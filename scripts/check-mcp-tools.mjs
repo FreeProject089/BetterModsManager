@@ -153,6 +153,32 @@ for (const rel of DOCS) {
   }
 }
 
+// ── every parameter says what it is ──
+//
+// A tool description is the only thing a model reads before calling the tool — that is the
+// argument the trigger-type check above already makes. It applies one level down: `profile_id`
+// with no description leaves "which id, out of what" to a guess, and a guess that happens to
+// parse fails the same way a wrong trigger type did, one level quieter.
+//
+// Thirty-four tools had properties with no `description` at all when this was written.
+//
+// The schema's own keys are not properties: `type`, `items` and `enum` appear inside one.
+for (const m of src.matchAll(/Tool::new\(\s*"(bmm_[a-z0-9_]+)",/g)) {
+  const start = m.index;
+  const next = src.indexOf('Tool::new(', start + 10);
+  const block = src.slice(start, next < 0 ? src.length : next);
+  const props = block.match(/"properties"\s*:\s*\{([\s\S]*)/);
+  if (!props) continue;
+  // Each `"name": { … }` at the top level of that object, and whether it carries a description.
+  for (const pm of props[1].matchAll(/"(\w+)"\s*:\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g)) {
+    const [, prop, body] = pm;
+    if (['type', 'items', 'enum', 'properties', 'required'].includes(prop)) continue;
+    if (!/"type"\s*:/.test(body)) continue;          // not a property schema
+    if (/"description"\s*:/.test(body)) continue;
+    problems.push(`${m[1]}.${prop} has no description — it is the only thing a model reads before sending a value`);
+  }
+}
+
 if (problems.length) {
   console.error('✗ MCP tools:');
   for (const p of problems) console.error(`  ${p}`);

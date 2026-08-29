@@ -408,7 +408,7 @@ impl ServerHandler for BmmMcpServer {
             // Profiles
             Tool::new(
                 "bmm_list_profiles",
-                "List all BMM profiles.",
+                "List every BMM profile with its id, name, game and folders. Start here: almost every other tool takes a profile_id from this list.",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
             Tool::new(
@@ -421,16 +421,16 @@ impl ServerHandler for BmmMcpServer {
                 "Get details of a specific profile.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "profile_id": { "type": "string" } },
+                    "properties": { "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." } },
                     "required": ["profile_id"]
                 })).unwrap()),
             ),
             Tool::new(
                 "bmm_set_active_profile",
-                "Activate a specific profile.",
+                "Make one profile the active one. This changes which mods are enabled on disk, so it is an action and not a view change.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "profile_id": { "type": "string" } },
+                    "properties": { "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." } },
                     "required": ["profile_id"]
                 })).unwrap()),
             ),
@@ -442,8 +442,8 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "profile_id": { "type": "string" },
-                        "filter": { "type": "string", "enum": ["all", "enabled", "disabled"] }
+                        "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." },
+                        "filter": { "type": "string", "enum": ["all", "enabled", "disabled"], "description": "Which mods to return. Omit for all of them." }
                     }
                 })).unwrap()),
             ),
@@ -452,16 +452,16 @@ impl ServerHandler for BmmMcpServer {
                 "Get details of a specific mod.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "mod_id": { "type": "string" } },
+                    "properties": { "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." } },
                     "required": ["mod_id"]
                 })).unwrap()),
             ),
             Tool::new(
                 "bmm_search_mods",
-                "Search mods.",
+                "Search the installed mods by free text across name, author and description. Returns the same shape as bmm_list_mods.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "query": { "type": "string" } },
+                    "properties": { "query": { "type": "string", "description": "Free text matched against a mod's name, author and description. Case-insensitive." } },
                     "required": ["query"]
                 })).unwrap()),
             ),
@@ -479,12 +479,12 @@ impl ServerHandler for BmmMcpServer {
             ),
             Tool::new(
                 "bmm_set_mod_enabled",
-                "Enable or disable a mod.",
+                "Enable or disable one installed mod in the active profile. Writes to disk; there is no toggle, so send the state you want.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "mod_id": { "type": "string" },
-                        "enabled": { "type": "boolean" }
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "enabled": { "type": "boolean", "description": "true turns it on, false turns it off. There is no toggle: send the state you want." }
                     },
                     "required": ["mod_id", "enabled"]
                 })).unwrap()),
@@ -557,7 +557,7 @@ impl ServerHandler for BmmMcpServer {
                 "Delete a scheduler automation by id (see bmm_list_schedules for ids).",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "id": { "type": "string" } },
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." } },
                     "required": ["id"]
                 })).unwrap()),
             ),
@@ -568,7 +568,7 @@ impl ServerHandler for BmmMcpServer {
                     "type": "object",
                     "properties": {
                         "manifest": { "type": "object", "description": "The plugin.json content ({ id, name, version?, author?, description?, game?, permissions?, tags?, website?, modlist?, apply_mode? })." },
-                        "scripts": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "content": { "type": "string" } }, "required": ["name", "content"] }, "description": "Script files to bundle (plain filenames; written under scripts/)." }
+                        "scripts": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string", "description": "File name, written under scripts/. A plain name, not a path." }, "content": { "type": "string", "description": "The script itself, as text." } }, "required": ["name", "content"] }, "description": "Script files to bundle (plain filenames; written under scripts/)." }
                     },
                     "required": ["manifest"]
                 })).unwrap()),
@@ -585,8 +585,8 @@ impl ServerHandler for BmmMcpServer {
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "name": { "type": "string" },
-                "mod_ids": { "type": "array", "items": { "type": "string" } }
+                "name": { "type": "string", "description": "Name written into repo.json and shown to whoever connects to it." },
+                "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods to publish, by id (from bmm_list_mods). Empty or absent publishes the active profile's mods." }
             },
             "required": ["name", "mod_ids"]
         })).unwrap()),
@@ -597,7 +597,7 @@ impl ServerHandler for BmmMcpServer {
         "List the files a plugin ships in its `assets/` folder — a README, config templates, sample lists, tools, sometimes a script. Each is { path, kind, size, readable } where kind is doc/script/image/data/archive/other. Reads the FOLDER, not the manifest, so a file the manifest never mentioned still appears. Works with BMM closed.",
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
-            "properties": { "plugin_id": { "type": "string" } },
+            "properties": { "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins. Lists the files it ships." } },
             "required": ["plugin_id"]
         })).unwrap()),
     ),
@@ -607,7 +607,7 @@ impl ServerHandler for BmmMcpServer {
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "plugin_id": { "type": "string" },
+                "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins." },
                 "path": { "type": "string", "description": "Relative to assets/, e.g. \"README.md\" or \"docs/codes.csv\"." }
             },
             "required": ["plugin_id", "path"]
@@ -624,8 +624,8 @@ impl ServerHandler for BmmMcpServer {
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "id": { "type": "string" },
-                "enabled": { "type": "boolean" }
+                "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." },
+                "enabled": { "type": "boolean", "description": "true turns it on, false turns it off. There is no toggle: send the state you want." }
             },
             "required": ["id", "enabled"]
         })).unwrap()),
@@ -665,7 +665,7 @@ impl ServerHandler for BmmMcpServer {
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "type": { "type": "string", "enum": ["app", "plugin", "theme", "preset", "modpack", "repo", "tutorial", "list"] },
+                "type": { "type": "string", "enum": ["app", "plugin", "theme", "preset", "modpack", "repo", "tutorial", "list"], "description": "Which catalogue this address is. NOT an index: an index lists catalogues of several kinds and is read by bmm_import_catalog, which decides the kind itself." },
                 "url": { "type": "string", "description": "The catalogue's address (http/https)." },
                 "follow": { "type": "boolean", "description": "false to stop following it. Default true." }
             },
@@ -691,10 +691,10 @@ impl ServerHandler for BmmMcpServer {
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "url": { "type": "string" },
-                "kind": { "type": "string", "enum": ["plugin", "task", "theme", "modlist", "bundle", "catalog", "app"] },
-                "id": { "type": "string" },
-                "password": { "type": "string" }
+                "url": { "type": "string", "description": "The repo's repo.json URL, or the folder that holds it." },
+                "kind": { "type": "string", "enum": ["plugin", "task", "theme", "modlist", "bundle", "catalog", "app"], "description": "What to take out of the repo. It must be listed under `extras` in that repo's manifest; read it first with bmm_repo_info." },
+                "id": { "type": "string", "description": "The entry's id, as listed in that repo's manifest under extras." },
+                "password": { "type": "string", "description": "The repo's download password, if it has one. Used for this call and never stored." }
             },
             "required": ["url", "kind", "id"]
         })).unwrap()),
@@ -719,12 +719,12 @@ impl ServerHandler for BmmMcpServer {
     ),
     Tool::new(
         "bmm_start_repo_server",
-        "Start the repository server.",
+        "Serve an exported repo folder over HTTP so others can sync from it. The folder must already hold a repo.json - use bmm_generate_repo first.",
         std::sync::Arc::new(serde_json::from_value(json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string" },
-                "port": { "type": "integer" }
+                "path": { "type": "string", "description": "The exported repo folder to serve - the one that holds repo.json." },
+                "port": { "type": "integer", "description": "TCP port to listen on. Omit for 8080." }
             },
             "required": ["path", "port"]
         })).unwrap()),
@@ -741,13 +741,13 @@ impl ServerHandler for BmmMcpServer {
                 "Read an internal documentation file.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "file_name": { "type": "string" } },
+                    "properties": { "file_name": { "type": "string", "description": "A file name from bmm_list_documentation, e.g. 'features/scheduler.md'. A path that climbs out of the docs folder is refused." } },
                     "required": ["file_name"]
                 })).unwrap()),
             ),
             Tool::new(
                 "bmm_get_language_list",
-                "List available UI languages.",
+                "List the UI language codes BMM ships, for bmm_read_language_file. These are interface translations, not mod languages.",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
             Tool::new(
@@ -755,7 +755,7 @@ impl ServerHandler for BmmMcpServer {
                 "Read a language file (UI text/FAQs).",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "lang_code": { "type": "string" } },
+                    "properties": { "lang_code": { "type": "string", "description": "A code from bmm_get_language_list, e.g. 'en' or 'fr'." } },
                     "required": ["lang_code"]
                 })).unwrap()),
             ),
@@ -765,17 +765,17 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "repo_path": { "type": "string" },
-                        "port": { "type": "integer" },
-                        "auto_start": { "type": "boolean" },
-                        "use_cloudflare": { "type": "boolean" },
-                        "use_upnp": { "type": "boolean" },
-                        "upload_limit": { "type": "integer" },
-                        "server_version": { "type": "integer" },
-                        "admin_password": { "type": "string" },
-                        "enable_docker": { "type": "boolean" },
-                        "docker_host_type": { "type": "string" },
-                        "server_type": { "type": "string" }
+                        "repo_path": { "type": "string", "description": "The exported repo folder the generated server will serve." },
+                        "port": { "type": "integer", "description": "TCP port the generated server listens on. Omit for 8080." },
+                        "auto_start": { "type": "boolean", "description": "Start the server when BMM starts." },
+                        "use_cloudflare": { "type": "boolean", "description": "Generate the Cloudflare Tunnel start-up as well." },
+                        "use_upnp": { "type": "boolean", "description": "Ask the router to open the port automatically." },
+                        "upload_limit": { "type": "integer", "description": "Outbound cap in KB/s. 0 or absent means unlimited." },
+                        "server_version": { "type": "integer", "description": "1 or 2. Version 2 is the current generator." },
+                        "admin_password": { "type": "string", "description": "Password for the generated server's admin page. Omit for none." },
+                        "enable_docker": { "type": "boolean", "description": "Write a Dockerfile beside the scripts." },
+                        "docker_host_type": { "type": "string", "description": "'linux' or 'windows' - which host the Dockerfile targets." },
+                        "server_type": { "type": "string", "description": "'std' (standard) or 'lux' (premium)." }
                     },
                     "required": ["repo_path", "port", "auto_start", "use_cloudflare", "use_upnp", "upload_limit", "server_version", "admin_password"]
                 })).unwrap()),
@@ -784,23 +784,23 @@ impl ServerHandler for BmmMcpServer {
             // Diagnostics
             Tool::new(
                 "bmm_get_statistics",
-                "Get global statistics.",
+                "Counts and sizes across every profile: mods, enabled mods, disk used, and when each was last synced.",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
             Tool::new(
                 "bmm_list_crash_reports",
-                "List crash reports.",
+                "List the crash reports BMM has collected, newest first. Each entry carries the report_path the other crash tools take.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "limit": { "type": "integer" } }
+                    "properties": { "limit": { "type": "integer", "description": "How many reports to return, newest first. Omit for all of them." } }
                 })).unwrap()),
             ),
             Tool::new(
                 "bmm_analyze_crash_report",
-                "Analyze a crash report.",
+                "Read one crash report and summarise what most likely caused it, including which mods were loaded at the time.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "report_path": { "type": "string" } },
+                    "properties": { "report_path": { "type": "string", "description": "A path from bmm_list_crash_reports. Reads the report and summarises the likely cause." } },
                     "required": ["report_path"]
                 })).unwrap()),
             ),
@@ -809,7 +809,7 @@ impl ServerHandler for BmmMcpServer {
                 "Read raw content of a crash report.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "report_path": { "type": "string" } },
+                    "properties": { "report_path": { "type": "string", "description": "A path from bmm_list_crash_reports. Returns the raw text." } },
                     "required": ["report_path"]
                 })).unwrap()),
             ),
@@ -819,18 +819,18 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "title": { "type": "string" },
-                        "description": { "type": "string" }
+                        "title": { "type": "string", "description": "One line naming the problem, as a person would report it." },
+                        "description": { "type": "string", "description": "What happened, what was expected, and how to reproduce it." }
                     },
                     "required": ["title", "description"]
                 })).unwrap()),
             ),
             Tool::new(
                 "bmm_export_config",
-                "Export BMM data.json.",
+                "Write a copy of BMM data.json to a path you choose. It holds profiles, mods and settings - treat it as sensitive.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "target_path": { "type": "string" } },
+                    "properties": { "target_path": { "type": "string", "description": "Where to write data.json. An existing file at that path is overwritten." } },
                     "required": ["target_path"]
                 })).unwrap()),
             ),
@@ -864,7 +864,7 @@ impl ServerHandler for BmmMcpServer {
             ),
             Tool::new(
                 "bmm_delete_launch_pack",
-                "Delete a Launch Pack.",
+                "Delete a Launch Pack by id. The pack is removed; the games and mods it pointed at are untouched.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
@@ -913,8 +913,8 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "name": { "type": "string" },
-                        "mod_ids": { "type": "array", "items": { "type": "string" } }
+                        "name": { "type": "string", "description": "Name of the modpack, shown in BMM." },
+                        "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods the modpack contains, by id (from bmm_list_mods)." }
                     },
                     "required": ["name", "mod_ids"]
                 })).unwrap()),
@@ -927,7 +927,7 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "mod_id": { "type": "string" },
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. This deletes its files." },
                         "delete_files": { "type": "boolean", "description": "Also delete the mod folder on disk (default false)" }
                     },
                     "required": ["mod_id"]
@@ -938,7 +938,7 @@ impl ServerHandler for BmmMcpServer {
                 "Verify a mod's on-disk files against its stored SHA-256 hashes. Returns per-file ok/corrupted.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "mod_id": { "type": "string" } },
+                    "properties": { "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Re-hashes its files and reports what changed." } },
                     "required": ["mod_id"]
                 })).unwrap()),
             ),
@@ -964,7 +964,7 @@ impl ServerHandler for BmmMcpServer {
                 "Get one installed plugin's full record (manifest, permissions, state) by id.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "plugin_id": { "type": "string" } },
+                    "properties": { "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins." } },
                     "required": ["plugin_id"]
                 })).unwrap()),
             ),
@@ -976,8 +976,8 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "on": { "type": "boolean" }, "full": { "type": "boolean" },
-                        "rust": { "type": "boolean" }, "js": { "type": "boolean" }
+                        "on": { "type": "boolean", "description": "Turn the session recorder on or off." }, "full": { "type": "boolean", "description": "true records everything, false masks text in the recording." },
+                        "rust": { "type": "boolean", "description": "Also record the backend's log lines." }, "js": { "type": "boolean", "description": "Also record the frontend's console." }
                     }
                 })).unwrap()),
             ),
@@ -986,7 +986,7 @@ impl ServerHandler for BmmMcpServer {
                 "Enable/disable the anonymous-usage telemetry consent in the running BMM app (GDPR opt-in).",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "enabled": { "type": "boolean" } },
+                    "properties": { "enabled": { "type": "boolean", "description": "true opts in to telemetry, false opts out. This is the consent itself, not a setting behind it." } },
                     "required": ["enabled"]
                 })).unwrap()),
             ),
@@ -996,7 +996,7 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "replay": { "type": "boolean" }, "full": { "type": "boolean" }, "bench": { "type": "boolean" }
+                        "replay": { "type": "boolean", "description": "Include session replays." }, "full": { "type": "boolean", "description": "Send full payloads rather than counts only." }, "bench": { "type": "boolean", "description": "Include benchmark results." }
                     }
                 })).unwrap()),
             ),
@@ -1012,7 +1012,7 @@ impl ServerHandler for BmmMcpServer {
                 "Trigger a saved scheduler task by id in the running BMM app.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "id": { "type": "string" } },
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules. Runs it once, now, whether or not it is armed." } },
                     "required": ["id"]
                 })).unwrap()),
             ),
@@ -1024,12 +1024,12 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "dataset": { "type": "string", "enum": ["sandbox", "real"] },
-                        "size": { "type": "string", "enum": ["S", "M", "L", "XL", "CUSTOM"] },
+                        "dataset": { "type": "string", "enum": ["sandbox", "real"], "description": "`sandbox` generates throwaway files; `real` measures against the mods actually installed. Use sandbox unless the question is about this machine's own library." },
+                        "size": { "type": "string", "enum": ["S", "M", "L", "XL", "CUSTOM"], "description": "How much data to move. XL takes minutes and writes several GB; CUSTOM reads `mb`." },
                         "mb": { "type": "integer", "description": "Dataset size in MB when size=CUSTOM" },
                         "sources": { "type": "array", "items": { "type": "string" }, "description": "Custom mod folder paths (dataset=real)" },
                         "profiles": { "type": "array", "items": { "type": "string" }, "description": "Profile ids/names to benchmark (dataset=real)" },
-                        "mode": { "type": "string", "enum": ["manual", "auto"] }
+                        "mode": { "type": "string", "enum": ["manual", "auto"], "description": "`auto` picks the dataset size from what this machine can take; `manual` uses the `size` given here." }
                     }
                 })).unwrap()),
             ),
@@ -1063,7 +1063,7 @@ impl ServerHandler for BmmMcpServer {
                 "Set the active BMM theme by id (e.g. bmm-discord, bmm-void, or an installed custom theme). Applies when BMM reloads themes.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "theme_id": { "type": "string" } },
+                    "properties": { "theme_id": { "type": "string", "description": "The theme's id, as returned by bmm_list_themes." } },
                     "required": ["theme_id"]
                 })).unwrap()),
             ),
@@ -1072,7 +1072,7 @@ impl ServerHandler for BmmMcpServer {
                 "Read an INSTALLED custom theme's full definition (vars, element overrides).",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
-                    "properties": { "theme_id": { "type": "string" } },
+                    "properties": { "theme_id": { "type": "string", "description": "The theme's id, as returned by bmm_list_themes." } },
                     "required": ["theme_id"]
                 })).unwrap()),
             ),
@@ -1084,7 +1084,7 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "method": { "type": "string", "enum": ["GET", "POST"] },
+                        "method": { "type": "string", "enum": ["GET", "POST"], "description": "GET reads, POST acts. Only these two: the bridge does not carry PUT or DELETE." },
                         "path": { "type": "string", "description": "API path starting with /api/ (query string allowed)" },
                         "body": { "type": "object", "description": "JSON body for POST requests" }
                     },
