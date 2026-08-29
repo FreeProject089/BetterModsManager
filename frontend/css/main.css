@@ -18864,6 +18864,12 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* Wraps, and the select keeps a floor — the same rule the key chooser needed after it
    shrank to its chevron in a narrow column. */
 .ssh-src-row { display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+
+/* Making a server from inside the block, when the panel that owns them is behind a modal
+   overlay and cannot be scrolled to. Column, because these are labelled rows and nothing
+   else holds them apart. */
+.ssh-src-new { display:flex; flex-direction:column; gap:6px; margin:8px 0 4px;
+    padding:8px; border:1px dashed var(--border); border-radius:8px; }
 .ssh-src-row > .input { flex: 1 1 160px; min-width: 140px; }
 .ssh-src-row > .btn { flex: 0 0 auto; }
 .ssh-src-sum {

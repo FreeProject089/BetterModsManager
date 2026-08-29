@@ -66,14 +66,18 @@
     "action": "catalog/follow",
     "params": [
       "type",
-      "url"
+      "url",
+      "password",
+      "key"
     ]
   },
   {
     "action": "catalog/import",
     "params": [
       "url",
-      "type"
+      "type",
+      "password",
+      "key"
     ]
   },
   {
@@ -89,7 +93,9 @@
     "action": "catalog/unfollow",
     "params": [
       "type",
-      "url"
+      "url",
+      "password",
+      "key"
     ]
   },
   {

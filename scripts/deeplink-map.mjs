@@ -29,6 +29,25 @@ const OUT = path.join(ROOT, 'frontend/deeplinks.json');
  */
 export function parseDeeplinks(src) {
   const text = String(src);
+
+  // Reads that live in a SHARED HELPER, keyed by function name.
+  //
+  // A handler that calls `applySourceAccess(url, parsedUrl.searchParams)` reads `password`
+  // and `key` as surely as if the lines were inline — and this parser saw neither, because it
+  // only looks inside the block. The map then said `catalog/follow` takes `type` and `url`,
+  // the check compared that to itself and passed, and the app's own deeplink reference
+  // quietly stopped mentioning two parameters that work.
+  //
+  // Nothing failed anywhere. That is the point of doing it here rather than remembering.
+  const helpers = new Map();
+  for (const m of text.matchAll(/(?:async\s+)?function\s+(\w+)\s*\([^)]*URLSearchParams[^)]*\)\s*(?::[^{]*)?\{/g)) {
+    // The body, to its closing brace at column 0 — these are top-level declarations.
+    const from = m.index + m[0].length;
+    const end = text.indexOf('\n}', from);
+    const body = text.slice(from, end === -1 ? from + 4000 : end);
+    const reads = [...new Set([...body.matchAll(/\.get\(\s*'([A-Za-z_][A-Za-z0-9_]*)'\s*\)/g)].map((x) => x[1]))];
+    if (reads.length) helpers.set(m[1], reads);
+  }
   // Every `if (action === …)` position, in order.
   const heads = [...text.matchAll(/if\s*\(\s*action\s*===/g)].map((m) => m.index);
   const out = [];
@@ -39,7 +58,13 @@ export function parseDeeplinks(src) {
     const cond = brace === -1 ? block : block.slice(0, brace);
     const actions = [...cond.matchAll(/action\s*===\s*'([^']+)'/g)].map((m) => m[1]);
     if (!actions.length) continue;
-    const params = [...new Set([...block.matchAll(/\.get\(\s*'([A-Za-z_][A-Za-z0-9_]*)'\s*\)/g)].map((m) => m[1]))];
+    const own = [...block.matchAll(/\.get\(\s*'([A-Za-z_][A-Za-z0-9_]*)'\s*\)/g)].map((m) => m[1]);
+    // …plus whatever a helper this block calls reads on its behalf.
+    const viaHelper = [];
+    for (const [name, reads] of helpers) {
+      if (new RegExp(`\\b${name}\\s*\\(`).test(block)) viaHelper.push(...reads);
+    }
+    const params = [...new Set([...own, ...viaHelper])];
     for (const a of actions) out.push({ action: a, params });
   }
   // Deduplicated by action: a few are handled in more than one place (repo/update appears

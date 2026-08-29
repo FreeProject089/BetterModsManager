@@ -23,7 +23,7 @@
 
 import { t } from '../../core/i18n.js';
 import { pickFile } from '../../core/api.js';
-import { loadTargets, type SshTarget } from './repo-ssh.js';
+import { loadTargets, saveTarget, type SshTarget } from './repo-ssh.js';
 import { closeOwningOverlay } from '../../core/source-access.js';
 
 /** What a caller passes straight through to `plan_remote_repo_refresh` / `refresh_repo_from_server`. */
@@ -55,6 +55,32 @@ export function sshSourceHtml(p: string): string {
           <button type="button" class="btn btn-sm" id="${p}-ssh-config">${esc(t('repo.sshsrc.configure'))}</button>
         </div>
         <div class="ssh-src-sum" id="${p}-ssh-sum"></div>
+
+        <!-- Making one, here.
+             The chooser lists what exists; this is what to do when nothing does, or when the
+             server for THIS repo is not the one already saved. Hidden until asked for, so the
+             common case — pick from the list — is not four extra fields. -->
+        <div class="ssh-src-new" id="${p}-ssh-new" hidden>
+          <label class="ssh-src-label" for="${p}-ssh-new-name">${esc(t('repo.sshsrc.newName'))}</label>
+          <input type="text" class="input input-sm" id="${p}-ssh-new-name" spellcheck="false"
+                 placeholder="${esc(t('repo.sshsrc.newNamePh'))}">
+          <div class="ssh-src-row">
+            <input type="text" class="input input-sm" id="${p}-ssh-new-host" spellcheck="false"
+                   placeholder="${esc(t('repo.sshsrc.newHostPh'))}">
+            <input type="number" class="input input-sm" id="${p}-ssh-new-port" min="1" max="65535"
+                   style="max-width:88px" placeholder="22">
+          </div>
+          <div class="ssh-src-row">
+            <input type="text" class="input input-sm" id="${p}-ssh-new-user" spellcheck="false"
+                   placeholder="${esc(t('repo.sshsrc.newUserPh'))}">
+            <input type="text" class="input input-sm" id="${p}-ssh-new-dir" spellcheck="false"
+                   placeholder="${esc(t('repo.sshsrc.newDirPh'))}">
+          </div>
+          <div class="ssh-src-row">
+            <button type="button" class="btn btn-sm btn-primary" id="${p}-ssh-new-save">${esc(t('common.save'))}</button>
+            <span class="ssh-src-hint">${esc(t('repo.sshsrc.newHint'))}</span>
+          </div>
+        </div>
 
         <label class="ssh-src-label" for="${p}-ssh-pw">${esc(t('repo.sshsrc.password'))}</label>
         <input type="password" class="input input-sm" id="${p}-ssh-pw" autocomplete="off" placeholder="—">
@@ -106,10 +132,11 @@ export function wireSshSource(p: string, manageKeys: () => void): void {
     };
 
     /** Saved targets, re-read on every open — one may have been added since. */
-    const fillTargets = () => {
+    const fillTargets = (select?: string) => {
         const all = loadTargets();
         const names = Object.keys(all);
-        const keep = sel.value;
+        // A target just created is the one you wanted; anything else keeps what was chosen.
+        const keep = select || sel.value;
         sel.textContent = '';
         const none = document.createElement('option');
         none.value = '';
@@ -188,12 +215,55 @@ export function wireSshSource(p: string, manageKeys: () => void): void {
         manageKeys();
     });
     document.getElementById(`${p}-ssh-config`)?.addEventListener('click', () => {
-        // The servers live in one place. Sending people there beats a second, drifting copy
-        // of host/port/user/dir on this screen.
-        document.getElementById('repo-ssh-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const body = document.getElementById('repo-ssh-body');
-        const toggle = document.getElementById('repo-ssh-toggle');
-        if (body?.hidden) { body.hidden = false; toggle?.setAttribute('aria-expanded', 'true'); }
+        // Scrolling to the full panel is the better answer WHEN IT IS REACHABLE: it has the
+        // fingerprint check, the test button and the key chooser, and none of that is worth
+        // duplicating.
+        //
+        // It is not reachable from a modal. This block is mounted in two places and one of
+        // them is a dialog, where `repo-ssh-card` sits behind the overlay — so on the screen
+        // where somebody most often discovers they need a server, the only button offering to
+        // make one scrolled a page nobody could see and appeared to do nothing.
+        const card = document.getElementById('repo-ssh-card');
+        const inModal = !!document.getElementById(`${p}-ssh`)?.closest('.modal-overlay');
+        if (card && !inModal) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const body = document.getElementById('repo-ssh-body');
+            const toggle = document.getElementById('repo-ssh-toggle');
+            if (body?.hidden) { body.hidden = false; toggle?.setAttribute('aria-expanded', 'true'); }
+            return;
+        }
+        const box = document.getElementById(`${p}-ssh-new`) as HTMLElement | null;
+        if (box) box.hidden = !box.hidden;
+    });
+
+    // Save it, into the same store the panel writes. The EDITOR may live in two places; the
+    // store must not, which is why this calls `saveTarget` rather than touching localStorage.
+    document.getElementById(`${p}-ssh-new-save`)?.addEventListener('click', () => {
+        const val = (id: string) => (document.getElementById(`${p}-ssh-new-${id}`) as HTMLInputElement | null)?.value?.trim() || '';
+        const host = val('host');
+        const user = val('user');
+        const dir = val('dir');
+        // Refused by NAME rather than saved half-empty. A target missing its host is one that
+        // fails at the moment somebody is publishing, with an error from a layer down.
+        if (!host || !user || !dir) {
+            // Said in the summary line, which is where this block already speaks. A silent
+            // no-op on a Save button is the worst of the three possible answers.
+            if (sum) { sum.hidden = false; sum.textContent = t('repo.sshsrc.newNeed'); }
+            return;
+        }
+        const name = val('name') || host;
+        saveTarget({
+            host,
+            port: Number(val('port')) || null,
+            user,
+            remoteDir: dir,
+            // Left empty on purpose: which key signs is chosen below, per run, and copying one
+            // in here would make this form quietly decide an identity.
+            keyPath: '',
+        }, name);
+        const box = document.getElementById(`${p}-ssh-new`) as HTMLElement | null;
+        if (box) box.hidden = true;
+        fillTargets(name);
     });
 
     fillTargets();

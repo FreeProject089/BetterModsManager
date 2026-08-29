@@ -135,8 +135,15 @@ function rememberKeyAuthKey(target: SshTarget): void {
 
 }
 
-/** Save (or replace) a named target. The secret is never part of what gets written. */
-function saveTarget(target: SshTarget, name = DEFAULT_TARGET): void {
+/**
+ * Save (or replace) a named target. The secret is never part of what gets written.
+ *
+ * Exported because the “this repo is on an SSH machine” block needs to create one from
+ * inside a modal, where the card that owns this panel is behind an overlay and unreachable.
+ * The EDITOR can live in two places; the STORE must not, which is why this is the only
+ * function that writes it.
+ */
+export function saveTarget(target: SshTarget, name = DEFAULT_TARGET): void {
     try {
         const all = loadTargets();
         all[name] = target;
