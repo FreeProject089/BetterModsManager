@@ -15,8 +15,8 @@
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
-// The schedule card's sentence is written here, not in md-lite — see hydrateDocPage.
-import { zoneDelta } from '../core/tz.js';
+// md-lite leaves two things for afterwards on purpose — see md-hydrate.ts.
+import { hydrateMdLite } from './md-hydrate.js';
 import { BMMS_REFERENCE } from './bmms-reference.gen.js';
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 
@@ -2847,7 +2847,13 @@ function bodyHtml(): string {
 function paint() {
   const body = host?.querySelector('.dh-body') as HTMLElement | null;
   const cr = host?.querySelector('.dh-crumbs') as HTMLElement | null;
-  if (body) body.innerHTML = bodyHtml();
+  if (body) {
+    body.innerHTML = bodyHtml();
+    // The THIRD place md-lite output reaches the DOM. `hydrateDocPage` runs for bundled
+    // pages and for the standalone reader; a hand-written article body is painted here and
+    // by nothing else, so a `:::schedule` in one drew a card with a blank heading.
+    hydrateMdLite(body);
+  }
   if (cr) cr.innerHTML = crumbs();
   // keep the search input in sync (e.g. after a lang re-render)
   const input = host?.querySelector('.dh-search') as HTMLInputElement | null;
@@ -2913,23 +2919,6 @@ function onClick(e: Event) {
   }
   const rep = hit('[data-replay]');
   if (rep) { playReplay(rep.getAttribute('data-replay') || ''); return; }
-
-  // `:::tabs` in a bundled page. Which panel is open is a class, not state in the document,
-  // so the same source reads the same way here, in the blog and on the website.
-  //
-  // Hidden panels stay in the tree rather than being rebuilt: a diagram's SVG and a code
-  // block's highlighting are then paid once, and switching back is instant.
-  const tabBtn = hit('.doc-tabs-btn');
-  const tabWrap = tabBtn?.closest('.doc-tabs') as HTMLElement | null;
-  if (tabBtn && tabWrap) {
-    const i = Number(tabBtn.getAttribute('data-tab') || 0);
-    tabWrap.querySelectorAll('.doc-tabs-btn').forEach((b, n) => {
-      b.classList.toggle('is-on', n === i);
-      b.setAttribute('aria-selected', n === i ? 'true' : 'false');
-    });
-    tabWrap.querySelectorAll('.doc-tab').forEach((pnl, n) => pnl.classList.toggle('is-on', n === i));
-    return;
-  }
 
   const navBtn = hit('[data-nav]');
   if (navBtn) { const v = navBtn.getAttribute('data-nav'); (document.querySelector(`.nav-item[data-view="${v}"]`) as HTMLElement | null)?.click(); return; }
@@ -3559,22 +3548,10 @@ async function hydrateDocPage(host: HTMLElement) {
   try { const { highlightIn } = await import('../ui/code-highlight.js'); highlightIn(host); }
   catch { /* code stays readable unhighlighted */ }
 
-  // Opening-hours cards. Same reason as the clips below: md-lite has no dictionary, and this
-  // card carries two sentences — the fallback title, and how far the reader is from the zone.
-  //
-  // "Right now" is not hedging. The difference changes twice a year and a rendered page does
-  // not redraw itself when it does, so a sentence that did not say when it was computed would
-  // quietly become false on a Sunday in March.
-  host.querySelectorAll('[data-sched-title]').forEach((el) => { el.textContent = t('md.sched.hours'); });
-  host.querySelectorAll('[data-sched-note]').forEach((el) => {
-    const tz = el.getAttribute('data-sched-note') || '';
-    const { dir, here, span } = zoneDelta(tz);
-    // Same zone as the reader: there is nothing to say, and an empty card line says it best.
-    if (dir === 'none') { el.remove(); return; }
-    el.textContent = dir === 'same'
-      ? t('md.sched.same', { here, tz })
-      : t(dir === 'ahead' ? 'md.sched.ahead' : 'md.sched.behind', { here, tz, span });
-  });
+  // What md-lite left blank: the schedule card's fallback title and its "how far you are"
+  // line. In docs/md-hydrate.ts because a PLUGIN's documentation goes through the same
+  // renderer from another screen, and was getting none of this.
+  hydrateMdLite(host);
 
   // Recording / clip cards. md-lite cannot speak the reader's language, so the one-line
   // explanation under the title is filled in here.

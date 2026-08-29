@@ -310,6 +310,13 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
             if (/\.(md|markdown)$/i.test(current.path)) {
                 const { renderDocMarkdown } = await import('../../docs/md-lite.js');
                 view.innerHTML = `<div class="pa-doc">${renderDocMarkdown(text)}</div>`;
+                // md-lite leaves two things for afterwards, on purpose: the schedule card's
+                // title and its "how far you are from that zone" line, and the behaviour
+                // behind a tab strip. Bundled pages got that from docs-hub; a plugin's own
+                // documentation goes through the same renderer and got none of it, so a
+                // `:::schedule` here drew a card with a blank heading.
+                const { hydrateMdLite } = await import('../../docs/md-hydrate.js');
+                hydrateMdLite(view);
             } else {
                 // Everything else stays TEXT, escaped. A .json or a .ps1 rendered as markdown
                 // would silently eat its own punctuation, and a script is the one file where

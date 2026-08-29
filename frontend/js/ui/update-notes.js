@@ -9,6 +9,8 @@ import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { getLinks } from '../core/links-config.js';
 import { expandDocBlocks, headingSlug } from './rich-markdown.js';
+// Imported for its side effect: it registers the delegated `:::tabs` handler.
+import '../docs/md-hydrate.js';
 // Persistence for expanded folders in the release notes tree
 const expandedFolders = new Set();
 // ── Navbar Version Button ────────────────────────────────
@@ -402,24 +404,10 @@ if (typeof document !== 'undefined') {
             setTimeout(() => { btn.innerHTML = prev; }, 2000);
         }).catch(() => { });
     });
-    // Delegated handler for :::tabs, which the website renders with a component and this
-    // renders with a class. Nothing about which panel is open lives in the markdown, so the
-    // same source shows the same tabs in the blog and in the app.
-    //
-    // Hidden panels stay in the tree rather than being rebuilt: a code block's highlighting
-    // and an image's download are then paid once, and switching back is instant.
-    document.addEventListener('click', (e) => {
-        const btn = e.target?.closest?.('.doc-tabs-btn');
-        const wrap = btn?.closest('.doc-tabs');
-        if (!btn || !wrap)
-            return;
-        const i = Number(btn.dataset.i || 0);
-        wrap.querySelectorAll('.doc-tabs-btn').forEach((b, n) => {
-            b.classList.toggle('is-on', n === i);
-            b.setAttribute('aria-selected', n === i ? 'true' : 'false');
-        });
-        wrap.querySelectorAll('.doc-tab').forEach((pnl, n) => pnl.classList.toggle('is-on', n === i));
-    });
+    // `:::tabs` is wired ONCE, in docs/md-hydrate.ts, for every surface that draws that
+    // strip — bundled pages, a plugin's own documentation, and this one. Two document
+    // listeners doing the same toggle is two copies of one rule, and the second copy is
+    // the one that stops matching when the markup changes.
     // Delegated handler for :::replay embeds (a play card in rendered markdown). Loads the
     // replay viewer lazily on click — no cost until someone actually watches a recording.
     document.addEventListener('click', (e) => {
