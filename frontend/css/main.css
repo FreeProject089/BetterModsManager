@@ -19662,6 +19662,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    one, and why the result still looked cramped. */
 .sched-tr-params { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:10px; }
 .sched-tr-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* The small grey words BETWEEN fields in a trigger row — « every », « min », « fires when ».
+   They were nine copies of the same inline style, which is how one of them ends up a
+   different size from its neighbours. */
+.sched-tr-lbl { font-size:12px; color:var(--text-muted); display:inline-flex; align-items:center; gap:5px; }
+/* The two halves of the script trigger. Column, because a textarea and the row under it are
+   siblings with nothing else holding them apart. */
+.sched-tr-scr-inline, .sched-tr-scr-file { display:flex; flex-direction:column; gap:8px; }
 /* The trigger's current condition, above its editor. */
 .sched-tr-now {
     margin: 0 0 8px;

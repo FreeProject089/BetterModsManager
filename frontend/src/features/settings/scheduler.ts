@@ -767,8 +767,23 @@ const _probeNext = new Map<string, number>();
 const _probeBusy = new Set<string>();
 
 async function scriptFired(task: Task): Promise<boolean> {
-    const tr = task.trigger as { type: 'script'; engine: string; code: string; everyMinutes: number };
-    const code = String(tr.code || '').trim();
+    const tr = task.trigger as {
+        type: 'script'; engine: string; code: string; everyMinutes: number;
+        source?: string; path?: string; fireOn?: string; exitCode?: number;
+        match?: string; timeoutSecs?: number;
+    };
+    // From a file, the file is re-read on every probe on purpose: that is the difference
+    // between "from a file" and the Load button, which takes a copy. Somebody who points at
+    // a script expects editing the script to change what BMM does.
+    let code = String(tr.code || '').trim();
+    if (String(tr.source || 'inline') === 'file') {
+        const path = String(tr.path || '').trim();
+        if (!path) return false;
+        // A missing or unreadable file is NOT a fire. It is also not a crash: a probe that
+        // threw here would take the whole scheduler tick with it.
+        try { code = String(await invoke('read_file_text', { path })).trim(); }
+        catch { return false; }
+    }
     if (!code) return false;
     // The grant is checked BEFORE the probe runs, not when the task does. Otherwise a task
     // whose steps ask for nothing would still run its author's code every few minutes.
@@ -789,12 +804,33 @@ async function scriptFired(task: Task): Promise<boolean> {
             code,
             workingDir: null,
             allow: true,
-            timeoutSecs: 60,
+            timeoutSecs: Math.min(900, Math.max(1, Number(tr.timeoutSecs) || 60)),
         }) as { code: number; stdout: string; stderr: string; ok: boolean };
-        if (!r.ok) return false;
+        const out = String(r.stdout || '').trim();
+        // What "it said so" MEANS, chosen on the trigger's own screen. It used to be `r.ok`
+        // — exit code 0 — decided here and stated nowhere, so a probe that prints its answer
+        // and exits 0 either way fired every interval, and a probe that signals by exiting 1
+        // never fired at all. Both read as a broken trigger.
+        //
+        // `exit0` is the default and is what every task saved before this meant.
+        let fired: boolean;
+        switch (String(tr.fireOn || 'exit0')) {
+            case 'exitIs': fired = Number(r.code) === Number(tr.exitCode ?? 0); break;
+            case 'printsAny': fired = out.length > 0; break;
+            case 'printsMatch': {
+                const needle = String(tr.match || '').trim();
+                // An empty needle matches everything, which would turn this into printsAny
+                // silently. Nothing to look for is nothing found.
+                fired = needle.length > 0 && out.toLowerCase().includes(needle.toLowerCase());
+                break;
+            }
+            default: fired = !!r.ok;
+        }
+        if (!fired) return false;
         // Whatever it printed reaches the task as {event.stdout}, so a probe can say WHICH
-        // thing it noticed rather than only that it noticed something.
-        _eventData.set(task.id, { stdout: String(r.stdout || '').trim().slice(0, 400) });
+        // thing it noticed rather than only that it noticed something. The exit code travels
+        // too — a probe firing on a code has no other way to say which one it was.
+        _eventData.set(task.id, { stdout: out.slice(0, 400), exitCode: String(r.code) });
         return true;
     } catch {
         return false;
@@ -5373,7 +5409,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         // sentence is what somebody scanning the task needs.
         const now = condSummary((_draft.trigger as any).condition);
         ph.innerHTML = `${now ? `<p class="sched-tr-now">${escHtml(t('sched.trCondNow'))} <b>${escHtml(now)}</b></p>` : ''}
-            <div class="sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
+            <div class="sched-cond sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
         // The very same editor an `if` step uses. All thirty-four conditions, for free, and
         // one place to fix when a thirty-fifth arrives.
         ph.querySelector('.sched-tr-cond')?.appendChild(conditionEditor((_draft.trigger as any).condition));
@@ -5384,20 +5420,70 @@ function renderTriggerEditor(host: HTMLElement): void {
             ['python', 'Python'], ['node', 'JavaScript (Node)'], ['rust', 'Rust'],
         ];
         const granted = taskPerms(_draft as Task).script;
+        // Old tasks carry neither field and meant exit-0 on pasted text, which is what these
+        // defaults say. A saved task must keep firing exactly as it did.
+        const fireOn = String((tr as any).fireOn || 'exit0');
+        const fromFile = String((tr as any).source || 'inline') === 'file';
+        // Every rule in one list, so the runner and the screen cannot describe different
+        // ones — the label here IS what the hint below repeats.
+        const rules: [string, string][] = [
+            ['exit0', t('sched.trScr.exit0')], ['exitIs', t('sched.trScr.exitIs')],
+            ['printsAny', t('sched.trScr.printsAny')], ['printsMatch', t('sched.trScr.printsMatch')],
+        ];
         ph.innerHTML = `
             <div class="sched-tr-row">
                 <select class="input" id="sched-tr-eng" style="max-width:190px">
                     ${engines.map(([v, l]) => `<option value="${v}"${(tr.engine || 'powershell') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
                 </select>
-                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.lblEvery') || 'every')}</span>
+                <span class="sched-tr-lbl">${escHtml(t('sched.lblEvery') || 'every')}</span>
                 <input type="number" class="input" id="sched-tr-scr-min" min="1" style="max-width:90px"
                     value="${Math.max(1, Number(tr.everyMinutes) || 5)}">
-                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.unitMin') || 'min')}</span>
+                <span class="sched-tr-lbl">${escHtml(t('sched.unitMin') || 'min')}</span>
+                <span class="sched-tr-lbl">${escHtml(t('sched.trScr.upTo'))}</span>
+                <input type="number" class="input" id="sched-tr-scr-to" min="1" max="900" style="max-width:90px"
+                    value="${Math.max(1, Number((tr as any).timeoutSecs) || 60)}">
+                <span class="sched-tr-lbl">${escHtml(t('sched.unitSec'))}</span>
             </div>
-            <textarea class="input" id="sched-tr-code" rows="5" spellcheck="false"
-                style="resize:vertical;font-family:var(--font-mono)"
-                placeholder="${escAttr(t('sched.trScriptPh'))}">${escHtml(tr.code || '')}</textarea>
+
+            <div class="sched-tr-row">
+                <label class="sched-tr-lbl"><input type="radio" name="sched-tr-scr-src" value="inline"${fromFile ? '' : ' checked'}>
+                    ${escHtml(t('sched.trScr.here'))}</label>
+                <label class="sched-tr-lbl"><input type="radio" name="sched-tr-scr-src" value="file"${fromFile ? ' checked' : ''}>
+                    ${escHtml(t('sched.trScr.file'))}</label>
+            </div>
+
+            <div class="sched-tr-scr-inline" style="${fromFile ? 'display:none' : ''}">
+                <textarea class="input" id="sched-tr-code" rows="12" spellcheck="false"
+                    style="resize:vertical;font-family:var(--font-mono)"
+                    placeholder="${escAttr(t('sched.trScriptPh'))}">${escHtml(tr.code || '')}</textarea>
+                <div class="sched-tr-row">
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-scr-load">${escHtml(t('sched.trScr.load'))}</button>
+                    <span class="sched-tr-lbl">${escHtml(t('sched.trScr.loadHint'))}</span>
+                </div>
+            </div>
+
+            <div class="sched-tr-scr-file" style="${fromFile ? '' : 'display:none'}">
+                <div class="sched-tr-row">
+                    <input class="input" id="sched-tr-scr-path" spellcheck="false" style="flex:1;min-width:220px"
+                        placeholder="${escAttr(t('sched.trScr.pathPh'))}" value="${escAttr((tr as any).path || '')}">
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-scr-pick">${escHtml(t('common.browse') || 'Browse')}</button>
+                </div>
+                <p class="sched-hint">${escHtml(t('sched.trScr.fileHint'))}</p>
+            </div>
+
+            <div class="sched-tr-row">
+                <span class="sched-tr-lbl">${escHtml(t('sched.trScr.fires'))}</span>
+                <select class="input" id="sched-tr-scr-when" style="max-width:230px">
+                    ${rules.map(([v, l]) => `<option value="${v}"${fireOn === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+                <input type="number" class="input" id="sched-tr-scr-exit" min="0" max="255" style="max-width:90px;${fireOn === 'exitIs' ? '' : 'display:none'}"
+                    value="${escAttr(String((tr as any).exitCode ?? 0))}">
+                <input class="input" id="sched-tr-scr-match" spellcheck="false" style="flex:1;min-width:160px;${fireOn === 'printsMatch' ? '' : 'display:none'}"
+                    placeholder="${escAttr(t('sched.trScr.matchPh'))}" value="${escAttr((tr as any).match || '')}">
+            </div>
+
             <p class="sched-hint">${escHtml(t('sched.trScriptHint'))}</p>
+            <p class="sched-hint">${escHtml(t('sched.trScr.stdoutHint'))}</p>
             ${granted ? '' : `<p class="sched-hint sched-hint-bad">${escHtml(t('sched.trScriptNoPerm'))}</p>`}`;
         ph.querySelector('#sched-tr-eng')?.addEventListener('change', (e) => {
             (_draft.trigger as any).engine = (e.target as HTMLSelectElement).value;
@@ -5407,6 +5493,55 @@ function renderTriggerEditor(host: HTMLElement): void {
         });
         ph.querySelector('#sched-tr-code')?.addEventListener('input', (e) => {
             (_draft.trigger as any).code = (e.target as HTMLTextAreaElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-to')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).timeoutSecs = Math.min(900, Math.max(1, parseInt((e.target as HTMLInputElement).value) || 60));
+        });
+        ph.querySelectorAll('input[name="sched-tr-scr-src"]').forEach((r) => {
+            r.addEventListener('change', (e) => {
+                const v = (e.target as HTMLInputElement).value;
+                (_draft.trigger as any).source = v;
+                (ph.querySelector('.sched-tr-scr-inline') as HTMLElement).style.display = v === 'file' ? 'none' : '';
+                (ph.querySelector('.sched-tr-scr-file') as HTMLElement).style.display = v === 'file' ? '' : 'none';
+            });
+        });
+        ph.querySelector('#sched-tr-scr-path')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).path = (e.target as HTMLInputElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-pick')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'Scripts', extensions: ['ps1', 'cmd', 'bat', 'sh', 'py', 'js', 'mjs', 'rs', 'txt'] }] }).catch(() => null);
+            if (!f) return;
+            (_draft.trigger as any).path = f;
+            (ph.querySelector('#sched-tr-scr-path') as HTMLInputElement).value = String(f);
+        });
+        // "Load" COPIES the file in rather than linking it. The two are different promises and
+        // the radio above is where you choose: this one takes a snapshot you can then edit
+        // here, the file mode re-reads on every probe.
+        ph.querySelector('#sched-tr-scr-load')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'Scripts', extensions: ['ps1', 'cmd', 'bat', 'sh', 'py', 'js', 'mjs', 'rs', 'txt'] }] }).catch(() => null);
+            if (!f) return;
+            try {
+                const text = String(await invoke('read_file_text', { path: f }));
+                (_draft.trigger as any).code = text;
+                (ph.querySelector('#sched-tr-code') as HTMLTextAreaElement).value = text;
+                toast(t('sched.trScr.loaded').replace('{f}', String(f).replace(/^.*[/\\]/, '')), 'success', 6000);
+            } catch (e) {
+                toast(String(e), 'warning', 8000);
+            }
+        });
+        ph.querySelector('#sched-tr-scr-when')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            (_draft.trigger as any).fireOn = v;
+            (ph.querySelector('#sched-tr-scr-exit') as HTMLElement).style.display = v === 'exitIs' ? '' : 'none';
+            (ph.querySelector('#sched-tr-scr-match') as HTMLElement).style.display = v === 'printsMatch' ? '' : 'none';
+        });
+        ph.querySelector('#sched-tr-scr-exit')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).exitCode = Math.min(255, Math.max(0, parseInt((e.target as HTMLInputElement).value) || 0));
+        });
+        ph.querySelector('#sched-tr-scr-match')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).match = (e.target as HTMLInputElement).value;
         });
     }
     if (tr.type === 'interval') {
@@ -5423,18 +5558,22 @@ function renderTriggerEditor(host: HTMLElement): void {
         ph.querySelector('#sched-tr-dom')?.addEventListener('input', (e) => { (_draft.trigger as any).day = Math.min(31, Math.max(1, parseInt((e.target as HTMLInputElement).value) || 1)); });
         ph.querySelector('#sched-tr-time')?.addEventListener('input', (e) => { (_draft.trigger as any).time = (e.target as HTMLInputElement).value; });
     } else if (tr.type === 'watchFile') {
-        // The DCS button is here rather than in a "games" screen because this is the moment
-        // somebody needs it: they have chosen "when a file changes" and do not yet know
-        // which file. It installs the hook and fills the path in with what the hook writes.
+        // This watches A FILE. It used to carry a "Set up DCS" button that installed a Lua
+        // hook into DCS and filled the path in with the file that hook writes — so the first
+        // thing somebody choosing this trigger met was one game's name, and, if they pressed
+        // it, a path ending in `bmm-server.json` with nothing on screen saying what that was.
+        //
+        // Setting a game up is a step, and there is an action for it: `game.watch`. The
+        // trigger asks for a path, and says where the other thing went.
         ph.innerHTML = `
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <div class="sched-tr-row">
                 <input class="input" id="sched-tr-watch" spellcheck="false" style="flex:1;min-width:220px"
                     placeholder="${escAttr(t('sched.trWatchPh') || 'Full path to the file to watch')}"
                     value="${escAttr(tr.path || '')}">
                 <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-watch-pick">${escHtml(t('common.browse') || 'Browse')}</button>
-                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-watch-dcs">${escHtml(t('sched.trWatchDcs') || 'Set up DCS')}</button>
             </div>
-            <p class="sched-hint">${escHtml(t('sched.trWatchHint') || '')}</p>`;
+            <p class="sched-hint">${escHtml(t('sched.trWatchHint') || '')}</p>
+            <p class="sched-hint">${escHtml(t('sched.trWatchGame') || '')}</p>`;
         ph.querySelector('#sched-tr-watch')?.addEventListener('input', (e) => {
             (_draft.trigger as any).path = (e.target as HTMLInputElement).value;
         });
@@ -5444,22 +5583,6 @@ function renderTriggerEditor(host: HTMLElement): void {
             if (!f) return;
             (_draft.trigger as any).path = f;
             (ph.querySelector('#sched-tr-watch') as HTMLInputElement).value = String(f);
-        });
-        ph.querySelector('#sched-tr-watch-dcs')?.addEventListener('click', async () => {
-            try {
-                const r: any = await invoke('dcs_install_hook', { dir: null });
-                // The FIRST is picked rather than asking, and the count is reported — there
-                // are usually two DCS folders (release and open beta) and the hook goes in
-                // both, but a trigger watches one file.
-                const first = (r?.watch || [])[0];
-                if (!first) return;
-                (_draft.trigger as any).path = first;
-                (ph.querySelector('#sched-tr-watch') as HTMLInputElement).value = String(first);
-                toast(t('sched.dcsHookOk').replace('{n}', String((r.installed || []).length)), 'success', 8000);
-            } catch (e) {
-                toast(String(e).includes('game.errNoDcs')
-                    ? t('sched.dcsHookNone') : String(e), 'warning', 8000);
-            }
         });
     } else if (tr.type === 'manual') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trManualHint') || 'Never runs automatically — use the ▶ Run button or a bmm://schedule/run link.'}</span>`;
@@ -6104,7 +6227,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 const cb = document.createElement('div');
                 cb.className = 'sched-branch';
                 cb.innerHTML = `<div class="sched-branch-label" style="display:flex;align-items:center;gap:8px">${t('sched.switchCase') || 'CASE'} ${ci + 1}
-                        <span class="sched-sw-cond" style="flex:1"></span>
+                        <span class="sched-cond sched-sw-cond" style="flex:1"></span>
                         <button class="btn btn-xs sched-chip sched-sw-delcase">✕</button></div>
                     <div class="sched-sw-case-steps"></div><div class="sched-sw-case-add"></div>`;
                 cb.querySelector('.sched-sw-cond')?.appendChild(conditionEditor(c.condition));

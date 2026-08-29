@@ -57,11 +57,48 @@ const cssCode = css.replace(/\/\*[\s\S]*?\*\//g, '');
 const defined = new Set([...cssCode.matchAll(/\.(sched-[\w-]+)/g)].map((m) => m[1]));
 const missing = [...used].filter((c) => !defined.has(c)).sort();
 
-if (missing.length) {
-  console.error(`✗ ${missing.length} scheduler class(es) that no stylesheet defines:`);
-  for (const c of missing) console.error(`    .${c}`);
-  console.error('\n  A class with no rule renders as an unstyled element. Nothing errors, and the');
-  console.error('  only symptom is that it looks wrong to whoever knows what it should look like.');
+// ── and the case the exemption above lets through ──
+//
+// A class can be a hook AND a container. `.sched-tr-cond` was queried — so it counted as a
+// hook and needed no rule — and it was the box `conditionEditor()` is appended into. That
+// editor emits a NOT checkbox, a dropdown, a params span and a Try button as siblings and
+// lays out none of them; the six other mount points are `.sched-cond`, which is
+// `display:flex; gap:6px`. The trigger's was styled by nothing, so they touched.
+//
+// Anything a component is APPENDED into is a container, whatever else it is.
+const mounts = new Set();
+for (const m of src.matchAll(/querySelector\(\s*'\.(sched-[\w-]+)'\s*\)\s*\??\.appendChild\(/g)) {
+  mounts.add(m[1]);
+}
+if (!mounts.size) {
+  console.error('✗ no `.sched-*` mount points found — the appendChild pattern moved, so this half cannot be trusted');
+  process.exit(2);
+}
+// A mount point styled through ANY of the classes on its element counts as styled: the fix
+// here was `class="sched-cond sched-tr-cond"`, where the first carries the layout and the
+// second stays as the hook it always was.
+const coMounted = new Set();
+for (const m of src.matchAll(/class="([^"$]*)"/g)) {
+  const classes = m[1].split(/\s+/).filter((c) => /^sched-[\w-]+$/.test(c));
+  if (classes.some((c) => mounts.has(c)) && classes.some((c) => defined.has(c))) {
+    for (const c of classes) if (mounts.has(c)) coMounted.add(c);
+  }
+}
+const bareMounts = [...mounts].filter((c) => !defined.has(c) && !coMounted.has(c)).sort();
+
+if (missing.length || bareMounts.length) {
+  if (missing.length) {
+    console.error(`✗ ${missing.length} scheduler class(es) that no stylesheet defines:`);
+    for (const c of missing) console.error(`    .${c}`);
+    console.error('\n  A class with no rule renders as an unstyled element. Nothing errors, and the');
+    console.error('  only symptom is that it looks wrong to whoever knows what it should look like.');
+  }
+  if (bareMounts.length) {
+    console.error(`✗ ${bareMounts.length} mount point(s) with no layout of their own:`);
+    for (const c of bareMounts) console.error(`    .${c} — a component is appended into it and nothing lays its children out`);
+    console.error('\n  Being queried is not enough. A box something is appended into is a container,');
+    console.error('  and an unstyled container puts the component\'s children in inline flow.');
+  }
   process.exit(1);
 }
-console.log(`✓ scheduler classes OK — all ${used.size} resolve to a rule`);
+console.log(`✓ scheduler classes OK — ${used.size} resolve to a rule, ${mounts.size} mount point(s) laid out`);
