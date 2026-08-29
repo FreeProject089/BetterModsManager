@@ -272,6 +272,10 @@ export async function initApiActivity(): Promise<void> {
                 if (params.type) qs.set('type', String(params.type));
                 if (params.url) qs.set('url', String(params.url));
                 if (params.password) qs.set('password', String(params.password));
+                // WHICH identity key signs it. Passed through rather than resolved here — the
+                // deeplink handler owns what a key reference means, including saying so when
+                // it names one that is not on the ring.
+                if (params.key) qs.set('key', String(params.key));
                 const go = (window as any).__bmmDeeplink;
                 if (go) await go(`bmm://${action}?${qs.toString()}`);
                 else console.warn('[api-exec] no deeplink handler yet:', action);

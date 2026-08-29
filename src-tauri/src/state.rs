@@ -27,12 +27,22 @@ pub struct ConnectedServerRepo {
     pub auto_sync_mode: Option<String>,
 }
 
-/// One key on the keyring: a name a person chose, and where the file is.
+/// One key on the keyring: a stable id, a name a person chose, and where the file is.
 ///
 /// Never the key itself. The file is opened at the moment a proof is signed and the bytes are
 /// dropped, which is what lets this live in settings at all.
+///
+/// `id` exists because a NAME is not a handle. It is what somebody types, so it is what they
+/// rename, and it can hold spaces, accents and slashes — none of which survive a URL or a
+/// deeplink well. The id is minted once and is never derived from the name, so renaming a key
+/// leaves every script that refers to it still pointing at the same key.
+///
+/// It defaults to empty for rings written before it existed; `keyring_from_settings` mints
+/// one on the next load rather than leaving a key nothing can address.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyAuthEntry {
+    #[serde(default)]
+    pub id: String,
     pub name: String,
     pub path: String,
 }

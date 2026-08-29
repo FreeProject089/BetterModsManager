@@ -191,7 +191,7 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
 | `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
-| `bmm://catalog/follow` | `type`*, `url`*, `password` | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. Un `password` est retenu pour cette session seulement, jamais écrit sur le disque |
+| `bmm://catalog/follow` | `type`*, `url`*, `password`, `key` | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `index`, `app`. Un `password` est retenu pour cette session seulement, jamais écrit sur le disque ; `key` désigne QUELLE clé d’identité signe la requête — un id ou un nom. Les ids vivent dans Réglages → Identité & API, sont affichés à côté de chaque clé et survivent à un renommage ; une référence absente du trousseau est signalée plutôt qu’ignorée, parce qu’une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
 | `bmm://catalog/import` | `url`*, `type`, `password` | Lit le document à cette adresse et le suit **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait. `type` restreint un index à un seul type |
 | `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Écrit une entrée du catalogue **que vous rédigez sur cette machine**. Un JSON invalide dans `fields` est refusé plutôt qu'enregistré comme la chaîne qu'il est |
@@ -366,7 +366,7 @@ Deux formes échappent à la règle :
 | `DELETE` | `/api/hook/:name` | `hooks.write` | — · oublier un seul nom | |
 | `POST` | `/api/content-id` | token | `kind`*, `doc`* · l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. Prend le document, donc il ne révèle rien de ce que cette installation contient — d'où le simple jeton plutôt qu'une portée de lecture par type |
 | `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
-| `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow` · suivre ou cesser de suivre un catalogue | |
+| `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow`, `password`, `key` · suivre ou cesser de suivre un catalogue. `password` pour un secret partagé, `key` pour désigner QUELLE clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, jamais ignorée : une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé | |
 | `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |

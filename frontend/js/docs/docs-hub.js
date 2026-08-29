@@ -1838,7 +1838,7 @@ It returns everything, \`settings\` included — and \`settings\` holds the admi
 | \`DELETE\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | Query \`type\` | |
 | \`POST\` | \`/api/catalog/import\` | \`catalog.write\` | \`url\`*, \`type\`, \`password\` → \`202\` · follows whatever is at an address **without being told what kind it is** — the document says so, and a link carrying the wrong type is how a theme catalogue ends up in the plugin list | ✓ |
 | \`GET\` | \`/api/catalogs\` | \`catalog.read\` | — · what BMM follows, by type, plus \`written_at\`. A MIRROR the interface pushes: no \`written_at\` means the app has not run since this existed, which is not the same fact as following nothing | |
-| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (default true) → \`202\` · driven through the app's own screens, so the reply means "the app was told" | ✓ |
+| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (default true), \`password\`, \`key\` → \`202\` · driven through the app's own screens, so the reply means "the app was told". \`password\` for a shared secret, \`key\` for WHICH identity key signs it — an id or a name, shown in Settings → Identity & API. A reference not on the ring is reported, never skipped: a request that quietly goes out unsigned comes back as “could not read it” with nothing pointing at the key | ✓ |
 
 #### Import / export — these drive the UI
 
@@ -2194,7 +2194,7 @@ Il renvoie tout, \`settings\` inclus — et \`settings\` contient le token admin
 | \`DELETE\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | Query \`type\` | |
 | \`POST\` | \`/api/catalog/import\` | \`catalog.write\` | \`url\`*, \`type\`, \`password\` → \`202\` · suit ce qui se trouve à une adresse **sans qu'on lui dise de quel type il s'agit** — le document le dit, et un lien portant le mauvais type est la façon dont un catalogue de thèmes atterrit dans la liste des plugins | ✓ |
 | \`GET\` | \`/api/catalogs\` | \`catalog.read\` | — · ce que BMM suit, par type, plus \`written_at\`. Un MIROIR poussé par l'interface : pas de \`written_at\` signifie que l'app n'a pas tourné depuis que ceci existe, ce qui n'est pas le même fait que ne rien suivre | |
-| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (vrai par défaut) → \`202\` · piloté par les écrans de l'app : la réponse veut dire « l'app a été prévenue » | ✓ |
+| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (vrai par défaut), \`password\`, \`key\` → \`202\` · piloté par les écrans de l'app : la réponse veut dire « l'app a été prévenue ». \`password\` pour un secret partagé, \`key\` pour désigner QUELLE clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, jamais ignorée : une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé | ✓ |
 
 #### Import / export — ceux-ci pilotent l’interface
 

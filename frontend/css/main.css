@@ -19666,6 +19666,23 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    They were nine copies of the same inline style, which is how one of them ends up a
    different size from its neighbours. */
 .sched-tr-lbl { font-size:12px; color:var(--text-muted); display:inline-flex; align-items:center; gap:5px; }
+
+/* A key’s handle on the Identity screen. A button because clicking copies it — the only
+   reason to read an id is to paste it somewhere else. */
+.idk-handle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bmm-s05, rgba(255, 255, 255, .05));
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+.idk-handle:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
+.idk-handle:disabled { cursor: default; opacity: .55; }
 /* The two halves of the script trigger. Column, because a textarea and the row under it are
    siblings with nothing else holding them apart. */
 .sched-tr-scr-inline, .sched-tr-scr-file { display:flex; flex-direction:column; gap:8px; }

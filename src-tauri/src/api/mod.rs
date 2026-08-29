@@ -296,13 +296,24 @@ struct HookSinceQuery {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CatalogFollowBody {
-    /// `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `app`.
+    /// `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `index` · `app`.
     #[serde(rename = "type")]
     kind: String,
     url: String,
     /// `false` to stop following it.
     #[serde(default = "yes")]
     follow: bool,
+    /// A shared secret, for a password-protected catalogue. Never stored.
+    #[serde(default)]
+    password: Option<String>,
+    /// WHICH identity key signs the request, by id or by name.
+    ///
+    /// A key-gated catalogue was unreachable from here: the request went out signed by
+    /// whatever the ring had active, and if that was the wrong key the answer was "could not
+    /// read it" with nothing naming the key. A key that does not resolve is reported rather
+    /// than silently skipped — see `applySourceAccess`.
+    #[serde(default)]
+    key: Option<String>,
 }
 fn yes() -> bool { true }
 
@@ -4162,7 +4173,16 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_cats_set))
         .map(|body: CatalogFollowBody, handle: tauri::AppHandle| {
             let action = if body.follow { "catalog/follow" } else { "catalog/unfollow" };
-            api_exec_reply(&handle, action, serde_json::json!({ "type": body.kind, "url": body.url }))
+            // Only the fields that were given. An empty `password=` on the link is not the
+            // same as no password: it would be remembered as the empty one and used.
+            let mut args = serde_json::json!({ "type": body.kind, "url": body.url });
+            if let Some(p) = body.password.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                args["password"] = serde_json::Value::String(p.to_string());
+            }
+            if let Some(k) = body.key.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                args["key"] = serde_json::Value::String(k.to_string());
+            }
+            api_exec_reply(&handle, action, args)
         });
 
     // ── Extras, and identity keys ──────────────────────────────────────

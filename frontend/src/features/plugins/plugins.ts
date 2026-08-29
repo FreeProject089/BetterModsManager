@@ -7152,6 +7152,8 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'type', type: 'string', required: true, desc: t('plugins.epF.cfType') },
                 { name: 'url', type: 'string', required: true, desc: t('plugins.epF.cfUrl') },
                 { name: 'follow', type: 'boolean', required: false, desc: t('plugins.epF.cfFollow') },
+                { name: 'password', type: 'string', required: false, desc: t('plugins.epF.cfPassword') },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.cfKey') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "action": "catalog/follow" }' },

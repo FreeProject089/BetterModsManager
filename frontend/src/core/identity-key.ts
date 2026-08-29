@@ -13,7 +13,12 @@ import { invoke, pickFile } from './api.js';
 // still an edge, and core → ui → core is a cycle the dep-graph gate counts. Callers pass a
 // notifier that takes an i18n KEY: this knows WHAT happened, the screen knows how to say it.
 
-export interface KeyEntry { name: string; path: string }
+export interface KeyEntry {
+    /** The stable handle. Minted once, never derived from the name, so a rename keeps it. */
+    id: string;
+    name: string;
+    path: string;
+}
 export interface KeyringView {
     keys: KeyEntry[];
     /** The key that signs when no per-source choice applies. */
@@ -99,6 +104,27 @@ export async function renderKeyManager(
             label.style.cssText = 'font-weight:600;font-size:11px;flex:0 0 auto;';
             label.textContent = k.name;
 
+            // The handle, next to the name that is NOT one. The only reason to read it is to
+            // paste it somewhere else, so clicking copies rather than making anyone select
+            // eleven characters of monospace by hand.
+            const id = document.createElement('button');
+            id.type = 'button';
+            id.className = 'idk-handle';
+            id.textContent = k.id || '\u2014';
+            id.title = t('settings.identity.authKeyIdCopy');
+            id.disabled = !k.id;
+            id.addEventListener('click', async () => {
+                if (!k.id) return;
+                try {
+                    await navigator.clipboard.writeText(k.id);
+                    notify?.('settings.identity.authKeyIdCopied', 'success');
+                } catch {
+                    // Clipboard denied is not silence: the id is short enough to read off the
+                    // screen, and saying nothing would look like the click did nothing.
+                    notify?.('settings.identity.authKeyIdNoCopy', 'warning');
+                }
+            });
+
             const path = document.createElement('span');
             path.style.cssText = 'font-size:10px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
             path.textContent = k.path;
@@ -114,7 +140,7 @@ export async function renderKeyManager(
                 } catch { /* already gone */ }
             });
 
-            row.append(radio, label, path, del);
+            row.append(radio, label, id, path, del);
             list.appendChild(row);
         }
     };

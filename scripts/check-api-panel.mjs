@@ -49,7 +49,11 @@ for (const m of rs.matchAll(/warp::path!\(([^)]*)\)/g)) {
 // A credential read belongs to the NEAREST PRECEDING route. Going forwards from a route by a
 // fixed number of characters is what got this wrong twice before: it ran past the handler and
 // picked up the next route's fields.
-const CRED = /(?:body\.(\w*(?:password|passphrase)\w*)|query\.get\("(\w*(?:password|passphrase)\w*)"\)|body\.(authorized_keys))/gi;
+// `key` is matched EXACTLY. A source can be gated by an identity key as well as by a
+// password, and that half was invisible here until /api/catalogs gained one — but
+// `body.public_key` on /api/keys is a RESULT, not a credential, and a substring match
+// would report it and teach people to ignore this check.
+const CRED = /(?:body\.(\w*(?:password|passphrase)\w*)|query\.get\("(\w*(?:password|passphrase)\w*)"\)|body\.(authorized_keys)|body\.(key)\b|query\.get\("(key)"\))/gi;
 // …and only within the ROUTER. `body.admin_password` also appears at line ~4816, inside the
 // export worker that runs long after every route is declared — with nothing but "nearest
 // preceding" to go on, that read was attributed to the last route in the file, /api/keys, and
@@ -60,7 +64,7 @@ for (const m of rs.matchAll(CRED)) {
   if (m.index > lastRoute + 3000) continue;
   const owner = marks.filter((k) => k.at < m.index).pop();
   if (!owner) continue;
-  const field = (m[1] || m[2] || m[3]).replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  const field = (m[1] || m[2] || m[3] || m[4] || m[5]).replace(/_([a-z])/g, (_, c) => c.toUpperCase());
   if (!creds.has(owner.path)) creds.set(owner.path, new Set());
   creds.get(owner.path).add(field);
 }

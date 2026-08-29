@@ -331,6 +331,31 @@ pub fn header_for(url: &str) -> Option<(&'static str, String)> {
     None
 }
 
+/// A fresh handle for a key.
+///
+/// Random, not derived from the name or the path: a derived id changes when the thing it
+/// describes is renamed or moved, which is the one property this must not have.
+pub fn mint_key_id() -> String {
+    use rand::RngCore;
+    let mut b = [0u8; 6];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    format!("bmmkey-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+}
+
+/// Find a key by its id OR its name, and answer with its NAME.
+///
+/// Both are accepted on purpose. The id is the handle a script should use; the name is what
+/// every existing task, origin mapping and saved setting already carries, and breaking those
+/// to introduce a handle would be a strange trade. The id is tried first: it is the
+/// unambiguous one, and a name that happens to look like an id belongs to whoever owns the id.
+pub fn resolve_key_ref(settings: &crate::state::AppSettings, reference: &str) -> Option<String> {
+    let r = reference.trim();
+    if r.is_empty() { return None; }
+    settings.key_auth_keys.iter().find(|e| e.id == r)
+        .or_else(|| settings.key_auth_keys.iter().find(|e| e.name == r))
+        .map(|e| e.name.clone())
+}
+
 /// Build the in-memory keyring from settings, migrating the single legacy value.
 ///
 /// `key_auth_key_path` held one path before the ring existed. Folding it in as an entry named
@@ -340,6 +365,7 @@ pub fn keyring_from_settings(settings: &mut crate::state::AppSettings) -> Keyrin
     if settings.key_auth_keys.is_empty() {
         if let Some(p) = settings.key_auth_key_path.clone().filter(|p| !p.trim().is_empty()) {
             settings.key_auth_keys.push(crate::state::KeyAuthEntry {
+                id: mint_key_id(),
                 name: "default".to_string(),
                 path: p,
             });
@@ -348,6 +374,13 @@ pub fn keyring_from_settings(settings: &mut crate::state::AppSettings) -> Keyrin
             }
         }
     }
+    // Every key gets a handle, including ones saved before there were handles. Done here
+    // rather than at the point of use because a key that is only addressable AFTER somebody
+    // happens to open the right screen is not addressable.
+    for e in settings.key_auth_keys.iter_mut() {
+        if e.id.trim().is_empty() { e.id = mint_key_id(); }
+    }
+
     // Did the owner have a choice recorded BEFORE we touched anything? The auto-pick below
     // must not fire when we are about to clear a stale one — a test caught exactly that:
     // "active = a key that was removed" plus one surviving key silently became "active = the
@@ -439,7 +472,7 @@ pub fn key_auth_add(
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
         match data.settings.key_auth_keys.iter_mut().find(|e| e.name == name) {
             Some(e) => e.path = path,
-            None => data.settings.key_auth_keys.push(crate::state::KeyAuthEntry { name: name.clone(), path }),
+            None => data.settings.key_auth_keys.push(crate::state::KeyAuthEntry { id: mint_key_id(), name: name.clone(), path }),
         }
         if data.settings.key_auth_active.is_none() {
             data.settings.key_auth_active = Some(name);
@@ -658,25 +691,44 @@ pub fn key_auth_set_active(
 /// `url` is any address on that server; the origin is derived here so a caller can pass the
 /// catalogue address it already has rather than assembling `scheme://host` itself — which is
 /// the kind of small duplication that ends up disagreeing with `audience_for`.
+/// Point one origin at one key, on settings alone.
+///
+/// A plain function rather than only a command, because the API server has to make exactly
+/// this decision too and a second copy of it is the copy that drifts. `None` clears the
+/// choice back to the active key.
+///
+/// The ORIGIN MAP stores the NAME. That is what every ring saved before ids holds, and what
+/// `signer_for` looks up; the id is a way in, not a second way of storing the same fact.
+pub fn bind_origin_to_key(
+    settings: &mut crate::state::AppSettings,
+    url: &str,
+    reference: Option<&str>,
+) -> Result<(), String> {
+    let origin = audience_for(url).ok_or_else(|| "repo.keyauth.errBadUrl".to_string())?;
+    match reference.map(str::trim).filter(|r| !r.is_empty()) {
+        Some(r) => {
+            // An id OR a name. A screen sends the name it is showing; a script, a deeplink or
+            // an API call sends the id, which is the half that survives a rename.
+            //
+            // An unknown reference is an ERROR, never a fall back to the active key: a typo
+            // that quietly signs as somebody else is the worst answer available here.
+            let resolved = resolve_key_ref(settings, r).ok_or("repo.keyauth.errNoSuchKey")?;
+            settings.key_auth_by_origin.insert(origin, resolved);
+        }
+        None => { settings.key_auth_by_origin.remove(&origin); }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn key_auth_set_for_url(
     state: tauri::State<'_, crate::state::AppState>,
     url: String,
     name: Option<String>,
 ) -> Result<KeyringView, String> {
-    let origin = audience_for(&url).ok_or_else(|| "repo.keyauth.errBadUrl".to_string())?;
     {
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
-        let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
-        match name {
-            Some(n) => {
-                if !data.settings.key_auth_keys.iter().any(|e| e.name == n) {
-                    return Err("repo.keyauth.errNoSuchKey".into());
-                }
-                data.settings.key_auth_by_origin.insert(origin, n);
-            }
-            None => { data.settings.key_auth_by_origin.remove(&origin); }
-        }
+        bind_origin_to_key(&mut data.settings, &url, name.as_deref())?;
     }
     commit(&state)?;
     key_auth_list(state)
@@ -845,9 +897,73 @@ mod tests {
     }
 
     #[test]
+    fn a_key_saved_before_ids_existed_gets_one() {
+        // The whole point of the handle is that it is always there. A key only addressable
+        // after somebody happens to open the right screen is not addressable, so the backfill
+        // runs where the ring is built rather than where it is displayed.
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry {
+            id: String::new(), name: "old".into(), path: "/o".into(),
+        });
+        keyring_from_settings(&mut s);
+        assert!(s.key_auth_keys[0].id.starts_with("bmmkey-"), "{:?}", s.key_auth_keys[0].id);
+    }
+
+    #[test]
+    fn two_keys_never_share_a_handle() {
+        let mut s = blank_settings();
+        for n in ["a", "b", "c", "d"] {
+            s.key_auth_keys.push(crate::state::KeyAuthEntry {
+                id: String::new(), name: n.into(), path: format!("/{n}"),
+            });
+        }
+        keyring_from_settings(&mut s);
+        let ids: std::collections::HashSet<&str> =
+            s.key_auth_keys.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids.len(), 4, "a handle was reused");
+    }
+
+    #[test]
+    fn a_handle_survives_a_rename() {
+        // THE ONE. This is the entire reason ids exist: a name is what somebody types, so it
+        // is what they change, and a script referring to a key by name breaks silently when
+        // they do.
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry {
+            id: String::new(), name: "release".into(), path: "/r".into(),
+        });
+        keyring_from_settings(&mut s);
+        let handle = s.key_auth_keys[0].id.clone();
+
+        s.key_auth_keys[0].name = "release-2026".into();
+        keyring_from_settings(&mut s);
+
+        assert_eq!(s.key_auth_keys[0].id, handle, "the rename changed the handle");
+        assert_eq!(resolve_key_ref(&s, &handle).as_deref(), Some("release-2026"));
+    }
+
+    #[test]
+    fn a_reference_may_be_either_and_an_unknown_one_is_none() {
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry {
+            id: String::new(), name: "work".into(), path: "/w".into(),
+        });
+        keyring_from_settings(&mut s);
+        let id = s.key_auth_keys[0].id.clone();
+
+        assert_eq!(resolve_key_ref(&s, &id).as_deref(), Some("work"));
+        assert_eq!(resolve_key_ref(&s, "work").as_deref(), Some("work"));
+        assert_eq!(resolve_key_ref(&s, "  work  ").as_deref(), Some("work"), "trimmed");
+        // Not a fallback to the active key, and not the only key on the ring: a reference to
+        // a key that is not there must fail, or a typo signs as somebody else.
+        assert_eq!(resolve_key_ref(&s, "nope"), None);
+        assert_eq!(resolve_key_ref(&s, ""), None);
+    }
+
+    #[test]
     fn an_active_name_that_no_longer_exists_is_dropped() {
         let mut s = blank_settings();
-        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "work".into(), path: "/w".into() });
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { id: mint_key_id(), name: "work".into(), path: "/w".into() });
         s.key_auth_active = Some("gone".to_string());
         keyring_from_settings(&mut s);
         // NOT silently repointed at "work": the owner chose a key that is no longer there, and
@@ -858,7 +974,7 @@ mod tests {
     #[test]
     fn one_key_and_no_choice_means_that_key() {
         let mut s = blank_settings();
-        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "only".into(), path: "/o".into() });
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { id: mint_key_id(), name: "only".into(), path: "/o".into() });
         keyring_from_settings(&mut s);
         assert_eq!(s.key_auth_active.as_deref(), Some("only"));
     }
@@ -866,8 +982,8 @@ mod tests {
     #[test]
     fn two_keys_and_no_choice_stays_no_choice() {
         let mut s = blank_settings();
-        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "a".into(), path: "/a".into() });
-        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "b".into(), path: "/b".into() });
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { id: mint_key_id(), name: "a".into(), path: "/a".into() });
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { id: mint_key_id(), name: "b".into(), path: "/b".into() });
         keyring_from_settings(&mut s);
         // Picking one for them would be picking an identity for them.
         assert_eq!(s.key_auth_active, None);

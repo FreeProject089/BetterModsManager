@@ -56,7 +56,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/hook/:name` | oui | `GET` lit les sonneries d'un nom, contenu compris, sans les consommer (`?since=<ms>` pour les récentes) ; `DELETE` oublie ce nom |
 | `/api/content-id` | oui | `{ kind, doc }` — l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. `kind` vaut modpack, plugin, task, profile, theme, launchpack, repo, app ou modlist. Il prend le DOCUMENT, donc la réponse ne révèle rien de ce que cette installation contient ; une variante par id serait un oracle « cette machine a-t-elle X » et exigerait la portée de lecture de chaque type. |
 | `/api/keys` | oui · `keys.write` | `{ name, algorithm? }` — GET liste, POST crée ; la moitié privée ne sort jamais |
-| `/api/catalogs` | oui · `catalog.write` | `{ type, url, follow }` — GET liste, POST (dés)abonne |
+| `/api/catalogs` | oui · `catalog.write` | `{ type, url, follow, password?, key? }` — GET liste, POST (dés)abonne. `key` désigne quelle clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, pas ignorée |
 | `/api/plugins/assets` | oui · `plugins.read` | — (GET `?id=&path=`) ce qu'un plugin livre, ou le texte d'un fichier |
 | `/api/repo/extras` | oui · `repo.write` | `{ url, kind, name }` — l'entrée est cherchée dans le manifeste, jamais décrite par l'appelant |
 | `/api/repo/modpacks` | oui · `repo.read` / `repo.write` | `GET ?dir=` — quels modpacks un dossier de repo sur cette machine partage. `POST { dir, shares[] }` définit toute la liste et re-signe le manifeste ; omettre `shares` lit au lieu d'écrire, parce que « dis-moi » et « n'en partage aucun » sont deux requêtes différentes. |

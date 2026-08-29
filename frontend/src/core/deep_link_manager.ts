@@ -26,6 +26,40 @@ async function getApiToken(): Promise<string> {
  * Initializes the deep link listener.
  * Listens for 'deep-link-received' events from the Rust backend.
  */
+/**
+ * The two ways a source is protected, applied the same way wherever a link names one.
+ *
+ *   ?password=…   a shared secret, remembered for this run only and never written to disk
+ *   ?key=…        which identity key signs the request — an id or a name
+ *
+ * `key` takes either because both are real handles to a person: the id is what a script
+ * should carry (it survives a rename), the name is what somebody reads off their own screen.
+ *
+ * A key that does not resolve is REPORTED. Continuing quietly would send the request signed
+ * by whatever the ring had active — usually the wrong one, or none — and the answer would be
+ * "could not read it", with nothing anywhere pointing at the key. That is the exact shape of
+ * defect `scripts/check-creds-wired.mjs` exists to catch inside the scheduler; a deeplink can
+ * reach the same sources and deserves the same honesty.
+ */
+async function applySourceAccess(url: string, params: URLSearchParams): Promise<void> {
+    if (!url) return;
+    const password = params.get('password') || '';
+    if (password) {
+        const { rememberSourcePassword } = await import('./source-fetch.js');
+        try { rememberSourcePassword(url, password); } catch { /* proceed unprotected */ }
+    }
+    const key = (params.get('key') || '').trim();
+    if (!key) return;
+    try {
+        await invoke('key_auth_set_for_url', { url, name: key });
+    } catch (e) {
+        // Named and not found, versus found and refused by the server, are different problems
+        // with different fixes, and only the first one is knowable here.
+        toast(t('deeplink.keyUnknown').replace('{k}', key), 'warning', 9000);
+        console.warn('[deeplink] key', key, e);
+    }
+}
+
 export async function initDeepLinks(): Promise<void> {
     if (typeof window === 'undefined' || !window.__TAURI__ || !window.__TAURI__.event) {
         console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
@@ -680,11 +714,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             // A catalogue can be password-protected, exactly as a repo can. Remembered for
             // this run only, which is the rule the source-access panel already states: a
             // password is never written to disk. Following an unprotected one is unchanged.
-            const password = parsedUrl.searchParams.get('password') || '';
-            if (password && url) {
-                const { rememberSourcePassword } = await import('./source-fetch.js');
-                try { rememberSourcePassword(url, password); } catch { /* follow anyway */ }
-            }
+            await applySourceAccess(url, parsedUrl.searchParams);
             const { STORE_KEY, addSource, removeSource, rememberOrigin, forgetOrigin, recordHistory } =
                 await import('../features/catalogs/catalog-index.js');
             const { writeSources } = await import('../features/catalogs/catalog-sources.js');
@@ -751,12 +781,8 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         if (action === 'catalog/import') {
             const url = parsedUrl.searchParams.get('url') || '';
             const want = parsedUrl.searchParams.get('type') || '';
-            const password = parsedUrl.searchParams.get('password') || '';
             if (!/^https?:\/\//i.test(url)) { toast(t('cat.badUrl'), 'warning', 8000); return; }
-            if (password) {
-                const { rememberSourcePassword } = await import('./source-fetch.js');
-                try { rememberSourcePassword(url, password); } catch { /* try anyway */ }
-            }
+            await applySourceAccess(url, parsedUrl.searchParams);
             let doc: unknown;
             try {
                 const { fetchSourceText } = await import('./source-fetch.js');
