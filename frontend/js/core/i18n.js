@@ -4,7 +4,11 @@
  */
 let translations = {};
 let langInfo = {};
-let currentLang = localStorage.getItem('bmm-lang') || 'fr';
+// Read at module scope, so it runs the moment anything imports this file — including the
+// node test suites, which import COMPILED modules with no browser around them. An
+// unguarded read throws there and takes down the whole file with it, and the failure
+// lands on whichever module happened to import i18n most recently rather than on i18n.
+let currentLang = (typeof localStorage === 'undefined' ? null : localStorage.getItem('bmm-lang')) || 'fr';
 let loaded = false;
 /** Synonym groups per language: { lang: { canonical: [synonyms] } } */
 let synonymsStore = {};

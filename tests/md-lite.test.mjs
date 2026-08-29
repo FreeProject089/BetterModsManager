@@ -96,3 +96,71 @@ describe('structure', () => {
     assert.match(renderDocMarkdown('```json\n{"a":1}\n```\n'), /class="[^"]*language-json/);
   });
 });
+
+// ── Tabs, hours and instants ─────────────────────────────────────────────────
+//
+// These three arrived together, so they are tested together. Each assertion below is a
+// decision that could be quietly reversed by somebody "simplifying" the renderer.
+describe('tabs, hours and instants', () => {
+  test('tabs get a strip, and only the first panel is open', () => {
+    const html = renderDocMarkdown(
+      ':::tabs\n:::tab{title="Windows"}\nRun it.\n:::\n:::tab{title="Linux"}\nRun it too.\n:::\n:::\n');
+    assert.match(html, /class="doc-tabs-bar"/);
+    assert.match(html, /doc-tabs-btn is-on"[^>]*data-tab="0"/);
+    assert.match(html, /class="doc-tab is-on" data-title="Windows"/);
+    // The second panel must NOT be open: two open panels is the stacked page this block
+    // exists to replace, wearing a tab strip.
+    assert.match(html, /class="doc-tab" data-title="Linux"/);
+  });
+
+  test('the strip reads its labels off the panels', () => {
+    // Not from a separate list. A label written twice is a label that drifts from the content
+    // it names, and nothing would report the drift.
+    const html = renderDocMarkdown(':::tabs\n:::tab{title="Only"}\nBody.\n:::\n:::\n');
+    assert.match(html, />Only<\/button>/);
+  });
+
+  test('an untitled panel is numbered rather than left blank', () => {
+    const html = renderDocMarkdown(':::tabs\n:::tab\nBody.\n:::\n:::\n');
+    assert.match(html, />1<\/button>/);
+  });
+
+  test('`:::tabs` around ordinary content renders the content, not an empty strip', () => {
+    const html = renderDocMarkdown(':::tabs\nJust a paragraph.\n:::\n');
+    assert.match(html, /Just a paragraph\./);
+    assert.doesNotMatch(html, /doc-tabs-bar/);
+  });
+
+  test('a schedule names its zone and leaves the rows ALONE', () => {
+    // The point of the block. "Monday 09:00 Europe/Paris" is 09:00 in Paris every week of the
+    // year; converting the row would make it right today and wrong in March, with nothing on
+    // the page admitting it.
+    const html = renderDocMarkdown(
+      ':::schedule[Support]{tz=Europe/Paris}\n| Day | Open |\n|---|---|\n| Mon-Fri | 09:00-18:00 |\n:::\n');
+    assert.match(html, /class="doc-schedule"/);
+    assert.match(html, /doc-schedule-tz">Europe\/Paris</);
+    assert.match(html, /09:00-18:00/);
+    assert.match(html, /<table/);
+  });
+
+  test('the schedule note is left EMPTY for the page to fill', () => {
+    // md-lite has no dictionary. It carries the zone and hydrateDocPage writes the sentence —
+    // and if hydration never runs, an empty <p> is a blank line rather than a wrong hour.
+    const html = renderDocMarkdown(':::hours{tz=Asia/Tokyo}\nAlways.\n:::\n');
+    assert.match(html, /<p class="doc-schedule-note" data-sched-note="Asia\/Tokyo"><\/p>/);
+  });
+
+  test('an instant is converted, and carries what the author typed', () => {
+    const html = renderDocMarkdown('Starts at :time[2026-09-01T20:00]{tz=Europe/Paris}.\n');
+    assert.match(html, /<time class="doc-time"/);
+    // 20:00 in Paris on that date is 18:00 UTC — the date is what settles the DST side.
+    assert.match(html, /datetime="2026-09-01T18:00:00\.000Z"/);
+    assert.match(html, /title="2026-09-01T20:00 Europe\/Paris"/);
+  });
+
+  test('an unparseable instant is shown as written, never as "Invalid Date"', () => {
+    const html = renderDocMarkdown('Meet :at[whenever]{tz=Europe/Paris}.\n');
+    assert.match(html, /class="doc-time">whenever</);
+    assert.doesNotMatch(html, /Invalid Date/);
+  });
+});

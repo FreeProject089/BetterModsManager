@@ -14,6 +14,8 @@
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
+// The schedule card's sentence is written here, not in md-lite — see hydrateDocPage.
+import { zoneDelta } from '../core/tz.js';
 import { BMMS_REFERENCE } from './bmms-reference.gen.js';
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
@@ -3576,6 +3578,25 @@ async function hydrateDocPage(host) {
         highlightIn(host);
     }
     catch { /* code stays readable unhighlighted */ }
+    // Opening-hours cards. Same reason as the clips below: md-lite has no dictionary, and this
+    // card carries two sentences — the fallback title, and how far the reader is from the zone.
+    //
+    // "Right now" is not hedging. The difference changes twice a year and a rendered page does
+    // not redraw itself when it does, so a sentence that did not say when it was computed would
+    // quietly become false on a Sunday in March.
+    host.querySelectorAll('[data-sched-title]').forEach((el) => { el.textContent = t('md.sched.hours'); });
+    host.querySelectorAll('[data-sched-note]').forEach((el) => {
+        const tz = el.getAttribute('data-sched-note') || '';
+        const { dir, here, span } = zoneDelta(tz);
+        // Same zone as the reader: there is nothing to say, and an empty card line says it best.
+        if (dir === 'none') {
+            el.remove();
+            return;
+        }
+        el.textContent = dir === 'same'
+            ? t('md.sched.same', { here, tz })
+            : t(dir === 'ahead' ? 'md.sched.ahead' : 'md.sched.behind', { here, tz, span });
+    });
     // Recording / clip cards. md-lite cannot speak the reader's language, so the one-line
     // explanation under the title is filled in here.
     host.querySelectorAll('.dh-clip').forEach((el) => {
