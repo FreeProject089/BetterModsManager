@@ -296,7 +296,13 @@ struct HookSinceQuery {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CatalogFollowBody {
-    /// `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `index` · `app`.
+    /// `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `app`.
+    ///
+    /// NOT `index`. An index is a catalogue OF catalogues and has no store of its own, so
+    /// `STORE_KEY['index']` is undefined and the handler answers "no catalogue type called
+    /// index". `catalog/import` is the route that reads one — it follows every kind the index
+    /// lists, and `type` narrows it to one of the eight above. This comment said nine for
+    /// long enough to send somebody scripting it into a warning toast.
     #[serde(rename = "type")]
     kind: String,
     url: String,

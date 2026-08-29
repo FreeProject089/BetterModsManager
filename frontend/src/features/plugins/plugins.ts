@@ -7843,6 +7843,11 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'appTitle',    label: d('fldAppTitle', 'Title'),         type: 'text', placeholder: 'My App' },
             { key: 'downloadUrl', label: d('fldDlUrl',    'Download URL'),  type: 'text', placeholder: 'https://github.com/.../app.exe' },
             { key: 'fileType',    label: d('fldFileType', 'File type'),     type: 'select', options: ['exe','zip','msi','script'] },
+            // The request has always CARRIED this and the route has always accepted it;
+            // there was simply no box to type it in, so it went out empty every time and
+            // every automated install landed in the default folder — with the field name
+            // sitting in the generated script looking like it had been considered.
+            { key: 'installPath', label: d('fldInstallPath', 'Install folder'), type: 'text', placeholder: d('phDefaultApps', 'blank = the default Apps folder') },
           ] },
         { id: 'launch_app',   cat: 'apps', label: d('actionLaunchApp', 'Launch app'),
           desc: d('actionLaunchAppDesc', 'Launches an app already installed through the BMM App Catalog.'),
@@ -7989,6 +7994,14 @@ function _actionCatalog(): _ActionDef[] {
             ] },
             { key: 'url', label: d('fldCatUrl', 'Address'), type: 'text', placeholder: 'https://…/catalog.json' },
             { key: 'follow', label: d('fldFollow', 'Follow it'), type: 'switch', default: true },
+            // A protected catalogue was unreachable from an automation. The route has taken a
+            // password since it was written and a key since this batch; the deeplink, the API
+            // and the endpoint tester all offer both, and this — the one door a SCHEDULED run
+            // uses — offered neither. It failed the way an unauthorised request fails, with
+            // nothing in the task saying a secret was the missing part.
+            { key: 'password', label: d('fldCatPw', 'Password'), type: 'text', half: true, placeholder: d('phOptional', 'optional') },
+            { key: 'key', label: d('fldCatKey', 'Identity key'), type: 'text', half: true, placeholder: d('phKeyRef', 'id or name') },
+            { key: 'passphrase', label: d('fldCatPassphrase', 'Key passphrase'), type: 'text', half: true, placeholder: d('phOptional', 'optional') },
           ] },
         { id: 'repo_take', cat: 'repo', label: d('actionRepoTake', 'Take something a repo carries'),
           desc: d('actionRepoTakeDesc', 'One plugin, automation, theme, mod list or catalogue from a repo. A plugin or automation arrives DISABLED.'),
@@ -8924,6 +8937,21 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
             case 'repo_info':
                 extra.url = raw.url || '';
                 break;
+            // Everything else: the card's own fields, under their own names.
+            //
+            // This switch is an allowlist, and it stopped being extended. Thirty-three
+            // action types had a case; SIXTEEN newer ones declared form fields and had
+            // none — so `extra` stayed empty, every `s('…')` in their request body read an
+            // empty string, and the generated script posted `{"url":"","port":0}`. The
+            // form worked, the script ran, and nothing said the values had been dropped.
+            //
+            // A default rather than sixteen more cases: the cases above exist to RESHAPE
+            // (duration_s → duration_ms in milliseconds, two inputs joined into `expr`), and
+            // an action that needs no reshaping needs no case. The next one added is then
+            // correct by default instead of silently empty.
+            default:
+                Object.assign(extra, raw);
+                break;
         }
         return { action_type: type, target_id, extra };
     });
@@ -9380,7 +9408,9 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
             return { method: 'POST', path: '/api/hook', body: { name: s('name'), data } };
         }
         case 'new_key':            return { method: 'POST', path: '/api/keys',                  body: _prune({ name: s('name'), kind: s('kind') || 'ed25519' }) };
-        case 'follow_catalog':     return { method: 'POST', path: '/api/catalogs',              body: { type: s('type') || 'plugin', url: s('url'), follow: bool('follow') } };
+        // `_prune` so an untouched field is ABSENT rather than empty: the route reads an empty
+        // password as "the password is the empty string" and remembers it as one.
+        case 'follow_catalog':     return { method: 'POST', path: '/api/catalogs',              body: { type: s('type') || 'plugin', url: s('url'), follow: bool('follow'), ..._prune({ password: s('password'), key: s('key'), passphrase: s('passphrase') }) } };
         case 'repo_take':          return { method: 'POST', path: '/api/repo/extras',           body: _prune({ url: s('url'), kind: s('kind'), id: s('id'), password: s('password') }) };
         case 'repo_sync_now':      return { method: 'POST', path: '/api/repo/sync-now',         body: _prune({ url: s('url'), repoProfile: s('repoProfile'), targetProfile: s('targetProfile'), gameDir: s('gameDir'), modsDir: s('modsDir'), backupDir: s('backupDir'), password: s('password'), overwriteAll: bool('overwriteAll'), deleteExtra: bool('deleteExtra') }) };
         // Typed as a comma-separated list, because a generated script has no place for a

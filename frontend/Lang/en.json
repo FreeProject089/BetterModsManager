@@ -10038,5 +10038,11 @@
   "srcacc.keyLockedTitle": "This key is locked",
   "srcacc.keyLockedDesc": "The key file is protected by a passphrase. Enter it to use the key — it is kept for this run only and never written down.",
   "srcacc.keyPassphrase": "Passphrase",
-  "srcacc.keyPassphraseWrong": "That passphrase does not open this key."
+  "srcacc.keyPassphraseWrong": "That passphrase does not open this key.",
+  "plugins.fldCatPw": "Password",
+  "plugins.fldCatKey": "Identity key",
+  "plugins.fldCatPassphrase": "Key passphrase",
+  "plugins.phKeyRef": "id or name",
+  "plugins.fldInstallPath": "Install folder",
+  "plugins.phDefaultApps": "blank = the default Apps folder"
 }

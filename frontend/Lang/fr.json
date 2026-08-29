@@ -10036,5 +10036,11 @@
   "srcacc.keyLockedTitle": "Cette clé est verrouillée",
   "srcacc.keyLockedDesc": "Le fichier de clé est protégé par une phrase de passe. Saisissez-la pour utiliser la clé — elle n’est gardée que pour cette exécution et jamais écrite.",
   "srcacc.keyPassphrase": "Phrase de passe",
-  "srcacc.keyPassphraseWrong": "Cette phrase de passe n’ouvre pas cette clé."
+  "srcacc.keyPassphraseWrong": "Cette phrase de passe n’ouvre pas cette clé.",
+  "plugins.fldCatPw": "Mot de passe",
+  "plugins.fldCatKey": "Clé d'identité",
+  "plugins.fldCatPassphrase": "Phrase de passe de la clé",
+  "plugins.phKeyRef": "id ou nom",
+  "plugins.fldInstallPath": "Dossier d'installation",
+  "plugins.phDefaultApps": "vide = le dossier Apps par défaut"
 }
