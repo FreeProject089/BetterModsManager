@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-68 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+69 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -149,6 +149,7 @@ donne les valeurs acceptées.
 | `bmm_list_actions` | — |  | Tous les types d'action qu'une étape peut utiliser (`{ type, label, needs, group }`) — le registre que le builder in-app affiche, généré depuis la source de l'app au build |
 | `bmm_set_schedule_enabled` | `id`\*, `enabled`\* | app | Arme ou désarme une tâche enregistrée. `enabled` uniquement — rien ici ne peut réécrire ses étapes |
 | `bmm_signal` | `name`\*, `data` | app | Sonne une cloche nommée qu'une tâche attend (`wait.hook`), p. ex. pour dire qu'un build est fini |
+| `bmm_signals_seen` | `name`, `since` | app | Lit avec quoi une cloche a sonné — les contenus et leurs horodatages, la même vue qu'obtient une tâche en attente. Sans `name`, chaque nom avec son compte. À utiliser après `bmm_signal` : un nom est rétréci en quelque chose qui peut servir de clé, donc `build/done` est classé sous `build_done` |
 | `bmm_run_schedule` | `id`\* | app | Déclenche une tâche du planificateur par son id, dans l'app BMM ouverte |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Lance un benchmark BMM dans l'app ouverte |
 
@@ -247,12 +248,12 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 68 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 69 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 68 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 69 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---

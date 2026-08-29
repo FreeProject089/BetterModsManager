@@ -642,6 +642,17 @@ impl ServerHandler for BmmMcpServer {
             "required": ["name"]
         })).unwrap()),
     ),
+    Tool::new(
+        "bmm_signals_seen",
+        "Read what a doorbell was rung with. Give a `name` for the rings themselves — what was sent and when, the same view a waiting task gets — or omit it for every name with a count. Use it after `bmm_signal` to confirm the ring landed under the name a task is actually waiting on: BMM narrows a name to something that can be a key, so \"build/done\" is filed as \"build_done\" and a task waiting on the first waits forever. Reading does not consume a ring.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "One doorbell. Omit to list every name with how many times it rang." },
+                "since": { "type": "integer", "description": "Unix milliseconds. Only rings at or after this. Omit for every ring still held." }
+            }
+        })).unwrap()),
+    ),
     // Catalogues.
     Tool::new(
         "bmm_list_catalogs",
@@ -1176,6 +1187,32 @@ impl ServerHandler for BmmMcpServer {
                 if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
             }
             self.tool_api_call("POST", "/api/hook", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_signals_seen" => {
+            // No name → the summary route, which takes no query at all. The docs said it took
+            // a `name` for a long time and it never did; that read now exists one path down,
+            // and this is the tool that reaches it.
+            let path = match args.get("name").and_then(|v| v.as_str()).map(str::trim).filter(|n| !n.is_empty()) {
+                None => "/api/hook".to_string(),
+                Some(name) => {
+                    // Narrowed HERE, with the writer's own function, rather than passed through
+                    // and encoded. A caller who rang "deploy/staging" saw it filed as
+                    // "deploy_staging"; asking for the name they typed used to answer `count: 0`
+                    // under "deploy_2Fstaging", which is a name that has never existed anywhere.
+                    //
+                    // The result is alphanumerics, `-`, `_` and `.`, so it needs no escaping to
+                    // be a path segment — the narrowing IS the escaping.
+                    let key = crate::commands::hooks::safe_hook_name(name);
+                    if key.is_empty() { "/api/hook".to_string() }
+                    else {
+                        match args.get("since").and_then(|v| v.as_i64()) {
+                            Some(ms) => format!("/api/hook/{key}?since={ms}"),
+                            None => format!("/api/hook/{key}"),
+                        }
+                    }
+                }
+            };
+            self.tool_api_call("GET", &path, None).await
         }
         "bmm_list_catalogs" => self.tool_api_call("GET", "/api/catalogs", None).await,
         "bmm_follow_catalog" => {

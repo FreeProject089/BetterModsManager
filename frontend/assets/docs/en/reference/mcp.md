@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-68 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+69 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -147,6 +147,7 @@ values.
 | `bmm_list_actions` | — |  | Every action type a step may use (`{ type, label, needs, group }`) — the same registry the in-app builder shows, generated from the app's source at build time |
 | `bmm_set_schedule_enabled` | `id`\*, `enabled`\* | app | Arm or disarm one saved task. Only `enabled` — nothing here can rewrite a task's steps |
 | `bmm_signal` | `name`\*, `data` | app | Ring a named doorbell a task may be waiting on (`wait.hook`), e.g. to say a build has finished |
+| `bmm_signals_seen` | `name`, `since` | app | Read what a doorbell was rung with — the payloads and their times, the same view a waiting task gets. Omit `name` for every name with a count. Use it after `bmm_signal`: a name is narrowed to something that can be a key, so `build/done` is filed as `build_done` |
 | `bmm_run_schedule` | `id`\* | app | Trigger a saved scheduler task by id in the running BMM app |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Launch a BMM benchmark in the running app |
 
@@ -244,12 +245,12 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 68 tools with their parameters is exactly the list that rots the
+written by hand, because 69 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 68 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 69 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---

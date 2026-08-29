@@ -7166,6 +7166,30 @@ function getEndpointDefs(): EndpointDef[] {
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "hooks": [] }' }, e401],
         },
         {
+            method: 'GET', path: '/api/hook/:name', auth: true,
+            desc: t('plugins.ep.hookRead'),
+            about: t('plugins.epAbout.hookRead'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "name": "build_done", "count": 1, "hits": [{ "at": 1787962421201, "data": { "job": "a91" } }] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/hook', auth: true,
+            desc: t('plugins.ep.hookClearAll'),
+            about: t('plugins.epAbout.hookClearAll'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "cleared": 3 }' }, e401],
+        },
+        {
+            method: 'DELETE', path: '/api/hook/:name', auth: true,
+            desc: t('plugins.ep.hookClearOne'),
+            about: t('plugins.epAbout.hookClearOne'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "cleared": 1 }' }, e401],
+        },
+        {
             method: 'POST', path: '/api/hook', auth: true,
             desc: t('plugins.ep.hookPost'),
             about: t('plugins.epAbout.hookPost'),

@@ -44,6 +44,10 @@ mod commands {
     // serde, so the CLI can compile a task with no app, no state and no HTTP.
     #[path = "../../commands/bmms.rs"]
     pub mod bmms;
+    // How a doorbell name is narrowed before it is filed. `bmm_signals_seen` has to ask the
+    // same question the writer answered, or it reads back a name that was never stored.
+    #[path = "../../commands/hooks.rs"]
+    pub mod hooks;
 }
 
 use clap::{Parser, Subcommand};
@@ -599,14 +603,46 @@ fn print_banner() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 
+/// How much stack the CLI actually needs.
+///
+/// A debug build of this binary overflowed the main thread's 1 MB before printing a byte
+/// — `info`, `profiles`, and `--version` alike. `--version` never reaches the match, which
+/// is what located it: the cost is in the command tree clap derives for 62 subcommands,
+/// one generated function in which every builder temporary gets its own slot because a
+/// debug build does not overlap them. Release did, so release worked, and the bug read as
+/// a phantom for a long time.
+///
+/// Measured on the way past: `Commands` is 120 bytes, and boxing the two branch futures
+/// changed nothing. Neither was it.
+///
+/// 16 MB is far more than the ~1 MB that was missing, which is the point: it is not a
+/// number tuned to today's subcommand count. Reserved address space, not committed
+/// memory — the pages are never touched.
+const CLI_STACK: usize = 16 * 1024 * 1024;
+
+fn main() -> anyhow::Result<()> {
+    // Everything runs on this thread, the runtime included, so the size covers argument
+    // parsing as well — which is where it was being spent. Doing it with a link flag would
+    // have worked too, and would have applied to every target in the workspace to fix one.
+    std::thread::Builder::new()
+        .name("bmm-cli".into())
+        .stack_size(CLI_STACK)
+        .spawn(run)
+        .map_err(|e| anyhow::anyhow!("could not start the CLI thread: {e}"))?
+        .join()
+        // A panic on the worker is reported as one here rather than swallowed into a
+        // silent non-zero exit — the failure this whole change is about printed nothing.
+        .map_err(|_| anyhow::anyhow!("the CLI thread panicked"))?
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         // Default (no subcommand) or explicit `serve` → MCP mode
         None | Some(Commands::Serve) => {
-            run_mcp_server().await
+            Box::pin(run_mcp_server()).await
         }
 
         Some(cmd) => {
@@ -620,7 +656,7 @@ async fn main() -> anyhow::Result<()> {
                 .init();
 
             print_banner();
-            run_cli_command(cmd).await
+            Box::pin(run_cli_command(cmd)).await
         }
     }
 }
