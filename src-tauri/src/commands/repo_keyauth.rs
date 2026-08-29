@@ -1128,6 +1128,60 @@ mod tests {
         ]
     }
 
+    /// The same, with a passphrase on it. `encrypt` is what `ssh-keygen -p` writes.
+    fn write_locked_key(dir: &std::path::Path, name: &str, pass: &str) -> (String, String) {
+        let key = russh::keys::PrivateKey::random(&mut OsRng, russh::keys::ssh_key::Algorithm::Ed25519).unwrap();
+        let locked = key.encrypt(&mut OsRng, pass).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, locked.to_openssh(russh::keys::ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
+        (path.to_string_lossy().to_string(), public_blob(key.public_key()).unwrap())
+    }
+
+    /// A key with a passphrase, which until recently could not be used AT ALL.
+    ///
+    /// Every call site passed `None`, so such a key could not be added — the picker reported
+    /// "not a usable key", which reads as "this file is no good" — and had one reached the
+    /// ring, no proof was ever built and the server answered "could not read it".
+    ///
+    /// The three answers are asserted separately because the screens have three different
+    /// things to say, and for months they could only say the wrong one.
+    #[test]
+    fn a_locked_key_says_which_of_the_three_things_is_wrong() {
+        let d = tempfile::tempdir().unwrap();
+        let (path, pk) = write_locked_key(d.path(), "locked", "correct horse");
+
+        // No passphrase: LOCKED, not "invalid key". This is the message the keyring screen
+        // has always had a branch for and could never reach.
+        assert_eq!(make_proof(&path, None, "https://x").unwrap_err(), "repo.ssh.errKeyPassphrase");
+
+        // Wrong passphrase: its own answer. russh calls this "cryptographic error", which
+        // reads like a broken key rather than four mistyped characters.
+        assert_eq!(
+            make_proof(&path, Some("correct hors"), "https://x").unwrap_err(),
+            "repo.ssh.errKeyBadPassphrase",
+        );
+
+        // Right passphrase: a proof that verifies against its own public half, exactly like an
+        // unprotected key. The passphrase changes how the file opens and nothing else.
+        let proof = make_proof(&path, Some("correct horse"), "https://x").unwrap();
+        assert_eq!(verify_proof(&proof, &[pk.clone()], "https://x").unwrap(), pk);
+    }
+
+    /// Remembering it is a session fact, and an empty one FORGETS.
+    ///
+    /// Storing the empty string would hand `decode_secret_key` an answer where there is none,
+    /// turning "this key is locked" into "that passphrase is wrong" — the same two the test
+    /// above exists to keep apart.
+    #[test]
+    fn an_empty_passphrase_forgets_rather_than_being_remembered() {
+        remember_passphrase("/nowhere/k", "open sesame");
+        assert_eq!(passphrase_for("/nowhere/k").as_deref(), Some("open sesame"));
+        remember_passphrase("/nowhere/k", "");
+        assert_eq!(passphrase_for("/nowhere/k"), None);
+        // And nothing is remembered for a key nobody unlocked.
+        assert_eq!(passphrase_for("/nowhere/never"), None);
+    }
+
     #[test]
     fn a_proof_verifies_against_its_own_key_whatever_the_algorithm() {
         let d = tempfile::tempdir().unwrap();
