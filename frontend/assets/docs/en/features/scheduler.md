@@ -91,8 +91,21 @@ held would start a hundred cleanups before the first had finished making room �
 once on false→true, and not again until it has been false in between.
 
 **When a script says so.** The free one: PowerShell, CMD, Bash, Python, Node or Rust, run on
-an interval you choose. **Exit 0 runs the task**; anything else means not yet. Whatever it
-printed arrives as `{event.stdout}`.
+an interval you choose.
+
+**You choose what counts as "yes".** Four rules: it succeeded (exit 0), the exit code is
+exactly N, it printed anything, or what it printed contains some text. This used to be exit 0
+and nothing else, decided in the runner and written nowhere — so a probe that prints its
+answer and exits 0 either way fired every interval, and a probe that signals by exiting 1
+never fired at all. Both looked like a broken trigger rather than a rule nobody was told.
+
+The code can be **written here or read from a file**. A file is re-read on every probe, so
+editing it in your own editor changes what BMM watches for; the Load button next to the
+editor takes a copy instead, which is a different promise and is why they are separate. A
+file that has gone missing is not a fire.
+
+What it printed arrives as `{event.stdout}`, and its exit code as `{event.exitCode}` — so a
+probe can say WHICH thing it noticed, not only that it noticed something.
 
 This trigger runs code, so it needs the **Run scripts** permission — checked before the probe
 runs, not when the task does. Without that rule a task whose steps ask for nothing would still
@@ -526,12 +539,18 @@ the report that gets somebody kicked at the loading screen without knowing why.
 ### DCS gets a real hook
 
 DCS has a supported callback API, so it is **asked** rather than guessed at from a log.
-**Set up DCS** (on the `watchFile` trigger, or the `game.watch` action) writes a small Lua file
+The **Watch a game** action (`game.watch`) writes a small Lua file
 to `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. It reports which multiplayer server
 you are on, to a file BMM watches. It reads nothing else and sends nothing anywhere.
 
 It goes into **every** DCS folder found — there are usually two, release and open beta —
 because flying in the one you did not set up looks exactly like the feature not working.
+
+It used to be a button on the `watchFile` trigger as well. It is not any more, and the reason
+is worth saying: setting a game up is a STEP, and putting one game's name on a generic
+trigger meant the first thing somebody choosing "when a file changes" met was DCS — and, if
+they pressed it, a path ending in `bmm-server.json` with nothing on screen saying what that
+was. Add the action, then point the trigger at the file it writes.
 
 !!! note "Why every call in it is wrapped"
 

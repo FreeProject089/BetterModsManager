@@ -231,6 +231,24 @@ de la synchro delta côté téléchargement. Le pas-à-pas côté auteur vit dan
 
 ## Déposer le dossier sur le serveur (SSH/SFTP)
 
+### Le même bouton, là où est le dossier
+
+Publier est proposé sur trois écrans désormais, tous avec la connexion enregistrée ici :
+
+- **la carte SSH elle-même**, sous l'export — republier un dossier existant sans le
+  régénérer ;
+- **Manifeste seul**, une fois qu'elle a écrit un `repo.json` pour des mods que tu héberges
+  déjà — mettre ce fichier sur le serveur est l'étape suivante, et le seul chemin était de
+  remonter ici et retaper le dossier ;
+- **Mettre à jour un dépôt**, dans les deux modes. C'était caché en mode local, au motif que
+  ça proposerait « de pousser vers un serveur que personne n'a nommé ». Vrai avant que les
+  cibles soient enregistrées ; faux après — une copie de travail locale qu'on publie, c'est
+  la façon normale de tenir un dépôt.
+
+Les trois posent la même confirmation, en nommant la cible. Publier écrase ce que les gens
+téléchargent à cet instant, et un point d'entrée qui sauterait la question rendrait le même
+acte prudent sur un écran et désinvolte sur un autre.
+
 L'export écrit un dossier. **Publier par SSH**, sur le même écran, est ce qui dépose ce dossier
 sur la machine qui l'héberge — sans programme de transfert de fichiers entre les deux.
 

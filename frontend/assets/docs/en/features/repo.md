@@ -233,6 +233,23 @@ So there is nothing to memorise. Generate the repo above, fill the server in her
 line tells you what will move where before you press anything. Later uploads reuse what is
 saved.
 
+### The same button, wherever the folder is
+
+Publishing is offered on three screens now, all using the connection saved here:
+
+- **the SSH card itself**, under the export — re-publish an existing folder without
+  regenerating it;
+- **Manifest only**, once it has written a `repo.json` for mods you already host — putting
+  that file on the server is the next thing you do, and the only route used to be scrolling
+  back here and retyping the folder;
+- **Update a repo**, in both modes. It was hidden in local mode, on the grounds that it would
+  "offer to push a folder to a server nobody named". True before targets were saved; not true
+  after — a local working copy that gets published is the ordinary way to run a repo.
+
+All three ask the same confirmation, naming the target. Publishing overwrites what people are
+downloading right now, and an entry point that skipped the question would make one act
+careful on one screen and casual on another.
+
 !!! note "This screen is also what automations reuse"
 
     What you save here is the connection the scheduled action **Publish repo over SSH** and

@@ -98,8 +98,23 @@ elle part donc une fois au passage faux→vrai, et pas de nouveau tant qu'elle n
 redevenue fausse entre-temps.
 
 **Quand un script le dit.** Le libre : PowerShell, CMD, Bash, Python, Node ou Rust, exécuté à
-l'intervalle de ton choix. **Le code de sortie 0 lance la tâche** ; toute autre valeur veut
-dire pas encore. Ce qu'il a affiché arrive dans `{event.stdout}`.
+l'intervalle de ton choix.
+
+**C'est toi qui décides ce qui compte comme « oui ».** Quatre règles : il réussit (code 0),
+le code de sortie vaut exactement N, il affiche quelque chose, ou ce qu'il affiche contient un
+texte donné. Avant, c'était le code 0 et rien d'autre, décidé dans le coureur et écrit nulle
+part — donc une sonde qui affiche sa réponse et sort 0 dans tous les cas se déclenchait à
+chaque intervalle, et une sonde qui signale en sortant 1 ne se déclenchait jamais. Les deux
+ressemblaient à un déclencheur cassé plutôt qu'à une règle que personne n'avait dite.
+
+Le code peut être **écrit ici ou lu depuis un fichier**. Un fichier est relu à chaque
+vérification : le modifier dans ton éditeur change donc ce que BMM surveille. Le bouton
+« Charger » à côté de l'éditeur en prend une copie — c'est une autre promesse, d'où leur
+séparation. Un fichier disparu ne déclenche pas.
+
+Ce qu'il a affiché arrive dans `{event.stdout}`, et son code de sortie dans
+`{event.exitCode}` — une sonde peut donc dire CE QU'elle a remarqué, pas seulement qu'elle a
+remarqué quelque chose.
 
 Ce déclencheur exécute du code : il demande donc la permission **Exécuter des scripts** —
 vérifiée avant que la sonde tourne, pas au moment où la tâche s'exécute. Sans cette règle,
@@ -587,10 +602,17 @@ pourquoi.
 ### DCS a un vrai hook
 
 DCS dispose d'une API de callbacks supportée : on le lui **demande** plutôt que de le deviner
-dans un log. **Configurer DCS** (sur le déclencheur `watchFile`, ou l'action `game.watch`) écrit
+dans un log. L'action **Surveiller un jeu** (`game.watch`) écrit
 un petit fichier Lua dans `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. Il signale sur
 quel serveur multijoueur tu es, dans un fichier que BMM surveille. Il ne lit rien d'autre et
 n'envoie rien nulle part.
+
+C'était aussi un bouton sur le déclencheur `watchFile`. Ça ne l'est plus, et la raison mérite
+d'être dite : configurer un jeu est une **étape**, et mettre le nom d'un jeu sur un
+déclencheur générique faisait que la première chose rencontrée en choisissant « quand un
+fichier change » était DCS — et, si on appuyait, un chemin finissant par `bmm-server.json`
+sans rien à l'écran pour dire ce que c'était. Ajoute l'action, puis pointe le déclencheur sur
+le fichier qu'elle écrit.
 
 Il est installé dans **tous** les dossiers DCS trouvés — il y en a généralement deux, release
 et open beta — parce que voler dans celui que tu n'as pas configuré ressemble exactement à
