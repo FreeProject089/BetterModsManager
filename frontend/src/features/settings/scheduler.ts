@@ -6480,9 +6480,72 @@ function _wireFold(block: HTMLElement, step: any): void {
  * Everything is a parameter. Nothing here opens a picker: this runs from a task, and a task
  * that fires at 03:00 has nobody to answer a dialog.
  */
-async function buildCatalogueInto(kind: string, dir: string, title: string, base: string): Promise<number> {
+/**
+ * Every kind this can publish, and what each one is built FROM.
+ *
+ * Exported so the screen, the deeplink and the API offer the same list rather than three
+ * copies drifting apart — a kind on one and not the others is a capability that exists and
+ * cannot be found.
+ */
+export const BUILDABLE_KINDS: { kind: string; from: string }[] = [
+    { kind: 'tutorial', from: 'your custom tutorials' },
+    { kind: 'theme', from: 'your installed themes' },
+    { kind: 'plugin', from: 'your installed plugins' },
+    { kind: 'modpack', from: 'your modpacks' },
+    { kind: 'automation', from: 'your scheduled tasks' },
+    { kind: 'index', from: 'the catalogues you follow' },
+    { kind: 'folder', from: 'whatever is already in the folder' },
+];
+
+/**
+ * Write a catalogue folder from what this BMM holds.
+ *
+ * Exported because publishing was reachable from a scheduled task and by no other means —
+ * the same gap that once made FOLLOWING a catalogue clickable-only. The deeplink and the API
+ * come through here rather than reimplementing the shapes each format expects.
+ */
+export async function buildCatalogueInto(kind: string, dir: string, title: string, base: string): Promise<number> {
     const stamp = new Date().toISOString();
     const write = (file: string, content: string) => invoke('write_text_file', { path: `${dir}/${file}`, content });
+
+    if (kind === 'index') {
+        // A catalogue of catalogues, from what this BMM follows.
+        //
+        // `looksLikeIndex`, `parseCatalogIndex` and `importIndexForType` have read one for a
+        // long time; nothing could write one, so a group running four catalogues had to hand
+        // out four addresses or hand-write the JSON that ties them together.
+        //
+        // Read straight from the stores rather than through the screens: this is a snapshot
+        // of what is followed, and it must be the same whether a person or a schedule asks.
+        const { STORE_KEY } = await import('../catalogs/catalog-index.js');
+        const catalogs: { type: string; url: string; name: string }[] = [];
+        for (const [type, storeKey] of Object.entries(STORE_KEY)) {
+            let urls: string[] = [];
+            try {
+                const v = JSON.parse(localStorage.getItem(storeKey) || '[]');
+                urls = Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+            } catch { urls = []; }
+            for (const url of urls) {
+                // The host is the only name available without fetching every catalogue, and
+                // fetching them would make publishing depend on all of them being up. A
+                // reader shows the name the catalogue gives once it is followed.
+                let host = url;
+                try { host = new URL(url).host; } catch { /* keep the raw address */ }
+                catalogs.push({ type, url, name: host });
+            }
+        }
+        await write('catalog.json', JSON.stringify({
+            version: '1.0',
+            // Said in the document itself. `looksLikeIndex` accepts one without the marker,
+            // but an EMPTY index has no entries to be recognised by — unmarked it would read
+            // as a catalogue of nothing rather than an index of nothing.
+            kind: 'catalog-index',
+            name: title,
+            generatedAt: stamp,
+            catalogs,
+        }, null, 2));
+        return catalogs.length;
+    }
 
     if (kind === 'modpack') {
         // Embedded. BMM holds a modpack as data, so there is nothing to link to and nothing
@@ -8325,6 +8388,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                   ['plugin', t('sched.catKindPlugin') || 'My plugins'],
                   ['modpack', t('sched.catKindModpack')],
                   ['automation', t('sched.catKindAuto')],
+                  // A catalogue of catalogues, from what this BMM follows. The reader has
+                  // understood one for a long time; nothing could write one.
+                  ['index', t('sched.catKindIndex')],
                   // The one the others cannot cover: a `.mm` is exported, not held by BMM,
                   // so a catalogue of mod lists can only be built from a folder.
                   ['folder', t('sched.catKindFolder')]] as [string, string][])

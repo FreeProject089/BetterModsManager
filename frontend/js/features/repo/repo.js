@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
-import { initRepoSsh } from './repo-ssh.js';
+import { initRepoSsh, explainSsh } from './repo-ssh.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
 import { initRepoSync, setRepoPassword } from './repo-sync.js';
@@ -636,21 +636,6 @@ export const loadModpacksForExport = async (modpacksListEl) => {
         console.error("Failed to load modpacks for export:", err);
     }
 };
-/**
- * An SSH error code from the backend, as a sentence.
- *
- * The backend reports failures as i18n KEYS, sometimes with `|`-separated detail. t() returns
- * the key itself on a miss, so printing String(e) puts `repo.ssh.errAuthRejected` in front of
- * the user — which is what the sync panel used to do before it grew its own explain().
- */
-function explainSsh(raw) {
-    const [key, ...rest] = String(raw).split('|');
-    const msg = t(key);
-    // t() returning the key unchanged means there is no translation; the raw text is then more
-    // use than the key name.
-    const base = msg === key ? raw : msg;
-    return rest.length ? `${base} — ${rest.join(' ')}` : base;
-}
 export function initRepo() {
     // The mode-info banner is gone, and so is its dismiss/restore wiring. It explained that
     // hosting works "like a classic web server" above the very controls that do it — a

@@ -414,6 +414,7 @@ Two shapes sit outside that rule:
 | `POST` | `/api/apps/launch` | `app.write` | `appId`*, `exePath`* | ✓ |
 | `DELETE` | `/api/apps/:id` | `app.write` | — · deregisters, files kept | |
 | `PUT` | `/api/apps/permissions/:id` | admin token | `permissions[]`* · **replaces** the list; `[]` revokes everything | |
+| `POST` | `/api/catalog/publish` | `catalog.write` | `dir`*, `kind`, `name`, `base` → `202` · builds a catalogue FOLDER from what this BMM holds — tutorials, themes, plugins, modpacks, scheduled tasks, or an `index` of the catalogues you follow. Different job from `/api/catalog/new`, which files entries you assembled. Writing nothing is reported as a warning: a catalogue with no entries looks published and installs nothing | |
 | `POST` | `/api/catalog/new` | `catalog.write` | `type` (`app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `index`, default `app`), `name`, `description`, `partner_catalogs[]`, `community_imports[]`, `entries[]` (or `apps[]`, still accepted for `app`) → `201` | |
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |

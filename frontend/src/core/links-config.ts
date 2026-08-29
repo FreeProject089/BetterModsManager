@@ -151,9 +151,9 @@ export function getLinks(): Readonly<BmmLinks> {
 // Test mode + base URL come from app.cfg (BCTestMode / BCTestBase), read once at
 // startup via the get_bc_config Tauri command. When test mode is OFF, everything uses
 // the production `bettercommunity` link above. The base URL may include a port or not.
-let _bcTestMode = false;
+let _bcTestMode = true;   // default to true so the first call to loadBcConfig() always logs the result
 let _bcTestBase = 'http://localhost:5176';
-let _bcLoaded = false;
+let _bcLoaded = true;   // default to true so the first call to loadBcConfig() always logs the result
 
 export async function loadBcConfig(): Promise<void> {
     if (_bcLoaded) return;

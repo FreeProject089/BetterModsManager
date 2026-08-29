@@ -759,6 +759,47 @@ async function handleDeepLink(urlStr) {
                 console.warn(`[deeplink] view/open: no screen named "${id}"`);
             return;
         }
+        // Publish a catalogue from what this BMM holds.
+        //
+        //   bmm://catalog/publish?kind=theme&dir=C:/out&name=My%20themes&base=https://x/y
+        //
+        // The kinds are `BUILDABLE_KINDS`, and the builder is the scheduler's own — a second
+        // implementation here would be a second set of the shapes each catalogue format
+        // expects, and the format is the part that has to be right.
+        //
+        // Until this existed, publishing was reachable from a scheduled task and by no other
+        // means: exactly the gap that once made FOLLOWING a catalogue clickable-only.
+        if (action === 'catalog/publish') {
+            const kind = (parsedUrl.searchParams.get('kind') || 'tutorial').trim();
+            const dir = (parsedUrl.searchParams.get('dir') || '').trim();
+            const name = (parsedUrl.searchParams.get('name') || '').trim() || 'My catalogue';
+            const base = (parsedUrl.searchParams.get('base') || '').trim().replace(/\/+$/, '');
+            if (!dir) {
+                toast(t('cat.pubNoDir'), 'warning', 8000);
+                return;
+            }
+            const { BUILDABLE_KINDS, buildCatalogueInto } = await import('../features/settings/scheduler.js');
+            if (!BUILDABLE_KINDS.some((k) => k.kind === kind)) {
+                // Named rather than guessed at. Falling through to a default would write a
+                // catalogue of the wrong thing into somebody's folder and report success.
+                toast(t('cat.pubBadKind').replace('{k}', kind)
+                    .replace('{list}', BUILDABLE_KINDS.map((k) => k.kind).join(', ')), 'warning', 10000);
+                return;
+            }
+            try {
+                const wrote = await buildCatalogueInto(kind, dir, name, base);
+                // Nothing written is not a success. A catalogue with no entries is a file that
+                // looks published and installs nothing.
+                if (!wrote)
+                    toast(t('cat.pubEmpty').replace('{k}', kind), 'warning', 10000);
+                else
+                    toast(t('cat.pubDone').replace('{n}', String(wrote)).replace('{k}', kind), 'success', 9000);
+            }
+            catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error', 10000);
+            }
+            return;
+        }
         // Follow / stop following a catalogue.
         //
         //   bmm://catalog/follow?type=theme&url=https://…/catalog.json

@@ -1856,6 +1856,7 @@ It returns everything, \`settings\` included — and \`settings\` holds the admi
 | \`POST\` | \`/api/apps/launch\` | \`app.write\` | \`appId\`*, \`exePath\`* | ✓ |
 | \`DELETE\` | \`/api/apps/:id\` | \`app.write\` | — · deregisters, files kept | |
 | \`PUT\` | \`/api/apps/permissions/:id\` | token | \`permissions[]\`* · **replaces** the list; \`[]\` revokes everything | |
+| \`POST\` | \`/api/catalog/publish\` | \`catalog.write\` | \`dir\`*, \`kind\`, \`name\`, \`base\` → \`202\` · builds a catalogue FOLDER from what this BMM holds — tutorials, themes, plugins, modpacks, scheduled tasks, or an \`index\` of the catalogues you follow. Different job from \`/api/catalog/new\`, which files entries you assembled. Writing nothing is reported as a warning: a catalogue with no entries looks published and installs nothing | |
 | \`POST\` | \`/api/catalog/new\` | \`catalog.write\` | \`name\`, \`description\`, \`partner_catalogs[]\`, \`community_imports[]\`, \`apps[]\` → \`201\` | |
 | \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (max 3), \`requirements\`, \`md_link\` → \`201\` | |
 | \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |
@@ -2212,6 +2213,7 @@ Il renvoie tout, \`settings\` inclus — et \`settings\` contient le token admin
 | \`POST\` | \`/api/apps/launch\` | \`app.write\` | \`appId\`*, \`exePath\`* | ✓ |
 | \`DELETE\` | \`/api/apps/:id\` | \`app.write\` | — · désenregistre, fichiers conservés | |
 | \`PUT\` | \`/api/apps/permissions/:id\` | token | \`permissions[]\`* · **remplace** la liste ; \`[]\` révoque tout | |
+| \`POST\` | \`/api/catalog/publish\` | \`catalog.write\` | \`dir\`*, \`kind\`, \`name\`, \`base\` → \`202\` · construit un DOSSIER de catalogue à partir de ce que contient ce BMM — tutoriels, thèmes, plugins, modpacks, tâches planifiées, ou un \`index\` des catalogues suivis. Rôle différent de \`/api/catalog/new\`, qui enregistre des entrées déjà assemblées. N'écrire aucune entrée est signalé comme un avertissement : un catalogue vide a l'air publié et n'installe rien | |
 | \`POST\` | \`/api/catalog/new\` | \`catalog.write\` | \`name\`, \`description\`, \`partner_catalogs[]\`, \`community_imports[]\`, \`apps[]\` → \`201\` | |
 | \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (3 max), \`requirements\`, \`md_link\` → \`201\` | |
 | \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |

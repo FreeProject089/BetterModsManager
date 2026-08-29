@@ -19,6 +19,7 @@
 import { invoke, pickFile, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+import { escHtml } from '../../core/utils.js';
 
 type AuthMethod = 'key' | 'password';
 
@@ -979,6 +980,76 @@ export async function pullStoredTarget(localDir: string, name = DEFAULT_TARGET):
         secret: null,
         localDir,
     })) as number;
+}
+
+/**
+ * An SSH error code from the backend, as a sentence.
+ *
+ * The backend reports failures as i18n KEYS, sometimes with `|`-separated detail. t() returns
+ * the key itself on a miss, so printing String(e) puts `repo.ssh.errAuthRejected` in front of
+ * the user — which is what the sync panel used to do before it grew its own explain().
+ *
+ * It lives HERE rather than in repo.ts because it is about SSH, and because anything else
+ * wanting to report an SSH failure could otherwise only import repo.ts (a cycle) or write a
+ * second copy — which is exactly how the sync panel got one.
+ */
+export function explainSsh(raw: string): string {
+    const [key, ...rest] = String(raw).split('|');
+    const msg = t(key);
+    // t() returning the key unchanged means there is no translation; the raw text is then more
+    // use than the key name.
+    const base = msg === key ? raw : msg;
+    return rest.length ? `${base} — ${rest.join(' ')}` : base;
+}
+
+/**
+ * Put a "Publish over SSH" button on any card that can name a repo folder.
+ *
+ * `dirHint` is read at CLICK time, never at mount time: the folder is usually chosen after
+ * the card is built, and capturing it early gives a button that publishes the wrong place or
+ * nothing at all.
+ *
+ * Hidden entirely when no target is configured. A button that can only produce "no SSH target
+ * set" is an invitation to an error message.
+ */
+export function mountPublishButton(host: HTMLElement | null, dirHint: () => string): void {
+    if (!host || host.querySelector('.repo-ssh-mount-btn')) return;
+    if (!sshTargetNames().length) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary btn-sm repo-ssh-mount-btn';
+    btn.style.cssText = 'width:100%;justify-content:center;margin-top:8px;';
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg><span>${escHtml(t('repo.ssh.publishHere') || 'Publish over SSH')}</span>`;
+    host.appendChild(btn);
+
+    btn.addEventListener('click', async () => {
+        const dir = (dirHint() || '').trim();
+        if (!dir) { toast(t('repo.ssh.publishNoDir'), 'warning', 7000); return; }
+        const names = sshTargetNames();
+        if (!names.length) { toast(t('repo.sync.useSshNotSet'), 'warning', 7000); return; }
+        const target = names[0];
+        // The same confirm the update dialog asks, and for the same reason: this overwrites
+        // what people are downloading right now. Naming the target rather than asking "are
+        // you sure" — with several configured, WHICH one is the question worth answering.
+        const ok = await (window as any).confirmCustom?.(
+            t('repo.update.publishTitle'),
+            (t('repo.update.publishMsg') || '').replace('{name}', target),
+            'warning',
+        ).catch(() => false);
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+            const n = await publishStoredTarget(dir, target);
+            toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
+        } catch (e) {
+            toast(explainSsh(String(e)), 'error', 9000);
+        } finally {
+            btn.disabled = false;
+        }
+    });
 }
 
 /** Does a usable headless target exist? Used to enable/disable the scheduler action. */

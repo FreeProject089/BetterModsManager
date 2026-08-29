@@ -7161,6 +7161,21 @@ function getEndpointDefs(): EndpointDef[] {
             ],
         },
         {
+            method: 'POST', path: '/api/catalog/publish', auth: true,
+            desc: t('plugins.ep.catPublish'),
+            about: t('plugins.epAbout.catPublish'),
+            fields: [
+                { name: 'kind', type: 'string', required: false, desc: t('plugins.epF.cpKind') },
+                { name: 'dir', type: 'string', required: true, desc: t('plugins.epF.cpDir') },
+                { name: 'name', type: 'string', required: false, desc: t('plugins.epF.cpName') },
+                { name: 'base', type: 'string', required: false, desc: t('plugins.epF.cpBase') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "action": "catalog/publish" }' },
+                e400, e401,
+            ],
+        },
+        {
             method: 'GET', path: '/api/hook', auth: true,
             desc: t('plugins.ep.hookGet'),
             about: t('plugins.epAbout.hookGet'),

@@ -426,6 +426,7 @@ Deux formes échappent à la règle :
 | `POST` | `/api/apps/launch` | `app.write` | `appId`*, `exePath`* | ✓ |
 | `DELETE` | `/api/apps/:id` | `app.write` | — · désenregistre, fichiers conservés | |
 | `PUT` | `/api/apps/permissions/:id` | admin token | `permissions[]`* · **remplace** la liste ; `[]` révoque tout | |
+| `POST` | `/api/catalog/publish` | `catalog.write` | `dir`*, `kind`, `name`, `base` → `202` · construit un DOSSIER de catalogue à partir de ce que contient ce BMM — tutoriels, thèmes, plugins, modpacks, tâches planifiées, ou un `index` des catalogues suivis. Rôle différent de `/api/catalog/new`, qui enregistre des entrées déjà assemblées. N'écrire aucune entrée est signalé comme un avertissement : un catalogue vide a l'air publié et n'installe rien | |
 | `POST` | `/api/catalog/new` | `catalog.write` | `name`, `description`, `partner_catalogs[]`, `community_imports[]`, `apps[]` → `201` | |
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |

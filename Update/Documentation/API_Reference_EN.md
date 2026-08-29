@@ -107,6 +107,7 @@ This document is the single source of truth for everything that can be driven pr
 |---|---|---|
 | `/api/apps/install` | yes · `app.write` | `{ appId, appTitle, downloadUrl, fileType, installPath, version?, category?, thumb? }` — `installPath` is required; `fileType` ∈ `exe·zip·msi·script` |
 | `/api/apps/launch` | yes · `app.write` | `{ appId, exePath }` |
+| `/api/catalog/publish` | yes · `catalog.write` | `{ dir*, kind?, name?, base? }` — build a catalogue folder from what BMM holds (tutorial · theme · plugin · modpack · automation · index · folder). `/api/catalog/new` files entries you assembled; this one asks BMM to look at itself. |
 | `/api/catalog/new` | yes · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | yes · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
 | `/api/catalog/import` | yes · `catalog.write` | `{ url, type?, password? }` — follows whatever is at that address without being told its kind. UI-driven |

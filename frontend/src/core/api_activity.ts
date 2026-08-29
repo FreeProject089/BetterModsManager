@@ -265,6 +265,19 @@ export async function initApiActivity(): Promise<void> {
             // as the others, it special-cases `app` (whose sources live in the backend), and
             // it takes a password for a protected catalogue. A second implementation here
             // would be a second set of those rules.
+            // Publishing goes the same way, and MUST be listed here: this switch answering
+            // 202 while doing nothing is the exact failure the comment above records, and it
+            // went unnoticed for as long as it did because the reply looks like success.
+            case 'catalog/publish': {
+                const qs = new URLSearchParams();
+                for (const k of ['kind', 'dir', 'name', 'base']) {
+                    if (params[k] !== undefined && params[k] !== '') qs.set(k, String(params[k]));
+                }
+                const go = (window as any).__bmmDeeplink;
+                if (go) await go('bmm://catalog/publish?' + qs.toString());
+                else console.warn('[api-exec] no deeplink handler yet:', action);
+                break;
+            }
             case 'catalog/import':
             case 'catalog/follow':
             case 'catalog/unfollow': {

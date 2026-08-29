@@ -364,6 +364,16 @@ export function initManifestOnly() {
             () => ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim() || '',
         );
     });
+    // And publishing it. This card writes a repo.json for mods somebody already hosts, so
+    // “put it on the server” is the very next thing — and the only route was to scroll to a
+    // different card and retype the folder. Same mounting pattern as the extras button above,
+    // for the same reason: the capability lives on one card and the folder lives on this one.
+    void import('./repo-ssh.js').then((m) => {
+        m.mountPublishButton(
+            $('manifest-result')?.parentElement || null,
+            () => ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim() || '',
+        );
+    });
     $('btn-generate-manifest')?.addEventListener('click', () => void generate());
     setMode('folder');
     renderFolders();

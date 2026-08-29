@@ -107,6 +107,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 |---|---|---|
 | `/api/apps/install` | oui · `app.write` | `{ appId, appTitle, downloadUrl, fileType, installPath, version?, category?, thumb? }` — `installPath` est requis ; `fileType` ∈ `exe·zip·msi·script` |
 | `/api/apps/launch` | oui · `app.write` | `{ appId, exePath }` |
+| `/api/catalog/publish` | oui · `catalog.write` | `{ dir*, kind?, name?, base? }` — construit un dossier de catalogue à partir de ce que BMM contient (tutorial · theme · plugin · modpack · automation · index · folder). `/api/catalog/new` enregistre des entrées déjà assemblées ; celle-ci demande à BMM de se regarder lui-même. |
 | `/api/catalog/new` | oui · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | oui · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
 | `/api/catalog/import` | oui · `catalog.write` | `{ url, type?, password? }` — suit ce qui se trouve à cette adresse sans qu'on lui dise le type. Piloté par l'interface |

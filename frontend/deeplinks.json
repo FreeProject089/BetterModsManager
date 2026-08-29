@@ -66,24 +66,30 @@
     "action": "catalog/follow",
     "params": [
       "type",
-      "url",
-      "password"
+      "url"
     ]
   },
   {
     "action": "catalog/import",
     "params": [
       "url",
-      "type",
-      "password"
+      "type"
+    ]
+  },
+  {
+    "action": "catalog/publish",
+    "params": [
+      "kind",
+      "dir",
+      "name",
+      "base"
     ]
   },
   {
     "action": "catalog/unfollow",
     "params": [
       "type",
-      "url",
-      "password"
+      "url"
     ]
   },
   {

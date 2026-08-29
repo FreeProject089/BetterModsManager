@@ -317,6 +317,31 @@ struct CatalogFollowBody {
 }
 fn yes() -> bool { true }
 
+/// `POST /api/catalog/publish` — build a catalogue folder from what this BMM holds.
+///
+/// Different job from `/api/catalog/new`, which takes entries the caller assembled. This one
+/// asks BMM to look at ITSELF — your themes, your plugins, the catalogues you follow — and
+/// was reachable from a scheduled task and by no other means.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CatalogPublishBody {
+    /// `tutorial` · `theme` · `plugin` · `modpack` · `automation` · `index` · `folder`.
+    ///
+    /// NOT validated here. The list lives in the app (`BUILDABLE_KINDS`) beside the builder
+    /// that implements it, and a copy here would be a second list to keep in step — one that
+    /// says yes to a kind the builder cannot write is worse than no list. An unknown kind is
+    /// named back at the person, with the real list.
+    #[serde(default)]
+    kind: Option<String>,
+    /// Where the catalogue folder is written. Required.
+    dir: String,
+    #[serde(default)]
+    name: Option<String>,
+    /// The address the files will be served from. Empty means they sit beside the catalogue.
+    #[serde(default)]
+    base: Option<String>,
+}
+
 /// `POST /api/keys` — make an identity keypair.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3449,6 +3474,39 @@ pub async fn start_api_server(
             }
         });
 
+    // POST /api/catalog/publish  (auth, perm: catalog.write) — build one from what BMM holds
+    let (tok_cat_pub, perm_cat_pub, h_cat_pub) = (token.clone(), data.clone(), app_handle.clone());
+    let _ = &perm_cat_pub;
+    let cat_publish = warp::path!("api" / "catalog" / "publish")
+        .and(warp::post())
+        .and(require_token(tok_cat_pub))
+        .and(require_permission(token.clone(), "catalog.write"))
+        .and(warp::body::json::<CatalogPublishBody>())
+        .and(with_app_handle(h_cat_pub))
+        .map(|body: CatalogPublishBody, h: tauri::AppHandle| {
+            let dir = body.dir.trim().to_string();
+            if dir.is_empty() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "catalog.errNoDir".into() }),
+                    StatusCode::BAD_REQUEST);
+            }
+            // Through the app, like every other catalogue action here: the builder knows what
+            // shape each format wants, and that knowledge belongs in one place. The reply is
+            // 202 for the same reason the follow route's is — it means "the app was told",
+            // and the count arrives on screen where the work happens.
+            let mut args = serde_json::json!({
+                "kind": body.kind.unwrap_or_else(|| "tutorial".into()),
+                "dir": dir,
+            });
+            if let Some(n) = body.name.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                args["name"] = serde_json::Value::String(n.to_string());
+            }
+            if let Some(b) = body.base.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                args["base"] = serde_json::Value::String(b.to_string());
+            }
+            api_exec_reply(&h, "catalog/publish", args)
+        });
+
     // POST /api/catalog/apps  (auth, perm: catalog.write) — add single app entry
     #[derive(serde::Deserialize, Clone)] struct CatalogAppBody { #[serde(flatten)] app: serde_json::Value }
     let (tok_cat_add, perm_cat_add, h_cat_add) = (token.clone(), data.clone(), app_handle.clone());
@@ -3690,7 +3748,8 @@ pub async fn start_api_server(
 
     // Order matters: specific sub-paths BEFORE the base GET /api/catalog
     let group_catalog = lang_template  // GET  /api/language/template (no auth needed)
-        .or(cat_new)                   // POST /api/catalog/new
+        .or(cat_new)
+        .or(cat_publish)                   // POST /api/catalog/new
         .or(cat_add_app)               // POST /api/catalog/apps
         .or(cat_upd_app)               // PUT  /api/catalog/apps/:id
         .or(cat_del_app)               // DELETE /api/catalog/apps/:id
