@@ -203,16 +203,42 @@ export function wireSourceAccess(
         // Named after the file, because asking for a name before the file is picked is asking
         // about something nobody has looked at yet. It is renameable in Settings.
         const name = String(path).replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '') || 'key';
-        try {
-            const { invoke } = await import('./api.js');
-            await invoke('key_auth_add', { name, path });
+        const { invoke } = await import('./api.js');
+        const added = async (passphrase?: string) => {
+            await invoke('key_auth_add', { name, path, passphrase });
             notify('srcacc.keyAdded', 'success');
             const kr = await import('./identity-key.js');
             await kr.refreshKeySelect(`${p}-access-key`, urlOf, t);
+        };
+        try {
+            await added();
         } catch (e) {
-            // The message IS the reason: a file that is not a key, or one that is passphrase
-            // protected, fail differently and only the backend knows which.
-            notify(String(e).split('|')[0] || 'srcacc.keyAddFailed', 'warning');
+            // The message IS the reason: a file that is not a key, and one that is protected
+            // by a passphrase, fail differently and only the backend knows which.
+            //
+            // A protected key used to end here as "could not add that key", which reads as
+            // "this file is no good" — so the answer was to go and make an unprotected one.
+            // It is a locked door, not a broken one: ask for the key to it.
+            if (!String(e).startsWith('repo.ssh.errKeyDecode')) {
+                notify(String(e).split('|')[0] || 'srcacc.keyAddFailed', 'warning');
+                return;
+            }
+            const { promptRepoPassword } = await import('../ui/ask-one.js');
+            // Re-asked until it opens or the person gives up, with the reason shown each
+            // time: a silent second prompt looks exactly like the first and reads as a
+            // broken dialog rather than as a mistyped character.
+            let error = '';
+            for (;;) {
+                const pass = await promptRepoPassword({
+                    title: t('srcacc.keyLockedTitle'),
+                    desc: t('srcacc.keyLockedDesc'),
+                    placeholder: t('srcacc.keyPassphrase'),
+                    error,
+                });
+                if (pass === null) return;
+                try { await added(pass); return; }
+                catch (e2) { error = t('srcacc.keyPassphraseWrong'); console.warn('[key]', e2); }
+            }
         }
     });
 

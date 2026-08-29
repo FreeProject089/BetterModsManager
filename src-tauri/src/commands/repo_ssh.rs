@@ -120,7 +120,14 @@ impl Handler for KnownHostClient {
     }
 }
 
-fn read_key(path: &str, passphrase: Option<&str>) -> Result<russh::keys::PrivateKey, String> {
+/// Open a private key, and say WHY when it will not open.
+///
+/// `pub(crate)` because the identity-key path needs the same three answers. It had its own
+/// one-line `map_err` instead, which flattened every failure to `errKeyDecode` — so a
+/// passphrase-protected key reported "this is not a usable key", and the screen's own
+/// "the key is locked" branch could never fire. Two classifiers for one question, and the
+/// one on the newer path was the one that could not tell a locked door from a broken one.
+pub(crate) fn read_key(path: &str, passphrase: Option<&str>) -> Result<russh::keys::PrivateKey, String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("repo.ssh.errKeyRead|{}|{}", path, e))?;
     decode_secret_key(&text, passphrase).map_err(|e| {

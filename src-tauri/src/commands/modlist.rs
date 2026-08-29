@@ -498,6 +498,10 @@ pub fn modlist_credentials_apply_keys(
             state.clone(),
             name.to_string(),
             path.to_string_lossy().to_string(),
+            // An imported key that needs a passphrase is skipped rather than half-added:
+            // there is nobody to ask in the middle of an import, and a key on the ring
+            // that cannot sign looks usable and is not.
+            None,
         )
         .is_ok()
         {

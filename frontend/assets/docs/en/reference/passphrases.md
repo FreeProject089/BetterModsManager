@@ -96,6 +96,40 @@ where it went.
 Each type is tested to **sign**, not merely to generate: a key that produces a file BMM
 cannot use would be a promise broken at the moment somebody is reaching for a server.
 
+### A key that has its own passphrase
+
+An OpenSSH key you already own may be protected by a passphrase — `ssh-keygen` offers to set
+one. Add it the same way; BMM asks for the phrase when the file will not open, and re-asks
+with the reason if it is wrong.
+
+**It is held for that run and nothing more.** Restarting BMM means unlocking again, and that
+is deliberate: the only place to write it down would be beside the key's path in
+`settings.json`, in plain text, next to the very thing it protects.
+
+For a script or a link, the phrase travels with the request that needs it:
+
+```
+bmm://catalog/follow?type=plugin&url=…&key=bmmkey-1a2b3c&passphrase=…
+```
+
+```json
+POST /api/catalogs
+{ "type": "plugin", "url": "…", "key": "bmmkey-1a2b3c", "passphrase": "…" }
+```
+
+Neither is stored. `key` takes an id or a name; the passphrase is checked before the key is
+chosen, so a wrong one is reported as a wrong passphrase rather than as a server that would
+not answer.
+
+!!! warning "A link that carries a passphrase is a secret"
+    It goes in shell history, in the address bar, and in whatever chat you paste it into.
+    Prefer letting BMM ask. Send one only where you would send the key file itself.
+
+!!! note "Keys BMM makes for you are not protected"
+    A passphrase BMM invented would be one nobody could type, and asking for one in the
+    middle of *make me a key* is a second question about a decision nobody came here to make.
+    Protect it afterwards with `ssh-keygen -p` if you want that.
+
 ### Backing them up
 
 A key is the one thing in BMM you cannot replace by asking again. Everything else in a backup

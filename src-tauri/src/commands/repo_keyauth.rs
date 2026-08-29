@@ -123,10 +123,10 @@ pub fn pubkey_from_openssh(line: &str) -> Result<String, String> {
 ///
 /// `passphrase` is used and dropped; nothing about the key is retained.
 pub fn make_proof(key_path: &str, passphrase: Option<&str>, audience: &str) -> Result<String, String> {
-    let text = std::fs::read_to_string(key_path)
-        .map_err(|e| format!("repo.ssh.errKeyRead|{}|{}", key_path, e))?;
-    let key = russh::keys::decode_secret_key(&text, passphrase)
-        .map_err(|e| format!("repo.ssh.errKeyDecode|{}", e))?;
+    // The SSH path's reader, not a second one: it separates "cannot read the file" from
+    // "the key is locked" from "that passphrase is wrong", and every screen already has
+    // wording for all three.
+    let key = crate::commands::repo_ssh::read_key(key_path, passphrase)?;
 
     let exp = now_secs() + TTL_SECONDS;
     let payload = Payload {
@@ -300,6 +300,35 @@ fn key_path_for(audience: &str) -> Option<String> {
     if path.is_empty() { None } else { Some(path) }
 }
 
+/// Passphrases, for this run only.
+///
+/// A protected key needs one every time it is opened, and there is nowhere honest to keep it:
+/// writing it beside the key path in settings.json would put the passphrase next to the thing
+/// it protects, in plain text, which is worse than not supporting protected keys at all.
+///
+/// So it lives in memory, keyed by the key's PATH — the ring's names and ids both resolve to
+/// one — and dies with the process. Somebody who restarts BMM unlocks again, which is the
+/// correct amount of friction for a secret nobody wrote down.
+static PASSPHRASES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+    std::sync::OnceLock::new();
+
+fn passphrases() -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
+    PASSPHRASES.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Hold a passphrase for this run. An empty one FORGETS, rather than remembering the empty
+/// string — which would then be offered to `decode_secret_key` as if it were an answer.
+pub fn remember_passphrase(key_path: &str, passphrase: &str) {
+    if let Ok(mut map) = passphrases().lock() {
+        if passphrase.is_empty() { map.remove(key_path); } else { map.insert(key_path.to_string(), passphrase.to_string()); }
+    }
+}
+
+/// What was remembered for this key, if anything.
+pub fn passphrase_for(key_path: &str) -> Option<String> {
+    passphrases().lock().ok().and_then(|m| m.get(key_path).cloned())
+}
+
 /// The proof header to attach to a request, if this BMM can make one.
 ///
 /// Returns None — silently — when no key is configured, or the file will not open. A client
@@ -324,7 +353,7 @@ pub fn header_for(url: &str) -> Option<(&'static str, String)> {
             return Some((HEADER, proof.clone()));
         }
         // Re-signed a little before expiry, so a proof never goes stale mid-request.
-        let proof = make_proof(&key_path, None, &audience).ok()?;
+        let proof = make_proof(&key_path, passphrase_for(&key_path).as_deref(), &audience).ok()?;
         list.push((audience, proof.clone(), now + TTL_SECONDS.saturating_sub(15)));
         return Some((HEADER, proof));
     }
@@ -457,6 +486,7 @@ pub fn key_auth_add(
     state: tauri::State<'_, crate::state::AppState>,
     name: String,
     path: String,
+    passphrase: Option<String>,
 ) -> Result<KeyringView, String> {
     let name = name.trim().to_string();
     let path = path.trim().to_string();
@@ -466,8 +496,14 @@ pub fn key_auth_add(
     if path.is_empty() {
         return Err("repo.keyauth.errNoPath".into());
     }
-    // Signing against a throwaway audience proves the file opens AND is ed25519.
-    make_proof(&path, None, "probe://validate")?;
+    // Signing against a throwaway audience proves the file opens AND that we can sign with it.
+    //
+    // The passphrase is checked HERE, at the picker, rather than discovered later by a server
+    // that answers "could not read it". It is remembered only after the file has actually
+    // opened with it, so a wrong one is never stored as if it worked.
+    let pass = passphrase.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    make_proof(&path, pass, "probe://validate")?;
+    if let Some(p) = pass { remember_passphrase(&path, p); }
     {
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
         match data.settings.key_auth_keys.iter_mut().find(|e| e.name == name) {
@@ -600,7 +636,10 @@ pub async fn key_auth_generate(
     // ed25519 before it is written to the ring — a key that generated but cannot sign would
     // otherwise sit there looking usable.
     let path_str = path.to_string_lossy().to_string();
-    let view = key_auth_add(state, name, path_str.clone())?;
+    // No passphrase: BMM generates unprotected keys, deliberately. A passphrase it invented
+    // would be one nobody could type, and one it asked for would be a second prompt in the
+    // middle of "make me a key".
+    let view = key_auth_add(state, name, path_str.clone(), None)?;
     Ok(KeyGenerated { path: path_str, public, ring: view })
 }
 
@@ -720,6 +759,30 @@ pub fn bind_origin_to_key(
     Ok(())
 }
 
+/// Unlock a key that is already on the ring.
+///
+/// Needed because the ring survives a restart and the passphrase does not — by design. Takes
+/// an id or a name, like everything else that names a key from outside.
+///
+/// The passphrase is VERIFIED before it is kept: remembering an unchecked one would turn a
+/// typo into "this key does not work", reported by a server, hours later.
+#[tauri::command]
+pub fn key_auth_unlock(
+    state: tauri::State<'_, crate::state::AppState>,
+    name: String,
+    passphrase: String,
+) -> Result<(), String> {
+    let path = {
+        let data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        let resolved = resolve_key_ref(&data.settings, &name).ok_or("repo.keyauth.errNoSuchKey")?;
+        data.settings.key_auth_keys.iter().find(|e| e.name == resolved)
+            .map(|e| e.path.clone()).ok_or("repo.keyauth.errNoSuchKey")?
+    };
+    make_proof(&path, Some(passphrase.trim()), "probe://validate")?;
+    remember_passphrase(&path, passphrase.trim());
+    Ok(())
+}
+
 #[tauri::command]
 pub fn key_auth_set_for_url(
     state: tauri::State<'_, crate::state::AppState>,
@@ -753,7 +816,7 @@ pub fn set_key_auth_key(
 ) -> Result<(), String> {
     let path = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
     match path {
-        Some(p) => { key_auth_add(state, "default".to_string(), p)?; }
+        Some(p) => { key_auth_add(state, "default".to_string(), p, None)?; }
         None => { key_auth_remove(state, "default".to_string())?; }
     }
     Ok(())

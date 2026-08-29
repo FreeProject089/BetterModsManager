@@ -98,6 +98,42 @@ Chaque type est testé pour **signer**, pas seulement pour se générer : un typ
 fichier inutilisable serait une promesse rompue au moment où quelqu'un cherche à joindre un
 serveur.
 
+### Une clé qui a sa propre phrase de passe
+
+Une clé OpenSSH que vous possédez déjà peut être protégée par une phrase de passe —
+`ssh-keygen` propose d'en mettre une. Ajoutez-la de la même façon : BMM demande la phrase
+quand le fichier ne s'ouvre pas, et redemande en disant pourquoi si elle est fausse.
+
+**Elle est gardée le temps de cette exécution, pas davantage.** Redémarrer BMM veut dire
+déverrouiller à nouveau, et c'est voulu : le seul endroit où l'écrire serait à côté du chemin
+de la clé dans `settings.json`, en clair, juste à côté de ce qu'elle protège.
+
+Pour un script ou un lien, la phrase voyage avec la requête qui en a besoin :
+
+```
+bmm://catalog/follow?type=plugin&url=…&key=bmmkey-1a2b3c&passphrase=…
+```
+
+```json
+POST /api/catalogs
+{ "type": "plugin", "url": "…", "key": "bmmkey-1a2b3c", "passphrase": "…" }
+```
+
+Ni l'un ni l'autre n'est conservé. `key` accepte un id ou un nom ; la phrase est vérifiée
+avant que la clé soit choisie, donc une phrase fausse est signalée comme telle et non comme un
+serveur qui ne répond pas.
+
+!!! warning "Un lien qui porte une phrase de passe est un secret"
+    Il finit dans l'historique du shell, dans la barre d'adresse, et dans la conversation où
+    vous le collez. Préférez laisser BMM demander. N'en envoyez un que là où vous enverriez le
+    fichier de clé lui-même.
+
+!!! note "Les clés que BMM fabrique ne sont pas protégées"
+    Une phrase de passe inventée par BMM serait une phrase que personne ne peut taper, et en
+    demander une au milieu de *fabrique-moi une clé*, c'est une seconde question sur une
+    décision que personne n'est venu prendre. Protégez-la ensuite avec `ssh-keygen -p` si vous
+    y tenez.
+
 ### Les sauvegarder
 
 Une clé est la seule chose dans BMM que tu ne peux pas remplacer en la redemandant. Tout le

@@ -27,6 +27,7 @@ async function getApiToken() {
  *
  *   ?password=…   a shared secret, remembered for this run only and never written to disk
  *   ?key=…        which identity key signs the request — an id or a name
+ *   ?passphrase=… unlocks that key, for this run only, when the key file has one
  *
  * `key` takes either because both are real handles to a person: the id is what a script
  * should carry (it survives a rename), the name is what somebody reads off their own screen.
@@ -51,6 +52,23 @@ async function applySourceAccess(url, params) {
     const key = (params.get('key') || '').trim();
     if (!key)
         return;
+    // Unlocked BEFORE the key is bound to the origin, so a wrong passphrase is reported as a
+    // passphrase problem rather than as the "could not read it" a server gives once the key
+    // has been chosen and then fails to sign.
+    //
+    // Not trimmed: leading and trailing spaces are legal in a passphrase, and silently
+    // dropping them would turn a correct secret into a wrong one.
+    const passphrase = params.get('passphrase') || '';
+    if (passphrase) {
+        try {
+            await invoke('key_auth_unlock', { name: key, passphrase });
+        }
+        catch (e) {
+            toast(t('deeplink.keyLocked').replace('{k}', key), 'warning', 9000);
+            console.warn('[deeplink] passphrase', key, e);
+            return;
+        }
+    }
     try {
         await invoke('key_auth_set_for_url', { url, name: key });
     }

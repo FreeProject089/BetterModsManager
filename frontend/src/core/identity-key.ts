@@ -167,16 +167,39 @@ export async function renderKeyManager(
             // exactly what people call that key anyway. A typed name still wins.
             const base = path.split(/[\\/]/).pop() || '';
             const name = typed || base.replace(/\.(pub|ppk|pem|key)$/i, '') || 'key';
-            try {
-                paint((await invoke('key_auth_add', { name, path })) as KeyringView);
+            const add = async (passphrase?: string) => {
+                paint((await invoke('key_auth_add', { name, path, passphrase })) as KeyringView);
                 if (nameInput) nameInput.value = '';
                 notify?.('settings.identity.authKeySet', 'success');
+            };
+            try {
+                await add();
             } catch (e) {
                 // The backend refuses a file it cannot sign with, so this is "wrong file",
                 // not "save failed" — name which, or the same file gets picked again.
-                notify?.(String(e) === 'repo.ssh.errKeyPassphrase'
-                    ? 'settings.identity.authKeyLocked'
-                    : 'settings.identity.authKeyBad', 'warning');
+                //
+                // `authKeyLocked` was unreachable until now: make_proof flattened every
+                // failure to errKeyDecode, so a locked key reported "not a usable key" and
+                // the branch written for it never ran. It shares the SSH reader now, which
+                // tells the three cases apart — and a locked door is asked about rather than
+                // reported as a broken one.
+                if (String(e) !== 'repo.ssh.errKeyPassphrase') {
+                    notify?.('settings.identity.authKeyBad', 'warning');
+                    return;
+                }
+                const { promptRepoPassword } = await import('../ui/ask-one.js');
+                let error = '';
+                for (;;) {
+                    const pass = await promptRepoPassword({
+                        title: t('srcacc.keyLockedTitle'),
+                        desc: t('srcacc.keyLockedDesc'),
+                        placeholder: t('srcacc.keyPassphrase'),
+                        error,
+                    });
+                    if (pass === null) return;
+                    try { await add(pass); return; }
+                    catch (e2) { error = t('srcacc.keyPassphraseWrong'); console.warn('[keyring]', e2); }
+                }
             }
         });
     }

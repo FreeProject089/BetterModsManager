@@ -799,6 +799,7 @@ fn main() {
             commands::repo_keyauth::key_auth_remove,
             commands::repo_keyauth::key_auth_set_active,
             commands::repo_keyauth::key_auth_set_for_url,
+            commands::repo_keyauth::key_auth_unlock,
             commands::repo_keyauth::key_auth_origin_of,
             commands::repo_ssh::ssh_list_dir,
             commands::repo_ssh::ssh_resolve_path,

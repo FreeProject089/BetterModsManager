@@ -68,7 +68,8 @@
       "type",
       "url",
       "password",
-      "key"
+      "key",
+      "passphrase"
     ]
   },
   {
@@ -77,7 +78,8 @@
       "url",
       "type",
       "password",
-      "key"
+      "key",
+      "passphrase"
     ]
   },
   {
@@ -95,7 +97,8 @@
       "type",
       "url",
       "password",
-      "key"
+      "key",
+      "passphrase"
     ]
   },
   {

@@ -314,6 +314,14 @@ struct CatalogFollowBody {
     /// than silently skipped — see `applySourceAccess`.
     #[serde(default)]
     key: Option<String>,
+    /// The passphrase for that key, if the file has one. Used to unlock it for THIS RUN
+    /// and never written down — the same contract as `password` above.
+    ///
+    /// Without it a protected key was unusable from here and said nothing about why: every
+    /// signing site passed `None`, so no proof was built, the request went out unsigned, and
+    /// the server answered "could not read it".
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 fn yes() -> bool { true }
 
@@ -4240,6 +4248,11 @@ pub async fn start_api_server(
             }
             if let Some(k) = body.key.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
                 args["key"] = serde_json::Value::String(k.to_string());
+            }
+            // NOT trimmed: leading and trailing spaces are legal in a passphrase, and
+            // dropping them would turn a correct secret into a wrong one.
+            if let Some(pp) = body.passphrase.as_deref().filter(|v| !v.is_empty()) {
+                args["passphrase"] = serde_json::Value::String(pp.to_string());
             }
             api_exec_reply(&handle, action, args)
         });

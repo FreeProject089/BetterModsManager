@@ -10031,5 +10031,12 @@
   "md.sched.hours": "Hours",
   "md.sched.same": "{here} is on the same clock as {tz} right now",
   "md.sched.ahead": "{here} is {span} ahead of {tz} right now",
-  "md.sched.behind": "{here} is {span} behind {tz} right now"
+  "md.sched.behind": "{here} is {span} behind {tz} right now",
+  "deeplink.keyLocked": "The key {k} is locked, and the passphrase given does not open it.",
+  "plugins.dl.catPassphrase": "Unlocks that key, if the key file has a passphrase. Used for this run and never stored — and never put it in a link you share.",
+  "plugins.epF.cfPassphrase": "Passphrase for that key, when the key file has one. Unlocks it for this run only; nothing about it is stored.",
+  "srcacc.keyLockedTitle": "This key is locked",
+  "srcacc.keyLockedDesc": "The key file is protected by a passphrase. Enter it to use the key — it is kept for this run only and never written down.",
+  "srcacc.keyPassphrase": "Passphrase",
+  "srcacc.keyPassphraseWrong": "That passphrase does not open this key."
 }
