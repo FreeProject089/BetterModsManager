@@ -6,6 +6,10 @@
 // cards, columns, collapsibles, coloured icons and the table of contents included.
 import { escHtml, escAttr } from '../core/utils.js';
 import { t } from '../core/i18n.js';
+// Written once and imported twice: md-lite renders the same two blocks for the bundled
+// documentation, and a second copy of daylight-saving arithmetic is a second copy to get
+// wrong — in a way that shows up as an hour on a page nobody checks against a clock.
+import { readInstant, zoneDelta } from '../core/tz.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
   // `check` and `error` are the site's aliases for success and danger. They were absent
@@ -36,36 +40,6 @@ const BUTTON_BRANDS: Record<string, { color: string; slug: string }> = {
 };
 const BUTTON_SIZES = new Set(['sm', 'md', 'lg']);
 
-/** The reader's own timezone, or UTC when the browser will not say. */
-function readerZone(): string {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
-}
-
-/**
- * What a wall-clock time in `tz` is in UTC, on a given date.
- *
- * There is no built-in for this. The trick is the standard one: format the instant IN the
- * zone, read back what the clock there said, and the difference is the offset. Done for a
- * SPECIFIC date, which is what makes daylight saving come out right — the same wall-clock
- * time has two different offsets across a year.
- */
-function zoneOffsetMs(dateUtcMs: number, tz: string): number {
-  try {
-    const dtf = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz, hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    const p: Record<string, string> = {};
-    for (const x of dtf.formatToParts(new Date(dateUtcMs))) p[x.type] = x.value;
-    // `hour` comes back as 24 at midnight in some engines, which Date.UTC reads as the next
-    // day — correct arithmetic, wrong day, and a silent one-day error.
-    const h = p.hour === '24' ? 0 : Number(p.hour);
-    const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), h, Number(p.minute), Number(p.second));
-    return asUtc - dateUtcMs;
-  } catch { return 0; }
-}
-
 /**
  * How far the reader is from `tz`, RIGHT NOW.
  *
@@ -74,16 +48,10 @@ function zoneOffsetMs(dateUtcMs: number, tz: string): number {
  * false on a Sunday in March.
  */
 function zoneNote(tz: string): string {
-  if (!tz) return '';
-  const here = readerZone();
-  if (tz === here) return '';
-  const now = Date.now();
-  const diffMin = Math.round((zoneOffsetMs(now, here) - zoneOffsetMs(now, tz)) / 60000);
-  if (!diffMin) return t('md.sched.same', { here, tz });
-  const h = Math.floor(Math.abs(diffMin) / 60);
-  const m = Math.abs(diffMin) % 60;
-  const span = m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
-  return t(diffMin > 0 ? 'md.sched.ahead' : 'md.sched.behind', { here, tz, span });
+  const { dir, here, span } = zoneDelta(tz);
+  if (dir === 'none') return '';
+  if (dir === 'same') return t('md.sched.same', { here, tz });
+  return t(dir === 'ahead' ? 'md.sched.ahead' : 'md.sched.behind', { here, tz, span });
 }
 
 /**
@@ -98,20 +66,13 @@ function zoneNote(tz: string): string {
 function docTime(raw: string, a: Record<string, string>): string {
   if (!raw) return '';
   const tz = String(a.tz || a.timezone || '').trim();
-  // Parsed as a wall-clock time IN `tz`, not in whatever zone the app happens to run in:
-  // `Date.parse('2026-09-01T20:00')` is local time, so without this the answer would be
-  // right only for readers who already live where the author does.
-  const naive = Date.parse(raw.includes('T') ? `${raw}Z` : `${raw.replace(' ', 'T')}Z`);
-  if (Number.isNaN(naive)) return `<span class="doc-time">${escHtml(raw)}</span>`;
-  const instant = tz ? naive - zoneOffsetMs(naive, tz) : naive;
-  const here = readerZone();
-  let shown: string;
-  try {
-    shown = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: here }).format(new Date(instant));
-  } catch { return `<span class="doc-time">${escHtml(raw)}</span>`; }
-  return `<time class="doc-time" datetime="${escAttr(new Date(instant).toISOString())}"`
-    + ` title="${escAttr(tz ? `${raw} ${tz}` : raw)}">${escHtml(shown)}`
-    + `<span class="doc-time-zone">${escHtml(here)}</span></time>`;
+  const r = readInstant(raw, tz);
+  // Shown as written rather than as "Invalid Date" — a reader should see what the author
+  // typed, not the failure of a parser.
+  if (!r.ok) return `<span class="doc-time">${escHtml(raw)}</span>`;
+  return `<time class="doc-time" datetime="${escAttr(r.iso)}"`
+    + ` title="${escAttr(tz ? `${raw} ${tz}` : raw)}">${escHtml(r.shown)}`
+    + `<span class="doc-time-zone">${escHtml(r.here)}</span></time>`;
 }
 
 // Step markers. The same four alphabets md.jsx uses on the website, so the same source

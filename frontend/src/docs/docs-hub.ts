@@ -687,10 +687,15 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
         // What BMM's own renderer (md-lite.ts) understands — deliberately a SUBSET of
         // BetterCommunity's, and said so here. A page listing blocks that only render on the
         // website would send people to write a roadmap that comes out as literal text in the app.
+        //
+        // The reverse happened instead: this list stayed at six blocks while md-lite grew to
+        // eleven, so it sent people to the website for a roadmap and for keyboard keys that had
+        // worked here for months. check-md-doc-matrix.mjs now holds the `:::name`s in this body
+        // to what md-lite actually answers to.
         id: 'custom-markdown', docsPath: 'reference/custom-markdown/',
         title: { en: 'Rich text blocks (custom markdown)', fr: 'Blocs de texte enrichi (markdown personnalisé)' },
         summary: { en: 'Callouts, steps, columns and more — in plugin docs, article bodies and anywhere BMM shows markdown.', fr: 'Encadrés, étapes, colonnes et plus — dans les docs de plugins, les articles, et partout où BMM affiche du markdown.' },
-        keywords: 'markdown callout steps columns details replay blocks directive formatting encadré étapes colonnes mise en forme',
+        keywords: 'markdown callout steps columns details replay roadmap tabs tab schedule hours timezone time kbd blocks directive formatting encadré étapes colonnes onglets horaires fuseau heure mise en forme',
         body: {
           en: '<p>Anywhere BMM renders markdown — a plugin’s documentation, a custom page, a community article — you get ordinary markdown <b>plus</b> a set of blocks. Each one opens with <code>:::name</code> and closes with a bare <code>:::</code>.</p>'
             + '<h4>The blocks</h4><ul>'
@@ -699,9 +704,14 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
             + '<li><b>Columns</b> — <code>:::columns</code> wrapping <code>:::column</code> blocks. They stack on a narrow window, so never write “the one on the left”.</li>'
             + '<li><b>Collapsible</b> — <code>:::details[Show more]</code>, hidden until clicked.</li>'
             + '<li><b>Session replay</b> — <code>:::replay{src="…" title="…"}</code> plays a <code>.bmmreplay</code> recording inline.</li>'
+            + '<li><b>Roadmap</b> — <code>:::roadmap[Title]</code> wrapping <code>:::stage[Name]{state=done}</code> blocks. A state it does not recognise reads as <i>planned</i>, never as finished.</li>'
+            + '<li><b>Tabs</b> — <code>:::tabs</code> wrapping <code>:::tab{title="Windows"}</code> panels. One at a time, so a page with three install paths does not print all three.</li>'
+            + '<li><b>Opening hours</b> — <code>:::schedule[Support]{tz=Europe/Paris}</code>. The rows are shown as written and the zone is named, because “Monday 09:00 in Paris” is true all year while the gap to <i>your</i> clock is not; the card states that gap for right now.</li>'
+            + '<li><b>One instant</b> — <code>:time[2026-09-01T20:00]{tz=Europe/Paris}</code> renders in <i>your</i> timezone. Write the date: it settles which side of a daylight-saving change the moment falls on.</li>'
+            + '<li><b>Keyboard keys</b> — <code>:kbd[Ctrl+K]</code>, inline.</li>'
             + '<li>Plus GFM <b>tables</b>, fenced <b>code</b>, lists, quotes and mkdocs-style <code>!!!</code> admonitions.</li></ul>'
             + '<h4>Two rules</h4><ul><li>Leave a <b>blank line</b> before a block — <code>:::note</code> tucked under a paragraph is read as part of it.</li><li><b>Close what you open.</b> Blocks nest freely, and every <code>:::</code> closes the innermost one still open.</li></ul>'
-            + '<p><b>On the website there are more</b> — cards, roadmaps, download rows, inline badges, icons and keyboard keys. Those render on BetterCommunity; in BMM they come out as plain text. The full list is in the online docs.</p>',
+            + '<p><b>On the website there are more</b> — cards, download rows, buttons, coloured links, inline badges and icons, and a table of contents. Those render on BetterCommunity and in BMM’s Community tab; in a <i>documentation</i> page they come out as plain text, which is deliberate — a visible mistake is one you can fix. The full list is in the online docs.</p>',
           fr: '<p>Partout où BMM affiche du markdown — la documentation d’un plugin, une page personnalisée, un article de la communauté — vous avez le markdown ordinaire <b>plus</b> un jeu de blocs. Chacun s’ouvre par <code>:::nom</code> et se ferme par un <code>:::</code> seul.</p>'
             + '<h4>Les blocs</h4><ul>'
             + '<li><b>Encadrés</b> — <code>:::note</code>, <code>:::tip</code>, <code>:::info</code>, <code>:::success</code>, <code>:::warning</code>, <code>:::danger</code>. Le titre va entre crochets : <code>:::warning[Sauvegardez d’abord]</code>.</li>'
@@ -709,9 +719,14 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
             + '<li><b>Colonnes</b> — <code>:::columns</code> autour de blocs <code>:::column</code>. Elles s’empilent sur une fenêtre étroite : n’écrivez jamais « celle de gauche ».</li>'
             + '<li><b>Repliable</b> — <code>:::details[Voir plus]</code>, caché jusqu’au clic.</li>'
             + '<li><b>Replay de session</b> — <code>:::replay{src="…" title="…"}</code> joue un enregistrement <code>.bmmreplay</code> dans la page.</li>'
+            + '<li><b>Feuille de route</b> — <code>:::roadmap[Titre]</code> autour de blocs <code>:::stage[Nom]{state=done}</code>. Un état inconnu est lu comme <i>prévu</i>, jamais comme terminé.</li>'
+            + '<li><b>Onglets</b> — <code>:::tabs</code> autour de panneaux <code>:::tab{title="Windows"}</code>. Un seul à la fois : une page à trois chemins d’installation n’affiche plus les trois.</li>'
+            + '<li><b>Horaires</b> — <code>:::schedule[Support]{tz=Europe/Paris}</code>. Les lignes sont affichées telles quelles et le fuseau est nommé, parce que « lundi 09:00 à Paris » est vrai toute l’année alors que l’écart avec <i>votre</i> horloge ne l’est pas ; la carte donne cet écart pour maintenant.</li>'
+            + '<li><b>Un instant</b> — <code>:time[2026-09-01T20:00]{tz=Europe/Paris}</code> s’affiche dans <i>votre</i> fuseau. Écrivez la date : elle décide de quel côté d’un changement d’heure le moment tombe.</li>'
+            + '<li><b>Touches clavier</b> — <code>:kbd[Ctrl+K]</code>, en ligne.</li>'
             + '<li>Plus les <b>tableaux</b> GFM, le <b>code</b> en blocs, les listes, les citations et les admonitions <code>!!!</code> façon mkdocs.</li></ul>'
             + '<h4>Deux règles</h4><ul><li>Laissez une <b>ligne vide</b> avant un bloc — <code>:::note</code> collé sous un paragraphe est lu comme en faisant partie.</li><li><b>Fermez ce que vous ouvrez.</b> Les blocs s’imbriquent librement, et chaque <code>:::</code> ferme le plus proche encore ouvert.</li></ul>'
-            + '<p><b>Sur le site il y en a d’autres</b> — cartes, feuilles de route, lignes de téléchargement, badges, icônes et touches clavier en ligne. Ceux-là s’affichent sur BetterCommunity ; dans BMM ils sortent en texte brut. La liste complète est dans la doc en ligne.</p>',
+            + '<p><b>Sur le site il y en a d’autres</b> — cartes, lignes de téléchargement, boutons, liens colorés, badges et icônes en ligne, et un sommaire. Ceux-là s’affichent sur BetterCommunity et dans l’onglet Communauté de BMM ; dans une page de <i>documentation</i> ils sortent en texte brut, et c’est voulu — une erreur visible est une erreur réparable. La liste complète est dans la doc en ligne.</p>',
         },
       },
       {
@@ -2896,6 +2911,23 @@ function onClick(e: Event) {
   }
   const rep = hit('[data-replay]');
   if (rep) { playReplay(rep.getAttribute('data-replay') || ''); return; }
+
+  // `:::tabs` in a bundled page. Which panel is open is a class, not state in the document,
+  // so the same source reads the same way here, in the blog and on the website.
+  //
+  // Hidden panels stay in the tree rather than being rebuilt: a diagram's SVG and a code
+  // block's highlighting are then paid once, and switching back is instant.
+  const tabBtn = hit('.doc-tabs-btn');
+  const tabWrap = tabBtn?.closest('.doc-tabs') as HTMLElement | null;
+  if (tabBtn && tabWrap) {
+    const i = Number(tabBtn.getAttribute('data-tab') || 0);
+    tabWrap.querySelectorAll('.doc-tabs-btn').forEach((b, n) => {
+      b.classList.toggle('is-on', n === i);
+      b.setAttribute('aria-selected', n === i ? 'true' : 'false');
+    });
+    tabWrap.querySelectorAll('.doc-tab').forEach((pnl, n) => pnl.classList.toggle('is-on', n === i));
+    return;
+  }
 
   const navBtn = hit('[data-nav]');
   if (navBtn) { const v = navBtn.getAttribute('data-nav'); (document.querySelector(`.nav-item[data-view="${v}"]`) as HTMLElement | null)?.click(); return; }
