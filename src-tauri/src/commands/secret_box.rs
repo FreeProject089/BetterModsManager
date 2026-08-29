@@ -94,7 +94,10 @@ pub fn seal(plain: &[u8], pass: &str) -> Result<Vec<u8>, String> {
     let key = derive(pass, &salt, M_KIB, T_COST, P_COST)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("bmm.enc.errKey|{}", e))?;
     let ct = cipher
-        .encrypt(Nonce::from_slice(&nonce_bytes), plain)
+        // `Nonce::from_slice` is deprecated in aes-gcm 0.11. The array is already exactly
+        // twelve bytes, so the infallible conversion is the honest one here — nothing to
+        // check and no error arm that could never run.
+        .encrypt(&Nonce::from(nonce_bytes), plain)
         .map_err(|_| "bmm.enc.errSeal".to_string())?;
 
     let boxed = SealedBox {
@@ -128,15 +131,17 @@ pub fn open(bytes: &[u8], pass: &str) -> Result<Vec<u8>, String> {
     let salt = b64().decode(&boxed.salt).map_err(|_| "bmm.enc.errBadEnvelope".to_string())?;
     let nonce = b64().decode(&boxed.nonce).map_err(|_| "bmm.enc.errBadEnvelope".to_string())?;
     let ct = b64().decode(&boxed.ct).map_err(|_| "bmm.enc.errBadEnvelope".to_string())?;
-    if nonce.len() != 12 {
-        return Err("bmm.enc.errBadEnvelope".into());
-    }
+    // The length used to be checked here and again, implicitly, by the nonce conversion
+    // below. One rule: `try_from` IS the check, and its failure is the same bad-envelope
+    // answer the explicit test gave. Two places deciding what twelve bytes means is how
+    // they come to disagree.
+    let nonce = Nonce::try_from(&nonce[..]).map_err(|_| "bmm.enc.errBadEnvelope".to_string())?;
     // The FILE's parameters, not this build's. Raising the defaults later must not lock
     // anybody out of what they already exported.
     let key = derive(pass, &salt, boxed.m, boxed.t, boxed.p)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("bmm.enc.errKey|{}", e))?;
     cipher
-        .decrypt(Nonce::from_slice(&nonce), ct.as_ref())
+        .decrypt(&nonce, ct.as_ref())
         .map_err(|_| "bmm.enc.errWrongPass".to_string())
 }
 
@@ -179,6 +184,34 @@ mod tests {
         doc.ct = b64().encode(&ct);
         let tampered = serde_json::to_vec(&doc).unwrap();
         assert!(open(&tampered, "k").is_err());
+    }
+
+    #[test]
+    fn a_nonce_of_the_wrong_length_is_a_bad_envelope() {
+        // The length is decided in ONE place now \u2014 `Nonce::try_from` \u2014 where it used to be
+        // checked explicitly and then again by the conversion. This is the branch that
+        // collapse rewrote, and nothing covered it: a wrong-length nonce has to come back
+        // as "this envelope is malformed", not as "wrong passphrase" and not as a panic.
+        //
+        // The difference matters to the person reading the message. "Wrong passphrase"
+        // invites them to try again forever with a file that can never open.
+        let sealed = seal(b"payload", "k").unwrap();
+        for len in [0usize, 11, 13, 32] {
+            let mut doc: SealedBox = serde_json::from_slice(&sealed).unwrap();
+            doc.nonce = b64().encode(vec![0u8; len]);
+            let broken = serde_json::to_vec(&doc).unwrap();
+            assert_eq!(
+                open(&broken, "k").unwrap_err(),
+                "bmm.enc.errBadEnvelope",
+                "a {len}-byte nonce"
+            );
+        }
+        // And twelve still opens, so the test is about the length and not about having
+        // touched the field at all.
+        let mut doc: SealedBox = serde_json::from_slice(&sealed).unwrap();
+        let good = doc.nonce.clone();
+        doc.nonce = good;
+        assert!(open(&serde_json::to_vec(&doc).unwrap(), "k").is_ok());
     }
 
     #[test]

@@ -31,6 +31,13 @@ mod mcp;
 
 // The mcp tools spawn children via `crate::commands::proc` (no-console helpers).
 // This example is self-contained, so mount the same file at the same crate path.
+//
+// `dead_code` is allowed for the whole block, and only here. Mounting a WHOLE file to use
+// part of it is the point of mounting rather than copying: the CLI needs `safe_hook_name`
+// and not the hook store, `safe_component` and not `resolve_in`. Every one of those is
+// live in the app that also compiles them. Silencing it per item would mean marking
+// fifteen things dead that are not, in files shared with a binary that uses them.
+#[allow(dead_code)]
 mod commands {
     #[path = "../../commands/proc.rs"]
     pub mod proc;

@@ -24,7 +24,7 @@ import { writeSources } from '../catalogs/catalog-sources.js';
  */
 // matching API endpoints for a plugin (when it sends X-BMM-Plugin-Id).
 //
-// TWENTY-FOUR scopes, mirroring `api::mod::PLUGIN_SCOPES`, and a Rust test asserts the
+// TWENTY-SIX scopes, mirroring `api::mod::PLUGIN_SCOPES`, and a Rust test asserts the
 // router and that list agree in both directions.
 //
 // This screen used to offer eleven. The comment above it said read scopes did not exist

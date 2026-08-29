@@ -759,6 +759,14 @@ pub fn cfg_has(flag: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Every scope a plugin token can carry.
+///
+/// Read only by `scope_tests` below, which is what makes it look dead: that test asserts
+/// this list and the router agree IN BOTH DIRECTIONS — a scope the router demands that
+/// nothing can grant is a route nothing can reach, and a scope that gates no route is a
+/// checkbox promising protection it does not give. The four API references point at this
+/// name as the definition, so it stays public and stays here.
+#[allow(dead_code)]
 pub const PLUGIN_SCOPES: [&str; 26] = [
     "app.read", "app.write",
     "catalog.read", "catalog.write",

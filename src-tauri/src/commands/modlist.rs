@@ -571,6 +571,10 @@ pub fn locked_header(bytes: &[u8]) -> Option<LockedList> {
     serde_json::from_str::<LockedList>(&text).ok().filter(|l| l.bmm_locked)
 }
 
+/// Read a list that is not locked. Only `modlist_tests` calls it — everything in the app
+/// goes through `read_modlist_file_with`, which takes the passphrase — so it reads as dead
+/// outside a test build. It is the unlocked-case name the tests are written against.
+#[allow(dead_code)]
 pub fn read_modlist_file(path: &std::path::Path) -> Result<ModList, AppError> {
     read_modlist_file_with(path, None)
 }
