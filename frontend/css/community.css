@@ -589,3 +589,14 @@
 
 /* A link that is a colour rather than THE link colour. */
 .md-body .doc-link-c { color: var(--lnk, var(--bmm-accent)); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Maths ────────────────────────────────────────────────────────────────────
+   `$$…$$`, typeset by KaTeX after the markdown lands (see ui/md-math.ts). Until it does — or
+   if the vendor file is missing from a build — the source text is what shows, so these rules
+   have to be legible for both. */
+.md-body .doc-math { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 0.95em; }
+.md-body .doc-math-block { display: block; text-align: center; margin: 14px 0; }
+/* KaTeX sets its own colours; this only makes sure it inherits the surface's ink rather than
+   the browser default black on a dark card. */
+.md-body .katex { color: inherit; }
+.md-body .katex-display { margin: 14px 0; overflow-x: auto; overflow-y: hidden; }

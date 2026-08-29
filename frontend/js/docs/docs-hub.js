@@ -684,9 +684,17 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
                         + '<li><b>Opening hours</b> — <code>:::schedule[Support]{tz=Europe/Paris}</code>. The rows are shown as written and the zone is named, because “Monday 09:00 in Paris” is true all year while the gap to <i>your</i> clock is not; the card states that gap for right now.</li>'
                         + '<li><b>One instant</b> — <code>:time[2026-09-01T20:00]{tz=Europe/Paris}</code> renders in <i>your</i> timezone. Write the date: it settles which side of a daylight-saving change the moment falls on.</li>'
                         + '<li><b>Keyboard keys</b> — <code>:kbd[Ctrl+K]</code>, inline.</li>'
+                        + '<li><b>Cards</b> — <code>:::cards</code> around <code>:::card[Title]{href=…}</code>, or <code>:ref[Title]{href=…}</code> alone on a line. Written inside a sentence the same directive becomes a small chip: a card with a cover image mid-paragraph is not a card.</li>'
+                        + '<li><b>Download row</b> — <code>:::file[setup.exe]{href=… size="12 MB"}</code>.</li>'
+                        + '<li><b>Buttons and coloured links</b> — <code>:button[Label]{href=…}</code>, <code>:link[read this]{color=#0a7 href=…}</code>. One with nowhere to go renders as plain text rather than as something that looks pressable and is not.</li>'
+                        + '<li><b>Badges and icons</b> — <code>:badge[New]{color=#0a7}</code>, <code>:icon[rocket]</code>.</li>'
+                        + '<li><b>Alignment</b> — <code>:::center</code>, <code>:::left</code>, <code>:::right</code>.</li>'
+                        + '<li><b>On this page</b> — <code>::toc</code> alone on a line builds a summary from the headings below it.</li>'
+                        + '<li><b>Maths</b> — <code>$$E = mc^2$$</code>. Alone on its lines it is centred; in a sentence it stays in the line. A single <code>$</code> is deliberately not maths — this app quotes prices.</li>'
+                        + '<li><b>Emoji</b> — <code>:rocket:</code> becomes the character. The same names the website knows; an unknown one stays exactly as you typed it.</li>'
                         + '<li>Plus GFM <b>tables</b>, fenced <b>code</b>, lists, quotes and mkdocs-style <code>!!!</code> admonitions.</li></ul>'
                         + '<h4>Two rules</h4><ul><li>Leave a <b>blank line</b> before a block — <code>:::note</code> tucked under a paragraph is read as part of it.</li><li><b>Close what you open.</b> Blocks nest freely, and every <code>:::</code> closes the innermost one still open.</li></ul>'
-                        + '<p><b>On the website there are more</b> — cards, download rows, buttons, coloured links, inline badges and icons, and a table of contents. Those render on BetterCommunity and in BMM’s Community tab; in a <i>documentation</i> page they come out as plain text, which is deliberate — a visible mistake is one you can fix. The full list is in the online docs.</p>',
+                        + '<p>This is the same vocabulary BetterCommunity uses, so an article written once reads the same on the website and in the app. The full list, with every attribute, is in the online docs.</p>',
                     fr: '<p>Partout où BMM affiche du markdown — la documentation d’un plugin, une page personnalisée, un article de la communauté — vous avez le markdown ordinaire <b>plus</b> un jeu de blocs. Chacun s’ouvre par <code>:::nom</code> et se ferme par un <code>:::</code> seul.</p>'
                         + '<h4>Les blocs</h4><ul>'
                         + '<li><b>Encadrés</b> — <code>:::note</code>, <code>:::tip</code>, <code>:::info</code>, <code>:::success</code>, <code>:::warning</code>, <code>:::danger</code>. Le titre va entre crochets : <code>:::warning[Sauvegardez d’abord]</code>.</li>'
@@ -699,9 +707,17 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
                         + '<li><b>Horaires</b> — <code>:::schedule[Support]{tz=Europe/Paris}</code>. Les lignes sont affichées telles quelles et le fuseau est nommé, parce que « lundi 09:00 à Paris » est vrai toute l’année alors que l’écart avec <i>votre</i> horloge ne l’est pas ; la carte donne cet écart pour maintenant.</li>'
                         + '<li><b>Un instant</b> — <code>:time[2026-09-01T20:00]{tz=Europe/Paris}</code> s’affiche dans <i>votre</i> fuseau. Écrivez la date : elle décide de quel côté d’un changement d’heure le moment tombe.</li>'
                         + '<li><b>Touches clavier</b> — <code>:kbd[Ctrl+K]</code>, en ligne.</li>'
+                        + '<li><b>Cartes</b> — <code>:::cards</code> autour de <code>:::card[Titre]{href=…}</code>, ou <code>:ref[Titre]{href=…}</code> seul sur sa ligne. Écrite dans une phrase, la même directive devient une petite pastille : une carte avec une image de couverture au milieu d’un paragraphe n’est pas une carte.</li>'
+                        + '<li><b>Ligne de téléchargement</b> — <code>:::file[setup.exe]{href=… size="12 Mo"}</code>.</li>'
+                        + '<li><b>Boutons et liens colorés</b> — <code>:button[Libellé]{href=…}</code>, <code>:link[lire ceci]{color=#0a7 href=…}</code>. Sans destination, le rendu est du texte simple plutôt qu’une forme qui a l’air cliquable et ne l’est pas.</li>'
+                        + '<li><b>Badges et icônes</b> — <code>:badge[Nouveau]{color=#0a7}</code>, <code>:icon[rocket]</code>.</li>'
+                        + '<li><b>Alignement</b> — <code>:::center</code>, <code>:::left</code>, <code>:::right</code>.</li>'
+                        + '<li><b>Sur cette page</b> — <code>::toc</code> seul sur sa ligne construit un sommaire à partir des titres qui suivent.</li>'
+                        + '<li><b>Maths</b> — <code>$$E = mc^2$$</code>. Seule sur ses lignes, la formule est centrée ; dans une phrase, elle reste dans la ligne. Un seul <code>$</code> n’est volontairement pas des maths : cette application cite des prix.</li>'
+                        + '<li><b>Emoji</b> — <code>:rocket:</code> devient le caractère. Les mêmes noms que le site ; un nom inconnu reste tel que vous l’avez tapé.</li>'
                         + '<li>Plus les <b>tableaux</b> GFM, le <b>code</b> en blocs, les listes, les citations et les admonitions <code>!!!</code> façon mkdocs.</li></ul>'
                         + '<h4>Deux règles</h4><ul><li>Laissez une <b>ligne vide</b> avant un bloc — <code>:::note</code> collé sous un paragraphe est lu comme en faisant partie.</li><li><b>Fermez ce que vous ouvrez.</b> Les blocs s’imbriquent librement, et chaque <code>:::</code> ferme le plus proche encore ouvert.</li></ul>'
-                        + '<p><b>Sur le site il y en a d’autres</b> — cartes, lignes de téléchargement, boutons, liens colorés, badges et icônes en ligne, et un sommaire. Ceux-là s’affichent sur BetterCommunity et dans l’onglet Communauté de BMM ; dans une page de <i>documentation</i> ils sortent en texte brut, et c’est voulu — une erreur visible est une erreur réparable. La liste complète est dans la doc en ligne.</p>',
+                        + '<p>C’est le même vocabulaire que BetterCommunity : un article écrit une fois se lit pareil sur le site et dans l’app. La liste complète, avec tous les attributs, est dans la doc en ligne.</p>',
                 },
             },
             {

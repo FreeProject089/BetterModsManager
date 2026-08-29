@@ -10,6 +10,10 @@ import { t } from '../core/i18n.js';
 // documentation, and a second copy of daylight-saving arithmetic is a second copy to get
 // wrong — in a way that shows up as an hour on a page nobody checks against a clock.
 import { readInstant, zoneDelta } from '../core/tz.js';
+// Maths is marked FIRST, before any directive rule runs: a formula containing a colon
+// would otherwise be read as a directive and typeset as nothing.
+import { markMath } from './md-math.js';
+import { replaceEmoji } from '../core/emoji.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
   // `check` and `error` are the site's aliases for success and danger. They were absent
@@ -39,6 +43,9 @@ const BUTTON_BRANDS: Record<string, { color: string; slug: string }> = {
   telegram: { color: '#26a5e4', slug: 'telegram' },
 };
 const BUTTON_SIZES = new Set(['sm', 'md', 'lg']);
+// One sheet of paper with a folded corner, used by the `:::file` card and by the inline
+// `:file[…]` chip. Written once because two copies of an icon drift into two icons.
+const FILE_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
 /**
  * How far the reader is from `tz`, RIGHT NOW.
@@ -235,6 +242,8 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
   const abs = (u: string) => (u && u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u; // relative site URL → absolute
   let s = md || '';
 
+  s = markMath(s);
+
   // ::toc → a "On this page" summary built from the ## / ### headings (top level only).
   if (_top && /^\s*::toc\b/m.test(s)) {
     const heads: { level: number; text: string }[] = [];
@@ -309,6 +318,29 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
   s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, attrs) => {
     const col = attrs && (attrs.match(/color=("|')?([^"'\s}]+)\1?/) || [])[2];
     return `<span class="community-inline-badge"${col ? ` style="--bc:${col}"` : ''}>${escHtml(txt)}</span>`;
+  });
+
+  // ── card / ref / file, written inline ───────────────────────────────────────
+  //
+  // The website runs container, leaf and TEXT directives through one switch, so `:ref[Doc]{href=…}`
+  // typed in the middle of a sentence renders there exactly like the `:::ref` block. Here those
+  // three names lived on the block scanner only, and the inline form — the shorter one, the one
+  // people actually type — reached the reader as its own source code.
+  //
+  // Alone on its line it BECOMES the block, which is what the author drew. Inside a sentence it
+  // becomes a small link chip instead: a card with a cover image, mid-paragraph, is not a card.
+  s = s.replace(/^[ \t]*:(file|ref|card)\[([^\]]*)\](\{[^}]*\})?[ \t]*$/gm,
+    (_m, n, label, at) => `:::${n}[${label}]${at || ''}\n:::`);
+  // `[^:]` matters: the line above has just written `:::file[…]`, and without it this rule
+  // matches the tail of its own output and leaves a stray `::` in front of a chip.
+  s = s.replace(/(^|[^:]):(file|ref|card)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, before, n, txt, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || '');
+    const href = abs(a.href || a.url || a.link || '');
+    const ico = n === 'file' ? FILE_SVG : (a.icon ? iconImg(a.icon) : '');
+    const cls = 'doc-btn doc-btn-sm doc-btn-outline';
+    if (!href) return `${before}<span class="${cls}">${ico}${escHtml(txt)}</span>`;
+    const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noreferrer"' : '';
+    return `${before}<a class="${cls}" href="${escAttr(href)}"${ext}>${ico}${escHtml(txt)}</a>`;
   });
 
   const lines = s.split('\n');
@@ -487,8 +519,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       const btns = href
         ? `<a href="${escAttr(href)}" download class="community-file-btn">Download</a><a href="${escAttr(href)}" target="_blank" rel="noreferrer" class="community-file-btn community-file-btn-ghost">Open</a>`
         : '';
-      const fileSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-      out.push('', `<div class="community-file"><span class="community-file-icon">${fileSvg}</span><div class="community-file-info"><div class="community-file-name">${escHtml(fname)}</div>${size ? `<div class="community-file-size">${escHtml(size)}</div>` : ''}</div><div class="community-file-actions">${btns}</div></div>`, '');
+      out.push('', `<div class="community-file"><span class="community-file-icon">${FILE_SVG}</span><div class="community-file-info"><div class="community-file-name">${escHtml(fname)}</div>${size ? `<div class="community-file-size">${escHtml(size)}</div>` : ''}</div><div class="community-file-actions">${btns}</div></div>`, '');
     } else if (name === 'details' || name === 'collapse') {
       out.push('', `<details class="community-details"><summary>${escHtml(label || attrs.title || 'Details')}</summary><div class="community-details-body">${mdInline(innerMd)}</div></details>`, '');
     } else if (name === 'replay' || name === 'bmmreplay') {
@@ -515,5 +546,8 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       out.push('');
     } else { out.push('', innerMd, ''); }
   }
-  return out.join('\n');
+  // `:rocket:` LAST, and on the assembled output: a shortcode inside a directive's attributes
+  // is not a shortcode, and by here every directive has been consumed. Only known names are
+  // replaced, so `10:30:45` and a French sentence ending in a colon are both safe.
+  return replaceEmoji(out.join('\n'));
 }

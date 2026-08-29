@@ -14,6 +14,7 @@
 // and on core/tz, both leaves — nothing here reaches back into either screen.
 import { t } from '../core/i18n.js';
 import { zoneDelta } from '../core/tz.js';
+import { typesetMath } from '../ui/md-math.js';
 
 /**
  * Tabs, delegated once for the whole document.
@@ -49,7 +50,24 @@ if (typeof document !== 'undefined') {
  */
 export function hydrateMdLite(host: HTMLElement): void {
     if (!host) return;
+    // Fire and forget: KaTeX is 272 KB and nothing on the page waits for a formula. It
+    // loads only when the subtree actually holds one.
+    void typesetMath(host);
     host.querySelectorAll('[data-sched-title]').forEach((el) => { el.textContent = t('md.sched.hours'); });
+    // The two other places md-lite leaves a word for somebody who has a dictionary.
+    host.querySelectorAll('[data-md-toc-title]').forEach((el) => { el.textContent = t('md.toc.title'); });
+    host.querySelectorAll('[data-md-open]').forEach((el) => { el.textContent = t('md.file.open'); });
+    // `:icon[rocket]` → a real CSS mask, so the glyph takes the colour of the text around it.
+    // The name was filtered to [a-z0-9-] before it reached the attribute, so building a URL
+    // from it introduces nothing; an <img> here would be flat black on a dark page.
+    host.querySelectorAll<HTMLElement>('.doc-icon-mask[data-lucide]').forEach((el) => {
+        const name = String(el.dataset.lucide || '').replace(/[^a-z0-9-]/g, '');
+        if (!name || el.dataset.masked) return;
+        el.dataset.masked = '1';
+        const url = `url('https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg') center/contain no-repeat`;
+        el.style.webkitMask = url;
+        el.style.mask = url;
+    });
     host.querySelectorAll('[data-sched-note]').forEach((el) => {
         const tz = el.getAttribute('data-sched-note') || '';
         const { dir, here, span } = zoneDelta(tz);

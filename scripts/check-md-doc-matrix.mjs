@@ -94,7 +94,12 @@ if (existsSync(HUB)) {
   // From the article's id to the end of its object. The next `id: '` is the next article.
   const end = hub.indexOf("        id: '", at + 10);
   const body = hub.slice(at, end < 0 ? hub.length : end);
-  const taught = new Set([...body.matchAll(/<code>:{1,3}([a-z][a-z0-9-]*)/g)].map((m) => m[1]));
+  // The lookahead is not decoration, and it has to forbid a NAME character as well as the
+  // colon. An emoji shortcode is written `:rocket:` and looks exactly like a text directive
+  // until its closing colon — so without this the article teaching emoji was read as teaching
+  // a `:::rocket` block. Excluding only the colon is not enough: the name is greedy, so it
+  // simply backtracks to `:::rocke` and reports that instead.
+  const taught = new Set([...body.matchAll(/<code>:{1,3}([a-z][a-z0-9-]*)(?![a-z0-9-:])/g)].map((m) => m[1]));
   // `:::name` is the article's own placeholder for "a directive name".
   taught.delete('name');
   taught.delete('nom');

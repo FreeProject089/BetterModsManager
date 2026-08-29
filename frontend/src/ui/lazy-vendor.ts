@@ -44,6 +44,44 @@ export function loadVendorScript(src: string): Promise<void> {
     return p;
 }
 
+/**
+ * Load a stylesheet once, the way `loadVendorScript` loads a script.
+ *
+ * KaTeX needs its CSS: without it every formula renders as a stack of overlapping glyphs,
+ * which is worse than the dollar signs it replaced.
+ */
+export function loadVendorCss(href: string): Promise<void> {
+    const cached = loads.get(href);
+    if (cached) return cached;
+    const p = new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector<HTMLLinkElement>(`link[href="${href}"]`);
+        if (existing?.dataset.loaded === '1') { resolve(); return; }
+        const el = existing ?? document.createElement('link');
+        el.rel = 'stylesheet';
+        el.addEventListener('load', () => { el.dataset.loaded = '1'; resolve(); }, { once: true });
+        el.addEventListener('error', () => reject(new Error(`css ${href}`)), { once: true });
+        if (!existing) { el.href = href; document.head.appendChild(el); }
+    });
+    p.catch(() => loads.delete(href));
+    loads.set(href, p);
+    return p;
+}
+
+/**
+ * Load KaTeX, for a document that has maths in it.
+ *
+ * Both halves together: the script alone typesets into markup the stylesheet is what makes
+ * legible, so resolving before the CSS has landed would show one frame of overlapping glyphs
+ * on every formula.
+ */
+export async function ensureKatex(): Promise<any> {
+    await Promise.all([
+        loadVendorScript('assets/vendor/katex/katex.min.js'),
+        loadVendorCss('assets/vendor/katex/katex.min.css'),
+    ]);
+    return (globalThis as any).katex || null;
+}
+
 /** True once mermaid has been configured, so the palette is only applied once per load. */
 let mermaidReady = false;
 

@@ -10030,6 +10030,8 @@
   "md.sched.same": "{here} est à la même heure que {tz} en ce moment",
   "md.sched.ahead": "{here} est en avance de {span} sur {tz} en ce moment",
   "md.sched.behind": "{here} est en retard de {span} sur {tz} en ce moment",
+  "md.toc.title": "Sur cette page",
+  "md.file.open": "Ouvrir",
   "deeplink.keyLocked": "La clé {k} est verrouillée, et la phrase de passe fournie ne l’ouvre pas.",
   "plugins.dl.catPassphrase": "Déverrouille cette clé, si le fichier en a une. Utilisée pour cette exécution et jamais conservée — et ne la mettez pas dans un lien que vous partagez.",
   "plugins.epF.cfPassphrase": "Phrase de passe de cette clé, si le fichier en a une. La déverrouille pour cette exécution seulement ; rien n’en est conservé.",
