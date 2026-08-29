@@ -412,6 +412,23 @@ if (typeof document !== 'undefined') {
             setTimeout(() => { btn.innerHTML = prev; }, 2000);
         }).catch(() => {});
     });
+    // Delegated handler for :::tabs, which the website renders with a component and this
+    // renders with a class. Nothing about which panel is open lives in the markdown, so the
+    // same source shows the same tabs in the blog and in the app.
+    //
+    // Hidden panels stay in the tree rather than being rebuilt: a code block's highlighting
+    // and an image's download are then paid once, and switching back is instant.
+    document.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement)?.closest?.('.doc-tabs-btn') as HTMLElement | null;
+        const wrap = btn?.closest('.doc-tabs') as HTMLElement | null;
+        if (!btn || !wrap) return;
+        const i = Number(btn.dataset.i || 0);
+        wrap.querySelectorAll('.doc-tabs-btn').forEach((b, n) => {
+            b.classList.toggle('is-on', n === i);
+            b.setAttribute('aria-selected', n === i ? 'true' : 'false');
+        });
+        wrap.querySelectorAll('.doc-tab').forEach((pnl, n) => pnl.classList.toggle('is-on', n === i));
+    });
     // Delegated handler for :::replay embeds (a play card in rendered markdown). Loads the
     // replay viewer lazily on click — no cost until someone actually watches a recording.
     document.addEventListener('click', (e) => {

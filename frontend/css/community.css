@@ -522,3 +522,70 @@
 .community-phase-title { font-weight: 600; }
 .community-phase-body > :first-child { margin-top: 0; }
 .community-phase-body > :last-child { margin-bottom: 0; }
+
+/* ── Tabs, schedules, instants, buttons and coloured links ────────────────────
+   The website's md.jsx draws these; rich-markdown.ts now emits the same markup so the
+   same source reads the same way in the blog and in the app. Class names are the site's
+   (`doc-*`) on purpose — one vocabulary, two stylesheets. */
+
+/* Tabs. The open panel is a class, set by the delegated handler in update-notes.ts —
+   hidden panels stay in the tree so switching back is instant. */
+.md-body .doc-tabs { border: 1px solid var(--bmm-border); border-radius: 10px; overflow: hidden; margin: 16px 0; }
+.md-body .doc-tabs-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); }
+.md-body .doc-tabs-btn {
+  border: none; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--bmm-text-secondary); padding: 6px 12px; border-radius: 7px; transition: background .12s, color .12s;
+}
+.md-body .doc-tabs-btn:hover { color: var(--bmm-text-primary); background: var(--bmm-bg-hover); }
+.md-body .doc-tabs-btn.is-on { color: var(--bmm-text-primary); background: var(--bmm-bg-primary); box-shadow: inset 0 0 0 1px var(--bmm-border); }
+/* Hidden, not unmounted — see the handler. */
+.md-body .doc-tab { display: none; padding: 14px 16px; }
+.md-body .doc-tab.is-on { display: block; }
+.md-body .doc-tab > :first-child { margin-top: 0; }
+.md-body .doc-tab > :last-child { margin-bottom: 0; }
+
+/* A repeating schedule, stated in one timezone. The zone is on the card because the rows
+   are NOT converted — see the comment in rich-markdown.ts. */
+.md-body .doc-schedule { border: 1px solid var(--bmm-border); border-radius: 10px; margin: 16px 0; overflow: hidden; }
+.md-body .doc-schedule-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); }
+.md-body .doc-schedule-title { font-weight: 700; font-size: 14px; }
+/* The zone is the point of the card, not a footnote on it. */
+.md-body .doc-schedule-tz { margin-left: auto; font-size: 11px; font-family: var(--bmm-font-mono, ui-monospace, monospace); color: var(--bmm-text-muted); border: 1px solid var(--bmm-border); border-radius: 999px; padding: 2px 8px; }
+.md-body .doc-schedule-body { padding: 4px 14px; }
+.md-body .doc-schedule-body table { margin: 10px 0; }
+.md-body .doc-schedule-note { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--bmm-text-muted); border-top: 1px dashed var(--bmm-border); }
+
+/* One instant, in the reader's own zone. The zone label rides along because a converted
+   time with no zone beside it is a number the reader cannot check. */
+.md-body .doc-time { font-variant-numeric: tabular-nums; border-bottom: 1px dotted var(--bmm-border); cursor: help; }
+.md-body .doc-time-zone { margin-left: 5px; font-size: 11px; color: var(--bmm-text-muted); }
+
+/* Buttons: one shape, three sizes, any colour. `--btn` is set inline by the directive. */
+.md-body .doc-btn {
+  --btn: var(--bmm-accent);
+  display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
+  border-radius: 9px; font-weight: 600; line-height: 1.2; vertical-align: middle;
+  background: var(--btn); border: 1px solid var(--btn);
+  /* Against the button's OWN colour, so a pale brand keeps dark text and a dark one light.
+     The author picks the ground here (`:button[…]{color=#e8e8e8}`), so a fixed white ink is
+     a button nobody can read — and it is the author who would never see it, because it looks
+     right on the colours they happened to try. */
+  color: color-contrast(var(--btn) vs var(--bmm-text-on-accent), var(--bmm-text-primary));
+  transition: filter .12s, background .12s;
+}
+/* color-contrast() is not in every engine yet, and the webview is one of the "yet"s. The ink
+   on the accent wins on every brand colour offered above; the outline variant is the escape
+   hatch for a pale custom one. */
+@supports not (color: color-contrast(#000 vs #fff, #111)) {
+  .md-body .doc-btn { color: var(--bmm-text-on-accent); }
+}
+.md-body .doc-btn:hover { filter: brightness(1.12); text-decoration: none; }
+.md-body .doc-btn-sm { padding: 6px 12px; font-size: 12px; }
+.md-body .doc-btn-md { padding: 9px 16px; font-size: 13px; }
+.md-body .doc-btn-lg { padding: 12px 22px; font-size: 15px; }
+.md-body .doc-btn-outline { background: transparent; color: var(--btn, var(--bmm-accent)); border-color: var(--btn, var(--bmm-accent)); }
+.md-body .doc-btn-outline:hover { background: color-mix(in srgb, var(--btn, var(--bmm-accent)) 12%, transparent); filter: none; }
+.md-body .doc-btn-logo { width: 1em; height: 1em; flex: 0 0 auto; }
+
+/* A link that is a colour rather than THE link colour. */
+.md-body .doc-link-c { color: var(--lnk, var(--bmm-accent)); text-decoration: underline; text-underline-offset: 2px; }

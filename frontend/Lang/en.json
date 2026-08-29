@@ -10027,5 +10027,9 @@
   "sched.act.catalog.entry": "Add, change or remove one catalogue entry",
   "sched.actd.catalog.entry": "One entry of a catalogue this machine AUTHORS, not one it follows. The id is what change and remove match on, so an entry without one could be written and never touched again — it is refused.",
   "sched.act.catalog.delete": "Delete a catalogue you author",
-  "sched.actd.catalog.delete": "Throws away the whole authored catalogue of one kind. Asks first, and needs the delete permission like every other step that destroys something of yours. Does not touch the catalogues you follow."
+  "sched.actd.catalog.delete": "Throws away the whole authored catalogue of one kind. Asks first, and needs the delete permission like every other step that destroys something of yours. Does not touch the catalogues you follow.",
+  "md.sched.hours": "Hours",
+  "md.sched.same": "{here} is on the same clock as {tz} right now",
+  "md.sched.ahead": "{here} is {span} ahead of {tz} right now",
+  "md.sched.behind": "{here} is {span} behind {tz} right now"
 }

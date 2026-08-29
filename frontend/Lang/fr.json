@@ -10025,5 +10025,9 @@
   "sched.act.catalog.entry": "Ajouter, modifier ou retirer une entrée de catalogue",
   "sched.actd.catalog.entry": "Une entrée d'un catalogue que cette machine ÉCRIT, pas un qu'elle suit. L'id est ce sur quoi modifier et retirer s'appuient : une entrée sans id pourrait être écrite puis jamais retouchée — elle est refusée.",
   "sched.act.catalog.delete": "Supprimer un catalogue que tu écris",
-  "sched.actd.catalog.delete": "Jette tout le catalogue écrit d'un type. Demande confirmation, et exige la permission « supprimer » comme toute étape qui détruit quelque chose à toi. Ne touche pas aux catalogues que tu suis."
+  "sched.actd.catalog.delete": "Jette tout le catalogue écrit d'un type. Demande confirmation, et exige la permission « supprimer » comme toute étape qui détruit quelque chose à toi. Ne touche pas aux catalogues que tu suis.",
+  "md.sched.hours": "Horaires",
+  "md.sched.same": "{here} est à la même heure que {tz} en ce moment",
+  "md.sched.ahead": "{here} est en avance de {span} sur {tz} en ce moment",
+  "md.sched.behind": "{here} est en retard de {span} sur {tz} en ce moment"
 }

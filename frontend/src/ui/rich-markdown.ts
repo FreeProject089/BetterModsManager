@@ -8,9 +8,111 @@ import { escHtml, escAttr } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
-  note: 'NOTE', info: 'NOTE', tip: 'TIP', hint: 'TIP', success: 'TIP',
-  warning: 'WARNING', caution: 'CAUTION', danger: 'CAUTION', important: 'IMPORTANT', callout: 'NOTE', custom: 'NOTE',
+  // `check` and `error` are the site's aliases for success and danger. They were absent
+  // here, so a post using either rendered its body with no callout around it at all — not a
+  // wrong colour, no box: the text simply lost its frame on the way into the app.
+  note: 'NOTE', info: 'NOTE', tip: 'TIP', hint: 'TIP', success: 'TIP', check: 'TIP',
+  warning: 'WARNING', caution: 'CAUTION', danger: 'CAUTION', error: 'CAUTION', important: 'IMPORTANT', callout: 'NOTE', custom: 'NOTE',
 };
+
+/**
+ * Brand buttons. The same eight the site draws, and deliberately no more: Patreon and Steam
+ * have no mark here either, and a coloured button with a hole where the logo goes is worse
+ * than one that is only the colour.
+ *
+ * The logo is requested in white on a filled button and in the brand colour on an outline
+ * one, because a brand-coloured logo on its own brand ground is invisible — which is what
+ * asking the icon helper for it would have produced.
+ */
+const BUTTON_BRANDS: Record<string, { color: string; slug: string }> = {
+  youtube: { color: '#ff0033', slug: 'youtube' },
+  discord: { color: '#5865f2', slug: 'discord' },
+  kofi: { color: '#ff5e5b', slug: 'kofi' },
+  github: { color: '#24292f', slug: 'github' },
+  twitch: { color: '#9146ff', slug: 'twitch' },
+  x: { color: '#000000', slug: 'x' },
+  reddit: { color: '#ff4500', slug: 'reddit' },
+  telegram: { color: '#26a5e4', slug: 'telegram' },
+};
+const BUTTON_SIZES = new Set(['sm', 'md', 'lg']);
+
+/** The reader's own timezone, or UTC when the browser will not say. */
+function readerZone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
+}
+
+/**
+ * What a wall-clock time in `tz` is in UTC, on a given date.
+ *
+ * There is no built-in for this. The trick is the standard one: format the instant IN the
+ * zone, read back what the clock there said, and the difference is the offset. Done for a
+ * SPECIFIC date, which is what makes daylight saving come out right — the same wall-clock
+ * time has two different offsets across a year.
+ */
+function zoneOffsetMs(dateUtcMs: number, tz: string): number {
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const p: Record<string, string> = {};
+    for (const x of dtf.formatToParts(new Date(dateUtcMs))) p[x.type] = x.value;
+    // `hour` comes back as 24 at midnight in some engines, which Date.UTC reads as the next
+    // day — correct arithmetic, wrong day, and a silent one-day error.
+    const h = p.hour === '24' ? 0 : Number(p.hour);
+    const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), h, Number(p.minute), Number(p.second));
+    return asUtc - dateUtcMs;
+  } catch { return 0; }
+}
+
+/**
+ * How far the reader is from `tz`, RIGHT NOW.
+ *
+ * "Right now" is not hedging. The difference changes twice a year and this markdown is
+ * rendered once, so a sentence that did not say when it was computed would quietly become
+ * false on a Sunday in March.
+ */
+function zoneNote(tz: string): string {
+  if (!tz) return '';
+  const here = readerZone();
+  if (tz === here) return '';
+  const now = Date.now();
+  const diffMin = Math.round((zoneOffsetMs(now, here) - zoneOffsetMs(now, tz)) / 60000);
+  if (!diffMin) return t('md.sched.same', { here, tz });
+  const h = Math.floor(Math.abs(diffMin) / 60);
+  const m = Math.abs(diffMin) % 60;
+  const span = m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  return t(diffMin > 0 ? 'md.sched.ahead' : 'md.sched.behind', { here, tz, span });
+}
+
+/**
+ * One instant, in the reader's own zone.
+ *
+ * The date is what makes this exact: it settles which side of a daylight-saving change the
+ * time falls on. That is precisely why a weekly `:::schedule` row is NOT converted.
+ *
+ * A value that cannot be parsed is shown as written rather than as "Invalid Date" — a reader
+ * should see what the author typed, not the failure of a parser.
+ */
+function docTime(raw: string, a: Record<string, string>): string {
+  if (!raw) return '';
+  const tz = String(a.tz || a.timezone || '').trim();
+  // Parsed as a wall-clock time IN `tz`, not in whatever zone the app happens to run in:
+  // `Date.parse('2026-09-01T20:00')` is local time, so without this the answer would be
+  // right only for readers who already live where the author does.
+  const naive = Date.parse(raw.includes('T') ? `${raw}Z` : `${raw.replace(' ', 'T')}Z`);
+  if (Number.isNaN(naive)) return `<span class="doc-time">${escHtml(raw)}</span>`;
+  const instant = tz ? naive - zoneOffsetMs(naive, tz) : naive;
+  const here = readerZone();
+  let shown: string;
+  try {
+    shown = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: here }).format(new Date(instant));
+  } catch { return `<span class="doc-time">${escHtml(raw)}</span>`; }
+  return `<time class="doc-time" datetime="${escAttr(new Date(instant).toISOString())}"`
+    + ` title="${escAttr(tz ? `${raw} ${tz}` : raw)}">${escHtml(shown)}`
+    + `<span class="doc-time-zone">${escHtml(here)}</span></time>`;
+}
 
 // Step markers. The same four alphabets md.jsx uses on the website, so the same source
 // numbers identically in both — a procedure that reads "1. 2. 3." in the blog and
@@ -209,6 +311,39 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     return `<span class="doc-comment" tabindex="0">${inner}${card}</span>`;
   });
   s = s.replace(/:icon\[([^\]]+)\](?:\{[^}]*\})?/g, (_m, name) => iconImg(name));            // inline icon → coloured icon
+  // :button[Label]{brand=youtube href=…} / :btn[…] → the site's one shape, three sizes,
+  // any colour. A button with nowhere to go is a shape that looks pressable and is not, so
+  // an absent href renders a span rather than a dead link — same rule as the website.
+  s = s.replace(/:(?:button|btn)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || '');
+    const brand = BUTTON_BRANDS[String(a.brand || '').toLowerCase()];
+    const color = a.color || brand?.color || '';
+    const size = BUTTON_SIZES.has(String(a.size)) ? a.size : 'md';
+    const outline = a.outline != null;
+    const href = abs(a.href || a.url || '');
+    const cls = `doc-btn doc-btn-${size}${outline ? ' doc-btn-outline' : ''}`;
+    const logo = brand
+      ? `<img class="doc-btn-logo" src="https://cdn.simpleicons.org/${brand.slug}/${outline ? brand.color.replace('#', '') : 'white'}" alt="" loading="lazy">`
+      : (a.icon ? iconImg(a.icon) : '');
+    const inner = logo + escHtml(txt);
+    const style = color ? ` style="--btn:${escAttr(color)}"` : '';
+    if (!href) return `<span class="${cls}"${style}>${inner}</span>`;
+    const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noreferrer"' : '';
+    return `<a class="${cls}"${style} href="${escAttr(href)}"${ext}>${inner}</a>`;
+  });
+  // :link[read this]{color=#0a7 href=…} — a link that is a colour rather than THE link
+  // colour. The href rules are the button's, because they are the same rules.
+  s = s.replace(/:link\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || '');
+    const href = abs(a.href || a.url || '');
+    const style = a.color ? ` style="--lnk:${escAttr(a.color)}"` : '';
+    if (!href) return `<span class="doc-link-c"${style}>${escHtml(txt)}</span>`;
+    const ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noreferrer"' : '';
+    return `<a class="doc-link-c"${style} href="${escAttr(href)}"${ext}>${escHtml(txt)}</a>`;
+  });
+  // :time[2026-09-01T20:00]{tz=Europe/Paris} / :at[…] → that instant in the reader's zone.
+  s = s.replace(/:(?:time|at)\[([^\]]+)\](?:\{([^}]*)\})?/g,
+    (_m, raw, rawAttrs) => docTime(String(raw).trim(), parseDirAttrs(rawAttrs || '')));
   // :badge[Label]{color=..} → a coloured chip (same look as the site's tags).
   s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, attrs) => {
     const col = attrs && (attrs.match(/color=("|')?([^"'\s}]+)\1?/) || [])[2];
@@ -273,7 +408,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
         // inside it — the site renders **bold** there and the app printed the asterisks.
         + `<div class="community-step-body">${mdInline(innerMd)}</div></div>`, '');
     }
-    else if (name === 'roadmap') {
+    else if (name === 'roadmap' || name === 'progress') {
       // THREE sources on the site, and the app knew only one of them:
       //
       //   :::roadmap  +  :::stage children   (below)
@@ -316,6 +451,54 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
           + (pct ? `<span class="community-phase-pct">${pct}%</span>` : '') + `</div>` : '')
         + (pct ? `<div class="community-phase-bar"><i style="width:${pct}%"></i></div>` : '')
         + `${innerMd}</div></div>`, '');
+    }
+    else if (name === 'tabs') {
+      // The one shape this vocabulary could not express, and the reason it exists: people
+      // wrote the same content three times — Windows, macOS, Linux — stacked down the page,
+      // because three headings were the only way to say "pick the one that is yours".
+      //
+      // The panels have already been expanded by the recursive call above, so their titles
+      // are read back OFF them rather than declared a second time here. A label written in
+      // two places is a label that drifts from its content.
+      const titles: string[] = [];
+      const body = innerMd.replace(/<div class="doc-tab" data-title="([^"]*)">/g, (_m2, title) => {
+        const i = titles.length;
+        titles.push(title);
+        return `<div class="doc-tab${i === 0 ? ' is-on' : ''}" data-title="${title}" role="tabpanel">`;
+      });
+      // No panels means somebody wrote `:::tabs` around ordinary content. Rendering the
+      // content is right; an empty tab strip above it would not be.
+      if (!titles.length) out.push('', innerMd, '');
+      else {
+        // Titles come back already escaped — they were read out of an attribute this file
+        // wrote. Escaping them again would render `&amp;` at the reader.
+        const bar = titles.map((title, i) => `<button type="button" role="tab" class="doc-tabs-btn${i === 0 ? ' is-on' : ''}"`
+          + ` data-i="${i}" aria-selected="${i === 0 ? 'true' : 'false'}">${title || String(i + 1)}</button>`).join('');
+        out.push('', `<div class="doc-tabs"><div class="doc-tabs-bar" role="tablist">${bar}</div>${body}</div>`, '');
+      }
+    }
+    else if (name === 'tab') {
+      // An untitled panel is numbered by the bar rather than left blank — better than a gap
+      // in the strip, and it says which one to go and name.
+      out.push('', `<div class="doc-tab" data-title="${escAttr(String(attrs.title || attrs.name || label || '').trim())}">${mdInline(innerMd)}</div>`, '');
+    }
+    else if (name === 'schedule' || name === 'hours') {
+      // A repeating schedule, stated in ONE zone.
+      //
+      // The rows are NOT converted, and that is the correct answer rather than a missing
+      // feature. "Monday 09:00 Europe/Paris" is 09:00 in Paris every week of the year; what
+      // moves across a daylight-saving boundary is how far that is from the reader. A
+      // converted row would be right today and wrong in March, with nothing on the page
+      // admitting it. So the zone is named, and the difference is stated for right now.
+      const tz = String(attrs.tz || attrs.timezone || '').trim();
+      const title = String(label || attrs.title || '').trim() || t('md.sched.hours');
+      const note = zoneNote(tz);
+      out.push('', `<div class="doc-schedule"><div class="doc-schedule-head">`
+        + `<span class="doc-schedule-title">${escHtml(title)}</span>`
+        + (tz ? `<span class="doc-schedule-tz">${escHtml(tz)}</span>` : '')
+        + `</div><div class="doc-schedule-body">${mdInline(innerMd)}</div>`
+        + (note ? `<p class="doc-schedule-note">${escHtml(note)}</p>` : '')
+        + `</div>`, '');
     }
     else if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
     else if (name === 'columns' || name === 'row') { out.push('', `<div class="community-columns">${innerMd}</div>`, ''); }
