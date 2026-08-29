@@ -537,7 +537,7 @@
   color: var(--bmm-text-secondary); padding: 6px 12px; border-radius: 7px; transition: background .12s, color .12s;
 }
 .md-body .doc-tabs-btn:hover { color: var(--bmm-text-primary); background: var(--bmm-bg-hover); }
-.md-body .doc-tabs-btn.is-on { color: var(--bmm-text-primary); background: var(--bmm-bg-primary); box-shadow: inset 0 0 0 1px var(--bmm-border); }
+.md-body .doc-tabs-btn.is-on { color: var(--bmm-text-primary); background: var(--bmm-bg-active); box-shadow: inset 0 0 0 1px var(--bmm-border); }
 /* Hidden, not unmounted — see the handler. */
 .md-body .doc-tab { display: none; padding: 14px 16px; }
 .md-body .doc-tab.is-on { display: block; }
