@@ -6820,6 +6820,11 @@ function getEndpointDefs() {
                 { name: 'useDocker', type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur de distribution.' },
                 { name: 'dockerOs', type: 'string', required: false, desc: 'OS hôte Docker : "linux" (défaut) ou "windows".' },
                 { name: 'serverVersion', type: 'string', required: false, desc: 'Version serveur : "std" (standard) ou "lux" (premium).' },
+                // Accepted since it was written, offered by the scheduler's own action, and
+                // never shown here — so the one screen that exists to try a route could not
+                // try the option that changes what the route DOES.
+                { name: 'lightweight', type: 'boolean', required: false, desc: 'N\'écrit que repo.json, sans copier les fichiers de mods. À associer à <code>filesBaseUrl</code> pour publier un manifeste de mods déjà hébergés ailleurs.' },
+                { name: 'filesBaseUrl', type: 'string', required: false, desc: 'Où vivent les fichiers quand ce n\'est pas à côté de repo.json. Écrit dans le manifeste ; les clients résolvent <code>&lt;ceci&gt;/mods/&lt;id&gt;/&lt;chemin&gt;</code>.' },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Gen started in background", "job_id": "uuid", "cancel_endpoint": "DELETE /api/repo/gen/cancel" }' },
@@ -9735,7 +9740,10 @@ function _apiBodyFor(a) {
         case 'repo_update_now': return { method: 'POST', path: '/api/repo/update-now', body: _prune({ repoDir: s('repoDir'), authorName: s('authorName') }) };
         case 'content_id': return { method: 'POST', path: '/api/content-id', body: _prune({ kind: s('kind'), id: s('id'), path: s('path') }) };
         case 'open_view': return { method: 'POST', path: '/api/view', body: { id: s('id') } };
-        case 'repo_manifest': return { method: 'POST', path: '/api/repo/manifest', body: _prune({ dir: s('dir') }) };
+        // `modsDir`, not `dir`. GenerateManifestArgs is camelCase and has no `dir` at all, so
+        // serde dropped it without a word and the route ran with no source — the folder you
+        // typed was ignored on every run of this action.
+        case 'repo_manifest': return { method: 'POST', path: '/api/repo/manifest', body: _prune({ modsDir: s('dir') }) };
         case 'set_schedule': return { method: 'POST', path: '/api/schedules/enabled', body: { id: s('id'), enabled: bool('enabled') } };
         case 'discord_rpc': return { method: 'POST', path: '/api/discord/rpc', body: { enabled: bool('enabled') } };
         case 'export_data': return { method: 'POST', path: '/api/data/export-auto', body: _prune({ dir: s('dir'), name: s('name'), increment: s('increment') || 'paren' }) };
