@@ -10048,5 +10048,9 @@
   "sched.syncLimit": "Limite de téléchargement",
   "sched.syncLimitPh": "Ko/s (vide = illimité)",
   "sched.syncKeepZipT": "Garder les archives zippées",
-  "sched.syncKeepZip": "Laisse les .zip et .7z tels quels au lieu de les décompresser. Pour un dépôt dont les mods doivent rester empaquetés."
+  "sched.syncKeepZip": "Laisse les .zip et .7z tels quels au lieu de les décompresser. Pour un dépôt dont les mods doivent rester empaquetés.",
+  "plugins.epF.srcKey": "QUELLE clé d’identité signe cette requête — son id ou son nom. Les ids vivent dans Réglages → Identité &amp; API et survivent à un renommage ; une référence absente du trousseau est signalée plutôt qu’ignorée, parce qu’une requête partie non signée revient en « impossible de le lire ».",
+  "plugins.epF.srcPassphrase": "Phrase de passe de cette clé, si le fichier en a une. La déverrouille pour cette exécution seulement ; rien n’en est conservé.",
+  "plugins.dl.srcKey": "QUELLE clé d’identité signe la requête — un id ou un nom. Une référence absente du trousseau est signalée plutôt qu’ignorée.",
+  "plugins.dl.srcPassphrase": "Déverrouille cette clé, si le fichier en a une. Utilisée pour cette exécution et jamais conservée — et ne la mettez pas dans un lien que vous partagez."
 }

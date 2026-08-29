@@ -5952,6 +5952,8 @@ function getDeepLinkDefs() {
                 { name: 'url', required: true, desc: t('plugins.dl.repo_connect.p.url') },
                 { name: 'password', required: false, desc: t('plugins.dl.repo_connect.p.password') },
                 { name: 'name', required: false, desc: t('plugins.dl.repo_connect.p.name') },
+                { name: 'key', required: false, desc: t('plugins.dl.srcKey') },
+                { name: 'passphrase', required: false, desc: t('plugins.dl.srcPassphrase') },
             ],
             desc: t('plugins.dl.repo_connect.d'),
             about: t('plugins.dl.repo_connect.a'),
@@ -5962,6 +5964,8 @@ function getDeepLinkDefs() {
             params: [
                 { name: 'url', required: true, desc: t('plugins.dl.repo_sync.p.url') },
                 { name: 'profile', required: true, desc: t('plugins.dl.repo_sync.p.profile') },
+                { name: 'key', required: false, desc: t('plugins.dl.srcKey') },
+                { name: 'passphrase', required: false, desc: t('plugins.dl.srcPassphrase') },
                 // The PARAMETER keeps its name. `game_dir` is the wire contract every
                 // existing script, deeplink and scheduled task already sends; renaming it
                 // to match a UI label would break all of them, silently. Only the prose
@@ -6704,6 +6708,8 @@ function getEndpointDefs() {
             fields: [
                 { name: 'url', type: 'string', required: true, desc: 'URL vers le repo.json distant (query param). Ex : ?url=https://monserveur.com/repo.json' },
                 { name: 'password', type: 'string', required: false, desc: 'Mot de passe de téléchargement, si le repo auto-hébergé est protégé. Envoyé en header X-Repo-Password. Ex : &password=secret' },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "data": { "name": "Mon Repo", "version": "1.0.0", "game_name": "My Game", "profiles": [...], "author": "FreeProject" } }' },
@@ -6729,6 +6735,8 @@ function getEndpointDefs() {
                 { name: 'url', type: 'string', required: true, desc: 'URL complète vers le repo.json distant (ou le dossier parent — /repo.json sera ajouté automatiquement).' },
                 { name: 'name', type: 'string', required: false, desc: 'Nom affiché dans BMM. Si omis, récupéré depuis le champ "name" du repo.json distant.' },
                 { name: 'password', type: 'string', required: false, desc: t('plugins.epField.connectPw') },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://...", "name": "Mon Serveur" }' },
@@ -6767,6 +6775,8 @@ function getEndpointDefs() {
                 { name: 'overwriteAll', type: 'boolean', required: false, desc: 'Si true, re-télécharge tous les fichiers même si le hash correspond. Défaut : false.' },
                 { name: 'deleteExtra', type: 'boolean', required: false, desc: 'Si true, supprime les fichiers locaux absents du repo distant. Défaut : false.' },
                 { name: 'downloadLimit', type: 'number', required: false, desc: 'Limite de téléchargement en KB/s (0 = illimité). Défaut : 0.' },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Sync started in background", "job_id": "uuid", "cancel_endpoint": "DELETE /api/repo/sync/cancel" }' },
@@ -7467,6 +7477,8 @@ function getEndpointDefs() {
                 { name: 'url', type: 'string', required: true, desc: t('plugins.epF.ciUrl') },
                 { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ciType') },
                 { name: 'password', type: 'string', required: false, desc: t('plugins.epF.ciPw') },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "catalog/import" }' },
@@ -7546,6 +7558,8 @@ function getEndpointDefs() {
                 { name: 'kind', type: 'string', required: true, desc: t('plugins.epF.rxKind') },
                 { name: 'id', type: 'string', required: true, desc: t('plugins.epF.rxId') },
                 { name: 'password', type: 'string', required: false, desc: t('plugins.epF.rxPw') },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "action": "repo/extras" }' },
@@ -7718,6 +7732,8 @@ function getEndpointDefs() {
                 { name: 'password', type: 'string', required: false, desc: t('plugins.epF.snPassword') },
                 { name: 'overwriteAll', type: 'boolean', required: false, desc: t('plugins.epF.snOverwrite') },
                 { name: 'deleteExtra', type: 'boolean', required: false, desc: t('plugins.epF.snDelete') },
+                { name: 'key', type: 'string', required: false, desc: t('plugins.epF.srcKey') },
+                { name: 'passphrase', type: 'string', required: false, desc: t('plugins.epF.srcPassphrase') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/sync-now" }' },

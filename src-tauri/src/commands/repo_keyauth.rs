@@ -446,6 +446,57 @@ fn commit(state: &tauri::State<'_, crate::state::AppState>) -> Result<(), String
     Ok(())
 }
 
+/// Apply the source credentials a caller sent with ONE request.
+///
+/// The deeplink layer has done this since keys existed (`applySourceAccess` in
+/// deep_link_manager.ts); every repo route on the API side had only half of it — a password
+/// header — so a key-gated repo could not be read from a script, and the failure arrived as
+/// "could not read it" with nothing naming the key.
+///
+/// The two halves have different lifetimes, deliberately:
+///
+///   · WHICH key signs for a host is the same stored preference the source-access panel
+///     writes, so it is bound in the ring and the signing mirror is refreshed. It is NOT
+///     written to disk here: a request should not silently rewrite a preference the screens
+///     show, and within one run the binding is what signing reads.
+///   · The PASSPHRASE is memory-only, for this run, like every other passphrase in BMM.
+///
+/// A key that does not resolve is an ERROR, never a fall back to the active key: turning up
+/// as somebody else is the worst answer available here.
+pub fn apply_source_access(
+    data: &std::sync::Arc<std::sync::Mutex<crate::state::AppData>>,
+    url: &str,
+    key: Option<&str>,
+    passphrase: Option<&str>,
+) -> Result<(), String> {
+    let key = key.map(str::trim).filter(|k| !k.is_empty());
+    // NOT trimmed: leading and trailing spaces are legal in a passphrase, and dropping them
+    // turns a correct secret into a wrong one.
+    let pass = passphrase.filter(|p| !p.is_empty());
+    if key.is_none() && pass.is_none() {
+        return Ok(());
+    }
+    {
+        let mut d = data.lock().map_err(|_| "state lock".to_string())?;
+        if let Some(k) = key {
+            bind_origin_to_key(&mut d.settings, url, Some(k))?;
+        }
+        // Refreshed whether or not a key was named: the mirror is what `header_for` reads, and
+        // a passphrase is useless if the ring it unlocks is a stale copy.
+        let ring = keyring_from_settings(&mut d.settings);
+        set_keyring(ring);
+    }
+    if let Some(p) = pass {
+        let audience = audience_for(url).ok_or_else(|| "repo.keyauth.errBadUrl".to_string())?;
+        let path = key_path_for(&audience).ok_or_else(|| "repo.keyauth.errNoSuchKey".to_string())?;
+        // Verified before it is kept: remembering an unchecked passphrase turns a typo into
+        // "this key does not work", reported by somebody else's server, later.
+        make_proof(&path, Some(p), "probe://validate")?;
+        remember_passphrase(&path, p);
+    }
+    Ok(())
+}
+
 /// What the screens show: the ring, what is active, and the per-origin choices.
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

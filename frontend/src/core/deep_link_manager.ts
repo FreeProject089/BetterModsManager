@@ -271,6 +271,10 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
                 return;
             }
+            // A protected repo needs the same three as a protected catalogue. This link
+            // took none of them, so connecting to one from a script produced an entry
+            // named after its own URL — the failure the route's own comment describes.
+            await applySourceAccess(repoUrl, parsedUrl.searchParams);
             const confirmed = await window.confirmCustom!(
                 t('plugins.deepLinkConnectRepoTitle') || 'Connecter un repo ?',
                 `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkConnectRepoDesc') || 'Ajouter ce repo à la liste des repos connectés dans BMM ?'}</p>
@@ -315,6 +319,9 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
                 return;
             }
+            // The same source credentials as everywhere else, applied before the screen opens
+            // so the sync it starts is already signed and already knows the password.
+            if (/^https?:\/\//i.test(repoUrl)) await applySourceAccess(repoUrl, parsedUrl.searchParams);
             // Navigate to the repo page so the user can complete the sync from there
             const navBtn = document.querySelector('[data-view="repo"]') as HTMLElement;
             if (navBtn) navBtn.click();

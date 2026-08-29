@@ -196,6 +196,18 @@ struct RepoConnectBody {
     /// `X-Repo-Password`, never stored.
     #[serde(default)]
     password: Option<String>,
+    /// WHICH identity key signs this request, by id or by name.
+    ///
+    /// A key-gated repo was unreachable from here: the request went out unsigned and came
+    /// back "could not read it", with nothing anywhere naming a key. Same contract as the
+    /// deeplink's `?key=` — an id survives a rename, a name is what somebody reads off
+    /// their own screen, and one that resolves to neither is reported rather than skipped.
+    #[serde(default)]
+    key: Option<String>,
+    /// The passphrase for that key, when the file has one. Used for THIS run and never
+    /// written down — the same contract as the password above.
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -235,6 +247,18 @@ struct RepoExtraBody {
     // installation's id is used instead; there is nothing to send.
     #[serde(default)]
     password: Option<String>,
+    /// WHICH identity key signs this request, by id or by name.
+    ///
+    /// A key-gated repo was unreachable from here: the request went out unsigned and came
+    /// back "could not read it", with nothing anywhere naming a key. Same contract as the
+    /// deeplink's `?key=` — an id survives a rename, a name is what somebody reads off
+    /// their own screen, and one that resolves to neither is reported rather than skipped.
+    #[serde(default)]
+    key: Option<String>,
+    /// The passphrase for that key, when the file has one. Used for THIS run and never
+    /// written down — the same contract as the password above.
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 
 /// `POST /api/mods/order` — set the deployment order.
@@ -467,6 +491,18 @@ struct RepoSyncNowBody {
     overwrite_all: bool,
     #[serde(default)]
     delete_extra: bool,
+    /// WHICH identity key signs this request, by id or by name.
+    ///
+    /// A key-gated repo was unreachable from here: the request went out unsigned and came
+    /// back "could not read it", with nothing anywhere naming a key. Same contract as the
+    /// deeplink's `?key=` — an id survives a rename, a name is what somebody reads off
+    /// their own screen, and one that resolves to neither is reported rather than skipped.
+    #[serde(default)]
+    key: Option<String>,
+    /// The passphrase for that key, when the file has one. Used for THIS run and never
+    /// written down — the same contract as the password above.
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -490,6 +526,18 @@ struct RepoSyncBody {
     /// Optional download password for a password-protected self-hosted repo.
     #[serde(default)]
     password: Option<String>,
+    /// WHICH identity key signs this request, by id or by name.
+    ///
+    /// A key-gated repo was unreachable from here: the request went out unsigned and came
+    /// back "could not read it", with nothing anywhere naming a key. Same contract as the
+    /// deeplink's `?key=` — an id survives a rename, a name is what somebody reads off
+    /// their own screen, and one that resolves to neither is reported rather than skipped.
+    #[serde(default)]
+    key: Option<String>,
+    /// The passphrase for that key, when the file has one. Used for THIS run and never
+    /// written down — the same contract as the password above.
+    #[serde(default)]
+    passphrase: Option<String>,
 }
 
 /// POST /api/repo/gen — generate repo structure (formerly "host")
@@ -2294,11 +2342,13 @@ pub async fn start_api_server(
     // ── Repo API routes ──────────────────────────────────────────────────────
 
     // GET /api/repo/info?url=<url>  (no auth)
+    let handle_repo_info = app_handle.clone();
     let repo_info = warp::path!("api" / "repo" / "info")
         .and(warp::get())
         .and(require_permission(token.clone(), "repo.read"))
         .and(warp::query::<std::collections::HashMap<String, String>>())
-        .and_then(|query: std::collections::HashMap<String, String>| async move {
+        .and(with_app_handle(handle_repo_info))
+        .and_then(|query: std::collections::HashMap<String, String>, handle: tauri::AppHandle| async move {
             let url = match query.get("url") {
                 Some(u) if !u.is_empty() => u.clone(),
                 _ => return Ok::<_, warp::Rejection>(warp::reply::with_status(
@@ -2314,6 +2364,21 @@ pub async fn start_api_server(
                 .header(reqwest::header::USER_AGENT, "BetterModManager")
                 .timeout(std::time::Duration::from_secs(15));
             if let Some(pw) = query.get("password") { if !pw.is_empty() { req = req.header("X-Repo-Password", pw.clone()); } }
+            // A key-gated repo, from a script. `?key=` names which identity signs and
+            // `?passphrase=` opens it; the proof itself is attached below, the same header
+            // the app's own fetch sends. Without this the probe went out unsigned and the
+            // answer was a 403 with nothing pointing at a key.
+            {
+                let st = handle.state::<crate::state::AppState>();
+                if let Err(e) = crate::commands::repo_keyauth::apply_source_access(
+                    &st.data, &target, query.get("key").map(|x| x.as_str()), query.get("passphrase").map(|x| x.as_str())) {
+                    return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST));
+                }
+            }
+            if let Some((name, value)) = crate::commands::repo_keyauth::header_for(&target) {
+                req = req.header(name, value);
+            }
             match req.send().await {
                 Ok(r) if r.status().is_success() => {
                     match r.json::<serde_json::Value>().await {
@@ -2359,6 +2424,13 @@ pub async fn start_api_server(
         .and(with_path(path_repo_connect))
         .and_then(|body: RepoConnectBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| async move {
             let url = body.url.trim().to_string();
+            // Which key signs, and the passphrase that opens it — before the probe, so a
+            // key-gated repo answers instead of 401ing into "could not read it".
+            if let Err(e) = crate::commands::repo_keyauth::apply_source_access(
+                &d, &url, body.key.as_deref(), body.passphrase.as_deref()) {
+                return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST));
+            }
             if url.is_empty() {
                 return Ok::<_, warp::Rejection>(warp::reply::with_status(
                     warp::reply::json(&ApiError { error: "url required".into() }),
@@ -2584,6 +2656,14 @@ pub async fn start_api_server(
         .and(warp::body::json::<RepoSyncNowBody>())
         .and(with_app_handle(handle_sync_now))
         .map(|body: RepoSyncNowBody, handle: tauri::AppHandle| {
+            {
+                let st = handle.state::<crate::state::AppState>();
+                if let Err(e) = crate::commands::repo_keyauth::apply_source_access(
+                    &st.data, &body.url, body.key.as_deref(), body.passphrase.as_deref()) {
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST);
+                }
+            }
             // Refused before anything starts rather than half-done. Each of these is a way
             // to sync into somewhere nobody chose.
             for (field, value) in [
@@ -2635,6 +2715,11 @@ pub async fn start_api_server(
         .and(with_atomic(sync_running_sync))
         .and(with_atomic(sync_cancel_sync))
         .map(|body: RepoSyncBody, _d: Arc<std::sync::Mutex<AppData>>, _path: Arc<PathBuf>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            if let Err(e) = crate::commands::repo_keyauth::apply_source_access(
+                &_d, &body.url, body.key.as_deref(), body.passphrase.as_deref()) {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST);
+            }
             // Reject if a sync is already in progress.
             {
                 let st = handle.state::<crate::commands::repo_server::RepoServerState>();
@@ -3603,6 +3688,10 @@ pub async fn start_api_server(
         #[serde(default, rename = "type")] kind: Option<String>,
         /// For a protected catalogue. Kept for the run, never written down.
         #[serde(default)] password: Option<String>,
+        /// WHICH identity key signs the reads this import makes, by id or by name, and the
+        /// passphrase that opens it. An index behind a key was unreachable from here.
+        #[serde(default)] key: Option<String>,
+        #[serde(default)] passphrase: Option<String>,
     }
     let (tok_ci, perm_ci, h_ci) = (token.clone(), data.clone(), app_handle.clone());
     let cat_import = warp::path!("api" / "catalog" / "import")
@@ -3620,8 +3709,12 @@ pub async fn start_api_server(
                     return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST);
                 }
             }
+            // The same two the deeplink takes: `applySourceAccess` on the other side reads
+            // them out of these args, so the import walks a key-gated index the way a click
+            // does.
             api_exec_reply(&h, "catalog/import", serde_json::json!({
                 "url": body.url, "type": body.kind, "password": body.password,
+                "key": body.key, "passphrase": body.passphrase,
             }))
         });
 
@@ -4276,6 +4369,16 @@ pub async fn start_api_server(
         .and(warp::body::json::<RepoExtraBody>())
         .and(with_app_handle(handle_extra_take))
         .and_then(|body: RepoExtraBody, handle: tauri::AppHandle| async move {
+            // Same credentials as everywhere else. The manifest this reads is behind the same
+            // door as the repo it belongs to.
+            {
+                let st = handle.state::<crate::state::AppState>();
+                if let Err(e) = crate::commands::repo_keyauth::apply_source_access(
+                    &st.data, &body.url, body.key.as_deref(), body.passphrase.as_deref()) {
+                    return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST));
+                }
+            }
             // The manifest is fetched and the entry taken FROM IT, rather than the caller
             // describing the entry it wants installed. A caller that could hand over its own
             // {kind, url, sha256} would be using this endpoint to install arbitrary files

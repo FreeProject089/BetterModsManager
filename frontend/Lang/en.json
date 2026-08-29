@@ -10050,5 +10050,9 @@
   "sched.syncLimit": "Download limit",
   "sched.syncLimitPh": "KB/s (empty = unlimited)",
   "sched.syncKeepZipT": "Keep archives zipped",
-  "sched.syncKeepZip": "Leaves .zip and .7z files as they are instead of unpacking them. For a repo whose mods are meant to stay packed."
+  "sched.syncKeepZip": "Leaves .zip and .7z files as they are instead of unpacking them. For a repo whose mods are meant to stay packed.",
+  "plugins.epF.srcKey": "WHICH identity key signs this request — its id or its name. Ids live in Settings → Identity &amp; API and survive a rename; a reference that is not on the ring is reported rather than skipped, because a request that quietly goes out unsigned comes back as “could not read it”.",
+  "plugins.epF.srcPassphrase": "Passphrase for that key, when the file has one. Unlocks it for this run only; nothing about it is stored.",
+  "plugins.dl.srcKey": "WHICH identity key signs the request — an id or a name. A reference that is not on the ring is reported rather than skipped.",
+  "plugins.dl.srcPassphrase": "Unlocks that key, if the file has one. Used for this run and never stored — and never put it in a link you share."
 }

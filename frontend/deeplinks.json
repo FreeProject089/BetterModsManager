@@ -257,7 +257,9 @@
     "action": "repo/connect",
     "params": [
       "url",
-      "password"
+      "password",
+      "key",
+      "passphrase"
     ]
   },
   {
@@ -292,7 +294,9 @@
       "game_dir",
       "mods_dir",
       "backup_dir",
-      "password"
+      "password",
+      "key",
+      "passphrase"
     ]
   },
   {
