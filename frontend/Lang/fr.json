@@ -10057,5 +10057,11 @@
   "sched.dbg.stopTip": "Arrêter l’exécution ici. La tâche se déroule et le panneau reste pour que tu lises ce qui s’est passé.",
   "sched.dbg.finished": "terminé",
   "sched.dbg.endedShort": "arrêté",
-  "sched.dbg.finishedLine": "{w} — {n} étape(s), {s} s"
+  "sched.dbg.finishedLine": "{w} — {n} étape(s), {s} s",
+  "repo.ssh.routeDirPh": "dossier de sortie du générateur",
+  "repo.ssh.routeFromExport": "depuis le générateur de dépôt",
+  "repo.ssh.choose": "Choisir…",
+  "repo.ssh.target": "Serveur",
+  "plugins.dl.sshTarget": "QUELLE cible SSH enregistrée, par son nom. Absent = celle par défaut. Ne peut nommer ni hôte, ni utilisateur, ni chemin de clé — seulement un des serveurs déjà configurés.",
+  "plugins.epF.sshTarget": "QUELLE cible SSH enregistrée, par son nom. Absent = celle par défaut. Un nom désigne un serveur déjà configuré ; il ne peut pas introduire un nouvel hôte ni un chemin de clé."
 }

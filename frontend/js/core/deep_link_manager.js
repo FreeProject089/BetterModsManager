@@ -431,10 +431,12 @@ async function handleDeepLink(urlStr) {
         }
         // ── Publish an exported repo over SSH ──
         //
-        // Uses the target STORED in Settings, never one from the URL. A deeplink that could
-        // name a host and a key path would let any page the user clicks decide where their
-        // repo gets uploaded and which private key is read to do it — the link says
-        // "publish what I already configured", and nothing more.
+        // `?target=` names WHICH saved target; it still cannot say what a target is. A link
+        // able to name a host and a key path would let any page the user clicks decide where
+        // their repo is uploaded and which private key is read to do it. A NAME refers to a
+        // machine the owner already configured and resolves to nothing if they did not —
+        // which is the difference between choosing among your own servers and being handed
+        // one. Absent still means the default target, as before.
         if (action === 'repo/publish-ssh') {
             const dir = parsedUrl.searchParams.get('dir') || '';
             if (!dir) {
@@ -442,9 +444,10 @@ async function handleDeepLink(urlStr) {
                 return;
             }
             const { publishStoredTarget } = await import('../features/repo/repo-ssh.js');
+            const target = (parsedUrl.searchParams.get('target') || '').trim();
             toast(t('repo.ssh.testing'), 'info');
             try {
-                const bytes = await publishStoredTarget(dir);
+                const bytes = await publishStoredTarget(dir, target || undefined);
                 toast(t('repo.ssh.uploaded').replace('{n}', '✓').replace('{size}', String(bytes)), 'success', 7000);
             }
             catch (e) {

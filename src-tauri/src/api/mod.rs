@@ -3035,11 +3035,16 @@ pub async fn start_api_server(
 
     // POST /api/repo/publish-ssh  (auth) — publish an exported repo over SSH.
     //
-    // Body: { "dir": "<exported folder>" }. The TARGET is not in the body and cannot be:
-    // host, user, key path and remote folder come from what the owner saved in Server Repo.
-    // An API caller that could name a host and a key path would be able to make BMM read a
-    // private key of its choosing and ship a repo to a machine of its choosing — the call
-    // says "publish what I already configured", and that is all it can say.
+    // Body: { "dir": "<exported folder>", "target": "<saved target name>" }.
+    //
+    // A caller may name WHICH saved target, and still cannot say what a target IS: host, user,
+    // key path and remote folder come from what the owner saved in Server Repo. That
+    // distinction is the whole rule. A call able to name a host and a key path could make BMM
+    // read a private key of its choosing and ship a repo to a machine of its choosing; a name
+    // refers to a machine the owner already set up, and resolves to nothing if they did not.
+    //
+    // It was omitted entirely, which meant "the first one" — so a script with a staging box
+    // and a live box reached exactly one of them, and could not tell which.
     //
     // Driven through the UI like repo/host, so an upload started this way is visible and
     // cancellable on the screen rather than happening invisibly in the background.
@@ -3059,9 +3064,10 @@ pub async fn start_api_server(
                     StatusCode::BAD_REQUEST,
                 );
             }
+            let target = body.get("target").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/publish-ssh",
-                "params": { "dir": dir }
+                "params": { "dir": dir, "target": target }
             }));
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({

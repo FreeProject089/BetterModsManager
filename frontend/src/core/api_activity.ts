@@ -317,11 +317,12 @@ export async function initApiActivity(): Promise<void> {
                 }
                 break;
             }
-            // Publishes to the target saved in Server Repo. The API cannot name one — see
-            // the route's comment in src-tauri/src/api/mod.rs for why that is deliberate.
+            // Publishes to a target saved in Server Repo. The API may name WHICH one and
+            // still cannot say what a target is — see the route's comment in
+            // src-tauri/src/api/mod.rs for why that distinction is the whole rule.
             case 'repo/publish-ssh': {
                 const { publishStoredTarget } = await import('../features/repo/repo-ssh.js');
-                publishStoredTarget(String(params?.dir || ''))
+                publishStoredTarget(String(params?.dir || ''), String(params?.target || '') || undefined)
                     .then((bytes: number) => toast(
                         t('repo.ssh.uploaded').replace('{n}', '✓').replace('{size}', String(bytes)),
                         'success', 7000))

@@ -10059,5 +10059,11 @@
   "sched.dbg.stopTip": "End the run here. The task unwinds and the panel stays so you can read what happened.",
   "sched.dbg.finished": "finished",
   "sched.dbg.endedShort": "stopped",
-  "sched.dbg.finishedLine": "{w} — {n} step(s), {s}s"
+  "sched.dbg.finishedLine": "{w} — {n} step(s), {s}s",
+  "repo.ssh.routeDirPh": "the generator's output folder",
+  "repo.ssh.routeFromExport": "from the repo generator",
+  "repo.ssh.choose": "Choose…",
+  "repo.ssh.target": "Server",
+  "plugins.dl.sshTarget": "WHICH saved SSH target to publish to, by its name. Absent = the default one. It cannot name a host, a user or a key path — only one of the servers you already configured.",
+  "plugins.epF.sshTarget": "WHICH saved SSH target, by name. Absent = the default one. A name refers to a server you already configured; it cannot introduce a new host or key path."
 }

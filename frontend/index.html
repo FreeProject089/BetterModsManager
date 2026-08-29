@@ -1647,9 +1647,19 @@
                                              answerable only by reading the whole form and assembling it in
                                              your head, which is what "jsp où ça publish" is. -->
                                         <div class="repo-ssh-route" id="repo-ssh-route">
-                                            <span class="repo-ssh-route-part">
+                                            <span class="repo-ssh-route-part repo-ssh-route-src">
                                                 <span class="repo-ssh-route-lbl" data-i18n="repo.ssh.routeFrom">Ce dossier</span>
-                                                <span class="repo-ssh-route-val" id="repo-ssh-route-from">—</span>
+                                                <!-- EDITABLE. It used to be a read-only echo of the repo
+                                                     generator's output folder, which lives on another card — so
+                                                     this panel could publish exactly one folder in the world, and
+                                                     when that folder was unset it said "no exported folder yet"
+                                                     with nothing here to do about it. Empty still means "the
+                                                     generator's output", which is what it always was. -->
+                                                <input class="input repo-ssh-route-in" id="repo-ssh-dir" type="text"
+                                                       data-i18n-placeholder="repo.ssh.routeDirPh"
+                                                       placeholder="dossier de sortie du générateur">
+                                                <button type="button" class="btn btn-xs btn-secondary" id="repo-ssh-dir-pick"
+                                                        data-i18n="repo.ssh.choose">Choisir…</button>
                                             </span>
                                             <svg class="repo-ssh-route-arrow" width="16" height="16" viewBox="0 0 24 24"
                                                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">

@@ -5742,7 +5742,8 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             scheme: 'repo/publish-ssh',
             params: [
                 { name: 'dir', required: true, desc: t('plugins.dl.sshDir') },
-            ],
+                            { name: 'target', required: false, desc: t('plugins.dl.sshTarget') },
+],
             desc: t('plugins.dl.sshDesc'),
             about: t('plugins.dl.sshAbout'),
             example: 'bmm://repo/publish-ssh?dir=D:/repos/dcs',
@@ -7466,6 +7467,7 @@ function getEndpointDefs(): EndpointDef[] {
             about: t('plugins.epAbout.publishSsh'),
             fields: [
                 { name: 'dir', type: 'string', required: false, desc: 'The repo folder. Default: the one on screen.' },
+                { name: 'target', type: 'string', required: false, desc: t('plugins.epF.sshTarget') },
             ],
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e401],
         },

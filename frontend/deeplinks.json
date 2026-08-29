@@ -282,7 +282,8 @@
   {
     "action": "repo/publish-ssh",
     "params": [
-      "dir"
+      "dir",
+      "target"
     ]
   },
   {

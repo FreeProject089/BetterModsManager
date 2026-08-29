@@ -422,10 +422,23 @@ function beginTransfer(): void {
     status('');
 }
 
+/**
+ * The folder this card publishes, and where the value comes from.
+ *
+ * Typed here first; the repo generator's output folder when the box is empty. That fallback is
+ * what the card ALWAYS did and could not be told otherwise — the source was a read-only echo of
+ * another card's field, so "no exported folder yet" was a dead end rather than a prompt.
+ */
+export function sshLocalDir(): string {
+    const typed = (el<HTMLInputElement>('repo-ssh-dir')?.value || '').trim();
+    if (typed) return typed;
+    return (el<HTMLInputElement>('repo-export-path')?.value || '').trim();
+}
+
 async function publish(): Promise<void> {
     const form = readForm();
     if (!form || busy) return;
-    const localDir = (el<HTMLInputElement>('repo-export-path')?.value || '').trim();
+    const localDir = sshLocalDir();
     if (!localDir) {
         status(t('repo.ssh.pickExportFirst'), 'err');
         return;
@@ -463,7 +476,7 @@ async function publish(): Promise<void> {
 async function pull(): Promise<void> {
     const form = readForm();
     if (!form || busy) return;
-    const localDir = (el<HTMLInputElement>('repo-export-path')?.value || '').trim();
+    const localDir = sshLocalDir();
     if (!localDir) {
         status(t('repo.ssh.pickExportFirst'), 'err');
         return;
@@ -699,14 +712,24 @@ async function fillKeyRing(): Promise<void> {
  */
 function renderRoute(): void {
     const val = (id: string) => el<HTMLInputElement>(id)?.value.trim() || '';
-    const from = el('repo-ssh-route-from');
+    const src = el<HTMLInputElement>('repo-ssh-dir');
     const to = el('repo-ssh-route-to');
-    if (!from || !to) return;
+    if (!src || !to) return;
 
-    // The folder the export card is pointed at — the same one Publish sends.
-    const dir = (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value.trim() || '';
-    from.textContent = dir || (t('repo.ssh.routeNoDir') || 'no exported folder yet');
-    from.classList.toggle('is-empty', !dir);
+    // Whatever Publish will actually send: what is typed here, or the generator's output.
+    const dir = sshLocalDir();
+    const typed = (el<HTMLInputElement>('repo-ssh-dir')?.value || '').trim();
+    const hint = el('repo-ssh-route-hint');
+    if (hint) {
+        // Which of the two it is showing. A path with no provenance is the same puzzle as
+        // before, one step further along.
+        hint.textContent = !dir ? '' : (typed ? '' : (t('repo.ssh.routeFromExport') || ''));
+        hint.hidden = !dir || !!typed;
+    }
+    src.classList.toggle('is-empty', !dir);
+    // The generator's folder is SHOWN rather than only implied: an empty box that quietly
+    // publishes something is the same puzzle as before with an extra step.
+    if (!typed) src.placeholder = dir || (t('repo.ssh.routeNoDir') || '');
 
     // The two buttons that MOVE that folder are off until there is one, and say why.
     //
@@ -767,7 +790,7 @@ export function initRepoSsh(): void {
     // generate card and is what Publish actually sends, so it is watched too — otherwise
     // the line would claim a folder that had been changed since.
     renderRoute();
-    for (const id of ['repo-ssh-host', 'repo-ssh-user', 'repo-ssh-port', 'repo-ssh-remote', 'repo-export-path']) {
+    for (const id of ['repo-ssh-host', 'repo-ssh-user', 'repo-ssh-port', 'repo-ssh-remote', 'repo-export-path', 'repo-ssh-dir']) {
         document.getElementById(id)?.addEventListener('input', renderRoute);
     }
 
@@ -788,6 +811,15 @@ export function initRepoSsh(): void {
     el('repo-ssh-auth-pass')?.addEventListener('click', () => applyAuthMethod('password'));
 
     el('repo-ssh-test')?.addEventListener('click', () => { void testConnection(); });
+    // Browse for the folder to publish. Typing a path is fine and picking one is faster,
+    // and the card had neither.
+    el('repo-ssh-dir-pick')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const dir = await pickFolder().catch(() => null);
+        if (!dir) return;
+        const inp = el<HTMLInputElement>('repo-ssh-dir');
+        if (inp) { inp.value = String(dir); renderRoute(); }
+    });
     el('repo-ssh-publish')?.addEventListener('click', () => { void publish(); });
     el('repo-ssh-pull')?.addEventListener('click', () => { void pull(); });
 
@@ -1022,6 +1054,31 @@ export function explainSsh(raw: string): string {
 export function mountPublishButton(host: HTMLElement | null, dirHint: () => string): void {
     if (!host || host.querySelector('.repo-ssh-mount-btn')) return;
     if (!sshTargetNames().length) return;
+    // WHICH server, on every card that offers this.
+    //
+    // Each mount published to `names[0]` — the first saved target, in whatever order the
+    // object enumerated. Somebody with a staging box and a live box could publish to exactly
+    // one of them from here, and nothing on screen said which one that was. Drawn only when
+    // there is a choice to make: one target needs no picker, and an empty select is furniture.
+    const names0 = sshTargetNames();
+    let pick: HTMLSelectElement | null = null;
+    if (names0.length > 1) {
+        const row = document.createElement('label');
+        row.className = 'repo-ssh-mount-pick';
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;';
+        const lbl = document.createElement('span');
+        lbl.textContent = t('repo.ssh.target') || 'Server';
+        pick = document.createElement('select');
+        pick.className = 'input input-sm';
+        pick.style.cssText = 'flex:1;min-width:0;';
+        for (const n of names0) {
+            const o = document.createElement('option');
+            o.value = n; o.textContent = n;
+            pick.appendChild(o);
+        }
+        row.appendChild(lbl); row.appendChild(pick);
+        host.appendChild(row);
+    }
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-secondary btn-sm repo-ssh-mount-btn';
@@ -1037,7 +1094,10 @@ export function mountPublishButton(host: HTMLElement | null, dirHint: () => stri
         if (!dir) { toast(t('repo.ssh.publishNoDir'), 'warning', 7000); return; }
         const names = sshTargetNames();
         if (!names.length) { toast(t('repo.sync.useSshNotSet'), 'warning', 7000); return; }
-        const target = names[0];
+        // Read at CLICK time: a target added since this card was drawn is in the list, and the
+        // chosen one is whatever the picker says now. One target and no picker still means
+        // that target.
+        const target = (pick?.value || '').trim() || names[0];
         // The same confirm the update dialog asks, and for the same reason: this overwrites
         // what people are downloading right now. Naming the target rather than asking "are
         // you sure" — with several configured, WHICH one is the question worth answering.
