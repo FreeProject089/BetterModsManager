@@ -1,8 +1,19 @@
 name: CI
 
-# Quality gate on every push / PR: catches the exact regressions we kept hitting
-# by hand (typecheck, security-guard, i18n parity, fmt, clippy). Split into a fast
-# frontend job (Linux) and the Rust job (Windows — BMM's Tauri target).
+# Quality gate on every push / PR.
+#
+# It runs `npm run ci` — the SAME chain used locally, all 67 of it — rather than a
+# hand-picked handful. It used to run three of those scripts plus tsc, which meant the
+# workflow could be green on a commit the real gates would refuse: a Rust-emitted
+# translation key missing from both dictionaries, a route served and absent from the app's
+# own API panel, a scheduler class no stylesheet defines. All caught locally; none by this
+# file.
+#
+# `check-dev-toggles` is first in that chain for a reason: it is what refuses a commit that
+# ships the developer's localhost-pointing BetterCommunity config to every user. One got
+# through, in this repository, while this workflow was green.
+#
+# Split into a frontend job (Linux) and the Rust job (Windows — BMM's Tauri target).
 
 on:
   push:
@@ -29,12 +40,12 @@ jobs:
         # betahub-config.local.ts is gitignored; the example provides the same
         # exports so tsc can resolve the module (values are irrelevant for CI).
         run: cp frontend/src/features/betahub/betahub-config.example.ts frontend/src/features/betahub/betahub-config.local.ts
-      - name: Security guard (no eval / new Function)
-        run: node scripts/security-guard.mjs
-      - name: i18n parity (en === fr)
-        run: node scripts/check-i18n-parity.mjs
-      - name: TypeScript typecheck
-        run: npx tsc --project frontend --noEmit
+      # The whole chain, not a selection from it. It includes the three that used to be
+      # listed here (security-guard, i18n parity, tsc) and sixty-four more — among them
+      # check-compiled-fresh, which compares the committed `frontend/js/**` against the
+      # TypeScript it comes from and is only meaningful on a clean checkout like this one.
+      - name: Gate chain (npm run ci — 67 checks)
+        run: npm run ci
 
   rust:
     name: Rust (compile check)
@@ -45,11 +56,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      # The gate is "does the Rust still compile?". `cargo check` is right here:
-      # the codebase predates rustfmt + a clean clippy pass, and clippy's
-      # correctness lints are deny-by-default, so a clippy/fmt gate would fail on
-      # tons of pre-existing issues. `cargo check` only fails on real compile errors
-      # — exactly the regressions we keep needing to catch.
-      - name: cargo check
+      # Still no fmt/clippy gate: this codebase predates both, clippy's correctness lints
+      # are deny-by-default, and turning them on would fail on hundreds of pre-existing
+      # findings rather than on anything a commit did.
+      #
+      # `cargo test` IS new. There are 414 of them — the signature scheme, the zip guards,
+      # the keyring, the catalogue kinds — and `cargo check` asserts none of it: it proves
+      # the code compiles, which is the weakest true statement available.
+      - name: cargo test
         working-directory: src-tauri
-        run: cargo check
+        run: cargo test

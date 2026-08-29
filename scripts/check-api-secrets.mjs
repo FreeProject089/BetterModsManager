@@ -42,17 +42,30 @@ for (const m of api.matchAll(/struct\s+(\w+)\s*\{([\s\S]*?)\n\}/g)) {
 }
 
 // ── Which route deserialises it ─────────────────────────────────────────────
-// The nearest `path!("api" / …)` above the `body::json::<T>()` line. Structural rather than a
-// table: a new route with a secret is caught without anybody adding it here.
+// The nearest `path!("api" / …)` above the `body::json::<T>()` line, WITH its verb.
+// Structural rather than a table: a new route with a secret is caught without anybody adding
+// it here.
+//
+// The verb is not decoration. Keyed by path alone, every entry sharing a path was checked
+// against every body on it — so `POST /api/catalogs` gaining a password reported the GET
+// beside it for not documenting one. Following that would have put a password box on a route
+// that reads no body: a form offering a field the server cannot receive, which is this gate's
+// own complaint pointed backwards.
 const routeSecrets = new Map();
 for (const m of api.matchAll(/body::json::<(\w+)>\(\)/g)) {
   const secrets = structs[m[1]];
   if (!secrets?.length) continue;
-  const paths = [...api.slice(0, m.index).matchAll(/path!\("api"((?:\s*\/\s*"[a-z0-9-]+")+)\)/g)];
+  const before = api.slice(0, m.index);
+  const paths = [...before.matchAll(/path!\("api"((?:\s*\/\s*"[a-z0-9-]+")+)\)/g)];
   const last = paths[paths.length - 1];
   if (!last) continue;
   const path = '/api/' + [...last[1].matchAll(/"([a-z0-9-]+)"/g)].map((x) => x[1]).join('/');
-  routeSecrets.set(path, secrets);
+  // Between that path filter and this body filter, which is where the verb sits.
+  const between = before.slice(last.index);
+  const method = /warp::post\(\)/.test(between) ? 'POST'
+    : /warp::put\(\)/.test(between) ? 'PUT'
+      : /warp::delete\(\)/.test(between) ? 'DELETE' : 'POST';
+  routeSecrets.set(`${method} ${path}`, secrets);
 }
 
 // ── What each documented form offers ────────────────────────────────────────
@@ -73,12 +86,14 @@ if (!routeSecrets.size || !forms.size) {
 }
 
 const missing = [];
-for (const [path, secrets] of routeSecrets) {
-  for (const [key, fields] of forms) {
-    if (!key.endsWith(' ' + path)) continue;
-    if (fields.some((f) => SECRET.test(f))) continue;
-    missing.push(`${key} — the route accepts ${secrets.join(', ')}, the documented fields do not mention it`);
-  }
+for (const [route, secrets] of routeSecrets) {
+  const fields = forms.get(route);
+  // A route with no form at all is check-api-panel's finding, not this one. Reporting it
+  // here too would mean fixing one thing to silence two checks that disagree about what is
+  // wrong.
+  if (!fields) continue;
+  if (fields.some((f) => SECRET.test(f))) continue;
+  missing.push(`${route} — the route accepts ${secrets.join(', ')}, the documented fields do not mention it`);
 }
 
 if (missing.length) {
