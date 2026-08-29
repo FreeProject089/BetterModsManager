@@ -2146,19 +2146,32 @@ export function initRepo() {
                 _ru.done = false;
                 progressEl.style.display = 'none';
                 await renderLoaded(repo);
-                // Publishing back only makes sense once there is something to publish, and
-                // only when a target is configured — otherwise the button is an invitation to
-                // an error message.
-                const m = await import('./repo-ssh.js');
-                const btnPub = document.getElementById('btn-repo-update-publish');
-                if (btnPub)
-                    btnPub.style.display = m.sshTargetNames().length ? 'inline-flex' : 'none';
+                await refreshPublishBtn();
                 return true;
             }
             catch {
                 toast(t('repo.update.errNoRepo') || 'No valid repo.json found in this folder', 'error');
                 return false;
             }
+        };
+        /**
+         * Whether "Publish over SSH" is offered: a repo is open, and a target exists to
+         * publish it to. Written once because it is asked from two places, and the copy in
+         * the mode switch had drifted into only ever hiding it.
+         */
+        const refreshPublishBtn = async () => {
+            const btn = document.getElementById('btn-repo-update-publish');
+            if (!btn)
+                return;
+            // No folder open yet: nothing to publish, and a button that errors is worse
+            // than no button.
+            const dir = document.getElementById('repo-update-path')?.value?.trim() || '';
+            if (!dir) {
+                btn.style.display = 'none';
+                return;
+            }
+            const m = await import('./repo-ssh.js');
+            btn.style.display = m.sshTargetNames().length ? 'inline-flex' : 'none';
         };
         // ── the two modes ───────────────────────────────────────────────────
         //
@@ -2185,11 +2198,17 @@ export function initRepo() {
                 b?.classList.toggle('is-on', on);
                 b?.setAttribute('aria-pressed', on ? 'true' : 'false');
             }
-            // The publish button belongs to the remote mode. Shown in local mode it would
-            // offer to push a folder to a server nobody named.
-            const pub = document.getElementById('btn-repo-update-publish');
-            if (pub && !remote)
-                pub.style.display = 'none';
+            // The publish button used to be hidden here and shown ONLY by a successful
+            // folder load, in remote mode. Two consequences, both reported as "there is no
+            // publish over SSH in Update the Server Repo":
+            //
+            //  · switching to remote AFTER loading a folder left it hidden until the folder
+            //    was loaded again — the mode switch could only ever take it away;
+            //  · local mode never offered it, on the grounds that it would "push a folder to
+            //    a server nobody named". A STORED TARGET is a named server, the confirm
+            //    names which one, and a folder on disk is exactly what publishing pushes.
+            //    The manifest card one screen over has offered precisely this all along.
+            void refreshPublishBtn();
         };
         document.getElementById('repo-update-mode-local')?.addEventListener('click', () => setMode(false));
         document.getElementById('repo-update-mode-remote')?.addEventListener('click', () => setMode(true));
