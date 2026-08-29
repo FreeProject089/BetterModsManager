@@ -9203,7 +9203,7 @@
   "sched.dbg.title": "Débogage",
   "sched.dbg.waiting": "démarrage…",
   "sched.dbg.step": "Pas à pas",
-  "sched.dbg.continue": "Continuer",
+  "sched.dbg.continue": "Aller au bout",
   "sched.dbg.stop": "Arrêter",
   "sched.dbg.ended": "Exécution de débogage arrêtée.",
   "sched.dbg.noVars": "Aucune variable pour l'instant — rien n'a encore capturé quoi que ce soit.",
@@ -9331,7 +9331,7 @@
   "sched.dbg.trailTip": "Cliquez le nom : toutes les valeurs qu’elle a prises, et l’étape qui l’a laissée ainsi",
   "sched.dbg.breakOnTip": "Continuer s'arrête à la première étape dont la description contient ceci. Laissez vide pour aller jusqu'au bout.",
   "sched.dbg.stepTip": "Exécute l'étape suivante puis s'arrête. Pressez-le pendant une exécution pour reprendre pas à pas.",
-  "sched.dbg.continueTip": "Continue sans s'arrêter — ou jusqu'à ce que l'étape ci-dessus corresponde. Le panneau continue d'afficher les variables dans les deux cas.",
+  "sched.dbg.continueTip": "Continuer sans s’arrêter — ou jusqu’à ce qu’une étape corresponde à la case au-dessus. Le panneau continue d’afficher les variables dans les deux cas.",
   "sched.dbg.copy": "Copier",
   "sched.dbg.copyTip": "Copie les étapes et les variables en texte, pour un rapport de bug.",
   "sched.dbg.copied": "Copié",
@@ -10052,5 +10052,10 @@
   "plugins.epF.srcKey": "QUELLE clé d’identité signe cette requête — son id ou son nom. Les ids vivent dans Réglages → Identité &amp; API et survivent à un renommage ; une référence absente du trousseau est signalée plutôt qu’ignorée, parce qu’une requête partie non signée revient en « impossible de le lire ».",
   "plugins.epF.srcPassphrase": "Phrase de passe de cette clé, si le fichier en a une. La déverrouille pour cette exécution seulement ; rien n’en est conservé.",
   "plugins.dl.srcKey": "QUELLE clé d’identité signe la requête — un id ou un nom. Une référence absente du trousseau est signalée plutôt qu’ignorée.",
-  "plugins.dl.srcPassphrase": "Déverrouille cette clé, si le fichier en a une. Utilisée pour cette exécution et jamais conservée — et ne la mettez pas dans un lien que vous partagez."
+  "plugins.dl.srcPassphrase": "Déverrouille cette clé, si le fichier en a une. Utilisée pour cette exécution et jamais conservée — et ne la mettez pas dans un lien que vous partagez.",
+  "sched.dbg.close": "Fermer ce panneau. L’exécution n’est pas touchée.",
+  "sched.dbg.stopTip": "Arrêter l’exécution ici. La tâche se déroule et le panneau reste pour que tu lises ce qui s’est passé.",
+  "sched.dbg.finished": "terminé",
+  "sched.dbg.endedShort": "arrêté",
+  "sched.dbg.finishedLine": "{w} — {n} étape(s), {s} s"
 }

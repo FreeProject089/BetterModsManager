@@ -20564,3 +20564,22 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border-radius: 4px;
     background: var(--bmm-s06);
 }
+
+/* ── The debugger's terminal state ────────────────────────────────────────────
+   The panel used to be REMOVED the moment the run finished, so the log and the variables
+   went with it. It stays now, and has to look finished rather than merely idle. */
+.dbg-foot-sp { flex: 1; }
+.dbg-panel.is-done .dbg-head { background: var(--bmm-bg-elevated); }
+.dbg-panel.is-done .dbg-step {
+  color: var(--bmm-text-secondary);
+  border-left: 3px solid var(--bmm-border);
+  padding-left: 9px;
+}
+.dbg-panel.is-done .dbg-mode { opacity: .75; }
+/* Disabled means "there is no gate left to release", not "wait a moment". Said in the cursor
+   as well as the colour: a button that looks pressable and resolves nothing is the difference
+   between an inspector and a screenshot with buttons on it. */
+.dbg-foot .btn:disabled { opacity: .45; cursor: not-allowed; }
+/* Stop ends a RUN; the × closes the panel. They were one control doing one thing under two
+   names, so the destructive one is now the one that looks destructive. */
+.dbg-danger:not(:disabled):hover { color: var(--bmm-danger, #ef4444); border-color: color-mix(in srgb, var(--bmm-danger, #ef4444) 45%, transparent); }

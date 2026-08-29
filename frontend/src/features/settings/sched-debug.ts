@@ -245,9 +245,37 @@ export function endDebug(): void {
         _session = null;   // detached: `debugging()` is false, the panel is just a document
         return;
     }
-    _session.panel?.remove();
+    // The panel STAYS. It used to be removed the moment the run finished, which threw away
+    // the log, the variables and anything that had gone wrong on the way — after pressing
+    // "run to the end", the answer to "so what happened" was an empty screen. It is an
+    // inspector, and an inspector outlives the run it inspected; the × puts it away.
+    finishPanel(_session, t('sched.dbg.finished'));
     detachKeys();
     _session = null;
+}
+
+/**
+ * The terminal state: what ran, how long it took, and no controls that pretend otherwise.
+ *
+ * Step and Run are disabled because there is no gate left to release — a button that resolves
+ * nothing is the difference between an inspector and a screenshot with buttons on it.
+ */
+function finishPanel(s: Session, word: string): void {
+    const el = s.panel;
+    if (!el) return;
+    el.classList.add('is-done');
+    const mode = el.querySelector('#dbg-mode') as HTMLElement | null;
+    if (mode && !s.failed) { mode.textContent = word; mode.classList.remove('is-run'); }
+    const secs = Math.max(0, Math.round((Date.now() - s.startedAt) / 100) / 10);
+    const step = el.querySelector('#dbg-step') as HTMLElement | null;
+    if (step && !s.failed) {
+        step.textContent = (t('sched.dbg.finishedLine') || '{w} — {n} step(s), {s}s')
+            .replace('{w}', word).replace('{n}', String(s.steps)).replace('{s}', String(secs));
+    }
+    for (const id of ['#dbg-step-btn', '#dbg-run-btn', '#dbg-stop-btn']) {
+        const b = el.querySelector(id) as HTMLButtonElement | null;
+        if (b) b.disabled = true;
+    }
 }
 
 /**
@@ -319,7 +347,7 @@ function openPanel(taskName: string): void {
             <span class="dbg-task">${escHtml(taskName)}</span>
             <span class="dbg-mode" id="dbg-mode">${escHtml(t('sched.dbg.modeStep'))}</span>
             <span class="dbg-count" id="dbg-count" title="${escHtml(t('sched.dbg.countTip'))}">0</span>
-            <button type="button" class="dbg-x" id="dbg-stop" title="${escHtml(t('sched.dbg.stop'))}">&times;</button>
+            <button type="button" class="dbg-x" id="dbg-close" title="${escHtml(t('sched.dbg.close'))}">&times;</button>
         </div>
         <div class="dbg-fail" id="dbg-fail" hidden></div>
         <div class="dbg-step" id="dbg-step">${escHtml(t('sched.dbg.waiting'))}</div>
@@ -344,9 +372,11 @@ function openPanel(taskName: string): void {
                 title="${escHtml(t('sched.dbg.stepTip'))}">${escHtml(t('sched.dbg.step'))}</button>
             <button type="button" class="btn btn-xs btn-secondary" id="dbg-run-btn"
                 title="${escHtml(t('sched.dbg.continueTip'))}">${escHtml(t('sched.dbg.continue'))}</button>
+            <span class="dbg-foot-sp"></span>
             <button type="button" class="btn btn-xs btn-ghost" id="dbg-copy-btn"
                 title="${escHtml(t('sched.dbg.copyTip'))}">${escHtml(t('sched.dbg.copy'))}</button>
-            <button type="button" class="btn btn-xs btn-ghost" id="dbg-stop-btn">${escHtml(t('sched.dbg.stop'))}</button>
+            <button type="button" class="btn btn-xs btn-ghost dbg-danger" id="dbg-stop-btn"
+                title="${escHtml(t('sched.dbg.stopTip'))}">${escHtml(t('sched.dbg.stop'))}</button>
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(el);
     raiseAboveAll(el, 11800);
@@ -432,9 +462,26 @@ function openPanel(taskName: string): void {
             () => flash(btn, t('common.error')),
         );
     });
-    const stop = () => { s.stopped = true; s.release?.(); };
-    el.querySelector('#dbg-stop')?.addEventListener('click', stop);
-    el.querySelector('#dbg-stop-btn')?.addEventListener('click', stop);
+    // Two different things, which used to be one.
+    //
+    // STOP ends the run: the gate throws `DebugStopped` and the task unwinds. CLOSE puts the
+    // panel away and leaves whatever already happened alone. They were wired to the same
+    // handler, so the × — which closes every other panel in BMM — killed the task instead;
+    // and once a run had ENDED it did nothing at all, because there was no gate left to
+    // release. A failed session's panel could not be dismissed by any means.
+    el.querySelector('#dbg-stop-btn')?.addEventListener('click', () => {
+        s.stopped = true;
+        s.release?.();
+        // A run that is already over has nothing to stop. Say it is over rather than leaving
+        // a button that looks like it did something.
+        if (!s.release) finishPanel(s, t('sched.dbg.endedShort'));
+    });
+    el.querySelector('#dbg-close')?.addEventListener('click', () => {
+        s.stopped = true;
+        s.release?.();
+        detachKeys();
+        el.remove();
+    });
     dragBy(el, el.querySelector('#dbg-head') as HTMLElement);
     attachKeys(s);
 }

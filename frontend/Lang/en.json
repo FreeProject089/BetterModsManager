@@ -9205,7 +9205,7 @@
   "sched.dbg.title": "Debugging",
   "sched.dbg.waiting": "starting…",
   "sched.dbg.step": "Step",
-  "sched.dbg.continue": "Continue",
+  "sched.dbg.continue": "Run to the end",
   "sched.dbg.stop": "Stop",
   "sched.dbg.ended": "Debug run stopped.",
   "sched.dbg.noVars": "No variables yet — nothing has captured anything.",
@@ -9333,7 +9333,7 @@
   "sched.dbg.trailTip": "Click the name: every value it has held, and the step that left it there",
   "sched.dbg.breakOnTip": "Continue stops again at the first step whose description contains this. Leave it empty to run to the end.",
   "sched.dbg.stepTip": "Run the next step, then stop. Press it during a run to start stepping again.",
-  "sched.dbg.continueTip": "Carry on without stopping — or until the step above matches. The panel keeps showing variables either way.",
+  "sched.dbg.continueTip": "Carry on without stopping — or until a step matches the box above. The panel keeps showing variables either way.",
   "sched.dbg.copy": "Copy",
   "sched.dbg.copyTip": "Copy the steps and variables as text, for a bug report.",
   "sched.dbg.copied": "Copied",
@@ -10054,5 +10054,10 @@
   "plugins.epF.srcKey": "WHICH identity key signs this request — its id or its name. Ids live in Settings → Identity &amp; API and survive a rename; a reference that is not on the ring is reported rather than skipped, because a request that quietly goes out unsigned comes back as “could not read it”.",
   "plugins.epF.srcPassphrase": "Passphrase for that key, when the file has one. Unlocks it for this run only; nothing about it is stored.",
   "plugins.dl.srcKey": "WHICH identity key signs the request — an id or a name. A reference that is not on the ring is reported rather than skipped.",
-  "plugins.dl.srcPassphrase": "Unlocks that key, if the file has one. Used for this run and never stored — and never put it in a link you share."
+  "plugins.dl.srcPassphrase": "Unlocks that key, if the file has one. Used for this run and never stored — and never put it in a link you share.",
+  "sched.dbg.close": "Close this panel. The run is not touched.",
+  "sched.dbg.stopTip": "End the run here. The task unwinds and the panel stays so you can read what happened.",
+  "sched.dbg.finished": "finished",
+  "sched.dbg.endedShort": "stopped",
+  "sched.dbg.finishedLine": "{w} — {n} step(s), {s}s"
 }

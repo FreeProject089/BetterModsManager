@@ -4599,43 +4599,7 @@ function draftSummary(): string {
 function refreshSummary(modal: HTMLElement): void {
     const el = modal.querySelector('#sched-summary');
     if (el) el.textContent = draftSummary();
-    void paintCodeHeader(modal);
 }
-
-/**
- * The task's header — name, trigger, permissions — above the code box, always current.
- *
- * Hung off refreshSummary because that is already the single place every trigger edit lands:
- * the params host fires it on `input`, and choosing a different trigger card fires it too. So
- * changing the trigger updates the script you are looking at, with nothing new to remember to
- * call, and no second path that could be forgotten.
- *
- * Printed by `bmms_decompile`, the same printer the box below uses. Writing these three lines
- * by hand here would be a second BMMScript printer, and the day the two disagree the one that
- * is wrong is the one on screen.
- */
-async function paintCodeHeader(modal: HTMLElement): Promise<void> {
-    const el = modal.querySelector('#sched-code-head') as HTMLElement | null;
-    if (!el) return;
-    try {
-        const full = await invoke('bmms_decompile', {
-            task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps, perms: (_draft as any).perms },
-        }) as string;
-        el.textContent = taskHeaderOf(full);
-    } catch {
-        // A printer that cannot print is not worth a message here — the box below is the
-        // thing being edited, and an error strip over it would be louder than the fault.
-        el.textContent = '';
-    }
-}
-
-/**
- * The header half of a printed task — literally the other half of what the code box gets.
- *
- * Not a second scanner: it is the same split, so what this shows is exactly what the box below
- * does not, with no line belonging to both or to neither.
- */
-const taskHeaderOf = (src: string): string => splitPrintedTask(src).header;
 
 /**
  * The shared variables, listed.
@@ -5087,14 +5051,13 @@ function renderModal(modal: HTMLElement): void {
                         </button>
 
                     </div>
-                    <!-- The header of the task, live.
-                         The box below holds the STEPS only — stripTaskWrapper removes the
-                         header on the way in, so the trigger was the one thing you could not
-                         see while writing the script that runs on it. It is shown here rather
-                         than made editable: the live compile, its line numbers and its caret
-                         handling are all indexed on the body, and a second editable copy of
-                         the trigger is two places to change one value. Copy takes both. -->
-                    <pre class="sched-code-head" id="sched-code-head" aria-live="polite"></pre>
+                    <!-- The box below holds the STEPS only: stripTaskWrapper removes the
+                         task "..." { on ... } header on the way in, because the live compile, the
+                         line numbers and the caret handling are all indexed on the body.
+                         The header used to be echoed above this box, read-only. It was noise —
+                         the trigger is chosen on the tab beside this one and shown there, so
+                         the strip repeated a value nobody was looking for and pushed the first
+                         line of real code down. Copy still takes both halves. -->
                     <div class="sched-code-row">
                         <aside class="sched-outline" id="sched-outline" hidden>
                             <div class="bo-list" id="sched-outline-list"></div>
@@ -5860,7 +5823,6 @@ function wireCodeMode(modal: HTMLElement): void {
                 // Assigning .value fires no input event, so nothing would repaint and the
                 // mirror would keep showing the previous task.
                 hl?.refresh();
-                void paintCodeHeader(modal);
                 say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
                 show('code');
                 return;
