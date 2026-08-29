@@ -25,10 +25,15 @@ Deux règles couvrent presque tous les problèmes rencontrés :
 Il y a deux moteurs dans BMM, pas un, et ils n'ont pas le même jeu.
 
 **La documentation** — pages fournies, doc d'un plugin, Aide &amp; autres — passe par le petit
-moteur de l'application : tout ce qu'il faut pour expliquer un fonctionnement, et rien de ce
-qui appartient à une page de présentation. **L'onglet Communauté et les notes de version**
-affichent des articles écrits sur BetterCommunity : ils rendent donc presque tout le
-vocabulaire du site.
+moteur de l'application. **L'onglet Communauté et les notes de version** affichent des articles
+écrits sur BetterCommunity. Les deux répondent désormais à tout le vocabulaire du site : un
+article écrit une fois se lit pareil dans le navigateur et dans l'app, ce qui est tout l'intérêt
+d'avoir une seule liste au lieu de deux.
+
+Une différence demeure, et elle est voulue. Le moteur de la documentation n'a pas de
+dictionnaire — il ne sait pas parler la langue du lecteur — donc les rares blocs qui écrivent
+une phrase à eux (le titre d'une carte d'horaires, le libellé d'un bouton de téléchargement)
+sont remplis après le rendu plutôt que par le moteur. Rien de ce que vous écrivez n'en dépend.
 
 | Bloc | Doc BMM | Onglet Communauté | Sur le site |
 |---|---|---|---|
@@ -43,12 +48,14 @@ vocabulaire du site.
 | `:time` (un instant, dans le fuseau du lecteur) | Oui | Oui | Oui |
 | `:kbd` (en ligne) | Oui | Oui | Oui |
 | Tableaux, code en blocs, listes, citations | Oui | Oui | Oui |
-| `cards` + `card` | — | Oui | Oui |
-| `file` (ligne de téléchargement) | — | Oui | Oui |
-| `:button` `:link` | — | Oui | Oui |
-| `:badge` `:icon` (en ligne) | — | Oui | Oui |
-| `center` `left` `right` | — | Oui | Oui |
-| `::toc` | — | Oui | Oui |
+| Maths — `$$E = mc^2$$` | Oui | Oui | Oui |
+| Raccourcis emoji — `:rocket:` `:warning:` | Oui | Oui | Oui |
+| `cards` + `card` | Oui | Oui | Oui |
+| `file` (ligne de téléchargement) | Oui | Oui | Oui |
+| `:button` `:link` | Oui | Oui | Oui |
+| `:badge` `:icon` (en ligne) | Oui | Oui | Oui |
+| `center` `left` `right` | Oui | Oui | Oui |
+| `::toc` | Oui | Oui | Oui |
 
 Un bloc que le moteur ne connaît pas est laissé en texte brut : un bloc réservé au site, mis
 dans la doc d'un plugin, s'affiche donc `:::cards` au lieu de disparaître. C'est voulu — une
@@ -207,11 +214,36 @@ chose.
 décide de quel côté d'un changement d'heure le moment tombe. Une valeur illisible est
 affichée telle que vous l'avez écrite, jamais en `Invalid Date`.
 
-## Les blocs en plus du site
+## Maths
 
-Ceux-ci s'affichent sur BetterCommunity — billets de blog, pages de doc, réponses de FAQ, pages
-de projet — et sont affichés en texte brut par l'app.
+Encadrez du TeX avec `$$` :
 
-La liste complète du site, avec tous les attributs, est dans le dépôt BCWEB à
-`guides/reference/CUSTOM_MARKDOWN.md`, et sur le site sous **Docs → Rédaction → Blocs de
-documentation**.
+```
+La relation masse-énergie s'écrit $$E = mc^2$$, et Pythagore dit
+
+$$
+a^2 + b^2 = c^2
+$$
+```
+
+Seule sur ses lignes, la formule est centrée ; dans une phrase, elle reste dans la ligne. Un
+seul `$` n'est **pas** des maths, volontairement : cette application cite des prix, et « $5 et
+$10 » serait sinon composé comme une formule, en silence, parce qu'un prix ne lève pas
+d'erreur. Une formule illisible est affichée telle que vous l'avez écrite plutôt qu'en message
+d'erreur : vous pouvez corriger la source, personne ne peut corriger un message.
+
+## Emoji
+
+`:rocket:` devient 🚀. Les mêmes 380 et quelques noms que le site connaît, donc le même document
+se lit pareil des deux côtés. Un nom inconnu reste tel que vous l'avez tapé plutôt que de
+disparaître, et un nom pris dans un mot (`path:rocket:x`) ou dans une heure (`10:30:45`) n'est
+jamais touché.
+
+Coller le caractère lui-même a toujours marché ; le raccourci existe parce qu'aucun clavier n'a
+🚀 dessus.
+
+## La liste complète du site
+
+Tous les blocs ci-dessus s'affichent des deux côtés. La liste complète avec tous les attributs
+est dans le dépôt BCWEB à `guides/reference/CUSTOM_MARKDOWN.md`, et sur le site sous
+**Docs → Rédaction → Blocs de documentation**.

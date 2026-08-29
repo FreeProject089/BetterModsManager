@@ -24,9 +24,15 @@ Two rules cover almost every problem people hit:
 There are two renderers inside BMM, not one, and they do not have the same set.
 
 **Documentation** — bundled pages, a plugin's docs, Help &amp; other — is rendered by the
-app's own small renderer: everything you need to explain how something works, and nothing
-that belongs on a landing page. **The Community tab and the release notes** show posts
-written on BetterCommunity, so they render very nearly the whole website vocabulary.
+app's own small renderer. **The Community tab and the release notes** show posts written on
+BetterCommunity. Both now answer to the whole website vocabulary: a post written once reads
+the same in the browser and in the app, which is the entire point of the two lists being one
+list.
+
+They still differ in one way, and it is a deliberate one. The documentation renderer has no
+dictionary — it cannot speak the reader's language — so the few blocks that write a sentence
+of their own (the schedule card's heading, a download button's label) are filled in after
+rendering rather than by the renderer itself. Nothing you write is affected.
 
 | Block | In BMM docs | In the Community tab | On the website |
 |---|---|---|---|
@@ -41,12 +47,14 @@ written on BetterCommunity, so they render very nearly the whole website vocabul
 | `:time` (one instant, in the reader's timezone) | Yes | Yes | Yes |
 | `:kbd` (inline) | Yes | Yes | Yes |
 | Tables, fenced code, lists, quotes | Yes | Yes | Yes |
-| `cards` + `card` | — | Yes | Yes |
-| `file` (download row) | — | Yes | Yes |
-| `:button` `:link` | — | Yes | Yes |
-| `:badge` `:icon` (inline) | — | Yes | Yes |
-| `center` `left` `right` | — | Yes | Yes |
-| `::toc` | — | Yes | Yes |
+| Maths — `$$E = mc^2$$` | Yes | Yes | Yes |
+| Emoji shortcodes — `:rocket:` `:warning:` | Yes | Yes | Yes |
+| `cards` + `card` | Yes | Yes | Yes |
+| `file` (download row) | Yes | Yes | Yes |
+| `:button` `:link` | Yes | Yes | Yes |
+| `:badge` `:icon` (inline) | Yes | Yes | Yes |
+| `center` `left` `right` | Yes | Yes | Yes |
+| `::toc` | Yes | Yes | Yes |
 
 A block the renderer does not know is left as literal text, so a website-only block in a
 plugin's docs shows up as `:::cards` on the page rather than vanishing. That is deliberate:
@@ -203,11 +211,35 @@ Write the date, not just the time — that is what makes it exact, because it se
 side of a daylight-saving change the moment falls on. A value that cannot be read is shown
 exactly as you typed it, never as `Invalid Date`.
 
-## The website's extra blocks
+## Maths
 
-These render on BetterCommunity — blog posts, docs pages, FAQ answers, project pages — and
-are shown as plain text by the app.
+Wrap TeX in `$$`:
 
-The complete website list, with every attribute, is in the BCWEB repository at
-`guides/reference/CUSTOM_MARKDOWN.md`, and on the site itself under **Docs → Authoring →
-Documentation blocks**.
+```
+The mass–energy relation is $$E = mc^2$$, and Pythagoras says
+
+$$
+a^2 + b^2 = c^2
+$$
+```
+
+On its own lines it is centred; inside a sentence it stays in the line. Single `$` is **not**
+maths, deliberately — this app quotes prices, and "$5 and $10" would otherwise be typeset as
+a formula, silently, because a price does not raise an error. A formula that will not parse is
+shown exactly as you wrote it rather than as a parser's complaint: you can fix the source, and
+nobody can fix a message.
+
+## Emoji
+
+`:rocket:` becomes 🚀. The same 380-odd names the website knows, so the same document reads the
+same in both. An unknown name stays as you typed it rather than disappearing, and a name that
+is part of a word (`path:rocket:x`) or a time (`10:30:45`) is never touched.
+
+Pasting the character itself has always worked; the shortcode exists because keyboards do not
+have 🚀 on them.
+
+## The full website list
+
+Every block above renders in both places. The complete list with every attribute is in the
+BCWEB repository at `guides/reference/CUSTOM_MARKDOWN.md`, and on the site itself under
+**Docs → Authoring → Documentation blocks**.
