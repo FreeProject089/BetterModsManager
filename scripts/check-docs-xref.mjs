@@ -186,7 +186,11 @@ if (!existsSync(MD_LITE)) {
     const want = [...md.matchAll(/^```mermaid[ \t]*\r?\n([\s\S]*?)^```/gm)].map((m) => lf(m[1]).trim());
     if (!want.length) continue;
     // Read each attribute the way a browser would: up to the next unescaped quote.
-    const got = [...renderDocMarkdown(md).matchAll(/data-mermaid="([^"]*)"/g)].map((m) => lf(unesc(m[1])).trim());
+    // `trusted`: these are OUR bundled pages, and the default is now the untrusted path —
+    // which ends in a sanitiser that needs a DOM. In node it fails closed, so every page
+    // came back as escaped text and every diagram went missing. This check measures the
+    // RENDERER, so it renders the way the app renders a page of ours.
+    const got = [...renderDocMarkdown(md, { trusted: true }).matchAll(/data-mermaid="([^"]*)"/g)].map((m) => lf(unesc(m[1])).trim());
     const where = relative(ROOT, f);
     if (got.length !== want.length) { fail(`${where}: ${want.length} diagram(s) in the source, ${got.length} in the HTML`); continue; }
     for (let i = 0; i < want.length; i++) {
@@ -209,7 +213,7 @@ if (existsSync(MD_LITE) && existsSync(BUNDLE)) {
   for (const f of walk(BUNDLE)) {
     if (!f.endsWith('.md')) continue;
     checked++;
-    const html = renderDocMarkdown(readFileSync(f, 'utf8'));
+    const html = renderDocMarkdown(readFileSync(f, 'utf8'), { trusted: true });
     const where = relative(ROOT, f);
     // The escaped form is what a reader actually saw.
     if (/&lt;!--/.test(html)) fail(`${where}: an HTML comment is rendered as visible text`);
