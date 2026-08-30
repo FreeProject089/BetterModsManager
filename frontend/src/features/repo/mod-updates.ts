@@ -16,6 +16,7 @@ import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { appState } from '../../core/state.js';
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 
 let _checking = false;
 let _autoTimer: any = null;
@@ -463,6 +464,10 @@ export function openModUpdateConfig(modId: string): void {
                 value="${escAttr(s.repo_url || '')}" style="flex:2;font-size:11px;padding:5px 7px;" />
             <input type="text" class="muc-src-rid form-input" placeholder="${escAttr(t('repo.cfgModIdPh') || 'repo_mod_id (optional)')}"
                 value="${escAttr(s.repo_mod_id || '')}" style="flex:1;font-size:11px;padding:5px 7px;${kind === 'direct' ? 'display:none;' : ''}" />
+            <label class="muc-src-prot" data-tooltip="${escAttr(t('repo.cfgProtectedTip'))}" style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:10.5px;color:var(--text-muted);cursor:pointer;">
+                <input type="checkbox" class="muc-src-protected" ${s.protected ? 'checked' : ''} />
+                ${escHtml(t('repo.cfgProtected'))}
+            </label>
             <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:var(--bmm-danger);cursor:pointer;font-weight:700;">✕</button>
         </div>`;
     };
@@ -495,12 +500,22 @@ export function openModUpdateConfig(modId: string): void {
                         placeholder="${escAttr(primaryKind === 'direct' ? (t('repo.cfgDirectUrlPh') || 'https://…/mod-latest.zip') : (t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)'))}"
                         style="flex:1;font-size:12px;padding:6px 8px;" />
                 </div>
+                <label class="muc-src-prot" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-bottom:8px;">
+                    <input type="checkbox" id="muc-primary-protected" ${mod.update_source_protected ? 'checked' : ''} />
+                    ${escHtml(t('repo.cfgProtected'))}
+                </label>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">${t('repo.cfgDirectHint') || 'For a Direct download, BMM detects a new build by comparing the archive\'s ETag, last-modified date and size together — or, if the host exposes none, a fingerprint of the file\'s first bytes — then re-downloads it on update. Redirect "latest" links are followed. For a Server repo, it compares versions from the repo.json instead.'}</div>
 
                 <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:2px;">${t('repo.cfgExtraSources') || 'Additional fallback sources'}</label>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">${t('repo.cfgExtraHint') || 'Tried only if the primary source has no update — each can be a repo or a direct download.'}</div>
                 <div id="muc-sources">${sources.map((s, i) => sourceRow(s, i)).join('')}</div>
                 <button id="muc-add-source" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ ${t('repo.cfgAddSource') || 'Add fallback'}</button>
+
+                <!-- The same block as every catalogue screen, and the fifth place an address
+                     gets pasted. It was the only one of the five with no answer to "what if
+                     it asks for a password" — so the way to find out was to save, wait for
+                     the check to fail, and be asked then. -->
+                <div style="margin-top:14px;">${sourceAccessHtml('muc')}</div>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <button id="muc-cancel" class="btn btn-secondary btn-sm">${t('common.cancel') || 'Cancel'}</button>
@@ -509,6 +524,22 @@ export function openModUpdateConfig(modId: string): void {
         </div>`;
 
     const close = () => hideOverlay(ov);
+
+    // Wired AFTER the overlay is in the document: wireSourceAccess finds its controls with
+    // getElementById, and on a detached subtree it bails out and leaves a dead fold — which
+    // looks exactly like a fold nobody has clicked yet.
+    //
+    // The address it seeds from is the PRIMARY url, because that is the one this screen is
+    // mostly about and the one a password would be for.
+    wireSourceAccess('muc', (m, k) => toast(t(m), k === 'warning' ? 'warning' : 'success'),
+        () => {
+            close();
+            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+            setTimeout(() => document.getElementById('settings-identity-card')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        },
+        () => (ov.querySelector('#muc-primary-url') as HTMLInputElement | null)?.value?.trim() || '');
+
     const srcWrap = ov.querySelector('#muc-sources') as HTMLElement;
     let counter = sources.length;
 
@@ -554,11 +585,14 @@ export function openModUpdateConfig(modId: string): void {
                 repo_url: (row.querySelector('.muc-src-url') as HTMLInputElement).value.trim(),
                 repo_mod_id: kind === 'direct' ? null : (rid || null),
                 kind,
+                protected: (row.querySelector('.muc-src-protected') as HTMLInputElement | null)?.checked ?? false,
             };
         }).filter(s => s.repo_url);
         try {
+            const updateSourceProtected =
+                (ov.querySelector('#muc-primary-protected') as HTMLInputElement | null)?.checked ?? false;
             await invoke('set_mod_update_config', {
-                modId, repoModId, updateUrl, updateSources, directUrl,
+                modId, repoModId, updateUrl, updateSources, directUrl, updateSourceProtected,
             });
             toast(t('repo.cfgSaved') || 'Update sources saved', 'success');
             close();

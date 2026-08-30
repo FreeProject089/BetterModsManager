@@ -127,6 +127,16 @@ pub struct ModEntry {
     /// available. None until a baseline is captured.
     #[serde(default)]
     pub direct_sig: Option<String>,
+    /// The PRIMARY source asks for a password or a key.
+    ///
+    /// `UpdateSource` carries its own flag; the primary is not one of those — it is
+    /// `update_url` or `direct_url`, flat on the mod — so it needs its own field, or the box
+    /// on screen would be the one of the three that silently records nothing.
+    ///
+    /// Same meaning as `UpdateSource::protected`: it does not replace BMM discovering the
+    /// refusal, it precedes it, and it travels with a shared list so the recipient knows.
+    #[serde(default)]
+    pub update_source_protected: bool,
 }
 
 /// One configurable place to look for updates to a mod. These act as fallbacks,
@@ -148,6 +158,20 @@ pub struct UpdateSource {
     /// archive URL; a change means a new build. None until a baseline is captured.
     #[serde(default)]
     pub sig: Option<String>,
+    /// This source asks for a password or a key.
+    ///
+    /// BMM already DISCOVERS that, by asking and being refused. That works for the person who
+    /// holds the answer and for nobody else: a shared list arrives with addresses that will
+    /// 401 for its recipient, and nothing before or during says which ones or why.
+    ///
+    /// The flag does not replace the discovery, it precedes it — the screen can offer the key
+    /// and the password before the first failure, and the marker travels with the source so
+    /// whoever receives the list knows what they are missing.
+    ///
+    /// `default` because every source stored before this is unmarked, and unmarked means
+    /// "nobody has said", which is exactly what it meant then.
+    #[serde(default)]
+    pub protected: bool,
 }
 
 fn default_source_kind() -> String { "repo".to_string() }
@@ -224,6 +248,7 @@ impl ModEntry {
             update_sources: Vec::new(),
             direct_url: None,
             direct_sig: None,
+            update_source_protected: false,
         }
     }
 

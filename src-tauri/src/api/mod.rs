@@ -4598,6 +4598,8 @@ pub fn compute_compare(
             strict_extra: vec![],
             all_required_active: true,
             missing_required: 0,
+            fallback_repo: None,
+            fallback_protected: false,
         },
     };
 
@@ -4628,6 +4630,10 @@ pub fn compute_compare(
             found,
             active,
             mod_id,
+            // Carried whether or not the mod is missing. The screen decides what to do with
+            // it; filtering here would mean the answer to "where does this come from" existed
+            // only while the answer was "you do not have it".
+            download_url: req.download_url.clone(),
         });
     }
 
@@ -4648,6 +4654,8 @@ pub fn compute_compare(
         strict_extra,
         all_required_active: missing_required == 0,
         missing_required,
+        fallback_repo: modlist.fallback_repo.clone(),
+        fallback_protected: modlist.fallback_protected,
     }
 }
 
@@ -4952,6 +4960,7 @@ async fn do_api_repo_sync(
                         update_sources: Vec::new(),
                         direct_url: None,
                         direct_sig: None,
+                        update_source_protected: false,
                     });
                     new_id
                 }

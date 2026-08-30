@@ -15,6 +15,7 @@
 // the error translation — is the same on every card, because it is the same question.
 import { invoke, pickFile, pickFolder } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { browseRemoteFolder } from './ssh-browse.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { sshTargetNames, storedSshTarget, explainSsh, type SshTarget } from './repo-ssh.js';
 import { openSshServers, onSshServersChanged } from './ssh-servers.js';
@@ -168,59 +169,22 @@ export function mountSshAction(host: HTMLElement | null, opts: SshActionOpts): v
         return { name, target: { ...stored, remoteDir: dest || stored.remoteDir }, secret };
     };
 
+    /**
+     * Walk the server's folders and drop the answer into the destination field.
+     *
+     * The picker itself is `ssh-browse.ts`, shared with the servers dialog: it used to be a
+     * list drawn into this panel that wrote straight into this panel's field, which is why
+     * the screen where the BASE folder is set had no browser at all.
+     */
     async function browse(name: string): Promise<void> {
         const stored = storedSshTarget(name);
         if (!stored) return;
         const secret = box.querySelector<HTMLInputElement>('.ssh-action-secret')?.value || '';
         const start = (box.querySelector<HTMLInputElement>('.ssh-action-dest')?.value || '').trim() || stored.remoteDir || '/';
-        status(t('sshact.listing'));
-        try {
-            const entries = (await invoke('ssh_list_dir', {
-                target: { ...stored, remoteDir: start }, secret, path: start,
-            })) as { name: string; isDir: boolean }[];
-            status('');
-            pickRemote(start, entries, stored, secret);
-        } catch (e) {
-            status(explainSsh(String(e)), 'err');
-        }
-    }
-
-    /** A small remote folder picker, drawn where the panel is rather than in a modal. */
-    function pickRemote(path: string, entries: { name: string; isDir: boolean }[], stored: SshTarget, secret: string): void {
-        box.querySelector('.ssh-action-browser')?.remove();
-        const wrap = document.createElement('div');
-        wrap.className = 'ssh-action-browser';
-        wrap.innerHTML = `
-          <div class="ssh-action-browser-path">${escHtml(path)}</div>
-          <div class="ssh-action-browser-list">
-            <button type="button" class="btn btn-ghost btn-sm" data-up>${escHtml(t('repo.ssh.browserUp'))}</button>
-            ${entries.filter((e) => e.isDir).map((e) => `<button type="button" class="btn btn-ghost btn-sm" data-into="${escAttr(e.name)}">${escHtml(e.name)}</button>`).join('')}
-          </div>
-          <div class="ssh-action-browser-foot">
-            <button type="button" class="btn btn-primary btn-sm" data-use>${escHtml(t('repo.ssh.browserChoose'))}</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-cancel>${escHtml(t('common.cancel'))}</button>
-          </div>`;
-        box.appendChild(wrap);
-        const go = async (next: string): Promise<void> => {
-            try {
-                const list = (await invoke('ssh_list_dir', {
-                    target: { ...stored, remoteDir: next }, secret, path: next,
-                })) as { name: string; isDir: boolean }[];
-                pickRemote(next, list, stored, secret);
-            } catch (e) { status(explainSsh(String(e)), 'err'); }
-        };
-        wrap.querySelector('[data-up]')?.addEventListener('click', () => {
-            const up = path.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || '/';
-            void go(up);
-        });
-        wrap.querySelectorAll<HTMLElement>('[data-into]').forEach((b) => {
-            b.addEventListener('click', () => void go(`${path.replace(/\/+$/, '')}/${b.getAttribute('data-into')}`));
-        });
-        wrap.querySelector('[data-use]')?.addEventListener('click', () => {
-            (box.querySelector('.ssh-action-dest') as HTMLInputElement).value = path;
-            wrap.remove();
-        });
-        wrap.querySelector('[data-cancel]')?.addEventListener('click', () => wrap.remove());
+        const picked = await browseRemoteFolder(stored, secret, start);
+        if (picked === null) return;
+        const dest = box.querySelector<HTMLInputElement>('.ssh-action-dest');
+        if (dest) dest.value = picked;
     }
 
     async function run(direction: 'up' | 'down'): Promise<void> {

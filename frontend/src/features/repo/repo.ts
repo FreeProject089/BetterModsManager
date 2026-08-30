@@ -14,6 +14,7 @@ import { raiseAboveAll } from '../../ui/layer.js';
 import { initRepoServer } from './repo-server.js';
 import { explainSsh } from './repo-ssh.js';
 import { mountSshAction } from './ssh-action.js';
+import { credsFoldHtml, wireCredsFold, readCredsFold, exportOrigins } from '../../core/creds-fold.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
@@ -783,6 +784,18 @@ export function initRepo() {
     // reste ici est la seule question que cette carte a le droit de poser : où va CE
     // dossier. `confirm` parce que publier écrase ce que des gens sont en train de
     // télécharger.
+    // The credentials fold. Mounted here beside its listener rather than written into
+    // index.html: the block has ids, handlers and a rule about which hosts travel with it, and
+    // a second copy is how one of them starts sending a password for a host the document does
+    // not even mention.
+    {
+        const slot = document.getElementById('repo-export-creds-slot');
+        if (slot) {
+            slot.innerHTML = credsFoldHtml('repoex');
+            wireCredsFold('repoex', exportOrigins);
+        }
+    }
+
     mountSshAction(document.getElementById('repo-ssh-mount'), {
         mode: 'both',
         confirm: true,
@@ -2807,12 +2820,22 @@ export function initRepo() {
                     };
                 }
 
+                // Refused BEFORE the folder is chosen and the walk begins: failing at the
+                // far end, after every mod has been copied, costs minutes for a mistake that
+                // was visible before it started.
+                const creds = await readCredsFold('repoex', exportOrigins);
+                if (creds === null) { toast(t('mm.creds.noPass'), 'warning', 8000); return; }
+
                 await invoke('export_server_repo', { 
                     profileIds, 
                     outputDir: outPath, 
                     authorName,
+                    creds: creds ?? null,
                     seed: elements.inputExportSeed ? elements.inputExportSeed.value.trim() || null : null,
-                    modpacksShareConfig: modpacksShareConfig.length > 0 ? modpacksShareConfig : null,
+                    // Passed straight through. It IS null — see the comment where it is
+                    // declared — and asking a null for its `.length` threw before this call
+                    // was ever made, which is to say the export button did nothing at all.
+                    modpacksShareConfig,
                     zipOutput: elements.cbZipEnable ? elements.cbZipEnable.checked : false,
                     zipMods: elements.cbZipMods ? elements.cbZipMods.checked : false,
                     serverOptions: serverOptions

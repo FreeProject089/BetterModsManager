@@ -2,7 +2,7 @@
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
-import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved, openExternal } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { permDomains } from './plugin-perms.js';
 import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
@@ -481,7 +481,13 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                     <span class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</span>
                     ${manifest.game ? `<span class="plug-card-game">${escHtml(manifest.game)}</span>` : ''}
                     ${source === 'installed' && hasModlist ? `
-                        <span class="plug-card-fact">${IC.list} ${manifest.modlist.required_mods.length} ${escHtml(t('plugins.modsRequired'))}</span>
+                        <!-- A button, not a fact. It reads as the question ("which twelve, and
+                             do I have them?") and the answer already existed one row down,
+                             behind a word that does not obviously refer to it. -->
+                        <button type="button" class="plug-card-fact plug-card-fact-btn plug-btn-modlist"
+                                data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.modsRequiredTip'))}">
+                            ${IC.list} ${manifest.modlist.required_mods.length} ${escHtml(t('plugins.modsRequired'))}
+                        </button>
                         ${manifest.modlist.strict ? `<span class="plug-badge-strict">${escHtml(t('plugins.strict'))}</span>` : ''}` : ''}
                     ${source === 'installed' && plugin.install_dir ? `
                     <!-- The checksum is a FACT about the plugin, like its id. It sat in the
@@ -617,6 +623,9 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
 
     wireCopyIds(card, toast);
     card.querySelector('.plug-btn-compare')?.addEventListener('click', () => handleCompare(manifest.id));
+    // Same overlay as Compare. Deliberately the same function and not a second, smaller list:
+    // the question is identical, and two lists of required mods is one of them going stale.
+    card.querySelector('.plug-btn-modlist')?.addEventListener('click', () => handleCompare(manifest.id));
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
     // Inspect stays a real button on the card, so it keeps a real listener.
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
@@ -3416,12 +3425,19 @@ function buildCompareContent(result: any, pluginName?: string, mode: 'compare' |
         if (!entry.found && !entry.optional) { icon = IC.x;   cls = 'plug-cmp-missing';  st = t('plugins.cmpMissing'); }
         else if (!entry.found && entry.optional) { icon = IC.check; cls = 'plug-cmp-optional'; st = t('plugins.optional'); }
         else if (entry.found && !entry.active)   { icon = IC.zap;   cls = 'plug-cmp-inactive'; st = t('plugins.cmpInactive'); }
+        // Where to get it, offered only for what is actually MISSING. Beside a mod that is
+        // already installed it would be an invitation to download it again.
+        const getIt = (!entry.found && entry.download_url)
+            ? `<button type="button" class="btn btn-xs plug-cmp-get" data-url="${escAttr(entry.download_url)}"
+                       data-tooltip="${escAttr(entry.download_url)}">${IC.download} ${t('plugins.cmpGet')}</button>`
+            : '';
         return `
             <div class="plug-cmp-row ${cls}">
                 <span class="plug-cmp-icon">${icon}</span>
                 <span class="plug-cmp-name">${escHtml(entry.name)}</span>
                 <span class="plug-cmp-st-badge ${cls}">${st}</span>
                 ${entry.optional ? `<span class="plug-cmp-opt">${t('plugins.optional')}</span>` : ''}
+                ${getIt}
             </div>`;
     }).join('');
 
@@ -3454,6 +3470,18 @@ function buildCompareContent(result: any, pluginName?: string, mode: 'compare' |
                 ${result.strict ? `<span class="plug-cmp-stat plug-cmp-stat-strict">${IC.lock} ${t('plugins.strict')}</span>` : ''}
             </div>
             <div class="plug-cmp-list">${rows}</div>
+            ${(nMissing && result.fallback_repo) ? `
+            <!-- Offered, never attached. A plugin that could add a repo by being installed is
+                 a plugin that decides where your mods come from; this is an address with a
+                 button next to it, and the button opens the screen that adds sources. -->
+            <div class="plug-cmp-fallback">
+                <div class="plug-cmp-fallback-head">${IC.globe} ${t('plugins.cmpFallback')}</div>
+                <div class="plug-cmp-fallback-url">${escHtml(result.fallback_repo)}</div>
+                ${result.fallback_protected ? `<div class="plug-cmp-fallback-note">${IC.lock} ${t('plugins.cmpFallbackProtected')}</div>` : ''}
+                <button type="button" class="btn btn-sm" id="plug-cmp-add-repo" data-url="${escAttr(result.fallback_repo)}">
+                    ${IC.plus} ${t('plugins.cmpFallbackAdd')}
+                </button>
+            </div>` : ''}
             ${extraRows ? `<div class="plug-cmp-extra-section">
                 <div class="plug-cmp-extra-title">${t('plugins.strictExtraTitle')}</div>
                 ${extraRows}
@@ -10605,6 +10633,41 @@ async function handleUninstall(pluginId: string, name: string) {
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
+/**
+ * The two ways out of a compare overlay that found something missing.
+ *
+ * Both only ever OPEN something — the browser, or the screen that adds update sources.
+ * Neither downloads, installs or attaches anything on its own: what a plugin says about where
+ * its mods live is a suggestion from a third party, and acting on it is the reader's to do.
+ */
+function wireCompareLinks(ov: HTMLElement): void {
+    ov.querySelectorAll('.plug-cmp-get').forEach((b) => {
+        b.addEventListener('click', () => {
+            const url = (b as HTMLElement).dataset.url || '';
+            if (url) void openExternal(url);
+        });
+    });
+    ov.querySelector('#plug-cmp-add-repo')?.addEventListener('click', async (ev) => {
+        const url = (ev.currentTarget as HTMLElement).dataset.url || '';
+        if (!url) return;
+        ov.remove();
+        // The repo screen, with the address already in the box.
+        //
+        // Filling the field rather than copying to the clipboard and saying "paste this over
+        // there": that is the same number of steps with one more place to lose it, and the
+        // clipboard is somebody else's too.
+        (document.getElementById('nav-repo') as HTMLElement | null)?.click();
+        setTimeout(() => {
+            const box = document.getElementById('repo-sync-url') as HTMLInputElement | null;
+            if (!box) { toast(url, 'info', 12000); return; }
+            box.value = url;
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            box.focus();
+        }, 260);
+    });
+}
+
 async function handleCompare(pluginId: string) {
     try {
         const result = await invoke('compare_plugin_mods', { pluginId });
@@ -10612,6 +10675,7 @@ async function handleCompare(pluginId: string) {
         // Compare mode: informational only — no Apply button
         const ov = createOverlay(buildCompareContent(result, plugin?.manifest?.name, 'compare'));
         ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+        wireCompareLinks(ov);
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
@@ -10637,6 +10701,7 @@ async function handleApply(pluginId: string) {
         // Apply mode: shows same compare info but WITH the Apply Now button
         const ov = createOverlay(buildCompareContent(result, plugin?.manifest?.name, 'apply'));
         ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+        wireCompareLinks(ov);
         ov.querySelector('#plug-ov-apply')?.addEventListener('click', async () => {
             ov.remove();
             await doApply(pluginId, result);

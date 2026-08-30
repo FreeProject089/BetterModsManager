@@ -135,7 +135,13 @@ export function openSshServers(focus?: string): void {
           </label>
           <label style="display:block;margin-bottom:10px;">
             <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('sshsrv.base'))}</span>
-            <input class="form-input" id="sshsrv-f-dir" value="${escAttr(draft.remoteDir)}" placeholder="/var/www/repo" spellcheck="false">
+            <span style="display:flex;gap:6px;">
+              <input class="form-input" id="sshsrv-f-dir" value="${escAttr(draft.remoteDir)}" placeholder="/var/www/repo" spellcheck="false" style="flex:1;min-width:0;">
+              <!-- Browsing needs a connection, so it needs whatever this server authenticates
+                   with. The passphrase box below it is the same one Test uses, and it is read
+                   at the moment of use and kept nowhere. -->
+              <button class="btn btn-secondary btn-sm" id="sshsrv-f-dirbrowse" type="button">${escHtml(t('repo.ssh.browseRemote'))}</button>
+            </span>
             <span style="font-size:10px;color:var(--text-muted);">${escHtml(t('sshsrv.baseHint'))}</span>
           </label>
           <div style="display:flex;gap:6px;margin-bottom:10px;">
@@ -150,6 +156,11 @@ export function openSshServers(focus?: string): void {
               <button class="btn btn-secondary btn-sm" id="sshsrv-f-browse" type="button">${escHtml(t('repo.ssh.browse'))}</button>
             </span>
           </label>` : `<p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">${escHtml(t('sshsrv.pwNote'))}</p>`}
+          <label style="display:block;margin-bottom:10px;">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('sshsrv.secret'))}</span>
+            <input class="form-input" id="sshsrv-f-secret" type="password" autocomplete="new-password" placeholder="${escAttr(t('sshsrv.secretPh'))}">
+            <span style="font-size:10px;color:var(--text-muted);">${escHtml(t('sshsrv.secretHint'))}</span>
+          </label>
           <div id="sshsrv-test" style="font-size:11px;margin-bottom:10px;"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-primary btn-sm" id="sshsrv-save" type="button">${escHtml(t('common.save'))}</button>
@@ -175,6 +186,24 @@ export function openSshServers(focus?: string): void {
         form.querySelector('#sshsrv-f-browse')?.addEventListener('click', async () => {
             const p = await pickFile().catch(() => null);
             if (p) { const i = form.querySelector('#sshsrv-f-keypath') as HTMLInputElement; i.value = String(p); dirty = true; }
+        });
+
+        // The base folder, walked rather than typed.
+        //
+        // Reads the form as it stands rather than the saved target: somebody filling this in
+        // for a new server has not saved anything yet, and refusing to browse until they do
+        // would mean saving a folder they cannot see in order to go and look at it.
+        form.querySelector('#sshsrv-f-dirbrowse')?.addEventListener('click', async () => {
+            read();
+            const out = form.querySelector('#sshsrv-test') as HTMLElement;
+            if (!draft.host || !draft.user) { out.textContent = t('sshsrv.needHostUser'); return; }
+            const secret = (form.querySelector('#sshsrv-f-secret') as HTMLInputElement | null)?.value || '';
+            const { browseRemoteFolder } = await import('./ssh-browse.js');
+            const picked = await browseRemoteFolder(draft, secret, draft.remoteDir || '/');
+            if (picked === null) return;
+            const i = form.querySelector('#sshsrv-f-dir') as HTMLInputElement;
+            i.value = picked;
+            dirty = true;
         });
 
         form.querySelector('#sshsrv-save')?.addEventListener('click', () => {

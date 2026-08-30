@@ -42,6 +42,7 @@ pub mod window;
 pub mod identity;
 pub mod repo_discover;
 pub mod repo_autoindex;
+pub mod creds;
 pub mod repo_credentials;
 pub mod repo_extras;
 pub mod game_watch;

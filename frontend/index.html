@@ -1419,6 +1419,14 @@
                                             style="font-size:11px; font-family:var(--font-mono); height:30px; background:var(--bmm-bg-base);" />
                                     </div>
 
+                                    <!-- "Include credentials for protected sources".
+                                         A slot, filled by core/creds-fold.ts — the same block
+                                         the .MM export uses. A repository points at exactly
+                                         the same protected sources a list does, and publishing
+                                         one left the recipient with addresses they cannot read
+                                         and no way to know before trying. -->
+                                    <div id="repo-export-creds-slot" style="margin-bottom:16px;"></div>
+
                                     <!-- Distribution Options (ZIP + Server) -->
                                     <div
                                         style="margin-bottom: 16px; padding: 12px; background: var(--bmm-bg-base); border-radius: 8px; border: 1px solid var(--bmm-s05);">

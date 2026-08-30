@@ -75,6 +75,16 @@ pub struct ServerRepo {
     /// rather than as a parse error over the whole manifest.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<RepoExtra>,
+    /// Credentials for the protected sources this repo's mods point at — SEALED.
+    ///
+    /// The same block a `.mm` carries, for the same reason and with the same rules: only this
+    /// section is encrypted, so the manifest stays readable by BMM, by BetterCommunity's
+    /// inspector and by a person deciding whether to trust it.
+    ///
+    /// Absent from every repo that carries none, which is almost all of them — and absent
+    /// from every manifest written before this existed, which is why it is `default`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<serde_json::Value>,
 }
 
 /// One non-mod thing a repo carries.
@@ -238,6 +248,7 @@ impl ServerRepo {
             profiles: Vec::new(),
             modpacks: None,
             extras: Vec::new(),
+            credentials: None,
         }
     }
 }

@@ -4,6 +4,7 @@
  */
 import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
 import { appState } from '../../core/state.js';
+import { exportOrigins } from '../../core/creds-fold.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { refreshMods } from './mods.js';
@@ -124,24 +125,6 @@ export async function importListAsking(path) {
                 ? t('bmm.enc.errWrongPass') : String(e2));
         }
     }
-}
-function exportOrigins() {
-    const out = new Set();
-    const add = (u) => {
-        if (typeof u !== 'string' || !u)
-            return;
-        try {
-            out.add(new URL(u).origin);
-        }
-        catch { /* not an address */ }
-    };
-    for (const m of appState.get('allMods') || []) {
-        add(m?.source_repo);
-        add(m?.update_url);
-        for (const s of m?.update_sources || [])
-            add(s?.url);
-    }
-    return [...out];
 }
 export function initModlist() {
     const exportBtn = document.getElementById('btn-export-mm');

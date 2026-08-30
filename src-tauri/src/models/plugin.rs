@@ -12,6 +12,14 @@ pub struct PluginModRequirement {
     pub optional: bool,
     #[serde(default)]
     pub sha256: Option<String>,
+    /// Where to get THIS mod, when it does not come from the list's fallback repo.
+    ///
+    /// A direct archive URL, for the ones that live nowhere in particular — a file on the
+    /// original author's site, a GitHub release. It wins over the list's fallback repo when
+    /// both are set: an address written for this mod is more precise than a repo it might
+    /// be in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -20,6 +28,21 @@ pub struct PluginModList {
     pub strict: bool,
     #[serde(default)]
     pub required_mods: Vec<PluginModRequirement>,
+    /// A repo.json the reader can add when they are missing mods from this list.
+    ///
+    /// The list named what to have and stopped there, which leaves somebody with a shopping
+    /// list and a search engine — while the person who wrote the plugin knows exactly where
+    /// they got them. Optional, and absent from every manifest written before this.
+    ///
+    /// Deliberately NOT fetched or installed from on its own: it is an address the reader is
+    /// offered, not a source BMM adds behind them. A plugin that could attach a repo by being
+    /// installed is a plugin that can decide where your mods come from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_repo: Option<String>,
+    /// Whether that repo asks for a password or a key. See UpdateSource::protected — same
+    /// meaning, same reason: the reader should learn it before the first refusal, not from it.
+    #[serde(default)]
+    pub fallback_protected: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -162,6 +185,10 @@ pub struct ModCompareEntry {
     pub found: bool,
     pub active: bool,
     pub mod_id: Option<String>,
+    /// Carried through from the requirement, so the screen listing what is MISSING can also
+    /// say where to get it. Nothing else in the compare knows this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -173,4 +200,10 @@ pub struct ModCompareResult {
     pub strict_extra: Vec<String>,
     pub all_required_active: bool,
     pub missing_required: usize,
+    /// The list's fallback repo, repeated here so the compare overlay does not have to go
+    /// back and read the manifest for the one thing it needs from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_repo: Option<String>,
+    #[serde(default)]
+    pub fallback_protected: bool,
 }

@@ -33,64 +33,11 @@ struct ModSnapshot {
     install_notes: String,
 }
 
-/// What the export screen asks for when the "include credentials" fold is used.
-///
-/// The PASSWORDS come from the frontend because that is the only place they exist: BMM keeps
-/// them for the run and never writes them down, so only passwords typed since launch can be
-/// carried. The KEYS are gathered here instead — the ring and the files it names are the
-/// backend's, and routing private key material through the webview to hand it straight back
-/// would be a copy of it in a second place for no reason.
-#[derive(serde::Deserialize, Default)]
-pub struct CredsRequest {
-    #[serde(default)]
-    pub passwords: std::collections::HashMap<String, String>,
-    #[serde(default)]
-    pub include_keys: bool,
-    #[serde(default)]
-    pub passphrase: String,
-}
-
-/// Build the sealed credentials block, or refuse.
-///
-/// Refuses without a passphrase rather than writing them in the clear. The whole reason this
-/// exists is that a `.mm` travels between strangers, and a marked-private secret in a shared
-/// file is a secret that has been shared.
-fn seal_credentials(
-    state: &tauri::State<'_, AppState>,
-    req: &CredsRequest,
-) -> Result<Option<serde_json::Value>, AppError> {
-    let want_pw = !req.passwords.is_empty();
-    if !want_pw && !req.include_keys {
-        return Ok(None);
-    }
-    if req.passphrase.is_empty() {
-        return Err(AppError::Internal("mm.creds.errNoPass".into()));
-    }
-
-    let mut keys: Vec<serde_json::Value> = Vec::new();
-    if req.include_keys {
-        let ring: Vec<(String, String)> = {
-            let data = state.data.lock().map_err(|_| AppError::LockError("state".into()))?;
-            data.settings.key_auth_keys.iter().map(|e| (e.name.clone(), e.path.clone())).collect()
-        };
-        for (name, path) in ring {
-            // An unreadable key is SKIPPED, never a failed export: the list itself is still
-            // worth writing, and the count below says how many made it.
-            if let Ok(pem) = std::fs::read_to_string(&path) {
-                keys.push(serde_json::json!({ "name": name, "pem": pem }));
-            }
-        }
-    }
-
-    let plain = serde_json::json!({
-        "passwords": req.passwords,
-        "keys": keys,
-    });
-    let bytes = serde_json::to_vec(&plain)?;
-    let sealed = crate::commands::secret_box::seal(&bytes, &req.passphrase).map_err(AppError::Internal)?;
-    let value: serde_json::Value = serde_json::from_slice(&sealed)?;
-    Ok(Some(value))
-}
+// `CredsRequest` and `seal_credentials` used to live here. They moved to commands/creds.rs
+// when the repo export needed the same block: a repository points at the same protected
+// sources a list does, and two implementations of one rule about secrets is one
+// implementation that will be a version behind.
+pub use crate::commands::creds::{seal_credentials, CredsRequest};
 
 #[tauri::command]
 pub async fn export_modlist(

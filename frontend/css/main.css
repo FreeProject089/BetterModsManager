@@ -12783,6 +12783,47 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .plug-cmp-name { flex: 1; font-weight: 500; }
 .plug-cmp-opt { font-size: 10px; color: var(--text-secondary); background: var(--bmm-s05); padding: 1px 5px; border-radius: 3px; }
 
+/* Where a missing mod comes from.
+   `.plug-cmp-get` sits at the END of its row, pushed there rather than given a fixed
+   column: only some rows have one, and a reserved column would put a gap beside every
+   mod the reader already has. */
+.plug-cmp-get { margin-left: auto; flex-shrink: 0; }
+
+/* The list's fallback repo. A panel and not a row, because it is about the whole list —
+   inside `.plug-cmp-list` it would read as a fourteenth mod. */
+.plug-cmp-fallback {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--bmm-s10, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    background: var(--bmm-bg-base, rgba(255, 255, 255, 0.03));
+}
+.plug-cmp-fallback-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+.plug-cmp-fallback-url {
+    font-size: 11px;
+    color: var(--text-muted);
+    /* An address is one long unbreakable token; without this it decides the panel's width
+       and the panel decides the overlay's. */
+    word-break: break-all;
+    margin-bottom: 7px;
+}
+.plug-cmp-fallback-note {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    color: var(--bmm-warning, #d9a441);
+    margin-bottom: 7px;
+}
+
 .plug-cmp-extra-section { margin-top: 8px; }
 .plug-cmp-extra-title { font-size: 11px; font-weight: 700; color: var(--danger); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 
@@ -12902,6 +12943,20 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     color: var(--text-secondary);
 }
 .plug-card-fact svg { width: 11px; height: 11px; }
+/* The mod count is a button now, and has to look like one without becoming one of the
+   card's verbs: it sits in the row of FACTS, where anything with a border or a fill would
+   read as an action beside "v1.2.0" and a game name. A dotted underline is the smallest
+   mark that says "this is clickable" — the same idiom the app uses for a definition. */
+button.plug-card-fact-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    border-bottom: 1px dotted var(--bmm-s25, rgba(255, 255, 255, 0.25));
+}
+button.plug-card-fact-btn:hover,
+button.plug-card-fact-btn:focus-visible { color: var(--text-primary); border-bottom-color: currentColor; }
 /* The ids end the line rather than starting a new one. */
 .plug-card-facts .plug-card-ids { margin-left: auto; }
 
@@ -20581,31 +20636,44 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .ssh-action-status[data-tone="ok"] { color: var(--success); }
 .ssh-action-status[data-tone="err"] { color: var(--danger); }
 
-.ssh-action-browser {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.ssh-action-browser-path {
+/* The remote folder browser (ssh-browse.ts), shared by the publish panel and the servers
+   dialog. It used to be a list drawn inside the publish card — `.ssh-action-browser-*` — so
+   the screen where the BASE folder is typed had no browser at all. */
+.ssh-br-path {
     font-family: var(--font-mono, ui-monospace, monospace);
     font-size: 11px;
     color: var(--text-muted);
     word-break: break-all;
+    margin-bottom: 8px;
 }
 /* The list scrolls rather than growing: a server folder with two hundred entries would
-   otherwise push every button on the card off the screen. */
-.ssh-action-browser-list {
+   otherwise push the Choose button off the bottom of the dialog. */
+.ssh-br-list {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: 180px;
+    max-height: 320px;
     overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
 }
-.ssh-action-browser-list > button { justify-content: flex-start; text-align: left; }
-.ssh-action-browser-foot { display: flex; gap: 6px; }
+.ssh-br-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.ssh-br-item:hover,
+.ssh-br-item:focus-visible { background: var(--bmm-s06, rgba(255, 255, 255, 0.06)); }
+.ssh-br-empty { font-size: 11px; color: var(--text-muted); padding: 6px 8px; }
+.ssh-br-status { font-size: 11px; color: var(--text-muted); margin-top: 8px; min-height: 15px; }
 
 @media (max-width: 640px) {
     .ssh-action-row { flex-direction: column; align-items: stretch; }

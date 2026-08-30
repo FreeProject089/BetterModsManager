@@ -207,6 +207,10 @@ pub async fn export_server_repo(
     zip_output: bool,
     zip_mods: bool,
     server_options: Option<MiniServerExportOptions>,
+    // Credentials for the protected sources this repo's mods point at, sealed with the
+    // passphrase the export screen asked for. `None` on every export that did not use the
+    // fold, which is almost all of them.
+    creds: Option<crate::commands::creds::CredsRequest>,
 ) -> Result<(), String> {
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
@@ -515,6 +519,26 @@ pub async fn export_server_repo(
         progress: 87.0,
         current_file: "repo.json".to_string(),
     });
+
+    // Sealed BEFORE the signature, deliberately.
+    //
+    // The signature covers the manifest, so adding anything to it afterwards produces a repo
+    // whose signature matches nothing — refused by every client, over a feature nobody would
+    // think to blame.
+    //
+    // Carried forward when this export did not use the fold, for the same reason `extras`
+    // and `modpacks` are: re-exporting after changing one mod must not silently strip what
+    // the repo was published with. Sending a request with nothing ticked seals nothing and
+    // clears the block, so the way to remove them is to ask for none.
+    match creds.as_ref() {
+        Some(req) => {
+            repo.credentials = crate::commands::creds::seal_credentials(&state, req)
+                .map_err(|e| e.to_string())?;
+        }
+        None => {
+            repo.credentials = previous.as_ref().and_then(|p| p.credentials.clone());
+        }
+    }
 
     // Sign the repo (using compact JSON for the signature payload to be stable)
     let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
@@ -1670,6 +1694,7 @@ pub async fn set_mod_update_config(
     update_url: Option<String>,
     update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
     direct_url: Option<String>,
+    update_source_protected: Option<bool>,
 ) -> Result<(), String> {
     {
         let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
@@ -1679,6 +1704,9 @@ pub async fn set_mod_update_config(
             let t = rid.trim();
             m.repo_mod_id = if t.is_empty() { None } else { Some(t.to_string()) };
         }
+        // `Option<bool>` rather than `bool`: a caller that does not mention the flag must not
+        // clear it, which is the difference between "unticked" and "not asked about".
+        if let Some(p) = update_source_protected { m.update_source_protected = p; }
         if let Some(url) = update_url {
             let t = url.trim();
             m.update_url = if t.is_empty() { None } else { Some(normalize_repo_url(t)) };
@@ -2236,6 +2264,9 @@ async fn discovered_repo(base: &str, client: &reqwest::Client) -> Result<ServerR
         files_layout: None,
         modpacks: None,
         extras: Vec::new(),
+        // Nothing to seal: this manifest is SYNTHESISED from a directory listing, so there
+        // is no export screen behind it and nobody asked for anything to be carried.
+        credentials: None,
         profiles: vec![crate::models::repo::RepoProfile {
             id: "discovered".to_string(),
             name: "Server".to_string(),
@@ -2321,6 +2352,10 @@ pub(crate) fn push_repo_source(
         // No baseline: the receiver captures its own on the first check, exactly as it does
         // for the author's inherited sources.
         sig: None,
+        // Unmarked, which means "nobody has said". This source is being attached because a
+        // sync succeeded against it, so it is reachable as things stand; whether it will ask
+        // somebody else for a password is not something this side knows.
+        protected: false,
     });
 }
 #[derive(serde::Deserialize)]
@@ -4494,7 +4529,7 @@ mod update_source_tests {
     use crate::models::mod_entry::UpdateSource;
 
     fn src(url: &str, kind: &str) -> UpdateSource {
-        UpdateSource { repo_url: url.into(), repo_mod_id: None, kind: kind.into(), sig: None }
+        UpdateSource { repo_url: url.into(), repo_mod_id: None, kind: kind.into(), sig: None, protected: false }
     }
 
     #[test]
