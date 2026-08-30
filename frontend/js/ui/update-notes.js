@@ -4,6 +4,7 @@
  * Extracted from app.js for modularity
  */
 import { invoke } from '../core/api.js';
+import { lucideIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
@@ -358,9 +359,13 @@ function ensurePurify() {
         // survived sanitisation; we only ever build it from [a-z0-9-], so it's safe).
         if (node.getAttribute && node.getAttribute('data-lucide')) {
             const name = String(node.getAttribute('data-lucide')).replace(/[^a-z0-9-]/g, '');
-            const url = `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-            node.style.webkitMask = `url('${url}') center/contain no-repeat`;
-            node.style.mask = `url('${url}') center/contain no-repeat`;
+            const url = lucideIconUrl(name);
+            // '' when remote icons are switched off: no mask, so the span stays empty
+            // rather than becoming a 404-shaped gap.
+            if (url) {
+                node.style.webkitMask = `url('${url}') center/contain no-repeat`;
+                node.style.mask = `url('${url}') center/contain no-repeat`;
+            }
         }
         // Only YouTube (no-cookie) iframes are allowed; anything else is neutralised.
         if (node.tagName === 'IFRAME') {

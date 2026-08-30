@@ -1,6 +1,7 @@
-# Rich text blocks (custom markdown)
+# B.MD — better.markdown
 
 
+**B.MD** (better.markdown) is the block vocabulary shared by BMM and BetterCommunity.
 Wherever text is rendered — a plugin's documentation, a custom page, a community article on
 BetterCommunity — you get ordinary Markdown **plus** a set of blocks.
 
@@ -237,6 +238,24 @@ is part of a word (`path:rocket:x`) or a time (`10:30:45`) is never touched.
 
 Pasting the character itself has always worked; the shortcode exists because keyboards do not
 have 🚀 on them.
+
+## Where a document comes from, and what that changes
+
+A page in this documentation is ours. **A plugin's documentation is not** — it arrives with
+the plugin, written by whoever made it, and it is rendered in a window that can call the
+application's own commands.
+
+So B.MD in BMM renders as **untrusted** unless the caller says otherwise:
+
+- Raw HTML is not passed through. A `README.md` that begins with `<` used to be handed to the
+  page verbatim; now it is sanitised like anything else.
+- Every link, image, download and recording is checked before it is written. `javascript:`,
+  `data:text/html`, `vbscript:` and a protocol-relative `//host` are all refused — the last
+  one matters because it has no scheme, so a check that only looks at schemes lets it past.
+- A refused link keeps its text and loses its destination, rather than becoming a button that
+  goes somewhere nobody chose.
+
+Nothing about writing a document changes. This is what happens to one you did not write.
 
 ## The full website list
 

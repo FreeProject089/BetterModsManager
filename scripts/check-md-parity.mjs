@@ -21,7 +21,10 @@ const BMM = 'frontend/src/ui/rich-markdown.ts';
 // The website's renderer, when it is checked out. It is a gitlink with no .gitmodules, so on
 // a fresh CI clone it is simply absent — and the run says so out loud rather than reporting
 // a comparison it did not make.
-const SITE = 'BCW/BCWEB/apps/web/src/markdown/index.jsx';
+// The site's PARSER. B.MD's index.jsx was split and names no directives now; this file said
+// so on the first run — "read 0 directive(s) from the site renderer" — rather than comparing
+// BMM against an empty list and reporting parity.
+const SITE = 'BCW/BCWEB/apps/web/src/markdown/directives.js';
 
 /**
  * Every directive the website answers to, as of the last time this was refreshed.

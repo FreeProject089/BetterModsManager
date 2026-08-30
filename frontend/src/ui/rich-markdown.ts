@@ -14,6 +14,11 @@ import { readInstant, zoneDelta } from '../core/tz.js';
 // would otherwise be read as a directive and typeset as nothing.
 import { markMath } from './md-math.js';
 import { replaceEmoji } from '../core/emoji.js';
+// One answer to "may a document link here", shared with the documentation renderer. Two
+// answers to that question is one too many, and this file had none.
+import { safeDocUrl } from '../docs/md-safe.js';
+// The two icon CDNs, in one place with a switch — see core/icon-cdn.ts.
+import { lucideIconUrl, brandIconUrl } from '../core/icon-cdn.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
   // `check` and `error` are the site's aliases for success and danger. They were absent
@@ -129,7 +134,13 @@ function mdInline(s: string): string {
 export function iconImg(name: string): string {
   const n = String(name || '').trim().toLowerCase();
   const simple = n.match(/^(?:simple|si):(.+)$/);
-  if (simple) return `<img class="md-inline-icon" src="https://cdn.simpleicons.org/${simple[1].replace(/[^a-z0-9-]/g, '')}" alt="" loading="lazy">`;
+  if (simple) {
+    const url = brandIconUrl(simple[1]);
+    // Remote icons off: the generic glyph rather than a broken image. A hole where a logo
+    // should be reads as the app being broken.
+    if (!url) return `<span class="md-inline-icon md-inline-icon--mask" data-lucide="circle"></span>`;
+    return `<img class="md-inline-icon" src="${escAttr(url)}" alt="" loading="lazy">`;
+  }
   return `<span class="md-inline-icon md-inline-icon--mask" data-lucide="${escAttr(n.replace(/[^a-z0-9-]/g, ''))}"></span>`;
 }
 
@@ -239,7 +250,17 @@ function stagesToTrackerJson(inner: string[]): string {
 
 export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true): string {
   const baseUrl = (opts.baseUrl || '').replace(/\/+$/, '');
-  const abs = (u: string) => (u && u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u; // relative site URL → absolute
+  // Relative site URL → absolute, and a URL the app would refuse to follow → nothing.
+  //
+  // Every href and media src in this file goes through here, which is why the check is
+  // here and not at nine call sites. Each of those sites already handles an empty URL —
+  // a button with nowhere to go renders as a span rather than a dead link — so refusing
+  // one lands in a path that already exists.
+  const abs = (u: string) => {
+    if (!u) return '';
+    if (!safeDocUrl(u)) return '';
+    return (u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u;
+  };
   let s = md || '';
 
   s = markMath(s);
@@ -293,7 +314,9 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     const href = abs(a.href || a.url || '');
     const cls = `doc-btn doc-btn-${size}${outline ? ' doc-btn-outline' : ''}`;
     const logo = brand
-      ? `<img class="doc-btn-logo" src="https://cdn.simpleicons.org/${brand.slug}/${outline ? brand.color.replace('#', '') : 'white'}" alt="" loading="lazy">`
+      ? (brandIconUrl(brand.slug)
+        ? `<img class="doc-btn-logo" src="${escAttr(brandIconUrl(brand.slug))}/${outline ? brand.color.replace('#', '') : 'white'}" alt="" loading="lazy">`
+        : '')
       : (a.icon ? iconImg(a.icon) : '');
     const inner = logo + escHtml(txt);
     const style = color ? ` style="--btn:${escAttr(color)}"` : '';
@@ -498,8 +521,10 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     else if (name === 'column' || name === 'col') { out.push('', `<div class="community-column">${mdInline(innerMd)}</div>`, ''); }
     else if (name === 'card' || name === 'ref') {
       const title = label || attrs.title || '';
-      let href = attrs.href || attrs.link || '';
-      if (href.startsWith('/') && baseUrl) href = `${baseUrl}${href}`; // relative site link → absolute
+      // Through `abs`, like everything else. This branch had its own copy of the
+      // relative-to-absolute line, which is how it went round the URL check that was
+      // added to `abs` — the funnel only funnels what actually flows through it.
+      const href = abs(attrs.href || attrs.link || '');
       const icon = attrs.icon ? iconImg(attrs.icon) : '';
       // Optional cover media (image / video / colour swatch), like the website's cards.
       const media = attrs.image
@@ -513,8 +538,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     } else if (name === 'file') {
       // Download card: :::file{name="setup.exe" href="…" size="12 MB"}
       const fname = label || attrs.name || attrs.title || 'file';
-      let href = attrs.href || attrs.url || attrs.link || '';
-      if (href.startsWith('/') && baseUrl) href = `${baseUrl}${href}`;
+      const href = abs(attrs.href || attrs.url || attrs.link || '');
       const size = attrs.size || '';
       const btns = href
         ? `<a href="${escAttr(href)}" download class="community-file-btn">Download</a><a href="${escAttr(href)}" target="_blank" rel="noreferrer" class="community-file-btn community-file-btn-ghost">Open</a>`

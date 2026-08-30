@@ -15,6 +15,7 @@
 import { t } from '../core/i18n.js';
 import { zoneDelta } from '../core/tz.js';
 import { typesetMath } from '../ui/md-math.js';
+import { lucideIconUrl } from '../core/icon-cdn.js';
 
 /**
  * Tabs, delegated once for the whole document.
@@ -35,12 +36,64 @@ if (typeof document !== 'undefined') {
         // `data-tab` is md-lite's attribute, `data-i` is rich-markdown's. Both renderers draw
         // this strip and neither should have to know about the other's spelling.
         const i = Number(btn.getAttribute('data-tab') ?? btn.getAttribute('data-i') ?? 0);
-        wrap.querySelectorAll('.doc-tabs-btn').forEach((b, n) => {
-            b.classList.toggle('is-on', n === i);
-            b.setAttribute('aria-selected', n === i ? 'true' : 'false');
-        });
-        wrap.querySelectorAll('.doc-tab').forEach((pnl, n) => pnl.classList.toggle('is-on', n === i));
+        selectTab(wrap, i);
     });
+
+    // The arrow keys, because a strip that only answers to Tab is a row of buttons.
+    //
+    // `role="tablist"` is a promise about how the widget behaves, and it was made without the
+    // behaviour: a screen reader announced a tablist and then Left/Right did nothing. Roving
+    // tabindex goes with it — exactly one tab in the tab order, the arrows moving between
+    // them — which is the other half of what the role announces.
+    document.addEventListener('keydown', (e) => {
+        const btn = (e.target as HTMLElement)?.closest?.('.doc-tabs-btn') as HTMLElement | null;
+        const wrap = btn?.closest('.doc-tabs') as HTMLElement | null;
+        if (!btn || !wrap) return;
+        const all = [...wrap.querySelectorAll<HTMLElement>('.doc-tabs-btn')];
+        const at = all.indexOf(btn);
+        const last = all.length - 1;
+        const to = e.key === 'ArrowRight' ? (at === last ? 0 : at + 1)
+            : e.key === 'ArrowLeft' ? (at === 0 ? last : at - 1)
+                : e.key === 'Home' ? 0
+                    : e.key === 'End' ? last
+                        : -1;
+        if (to < 0) return;
+        e.preventDefault();
+        selectTab(wrap, to);
+        all[to]?.focus();
+    });
+}
+
+/**
+ * Show one panel of a strip, and tell assistive technology which.
+ *
+ * Both renderers draw this markup, so the ids are assigned HERE rather than by either of
+ * them: a page can hold two strips, and two `#doc-tab-0` would make every `aria-controls`
+ * point at whichever came first.
+ */
+function selectTab(wrap: HTMLElement, i: number): void {
+    const btns = [...wrap.querySelectorAll<HTMLElement>('.doc-tabs-btn')];
+    const panels = [...wrap.querySelectorAll<HTMLElement>('.doc-tab')];
+    if (!wrap.dataset.tabsId) {
+        wrap.dataset.tabsId = `t${Math.random().toString(36).slice(2, 9)}`;
+        btns.forEach((b, n) => {
+            b.id = `${wrap.dataset.tabsId}-tab-${n}`;
+            b.setAttribute('aria-controls', `${wrap.dataset.tabsId}-panel-${n}`);
+        });
+        panels.forEach((p, n) => {
+            p.id = `${wrap.dataset.tabsId}-panel-${n}`;
+            p.setAttribute('role', 'tabpanel');
+            p.setAttribute('aria-labelledby', `${wrap.dataset.tabsId}-tab-${n}`);
+        });
+    }
+    btns.forEach((b, n) => {
+        b.classList.toggle('is-on', n === i);
+        b.setAttribute('aria-selected', n === i ? 'true' : 'false');
+        b.tabIndex = n === i ? 0 : -1;
+    });
+    // `tabIndex` on the panel too: it holds arbitrary content, and a long one has to be
+    // scrollable by keyboard.
+    panels.forEach((p, n) => { p.classList.toggle('is-on', n === i); p.tabIndex = n === i ? 0 : -1; });
 }
 
 /**
@@ -53,6 +106,12 @@ export function hydrateMdLite(host: HTMLElement): void {
     // Fire and forget: KaTeX is 272 KB and nothing on the page waits for a formula. It
     // loads only when the subtree actually holds one.
     void typesetMath(host);
+    // Give every strip its ids and its roving tabindex now, rather than on first click:
+    // a keyboard user reaches the strip before they activate it.
+    host.querySelectorAll<HTMLElement>('.doc-tabs').forEach((w) => {
+        const on = [...w.querySelectorAll('.doc-tab')].findIndex((p) => p.classList.contains('is-on'));
+        selectTab(w, on < 0 ? 0 : on);
+    });
     host.querySelectorAll('[data-sched-title]').forEach((el) => { el.textContent = t('md.sched.hours'); });
     // The two other places md-lite leaves a word for somebody who has a dictionary.
     host.querySelectorAll('[data-md-toc-title]').forEach((el) => { el.textContent = t('md.toc.title'); });
@@ -64,7 +123,9 @@ export function hydrateMdLite(host: HTMLElement): void {
         const name = String(el.dataset.lucide || '').replace(/[^a-z0-9-]/g, '');
         if (!name || el.dataset.masked) return;
         el.dataset.masked = '1';
-        const url = `url('https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg') center/contain no-repeat`;
+        const src = lucideIconUrl(name);
+        if (!src) return;   // remote icons are off
+        const url = `url('${src}') center/contain no-repeat`;
         el.style.webkitMask = url;
         el.style.mask = url;
     });

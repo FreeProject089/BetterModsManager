@@ -1,4 +1,4 @@
-# Blocs de texte enrichi (markdown personnalisé)
+# B.MD — better.markdown
 
 
 Partout où du texte est affiché — la documentation d'un plugin, une page personnalisée, un
@@ -241,6 +241,25 @@ jamais touché.
 
 Coller le caractère lui-même a toujours marché ; le raccourci existe parce qu'aucun clavier n'a
 🚀 dessus.
+
+## D'où vient un document, et ce que ça change
+
+Une page de cette documentation est la nôtre. **La documentation d'un plugin ne l'est pas** :
+elle arrive avec le plugin, écrite par qui l'a fait, et elle s'affiche dans une fenêtre qui
+peut appeler les commandes de l'application.
+
+B.MD dans BMM rend donc en mode **non fiable** sauf mention contraire de l'appelant :
+
+- Le HTML brut n'est plus laissé tel quel. Un `README.md` qui commence par `<` était remis à
+  la page mot pour mot ; il est désormais assaini comme le reste.
+- Chaque lien, image, téléchargement et enregistrement est vérifié avant d'être écrit.
+  `javascript:`, `data:text/html`, `vbscript:` et un `//hôte` sans protocole sont refusés — ce
+  dernier compte parce qu'il n'a pas de schéma, donc un contrôle qui ne regarde que les
+  schémas le laisse passer.
+- Un lien refusé garde son texte et perd sa destination, plutôt que de devenir un bouton qui
+  mène quelque part que personne n'a choisi.
+
+Rien ne change pour écrire un document. Ceci concerne ceux que vous n'avez pas écrits.
 
 ## La liste complète du site
 

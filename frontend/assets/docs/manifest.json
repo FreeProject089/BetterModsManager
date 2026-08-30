@@ -725,14 +725,14 @@
       "path": "reference/custom-markdown",
       "section": "reference",
       "title": {
-        "en": "Rich text blocks (custom markdown)",
-        "fr": "Blocs de texte enrichi (markdown personnalisé)"
+        "en": "B.MD — better.markdown",
+        "fr": "B.MD — better.markdown"
       },
       "summary": {
-        "en": "Wherever text is rendered — a plugin's documentation, a custom page, a community article on BetterCommunity — you get ordinary Markdown plus a set of blocks.",
+        "en": "B.MD (better.markdown) is the block vocabulary shared by BMM and BetterCommunity.",
         "fr": "Partout où du texte est affiché — la documentation d'un plugin, une page personnalisée, un article de la communauté sur BetterCommunity — vous avez le…"
       },
-      "words": 1017,
+      "words": 1197,
       "diagrams": 0,
       "fr": true
     },

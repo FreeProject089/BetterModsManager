@@ -28,6 +28,16 @@ globalThis.localStorage ??= { getItem: () => 'en', setItem() {} };
 const { expandDocBlocks } = await import(pathToFileURL(join(ROOT, 'frontend/js/ui/rich-markdown.js')).href);
 const { renderDocMarkdown } = await import(pathToFileURL(join(ROOT, 'frontend/js/docs/md-lite.js')).href);
 
+/**
+ * Every call here renders as TRUSTED, and that is the point of these tests.
+ *
+ * `renderDocMarkdown` is untrusted by default now — a plugin's README goes through it —
+ * so the default path ends in a sanitiser that needs a DOM, and node has none. These
+ * measure the RENDERER; tests/md-security.test.mjs measures what happens to a document
+ * nobody vouched for.
+ */
+const render = (md) => renderDocMarkdown(md, { trusted: true });
+
 /** How each directive is WRITTEN. Anything unlisted gets the plain container form. */
 const FORM = {
   badge: 'x :badge[NEW]{color=#0a7}', tag: 'x :tag[OLD]', icon: 'x :icon[rocket]',
@@ -111,7 +121,7 @@ describe('the documentation renderer draws everything it answers to', () => {
     for (const n of LITE) {
       const src = formOf(n);
       let out;
-      try { out = renderDocMarkdown(src); } catch (e) { bad.push(`:${n} threw — ${e?.message || e}`); continue; }
+      try { out = render(src); } catch (e) { bad.push(`:${n} threw — ${e?.message || e}`); continue; }
       const why = transformed(n, out, src);
       if (why) bad.push(`:${n} ${why}`);
     }

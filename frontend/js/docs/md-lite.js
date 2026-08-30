@@ -32,6 +32,8 @@ import { readInstant } from '../core/tz.js';
 // read as a directive and typeset as nothing. See md-math.ts.
 import { markMath } from '../ui/md-math.js';
 import { replaceEmoji } from '../core/emoji.js';
+// Rendering is untrusted by default — see md-safe.ts for what that costs and why.
+import { sanitizeDocHtml, safeDocUrl } from './md-safe.js';
 const CALLOUT_KIND = {
     note: 'info', info: 'info', hint: 'tip', tip: 'tip', success: 'success', check: 'success',
     warning: 'warning', caution: 'warning', danger: 'danger', error: 'danger',
@@ -98,7 +100,11 @@ function leafAttrs(raw) {
  * no destination is a plain span rather than something that looks pressable and is not.
  */
 function docLinkish(a, inner, cls, style) {
-    const href = a.href || a.url || a.link || '';
+    const raw = a.href || a.url || a.link || '';
+    // A refused URL is dropped rather than shown: the tail of this function put it in a
+    // `title`, so `javascript:alert(1)` was still on the page as a tooltip — harmless to a
+    // browser and exactly the kind of thing a reader should never be handed.
+    const href = safeDocUrl(raw) ? raw : '';
     if (!href)
         return `<span class="${cls}"${style}>${inner}</span>`;
     if (/^doc-page:/i.test(href))
@@ -214,9 +220,10 @@ function inline(s) {
             return `<button type="button" class="dh-link" data-anchor="${escRaw(url.slice(1))}">${txt}</button>`;
         if (/^mailto:/i.test(url))
             return `<button type="button" class="dh-link dh-link-ext" data-ext="${escRaw(url)}">${txt}</button>`;
-        // A relative path that is not a doc route (a site asset that was not bundled): show the text,
-        // drop the dead link rather than shipping something that navigates the app into nothing.
-        return `<span class="dh-link-dead" title="${escRaw(url)}">${txt}</span>`;
+        // A relative path that is not a doc route (a site asset that was not bundled), or a URL
+        // the policy refuses: show the text, drop the dead link rather than shipping something
+        // that navigates the app into nothing — or somewhere it should not go.
+        return `<span class="dh-link-dead" title="${escRaw(safeDocUrl(url) ? url : '')}">${txt}</span>`;
     });
     s = s.replace(/ (\d+) /g, (_m, i) => `<code>${esc(codes[+i])}</code>`);
     // Back to markup, after everything that escapes has run.
@@ -656,7 +663,10 @@ function renderDirective(dir, body) {
         return `<details class="doc-details"><summary>${esc(label || 'Details')}</summary><div class="doc-details-body">${inner()}</div></details>`;
     }
     if (name === 'replay' || name === 'bmmreplay') {
-        const src = attrs.src || '';
+        // The app opens this itself, so a refused URL must not reach the attribute the click
+        // handler reads. A player is a thing that follows a link.
+        const raw = attrs.src || '';
+        const src = safeDocUrl(raw) ? raw : '';
         return `<figure class="dh-media"><button class="dh-replay" data-replay="${escRaw(src)}">▶ <span>${esc(label || attrs.title || 'Play recording')}</span></button></figure>`;
     }
     // unknown directive → render its body plainly so nothing is lost
@@ -713,14 +723,23 @@ function slugForAnchor(s) {
     return s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
 }
-export function renderDocMarkdown(src) {
+export function renderDocMarkdown(src, opts = {}) {
     if (!src)
         return '';
-    if (/^\s*</.test(src))
-        return src; // already HTML
+    // UNTRUSTED unless a caller says otherwise, and the default is the safe one on purpose: a
+    // new call site added next year is safe by construction rather than by somebody remembering.
+    //
+    // The raw-HTML passthrough below exists for the article bodies written in docs-hub.ts, which
+    // are ours and are HTML. It was reached by ANY source starting with `<` — including a
+    // plugin's README, whose output goes straight into innerHTML in a webview where
+    // `withGlobalTauri` is on. That is the whole backend behind an `onerror`.
+    const trusted = opts.trusted === true;
+    if (trusted && /^\s*</.test(src))
+        return src; // our own HTML article bodies
     // Emoji LAST, on the rendered output: a shortcode inside a directive's attributes is not a
     // shortcode, and by here every directive has been consumed.
     const prepared = tableOfContents(promoteLeaves(markMath(src.replace(/\r\n?/g, '\n'))));
-    return replaceEmoji(renderBlocks(prepared.split('\n')));
+    const html = replaceEmoji(renderBlocks(prepared.split('\n')));
+    return trusted ? html : sanitizeDocHtml(html);
 }
 //# sourceMappingURL=md-lite.js.map
