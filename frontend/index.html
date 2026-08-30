@@ -6834,33 +6834,42 @@
                         <button type="button" class="repo-update-mode" id="repo-update-mode-remote"
                             aria-pressed="false" data-i18n="repo.update.modeRemote">On a server</button>
                     </div>
-                    <label class="form-label" style="font-size:12px;font-weight:700;" data-i18n="repo.update.folder">Existing repo folder</label>
-                    <div style="display:flex; gap:8px; margin:6px 0 16px;">
-                        <input type="text" id="repo-update-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
-                        <button class="btn btn-secondary btn-sm" id="btn-pick-repo-update-folder" data-i18n="repo.update.browse">Browse</button>
-                        <!-- WHICH repo to fetch. `ssh://nom` names a target saved in Publier
-                             par SSH; `ssh://` alone means the one called default. Asking for an
-                             address rather than opening a folder dialog: you know the server,
-                             not the folder BMM would like to put it in. -->
+                    <!-- ONE QUESTION PER BLOCK.
+                         These were four controls in a single flex row — a folder, a Browse, an
+                         address and a fetch button — two of which talk about this disk and two
+                         about a server, with nothing saying which was which.
+
+                         Split: the folder is always the folder, and everything about the
+                         server lives under its own heading and only when there is one. -->
+                    <div class="repo-upd-block">
+                        <label class="repo-upd-label" for="repo-update-path" data-i18n="repo.update.folder">Existing repo folder</label>
+                        <div class="repo-upd-row">
+                            <input type="text" id="repo-update-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
+                            <button class="btn btn-secondary btn-sm" id="btn-pick-repo-update-folder" data-i18n="repo.update.browse">Browse</button>
+                        </div>
+                        <p class="repo-upd-hint" id="repo-update-folder-hint" data-i18n="repo.update.folderHintLocal">The repo to edit. Changes are written here.</p>
+                    </div>
+
+                    <!-- The server, when there is one.
+                         "From the server" used to sit in the row above and was a DUPLICATE:
+                         the shared panel at the foot of this dialog already offers Fetch, with
+                         the server chosen, the destination visible and the passphrase beside
+                         it. The old button did the same transfer while deciding on its own
+                         where it landed. Two buttons, two rules, one act — and the one that
+                         explained least was the one you saw first.
+
+                         What takes its place is what it was about: the address, and the
+                         credentials fold, together. Mounted by repo.ts so the markup and its
+                         listeners cannot separate. -->
+                    <div class="repo-upd-block" id="repo-update-remote-block" hidden>
+                        <label class="repo-upd-label" for="repo-update-url" data-i18n="repo.update.where">Which server it lives on</label>
                         <input type="text" id="repo-update-url" class="form-input" spellcheck="false"
                             data-i18n-placeholder="repo.update.urlPh"
-                            placeholder="ssh://nom/chemin" style="flex:1;min-width:140px;font-size:12px;">
-                        <!-- The same repo, fetched from the server it is served from.
-                             SSH is a transport, not a step of "generate": an existing repo can
-                             be brought down, edited and put back. This does exactly the pull
-                             the SSH panel already does, into the folder above, so there is one
-                             implementation of "fetch a repo over SFTP" and not two. -->
-                        <button class="btn btn-secondary btn-sm" id="btn-repo-update-pull"
-                            data-i18n="repo.update.fromSsh"
-                            data-tasky="repo.update.fromSshTip" data-tasky-icon="icon-download">From the server</button>
+                            placeholder="ssh://nom/chemin" style="width:100%;font-size:12px;">
+                        <p class="repo-upd-hint" data-i18n="repo.update.whereHint">`ssh://name` picks a saved server, `ssh://` the one called default. Leave it empty if you only have one.</p>
+                        <div id="repo-update-ssh-mount"></div>
+                        <p class="repo-upd-hint repo-upd-hint-strong" data-i18n="repo.update.fetchWhere">Fetch and publish are at the bottom of this dialog, where the destination and the passphrase are.</p>
                     </div>
-                    <!-- The SSH credentials for the address above.
-                         "ssh://nom" named a saved target and nothing else: a target that
-                         authenticates by PASSWORD was refused outright here, because nothing
-                         about a password is stored and a scheduled run has nobody to ask. In
-                         front of this dialog there IS somebody to ask. Mounted by repo.ts so
-                         the markup and its listeners cannot separate. -->
-                    <div id="repo-update-ssh-mount" style="margin:10px 0"></div>
                     <div id="repo-update-content" style="display:none;">
                         <!-- Current repo content (remove) -->
                         <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;" data-i18n="repo.update.current">Current content — uncheck to remove</div>

@@ -8,7 +8,6 @@ import { t } from '../../core/i18n.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
-import { explainSsh } from './repo-ssh.js';
 import { mountSshAction } from './ssh-action.js';
 import { credsFoldHtml, wireCredsFold, readCredsFold, exportOrigins } from '../../core/creds-fold.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
@@ -2204,18 +2203,19 @@ export function initRepo() {
         // published back. Both end in the same editor below, which is why they are a switch
         // rather than two screens — what changes is only where the repo comes from.
         const setMode = (remote) => {
-            const url = document.getElementById('repo-update-url');
-            const pull = document.getElementById('btn-repo-update-pull');
-            const browse = document.getElementById('btn-pick-repo-update-folder');
-            if (url)
-                url.style.display = remote ? '' : 'none';
-            if (pull)
-                pull.style.display = remote ? '' : 'none';
+            // One block, shown or hidden whole. It used to be two controls inside a row of
+            // four, so "on a server" added an address field and a button between a folder and
+            // its Browse — the reason nobody could tell which half was which.
+            const block = document.getElementById('repo-update-remote-block');
+            if (block)
+                block.hidden = !remote;
             // Browse stays in BOTH modes. In remote it is the DESTINATION rather than the
             // source, and hiding it left the folder field read-only with no way to change
-            // where a fetch would land.
-            if (browse)
-                browse.style.display = '';
+            // where a fetch would land — which is also why the hint under it changes rather
+            // than the control.
+            const hint = document.getElementById('repo-update-folder-hint');
+            if (hint)
+                hint.textContent = t(remote ? 'repo.update.folderHintRemote' : 'repo.update.folderHintLocal');
             if (pathInput)
                 pathInput.readOnly = false;
             for (const [id, on] of [['repo-update-mode-local', !remote], ['repo-update-mode-remote', remote]]) {
@@ -2261,82 +2261,17 @@ export function initRepo() {
                 });
             });
         }
-        // ── from the server ─────────────────────────────────────────────────
+        // "From the server" lived here and is gone.
         //
-        // The repo is fetched into a folder YOU choose, not a hidden working copy: the update
-        // writes into it, and a folder you cannot see is a folder you cannot check before
-        // publishing it back over what is live.
-        document.getElementById('btn-repo-update-pull')?.addEventListener('click', async () => {
-            const m = await import('./repo-ssh.js');
-            const src = await import('./ssh-source.js');
-            const names = m.sshTargetNames();
-            if (!names.length) {
-                // Say where to configure it rather than failing about a field never filled in.
-                toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
-                return;
-            }
-            // Credentials typed into the block below, when there are any. This is the path
-            // that makes a PASSWORD server usable from here at all: the stored-target helpers
-            // refuse one on purpose, because nothing about a password is written down and an
-            // unattended run has nobody to ask. Somebody is looking at this dialog.
-            const typedCreds = src.readSshSource('repo-update');
-            // The address names WHICH server. `ssh://nom` picks that target, `ssh://` the one
-            // called default, and an empty field the only one you have.
-            const typed = document.getElementById('repo-update-url')?.value?.trim() || '';
-            let target = names[0];
-            if (typed) {
-                const parsed = m.sshTargetName(typed);
-                if (!parsed) {
-                    toast(t('repo.update.urlBad'), 'warning', 7000);
-                    return;
-                }
-                if (!names.includes(parsed)) {
-                    toast(t('repo.update.urlNoTarget').replace('{name}', parsed), 'warning', 8000);
-                    return;
-                }
-                target = parsed;
-            }
-            // Where it LANDS, decided without asking.
-            //
-            // A button labelled "from the server" that opens a local file explorer is the
-            // opposite of what it says, and that is what this did whenever the export folder
-            // was empty. Order: the export folder if there is one — it is where Publier par
-            // SSH already sends from, so fetch, edit and publish speak about one place — then
-            // whatever is already typed in the field, then a folder BMM keeps for this.
-            // Never a dialog: the field shows where it went and stays editable.
-            let folder = document.getElementById('repo-export-path')?.value?.trim()
-                || pathInput?.value?.trim() || '';
-            if (!folder) {
-                try {
-                    folder = await invoke('default_remote_repo_dir');
-                }
-                catch {
-                    folder = '';
-                }
-            }
-            if (!folder) {
-                toast(t('repo.update.noFolder'), 'warning', 7000);
-                return;
-            }
-            const btn = document.getElementById('btn-repo-update-pull');
-            if (btn)
-                btn.disabled = true;
-            try {
-                toast(t('repo.update.pulling'), 'info', 4000);
-                const n = typedCreds.ssh
-                    ? await m.pullWithTarget(folder, typedCreds.ssh, typedCreds.sshSecret)
-                    : await m.pullStoredTarget(folder, target);
-                toast((t('repo.update.pulled') || '').replace('{n}', String(n)), 'success', 5000);
-                await loadRepoFolder(folder);
-            }
-            catch (e) {
-                toast(explainSsh(String(e)), 'error', 9000);
-            }
-            finally {
-                if (btn)
-                    btn.disabled = false;
-            }
-        });
+        // It was a second implementation of a transfer the shared panel below already does:
+        // fetch this repo over SFTP into the folder above. The difference was only in how the
+        // destination got chosen — this one took the export folder, or the field, or a folder
+        // BMM keeps for the purpose, deciding silently; the panel shows the server, shows the
+        // destination and has the passphrase box beside it.
+        //
+        // Two buttons for one act, and the one that explained least was the one at the top of
+        // the dialog. The panel's `mountSshAction(..., { mode: 'both' })` below is the whole
+        // feature now, and its `onDone` reloads the folder exactly as this did.
         // ── and back again ──────────────────────────────────────────────────
         //
         // The lone "Publish to the server" button lived here and chose its destination by
