@@ -21,7 +21,6 @@
 // 04:00 to type one, and a prompt nobody answers is a task that silently never runs.
 import { invoke, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { topLayerZ } from '../../ui/layer.js';
 import {
@@ -181,14 +180,17 @@ export function openSshServers(focus?: string): void {
         form.querySelector('#sshsrv-save')?.addEventListener('click', () => {
             read();
             const name = val('sshsrv-f-name') || DEFAULT_TARGET;
-            if (!draft.host || !draft.user || !draft.remoteDir) { toast(t('sshsrv.needFields'), 'warning', 6000); return; }
+            const out = form.querySelector('#sshsrv-test') as HTMLElement;
+            if (!draft.host || !draft.user || !draft.remoteDir) { out.textContent = t('sshsrv.needFields'); return; }
             // A rename is a save under the new name plus a delete of the old one. Doing it in
             // that order means a failure leaves the original intact rather than neither.
             saveTarget(draft, name);
             if (current && current !== name) deleteTarget(current);
             current = name;
             dirty = false;
-            toast(t('sshsrv.saved'), 'success');
+            // Said where the reader is looking, next to the button they pressed, rather
+            // than in a corner of the window behind this dialog.
+            out.innerHTML = `<span style="color:var(--success);">${escHtml(t('sshsrv.saved'))}</span>`;
             renderList(); renderForm(); announce();
         });
 

@@ -15,7 +15,6 @@
 // the error translation — is the same on every card, because it is the same question.
 import { invoke, pickFile, pickFolder } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { sshTargetNames, storedSshTarget, explainSsh, type SshTarget } from './repo-ssh.js';
 import { openSshServers, onSshServersChanged } from './ssh-servers.js';
@@ -160,7 +159,7 @@ export function mountSshAction(host: HTMLElement | null, opts: SshActionOpts): v
     const targetNow = (): { name: string; target: SshTarget; secret: string } | null => {
         const name = box.querySelector<HTMLSelectElement>('.ssh-action-profile')?.value || '';
         const stored = name ? storedSshTarget(name) : null;
-        if (!stored) { toast(t('sshact.none'), 'warning', 6000); return null; }
+        if (!stored) { status(t('sshact.none'), 'err'); return null; }
         const dest = (box.querySelector<HTMLInputElement>('.ssh-action-dest')?.value || '').trim();
         const secret = box.querySelector<HTMLInputElement>('.ssh-action-secret')?.value || '';
         // The override replaces the base folder for THIS transfer and is not written back to
@@ -231,7 +230,7 @@ export function mountSshAction(host: HTMLElement | null, opts: SshActionOpts): v
 
         const picked = (box.querySelector<HTMLInputElement>('.ssh-action-local')?.value || '').trim();
         const local = picked || (opts.source.file ? opts.source.file() : opts.source.dir ? opts.source.dir() : '');
-        if (!local) { toast(t('sshact.noSource'), 'warning', 6000); return; }
+        if (!local) { status(t('sshact.noSource'), 'err'); return; }
 
         const oneFile = !!opts.source.file || opts.source.pick === 'file';
         if (direction === 'up' && opts.confirm) {
@@ -261,13 +260,13 @@ export function mountSshAction(host: HTMLElement | null, opts: SshActionOpts): v
                     target: now.target, secret: now.secret, localDir: local,
                 })) as number;
             }
+            // The line under the buttons, and not also a toast. The same sentence in two
+            // places, one of which vanishes on a timer, is the reader deciding which one to
+            // trust.
             status(t(direction === 'up' ? 'sshact.published' : 'sshact.fetched').replace('{n}', String(bytes)), 'ok');
-            toast(t(direction === 'up' ? 'sshact.published' : 'sshact.fetched').replace('{n}', String(bytes)), 'success', 6000);
             opts.onDone?.(bytes, direction);
         } catch (e) {
-            const msg = explainSsh(String(e));
-            status(msg, 'err');
-            toast(msg, 'error', 9000);
+            status(explainSsh(String(e)), 'err');
         } finally {
             busy = false;
             box.querySelectorAll('button').forEach((b) => { (b as HTMLButtonElement).disabled = false; });
