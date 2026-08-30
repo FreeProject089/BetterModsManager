@@ -178,6 +178,26 @@ function inline(s) {
         return before + keep(docLinkish(a, ico + esc(txt), 'doc-btn doc-btn-sm doc-btn-outline', ''));
     });
     s = esc(s);
+    // The mkdocs spelling of the same thing: `++ctrl+k++`, from pymdownx.keys.
+    //
+    // BMM Docs is published twice — as a website by mkdocs, and bundled into this app — and the
+    // two did not answer to the same vocabulary. Ten `++esc++` in the pages drew keycaps on the
+    // site and printed as `++esc++` here, in the very files that ALSO use `:kbd[…]`.
+    //
+    // Before the `:kbd` rule, because both produce the same markup and this one has the simpler
+    // shape. Escaped text cannot reach it: `+` is not touched by esc().
+    s = s.replace(/\+\+([a-z0-9][a-z0-9+.-]*)\+\+/gi, (_m, keys) => {
+        const parts = String(keys).split('+').filter(Boolean);
+        if (!parts.length)
+            return _m;
+        // Capitalised the way a keycap is read, and the way pymdownx.keys prints it on the
+        // website: `Ctrl`, `Esc`, `Shift` — but `F5`, `F10` and a single letter stay upper.
+        // `ctrl` is written lowercase in a source file and nobody has a key with that on it.
+        const cap = (k) => (k.length === 1 || /^f\d+$/i.test(k)
+            ? k.toUpperCase()
+            : k[0].toUpperCase() + k.slice(1).toLowerCase());
+        return `<span class="dh-kbd">${parts.map((k) => `<kbd>${esc(cap(k))}</kbd>`).join('+')}</span>`;
+    });
     // Keyboard keys — `:kbd[Ctrl+K]` → styled <kbd> per key (BCWEB-style).
     s = s.replace(/:kbd\[([^\]]+)\]/g, (_m, keys) => {
         const parts = String(keys).split(/\s*\+\s*|\s+/).filter(Boolean);

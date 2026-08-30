@@ -212,6 +212,21 @@ Write the date, not just the time — that is what makes it exact, because it se
 side of a daylight-saving change the moment falls on. A value that cannot be read is shown
 exactly as you typed it, never as `Invalid Date`.
 
+## Keyboard keys, either way
+
+Two spellings, both drawn on both surfaces:
+
+```
+Press :kbd[Ctrl+K] to open the palette.
+Press ++ctrl+k++ to open the palette.
+```
+
+`:kbd[…]` is B.MD's; `++…++` is the one the documentation site's own extension uses. They were
+not interchangeable until recently — ten `++esc++` in these pages drew keycaps on the website
+and printed as literal text in the app, and four `:kbd[…]` did the reverse, in the same two
+files. `scripts/check-doc-dialects.mjs` in the BMM repository now fails the build when a page
+uses syntax only one of the two renders.
+
 ## Maths
 
 Wrap TeX in `$$`:

@@ -214,6 +214,21 @@ chose.
 décide de quel côté d'un changement d'heure le moment tombe. Une valeur illisible est
 affichée telle que vous l'avez écrite, jamais en `Invalid Date`.
 
+## Touches clavier, dans les deux écritures
+
+Deux écritures, toutes deux dessinées des deux côtés :
+
+```
+Appuyez sur :kbd[Ctrl+K] pour ouvrir la palette.
+Appuyez sur ++ctrl+k++ pour ouvrir la palette.
+```
+
+`:kbd[…]` est celle de B.MD ; `++…++` est celle de l'extension du site de documentation. Elles
+n'étaient pas interchangeables jusqu'ici : dix `++esc++` dans ces pages dessinaient des touches
+sur le site et s'affichaient en texte brut dans l'app, et quatre `:kbd[…]` faisaient l'inverse,
+dans les deux mêmes fichiers. `scripts/check-doc-dialects.mjs` dans le dépôt BMM fait
+maintenant échouer la build si une page utilise une syntaxe qu'un seul des deux rend.
+
 ## Maths
 
 Encadrez du TeX avec `$$` :
