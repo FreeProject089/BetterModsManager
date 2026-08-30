@@ -142,7 +142,7 @@ fichiers que tu n'as pas choisis.
 ### Lire une machine SSH à la place
 
 Ouvre **Ce dépôt est sur une machine SSH** sur le même écran et choisis un des serveurs que tu
-as configurés dans *Publier par SSH*. L'hôte, le port, le compte et le dossier viennent de là :
+as configurés dans *Serveurs SSH*. L'hôte, le port, le compte et le dossier viennent de là :
 les redemander serait une seconde copie des mêmes informations, libre de diverger, et une
 empreinte de confiance connue d'un côté et inconnue de l'autre.
 
@@ -229,51 +229,49 @@ utilisateurs quand la mise à jour est détectée). Il ne réécrit que ce qui a
 de la synchro delta côté téléchargement. Le pas-à-pas côté auteur vit dans le guide développeur
 *Rendre ton mod actualisable*.
 
-## Déposer le dossier sur le serveur (SSH/SFTP)
+## Mettre le dossier sur le serveur (SSH/SFTP)
 
-### Le même bouton, là où est le dossier
+L'export ecrit un dossier. Le poser sur la machine qui le sert, c'est un panneau — et c'est le
+meme partout ou cette phrase a un sens : aucun logiciel de transfert entre les deux, et aucun
+ecran a visiter d'abord.
 
-Publier est proposé sur trois écrans désormais, tous avec la connexion enregistrée ici :
+Il y a deux moities, et elles ne formaient qu'une carte auparavant :
 
-- **la carte SSH elle-même**, sous l'export — republier un dossier existant sans le
-  régénérer ;
-- **Manifeste seul**, une fois qu'elle a écrit un `repo.json` pour des mods que tu héberges
-  déjà — mettre ce fichier sur le serveur est l'étape suivante, et le seul chemin était de
-  remonter ici et retaper le dossier ;
-- **Mettre à jour un dépôt**, dans les deux modes. C'était caché en mode local, au motif que
-  ça proposerait « de pousser vers un serveur que personne n'a nommé ». Vrai avant que les
-  cibles soient enregistrées ; faux après — une copie de travail locale qu'on publie, c'est
-  la façon normale de tenir un dépôt.
+- **Serveurs SSH** — les machines qui sont a toi. Configurees une fois, depuis n'importe ou :
+  le bouton est sur chaque panneau qui publie, et il s'ouvre par-dessus ce que tu regardais.
+- **Le panneau de publication** — choisis un de ces serveurs, dis ou ca atterrit, tape la
+  phrase de passe, envoie.
 
-Les trois posent la même confirmation, en nommant la cible. Publier écrase ce que les gens
-téléchargent à cet instant, et un point d'entrée qui sauterait la question rendrait le même
-acte prudent sur un écran et désinvolte sur un autre.
+Cette separation est le fond du sujet. Un serveur n'est pas une propriete d'un export : c'est
+une machine, et on s'en sert depuis l'ecran des depots, celui du manifeste et depuis un
+catalogue. Le configurer a l'interieur de « Generer un depot » voulait dire que publier un
+catalogue commencait par une page qui parlait d'autre chose.
 
-L'export écrit un dossier. **Publier par SSH**, sur le même écran, est ce qui dépose ce dossier
-sur la machine qui l'héberge — sans programme de transfert de fichiers entre les deux.
+### Ou apparait le panneau
 
-La carte s'ouvre sur le trajet : **le dossier exporté → `user@hôte:/dossier/distant`**, rempli
-depuis les champs à mesure que tu tapes. Cette ligne fait le travail qu'une liste numérotée
-faisait avant : le formulaire réclame un hôte avant que quoi que ce soit n'annonce qu'un
-dossier doit exister, et les deux moitiés de « où est-ce que ça part » n'étaient jamais côte à
-côte — la source se configure sur une autre carte, et la destination est un hôte et un dossier
-distant séparés de quatre lignes.
+Partout ou « publier ceci » ou « recuperer ceci » est vrai :
 
-Il n'y a donc rien à retenir. Génère le dépôt au-dessus, renseigne le serveur ici, et la ligne
-te dit ce qui va partir et vers où avant que tu appuies sur quoi que ce soit. Les envois
-suivants réutilisent ce qui est enregistré.
+| Ecran | Ce qu'il envoie sans qu'on le lui dise | Sens |
+|---|---|---|
+| **Generer un depot** | le dossier exporte | publier · recuperer |
+| **Mettre a jour un depot** | le dossier en cours d'edition | publier · recuperer |
+| **Manifeste seul** | le `repo.json` qu'il vient d'ecrire — le fichier, pas le dossier autour | publier |
+| **Un catalogue en cours** | le fichier que tu as enregistre | publier |
 
-!!! note "Cet écran est aussi ce que réutilisent les automatisations"
+Chaque carte sait deja ce qu'elle a : rien a retaper. La ou elle ne peut pas savoir — un
+catalogue enregistre via une boite de dialogue systeme — le panneau demande, au lieu de deviner.
 
-    Ce que vous enregistrez ici est la connexion qu'utilisent l'action planifiée **Publier le
-    dépôt par SSH** et `POST /api/repo/publish-ssh`. Aucun des deux ne peut nommer d'hôte ni de
-    clé, exprès : une tâche ou un appelant capable de les nommer pourrait faire lire à BMM une
-    clé privée de son choix et expédier un dépôt vers une machine de son choix.
+### Ce que le panneau demande
 
-    Ce qui veut dire qu'une clé protégée par une **phrase secrète ne peut pas tourner sans
-    surveillance** — rien de cette phrase n'est conservé, il n'y aurait personne à qui la
-    demander. Une publication planifiée contre une telle clé échoue avec un message plutôt que
-    de rester bloquée sur une invite que personne ne verra.
+| | |
+|---|---|
+| **Serveur** | Un de tes serveurs enregistres. La liste se met a jour pendant que la carte est ouverte : un serveur ajoute depuis ce panneau apparait sans aller nulle part. |
+| **Destination** | Le dossier de base du serveur, prerempli. Le changer ici ne vaut **que pour ce transfert** : une publication ponctuelle dans un sous-dossier ne doit pas deplacer en silence l'endroit ou toutes les autres cartes publient. **Parcourir…** ouvre les dossiers du serveur. |
+| **Phrase de passe ou mot de passe** | Lue au moment de s'en servir, stockee nulle part. Une cle sans phrase de passe laisse le champ vide. |
+
+Publier demande confirmation et **nomme le serveur**. Ca ecrase ce que des gens sont en train
+de telecharger, et avec plusieurs serveurs configures, *lequel* est la question qui merite une
+reponse.
 
 ### Ce que tu renseignes
 

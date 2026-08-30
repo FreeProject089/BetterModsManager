@@ -755,6 +755,8 @@ fn main() {
             commands::repo_ssh::ssh_test_connection,
             commands::repo_ssh::ssh_upload_repo,
             commands::repo_ssh::ssh_download_repo,
+            commands::repo_ssh::ssh_upload_file,
+            commands::repo_ssh::ssh_download_file,
             commands::repo_ssh::ssh_fetch_repo_info,
             commands::repo_ssh::ssh_read_text,
             commands::repo_keyauth::set_key_auth_key,

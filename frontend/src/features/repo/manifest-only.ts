@@ -368,11 +368,22 @@ export function initManifestOnly() {
     // “put it on the server” is the very next thing — and the only route was to scroll to a
     // different card and retype the folder. Same mounting pattern as the extras button above,
     // for the same reason: the capability lives on one card and the folder lives on this one.
-    void import('./repo-ssh.js').then((m) => {
-        m.mountPublishButton(
-            $('manifest-result')?.parentElement || null,
-            () => ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim() || '',
-        );
+    void import('./ssh-action.js').then((m) => {
+        m.mountSshAction($('manifest-result')?.parentElement || null, {
+            mode: 'publish',
+            confirm: true,
+            label: t('sshact.labelManifest'),
+            // UN fichier, pas le dossier. Cette carte écrit un repo.json pour des mods déjà
+            // hébergés ailleurs : envoyer le dossier enverrait tout ce qui traîne à côté.
+            source: {
+                file: () => {
+                    const dir = ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim() || '';
+                    if (!dir) return '';
+                    return `${dir}${dir.includes('\\') ? '\\' : '/'}repo.json`;
+                },
+                remoteName: 'repo.json',
+            },
+        });
     });
     $('btn-generate-manifest')?.addEventListener('click', () => void generate());
     setMode('folder');

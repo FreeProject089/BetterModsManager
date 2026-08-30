@@ -215,25 +215,15 @@ export function wireSshSource(p: string, manageKeys: () => void): void {
         manageKeys();
     });
     document.getElementById(`${p}-ssh-config`)?.addEventListener('click', () => {
-        // Scrolling to the full panel is the better answer WHEN IT IS REACHABLE: it has the
-        // fingerprint check, the test button and the key chooser, and none of that is worth
-        // duplicating.
+        // The full editor, opened OVER whatever is on screen.
         //
-        // It is not reachable from a modal. This block is mounted in two places and one of
-        // them is a dialog, where `repo-ssh-card` sits behind the overlay — so on the screen
-        // where somebody most often discovers they need a server, the only button offering to
-        // make one scrolled a page nobody could see and appeared to do nothing.
-        const card = document.getElementById('repo-ssh-card');
-        const inModal = !!document.getElementById(`${p}-ssh`)?.closest('.modal-overlay');
-        if (card && !inModal) {
-            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const body = document.getElementById('repo-ssh-body');
-            const toggle = document.getElementById('repo-ssh-toggle');
-            if (body?.hidden) { body.hidden = false; toggle?.setAttribute('aria-expanded', 'true'); }
-            return;
-        }
-        const box = document.getElementById(`${p}-ssh-new`) as HTMLElement | null;
-        if (box) box.hidden = !box.hidden;
+        // This used to scroll to the form inside the export card, with a fallback to a small
+        // inline box when that card was not reachable — and it was not reachable exactly
+        // where it mattered: this block is mounted in a dialog too, where the card sits
+        // behind the overlay, so on the screen where somebody most often discovers they need
+        // a server, the button scrolled a page nobody could see. A dialog does not have that
+        // problem, and there is one editor again rather than two.
+        void import('./ssh-servers.js').then((m) => m.openSshServers());
     });
 
     // Save it, into the same store the panel writes. The EDITOR may live in two places; the

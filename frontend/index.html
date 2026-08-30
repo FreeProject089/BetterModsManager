@@ -1621,203 +1621,14 @@
                                          Exporting writes a folder; this is what puts it on the machine
                                          that serves it. Separate from the export button on purpose: you
                                          can re-publish an existing folder without regenerating it. -->
-                                    <div class="repo-ssh-card" id="repo-ssh-card">
-                                        <button class="repo-ssh-head" id="repo-ssh-toggle" type="button"
-                                            aria-expanded="false" aria-controls="repo-ssh-body">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                                                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                                            </svg>
-                                            <span data-i18n="repo.ssh.title">Publier par SSH</span>
-                                            <span class="repo-ssh-badge" id="repo-ssh-status" hidden></span>
-                                            <svg class="repo-ssh-chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.4" aria-hidden="true">
-                                                <polyline points="6 9 12 15 18 9"/>
-                                            </svg>
-                                        </button>
-                                        <div id="repo-ssh-body" class="repo-ssh-body" hidden>
-                                        <p class="repo-ssh-desc" data-i18n="repo.ssh.desc">
-                                            Envoie le dossier exporté vers le serveur qui l’héberge, par SFTP.
-                                        </p>
-
-                                        <!-- WHERE it goes, in one line, kept in step with the fields.
-                                             Everything needed to answer "where does this publish to" was on
-                                             the screen and no two parts of it were next to each other: the
-                                             SOURCE is a folder on a different card, and the DESTINATION is a
-                                             host and a remote directory four rows apart. So the question was
-                                             answerable only by reading the whole form and assembling it in
-                                             your head, which is what "jsp où ça publish" is. -->
-                                        <div class="repo-ssh-route" id="repo-ssh-route">
-                                            <span class="repo-ssh-route-part repo-ssh-route-src">
-                                                <span class="repo-ssh-route-lbl" data-i18n="repo.ssh.routeFrom">Ce dossier</span>
-                                                <!-- EDITABLE. It used to be a read-only echo of the repo
-                                                     generator's output folder, which lives on another card — so
-                                                     this panel could publish exactly one folder in the world, and
-                                                     when that folder was unset it said "no exported folder yet"
-                                                     with nothing here to do about it. Empty still means "the
-                                                     generator's output", which is what it always was. -->
-                                                <input class="input repo-ssh-route-in" id="repo-ssh-dir" type="text"
-                                                       data-i18n-placeholder="repo.ssh.routeDirPh"
-                                                       placeholder="dossier de sortie du générateur">
-                                                <button type="button" class="btn btn-xs btn-secondary" id="repo-ssh-dir-pick"
-                                                        data-i18n="repo.ssh.choose">Choisir…</button>
-                                            </span>
-                                            <svg class="repo-ssh-route-arrow" width="16" height="16" viewBox="0 0 24 24"
-                                                fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-                                                <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
-                                            </svg>
-                                            <span class="repo-ssh-route-part">
-                                                <span class="repo-ssh-route-lbl" data-i18n="repo.ssh.routeTo">Vers</span>
-                                                <span class="repo-ssh-route-val" id="repo-ssh-route-to">—</span>
-                                            </span>
-                                        </div>
-
-                                        <!-- Saved targets. One SSH server was enough until a second repo or a
-                                             catalog needed its own; each is named, and the name is what a source
-                                             URL refers to (ssh://prod). Clicking a chip loads it. -->
-                                        <div class="repo-ssh-saved" id="repo-ssh-saved" hidden></div>
-
-                                        <div class="repo-ssh-grid">
-                                            <label class="repo-ssh-field" style="grid-column:span 4">
-                                                <span data-i18n="repo.ssh.host">Hôte</span>
-                                                <input type="text" class="form-input" id="repo-ssh-host" data-i18n-placeholder="repo.ssh.hostPh" placeholder="repo.example.com or 203.0.113.4" spellcheck="false">
-                                            </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 2">
-                                                <span data-i18n="repo.ssh.port">Port</span>
-                                                <input type="number" class="form-input" id="repo-ssh-port" placeholder="22" min="1" max="65535">
-                                            </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 3">
-                                                <span data-i18n="repo.ssh.user">Utilisateur</span>
-                                                <input type="text" class="form-input" id="repo-ssh-user" data-i18n-placeholder="repo.ssh.userPh" placeholder="your login on the server" spellcheck="false">
-                                            </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 3">
-                                                <span data-i18n="repo.ssh.targetName">Nom</span>
-                                                <input type="text" class="form-input" id="repo-ssh-name" placeholder="default" spellcheck="false">
-                                            </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 6">
-                                                <span data-i18n="repo.ssh.remoteDir">Dossier distant</span>
-                                                <div class="repo-ssh-keyrow">
-                                                    <input type="text" class="form-input" id="repo-ssh-remote" data-i18n-placeholder="repo.ssh.remotePh" placeholder="/var/www/repo — an absolute path" spellcheck="false">
-                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-remote-pick" type="button" data-i18n="repo.ssh.browseRemote">Parcourir…</button>
-                                                </div>
-                                            </label>
-                                        </div>
-
-                                        <!-- How it authenticates, with its fields under it rather than mixed
-                                             into the server grid. Two buttons and not a dropdown: there are
-                                             exactly two answers and which is active must be readable without
-                                             opening anything. -->
-                                        <div class="repo-ssh-authbox">
-                                            <div class="repo-ssh-auth" role="group" aria-label="Authentification">
-                                                <button class="repo-ssh-authbtn" id="repo-ssh-auth-key" type="button" aria-pressed="true" data-i18n="repo.ssh.authKey">Clé privée</button>
-                                                <button class="repo-ssh-authbtn" id="repo-ssh-auth-pass" type="button" aria-pressed="false" data-i18n="repo.ssh.authPassword">Mot de passe</button>
-                                            </div>
-
-                                            <div class="repo-ssh-grid repo-ssh-keyonly">
-                                                <label class="repo-ssh-field" style="grid-column:span 4">
-                                                    <span data-i18n="repo.ssh.keyPath">Clé privée</span>
-                                                    <div class="repo-ssh-keyrow">
-                                                        <input type="text" class="form-input" id="repo-ssh-key" data-i18n-placeholder="repo.ssh.keyPh" placeholder="id_ed25519, or a PuTTY .ppk" spellcheck="false">
-                                                        <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
-                                                    </div>
-                                                    <!-- The keys already configured under Identity & API. Picking one
-                                                         FILLS the field above rather than replacing it: what will be
-                                                         read at send time stays visible and editable. -->
-                                                    <div class="repo-ssh-keyrow" style="margin-top:6px">
-                                                        <select class="form-input" id="repo-ssh-key-ring"></select>
-                                                        <button class="btn btn-ghost btn-sm" id="repo-ssh-key-manage" type="button" data-i18n="repo.ssh.manageKeys">Gérer les clés</button>
-                                                    </div>
-                                                </label>
-                                                <label class="repo-ssh-field" style="grid-column:span 2">
-                                                    <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
-                                                    <input type="password" class="form-input" id="repo-ssh-pass" placeholder="—" autocomplete="off">
-                                                    <span class="repo-ssh-inline" data-i18n="repo.ssh.keyNote">OpenSSH et PuTTY (.ppk) acceptées. La phrase sert à cet envoi et n’est pas conservée.</span>
-                                                </label>
-                                            </div>
-
-                                            <div class="repo-ssh-grid repo-ssh-passonly" hidden>
-                                                <label class="repo-ssh-field" style="grid-column:span 6">
-                                                    <span data-i18n="repo.ssh.password">Mot de passe</span>
-                                                    <input type="password" class="form-input" id="repo-ssh-pw" placeholder="—" autocomplete="off">
-                                                    <span class="repo-ssh-inline" data-i18n="repo.ssh.passwordNote">Sert à cette connexion et n’est jamais enregistré — à retaper à chaque session. Certains serveurs refusent le mot de passe : utilisez alors une clé.</span>
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                        <div class="repo-ssh-actions">
-                                            <button class="btn btn-primary btn-sm" id="repo-ssh-publish" type="button">
-                                                <span data-i18n="repo.ssh.publish">Publier le dossier exporté</span>
-                                            </button>
-                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-test" type="button">
-                                                <span data-i18n="repo.ssh.test">Tester la connexion</span>
-                                            </button>
-                                            <!-- The other direction, pushed to the far end. Publish and pull sat
-                                                 side by side as peers, which is two opposite acts one slip apart. -->
-                                            <span class="repo-ssh-actions-gap"></span>
-                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-pull" type="button">
-                                                <span data-i18n="repo.ssh.pull">Récupérer depuis le serveur</span>
-                                            </button>
-                                            <button class="btn btn-ghost btn-sm" id="repo-ssh-forget" type="button" hidden>
-                                                <span data-i18n="repo.ssh.forget">Oublier l’empreinte</span>
-                                            </button>
-                                        </div>
-
-                                        <!-- The three things worth knowing and not worth reading every time.
-                                             They used to be three paragraphs ABOVE the fields, so the form began
-                                             with an ordered list, a note about scheduled tasks and a note about
-                                             passphrases — roughly as much text as there are inputs. -->
-                                        <details class="repo-ssh-more">
-                                            <summary data-i18n="repo.ssh.moreTitle">Ce qui réutilise cette cible</summary>
-                                            <p class="repo-ssh-note" data-i18n="repo.ssh.reused">
-                                                Ce qui est enregistré ici est ce que réutilisent l’action planifiée
-                                                « Publier le dépôt par SSH » et <code>POST /api/repo/publish-ssh</code> —
-                                                ils ne peuvent pas nommer d’hôte ni de clé eux-mêmes, exprès. Une clé
-                                                protégée par une phrase secrète ne peut donc pas servir sans
-                                                surveillance : rien de cette phrase n’est conservé, il n’y aurait
-                                                personne à qui la demander.
-                                            </p>
-                                            <p class="repo-ssh-note" data-i18n="repo.ssh.syncHint">
-                                                Pour synchroniser DEPUIS ce dépôt, saisissez ssh:// comme URL dans la
-                                                synchronisation : BMM utilisera la cible ci-dessus.
-                                            </p>
-                                        </details>
-
-                                        <!-- The diagnosis, when there is one.
-                                             The verdict lives in the pill beside the title, which is 10px and
-                                             round: a sentence explaining WHY a directory refused a write does
-                                             not fit in it, and stuffing one in produced an unreadable oval.
-                                             This is the block that answers "but I have the rights". -->
-                                        <div class="repo-ssh-why" id="repo-ssh-why" hidden></div>
-
-                                        <div class="repo-ssh-progress" id="repo-ssh-progress" hidden>
-                                            <div class="repo-ssh-bar"><div class="repo-ssh-bar-fill" id="repo-ssh-bar-fill"></div></div>
-                                            <div class="repo-ssh-progress-text" id="repo-ssh-progress-text"></div>
-                                        </div>
-
-                                        <!-- Remote folder picker.
-                                             Deliberately NOT built on the shared modal system: `.modal-body` forces
-                                             a column flex layout on its children, which this list fights, and the
-                                             picker needs nothing the modal system provides. Self-contained overlay,
-                                             hidden until asked for. -->
-                                        <div class="repo-ssh-browser" id="repo-ssh-browser" hidden>
-                                            <div class="repo-ssh-browser-panel">
-                                                <div class="repo-ssh-browser-head">
-                                                    <span data-i18n="repo.ssh.browserTitle">Dossier distant</span>
-                                                    <button class="btn btn-ghost btn-sm" id="repo-ssh-browser-close" type="button" aria-label="Fermer">✕</button>
-                                                </div>
-                                                <div class="repo-ssh-browser-path" id="repo-ssh-browser-path"></div>
-                                                <div class="repo-ssh-browser-list" id="repo-ssh-browser-list"></div>
-                                                <div class="repo-ssh-browser-foot">
-                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-browser-up" type="button" data-i18n="repo.ssh.browserUp">Dossier parent</button>
-                                                    <button class="btn btn-primary btn-sm" id="repo-ssh-browser-choose" type="button" data-i18n="repo.ssh.browserChoose">Choisir ce dossier</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    </div><!-- /repo-ssh-card — closes HERE.
-                                         The export progress bar and the two buttons below belong to
-                                         generation, not to publishing over SSH. They used to sit inside
-                                         this card, so its border drew around them and the collapse read
-                                         as if it owned them. -->
+                                    <!-- Publier l'export sur un serveur SSH.
+                                         Le formulaire du serveur vivait ICI, à l'intérieur de la carte
+                                         d'export : « où je publie » au milieu de « comment je fabrique un
+                                         dépôt ». Un serveur est une machine qu'on possède et qu'on utilise
+                                         depuis trois écrans ; il n'appartenait à aucun des trois et n'était
+                                         joignable que depuis celui-ci. Le panneau est monté par
+                                         features/repo/ssh-action.ts, le même partout. -->
+                                    <div id="repo-ssh-mount"></div>
 
                                     <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
                                         <div class="bmm-progress-head">
@@ -7065,9 +6876,12 @@
                     <button class="btn btn-outline-danger" id="btn-cancel-repo-update" style="display:none;color:var(--danger);border-color:rgba(239,68,68,0.3);" data-i18n="repo.update.cancel">Cancel update</button>
                     <!-- Offered, not automatic. Publishing overwrites what is live; doing
                          that as a silent consequence of "apply changes" would make a local
-                         edit and a public release the same click. -->
-                    <button class="btn btn-secondary" id="btn-repo-update-publish" style="display:none;"
-                        data-i18n="repo.update.publishSsh">Publish to the server</button>
+                         edit and a public release the same click.
+
+                         The lone button became the shared panel: it published to whichever
+                         profile the address named, or to the first one, with no destination
+                         and nowhere to type a passphrase. Mounted by repo.ts. -->
+                    <div id="repo-update-ssh-action" style="display:none;"></div>
                     <button class="btn btn-primary" id="btn-apply-repo-update" disabled data-i18n="repo.update.apply">Apply changes</button>
                 </div>
             </div>

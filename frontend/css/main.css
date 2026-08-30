@@ -18404,64 +18404,15 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* ── Server Repo → publish over SSH ──────────────────────────────────────────
    Tokens only, no literal colours: this panel sits inside the Host tab and has to
    follow every theme, including the light ones. */
-.repo-ssh-card {
-    margin-top: 14px;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--bmm-bg-elevated);
-}
-.repo-ssh-head {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 13px; font-weight: 700; color: var(--text-primary);
-    margin-bottom: 4px;
-}
-.repo-ssh-badge {
-    margin-left: auto; font-size: 10px; font-weight: 700;
-    padding: 2px 8px; border-radius: 999px;
-    border: 1px solid var(--border); color: var(--text-muted);
-}
-.repo-ssh-badge[data-tone="ok"]   { color: var(--success); border-color: var(--success); }
-.repo-ssh-badge[data-tone="warn"] { color: var(--warning); border-color: var(--warning); }
-.repo-ssh-badge[data-tone="err"]  { color: var(--danger);  border-color: var(--danger); }
-.repo-ssh-desc, .repo-ssh-note {
-    font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 0 0 10px;
-}
-.repo-ssh-note { margin: 8px 0 0; }
-/* Four columns so host+port and user+folder pair up naturally; the fields declare
-   their own span. Collapses to one column when the panel is narrow. */
-.repo-ssh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; }
-.repo-ssh-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.repo-ssh-field > span { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
-.repo-ssh-keyrow { display: flex; gap: 6px; align-items: center; }
-.repo-ssh-keyrow > .form-input { flex: 1; min-width: 0; }
-.repo-ssh-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-/* The diagnosis block. Left rule + tone colour, like a callout, because it is one:
-   it appears only when something needs explaining and must not read as chrome. */
-.repo-ssh-why {
-    margin-top: 10px; padding: 8px 10px;
-    font-size: 11px; line-height: 1.6; color: var(--text-secondary);
-    background: var(--bmm-s03); border: 1px solid var(--border);
-    border-left: 3px solid var(--border); border-radius: 8px;
-    /* The message is built from two sentences joined by a newline. */
-    white-space: pre-line;
-    /* A server path or a chown line must not push the card wide. */
-    overflow-wrap: anywhere;
-}
-.repo-ssh-why[data-tone="err"]  { border-left-color: var(--danger); }
-.repo-ssh-why[data-tone="warn"] { border-left-color: var(--warning); }
-.repo-ssh-why[data-tone="ok"]   { border-left-color: var(--success); }
-/* The ring chooser shares the key row, and must not shrink to its chevron the way the
-   catalogue one did — same floor, same reason. */
-#repo-ssh-key-ring { flex: 1 1 160px; min-width: 140px; }
-.repo-ssh-progress { margin-top: 10px; }
-.repo-ssh-bar { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.repo-ssh-bar-fill { height: 100%; width: 0; background: var(--bmm-accent, var(--accent)); transition: width .15s linear; }
-.repo-ssh-progress-text { font-size: 10px; color: var(--text-muted); margin-top: 5px; font-family: var(--font-mono); }
-@media (max-width: 720px) {
-    .repo-ssh-grid { grid-template-columns: 1fr; }
-    .repo-ssh-field { grid-column: span 1 !important; }
-}
+/* Les styles du formulaire SSH vivaient ici : carte, en-tete, grille, puces, barre de
+   progression, navigateur distant. Le formulaire est parti dans ssh-servers.ts (un ecran
+   qui s'ouvre par-dessus, donc joignable depuis une boite de dialogue) et le bouton dans
+   ssh-action.ts, dont les styles sont plus bas sous .ssh-action. Une regle qui ne cible
+   plus rien se lit comme si elle faisait quelque chose.
+
+   Ce qui reste de .repo-ssh-* plus bas (auth, browser) ne cible plus rien non plus. Ce sont
+   des CLASSES : check-css-targets ne verifie que les #id, donc rien ne le dira. Elles
+   partiront avec la prochaine passe sur cette feuille. */
 
 /* An author that resolves to a BetterCommunity profile. Only decorated when a link was
    actually found, so the affordance never promises something that does not exist. */
@@ -20583,3 +20534,79 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* Stop ends a RUN; the × closes the panel. They were one control doing one thing under two
    names, so the destructive one is now the one that looks destructive. */
 .dbg-danger:not(:disabled):hover { color: var(--bmm-danger, #ef4444); border-color: color-mix(in srgb, var(--bmm-danger, #ef4444) 45%, transparent); }
+
+/* ── The SSH publish/fetch panel, wherever it is mounted ────────────────────
+   One layout for every card that offers it: repo export, manifest, update, catalogue. A
+   panel that looked different on each would read as four features rather than one. */
+.ssh-action {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.02));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ssh-action-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+.ssh-action-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.ssh-action-row { display: flex; align-items: flex-end; gap: 8px; }
+.ssh-action-row .ssh-action-cell { flex: 1; min-width: 0; }
+.ssh-action-cell { display: flex; flex-direction: column; gap: 4px; }
+.ssh-action-cell > span:first-child {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+/* `min-width: 0` on the input: without it a long remote path makes the row wider than the
+   card and the Browse button leaves the panel. */
+.ssh-action-inline { display: flex; gap: 6px; align-items: center; }
+.ssh-action-inline > input { flex: 1; min-width: 0; }
+.ssh-action-hint { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+.ssh-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.ssh-action-status { font-size: 11px; color: var(--text-muted); }
+.ssh-action-status[data-tone="ok"] { color: var(--success); }
+.ssh-action-status[data-tone="err"] { color: var(--danger); }
+
+.ssh-action-browser {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.ssh-action-browser-path {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--text-muted);
+    word-break: break-all;
+}
+/* The list scrolls rather than growing: a server folder with two hundred entries would
+   otherwise push every button on the card off the screen. */
+.ssh-action-browser-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.ssh-action-browser-list > button { justify-content: flex-start; text-align: left; }
+.ssh-action-browser-foot { display: flex; gap: 6px; }
+
+@media (max-width: 640px) {
+    .ssh-action-row { flex-direction: column; align-items: stretch; }
+}

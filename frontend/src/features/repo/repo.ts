@@ -12,7 +12,8 @@ import { raiseAboveAll } from '../../ui/layer.js';
 
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
-import { initRepoSsh, explainSsh } from './repo-ssh.js';
+import { explainSsh } from './repo-ssh.js';
+import { mountSshAction } from './ssh-action.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
@@ -777,7 +778,19 @@ export function initRepo() {
 
     // Initialize Sub-Modules
     initRepoServer(elements);
-    initRepoSsh();
+    // Publier l'export. Le formulaire du serveur vivait dans cette carte ; il est
+    // maintenant dans ssh-servers.ts, atteignable depuis n'importe quel écran, et ce qui
+    // reste ici est la seule question que cette carte a le droit de poser : où va CE
+    // dossier. `confirm` parce que publier écrase ce que des gens sont en train de
+    // télécharger.
+    mountSshAction(document.getElementById('repo-ssh-mount'), {
+        mode: 'both',
+        confirm: true,
+        label: t('sshact.labelExport'),
+        source: {
+            dir: () => (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value?.trim() || '',
+        },
+    });
     // The shell first: the three features below bind their own open buttons and listen for
     // the tab event, and neither is useful until the rail exists.
     initServerModal();
@@ -2180,7 +2193,7 @@ export function initRepo() {
          * the mode switch had drifted into only ever hiding it.
          */
         const refreshPublishBtn = async () => {
-            const btn = document.getElementById('btn-repo-update-publish') as HTMLElement | null;
+            const btn = document.getElementById('repo-update-ssh-action') as HTMLElement | null;
             if (!btn) return;
             // No folder open yet: nothing to publish, and a button that errors is worse
             // than no button.
@@ -2315,41 +2328,26 @@ export function initRepo() {
         });
 
         // ── and back again ──────────────────────────────────────────────────
-        document.getElementById('btn-repo-update-publish')?.addEventListener('click', async () => {
-            if (!repoDir) return;
-            const m = await import('./repo-ssh.js');
-            const src = await import('./ssh-source.js');
-            const names = m.sshTargetNames();
-            if (!names.length) { toast(t('repo.sync.useSshNotSet'), 'warning', 7000); return; }
-            // Read here too. A fetch that used typed credentials and a publish that fell back
-            // to the stored target would put the edited repo on a DIFFERENT server from the
-            // one it came from, and report success for doing it.
-            const pubCreds = src.readSshSource('repo-update');
-            // Back to the target the address names, so a fetch and its publish cannot end up
-            // on two different servers.
-            const typedP = (document.getElementById('repo-update-url') as HTMLInputElement | null)?.value?.trim() || '';
-            const pTarget = (typedP && m.sshTargetName(typedP)) || names[0];
-            // Publishing overwrites what people are downloading right now. The confirm says
-            // WHAT changes rather than "are you sure".
-            const ok = await (window as any).confirmCustom?.(
-                t('repo.update.publishTitle'),
-                t('repo.update.publishMsg').replace('{name}', pTarget),
-                'warning',
-            ).catch(() => false);
-            if (!ok) return;
-            const btn = document.getElementById('btn-repo-update-publish') as HTMLButtonElement | null;
-            if (btn) btn.disabled = true;
-            try {
-                const n = pubCreds.ssh
-                    ? await m.publishWithTarget(repoDir, pubCreds.ssh, pubCreds.sshSecret)
-                    : await m.publishStoredTarget(repoDir, pTarget);
-                toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
-            } catch (e) {
-                toast(explainSsh(String(e)), 'error', 9000);
-            } finally {
-                if (btn) btn.disabled = false;
-            }
+        //
+        // The lone "Publish to the server" button lived here and chose its destination by
+        // guesswork: the profile the typed address named, or the first one in the object.
+        // It is the shared panel now — same folder, and it says where it is going.
+        mountSshAction(document.getElementById('repo-update-ssh-action'), {
+            mode: 'both',
+            confirm: true,
+            label: t('sshact.labelUpdate'),
+            source: {
+                dir: () => (document.getElementById('repo-update-path') as HTMLInputElement | null)?.value?.trim() || '',
+            },
+            // A pull rewrites the folder under the editor, so what is on screen has to be
+            // read again — the old button did this and losing it would leave a stale list.
+            onDone: (_n, dir) => {
+                if (dir !== 'down') return;
+                const folder = (document.getElementById('repo-update-path') as HTMLInputElement | null)?.value?.trim() || '';
+                if (folder) void loadRepoFolder(folder);
+            },
         });
+
 
         btnPick?.addEventListener('click', async () => {
             const folder = await pickFolder().catch(() => null);

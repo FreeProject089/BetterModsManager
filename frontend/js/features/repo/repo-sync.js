@@ -131,13 +131,11 @@ function initSyncKeyAndSshFields() {
         urlInput.value = sel.value === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${sel.value}`;
         urlInput.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    // CONFIGURE goes to the one real form rather than opening a second copy of it. A host,
-    // a port, a key and a folder edited in two places would drift, and the copy you edited
-    // would not be the one that connects.
+    // CONFIGURE opens the servers screen. It used to scroll to the form inside the export
+    // card — one real form, which was the right instinct and the wrong place: that card is
+    // on another screen, and from a dialog it is behind the overlay entirely.
     document.getElementById('btn-sync-ssh-config')?.addEventListener('click', () => {
-        const panel = document.getElementById('repo-ssh-card') || document.getElementById('repo-ssh-test')?.closest('.repo-card');
-        panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        document.getElementById('repo-ssh-host')?.focus();
+        void import('./ssh-servers.js').then((m) => m.openSshServers());
     });
     void refresh();
 }

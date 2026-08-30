@@ -487,6 +487,94 @@ async fn upload_tree<F: FnMut(SshProgress)>(
     Ok(bytes)
 }
 
+/// Publish ONE file.
+///
+/// `remote_name` is '/'-separated and relative to the target's remote folder — `repo.json`,
+/// or `sub/dir/catalog.json`. Its parent directories are created the same way an export
+/// creates them, because a destination that does not exist yet is the ordinary case the
+/// first time somebody publishes into a new folder.
+///
+/// Separate from `ssh_upload_repo` rather than a flag on it: that one walks a tree and
+/// deliberately writes `repo.json` LAST so a half-uploaded repo never advertises itself as
+/// complete. There is no such ordering to get right for one file, and folding the two would
+/// mean one function with two meanings for its arguments.
+#[tauri::command]
+pub async fn ssh_upload_file(
+    state: State<'_, AppState>,
+    target: SshTarget,
+    secret: Option<String>,
+    local_file: String,
+    remote_name: String,
+) -> Result<u64, String> {
+    let abs = PathBuf::from(&local_file);
+    if !abs.is_file() {
+        return Err(format!("repo.ssh.errLocalFile|{}", local_file));
+    }
+    // A path that climbs out of the remote folder is refused rather than normalised: the
+    // caller passes a name it built, and `..` in it is either a bug or an attempt.
+    let rel = remote_name.replace('\\', "/");
+    let rel = rel.trim_start_matches('/').to_string();
+    if rel.is_empty() || rel.split('/').any(|seg| seg == ".." || seg == ".") {
+        return Err(format!("repo.ssh.errRemoteName|{}", remote_name));
+    }
+
+    let conn = open_for_sync(&state, &target, secret.as_deref()).await?;
+    let remote = format!("{}/{}", conn.base, rel);
+
+    if let Some(parent) = rel.rfind('/').map(|i| &rel[..i]) {
+        let mut acc = conn.base.clone();
+        for seg in parent.split('/') {
+            acc.push('/');
+            acc.push_str(seg);
+            // Already-exists is not an error: the folder may well hold a previous publish.
+            let _ = conn.sftp.create_dir(&acc).await;
+        }
+    }
+
+    let data = std::fs::read(&abs).map_err(|e| format!("repo.ssh.errRead|{}", e))?;
+    let mut f = conn
+        .sftp
+        .create(&remote)
+        .await
+        .map_err(|e| format!("repo.ssh.errCreate|{}|{}", remote, e))?;
+    f.write_all(&data)
+        .await
+        .map_err(|e| format!("repo.ssh.errWrite|{}|{}", remote, e))?;
+    f.shutdown()
+        .await
+        .map_err(|e| format!("repo.ssh.errClose|{}|{}", remote, e))?;
+    Ok(data.len() as u64)
+}
+
+/// Fetch ONE file, to a local path.
+///
+/// The twin of the above, and the reason "get it from the server" can mean a single
+/// `repo.json` rather than the whole repo — which is what the update screens actually want
+/// when they are checking whether anything changed.
+#[tauri::command]
+pub async fn ssh_download_file(
+    state: State<'_, AppState>,
+    target: SshTarget,
+    secret: Option<String>,
+    remote_name: String,
+    local_file: String,
+) -> Result<u64, String> {
+    let rel = remote_name.replace('\\', "/");
+    let rel = rel.trim_start_matches('/').to_string();
+    if rel.is_empty() || rel.split('/').any(|seg| seg == ".." || seg == ".") {
+        return Err(format!("repo.ssh.errRemoteName|{}", remote_name));
+    }
+    let conn = open_for_sync(&state, &target, secret.as_deref()).await?;
+    let data = conn.read(&rel).await?;
+    let out = PathBuf::from(&local_file);
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("repo.ssh.errLocalDir|{}|{}", parent.display(), e))?;
+    }
+    std::fs::write(&out, &data).map_err(|e| format!("repo.ssh.errWriteLocal|{}|{}", local_file, e))?;
+    Ok(data.len() as u64)
+}
+
 // ── browsing, and syncing back down ──────────────────────────────────────────
 
 /// One entry in a remote directory listing.

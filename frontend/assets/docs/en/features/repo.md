@@ -136,7 +136,7 @@ choose.
 ### Reading an SSH machine instead
 
 Open **This repo is on an SSH machine** on the same screen and pick one of the servers you
-configured under *Publish over SSH*. Host, port, account and folder come from there — asking
+configured under *SSH servers*. Host, port, account and folder come from there — asking
 for them twice would be a second copy of the same facts, free to drift, and a fingerprint
 trusted in one place and unknown in the other.
 
@@ -220,47 +220,59 @@ walkthrough lives in the developer guide *Making your mod updatable*.
 
 ## Getting the folder onto the server (SSH/SFTP)
 
-Exporting writes a folder. **Publish over SSH**, on the same screen, is what puts that folder
-on the machine that serves it — no separate file-transfer program in between.
+Exporting writes a folder. Putting it on the machine that serves it is one panel, and it is
+the same panel everywhere that sentence makes sense — no separate file-transfer program in
+between, and no screen you have to visit first.
 
-The card opens with the route: **the exported folder → `user@host:/remote/dir`**, filled in
-from the fields as you type. That line is doing the job a numbered list used to: the form asks
-for a host before anything says a folder has to exist, and the two halves of "where does this
-go" were never next to each other — the source is configured on a different card, and the
-destination is a host and a remote directory four rows apart.
+There are two halves, and they used to be one card:
 
-So there is nothing to memorise. Generate the repo above, fill the server in here, and the
-line tells you what will move where before you press anything. Later uploads reuse what is
-saved.
+- **SSH servers** — the machines you own. Configured once, from anywhere: the button is on
+  every panel that publishes, and it opens over whatever you were looking at.
+- **The publish panel** — pick one of those servers, say where it lands, type the passphrase,
+  go.
 
-### The same button, wherever the folder is
+That split is the point. A server is not a property of an export: it is a machine, and you use
+it from the repo screen, from the manifest screen and from a catalogue. Configuring it inside
+"Generate a repository" meant publishing a catalogue began with visiting a page about
+something else.
 
-Publishing is offered on three screens now, all using the connection saved here:
+### Where the panel appears
 
-- **the SSH card itself**, under the export — re-publish an existing folder without
-  regenerating it;
-- **Manifest only**, once it has written a `repo.json` for mods you already host — putting
-  that file on the server is the next thing you do, and the only route used to be scrolling
-  back here and retyping the folder;
-- **Update a repo**, in both modes. It was hidden in local mode, on the grounds that it would
-  "offer to push a folder to a server nobody named". True before targets were saved; not true
-  after — a local working copy that gets published is the ordinary way to run a repo.
+Everywhere the sentence "publish this" or "fetch this" is true:
 
-All three ask the same confirmation, naming the target. Publishing overwrites what people are
-downloading right now, and an entry point that skipped the question would make one act
-careful on one screen and casual on another.
+| Screen | What it sends, without being told | Direction |
+|---|---|---|
+| **Generate a repository** | the exported folder | publish · fetch |
+| **Update a repo** | the folder you are editing | publish · fetch |
+| **Manifest only** | the `repo.json` it just wrote — the file, not the folder around it | publish |
+| **A catalogue you are building** | the file you saved | publish |
 
-!!! note "This screen is also what automations reuse"
+Each one already knows what it has, so there is nothing to retype. Where a card cannot know —
+a catalogue whose file you saved through a system dialog — the panel asks, rather than
+guessing.
 
-    What you save here is the connection the scheduled action **Publish repo over SSH** and
-    `POST /api/repo/publish-ssh` both use. Neither can name a host or a key of its own, on
-    purpose: a task or a caller able to name those could make BMM read a private key of its
-    choosing and ship a repo to a machine of its choosing.
+### What the panel asks
+
+| | |
+|---|---|
+| **Server** | One of your saved servers. The list updates while the card is open, so a server added from the same panel appears without navigating anywhere. |
+| **Destination** | The server's base folder, filled in. Changing it here applies **to this transfer only** — a one-off publish into a subfolder must not silently move where every other card publishes. **Browse…** walks the server's folders. |
+| **Passphrase or password** | Read at the moment of use and stored nowhere. A key without a passphrase leaves it empty. |
+
+Publishing asks for confirmation and **names the server**. It overwrites what people are
+downloading right now, and with several configured, *which one* is the question worth
+answering.
+
+!!! note "This is also what automations reuse"
+
+    What you save under **SSH servers** is the connection the scheduled action **Publish repo
+    over SSH** and `POST /api/repo/publish-ssh` both use. Neither can name a host or a key of
+    its own, on purpose: a task or a caller able to name those could make BMM read a private
+    key of its choosing and ship a repo to a machine of its choosing.
 
     Which means a key protected by a **passphrase cannot run unattended** — nothing about that
     passphrase is kept, so there would be nobody to ask. A scheduled publish against one fails
     with a message rather than hanging on a prompt no one will see.
-
 
 ### What you fill in
 

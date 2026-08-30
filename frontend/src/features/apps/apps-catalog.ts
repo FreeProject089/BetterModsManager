@@ -1363,6 +1363,11 @@ function renderCreate() {
               <button class="btn btn-ghost" id="cr-copy">${t('apps.create.copy')||'Copy JSON'}</button>
               <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
             </div>
+            <!-- Et sur un serveur. Publier un catalogue voulait dire l'enregistrer, ouvrir
+                 l'ecran des depots, y configurer un serveur, puis retrouver le fichier :
+                 SSH etait un transport reserve aux depots alors que c'est le meme geste.
+                 Le panneau est monte par initCatalogSsh(), plus bas. -->
+            <div id="cr-ssh-mount"></div>
           </div>
         </div>
       </div>
@@ -1470,6 +1475,19 @@ function renderCreate() {
     });
 
     document.getElementById('cr-bundle')?.addEventListener('click', () => { void publishBundle(); });
+    // Publier le catalogue sur un serveur SSH, depuis l'ecran ou on le fabrique.
+    //
+    // Le meme panneau que les depots : on choisit un serveur configure, on peut viser un
+    // autre dossier pour ce transfert-la, on tape la phrase de passe. `pick: 'file'` parce
+    // que cette carte ne sait pas encore ou le fichier a ete enregistre — c'est la reponse
+    // honnete tant que « telecharger » ouvre une boite de dialogue systeme.
+    void import('../repo/ssh-action.js').then((m) => {
+        m.mountSshAction(document.getElementById('cr-ssh-mount'), {
+            mode: 'publish',
+            label: t('sshact.labelCatalog'),
+            source: { pick: 'file' },
+        });
+    });
 
     document.getElementById('cr-app-close')?.addEventListener('click', () => {
         document.getElementById('cr-app-modal')!.classList.remove('open');
