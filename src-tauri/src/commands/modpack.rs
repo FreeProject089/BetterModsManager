@@ -340,9 +340,17 @@ pub async fn check_modpack_integrity(
 
         if let Some(local_mod) = found_mod {
             let mut is_corrupted = false;
-            
+
+            // An archived mod is a .zip ON DISK — its files live INSIDE the archive, not at
+            // `mod_folder_path/<relative>`. Joining onto the folder path gave `…/thing.zip/tex/a.dds`,
+            // which exists nowhere, so every archived mod in a pack was flagged corrupt (issues1.0
+            // "Modpacks contenant des archives"). `mod_read_root` returns the extracted view for an
+            // archive (and the folder unchanged for a regular mod), the same resolution every other
+            // reader here already uses.
+            let read_root = crate::archive::mod_read_root(&local_mod.mod_folder_path);
+
             for file_ref in &mref.file_manifest {
-                let local_file_path = local_mod.mod_folder_path.join(&file_ref.relative_path);
+                let local_file_path = read_root.join(&file_ref.relative_path);
                 if !local_file_path.exists() {
                     is_corrupted = true;
                     break;

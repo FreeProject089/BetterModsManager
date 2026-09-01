@@ -722,8 +722,17 @@ pub fn repo_modpacks_apply(
 #[tauri::command]
 pub fn repo_modpacks_read(repo_dir: String) -> Result<Vec<crate::models::repo::RepoModpackShare>, String> {
     let manifest_path = std::path::PathBuf::from(&repo_dir).join("repo.json");
-    let raw = std::fs::read_to_string(&manifest_path)
-        .map_err(|_| "repo.extras.errNoManifest".to_string())?;
+    // A repo with no repo.json yet simply has no shared modpacks — that is not an error. The
+    // "Include in the repo" screen reads this only to pre-tick packs already published, so a
+    // missing manifest means "nothing published yet", exactly what an empty list says. Erroring
+    // here is what surfaced as `repo_modpacks_read: repo.extras.errNoManifest` when Including into
+    // a repo not yet generated (issues1.0). A file that EXISTS but cannot be read is still a real
+    // error; only NotFound is benign — the same stance read_local_repo takes on a missing manifest.
+    let raw = match std::fs::read_to_string(&manifest_path) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => return Err("repo.extras.errNoManifest".to_string()),
+    };
     let repo: crate::models::repo::ServerRepo =
         serde_json::from_str(&raw).map_err(|e| format!("repo.extras.errManifest|{}", e))?;
     Ok(repo.modpacks.unwrap_or_default())
