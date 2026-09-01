@@ -16282,6 +16282,21 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 .ipk-tab.active { color: var(--accent); border-color: var(--accent); background: var(--bmm-s02); }
 .ipk-tab-upload { color: var(--text-muted); }
 
+/* Responsive: on a narrow window the head (title + 5 tabs + close) no longer fits one row.
+   Title + close stay on top, the tabs drop to their own full-width strip that scrolls
+   sideways instead of overflowing, and the search bar + grid tighten. */
+@media (max-width: 580px) {
+    .ipk-modal { width: 96vw; padding: 14px 14px 12px; gap: 10px; }
+    .ipk-head { flex-wrap: wrap; row-gap: 10px; }
+    .ipk-title { order: 1; }
+    .ipk-close { order: 2; margin-left: auto; }
+    .ipk-tabs { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 3px; scrollbar-width: thin; }
+    .ipk-tab { flex-shrink: 0; }
+    .ipk-searchwrap { height: 44px; }
+    .ipk-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+    .ipk-foot { flex-wrap: wrap; gap: 8px 12px; }
+}
+
 /* The door to the icon library: a real button with a face, not an ellipsis tile.
    It used to be one "…" cell that turned into whatever icon was picked, which erased the
    button — once something was chosen, nothing said "there are more icons here" any more. */

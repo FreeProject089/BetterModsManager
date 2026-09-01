@@ -80,10 +80,23 @@ export function iconColourOf(ref: string): string | null {
     return splitRef(ref).colour;
 }
 
+// ── Our own marks ──────────────────────────────────────────────────────────
+// The Better* project logos + the Tasky mascot, as a built-in picker source ("Ours"). Full-
+// colour bundled PNGs, referenced app:<key> and rendered as <img>. So a nav item / tag / profile
+// can wear a BMM / BetterCommunity / Tasky logo without hunting for a file to upload.
+const OUR_ICONS: Record<string, { src: string; label: string }> = {
+    'app:bmm':   { src: 'assets/BMm.png',   label: 'BetterModsManager' },
+    'app:bc':    { src: 'assets/BC.webp',   label: 'BetterCommunity' },
+    'app:bi':    { src: 'assets/bi.png',    label: 'BetterInstaller' },
+    'app:bd':    { src: 'assets/bd.png',    label: 'BetterDiscord' },
+    'app:tasky': { src: 'assets/Tasky.png', label: 'Tasky' },
+    'app:tasky-happy': { src: 'assets/Tasky_Happy.png', label: 'Tasky (happy)' },
+};
+
 /** Is this string an icon-pack ref this module can render? */
 export function isPackIcon(ref: unknown): ref is string {
     return typeof ref === 'string'
-        && (ref.startsWith('lucide:') || ref.startsWith('si:') || ref.startsWith('data:image/'));
+        && (ref.startsWith('lucide:') || ref.startsWith('si:') || ref.startsWith('data:image/') || ref.startsWith('app:'));
 }
 
 /** Ensure the pack a ref needs is in memory (no-op for data: URIs). */
@@ -136,6 +149,11 @@ export function renderPackIcon(ref: string, size = 16, color?: string): string {
     }
     if (ref.startsWith('data:image/')) {
         return `<img src="${escAttr(ref)}" alt="" style="width:${size}px;height:${size}px;border-radius:3px;object-fit:cover" />`;
+    }
+    if (ref.startsWith('app:')) {
+        const our = OUR_ICONS[ref];
+        if (!our) return '';
+        return `<img src="${escAttr(our.src)}" alt="" style="width:${size}px;height:${size}px;object-fit:contain" />`;
     }
     if (ref.startsWith('lucide:')) {
         const node = _lucide?.[ref.slice(7)];
@@ -271,6 +289,7 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
                 <div class="ipk-head">
                     <h3 class="ipk-title">${t('iconpack.title') || 'Choose an icon'}</h3>
                     <div class="ipk-tabs">
+                        <button class="ipk-tab" data-src="ours">${t('iconpack.ours') || 'Better*'}</button>
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
                         <button class="ipk-tab" data-src="mine">${t('iconpack.mine') || 'Yours'}</button>
@@ -313,7 +332,7 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
         const search = overlay.querySelector('#ipk-search') as HTMLInputElement;
         const countEl = overlay.querySelector('#ipk-count') as HTMLElement;
         const moreBtn = overlay.querySelector('#ipk-more') as HTMLElement;
-        let src: 'lucide' | 'si' | 'mine' = 'lucide';
+        let src: 'lucide' | 'si' | 'mine' | 'ours' = 'lucide';
         let shown = PAGE;
 
         const done = (ref: string | null) => { overlay.remove(); resolve(ref); };
@@ -321,6 +340,11 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
         overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) done(null); });
 
         const names = (): string[] => {
+            if (src === 'ours') {
+                const q = search.value.trim().toLowerCase();
+                const keys = Object.keys(OUR_ICONS);
+                return q ? keys.filter((k) => (k.slice(4) + ' ' + OUR_ICONS[k].label).toLowerCase().includes(q)) : keys;
+            }
             if (src === 'mine') {
                 const q = search.value.trim().toLowerCase();
                 const mine = savedIcons();
@@ -342,6 +366,12 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
         };
 
         const cellHtml = (n: string): string => {
+            if (src === 'ours') {
+                // `n` is the app:<key> ref. Colour never applies to a full-colour logo.
+                const our = OUR_ICONS[n];
+                return `<button type="button" class="ipk-cell ipk-cell-mine" data-ref="${escAttr(n)}" title="${escAttr(our.label)}">`
+                    + `${renderPackIcon(n, 22)}<span class="ipk-name">${escHtml(our.label)}</span></button>`;
+            }
             if (src === 'mine') {
                 // `n` IS the data URL — a saved icon has no pack prefix, because what the
                 // caller stores is the image itself. Colour does not apply: tinting somebody
@@ -377,7 +407,7 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
         const syncColourUi = () => {
             tint.disabled = !tintOn.checked;
             (overlay.querySelector('#ipk-auto-wrap') as HTMLElement).style.display = src === 'si' ? '' : 'none';
-            (overlay.querySelector('.ipk-colour') as HTMLElement).style.display = src === 'mine' ? 'none' : '';
+            (overlay.querySelector('.ipk-colour') as HTMLElement).style.display = (src === 'mine' || src === 'ours') ? 'none' : '';
             if (src === 'si' && autoBox.checked) { tintOn.checked = false; tint.disabled = true; }
             render();
         };
@@ -397,8 +427,8 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
             }
             const cell = (e.target as HTMLElement).closest('.ipk-cell') as HTMLElement | null;
             if (!cell?.dataset.ref) return;
-            // A saved icon is already a complete answer; only pack refs take a colour.
-            done(src === 'mine' ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
+            // A saved/our icon is already a complete answer; only tintable pack refs take a colour.
+            done((src === 'mine' || src === 'ours') ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
         });
         // Append the new page instead of re-rendering everything: a full rebuild
         // made each successive click slower (quadratic over 15 pages of brands).
@@ -443,7 +473,8 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
             reader.readAsDataURL(file);
         });
 
-        if (opts.current?.startsWith('si:')) { src = 'si'; overlay.querySelectorAll('.ipk-tab').forEach(x => x.classList.toggle('active', (x as HTMLElement).dataset.src === 'si')); }
+        const initSrc = opts.current?.startsWith('si:') ? 'si' : opts.current?.startsWith('app:') ? 'ours' : null;
+        if (initSrc) { src = initSrc; overlay.querySelectorAll('.ipk-tab').forEach(x => x.classList.toggle('active', (x as HTMLElement).dataset.src === initSrc)); }
         void _loadLucide().then(() => (src === 'si' ? _loadSimpleAll() : Promise.resolve())).then(() => { syncColourUi(); search.focus(); });
     });
 }
