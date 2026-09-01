@@ -6010,6 +6010,7 @@
   "watcher.fullMode": "Mode complet (sans masquer noms de mods / profils / chemins)",
   "watcher.rustLog": "Inclure les logs Rust (backend)",
   "watcher.jsLog": "Inclure les logs JS (console)",
+  "watcher.limitsHelp": "Les enregistrements sont nettoyés automatiquement : <b>Garder les derniers</b> = combien de sessions récentes conserver, et <b>Total max</b> plafonne l'espace disque utilisé — les plus anciens sont supprimés en premier dès qu'une des deux limites est dépassée. Mettez Total max à 0 pour ne pas limiter la taille.",
   "watcher.export": "Exporter la session",
   "watcher.import": "Importer & rejouer",
   "watcher.viewerTitle": "Lecture de session",
