@@ -16,7 +16,7 @@
 // is the part most likely to be wrong in a way that only shows up as "the results feel off",
 // which is exactly the kind of thing that needs measuring rather than eyeballing.
 
-export type HitKind = 'command' | 'mod' | 'profile' | 'doc' | 'theme' | 'plugin' | 'setting' | 'app';
+export type HitKind = 'command' | 'mod' | 'profile' | 'doc' | 'theme' | 'plugin' | 'setting' | 'app' | 'element';
 
 export interface SearchHit {
   id: string;

@@ -156,6 +156,7 @@ const KIND_LABEL: Record<HitKind, L> = {
   profile: { en: 'Profile', fr: 'Profil' }, doc: { en: 'Doc', fr: 'Doc' },
   theme: { en: 'Theme', fr: 'Thème' }, plugin: { en: 'Plugin', fr: 'Plugin' },
   setting: { en: 'Setting', fr: 'Réglage' }, app: { en: 'App', fr: 'App' },
+  element: { en: 'On this page', fr: 'Sur la page' },
 };
 const CAT_LABEL: Record<Command['category'], L> = {
   nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
@@ -459,6 +460,63 @@ registerSearchProvider('profiles', async (q): Promise<SearchHit[]> => {
   } catch { return []; }
 });
 
+// ── In-page element search ──────────────────────────────────────────────────
+// "Search elements INSIDE the current page." The palette already finds commands, mods, docs…;
+// this finds the actual controls on the view you're looking at — a specific setting row, a
+// button, a section heading, a mod in the list — and jumps to it. It is the precise "where is
+// that thing on this screen" search, so a dense view (Settings, the mod library, Server-Repo)
+// is navigable by name instead of by scrolling.
+function flashElement(el: HTMLElement): void {
+  try {
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('cp-flash');
+    setTimeout(() => el.classList.remove('cp-flash'), 1400);
+    // Focus if it can take focus, so keyboard users land ON it, not just near it.
+    const focusable = el.matches('a,button,input,select,textarea,summary,[tabindex]');
+    if (focusable) setTimeout(() => { try { (el as HTMLElement).focus({ preventScroll: true }); } catch { /* ignore */ } }, 260);
+  } catch { /* a detached node — nothing to do */ }
+}
+registerSearchProvider('page', (q: string): SearchHit[] => {
+  if (!q || q.trim().length < 1 || typeof document === 'undefined') return [];
+  // The active view (BMM toggles `.view.active`); fall back to the app root, never the whole doc.
+  const root = (document.querySelector('.view.active') as HTMLElement)
+    || (document.getElementById('app') as HTMLElement) || document.body;
+  if (!root) return [];
+  const SEL = 'h1,h2,h3,h4,h5,.card-title,.section-title,.setting-title,[data-setting],'
+    + 'button,a[href],[role="button"],.nav-item,summary,legend,label,th,'
+    + '[data-searchable],[data-mod-id],[data-name],[data-tab]';
+  const hits: SearchHit[] = [];
+  const seen = new Set<string>();
+  let n = 0;
+  for (const node of Array.from(root.querySelectorAll(SEL))) {
+    if (n > 400) break; // a hard scan cap so a giant list can't stall a keystroke
+    n++;
+    const el = node as HTMLElement;
+    // Skip the aria-hidden measuring copies (e.g. ActionBar's hidden button clones), and
+    // anything not currently laid out (display:none / collapsed) — you can't jump to it.
+    if (el.closest('[aria-hidden="true"]')) continue;
+    if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
+    const label = (el.getAttribute('aria-label') || el.getAttribute('data-name')
+      || el.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!label || label.length < 2 || label.length > 90) continue;
+    const key = `${el.tagName}:${label.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const isHeading = /^H[1-5]$/.test(el.tagName) || el.classList.contains('card-title') || el.classList.contains('section-title');
+    hits.push({
+      id: `page:${n}:${key}`,
+      kind: 'element' as HitKind,
+      title: label,
+      sub: tr(isHeading ? { en: 'Section', fr: 'Section' } : { en: 'On this page', fr: 'Sur la page' }),
+      // Slightly below real commands so "Settings" the command still beats a "Settings" label,
+      // but comfortably present so the on-page control is one keystroke away.
+      boost: 0.8,
+      run: () => flashElement(el),
+    });
+  }
+  return hits;
+});
+
 export function refreshNavCommands() {
   for (const id of [..._cmds.keys()]) if (id.startsWith('nav.')) _cmds.delete(id);
   const seen = new Set<string>();
@@ -687,6 +745,13 @@ function ensurePaletteStyles() {
     background:transparent;color:var(--bmm-text-muted,#7c8698);font-size:13px;}
   .sk-reset:hover,.sk-clear:hover{color:var(--bmm-text-primary,#e6edf3);border-color:var(--bmm-border-hover,#3a4556);}
   .sk-hint{font-size:11.5px;color:var(--bmm-text-muted,#7c8698);margin-top:4px;line-height:1.5;}
+  /* Flash a page element the palette jumped to (in-page 'element' hits). Global, not scoped to
+     the overlay — the target lives out on the page. */
+  .cp-flash{animation:cp-flash-kf 1.4s ease-out;border-radius:8px;}
+  @keyframes cp-flash-kf{
+    0%,100%{box-shadow:0 0 0 0 transparent;background-color:transparent;}
+    12%{box-shadow:0 0 0 3px var(--bmm-accent,#3b82f6),0 0 0 7px var(--bmm-accent-glow,rgba(59,130,246,.28));background-color:var(--bmm-accent-glow,rgba(59,130,246,.12));}
+  }
   `;
   document.head.appendChild(s);
 }
