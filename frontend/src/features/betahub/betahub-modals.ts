@@ -554,7 +554,7 @@ async function renderCrashReports(): Promise<void> {
     const list = document.getElementById('bh-bug-report-list');
     if (!list) return;
 
-    list.innerHTML = `<div class="bh-state bh-state-loading">${t('common.loading')}</div>`;
+    list.innerHTML = `<div aria-busy="true">${new Array(5).fill('<div class="skeleton skeleton-card" style="height:56px;margin-bottom:8px" aria-hidden="true"></div>').join('')}</div>`;
 
     try {
         let reports = await invoke('list_crash_reports') as any[];
