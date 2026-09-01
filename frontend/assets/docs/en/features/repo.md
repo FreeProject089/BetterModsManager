@@ -274,6 +274,22 @@ answering.
     passphrase is kept, so there would be nobody to ask. A scheduled publish against one fails
     with a message rather than hanging on a prompt no one will see.
 
+### Credentials can travel with the repo
+
+The export card carries the same **"Include credentials for protected sources"** fold as the
+`.MM` export, and it means the same thing: download passwords for the hosts this repo's mods
+actually point at, and identity keys, sealed with a passphrase into a block inside
+`repo.json`.
+
+Only that block is encrypted, never the manifest — a repo nobody can read is a repo nobody
+can check. It is sealed **before** the repo is signed, so the signature still verifies, and
+it is carried forward when you re-export without touching the fold, exactly like modpacks
+and extras. Sealing with the fold open but nothing ticked is how you remove it.
+
+Who this is for: a private repo whose mods live behind a password. Without the block, the
+person you hand the repo to gets addresses that answer 401 and no way to know why before
+trying.
+
 ### What you fill in
 
 | Field | Notes |

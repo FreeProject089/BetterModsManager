@@ -713,3 +713,68 @@ that asks, and a name already on your ring is skipped rather than overwritten.
 - The **"allow any origin" CORS warning** says what it actually exposes. It claimed any site
   could read your API responses — false for the seventy routes behind the token. Two routes
   answer without one, and one of them returns your active profile's name and game.
+
+---
+
+## [1.0 cycle — late August] SSH grows up, and a repository can carry its keys
+
+### Publishing over SSH, split into its two halves
+- **SSH servers** is its own screen now, opened as a dialog from every panel that publishes —
+  it used to be a form inside "Generate Repository", which meant publishing a catalogue began
+  with visiting a page about something else, and from a dialog the "Configure" button
+  scrolled to a card sitting *behind* the overlay.
+- **The publish/fetch panel** is one component mounted in four places: the export folder,
+  the repo being updated, the manifest card (which sends the **file** `repo.json`, not the
+  folder around it) and the catalogue builders. Server, per-transfer destination override,
+  passphrase read at the moment of use and stored nowhere.
+- **A real remote folder browser**, shared by the publish panel and the servers dialog: a
+  clickable breadcrumb, folders and **files with sizes** (a folder full of the repo you are
+  looking for no longer reads as empty), a fixed-height pane, and it opens **above** the
+  dialog that opened it — the first version took the plain overlay z-index and appeared
+  underneath, buttons unreachable.
+- **"Update Server Repo" untangled.** The top row was a folder, a Browse, an address and a
+  fetch button side by side — two about this disk, two about a server, nothing saying which.
+  Two labelled blocks now, and the duplicate "From the server" button is gone: the shared
+  panel at the foot of the dialog already did the same transfer while *showing* its
+  destination instead of guessing one.
+
+### Credentials travel with what you publish
+- A **repository can carry sealed credentials** for the protected sources its mods point at —
+  the same encrypted block a `.mm` list has carried, from the same module, sealed **before**
+  the manifest is signed (sealing after would produce a repo whose signature matches nothing,
+  refused by every client with nothing pointing at why).
+- Carried forward on re-export like extras and modpacks; asking for none clears it.
+- Fixed on the way: the host list under "include download passwords" read `s.url` where the
+  field is `repo_url`, so a private repo attached as a fallback never appeared in the
+  sentence **and its password was silently dropped** — the recipient was refused by precisely
+  the source there had been a password for.
+
+### Plugins say where their mods come from
+- **"12 mods required" is a button.** It opens the same present/active/missing list Compare
+  shows — it was dead text one row above the answer.
+- A plugin's mod list can name a **fallback repo** for the whole list and a **direct URL per
+  mod** (the per-mod address wins; it was written for that mod). Offered, never attached: a
+  plugin that could add a repo by being installed would be a plugin deciding where your mods
+  come from.
+- **Update sources can be marked protected** — the primary and each fallback. BMM still
+  discovers protection by being refused; the mark travels with a shared list or repo so the
+  *recipient* learns it before the 401 does.
+
+### The export button, and the gate that now guards it
+- Pressing **"Generate the repository" threw a `TypeError` before reaching Rust** —
+  `modpacksShareConfig` was deliberately `null` (the comment above it says why) and a
+  leftover `.length` read it. `@ts-nocheck` on line 1 meant tsc never looked; the two other
+  callers pass `null` and work, so nothing compared.
+- New CI gate `check-null-deref.mjs`: a `const x = null` later asked for a property throws
+  unconditionally — const-only on purpose, because the `let` version flagged twenty-five
+  correct state variables. Planted the exact bug and watched it go red. (And the gate itself
+  first landed in `build` instead of `ci` — two chains share the sub-script and a text
+  replace hit the first; caught because npm prints the command it resolved.)
+
+### The two markdowns call a truce
+- The site's custom markdown is named **B.MD**, and the app's `md-lite` learned its
+  `++Ctrl+K++` keycaps while the docs pipeline learned `:kbd[…]` — ten pages drew keycaps on
+  the website and printed plus-signs in the app, or vice versa, with both renderers green.
+- **A plugin's bundled README went into `innerHTML` raw.** With `withGlobalTauri` on, that is
+  third-party HTML with every Tauri command in reach. Untrusted documentation is sanitised
+  and **fails closed** (no sanitiser → escaped text, never markup).

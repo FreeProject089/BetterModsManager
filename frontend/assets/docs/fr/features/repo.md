@@ -273,6 +273,23 @@ Publier demande confirmation et **nomme le serveur**. Ca ecrase ce que des gens 
 de telecharger, et avec plusieurs serveurs configures, *lequel* est la question qui merite une
 reponse.
 
+### Les identifiants peuvent voyager avec le dépôt
+
+La carte d'export porte le même repli **« Inclure les identifiants des sources protégées »**
+que l'export `.MM`, et il veut dire la même chose : les mots de passe de téléchargement des
+hôtes que les mods de ce dépôt visent réellement, et les clés d'identité, scellés par phrase
+de passe dans un bloc de `repo.json`.
+
+Seul ce bloc est chiffré, jamais le manifeste — un dépôt que personne ne peut lire est un
+dépôt que personne ne peut vérifier. Il est scellé **avant** la signature du dépôt, donc la
+signature reste valable, et il est reconduit quand tu ré-exportes sans toucher le repli,
+exactement comme les modpacks et les extras. Sceller avec le repli ouvert mais rien de coché
+est la façon de le retirer.
+
+À qui ça sert : un dépôt privé dont les mods vivent derrière un mot de passe. Sans le bloc,
+la personne à qui tu donnes le dépôt reçoit des adresses qui répondent 401, sans moyen de
+savoir pourquoi avant d'essayer.
+
 ### Ce que tu renseignes
 
 | Champ | Remarques |

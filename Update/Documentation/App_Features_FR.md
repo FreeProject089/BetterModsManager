@@ -1070,3 +1070,48 @@ leur propre question et un avertissement direct, et un nom déjà sur ton trouss
 plutôt qu'écrasé : importer une liste ne peut pas remplacer la clé avec laquelle tu signes.
 
 Détail complet : **Guides → Catalogs and Repos → Phrases secrètes et clés d'identité**.
+
+
+---
+
+## Publier par SSH — les deux moitiés
+
+**Serveurs SSH** et **le panneau de publication** ne formaient qu'une carte dans « Générer un
+dépôt ». Ce sont deux choses maintenant, parce qu'un serveur n'est pas une propriété d'un
+export : c'est une machine, utilisée depuis l'écran des dépôts, celui du manifeste et les
+catalogues.
+
+| Où | Ce qu'il envoie sans qu'on lui dise | Sens |
+| :--- | :--- | :--- |
+| Générer un dépôt | le dossier exporté | publier · récupérer |
+| Mettre à jour un dépôt | le dossier en cours d'édition | publier · récupérer |
+| Manifeste seul | le `repo.json` écrit — le fichier, pas le dossier | publier |
+| Un catalogue en cours | le fichier enregistré | publier |
+
+Chaque panneau propose la même chose : un serveur de votre liste, une destination préremplie
+avec le dossier de base (la changer ne vaut que pour **ce transfert**), une phrase de passe
+lue au moment de servir et conservée nulle part, et **Parcourir…** — un vrai navigateur de
+dossiers distants, fil d'Ariane cliquable, dossiers *et fichiers avec leur taille*, ouvert
+au-dessus de ce qui l'a ouvert. L'écran des serveurs a le même navigateur sur son champ
+**dossier de base** : le seul chemin fixé pour de bon n'est plus celui qu'il fallait
+connaître par cœur.
+
+**Les identifiants peuvent voyager avec un dépôt.** Le repli « Inclure les identifiants des
+sources protégées » de l'export `.mm` est aussi sur le générateur : mots de passe des hôtes
+que ce dépôt vise réellement, et clés d'identité, scellés par phrase de passe dans un bloc de
+`repo.json` — le manifeste reste lisible, pas les secrets. Ré-exporter après avoir changé un
+mod les conserve, exactement comme les modpacks et les extras.
+
+## Plugins : la liste de mods répond à ses propres questions
+
+Le compte **« N mods requis »** d'une carte de plugin est un bouton ; il ouvre la répartition
+présent / inactif / manquant que Comparer affiche. Quand quelque chose *manque*, la liste
+peut dire où le trouver : un plugin peut déclarer un **dépôt de secours** pour l'ensemble et
+une **URL de téléchargement par mod** — « L'obtenir » à côté de chaque entrée manquante, et
+« L'ouvrir dans Dépôts serveur » pour le dépôt. BMM n'ajoute jamais une source de lui-même ;
+le plugin propose, vous décidez.
+
+**Les sources protégées sont étiquetées.** Une source de mise à jour — principale ou de
+secours — peut être marquée comme demandant un mot de passe ou une clé. La marque ne change
+rien sur votre machine (BMM demande déjà quand il est refusé) ; elle voyage avec une liste ou
+un dépôt partagé, pour que le destinataire le sache avant le premier 401 et non grâce à lui.

@@ -6,7 +6,7 @@ Ce document fournit une analyse complète de l'architecture logicielle, des mote
 
 ## 1. Vue d'ensemble de l'architecture
 
-BMM est construit sur le **framework Tauri v1**, une stack de bureau privilégiant Rust qui fournit une interface utilisateur basée sur WebView avec un backend Rust haute performance.
+BMM est construit sur le **framework Tauri v2**, une stack de bureau privilégiant Rust qui fournit une interface utilisateur basée sur WebView avec un backend Rust haute performance.
 
 | Couche | Technologie | Responsabilité |
 | :--- | :--- | :--- |
@@ -1245,3 +1245,41 @@ cryptographie est correcte. Elle se teste en nommant ce que détient l'attaquant
 demandant ce que ça lui coûte. Ici l'attaquant détient le fichier — la question n'a jamais
 été « est-ce qu'AES-GCM est solide », mais « qu'est-ce qu'on lit en l'ouvrant dans un éditeur
 de texte ». Cette question prend dix secondes et c'est celle qui aurait attrapé les trois.
+
+
+---
+
+## Delta — le cycle de fin août, et les décisions derrière
+
+**Sceller avant de signer.** Le bloc d'identifiants scellés d'un dépôt est écrit dans le
+manifeste *avant* le calcul de la signature Ed25519. L'ordre inverse produit un dépôt dont la
+signature ne correspond à rien — refusé par chaque client, pour une fonctionnalité que
+personne ne penserait à accuser. Le scellement vit dans un seul module (`commands/creds.rs`),
+partagé avec l'export `.mm` : deux implémentations d'une règle sur des secrets, c'est une
+implémentation qui aura une version de retard.
+
+**Ce qui s'ouvre depuis un dialogue doit demander où est le dessus.** `.modal-overlay` est à
+z-index 5000 ; les dialogues ouverts via `raiseAboveAll` atterrissent au-dessus de 11000. Le
+navigateur de dossiers distants prenait la classe nue et apparaissait *derrière* le dialogue
+qui l'ouvrait — visible seulement comme un assombrissement, boutons inatteignables. Il
+appelle `raiseAboveAll` lui-même, et capture Échap pour que le fermer ne ferme pas le
+dialogue dessous.
+
+**`check-null-deref.mjs`, et pourquoi const seulement.** Le bug livré était
+`const x = null; … x.length` dans un fichier `@ts-nocheck` — levée inconditionnelle,
+invisible pour tsc, invisible pour le contrôle des noms (le nom existe), avec deux appelants
+voisins *fonctionnels* en comparaison. Un `const` lié à un `null` nu ne peut rien contenir
+d'autre : l'accès de propriété qui suit est une preuve, pas une heuristique. Le premier jet
+acceptait aussi `let` et signalait vingt-cinq variables d'état correctes — un contrôle juste
+une fois sur vingt-six est un contrôle qu'on apprend à survoler.
+
+**Un point d'entrée par comportement.** Le compare des plugins, le tap et l'effet de
+transition appelaient chacun `setFracture` directement ; une seconde réaction ajoutée à côté
+aurait été appliquée par un appelant et pas les autres. La même règle a conduit le panneau
+SSH (un composant, quatre montages) et le repli d'identifiants (un module, deux éditeurs) :
+là où une règle est écrite deux fois, les copies divergent — ce dépôt a rencontré ce motif
+assez souvent pour en faire une contrainte de conception, pas une préférence.
+
+**Corrigé dans le corps :** le tableau d'architecture disait Tauri v1 ; l'application est
+sur **Tauri v2** depuis la migration de juin (`com.bettermm.desktop`, IPC à capacités, tray
+et updater v2).

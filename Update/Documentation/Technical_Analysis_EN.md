@@ -6,7 +6,7 @@ This document provides a comprehensive analysis of the software architecture, in
 
 ## 1. Architecture Overview
 
-BMM is built on the **Tauri v1 Framework**, a Rust-first desktop stack that provides a WebView-based UI with a high-performance Rust backend.
+BMM is built on the **Tauri v2 Framework**, a Rust-first desktop stack that provides a WebView-based UI with a high-performance Rust backend.
 
 | Layer | Technology | Responsibility |
 | :--- | :--- | :--- |
@@ -1286,3 +1286,40 @@ is tested by naming what an attacker holds and asking what it costs them. Here t
 holds the file — so the question was never "is AES-GCM sound", it was "what can be read by
 opening this in a text editor". That question takes ten seconds and it is the one that would
 have caught all three.
+
+
+---
+
+## Delta — the late-August cycle, and the decisions behind it
+
+**Seal before sign.** A repository's sealed-credentials block is written into the manifest
+*before* the Ed25519 signature is computed. The other order produces a repo whose signature
+matches nothing — refused by every client, over a feature nobody would think to blame. The
+sealing itself lives in one module (`commands/creds.rs`), shared with the `.mm` export:
+two implementations of a rule about secrets is one implementation that will be a version
+behind.
+
+**Anything opened from a dialog must ask where the top is.** `.modal-overlay` is z-index
+5000; dialogs opened through `raiseAboveAll` land above 11000. The remote folder browser
+took the plain class and appeared *behind* the dialog that opened it — visible only as a
+dimming, buttons unreachable. It now calls `raiseAboveAll` itself, and captures Escape so
+closing it cannot close the dialog underneath.
+
+**`check-null-deref.mjs`, and why it is const-only.** The shipped bug was
+`const x = null; … x.length` in a `@ts-nocheck` file — unconditionally throwing, invisible
+to tsc, invisible to the undefined-names check (the name exists), and with two *working*
+sibling call sites to compare against. A `const` bound to a bare `null` can never hold
+anything else, so a later property access is a proof, not a heuristic. The first draft also
+accepted `let` and reported twenty-five module-level state variables, every one correct —
+a check right once in twenty-six is a check people learn to skim.
+
+**One entry point per behaviour.** The plugin compare, the tap path and the page-transition
+flourish each called `setFracture` directly; adding a second reaction beside it would have
+been applied by one caller and not the others. The same rule drove the SSH panel (one
+component, four mounts) and the credentials fold (one module, two publishers): where a rule
+is written twice, the copies diverge — this codebase has caught that pattern often enough
+that it is now a design constraint, not a preference.
+
+**Corrected in place:** the architecture table said Tauri v1; the app has been on **Tauri
+v2** since the June migration (`com.bettermm.desktop`, capability-scoped IPC, the v2 tray
+and updater APIs).

@@ -743,3 +743,70 @@ est ignoré, jamais écrasé.
   affirmait que n'importe quel site pouvait lire vos réponses d'API — faux pour les
   soixante-dix routes derrière le jeton. Deux routes répondent sans jeton, et l'une d'elles
   renvoie le nom et le jeu de votre profil actif.
+
+---
+
+## [cycle 1.0 — fin août] Le SSH devient adulte, et un dépôt peut porter ses clés
+
+### « Publier par SSH », séparé en ses deux moitiés
+- **Serveurs SSH** est son propre écran, ouvert en dialogue depuis chaque panneau qui publie —
+  c'était un formulaire dans « Générer un dépôt », donc publier un catalogue commençait par
+  une page qui parlait d'autre chose, et depuis un dialogue le bouton « Configurer » faisait
+  défiler vers une carte située *derrière* la surface.
+- **Le panneau publier/récupérer** est un composant monté à quatre endroits : le dossier
+  d'export, le dépôt en cours de mise à jour, la carte du manifeste (qui envoie le **fichier**
+  `repo.json`, pas le dossier autour) et les catalogues. Serveur, destination modifiable pour
+  ce transfert seulement, phrase de passe lue au moment de servir et conservée nulle part.
+- **Un vrai navigateur de dossiers distants**, partagé : fil d'Ariane cliquable, dossiers et
+  **fichiers avec leur taille** (un dossier plein du dépôt cherché ne se lit plus « vide »),
+  hauteur fixe, et il s'ouvre **au-dessus** du dialogue qui l'a ouvert — la première version
+  prenait le z-index de base et passait dessous, boutons inatteignables.
+- **« Mettre à jour un dépôt » démêlé.** La rangée du haut alignait un dossier, un Parcourir,
+  une adresse et un bouton de récupération — deux parlant du disque, deux du serveur, rien
+  pour dire lequel. Deux blocs titrés maintenant, et le doublon « Depuis le serveur » est
+  parti : le panneau partagé en bas faisait le même transfert en *montrant* sa destination
+  au lieu d'en deviner une.
+
+### Les identifiants voyagent avec ce qu'on publie
+- Un **dépôt peut porter des identifiants scellés** pour les sources protégées que ses mods
+  visent — le même bloc chiffré qu'une liste `.mm`, du même module, scellé **avant** la
+  signature du manifeste (après, le dépôt aurait une signature qui ne correspond à rien,
+  refusé par chaque client sans que rien ne désigne la cause).
+- Reconduits au ré-export comme les extras et les modpacks ; n'en demander aucun les efface.
+- Corrigé au passage : la liste d'hôtes sous « inclure les mots de passe » lisait `s.url` là
+  où le champ s'appelle `repo_url` — un dépôt privé en source de secours n'apparaissait pas
+  dans la phrase **et son mot de passe était retiré en silence** : le destinataire se faisait
+  refuser exactement par la source pour laquelle il y avait un mot de passe.
+
+### Les plugins disent d'où viennent leurs mods
+- **« 12 mods requis » est un bouton.** Il ouvre la liste présent/actif/manquant que Comparer
+  affiche — c'était du texte mort une ligne au-dessus de la réponse.
+- La liste d'un plugin peut nommer un **dépôt de secours** pour l'ensemble et une **URL
+  directe par mod** (l'adresse par mod gagne : elle a été écrite pour lui). Proposé, jamais
+  attaché : un plugin qui ajouterait un dépôt en s'installant déciderait d'où viennent vos
+  mods.
+- **Les sources de mise à jour peuvent être marquées protégées** — la principale et chaque
+  secours. BMM découvre toujours la protection en se faisant refuser ; la marque voyage avec
+  une liste ou un dépôt partagé pour que le *destinataire* l'apprenne avant le 401.
+
+### Le bouton d'export, et le garde-fou qui le surveille
+- Presser **« Générer le dépôt » levait une `TypeError` avant d'atteindre Rust** —
+  `modpacksShareConfig` était volontairement `null` (le commentaire au-dessus dit pourquoi)
+  et un `.length` résiduel le lisait. `@ts-nocheck` en ligne 1 : tsc n'a jamais regardé ; les
+  deux autres appelants passent `null` et marchent, donc rien ne comparait.
+- Nouveau gate CI `check-null-deref.mjs` : un `const x = null` interrogé ensuite sur une
+  propriété lève toujours — `const` seulement, exprès, parce que la version `let` signalait
+  vingt-cinq variables d'état correctes. Bug replanté, gate rouge, vérifié. (Et le gate
+  lui-même a d'abord atterri dans `build` au lieu de `ci` — deux chaînes partagent le
+  sous-script et un remplacement de texte a touché la première ; attrapé parce que npm
+  imprime la commande qu'il résout.)
+
+### Les deux markdown font la paix
+- Le markdown du site s'appelle **B.MD**, et `md-lite` de l'app a appris ses touches
+  `++Ctrl+K++` pendant que la chaîne de docs apprenait `:kbd[…]` — dix pages dessinaient des
+  touches sur le site et imprimaient des signes plus dans l'app, ou l'inverse, les deux
+  moteurs au vert.
+- **Le README embarqué d'un plugin partait brut dans `innerHTML`.** Avec `withGlobalTauri`
+  actif, c'est du HTML tiers avec toutes les commandes Tauri à portée. La documentation non
+  fiable est assainie et **échoue fermé** (pas d'assainisseur → texte échappé, jamais du
+  balisage).

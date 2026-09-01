@@ -1147,3 +1147,46 @@ and a blunt warning, and a name already on your ring is skipped rather than over
 importing a list cannot replace the key you sign with.
 
 Full detail: **Guides → Catalogs and Repos → Passphrases and identity keys**.
+
+
+---
+
+## Publishing over SSH — the two halves
+
+**SSH servers** and **the publish panel** used to be one card inside "Generate Repository".
+They are two things now, because a server is not a property of an export: it is a machine,
+used from the repo screen, the manifest screen and the catalogues alike.
+
+| Where | What it sends without being told | Directions |
+| :--- | :--- | :--- |
+| Generate a repository | the exported folder | publish · fetch |
+| Update a repo | the folder being edited | publish · fetch |
+| Manifest only | the `repo.json` it wrote — the file, not the folder | publish |
+| A catalogue you are building | the file you saved | publish |
+
+Every panel offers the same things: a server from your saved list, a destination prefilled
+with the server's base folder (changing it applies to **this transfer only**), a passphrase
+field read at the moment of use and stored nowhere, and **Browse…** — a real remote folder
+browser with a clickable breadcrumb, folders *and files with sizes*, that opens above
+whatever opened it. The servers dialog has the same browser on its **base folder** field, so
+the one path you set for good is no longer the one you had to know by heart.
+
+**Credentials can travel with a repository.** The "Include credentials for protected
+sources" fold from the `.mm` export is on the repo generator too: download passwords for the
+hosts this repo actually points at, and identity keys, sealed with a passphrase into a block
+inside `repo.json` — the manifest stays readable, the secrets do not. Re-exporting after
+changing a mod keeps them, exactly like modpacks and extras.
+
+## Plugins: the mod list answers its own questions
+
+The **"N mods required"** count on a plugin card is a button; it opens the same
+present / inactive / missing breakdown that Compare shows. When something *is* missing, the
+list can now say where to get it: a plugin may declare a **fallback repo** for the whole
+list and a **direct download URL per mod** — shown as "Get it" beside each missing entry and
+as an "open it in Server repos" offer for the repo. BMM never adds a source by itself; the
+plugin suggests, you decide.
+
+**Protected sources are labelled.** An update source — primary or fallback — can be marked
+as asking for a password or a key. The mark changes nothing on your machine (BMM already
+asks when refused); it travels with a shared list or repo, so whoever receives it knows
+before the first 401 instead of from it.
