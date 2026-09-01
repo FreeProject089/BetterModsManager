@@ -47,6 +47,21 @@ export interface TutorialStep {
   action?: TutorialStepAction;
   /** If true, the user can skip this step without completing the action */
   optional?: boolean;
+  /** How this step hands off to the next — the author's choice between the two modes the
+   *  hub offers:
+   *   - 'interact' : the user must complete `action` before the Next button unlocks (this is
+   *                  the default whenever a step has an `action`, so stating it is documentation).
+   *   - 'next'     : a plain Next button that is always available. On a step that also has an
+   *                  `action`, this keeps tracking the interaction (it still marks complete when
+   *                  done) but does NOT force it — the reader may just continue. This is what an
+   *                  `optional` action step wants.
+   *  A step with no `action` is always 'next'. */
+  advance?: 'next' | 'interact';
+  /** Where Next goes, overriding the linear next step — the "jump to a specific step" choice.
+   *  Either a step id in THIS part, or `{ part, step }` to jump into another part. Lets a
+   *  tutorial branch instead of always walking straight through. Unknown targets fall back to
+   *  the linear next, so a typo can never strand the reader. */
+  goto?: string | { part?: string; step: string };
 }
 
 export interface TutorialPart {

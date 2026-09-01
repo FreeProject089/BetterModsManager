@@ -757,7 +757,7 @@ function _renderStep(): void {
                 </div>
                 <div style="display:flex;align-items:center;gap:8px">
                     <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${t('tut.skip.title')}">${t('tut.skip')}</button>
-                    <button class="tut-next-btn" id="btn-tut-next" ${step.action ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
+                    <button class="tut-next-btn" id="btn-tut-next" ${(step.action && step.advance !== 'next') ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
                 </div>
             </div>
         </div>
@@ -1009,9 +1009,29 @@ function _nextStep(): void {
     _advanceStep(step);
 }
 
+/** Resolve a step's `goto` target to concrete part/step indices, or null if it names a
+ *  step that does not exist (caller then falls back to the linear next, so a bad target
+ *  can never strand the reader). A bare string is a step id in the current part. */
+function _resolveGoto(goto: string | { part?: string; step: string }): { pIdx: number; sIdx: number } | null {
+    const stepId = typeof goto === 'string' ? goto : goto.step;
+    const partId = typeof goto === 'string' ? undefined : goto.part;
+    const pIdx = partId ? _tutorial!.parts.findIndex(p => p.id === partId) : _partIndex;
+    if (pIdx < 0) return null;
+    const sIdx = _tutorial!.parts[pIdx].steps.findIndex(s => s.id === stepId);
+    if (sIdx < 0) return null;
+    return { pIdx, sIdx };
+}
+
 function _advanceStep(step: TutorialStep): void {
     if (!step.action) markStepComplete(_tutorial!.id, _currentPart().id, step.id);
     _cleanup();
+
+    // An explicit jump wins over the linear order — the "go to a specific step" choice.
+    if (step.goto) {
+        const j = _resolveGoto(step.goto);
+        if (j) { _partIndex = j.pIdx; _stepIndex = j.sIdx; _renderStep(); return; }
+        // Unknown target: fall through to the linear next rather than getting stuck.
+    }
 
     if (_stepIndex < _totalSteps() - 1)                { _stepIndex++; }
     else if (_partIndex < _tutorial!.parts.length - 1) { _partIndex++; _stepIndex = 0; }

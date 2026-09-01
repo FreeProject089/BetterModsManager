@@ -95,6 +95,11 @@ const BASICS = {
                         { sel: 'btn-confirm-profile', key: 'tut.basics.profiles.f.create' },
                     ],
                     action: { event: BMM_ACTIONS.PROFILE_CREATED, desc_key: 'tut.basics.profiles.s2.action' },
+                    // Creating the first profile is the point of this part, so the reader must
+                    // actually do it — Next stays locked until PROFILE_CREATED fires. (This is
+                    // the "require interaction" advance mode, stated for clarity; a step with an
+                    // action defaults to it.)
+                    advance: 'interact',
                 },
                 {
                     id: 'edit',
@@ -105,6 +110,10 @@ const BASICS = {
                     selector: 'btn-edit-profile',
                     modal_selector: 'btn-confirm-edit-profile',
                     optional: true,
+                    // Editing is optional, so Next is available straight away — the reader may
+                    // customise now or move on. The PROFILE_EDITED action is still tracked if
+                    // they do it. (This is the "plain Next" advance mode.)
+                    advance: 'next',
                     // Same fields as creation — edit/customise any of them anytime.
                     modal_fields: [
                         { sel: 'edit-prof-name', key: 'tut.basics.profiles.f.name' },
@@ -168,6 +177,9 @@ const BASICS = {
                     selector: 'btn-add-mod',
                     modal_selector: 'btn-confirm-add-mod',
                     optional: true,
+                    // Adding a mod by hand is optional here — Next stays available so the reader
+                    // can skip straight on, while MOD_ADDED is still tracked if they try it.
+                    advance: 'next',
                     modal_fields: [
                         { sel: 'mod-name', key: 'tut.basics.scan.f.name' },
                         { sel: 'mod-folder', key: 'tut.basics.scan.f.folder' },
