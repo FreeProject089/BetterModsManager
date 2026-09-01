@@ -858,8 +858,8 @@ async function renderCatalog(container: HTMLElement) {
             ${sourceAccessHtml('plug')}
             <div id="plug-sources-list" class="plug-sources-list"></div>
         </div>
-        <div id="plug-catalog-grid" class="plug-grid">
-            <div class="plug-loading">${t('common.loading')}</div>
+        <div id="plug-catalog-grid" class="plug-grid" aria-busy="true">
+            ${new Array(6).fill('<div class="plug-sk-card" aria-hidden="true"><div class="skeleton plug-sk-cover"></div><div class="plug-sk-body"><div class="skeleton skeleton-line sk-lg"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line sk-sm"></div></div></div>').join('')}
         </div>`;
 
     container.querySelector('#plug-refresh-catalog')?.addEventListener('click', async () => {

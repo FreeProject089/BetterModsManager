@@ -4416,6 +4416,10 @@ select.input-field option {
     padding: 4px 0;
 }
 .apps-skeleton-grid .skeleton-card { height: 132px; margin: 0; }
+/* Plugins catalogue: skeleton cards sit in the real .plug-grid while loading. */
+.plug-sk-card { border: 1px solid var(--bmm-s07); border-radius: 14px; overflow: hidden; background: var(--bmm-s02); }
+.plug-sk-cover { height: 96px; border-radius: 0; }
+.plug-sk-body { padding: 12px 14px 14px; }
 
 .tut-card-progress-label {
     font-size: 10px;
