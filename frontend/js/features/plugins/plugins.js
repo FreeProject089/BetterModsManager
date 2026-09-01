@@ -1495,12 +1495,50 @@ function renderSourcesList(container) {
         });
     });
 }
-function renderCatalogGrid(plugins) {
+function renderCatalogGrid(plugins, query = '') {
     const grid = document.getElementById('plug-catalog-grid');
     if (!grid)
         return;
+    grid.removeAttribute('aria-busy');
     if (!plugins.length) {
-        grid.innerHTML = `<div class="plug-empty"><p>${t('plugins.catalogEmpty')}</p></div>`;
+        const q = query.trim();
+        if (q) {
+            // A live search matched nothing — this is not an empty catalogue, it's a
+            // dead end the user can back out of. Say what missed and offer the one
+            // action that helps: clear the box.
+            grid.innerHTML = `
+                <div class="plug-empty">
+                    <div class="plug-empty-icon">${IC.search}</div>
+                    <p class="plug-empty-title">${escHtml(t('plugins.catalogNoMatchTitle') || 'No plugins match your search')}</p>
+                    <p class="plug-empty-sub">“${escHtml(q)}”</p>
+                    <button class="btn btn-secondary" id="plug-empty-clear">${IC.x} ${escHtml(t('plugins.clearSearch') || 'Clear search')}</button>
+                </div>`;
+            grid.querySelector('#plug-empty-clear')?.addEventListener('click', () => {
+                const inp = document.getElementById('plug-catalog-search');
+                if (inp)
+                    inp.value = '';
+                renderCatalogGrid(_catalog?.plugins || []);
+                inp?.focus();
+            });
+            return;
+        }
+        // The catalogue really is empty: no built-in entries and no community sources
+        // followed yet. Instead of a dead sentence, point at the three ways to fill it.
+        grid.innerHTML = `
+            <div class="plug-empty">
+                <div class="plug-empty-icon">${IC.globe}</div>
+                <p class="plug-empty-title">${escHtml(t('plugins.catalogEmptyTitle') || 'No plugins here yet')}</p>
+                <p class="plug-empty-sub">${escHtml(t('plugins.catalogEmptyDesc') || 'Follow a community catalog, import a plugin file, or check back after a refresh.')}</p>
+                <div class="plug-empty-actions">
+                    <button class="btn btn-accent" id="plug-empty-sources">${IC.globe} ${escHtml(t('plugins.communityCatalogs') || 'Community catalogs')}</button>
+                    <button class="btn btn-secondary" id="plug-empty-import">${IC.upload} ${escHtml(t('plugins.importFile'))}</button>
+                    <button class="btn btn-ghost" id="plug-empty-refresh">${IC.refresh} ${escHtml(t('plugins.refresh'))}</button>
+                </div>
+            </div>`;
+        // Reuse the toolbar buttons already wired in renderCatalog — no duplicate logic.
+        grid.querySelector('#plug-empty-sources')?.addEventListener('click', () => document.getElementById('plug-toggle-sources')?.click());
+        grid.querySelector('#plug-empty-import')?.addEventListener('click', () => document.getElementById('plug-import-file-cat')?.click());
+        grid.querySelector('#plug-empty-refresh')?.addEventListener('click', () => document.getElementById('plug-refresh-catalog')?.click());
         return;
     }
     grid.innerHTML = '';
@@ -1527,7 +1565,7 @@ function filterCatalogGrid(query) {
         (p.description || '').toLowerCase().includes(q) ||
         (p.game || '').toLowerCase().includes(q) ||
         (p.author || '').toLowerCase().includes(q));
-    renderCatalogGrid(filtered);
+    renderCatalogGrid(filtered, query);
 }
 // ── Overlay utility ────────────────────────────────────────────────────────
 function createOverlay(html) {

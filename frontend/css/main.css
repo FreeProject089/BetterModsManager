@@ -12669,7 +12669,36 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     align-items: center;
     gap: 16px;
 }
-.plug-empty-icon { font-size: 48px; }
+.plug-empty-icon {
+    font-size: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--bmm-s04, rgba(127, 127, 127, 0.10));
+    color: var(--text-secondary);
+}
+.plug-empty-icon svg { width: 32px; height: 32px; }
+.plug-empty-title {
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--text-primary);
+    margin: 0;
+}
+.plug-empty-sub {
+    margin: -6px 0 0;
+    max-width: 44ch;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+.plug-empty-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
 .plug-error { color: var(--danger); padding: 20px; }
 .plug-loading { padding: 40px; text-align: center; color: var(--text-secondary); }
 
