@@ -20,6 +20,15 @@ import { invoke } from './api.js';
  * fail (checking whether a catalog exists at a guessed URL) should not shout in the console.
  */
 export async function fetchSourceText(url: string, quiet = false): Promise<string> {
+    // A LOCAL file — a `file://` URL or an absolute filesystem path from the file picker — is read
+    // from disk through the hardened `read_file_text` command. This is why importing a catalog
+    // "via File" works: it used to fall through to `fetch_remote_json`, which accepts only http(s),
+    // so a picked path was rejected. Handling it HERE fixes it once for every catalog type that
+    // reaches this single reader (app / plugin / theme / preset / index), consistently. Zip-shaped
+    // mod lists take their own import path (`import_modlist`) and never arrive here.
+    const local = localPathOf(url);
+    if (local !== null) return await invoke('read_file_text', { path: local }) as string;
+
     // Loaded lazily: this module sits in core/ and the SSH panel is a repo feature. A static
     // import would drag the panel into the boot path of anything that reads a catalog.
     const m = await import('../features/repo/repo-ssh.js');
@@ -98,6 +107,24 @@ async function fetchHttp(url: string, quiet: boolean): Promise<string> {
         _sessionPasswords[key] = pw;
         return await invoke('fetch_remote_json', { url, password: pw }, { quiet }) as string;
     }
+}
+
+/**
+ * A local filesystem path for this source, or null if it is a remote (http/https/ssh) URL.
+ *
+ * Recognises a `file://` URL (mapped back to a path, incl. the Windows `/C:/…` form) and bare
+ * absolute paths as a file picker returns them: a Windows drive (`C:\…`), a UNC share (`\\…`),
+ * or a POSIX absolute path (`/…`, but not the protocol-relative `//host`). Anything with an
+ * http(s)/ssh scheme is remote and returns null so it keeps its existing transport.
+ */
+function localPathOf(u: string): string | null {
+    if (/^file:\/\//i.test(u)) {
+        try { return decodeURIComponent(new URL(u).pathname).replace(/^\/([a-zA-Z]:)/, '$1'); } catch { return null; }
+    }
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) return null; // http(s)://, ssh://, any scheme → remote
+    if (/^[a-zA-Z]:[\\/]/.test(u) || /^\\\\/.test(u)) return u; // Windows drive or UNC
+    if (u.startsWith('/') && !u.startsWith('//')) return u;     // POSIX absolute (not protocol-relative)
+    return null;
 }
 
 /** True when this source is read over SSH rather than HTTP. */
