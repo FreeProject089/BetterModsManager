@@ -10885,86 +10885,90 @@ body.tasky-hidden #app-mascot-container {
     box-shadow: 0 0 6px var(--accent);
 }
 
-/* Repo Cards */
+/* Repo Cards — restrained, modern: one neutral surface, a single 3px colour rail on the
+   left edge + a tinted circular step badge (no full-colour gradient headers), a soft lift on
+   hover. The old cards stacked a coloured top-border + a gradient-tinted header + a coloured
+   square badge per card, which read as busy across six cards of four colours. */
 .repo-card {
+    position: relative;
     background: var(--bmm-s02);
     border: 1px solid var(--bmm-s07);
-    border-radius: 14px;
+    border-radius: 16px;
     overflow: hidden;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+/* The accent rail — the only place a card's colour lives now. */
+.repo-card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--bmm-s08);
+    opacity: 0.55;
+    transition: opacity 0.2s ease;
 }
 .repo-card:hover {
-    border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.13);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+    border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.16);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.28);
+    transform: translateY(-2px);
 }
+.repo-card:hover::before { opacity: 1; }
 .repo-card-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--bmm-s06);
+    gap: 11px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--bmm-s05);
+    background: none;
 }
 .repo-card-header h3 {
     margin: 0;
-    font-size: 13px;
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
     font-weight: 700;
     display: flex;
     align-items: center;
-    gap: 7px;
-    flex: 1;
-    line-height: 1;
+    gap: 8px;
+    line-height: 1.15;
     border: none;
     padding: 0;
     text-transform: none;
     letter-spacing: normal;
     opacity: 1;
-    color: inherit;
+    color: var(--text-primary);
 }
 .repo-card-step {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     letter-spacing: 0;
+    background: var(--bmm-s06);
+    color: var(--text-secondary);
+    border: 1px solid var(--bmm-s08);
 }
 .repo-card-body {
-    padding: 18px;
+    padding: 20px;
 }
 
-/* Color variants */
-.repo-card--cyan { border-top: 2px solid var(--cyan); }
-.repo-card--cyan .repo-card-header {
-    background: linear-gradient(135deg, rgba(0,194,255,0.07) 0%, transparent 60%);
-}
-.repo-card--cyan .repo-card-header h3 { color: var(--cyan); }
-.repo-card--cyan .repo-card-step {
-    background: rgba(0,194,255,0.15);
-    color: var(--cyan);
-}
+/* Variants: just the rail colour + a tinted badge. The header stays neutral. */
+.repo-card--cyan::before { background: var(--cyan); opacity: 0.9; }
+.repo-card--cyan .repo-card-step { background: rgba(0,194,255,0.14); color: var(--cyan); border-color: rgba(0,194,255,0.3); }
 
-.repo-card--green { border-top: 2px solid #2ecc71; }
-.repo-card--green .repo-card-header {
-    background: linear-gradient(135deg, rgba(46,204,113,0.07) 0%, transparent 60%);
-}
-.repo-card--green .repo-card-header h3 { color: var(--success); }
-.repo-card--green .repo-card-step {
-    background: rgba(46,204,113,0.15);
-    color: var(--success);
-}
+.repo-card--green::before { background: #2ecc71; opacity: 0.9; }
+.repo-card--green .repo-card-step { background: rgba(46,204,113,0.14); color: var(--success); border-color: rgba(46,204,113,0.3); }
 
-.repo-card--accent { border-top: 2px solid var(--accent); }
-.repo-card--accent .repo-card-header {
-    background: linear-gradient(135deg, rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.07) 0%, transparent 60%);
-}
-.repo-card--accent .repo-card-header h3 { color: var(--accent); }
+.repo-card--accent::before { background: var(--accent); opacity: 0.9; }
+.repo-card--accent .repo-card-step { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.14); color: var(--accent); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3); }
 
-.repo-card--optional { border-top: 2px solid rgba(138,152,173,0.4); }
-.repo-card--optional .repo-card-header { background: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.015); }
+.repo-card--optional { background: color-mix(in srgb, var(--bmm-s02) 90%, transparent); }
+.repo-card--optional::before { background: var(--bmm-s08); opacity: 0.45; }
 .repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
 
 /* Repo status bar */
