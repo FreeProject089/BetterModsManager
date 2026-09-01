@@ -141,6 +141,16 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 18px;
 }
+/* Loading skeleton — a card-shaped placeholder that sits in the same grid as the real cards
+   (cover block + title + excerpt lines). Uses the shared .skeleton primitive from main.css. */
+.community-sk-card {
+  border: 1px solid var(--bmm-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bmm-s02);
+}
+.community-sk-cover { height: 128px; border-radius: 0; }
+.community-sk-body { padding: 14px 14px 16px; }
 .community-card {
   display: flex;
   flex-direction: column;

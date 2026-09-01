@@ -210,7 +210,16 @@ function render(): void {
 
   let bodyHtml: string;
   if (_loading) {
-    bodyHtml = `<div class="community-empty"><div class="community-spinner"></div><p>${escHtml(t('community.loading') || 'Loading…')}</p></div>`;
+    // A skeleton grid mirroring the real cards (cover + title + excerpt) instead of a lone
+    // spinner — it shows the shape of what's loading, so the list doesn't pop in from blank.
+    const skCard = '<div class="community-sk-card" aria-hidden="true">'
+      + '<div class="skeleton community-sk-cover"></div>'
+      + '<div class="community-sk-body">'
+      + '<div class="skeleton skeleton-line sk-lg"></div>'
+      + '<div class="skeleton skeleton-line"></div>'
+      + '<div class="skeleton skeleton-line sk-sm"></div>'
+      + '</div></div>';
+    bodyHtml = `<div class="community-grid" aria-busy="true">${new Array(6).fill(skCard).join('')}</div>`;
   } else if (_posts === null) {
     // Two different situations, two different sentences: no network at all is the
     // reader's situation; network fine but BCWEB down (or 404ing) is ours. Telling
