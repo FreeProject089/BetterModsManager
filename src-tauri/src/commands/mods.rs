@@ -1347,6 +1347,43 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     // Log history
     log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled", None);
+
+    // A1 — cascade disable. Enabling a mod pulls in its dependency chain (see enable_mod); disabling
+    // it must let go of that chain too, or the deps it dragged in stay active forever. We recompute
+    // what the REMAINING active mods still require, then disable this mod's dependencies that nothing
+    // else needs. A dep shared with a different still-enabled mod is in `required` and stays — that is
+    // the whole point of the fix. Recursion carries it down the chain: each disabled dep, in turn,
+    // releases its own now-orphaned deps.
+    let orphans: Vec<String> = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        match data.active_profile_id.clone().and_then(|apid| data.profiles.iter().find(|p| p.id == apid).cloned()) {
+            Some(ap) => {
+                // This mod's DIRECT same-profile dependencies (cross-profile deps are informational
+                // only — enable_mod never activates them, so disable must not chase them either).
+                let direct: Vec<String> = data.mods.iter().find(|m| m.id == mod_id)
+                    .map(|m| m.dependencies.iter().filter_map(|d| {
+                        let (cross, id) = parse_dep_ref(d);
+                        if cross.is_some() { None } else { Some(id) }
+                    }).collect())
+                    .unwrap_or_default();
+                // Everything the still-active set requires (each active mod + its transitive deps).
+                let mut required: Vec<String> = Vec::new();
+                for mid2 in &ap.active_mods {
+                    let (mut resolved, mut unresolved, mut missing) = (Vec::new(), Vec::new(), Vec::new());
+                    let _ = resolve_dependencies(mid2, &data.mods, &mut resolved, &mut unresolved, &mut missing);
+                    for r in resolved { if !required.contains(&r) { required.push(r); } }
+                }
+                // An orphan = a dependency still active but no longer required by anything.
+                direct.into_iter().filter(|d| ap.active_mods.contains(d) && !required.contains(d)).collect()
+            }
+            None => Vec::new(),
+        }
+    };
+    for dep in orphans {
+        if crate::fs_utils::is_mod_op_cancelled() { break; }
+        log_line(format!("[MOD] Cascade: disabling '{}' — pulled in by '{}' and no longer required by any active mod", dep, mod_id));
+        Box::pin(disable_mod(window.clone(), state.clone(), dep)).await?;
+    }
     Ok(())
 }
 
