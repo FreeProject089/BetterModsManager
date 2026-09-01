@@ -2818,7 +2818,7 @@ pub async fn open_active_game_folder(state: State<'_, AppState>) -> Result<(), S
     if game_path.exists() {
         open_folder(game_path.to_string_lossy().to_string())
     } else {
-        Err("Dossier du jeu introuvable".to_string())
+        Err("Dossier de destination introuvable".to_string())
     }
 }
 

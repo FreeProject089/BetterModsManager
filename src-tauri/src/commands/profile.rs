@@ -63,7 +63,7 @@ pub fn create_profile(
 
     if !game_p.exists() {
         error!("Game path does not exist: {}", payload.game_path);
-        return Err(AppError::NotFound(format!("Le dossier du jeu n'existe pas : {}", payload.game_path)));
+        return Err(AppError::NotFound(format!("Le dossier de destination n'existe pas : {}", payload.game_path)));
     }
     if !mods_p.exists() {
         error!("Mods path does not exist: {}", payload.mods_path);
@@ -147,7 +147,7 @@ pub fn update_profile(
     
     if !game_p.exists() {
         error!("Game path does not exist: {}", payload.game_path);
-        return Err(AppError::NotFound(format!("Le dossier du jeu n'existe pas : {}", payload.game_path)));
+        return Err(AppError::NotFound(format!("Le dossier de destination n'existe pas : {}", payload.game_path)));
     }
     if !mods_p.exists() {
         error!("Mods path does not exist: {}", payload.mods_path);

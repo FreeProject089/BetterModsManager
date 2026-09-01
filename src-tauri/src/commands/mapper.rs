@@ -381,7 +381,7 @@ pub async fn open_game_item_in_explorer(
     };
 
     if !path.exists() {
-        return Err(AppError::NotFound("Chemin introuvable dans le dossier du jeu".to_string()));
+        return Err(AppError::NotFound("Chemin introuvable dans le dossier de destination".to_string()));
     }
 
     #[cfg(target_os = "windows")]
