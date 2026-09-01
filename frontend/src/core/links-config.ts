@@ -39,6 +39,14 @@ export interface BmmLinks {
     // talk to the domain that is down. Being in the registry is what makes them testable.
     preset_catalog:   string;
     catalog_index:    string;
+    // The remaining official catalogue kinds, in the registry like the others so a tunnelled or
+    // self-hosted BCWEB can serve them and none stays a hardcoded literal. Any of the *_catalog
+    // values (and catalog_index) may be a single URL OR an array of URLs — read them through
+    // `catalogSources()` to get the list. An empty string means "no default"; it degrades to the
+    // next source and is never fetched, so an unconfigured kind simply contributes nothing.
+    theme_catalog:      string | string[];
+    automation_catalog: string | string[];
+    tutorial_catalog:   string | string[];
     // Telemetry (opt-in). HTTPS PostHog-compatible capture endpoint + PUBLIC key.
     // `analytics_key` is a PUBLIC ingest key — it ships inside the app and only
     // permits submitting telemetry. The PRIVATE admin key (deletion approvals,
@@ -73,6 +81,11 @@ const DEFAULTS: BmmLinks = {
     apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
     preset_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET',
     catalog_index:    'https://bettercommunity.ch/api/catalogs.json',
+    // Same BCWEB feed as preset_catalog, one per remaining kind. These are the LAST-RESORT
+    // defaults — links.json / BCWEB override them, and may set any to an array of URLs.
+    theme_catalog:      'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=THEME',
+    automation_catalog: 'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=AUTOMATION',
+    tutorial_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=TUTORIAL',
     // Telemetry: production collector (MUST be HTTPS — BMM refuses plain HTTP, so the
     // old localhost dev default only worked in test builds). For LOCAL testing, override
     // via a hosted links.json or an HTTPS tunnel (ngrok/cloudflared) ending in "/batch/".
@@ -145,6 +158,19 @@ export async function loadLinks(): Promise<void> {
 /** Returns the cached links (call loadLinks() first at app startup). */
 export function getLinks(): Readonly<BmmLinks> {
     return _links;
+}
+
+/**
+ * The source URL(s) for one catalogue key, always as an array — a kind may be configured with a
+ * single URL (the common case) or a list of them (A3: "accepts a list per kind"). Empty strings
+ * are dropped, so a kind set to "" or [] contributes nothing and is never fetched. A loader that
+ * wants to merge several sources for a kind iterates this; the single-string readers elsewhere are
+ * unaffected, which is why the change is backward-compatible.
+ */
+export function catalogSources(key: keyof BmmLinks): string[] {
+    const v = (_links as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(v)) return v.filter((s): s is string => typeof s === 'string' && s.trim() !== '');
+    return typeof v === 'string' && v.trim() !== '' ? [v] : [];
 }
 
 // ── BetterCommunity base resolution (blog / community / account link) ──────────
