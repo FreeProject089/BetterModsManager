@@ -482,35 +482,54 @@ registerSearchProvider('page', (q: string): SearchHit[] => {
   const root = (document.querySelector('.view.active') as HTMLElement)
     || (document.getElementById('app') as HTMLElement) || document.body;
   if (!root) return [];
+  // Two families: STRUCTURED controls (headings, buttons, setting rows — jump to a thing), and
+  // CONTENT (paragraphs, list items, descriptions — jump to where the page SAYS something). The
+  // content family is what makes this "search the content of the page you're on", not just its
+  // controls.
   const SEL = 'h1,h2,h3,h4,h5,.card-title,.section-title,.setting-title,[data-setting],'
     + 'button,a[href],[role="button"],.nav-item,summary,legend,label,th,'
-    + '[data-searchable],[data-mod-id],[data-name],[data-tab]';
+    + '[data-searchable],[data-mod-id],[data-name],[data-tab],'
+    + 'p,li,td,dd,.setting-desc,.hint,.card-desc,.field-hint,.desc';
+  const CONTENT_TAG = new Set(['P', 'LI', 'TD', 'DD']);
   const hits: SearchHit[] = [];
   const seen = new Set<string>();
   let n = 0;
   for (const node of Array.from(root.querySelectorAll(SEL))) {
-    if (n > 400) break; // a hard scan cap so a giant list can't stall a keystroke
+    if (n > 600) break; // a hard scan cap so a giant list can't stall a keystroke
     n++;
     const el = node as HTMLElement;
     // Skip the aria-hidden measuring copies (e.g. ActionBar's hidden button clones), and
     // anything not currently laid out (display:none / collapsed) — you can't jump to it.
     if (el.closest('[aria-hidden="true"]')) continue;
     if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
-    const label = (el.getAttribute('aria-label') || el.getAttribute('data-name')
+    const isContent = CONTENT_TAG.has(el.tagName) || el.classList.contains('setting-desc')
+      || el.classList.contains('hint') || el.classList.contains('card-desc')
+      || el.classList.contains('field-hint') || el.classList.contains('desc');
+    // A content node that WRAPS a control (a <li> holding a button, a <p> with a link) is
+    // indexed through that control already — indexing the wrapper too would duplicate it and
+    // grab a blob of concatenated text. Let the leaf win.
+    if (isContent && el.querySelector('button,a[href],input,select,textarea,[role="button"]')) continue;
+    const raw = (el.getAttribute('aria-label') || el.getAttribute('data-name')
       || el.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!label || label.length < 2 || label.length > 90) continue;
-    const key = `${el.tagName}:${label.toLowerCase()}`;
+    // Skip empties and whole-container blobs (a paragraph over ~400 chars is a section, not a
+    // line to jump to — and it would be found via a heading anyway).
+    if (!raw || raw.length < 2 || raw.length > 400) continue;
+    const key = `${el.tagName}:${raw.slice(0, 60).toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    // Show a snippet, but MATCH the whole text: a query hits anywhere in a paragraph, and the
+    // full string rides in `keywords` (matched, not shown) when the title is truncated.
+    const title = raw.length > 80 ? `${raw.slice(0, 78).trimEnd()}…` : raw;
     const isHeading = /^H[1-5]$/.test(el.tagName) || el.classList.contains('card-title') || el.classList.contains('section-title');
     hits.push({
       id: `page:${n}:${key}`,
       kind: 'element' as HitKind,
-      title: label,
+      title,
+      keywords: raw.length > 80 ? raw : undefined,
       sub: tr(isHeading ? { en: 'Section', fr: 'Section' } : { en: 'On this page', fr: 'Sur la page' }),
-      // Slightly below real commands so "Settings" the command still beats a "Settings" label,
-      // but comfortably present so the on-page control is one keystroke away.
-      boost: 0.8,
+      // Content sits a touch below controls, and both below real commands — so "Settings" the
+      // command beats a "Settings" label, and a control beats a paragraph that mentions it.
+      boost: isContent ? 0.6 : 0.8,
       run: () => flashElement(el),
     });
   }
