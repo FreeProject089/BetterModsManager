@@ -468,7 +468,8 @@ async function refresh(): Promise<void> {
         await refresh();
     }));
 
-    listEl.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${escHtml(t('modpack.cat.loading'))}</span>`;
+    // Skeleton rows instead of a bare "loading" line — reuses the shared .skeleton primitive.
+    listEl.innerHTML = `<div aria-busy="true">${new Array(4).fill('<div class="skeleton skeleton-card" style="height:64px;margin-bottom:10px" aria-hidden="true"></div>').join('')}</div>`;
 
     // Each source is fetched independently and its own failure stays its own: one unreachable
     // catalogue used to be able to empty the whole list, which looks like everything broke.
