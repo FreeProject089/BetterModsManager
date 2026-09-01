@@ -11032,6 +11032,44 @@ body.tasky-hidden #app-mascot-container {
 .repo-card--optional::before { background: var(--bmm-s08); opacity: 0.45; }
 .repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
 
+/* ── Method picker ── A segmented control at the top of the "produce repo.json" step so the
+   THREE ways (generate / manifest-only / remote) become one choice with one form showing,
+   instead of three stacked cards you scroll past. Cleaner navigation for the whole step. */
+.repo-method-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 0 0 16px;
+    padding: 4px;
+    background: var(--bmm-s03);
+    border: 1px solid var(--bmm-s06);
+    border-radius: 12px;
+}
+.repo-method-pill {
+    flex: 1;
+    padding: 9px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.repo-method-pill:hover { color: var(--text-primary); }
+.repo-method-pill.active {
+    background: var(--bmm-s07);
+    color: var(--text-primary);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+/* Only the active method's card is shown; the "ALTERNATIVE" badge on the alts is now noise
+   (the picker names the choice), so it's hidden. */
+.repo-host-group[data-host-group="publish"] .repo-card[data-method] { display: none; }
+.repo-host-group[data-host-group="publish"][data-active-method="generate"] .repo-card[data-method="generate"],
+.repo-host-group[data-host-group="publish"][data-active-method="manifest"] .repo-card[data-method="manifest"],
+.repo-host-group[data-host-group="publish"][data-active-method="remote"] .repo-card[data-method="remote"] { display: block; }
+.repo-host-group[data-host-group="publish"] .repo-card[data-method] .badge-server-tag { display: none; }
+
 /* Repo status bar */
 .repo-status-bar {
     display: flex;

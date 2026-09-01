@@ -1314,13 +1314,20 @@
                                 <p class="repo-host-lede-p repo-host-lede-alt" data-i18n="repo.hostLedeAlt">Les cartes marqu&#233;es <b>ALTERNATIVE</b> ne sont pas des &#233;tapes de plus&#160;: ce sont d'autres fa&#231;ons de faire celle au-dessus d'elles.</p>
                             </div>
                             <!-- Card: Generate Repo -->
-                            <div class="repo-host-group" data-host-group="publish">
+                            <div class="repo-host-group" data-host-group="publish" data-active-method="generate">
 <div class="repo-group-h">
                                     <span class="repo-group-n">1</span>
                                     <span class="repo-group-t" data-i18n="repo.groupPublish">Produire le repo.json</span>
                                     <span class="repo-group-sub" data-i18n="repo.groupPublishSub">Une seule des trois voies ci-dessous suffit.</span>
                                 </div>
-                            <div class="repo-card repo-card--cyan">
+                                <!-- Method picker: pick ONE of the three ways; only its form shows,
+                                     so the two alternatives no longer sit in the way as scroll. -->
+                                <div class="repo-method-tabs" role="tablist" aria-label="Méthode">
+                                    <button type="button" class="repo-method-pill active" data-method-pill="generate" role="tab" data-i18n="repo.method.generate">Générer</button>
+                                    <button type="button" class="repo-method-pill" data-method-pill="manifest" role="tab" data-i18n="repo.method.manifest">Manifeste seul</button>
+                                    <button type="button" class="repo-method-pill" data-method-pill="remote" role="tab" data-i18n="repo.method.remote">Dépôt distant</button>
+                                </div>
+                            <div class="repo-card repo-card--cyan" data-method="generate">
                                 <div class="repo-card-header">
                                     <div class="repo-card-step">01</div>
                                     <h3>
@@ -1665,7 +1672,7 @@
                             <!-- Card: Serveur HTTP -->
                             <!-- Manifest-only generation: describe mods that are ALREADY
                                  hosted, instead of exporting a copy of them. -->
-                            <div class="repo-card repo-card--optional">
+                            <div class="repo-card repo-card--optional" data-method="manifest">
                                 <div class="repo-card-header">
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1781,7 +1788,7 @@
 
                             <!-- Mods live only on the server: BMM reads its listing and
                                  updates repo.json without pulling the repo back. -->
-                            <div class="repo-card repo-card--optional">
+                            <div class="repo-card repo-card--optional" data-method="remote">
                                 <div class="repo-card-header">
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"

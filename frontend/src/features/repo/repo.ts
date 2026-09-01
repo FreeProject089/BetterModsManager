@@ -831,6 +831,19 @@ export function initRepo() {
         btn.addEventListener('click', () => activateRepoTab((btn as HTMLElement).dataset.repoTab || 'sync'));
     });
 
+    // ── Method picker (the "produce repo.json" step) ─────────────────────
+    // Pick ONE of the three ways; the group carries data-active-method and the CSS shows only
+    // that method's form, so the two alternatives no longer sit in the way as dead scroll.
+    document.querySelectorAll('#view-repo .repo-method-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            const m = (pill as HTMLElement).dataset.methodPill || 'generate';
+            const group = pill.closest('.repo-host-group') as HTMLElement | null;
+            if (!group) return;
+            group.dataset.activeMethod = m;
+            group.querySelectorAll('.repo-method-pill').forEach(p => p.classList.toggle('active', p === pill));
+        });
+    });
+
     // ZIP Export Server Type Listener (lock cloudflare/upnp for "server")
     if (elements.selectZipType) {
         elements.selectZipType.addEventListener('change', (e: any) => {
