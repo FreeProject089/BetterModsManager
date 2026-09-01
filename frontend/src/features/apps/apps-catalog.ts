@@ -209,7 +209,15 @@ function renderShell(view: HTMLElement) {
       </div>
 
       <div class="apps-content" id="apps-content">
-        <div class="apps-loading" id="apps-loading"><div class="apps-spinner"></div><p data-i18n="apps.loading">Loading…</p></div>
+        <!-- Skeleton grid instead of a bare spinner: it shows the SHAPE of the app cards that
+             are coming, so the load reads as faster and doesn't pop in from an empty screen. -->
+        <div class="apps-loading apps-loading--skeleton" id="apps-loading" aria-busy="true">
+          <div class="apps-skeleton-grid" aria-hidden="true">
+            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+          </div>
+        </div>
       </div>
     </div>
 

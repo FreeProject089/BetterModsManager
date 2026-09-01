@@ -4374,6 +4374,49 @@ select.input-field option {
 @keyframes tut-progress-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .tut-card.has-progress .tut-card-progress-fill::after { animation: none; } }
 
+/* ── Skeleton placeholders ──────────────────────────────────────────────────
+   A reusable loading placeholder: a soft shimmering block standing in for content
+   that hasn't arrived. Preferred over a bare spinner for lists/cards — it shows the
+   SHAPE of what's coming, which reads as faster and less jarring than a spinner then
+   a pop-in. Token-based (no hard-coded colours), and under reduced motion the sheen
+   becomes a static tint rather than vanishing.
+   Usage: a container with `.skeleton-card` blocks, or `.skeleton .skeleton-line` rows.
+     <div class="skeleton skeleton-card"></div>
+     <div class="skeleton skeleton-line sk-lg"></div> */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--bmm-s05);
+    border-radius: 8px;
+}
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--bmm-s08), transparent);
+    animation: skeleton-sheen 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-sheen { 100% { transform: translateX(100%); } }
+.skeleton-line { height: 12px; margin: 8px 0; border-radius: 6px; }
+.skeleton-line.sk-sm { height: 10px; width: 55%; }
+.skeleton-line.sk-lg { height: 16px; width: 80%; }
+.skeleton-card { height: 84px; border-radius: 14px; margin-bottom: 12px; }
+.skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.skeleton-wrap { display: flex; flex-direction: column; }
+@media (prefers-reduced-motion: reduce) {
+    .skeleton::after { animation: none; background: var(--bmm-s07); transform: none; }
+}
+/* Apps catalogue: a skeleton grid that mirrors the real app-card grid while loading. */
+.apps-loading--skeleton { display: block; padding: 0; }
+.apps-skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 16px;
+    padding: 4px 0;
+}
+.apps-skeleton-grid .skeleton-card { height: 132px; margin: 0; }
+
 .tut-card-progress-label {
     font-size: 10px;
     color: var(--text-muted);
