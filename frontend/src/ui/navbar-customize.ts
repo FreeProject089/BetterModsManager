@@ -365,6 +365,13 @@ function svgWrap(inner: string): string {
 function iconRegistry(): Record<string, string> {
     const reg: Record<string, string> = {};
     for (const k of Object.keys(ICONS)) reg[k] = svgWrap(ICONS[k]);
+    // Better* project marks — full-colour brand logos, rendered as <img> (not a currentColor
+    // SVG). Src is a fixed bundled asset, never user input. Sized by .nav-custom-img /
+    // .nbe-icon-opt img (both 18px). Lets a nav item wear a Better* logo out of the box.
+    reg['brand:bmm'] = '<img class="nav-custom-img" src="assets/BMm.png" alt="BMM">';
+    reg['brand:bc'] = '<img class="nav-custom-img" src="assets/BC.webp" alt="BetterCommunity">';
+    reg['brand:bi'] = '<img class="nav-custom-img" src="assets/bi.png" alt="BetterInstaller">';
+    reg['brand:bd'] = '<img class="nav-custom-img" src="assets/bd.png" alt="BetterDiscord">';
     for (const el of items()) {
         if (!el.dataset.view) continue;                       // built-in views only
         const ic = el.querySelector('.nav-icon');
