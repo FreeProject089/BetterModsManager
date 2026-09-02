@@ -1485,7 +1485,20 @@ function _hlLayer(): HTMLElement {
 }
 
 function _drawHighlight(target: Element, idx: number = 0): void {
-    const r = target.getBoundingClientRect();
+    let r = target.getBoundingClientRect();
+    // Bring an off-viewport target into view before ringing it. A step can point at a nav item
+    // scrolled below the fold in the sidebar, or a control scrolled out of a panel — it has a
+    // real size, so nothing above bailed, but the ring drew off-screen and the step looked like
+    // it pointed at nothing ("the sidebar hides the action"). Scroll it to centre and re-measure
+    // so the spotlight lands ON it. Instant (not smooth) so the rect below is already correct.
+    if (r.width > 0 && r.height > 0) {
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        const vw = window.innerWidth || document.documentElement.clientWidth;
+        if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) {
+            try { (target as HTMLElement).scrollIntoView({ block: 'center', inline: 'nearest' }); } catch { /* detached */ }
+            r = target.getBoundingClientRect();
+        }
+    }
     if (r.width === 0 || r.height === 0) return;
 
     // Smart placement: keep the coach card off the highlighted target.
