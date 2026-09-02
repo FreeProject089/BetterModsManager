@@ -1121,10 +1121,19 @@ function _finishTutorial(): void {
     document.getElementById('btn-tut-finish-hub')?.addEventListener('click', () => {
         _cleanupDemo();
         panel.classList.add('closing');
-        panel.addEventListener('animationend', () => {
+        // Reopen the hub once the close animation ends — but never depend on `animationend`
+        // alone. Under reduced-motion, a backgrounded tab, or any path where the `.closing`
+        // keyframe doesn't actually run, that event never fires and the button did nothing
+        // (the reported "Back to Hub doesn't work"). A one-shot guard + timeout fallback — the
+        // same shape closeTutorialEngine() already uses — makes it fire exactly once, always.
+        let done = false;
+        const finish = () => {
+            if (done) return; done = true;
             _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null;
             if (_onClose) _onClose();
-        }, { once: true });
+        };
+        panel.addEventListener('animationend', finish, { once: true });
+        setTimeout(finish, 450);
     });
 }
 

@@ -476,6 +476,14 @@ function flashElement(el: HTMLElement): void {
     if (focusable) setTimeout(() => { try { (el as HTMLElement).focus({ preventScroll: true }); } catch { /* ignore */ } }, 260);
   } catch { /* a detached node — nothing to do */ }
 }
+// A control hit should DO the thing, not just scroll to it. A Ctrl+K result for a button, a
+// link, a tab or a nav item that merely flashed read as broken — "clicking does nothing on
+// certain elements". Flash to show where it is, then click it: runActive() has already closed
+// the palette, so the overlay can't swallow the event.
+function activateElement(el: HTMLElement): void {
+  flashElement(el);
+  setTimeout(() => { try { el.click(); } catch { /* ignore */ } }, 120);
+}
 registerSearchProvider('page', (q: string): SearchHit[] => {
   if (!q || q.trim().length < 1 || typeof document === 'undefined') return [];
   // The active view (BMM toggles `.view.active`); fall back to the app root, never the whole doc.
@@ -521,6 +529,8 @@ registerSearchProvider('page', (q: string): SearchHit[] => {
     // full string rides in `keywords` (matched, not shown) when the title is truncated.
     const title = raw.length > 80 ? `${raw.slice(0, 78).trimEnd()}…` : raw;
     const isHeading = /^H[1-5]$/.test(el.tagName) || el.classList.contains('card-title') || el.classList.contains('section-title');
+    // Actionable controls get clicked, not just scrolled to; headings and prose only flash.
+    const isControl = !isContent && !isHeading && (el.matches('button,a[href],[role="button"],.nav-item,summary') || el.hasAttribute('data-tab'));
     hits.push({
       id: `page:${n}:${key}`,
       kind: 'element' as HitKind,
@@ -530,7 +540,7 @@ registerSearchProvider('page', (q: string): SearchHit[] => {
       // Content sits a touch below controls, and both below real commands — so "Settings" the
       // command beats a "Settings" label, and a control beats a paragraph that mentions it.
       boost: isContent ? 0.6 : 0.8,
-      run: () => flashElement(el),
+      run: isControl ? () => activateElement(el) : () => flashElement(el),
     });
   }
   return hits;
