@@ -76,6 +76,10 @@ function buildModal(): void {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     <input id="theme-cat-search" placeholder="${t('common.search') || 'Search...'}" style="flex:1;border:none;background:transparent;padding:8px 0;font-size:12.5px;color:var(--bmm-text-primary);">
                 </div>
+                <button class="btn btn-ghost btn-sm" id="theme-cat-reset" title="${escAttr(t('themes.resetDefaultTip') || 'Revert to the built-in default look')}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    ${t('themes.resetDefault') || 'Default theme'}
+                </button>
                 <button class="btn btn-ghost btn-sm" id="theme-cat-refresh">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                     ${t('common.refresh') || 'Refresh'}
@@ -101,6 +105,15 @@ function buildModal(): void {
     _modal.querySelector('#theme-cat-search')!.addEventListener('input', (e) => {
         _filter = (e.target as HTMLInputElement).value.toLowerCase();
         renderCatalog();
+    });
+    _modal.querySelector('#theme-cat-reset')!.addEventListener('click', async () => {
+        try {
+            const { resetTheme } = await import('./theme-engine.js');
+            resetTheme();                                     // clears the frontend + the ACTIVE_KEY boot reads
+            await invoke('set_active_theme', { themeId: '' }).catch(() => {}); // best-effort clear the backend copy too
+            toast(t('themes.resetDone') || 'Reverted to the default theme', 'success');
+            renderCatalog();
+        } catch (e) { toast(String(e), 'error'); }
     });
     _modal.querySelector('#theme-cat-refresh')!.addEventListener('click', async () => {
         await fetchCatalog(true);
