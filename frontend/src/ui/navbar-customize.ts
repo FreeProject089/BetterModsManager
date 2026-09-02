@@ -370,7 +370,7 @@ function iconRegistry(): Record<string, string> {
     // .nbe-icon-opt img (both 18px). Lets a nav item wear a Better* logo out of the box.
     reg['brand:bmm'] = '<img class="nav-custom-img" src="assets/BMm.png" alt="BMM">';
     reg['brand:bc'] = '<img class="nav-custom-img" src="assets/BC.webp" alt="BetterCommunity">';
-    reg['brand:bi'] = '<img class="nav-custom-img" src="assets/bi.png" alt="BetterInstaller">';
+    reg['brand:bi'] = '<img class="nav-custom-img" src="assets/bi.svg" alt="BetterInstaller">';
     reg['brand:bd'] = '<img class="nav-custom-img" src="assets/bd.png" alt="BetterDiscord">';
     for (const el of items()) {
         if (!el.dataset.view) continue;                       // built-in views only

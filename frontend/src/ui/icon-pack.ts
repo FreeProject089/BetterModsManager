@@ -87,7 +87,7 @@ export function iconColourOf(ref: string): string | null {
 const OUR_ICONS: Record<string, { src: string; label: string }> = {
     'app:bmm':   { src: 'assets/BMm.png',   label: 'BetterModsManager' },
     'app:bc':    { src: 'assets/BC.webp',   label: 'BetterCommunity' },
-    'app:bi':    { src: 'assets/bi.png',    label: 'BetterInstaller' },
+    'app:bi':    { src: 'assets/bi.svg',    label: 'BetterInstaller' },
     'app:bd':    { src: 'assets/bd.png',    label: 'BetterDiscord' },
     'app:tasky': { src: 'assets/Tasky.png', label: 'Tasky' },
     'app:tasky-happy': { src: 'assets/Tasky_Happy.png', label: 'Tasky (happy)' },
