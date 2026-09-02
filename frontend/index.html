@@ -6032,6 +6032,14 @@
                         </div>
                     </div>
                     <div class="form-group">
+                        <label class="form-label" data-i18n="prof.bgImage">Image de fond</label>
+                        <div class="prof-custom-icon-row" style="display:flex;align-items:center;gap:10px">
+                            <div id="prof-bg-preview" style="display:none;width:52px;height:34px;border-radius:6px;overflow:hidden;background-size:cover;background-position:center;border:1px solid var(--border);flex-shrink:0"></div>
+                            <button type="button" class="btn btn-sm btn-ghost" id="prof-pick-bg" data-i18n="prof.bgImage">Image de fond…</button>
+                            <button type="button" class="btn btn-sm btn-ghost" id="prof-remove-bg" style="display:none" data-i18n="prof.bgRemove">Retirer le fond</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" data-i18n="prof.gameDir">Dossier de destination <span
                                 class="required">*</span></label>
                         <div class="path-picker">

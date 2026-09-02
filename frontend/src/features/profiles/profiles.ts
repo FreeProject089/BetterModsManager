@@ -568,6 +568,29 @@ function resetProfileIconUI(prefix) {
     if (rm) rm.style.display = 'none';
 }
 
+// A background chosen in the CREATE modal. It can't be staged until the profile exists (the
+// cropper needs a profile id to write its temp webp), so we hold the picked source + crop box
+// here and stage+apply it right after create_profile returns. { sourcePath, cropData } | null.
+let _pendingCreateBg: { sourcePath: string; cropData: any } | null = null;
+
+function renderCreateBgUI() {
+    const prev = document.getElementById('prof-bg-preview') as HTMLElement | null;
+    const rm = document.getElementById('prof-remove-bg') as HTMLElement | null;
+    const pick = document.getElementById('prof-pick-bg') as HTMLElement | null;
+    if (!prev || !rm || !pick) return;
+    if (_pendingCreateBg) {
+        prev.style.display = 'block';
+        prev.style.backgroundImage = `url("${convertFileSrc(_pendingCreateBg.sourcePath)}")`;
+        rm.style.display = '';
+        pick.textContent = t('prof.bgChange');
+    } else {
+        prev.style.display = 'none';
+        prev.style.backgroundImage = '';
+        rm.style.display = 'none';
+        pick.textContent = t('prof.bgImage');
+    }
+}
+
 export function openNewProfileModal() {
     // Clear fields
     ['prof-name', 'prof-game', 'prof-game-path', 'prof-mods-path', 'prof-backup-path']
@@ -576,6 +599,21 @@ export function openNewProfileModal() {
     document.getElementById('prof-icon').value = '';
     updateIconPickerSelection('prof-icon-grid', '');
     resetProfileIconUI('prof');
+    _pendingCreateBg = null;
+    renderCreateBgUI();
+    // Wire the background picker once. It reuses the same cropper as the edit flow, but in
+    // "capture" mode: no profile id exists yet, so onConfirm just stashes the crop and the
+    // actual staging happens after create_profile.
+    const pickBg = document.getElementById('prof-pick-bg');
+    if (pickBg && !(pickBg as any)._wired) {
+        (pickBg as any)._wired = true;
+        pickBg.addEventListener('click', async () => {
+            const filePath = await pickFile([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }]);
+            if (!filePath) return;
+            openCropOverlay(filePath, { id: '__new__' }, { onConfirm: (cropData, src) => { _pendingCreateBg = { sourcePath: src, cropData }; renderCreateBgUI(); } });
+        });
+        document.getElementById('prof-remove-bg')?.addEventListener('click', () => { _pendingCreateBg = null; renderCreateBgUI(); });
+    }
     document.getElementById('modal-new-profile').classList.add('open');
 }
 
@@ -659,6 +697,15 @@ async function confirmCreateProfile() {
         const newIconSrc = (document.getElementById('prof-icon-image') as HTMLInputElement)?.value || '';
         if (newIconSrc && newIconSrc !== '__REMOVE__') {
             try { await invoke('import_profile_icon', { profileId: profile.id, sourcePath: newIconSrc }); } catch (e) { console.warn('[profiles] import icon failed', e); }
+        }
+        // Apply a background chosen during creation, now that the profile has an id: stage the
+        // crop against it, then apply — the same two steps the edit flow uses on save.
+        if (_pendingCreateBg) {
+            try {
+                await invoke('crop_and_save_webp', { profileId: profile.id, sourcePath: _pendingCreateBg.sourcePath, x: _pendingCreateBg.cropData.x, y: _pendingCreateBg.cropData.y, width: _pendingCreateBg.cropData.width, height: _pendingCreateBg.cropData.height, isTemp: true });
+                await invoke('apply_profile_background', { profileId: profile.id });
+            } catch (e) { console.warn('[profiles] create background failed', e); }
+            _pendingCreateBg = null;
         }
         document.getElementById('modal-new-profile').classList.remove('open');
         // IKEA effect: celebrate the FIRST profile the user ever builds (one time), then
@@ -1817,7 +1864,7 @@ function initEditBackgroundSection(profile) {
     }
 }
 
-function openCropOverlay(sourcePath, profile) {
+function openCropOverlay(sourcePath, profile, opts?: { onConfirm?: (cropData: any, sourcePath: string) => void }) {
     // Remove existing overlay
     const existing = document.getElementById('crop-overlay');
     if (existing) existing.remove();
@@ -1880,7 +1927,16 @@ function openCropOverlay(sourcePath, profile) {
         try {
             // Get crop box data rounded to nearest integers
             const cropData = cropper.getData(true);
-            
+
+            // Capture mode (the create modal): no profile id to crop against yet, so hand the
+            // crop back to the caller, which stages + applies it once the profile exists.
+            if (opts && opts.onConfirm) {
+                opts.onConfirm(cropData, sourcePath);
+                if (cropper) cropper.destroy();
+                overlay.remove();
+                return;
+            }
+
             const tmpPath = await invoke('crop_and_save_webp', {
                 profileId: profile.id,
                 sourcePath,
