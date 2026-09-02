@@ -11443,11 +11443,13 @@ body.tasky-hidden #app-mascot-container {
 .plug-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 14px;
+    /* More air. The card read as "compact et surchargé" because every row sat one line-height
+       from the next; a roomier pad + gap lets each part breathe and the card reads calmer. */
+    padding: 18px 18px 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 13px;
     transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
     position: relative;
     overflow: hidden;
@@ -11473,26 +11475,26 @@ body.tasky-hidden #app-mascot-container {
     align-items: flex-start;
 }
 .plug-card-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
     object-fit: cover;
     flex-shrink: 0;
 }
 .plug-card-icon-default {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
     background: var(--bmm-s05);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 22px;
     flex-shrink: 0;
 }
 .plug-card-meta { flex: 1; min-width: 0; }
 .plug-card-name {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -11561,8 +11563,8 @@ body.tasky-hidden #app-mascot-container {
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
-    margin-top: 4px;
-    padding-top: 10px;
+    margin-top: 6px;
+    padding-top: 13px;
     border-top: 1px solid var(--bmm-s05);
 }
 /* An installed card stacks its two rows; a catalogue card keeps the single row it has
@@ -13061,10 +13063,19 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 4px 8px;
-    margin-top: 3px;
+    gap: 5px 10px;
+    margin-top: 5px;
     min-width: 0;
 }
+/* The checksum and the two copy-id buttons are reference chrome, not something you read on
+   every glance — they were a big part of why the top of the card felt "surchargé". Let them
+   recede to a whisper and come back to full strength when the card is hovered/focused. */
+.plug-card-facts .plug-card-ids,
+.plug-card-facts .plug-sha-badge { opacity: 0.5; transition: opacity 0.15s; }
+.plug-card:hover .plug-card-facts .plug-card-ids,
+.plug-card:hover .plug-card-facts .plug-sha-badge,
+.plug-card:focus-within .plug-card-facts .plug-card-ids,
+.plug-card:focus-within .plug-card-facts .plug-sha-badge { opacity: 1; }
 .plug-card-facts .plug-card-sub { margin-top: 0; }
 .plug-card-facts .plug-card-game { margin-top: 0; }
 .plug-card-fact {
