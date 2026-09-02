@@ -16352,6 +16352,10 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 
 .ipk-searchwrap {
     display: flex; align-items: center; gap: 9px;
+    /* Explicit full width + border-box so the bar can never render wider than the modal
+       body — that overflow past the right edge was the "sort de la modal" on the Lucide /
+       Brands tabs, where the grid's scrollbar changed the content width under it. */
+    width: 100%; box-sizing: border-box;
     height: 40px; padding: 0 14px; border-radius: 11px;
     background: var(--bmm-bg-base); border: 1px solid var(--border);
     transition: border-color 0.15s, box-shadow 0.15s;
@@ -16373,7 +16377,14 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
     display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     gap: 8px; padding: 2px;
     align-content: start;
+    /* A thin, reserved gutter so the huge Lucide/Brands lists don't reflow the grid (and shove
+       the search bar) when the scrollbar appears, and so the bar and the grid line up. */
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
 }
+.ipk-grid::-webkit-scrollbar { width: 8px; }
+.ipk-grid::-webkit-scrollbar-thumb { background: var(--bmm-s10, rgba(255,255,255,0.14)); border-radius: 8px; }
+.ipk-grid::-webkit-scrollbar-track { background: transparent; }
 .ipk-cell {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
     min-height: 76px; padding: 10px 6px 8px;
