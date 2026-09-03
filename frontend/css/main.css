@@ -10960,7 +10960,6 @@ body.tasky-hidden #app-mascot-container {
 }
 .repo-card::before { display: none; }
 .repo-card:hover { box-shadow: none; }
-.repo-card + .repo-card { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--bmm-s05); }
 .repo-card-header {
     display: flex;
     align-items: center;
@@ -10986,32 +10985,13 @@ body.tasky-hidden #app-mascot-container {
     opacity: 1;
     color: var(--text-primary);
 }
-.repo-card-step {
-    font-size: 11px;
-    font-weight: 800;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    letter-spacing: 0;
-    background: var(--bmm-s06);
-    color: var(--text-secondary);
-    border: 1px solid var(--bmm-s08);
-}
-/* Controls sit indented under the header's title, aligned past the step badge. */
+/* No more step badges — the page is not a numbered wizard. */
+.repo-card-step { display: none; }
+/* Controls flow straight under the section title, no badge to align past. */
 .repo-card-body {
-    padding: 2px 0 0 35px;
+    padding: 4px 0 0 0;
 }
-
-/* Variants: only the round step badge is tinted now — no rails, no header fills. */
-.repo-card--cyan .repo-card-step { background: rgba(0,194,255,0.16); color: var(--cyan); border-color: rgba(0,194,255,0.35); }
-.repo-card--green .repo-card-step { background: rgba(46,204,113,0.16); color: var(--success); border-color: rgba(46,204,113,0.35); }
-.repo-card--accent .repo-card-step { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.16); color: var(--accent); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.35); }
 .repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
-.repo-card--optional .repo-card-step { opacity: 0.7; }
 
 /* ── Method picker ── A segmented control at the top of the "produce repo.json" step so the
    THREE ways (generate / manifest-only / remote) become one choice with one form showing,
@@ -19996,60 +19976,65 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    for a grid that was not there.
    The group is a real block now: a rail down the left tying its cards together, and a
    header that says what the step is FOR rather than only numbering it. */
+/* No rail, no numbers — each group is a titled section that flows down the page. A coloured
+   accent bar under the title marks Produce vs Serve without turning them into wizard steps. */
 .repo-host-group {
     display: flex;
     flex-direction: column;
     gap: 18px;
-    padding-left: 22px;
-    border-left: 2px solid var(--bmm-s05);
+    padding-left: 0;
+    border-left: none;
 }
-.repo-host-group + .repo-host-group { margin-top: 30px; }
-.repo-host-group[data-host-group="publish"] { border-left-color: color-mix(in srgb, var(--cyan) 40%, transparent); }
-.repo-host-group[data-host-group="serve"] { border-left-color: color-mix(in srgb, var(--success) 40%, transparent); }
+.repo-host-group + .repo-host-group { margin-top: 38px; }
 
 .repo-group-h {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 4px 10px;
-    margin-left: -33px;          /* the number badge straddles the 22px-inset rail */
+    gap: 4px 12px;
+    margin-left: 0;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--bmm-s05);
 }
 .repo-group-h--loose { margin-left: 0; }
-.repo-group-n {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    font-size: 11px;
+.repo-group-n { display: none; }        /* no step numbers */
+.repo-group-t {
+    font-size: 18px;
     font-weight: 800;
-    color: var(--bmm-bg-base);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-primary);
+    /* A short accent underline so the section still reads as Produce (cyan) / Serve (green). */
+    position: relative;
+    padding-bottom: 8px;
+}
+.repo-group-t::after {
+    content: "";
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 34px; height: 3px;
+    border-radius: 3px;
     background: var(--cyan);
 }
-.repo-group-n--accent { background: var(--accent); }
-.repo-host-group[data-host-group="serve"] .repo-group-n { background: var(--success); }
-.repo-group-t {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--text);
-}
+.repo-host-group[data-host-group="serve"] .repo-group-t::after { background: var(--success); }
+.repo-column[data-repo-panel="sync"] .repo-group-t::after { background: var(--accent); }
 .repo-group-sub {
-    flex: 1 1 240px;
+    flex: 1 1 260px;
     min-width: 0;
-    font-size: 11px;
-    line-height: 1.4;
+    font-size: 12px;
+    line-height: 1.45;
     color: var(--text-muted);
+    align-self: center;
 }
 
-/* An alternative is subordinate to the step it is an alternative TO. It used to sit at the
-   same weight as the numbered card, so "choose one of these" read as "do all three". */
+/* An alternative method sits subordinate to its section — indented under a soft dashed edge,
+   so "one of these three" never reads as three things to do. */
 .repo-host-group .repo-card--optional {
-    margin-left: 18px;
-    border-left: 1px dashed var(--bmm-s07);
+    margin-left: 16px;
+    padding-left: 16px;
+    border-left: 2px dashed var(--bmm-s06);
+    border-top: none;
 }
 
 
