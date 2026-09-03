@@ -1878,7 +1878,12 @@ function _startHighlightTracker(): void {
             return;
         }
         let anyInView = false;
-        let offTarget: { el: HTMLElement; dir: 'up' | 'down' } | null = null;
+        let offTarget: { el: HTMLElement; dir: 'up' | 'down' | 'left' | 'right' | 'behind' } | null = null;
+        // The sidebar can COVER a target horizontally — a step pointing at something behind it
+        // used to draw a highlight nobody could see, with no cue. Detect that as its own case.
+        const sidebar = document.querySelector('.sidebar') as HTMLElement | null;
+        const sbRect = (sidebar && window.getComputedStyle(sidebar).display !== 'none' && sidebar.offsetWidth > 0)
+            ? sidebar.getBoundingClientRect() : null;
         highlights.forEach(hlEl => {
             const hl     = hlEl as HTMLElement;
             const target = (hl as any)._tutTarget as HTMLElement | null;
@@ -1889,11 +1894,24 @@ function _startHighlightTracker(): void {
             const clip = _scrollClipRect(target);
             const vTop = clip ? clip.top : 0;
             const vBottom = clip ? clip.bottom : window.innerHeight;
+            const vLeft = clip ? clip.left : 0;
+            const vRight = clip ? clip.right : window.innerWidth;
             const cy = r.top + r.height / 2;
-            const inView = cy >= vTop - 2 && cy <= vBottom + 2;
+            const cx = r.left + r.width / 2;
+            const inViewV = cy >= vTop - 2 && cy <= vBottom + 2;
+            // Behind the sidebar: the target's centre sits inside the sidebar's rectangle.
+            const behindSidebar = !!sbRect && cx <= sbRect.right && cx >= sbRect.left && cy >= sbRect.top && cy <= sbRect.bottom;
+            const inViewH = cx >= vLeft - 2 && cx <= vRight + 2 && !behindSidebar;
+            const inView = inViewV && inViewH;
             hl.style.visibility = inView ? 'visible' : 'hidden';
             if (inView) anyInView = true;
-            else if (!offTarget) offTarget = { el: target, dir: cy < vTop ? 'up' : 'down' };
+            else if (!offTarget) {
+                const dir: 'up' | 'down' | 'left' | 'right' | 'behind' =
+                    behindSidebar ? 'behind'
+                    : !inViewV ? (cy < vTop ? 'up' : 'down')
+                    : (cx < vLeft ? 'left' : 'right');
+                offTarget = { el: target, dir };
+            }
             const pad        = 4;
             const cs         = window.getComputedStyle(target);
             const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -1908,14 +1926,14 @@ function _startHighlightTracker(): void {
         });
         // Show a "scroll up/down" cue when the highlighted target is off-screen and
         // nothing else for this step is currently visible.
-        if (!anyInView && offTarget) _renderScrollHint((offTarget as { dir: 'up' | 'down' }).dir, (offTarget as { el: HTMLElement }).el);
+        if (!anyInView && offTarget) _renderScrollHint((offTarget as { dir: 'up' | 'down' | 'left' | 'right' | 'behind' }).dir, (offTarget as { el: HTMLElement }).el);
         else _renderScrollHint(null, null);
     }, 150);
 }
 
 /** Floating "scroll up/down" cue shown when the highlighted target is out of view.
  *  Clicking it scrolls the target into view. Pass (null, null) to remove it. */
-function _renderScrollHint(dir: 'up' | 'down' | null, target: HTMLElement | null): void {
+function _renderScrollHint(dir: 'up' | 'down' | 'left' | 'right' | 'behind' | null, target: HTMLElement | null): void {
     const existing = document.getElementById('tut-scroll-hint');
     if (!dir || !target) { existing?.remove(); return; }
     const color = _tutorial?.color ?? 'var(--accent)';
@@ -1926,14 +1944,25 @@ function _renderScrollHint(dir: 'up' | 'down' | null, target: HTMLElement | null
         hint.className = 'tut-scroll-hint';
         document.body.appendChild(hint);
     }
-    hint.classList.toggle('is-up', dir === 'up');
-    hint.classList.toggle('is-down', dir === 'down');
+    // 'behind' (covered by the sidebar) points left, toward the sidebar, and carries its own text.
+    const arrowDir = dir === 'behind' ? 'left' : dir;
+    for (const d of ['up', 'down', 'left', 'right', 'behind'] as const) hint.classList.toggle(`is-${d}`, dir === d);
     hint.style.background = color;
-    const arrow = dir === 'up'
-        ? '<polyline points="18 15 12 9 6 15"/>'
-        : '<polyline points="6 9 12 15 18 9"/>';
-    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${arrow}</svg><span>${dir === 'up' ? t('tut.scroll.up') : t('tut.scroll.down')}</span>`;
-    (hint as any).onclick = () => target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const arrows: Record<string, string> = {
+        up:    '<polyline points="18 15 12 9 6 15"/>',
+        down:  '<polyline points="6 9 12 15 18 9"/>',
+        left:  '<polyline points="15 18 9 12 15 6"/>',
+        right: '<polyline points="9 18 15 12 9 6"/>',
+    };
+    const label = dir === 'behind' ? t('tut.scroll.behind')
+        : dir === 'up' ? t('tut.scroll.up')
+        : dir === 'down' ? t('tut.scroll.down')
+        : dir === 'left' ? t('tut.scroll.left')
+        : t('tut.scroll.right');
+    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${arrows[arrowDir]}</svg><span>${label}</span>`;
+    // Scrolling into view fixes an off-screen target; for one behind the sidebar it nudges any
+    // horizontal scroll container, and the label already tells the reader what is in the way.
+    (hint as any).onclick = () => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
 }
 
 /** Rect of the nearest scrollable ancestor (to clip highlights to the scroll area). */

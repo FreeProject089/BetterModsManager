@@ -6017,6 +6017,16 @@ body.tut-docked.tut-min .app-shell {
 }
 .tut-scroll-hint.is-up { --tut-bounce: -4px; }
 .tut-scroll-hint.is-down { --tut-bounce: 4px; }
+/* Off to the side / behind the sidebar: pin to the correct edge, vertically centred, and bounce
+   horizontally toward the target instead of up/down. 'behind' sits just clear of a typical
+   sidebar and points left at it. */
+.tut-scroll-hint.is-left,
+.tut-scroll-hint.is-behind { left: 96px; right: auto; top: 50%; bottom: auto; transform: translateY(-50%); animation: tutScrollBounceX 1.1s ease-in-out infinite; --tut-bounce-x: -4px; }
+.tut-scroll-hint.is-right { left: auto; right: 16px; top: 50%; bottom: auto; transform: translateY(-50%); animation: tutScrollBounceX 1.1s ease-in-out infinite; --tut-bounce-x: 4px; }
+@keyframes tutScrollBounceX {
+    0%, 100% { transform: translateY(-50%) translateX(0); }
+    50%      { transform: translateY(-50%) translateX(var(--tut-bounce-x, 4px)); }
+}
 .tut-ghost-cursor.clicking { animation: tutGhostClick 0.28s ease; }
 @keyframes tutGhostClick {
     0%, 100% { transform: translate(-3px,-2px) scale(1); }
