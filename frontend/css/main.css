@@ -3434,6 +3434,19 @@ body.bmm-toolbar-opaque .lib-header-shell {
     border-top: 1px solid var(--border);
 }
 
+/* Mobile: a modal centred with 32px of overlay padding wastes most of a phone screen and
+   crams the content. On a narrow viewport it becomes a near-full-height sheet with tight edge
+   padding, so the layout inside gets the room it needs. */
+@media (max-width: 560px) {
+    .modal-overlay { padding: 10px; align-items: flex-end; }
+    .modal, .srv-modal { max-width: 100%; width: 100%; max-height: 94vh; border-radius: 18px 18px 0 0; }
+    .modal-header { padding: 15px 18px 11px; }
+    .modal-body { padding: 15px 18px; gap: 12px; }
+    .modal-footer { padding: 11px 18px 16px; }
+    .modal-footer .btn { flex: 1; }
+    .srv-header, .srv-actions { padding-left: 16px; padding-right: 16px; }
+}
+
 /* ═══════════════════════════════════
    SETTINGS
 ═══════════════════════════════════ */
