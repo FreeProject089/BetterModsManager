@@ -153,12 +153,11 @@ export function renderPackIcon(ref: string, size = 16, color?: string): string {
     if (ref.startsWith('app:')) {
         const our = OUR_ICONS[ref];
         if (!our) return '';
-        // A white rounded chip behind the mark — so a transparent logo reads on ANY surface
-        // (dark nav, a tag, a picker cell) and looks deliberate, not brute. A hairline border
-        // gives it an edge on light surfaces too, and the padding lets the logo breathe.
-        const r = Math.max(4, Math.round(size * 0.24));
-        const pad = Math.max(1, Math.round(size * 0.12));
-        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:${r}px;padding:${pad}px;box-sizing:border-box;flex-shrink:0"><img src="${escAttr(our.src)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" /></span>`;
+        // Just a white rounded background behind the mark — like a 512px app icon (~22% corner
+        // radius) — so a transparent logo reads on any surface. No border, clean.
+        const r = Math.max(4, Math.round(size * 0.22));
+        const pad = Math.max(1, Math.round(size * 0.11));
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;background:#fff;border-radius:${r}px;padding:${pad}px;box-sizing:border-box;flex-shrink:0"><img src="${escAttr(our.src)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" /></span>`;
     }
     if (ref.startsWith('lucide:')) {
         const node = _lucide?.[ref.slice(7)];
