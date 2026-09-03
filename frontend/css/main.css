@@ -10946,48 +10946,34 @@ body.tasky-hidden #app-mascot-container {
     box-shadow: 0 0 6px var(--accent);
 }
 
-/* Repo Cards — restrained, modern: one neutral surface, a single 3px colour rail on the
-   left edge + a tinted circular step badge (no full-colour gradient headers), a soft lift on
-   hover. The old cards stacked a coloured top-border + a gradient-tinted header + a coloured
-   square badge per card, which read as busy across six cards of four colours. */
+/* Repo "cards" — REBUILT as flat sections, not boxes. The Server-Repo page read as a stack of
+   floating cards-in-cards; now each step is a plain section that flows down the page, its number
+   badge and title forming a quiet header and the controls indented beneath it. No surface, no
+   border box, no hover lift — the page is one calm column. Colour lives only in the round step
+   badge. (The step grouping/rail comes from .repo-host-group below.) */
 .repo-card {
     position: relative;
-    background: var(--bmm-s02);
-    border: 1px solid var(--bmm-s07);
-    border-radius: 16px;
-    overflow: hidden;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    background: none;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
 }
-/* The accent rail — the only place a card's colour lives now. */
-.repo-card::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--bmm-s08);
-    opacity: 0.55;
-    transition: opacity 0.2s ease;
-}
-.repo-card:hover {
-    /* Less "floating card": a quiet border + surface lift on hover instead of the raise +
-       heavy drop-shadow, which was the most card-like thing about it. */
-    border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.20);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.14);
-}
-.repo-card:hover::before { opacity: 1; }
+.repo-card::before { display: none; }
+.repo-card:hover { box-shadow: none; }
+.repo-card + .repo-card { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--bmm-s05); }
 .repo-card-header {
     display: flex;
     align-items: center;
     gap: 11px;
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--bmm-s05);
+    padding: 0 0 12px;
+    border-bottom: none;
     background: none;
 }
 .repo-card-header h3 {
     margin: 0;
     flex: 1;
     min-width: 0;
-    font-size: 14px;
+    font-size: 14.5px;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -11003,8 +10989,8 @@ body.tasky-hidden #app-mascot-container {
 .repo-card-step {
     font-size: 11px;
     font-weight: 800;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -11015,23 +11001,17 @@ body.tasky-hidden #app-mascot-container {
     color: var(--text-secondary);
     border: 1px solid var(--bmm-s08);
 }
+/* Controls sit indented under the header's title, aligned past the step badge. */
 .repo-card-body {
-    padding: 20px;
+    padding: 2px 0 0 35px;
 }
 
-/* Variants: just the rail colour + a tinted badge. The header stays neutral. */
-.repo-card--cyan::before { background: var(--cyan); opacity: 0.9; }
-.repo-card--cyan .repo-card-step { background: rgba(0,194,255,0.14); color: var(--cyan); border-color: rgba(0,194,255,0.3); }
-
-.repo-card--green::before { background: #2ecc71; opacity: 0.9; }
-.repo-card--green .repo-card-step { background: rgba(46,204,113,0.14); color: var(--success); border-color: rgba(46,204,113,0.3); }
-
-.repo-card--accent::before { background: var(--accent); opacity: 0.9; }
-.repo-card--accent .repo-card-step { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.14); color: var(--accent); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3); }
-
-.repo-card--optional { background: color-mix(in srgb, var(--bmm-s02) 90%, transparent); }
-.repo-card--optional::before { background: var(--bmm-s08); opacity: 0.45; }
+/* Variants: only the round step badge is tinted now — no rails, no header fills. */
+.repo-card--cyan .repo-card-step { background: rgba(0,194,255,0.16); color: var(--cyan); border-color: rgba(0,194,255,0.35); }
+.repo-card--green .repo-card-step { background: rgba(46,204,113,0.16); color: var(--success); border-color: rgba(46,204,113,0.35); }
+.repo-card--accent .repo-card-step { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.16); color: var(--accent); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.35); }
 .repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
+.repo-card--optional .repo-card-step { opacity: 0.7; }
 
 /* ── Method picker ── A segmented control at the top of the "produce repo.json" step so the
    THREE ways (generate / manifest-only / remote) become one choice with one form showing,
@@ -20008,20 +19988,20 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .repo-host-group {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding-left: 16px;
-    border-left: 2px solid var(--bmm-s06);
+    gap: 18px;
+    padding-left: 22px;
+    border-left: 2px solid var(--bmm-s05);
 }
-.repo-host-group + .repo-host-group { margin-top: 10px; }
-.repo-host-group[data-host-group="publish"] { border-left-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
-.repo-host-group[data-host-group="serve"] { border-left-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.repo-host-group + .repo-host-group { margin-top: 30px; }
+.repo-host-group[data-host-group="publish"] { border-left-color: color-mix(in srgb, var(--cyan) 40%, transparent); }
+.repo-host-group[data-host-group="serve"] { border-left-color: color-mix(in srgb, var(--success) 40%, transparent); }
 
 .repo-group-h {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
     gap: 4px 10px;
-    margin-left: -30px;          /* the number sits ON the rail */
+    margin-left: -33px;          /* the number badge straddles the 22px-inset rail */
 }
 .repo-group-h--loose { margin-left: 0; }
 .repo-group-n {
