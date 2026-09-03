@@ -80,7 +80,7 @@ export function iconColourOf(ref) {
 const OUR_ICONS = {
     'app:bmm': { src: 'assets/BMm.png', label: 'BetterModsManager' },
     'app:bc': { src: 'assets/BC.webp', label: 'BetterCommunity' },
-    'app:bi': { src: 'assets/bi.png', label: 'BetterInstaller' },
+    'app:bi': { src: 'assets/bi.svg', label: 'BetterInstaller' },
     'app:bd': { src: 'assets/bd.png', label: 'BetterDiscord' },
     'app:tasky': { src: 'assets/Tasky.png', label: 'Tasky' },
     'app:tasky-happy': { src: 'assets/Tasky_Happy.png', label: 'Tasky (happy)' },
@@ -144,7 +144,11 @@ export function renderPackIcon(ref, size = 16, color) {
         const our = OUR_ICONS[ref];
         if (!our)
             return '';
-        return `<img src="${escAttr(our.src)}" alt="" style="width:${size}px;height:${size}px;object-fit:contain" />`;
+        // Just a white rounded background behind the mark — like a 512px app icon (~22% corner
+        // radius) — so a transparent logo reads on any surface. No border, clean.
+        const r = Math.max(4, Math.round(size * 0.22));
+        const pad = Math.max(1, Math.round(size * 0.11));
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;background:#fff;border-radius:${r}px;padding:${pad}px;box-sizing:border-box;flex-shrink:0"><img src="${escAttr(our.src)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" /></span>`;
     }
     if (ref.startsWith('lucide:')) {
         const node = _lucide?.[ref.slice(7)];

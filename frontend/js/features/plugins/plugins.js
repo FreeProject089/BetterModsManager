@@ -496,7 +496,6 @@ function buildPluginCard(plugin, source) {
                      these is an action, and none is worth a line of its own. -->
                 <div class="plug-card-facts">
                     <span class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</span>
-                    ${manifest.game ? `<span class="plug-card-game">${escHtml(manifest.game)}</span>` : ''}
                     ${source === 'installed' && hasModlist ? `
                         <!-- A button, not a fact. It reads as the question ("which twelve, and
                              do I have them?") and the answer already existed one row down,
@@ -552,16 +551,19 @@ function buildPluginCard(plugin, source) {
                          own buttons rather than as the eighth and ninth icon in a row.
                          Everything that CHANGES something is behind the menu; these two only
                          look. -->
-                    <button class="btn btn-xs btn-ghost plug-btn-perms" data-id="${escHtml(manifest.id)}"
-                        data-name="${escAttr(manifest.name)}" data-tooltip="${escAttr(t('plugins.perm.tip'))}">
-                        ${IC.lock} <span class="plug-btn-word">${escHtml(t('plugins.perm.word'))}</span>
+                    <!-- Icon-only now. These three only LOOK at the plugin; as labelled buttons
+                         they doubled the card's verb count and made a small card read as busy.
+                         The tooltip still names each one; the handlers are unchanged. -->
+                    <button class="btn btn-xs btn-ghost plug-icobtn plug-btn-perms" data-id="${escHtml(manifest.id)}"
+                        data-name="${escAttr(manifest.name)}" aria-label="${escAttr(t('plugins.perm.word'))}" data-tooltip="${escAttr(t('plugins.perm.tip'))}">
+                        ${IC.lock}
                     </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-content" data-id="${escHtml(manifest.id)}"
-                        data-name="${escAttr(manifest.name)}" data-tooltip="${escAttr(t('plugins.tree.tip'))}">
-                        ${IC.folder} <span class="plug-btn-word">${escHtml(t('plugins.tree.word'))}</span>
+                    <button class="btn btn-xs btn-ghost plug-icobtn plug-btn-content" data-id="${escHtml(manifest.id)}"
+                        data-name="${escAttr(manifest.name)}" aria-label="${escAttr(t('plugins.tree.word'))}" data-tooltip="${escAttr(t('plugins.tree.tip'))}">
+                        ${IC.folder}
                     </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.inspect'))}">
-                        ${IC.eye} <span class="plug-btn-word">${escHtml(t('plugins.inspectWord'))}</span>
+                    <button class="btn btn-xs btn-ghost plug-icobtn plug-btn-inspect" data-id="${escHtml(manifest.id)}" aria-label="${escAttr(t('plugins.inspectWord'))}" data-tooltip="${escAttr(t('plugins.inspect'))}">
+                        ${IC.eye}
                     </button>
                 </div>
                 <!-- Everything that did not earn a place on the card, at the end — a SIBLING

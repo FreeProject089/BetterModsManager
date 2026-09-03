@@ -312,8 +312,9 @@ const REACTION_EMOJI = {
     'thumbs-up': '👍', heart: '❤️', fire: '🔥', party: '🎉', star: '⭐',
     rocket: '🚀', laugh: '😂', smile: '🙂', sparkles: '✨', check: '✅',
 };
-// Project logo (like the website's coverless cards) — falls back to a monogram.
-const PROJ_LOGO = { community: 'assets/BC.webp', bmm: 'assets/BMm.png' };
+// Project logo (like the website's coverless cards) — the white rounded-chip marks, falling
+// back to a monogram for a project with no bundled logo.
+const PROJ_LOGO = { community: 'assets/BC_white.webp', bmm: 'assets/BMm_white.webp', installer: 'assets/bi.svg' };
 function projMono(p) {
     const key = projOf(p);
     const logo = PROJ_LOGO[key];
