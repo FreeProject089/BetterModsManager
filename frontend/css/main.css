@@ -10893,6 +10893,16 @@ body.tasky-hidden #app-mascot-container {
     color: var(--cyan);
 }
 .repo-tab-btn.active .repo-tab-sub { color: var(--text-secondary); }
+/* An unmistakable "selected tab" underline on the active card. */
+.repo-tab-btn.active::after {
+    content: "";
+    position: absolute;
+    left: 16px; right: 16px; bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+}
+.repo-tab-btn[data-repo-tab="sync"].active::after { background: var(--accent); }
+.repo-tab-btn[data-repo-tab="host"].active::after { background: var(--cyan); }
 
 /* Panels — high specificity so it beats .repo-column { display:flex } */
 .repo-tab-body { position: relative; }
