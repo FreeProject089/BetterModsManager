@@ -11535,12 +11535,16 @@ body.tasky-hidden #app-mascot-container {
    always had, with one Install button in it. Selected by what the card CONTAINS rather
    than by a second class on the container, so the markup cannot say "installed" in one
    place and "catalogue" in another. */
+/* One row now: the DO actions (Compare / Apply) on the left, the look-at-it icons + the ⋮
+   pushed to the right. If the card is too narrow the icon group wraps below AS A GROUP (it is
+   one nowrap unit), never the ⋮ alone — which was the whole reason this used to be two rows. */
 .plug-card-actions:has(.plug-card-actions-right) {
-    flex-direction: column;
-    align-items: stretch;
-    flex-wrap: nowrap;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
 }
+.plug-card-actions:has(.plug-card-actions-right) .plug-card-actions-row { margin-left: auto; }
 .plug-card-actions-main {
     display: flex;
     gap: 6px;
@@ -13075,6 +13079,19 @@ button.plug-card-fact-btn {
 }
 button.plug-card-fact-btn:hover,
 button.plug-card-fact-btn:focus-visible { color: var(--text-primary); border-bottom-color: currentColor; }
+/* The "N mods required" is the one fact worth acting on ("which, and do I have them?"), so it
+   gets a real accent pill instead of a dotted-underline whisper — clearly tappable, without
+   becoming a heavy button beside the version text. */
+button.plug-btn-modlist.plug-card-fact-btn {
+    border-bottom: none;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+}
+button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
 /* The ids end the line rather than starting a new one. */
 .plug-card-facts .plug-card-ids { margin-left: auto; }
 
@@ -20347,7 +20364,19 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .plug-btn-word { font-size: 10.5px; white-space: nowrap; }
 
 .plug-more { position: relative; }
-.plug-more-btn { font-size: 15px; line-height: 1; padding: 2px 7px; }
+/* The ⋮ is a square button matching the perms/contents/inspect icons beside it, so the whole
+   right cluster reads as one consistent row of controls instead of a menu tacked on the end. */
+.plug-more-btn {
+    width: 30px; height: 30px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; line-height: 1;
+    border-radius: 8px;
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-s08);
+    color: var(--text-secondary);
+    transition: background .12s, color .12s, transform .1s;
+}
+.plug-more-btn:hover { background: var(--bmm-s09); color: var(--text-primary); transform: translateY(-1px); }
 /* Fixed, not absolute.
    `.plug-card` is `overflow: hidden` — it has a decorative ::before and a border radius to
    keep — so an absolutely positioned menu inside it was CLIPPED BY THE CARD. It opened
