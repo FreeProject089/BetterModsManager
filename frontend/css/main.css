@@ -10956,33 +10956,40 @@ body.tasky-hidden #app-mascot-container {
     box-shadow: 0 0 6px var(--accent);
 }
 
-/* Repo "cards" — REBUILT as flat sections, not boxes. The Server-Repo page read as a stack of
-   floating cards-in-cards; now each step is a plain section that flows down the page, its number
-   badge and title forming a quiet header and the controls indented beneath it. No surface, no
-   border box, no hover lift — the page is one calm column. Colour lives only in the round step
-   badge. (The step grouping/rail comes from .repo-host-group below.) */
+/* Repo cards — real cards again, but BETTER and step-free. Each is a clean rounded surface with
+   a soft accent hairline down the left edge (its method's colour), a light header with a title,
+   and its controls in a padded body. No numbered wizard badges — the flow is tabs (Sync/Host)
+   and the method pills, not "step 1 / step 2". A quiet hover lifts the border, not the whole card. */
 .repo-card {
     position: relative;
-    background: none;
-    border: none;
-    border-radius: 0;
-    overflow: visible;
+    background: color-mix(in srgb, var(--bmm-s02) 60%, transparent);
+    border: 1px solid var(--bmm-s06);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color .18s ease, box-shadow .18s ease;
 }
-.repo-card::before { display: none; }
-.repo-card:hover { box-shadow: none; }
+.repo-card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--bmm-s08);
+    opacity: 0.6;
+}
+.repo-card:hover { border-color: var(--bmm-s09); box-shadow: 0 2px 14px rgba(0,0,0,0.16); }
 .repo-card-header {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 0 0 12px;
-    border-bottom: none;
-    background: none;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--bmm-s05);
+    background: color-mix(in srgb, var(--bmm-s04) 40%, transparent);
 }
 .repo-card-header h3 {
     margin: 0;
     flex: 1;
     min-width: 0;
-    font-size: 14.5px;
+    font-size: 14px;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -10995,12 +11002,15 @@ body.tasky-hidden #app-mascot-container {
     opacity: 1;
     color: var(--text-primary);
 }
-/* No more step badges — the page is not a numbered wizard. */
+/* No numbered step badges — the page navigates by tabs, not a wizard. */
 .repo-card-step { display: none; }
-/* Controls flow straight under the section title, no badge to align past. */
-.repo-card-body {
-    padding: 4px 0 0 0;
-}
+.repo-card-body { padding: 16px; }
+/* The accent hairline carries each method's colour. */
+.repo-card--cyan::before { background: var(--cyan); opacity: 0.85; }
+.repo-card--green::before { background: #2ecc71; opacity: 0.85; }
+.repo-card--accent::before { background: var(--accent); opacity: 0.85; }
+.repo-card--optional { background: color-mix(in srgb, var(--bmm-s02) 42%, transparent); }
+.repo-card--optional::before { opacity: 0.4; }
 .repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
 
 /* ── Method picker ── A segmented control at the top of the "produce repo.json" step so the
@@ -11029,9 +11039,10 @@ body.tasky-hidden #app-mascot-container {
 }
 .repo-method-pill:hover { color: var(--text-primary); }
 .repo-method-pill.active {
-    background: var(--bmm-s07);
+    background: color-mix(in srgb, var(--accent) 20%, var(--bmm-s07));
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
     color: var(--text-primary);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.28);
 }
 /* Only the active method's card is shown; the "ALTERNATIVE" badge on the alts is now noise
    (the picker names the choice), so it's hidden. */
@@ -20055,13 +20066,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     align-self: center;
 }
 
-/* An alternative method sits subordinate to its section — indented under a soft dashed edge,
-   so "one of these three" never reads as three things to do. */
+/* An alternative method is just a card with the method pills above it choosing which one shows;
+   it needs no dashed indent now that it is a real card again (the reduced-opacity accent marks
+   it). */
 .repo-host-group .repo-card--optional {
-    margin-left: 16px;
-    padding-left: 16px;
-    border-left: 2px dashed var(--bmm-s06);
-    border-top: none;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 1px solid var(--bmm-s06);
 }
 
 
