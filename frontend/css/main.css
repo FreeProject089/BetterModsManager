@@ -11616,6 +11616,17 @@ body.tasky-hidden #app-mascot-container {
 }
 .plug-card-actions-right .btn:hover { background: var(--bmm-s09); color: var(--text-primary); transform: translateY(-1px); }
 .plug-card-actions-right .btn svg { width: 14px; height: 14px; }
+/* Icon-only secondary buttons: a square target, no label, so three "look at it" actions take
+   the space of one word instead of three. */
+.plug-icobtn {
+    width: 30px;
+    min-width: 30px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.plug-icobtn svg { width: 15px; height: 15px; }
 .plug-card-actions-right .btn-danger-ghost:hover,
 .plug-card-actions-right .btn.btn-danger:hover { background: rgba(239,68,68,0.15); color: var(--danger); border-color: rgba(239,68,68,0.35); }
 /* Primary actions (Compare / Apply) keep a clear filled/secondary look.
