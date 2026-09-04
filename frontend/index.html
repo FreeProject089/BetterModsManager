@@ -1660,11 +1660,6 @@
                                             <span data-i18n="repo.update.openBtn">Update an existing repo</span>
                                         </button>
                                         <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.update.openHint">Add/remove mods &amp; profiles in an existing repo without regenerating everything.</p>
-                                        <button class="btn btn-secondary btn-sm" id="btn-open-repo-hub" style="width:100%;justify-content:center;gap:7px;margin-top:10px;">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
-                                            <span data-i18n="repo.hub.openBtn">Multi-repo hub server</span>
-                                        </button>
-                                        <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.hub.openHint">Serve all your repos from one Node server with a web dashboard.</p>
                                     </div>
                                     </div><!-- /repo-card-body (generate) -->
                             </div><!-- /repo-card--cyan -->
@@ -2213,6 +2208,17 @@
                                             </div>
                                         </div>
                                     </div><!-- /repo-server-url-container -->
+
+                                    <!-- Serve EVERY repo from one Node server + web dashboard. A
+                                         serving concern, so it lives with the serve step, not in
+                                         the generate card where it used to sit. -->
+                                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bmm-s06);">
+                                        <button class="btn btn-secondary btn-sm" id="btn-open-repo-hub" style="width:100%;justify-content:center;gap:7px;">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
+                                            <span data-i18n="repo.hub.openBtn">Multi-repo hub server</span>
+                                        </button>
+                                        <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.hub.openHint">Serve all your repos from one Node server with a web dashboard.</p>
+                                    </div>
                                 </div><!-- /repo-card-body (http server) -->
                             </div><!-- /repo-card--green -->
 
