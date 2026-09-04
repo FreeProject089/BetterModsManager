@@ -1022,7 +1022,12 @@ export function showSyncSummary(summary) {
     if (!body || !modal)
         return;
     if (!summary || !summary.profiles || summary.profiles.length === 0) {
-        body.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">${t('repo.noChanges')}</div>`;
+        // "Nothing to do" is a result, not an absence — say what was checked and what it means.
+        body.innerHTML = `<div class="empty-state" style="padding:22px 12px;">
+            <div class="empty-icon" style="opacity:.55;color:var(--success);"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 6 9 17l-5-5"/></svg></div>
+            <p class="empty-title" style="font-size:13px;">${escHtml(t('repo.noChanges'))}</p>
+            <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noChangesHint') || 'Every mod in this repo matches what you already have — nothing to download, nothing to remove.')}</p>
+        </div>`;
     }
     else {
         body.innerHTML = summary.profiles.map(p => `

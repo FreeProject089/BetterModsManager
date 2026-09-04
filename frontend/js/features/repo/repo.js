@@ -552,7 +552,12 @@ export const loadProfilesForExport = async (profilesListEl) => {
         const profiles = await invoke('get_profiles');
         profilesListEl.innerHTML = '';
         if (!profiles || profiles.length === 0) {
-            profilesListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center;">${t('repo.noProfiles')}</div>`;
+            // A real empty state, not a grey line: what is missing and what puts something here.
+            profilesListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
+                <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+                <p class="empty-title" style="font-size:13px;">${escHtml(t('repo.noProfiles'))}</p>
+                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noProfilesHint') || 'This repo ships no profile yet — the host adds them from Generate → profiles to include.')}</p>
+            </div>`;
             return;
         }
         profiles.forEach(p => {
@@ -590,7 +595,11 @@ export const loadModpacksForExport = async (modpacksListEl) => {
         const modpacks = await invoke('load_modpacks');
         modpacksListEl.innerHTML = '';
         if (!modpacks || modpacks.length === 0) {
-            modpacksListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center; padding: 10px;">${t('modpack.noMods') || 'No modpack available'}</div>`;
+            modpacksListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
+                <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+                <p class="empty-title" style="font-size:13px;">${escHtml(t('modpack.noMods') || 'No modpack available')}</p>
+                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noModpacksHint') || 'The host has not attached a modpack to this repo. Once they do, it appears here to apply in one click.')}</p>
+            </div>`;
             return;
         }
         modpacks.forEach(pack => {
