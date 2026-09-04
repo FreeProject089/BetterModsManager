@@ -1312,6 +1312,13 @@
                                 <p class="repo-host-lede-p repo-host-lede-alt" data-i18n="repo.hostLedeAlt">Les cartes marqu&#233;es <b>ALTERNATIVE</b> ne sont pas des &#233;tapes de plus&#160;: ce sont d'autres fa&#231;ons de faire celle au-dessus d'elles.</p>
                             </div>
                             <!-- Card: Generate Repo -->
+                            <!-- Host view: one tab per job. "All" keeps both steps on screen (the default —
+                                 tutorial steps and deep links land on either); "Generate" or "Serve" shows one. -->
+                            <div class="repo-host-view" role="tablist" id="repo-host-view">
+                                <button type="button" class="repo-host-view-btn active" data-host-view="all" role="tab" data-i18n="repo.hostView.all">All</button>
+                                <button type="button" class="repo-host-view-btn" data-host-view="publish" role="tab"><span class="repo-host-view-n">1</span><span data-i18n="repo.hostView.publish">Generate the repo</span></button>
+                                <button type="button" class="repo-host-view-btn" data-host-view="serve" role="tab"><span class="repo-host-view-n">2</span><span data-i18n="repo.hostView.serve">Serve the files</span></button>
+                            </div>
                             <div class="repo-host-group" data-host-group="publish" data-active-method="generate">
 <div class="repo-group-h">
                                     <span class="repo-group-n">1</span>

@@ -323,3 +323,23 @@
     background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.3);
     color: var(--cyan); font-size: 11px; font-weight: 800;
 }
+
+/* ── Host view switcher: All / Generate / Serve ───────────────────────────────── */
+.repo-host-view {
+    display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px;
+    border: 1px solid var(--bmm-s08); background: var(--bmm-s03); border-radius: 12px;
+}
+.repo-host-view-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 14px; border-radius: 9px; border: 1px solid transparent;
+    background: transparent; color: var(--bmm-text-secondary);
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: background .12s, color .12s;
+}
+.repo-host-view-btn:hover { color: var(--bmm-text-primary); }
+.repo-host-view-btn.active { background: var(--bmm-bg-elevated); color: var(--bmm-text-primary); border-color: var(--bmm-s10); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.repo-host-view-n {
+    display: grid; place-items: center; width: 18px; height: 18px;
+    border-radius: var(--radius-badge, 5px); font-size: 10.5px; font-weight: 800;
+    background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--cyan);
+}

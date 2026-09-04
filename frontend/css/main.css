@@ -11633,17 +11633,28 @@ body.tasky-hidden #app-mascot-container {
    pushed to the right. If the card is too narrow the icon group wraps below AS A GROUP (it is
    one nowrap unit), never the ⋮ alone — which was the whole reason this used to be two rows. */
 .plug-card-actions:has(.plug-card-actions-right) {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
 }
-.plug-card-actions:has(.plug-card-actions-right) .plug-card-actions-row { margin-left: auto; }
+/* Secondary first (small icons + ⋮, spread across the row), primary last and big. */
+.plug-card-actions:has(.plug-card-actions-right) .plug-card-actions-row { order: 1; margin-left: 0; justify-content: space-between; }
+.plug-card-actions:has(.plug-card-actions-right) .plug-card-actions-main { order: 2; }
 .plug-card-actions-main {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
 }
+/* The two things the card exists for: Compare and Apply. Big, bold, sharing the width. */
+.plug-card-actions-main > .btn {
+    flex: 1 1 0;
+    height: 36px !important;
+    font-size: 12.5px;
+    font-weight: 700;
+    border-radius: var(--radius-btn, 10px) !important;
+    justify-content: center;
+}
+.plug-card-actions-main > .btn svg { width: 14px; height: 14px; }
 /* A plugin with no mod list and no scripts has neither button, and an empty flex row is
    still a gap. */
 .plug-card-actions-main:empty { display: none; }
@@ -11684,7 +11695,7 @@ body.tasky-hidden #app-mascot-container {
 }
 /* Clean square icon buttons in the installed-plugin action row */
 .plug-card-actions-right .btn {
-    width: 30px; height: 30px; min-width: 30px; padding: 0;
+    width: 28px; height: 28px; min-width: 28px; padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
     border-radius: 8px;
     background: var(--bmm-s04);
@@ -20461,7 +20472,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* The ⋮ is a square button matching the perms/contents/inspect icons beside it, so the whole
    right cluster reads as one consistent row of controls instead of a menu tacked on the end. */
 .plug-more-btn {
-    width: 30px; height: 30px; padding: 0;
+    width: 28px; height: 28px; padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 16px; line-height: 1;
     border-radius: 8px;
