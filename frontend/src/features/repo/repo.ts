@@ -2465,38 +2465,6 @@ export function initRepo() {
         const box = document.getElementById('repo-export-server-options');
         if (cb && box) { const sync = () => { box.style.display = cb.checked ? '' : 'none'; }; cb.addEventListener('change', sync); sync(); }
     }
-    // ── Host view: All / Generate / Serve. Filters the two host groups; "all" is the default so
-    //    a tutorial step or a deep link that targets either group always finds it on screen. ──
-    {
-        const KEY = 'bmm_repo_host_view';
-        const apply = (v: string) => {
-            document.querySelectorAll<HTMLElement>('.repo-host-group').forEach((g) => { g.style.display = (v === 'all' || g.dataset.hostGroup === v) ? '' : 'none'; });
-            document.querySelectorAll<HTMLElement>('.repo-host-view-btn').forEach((b) => b.classList.toggle('active', b.dataset.hostView === v));
-        };
-        let cur = 'all'; try { cur = localStorage.getItem(KEY) || 'all'; } catch { /* private mode */ }
-        if (document.getElementById('repo-host-view')) apply(cur);
-        document.addEventListener('click', (e) => {
-            const b = (e.target instanceof Element) ? e.target.closest<HTMLElement>('.repo-host-view-btn') : null; if (!b) return;
-            const v = b.dataset.hostView || 'all'; apply(v); try { localStorage.setItem(KEY, v); } catch { /* private mode */ }
-        });
-        // A step or a deep link aimed at a hidden group brings the view back to "all" — the
-        // tutorial engine and openDeepLink both dispatch this before highlighting.
-        window.addEventListener('bmm:repo-host-reveal', () => { apply('all'); });
-        // The emitter: the tutorial engine draws a .tut-highlight whose _tutTarget is the step's
-        // element. If that element sits in a host group this view hides, reveal everything —
-        // otherwise the highlight would measure 0×0 and vanish, and the step would point at
-        // nothing. Observed here rather than wired into the engine, so the engine stays generic.
-        const layerObs = new MutationObserver((muts) => {
-            for (const m of muts) for (const node of m.addedNodes) {
-                if (!(node instanceof HTMLElement) || !node.classList.contains('tut-highlight')) continue;
-                const target = (node as any)._tutTarget as HTMLElement | null;
-                const grp = target?.closest<HTMLElement>('.repo-host-group');
-                if (grp && grp.style.display === 'none') window.dispatchEvent(new Event('bmm:repo-host-reveal'));
-            }
-        });
-        layerObs.observe(document.body, { childList: true, subtree: true });
-    }
-
     // ── Every repo card folds from its header chevron; the state survives a restart. ──
     {
         const KEY = 'bmm_repo_card_folded';

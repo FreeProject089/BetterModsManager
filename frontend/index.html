@@ -1312,13 +1312,6 @@
                                 <p class="repo-host-lede-p repo-host-lede-alt" data-i18n="repo.hostLedeAlt">Les cartes marqu&#233;es <b>ALTERNATIVE</b> ne sont pas des &#233;tapes de plus&#160;: ce sont d'autres fa&#231;ons de faire celle au-dessus d'elles.</p>
                             </div>
                             <!-- Card: Generate Repo -->
-                            <!-- Host view: one tab per job. "All" keeps both steps on screen (the default —
-                                 tutorial steps and deep links land on either); "Generate" or "Serve" shows one. -->
-                            <div class="repo-host-view" role="tablist" id="repo-host-view">
-                                <button type="button" class="repo-host-view-btn active" data-host-view="all" role="tab" data-i18n="repo.hostView.all">All</button>
-                                <button type="button" class="repo-host-view-btn" data-host-view="publish" role="tab"><span class="repo-host-view-n">1</span><span data-i18n="repo.hostView.publish">Generate the repo</span></button>
-                                <button type="button" class="repo-host-view-btn" data-host-view="serve" role="tab"><span class="repo-host-view-n">2</span><span data-i18n="repo.hostView.serve">Serve the files</span></button>
-                            </div>
                             <div class="repo-host-group" data-host-group="publish" data-active-method="generate">
 <div class="repo-group-h">
                                     <span class="repo-group-n">1</span>
@@ -1616,27 +1609,6 @@
                                         </div><!-- /repo-export-zip-options -->
                                     </div>
                                     </details>
-                                    <div style="display:flex; gap:10px;">
-                                        <button class="btn btn-primary" id="btn-start-repo-export"
-                                            style="flex:1;justify-content:center;">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.2">
-                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                <polyline points="17 8 12 3 7 8" />
-                                                <line x1="12" y1="3" x2="12" y2="15" />
-                                            </svg>
-                                            <span data-i18n="repo.exportBtn">...</span>
-                                        </button>
-                                        <button class="btn btn-outline-danger btn-sm" id="btn-cancel-repo-export"
-                                            style="display:none; justify-content:center; gap:6px; color:var(--danger); border-color:rgba(239,68,68,0.3); padding:0 14px; flex-shrink:0;">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5">
-                                                <line x1="18" y1="6" x2="6" y2="18" />
-                                                <line x1="6" y1="6" x2="18" y2="18" />
-                                            </svg>
-                                            <span data-i18n="repo.cancelExport">Annuler</span>
-                                        </button>
-                                    </div>
 
                                     <details class="repo-sec">
                                     <summary class="repo-sec-h"><span class="repo-sec-n">4</span><span data-i18n="repo.sec.publish">Include more &amp; publish over SSH</span></summary>
@@ -1670,6 +1642,29 @@
                                          features/repo/ssh-action.ts, le même partout. -->
                                     <div id="repo-ssh-mount"></div>
                                     </details>
+
+                                    <!-- The one action, after every section. -->
+                                    <div style="display:flex; gap:10px; margin-top:6px;">
+                                        <button class="btn btn-primary" id="btn-start-repo-export"
+                                            style="flex:1;justify-content:center;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.2">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                <polyline points="17 8 12 3 7 8" />
+                                                <line x1="12" y1="3" x2="12" y2="15" />
+                                            </svg>
+                                            <span data-i18n="repo.exportBtn">...</span>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" id="btn-cancel-repo-export"
+                                            style="display:none; justify-content:center; gap:6px; color:var(--danger); border-color:rgba(239,68,68,0.3); padding:0 14px; flex-shrink:0;">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.5">
+                                                <line x1="18" y1="6" x2="6" y2="18" />
+                                                <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                            <span data-i18n="repo.cancelExport">Annuler</span>
+                                        </button>
+                                    </div>
 
                                     <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
                                         <div class="bmm-progress-head">

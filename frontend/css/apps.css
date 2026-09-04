@@ -395,7 +395,7 @@
     align-items: center;
     gap: 5px;
     padding: 5px 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-badge, 5px);
     font-size: 12px;
     font-weight: 500;
     background: var(--bg-secondary);
