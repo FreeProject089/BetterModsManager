@@ -109,6 +109,9 @@
     --space-16: 64px;
 
     /* ── Spacing / Shape ──────────────────────────────────────────────────── */
+    /* One coherent rounding scale — "rounded rectangles", not lozenges. Reach for a token,
+       not a raw px, so the app reads as one family: badge (tiny labels) < input/btn < card. */
+    --bmm-radius-badge:  5px;
     --bmm-radius-card:  14px;
     --bmm-radius-btn:   10px;
     --bmm-radius-input: 9px;
@@ -238,6 +241,7 @@
     --text-on-accent: var(--bmm-text-on-accent);
     --font-sans:     var(--bmm-font-sans);
     --font-mono:     var(--bmm-font-mono);
+    --radius-badge:  var(--bmm-radius-badge);
     --radius-card:   var(--bmm-radius-card);
     --radius-btn:    var(--bmm-radius-btn);
     --radius-input:  var(--bmm-radius-input);

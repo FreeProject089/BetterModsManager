@@ -890,7 +890,7 @@ export async function renderProfiles() {
                     </div>
                 </div>
             </div>
-            <button class="btn btn-ghost btn-sm" ${actAttrs('openDiagram', 'mod-architecture')} style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-ghost btn-sm" ${actAttrs('openDocsArticleById', 'activation')} style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>

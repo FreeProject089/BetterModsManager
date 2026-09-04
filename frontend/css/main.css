@@ -11529,14 +11529,15 @@ body.tasky-hidden #app-mascot-container {
     margin: 0;
 }
 
-/* Badges — pill-shaped, uppercase, so official/community/strict read as one badge family. */
+/* Badges — a rounded RECTANGLE (not a pill), uppercase, so official/community/strict read as
+   one badge family that matches the app-catalog tiles rather than a lozenge. */
 .plug-badge-official,
 .plug-badge-community,
 .plug-badge-strict {
     font-size: 9px;
     font-weight: 800;
     padding: 2px 7px;
-    border-radius: 999px;
+    border-radius: var(--radius-badge, 5px);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     line-height: 1.5;
