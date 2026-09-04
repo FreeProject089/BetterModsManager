@@ -1326,7 +1326,7 @@
                                     <button type="button" class="repo-method-pill" data-method-pill="remote" role="tab" data-i18n="repo.method.remote">Dépôt distant</button>
                                 </div>
                             <div class="repo-card repo-card--cyan" data-method="generate">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <div class="repo-card-step">01</div>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1382,6 +1382,8 @@
                                          a screen. Keeping it here meant a modpack could only be
                                          added while re-exporting every mod. -->
 
+                                    <details class="repo-sec" open>
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">2</span><span data-i18n="repo.sec.output">Output &amp; identity</span></summary>
                                     <div class="form-group" style="margin-bottom:6px;">
                                         <label class="form-label" style="margin-bottom:4px;"
                                             data-i18n="repo.outputDir">...</label>
@@ -1432,6 +1434,9 @@
                                          and no way to know before trying. -->
                                     <div id="repo-export-creds-slot" style="margin-bottom:16px;"></div>
 
+                                    </details>
+                                    <details class="repo-sec">
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">3</span><span data-i18n="repo.sec.dist">Distribution — archive &amp; standalone server</span></summary>
                                     <!-- Distribution Options (ZIP + Server) -->
                                     <div
                                         style="margin-bottom: 16px; padding: 12px; background: var(--bmm-bg-base); border-radius: 8px; border: 1px solid var(--bmm-s05);">
@@ -1473,6 +1478,17 @@
 
                                         <div id="repo-export-zip-options"
                                             style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bmm-s05);">
+                                            <!-- The archive and the standalone server are two different things. The zip used
+                                                 to imply the server; now the server is opt-in, and an unticked box means the
+                                                 zip holds the repo and nothing else — the API already had both flags apart
+                                                 (zipOutput / generateServer), only this form conflated them. -->
+                                            <label class="checkbox-container"
+                                                style="font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px;">
+                                                <input type="checkbox" id="repo-export-server-enable" />
+                                                <span class="checkmark"></span>
+                                                <span data-i18n="repo.includeStandalone">Also bundle a standalone server (optional)</span>
+                                            </label>
+                                            <div id="repo-export-server-options" style="display:none;">
                                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                     stroke="var(--accent)" stroke-width="2.5">
@@ -1588,9 +1604,11 @@
                                                     </select>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
 
+                                            </div><!-- /repo-export-server-options -->
+                                        </div><!-- /repo-export-zip-options -->
+                                    </div>
+                                    </details>
                                     <div style="display:flex; gap:10px;">
                                         <button class="btn btn-primary" id="btn-start-repo-export"
                                             style="flex:1;justify-content:center;">
@@ -1613,6 +1631,8 @@
                                         </button>
                                     </div>
 
+                                    <details class="repo-sec">
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">4</span><span data-i18n="repo.sec.publish">Include more &amp; publish over SSH</span></summary>
                                     <!-- ── Everything that is not a mod ──
                                          Its own button, and NOT part of the export run, because the
                                          three moments it serves are the same act: finishing an
@@ -1642,6 +1662,7 @@
                                          joignable que depuis celui-ci. Le panneau est monté par
                                          features/repo/ssh-action.ts, le même partout. -->
                                     <div id="repo-ssh-mount"></div>
+                                    </details>
 
                                     <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
                                         <div class="bmm-progress-head">
@@ -1666,7 +1687,7 @@
                             <!-- Manifest-only generation: describe mods that are ALREADY
                                  hosted, instead of exporting a copy of them. -->
                             <div class="repo-card repo-card--optional" data-method="manifest">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -1692,6 +1713,8 @@
                                         </button>
                                     </div>
 
+                                    <details class="repo-sec" open>
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">1</span><span data-i18n="repo.sec.msource">What to describe</span></summary>
                                     <!-- A LIST of folders, not one: a collection kept in two
                                          places is one repo, and it used to be impossible. -->
                                     <div id="manifest-folder-block" style="margin-bottom:10px;">
@@ -1713,6 +1736,9 @@
                                             data-i18n="repo.manifestProfilesHint">Des profils sur des dossiers differents donnent un seul repo.json.</p>
                                     </div>
 
+                                    </details>
+                                    <details class="repo-sec" open>
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">2</span><span data-i18n="repo.sec.mwrite">Where repo.json is written</span></summary>
                                     <!-- Where repo.json lands. Empty = beside the first folder,
                                          which is what it has always done. -->
                                     <div style="margin-bottom:10px;">
@@ -1729,6 +1755,9 @@
                                         </div>
                                     </div>
 
+                                    </details>
+                                    <details class="repo-sec">
+                                    <summary class="repo-sec-h"><span class="repo-sec-n">3</span><span data-i18n="repo.sec.mextra">Modpacks &amp; public file URL</span></summary>
                                     <!-- Modpacks apply to BOTH modes: a pack is a selection of
                                          mods, independent of how the mods were chosen. -->
                                     <div style="margin-bottom:10px;">
@@ -1745,6 +1774,7 @@
                                             placeholder="https://mon-serveur.tld/fichiers"
                                             style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                     </div>
+                                    </details>
 
                                     <div style="margin-bottom:12px;">
                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
@@ -1782,7 +1812,7 @@
                             <!-- Mods live only on the server: BMM reads its listing and
                                  updates repo.json without pulling the repo back. -->
                             <div class="repo-card repo-card--optional" data-method="remote">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -1877,7 +1907,7 @@
                                     <span class="repo-group-sub" data-i18n="repo.groupServeSub">Le repo.json ne sert à rien tant que personne ne peut le télécharger.</span>
                                 </div>
                             <div class="repo-card repo-card--green">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <div class="repo-card-step">02</div>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -2214,7 +2244,7 @@
                                  A serving concern, so it sits in the serve step as its own card (it used to be a
                                  button that opened a modal). All ids are the ones repo.ts's initRepoHub binds. -->
                             <div class="repo-card repo-card--optional" id="repo-hub-card" data-method="hub">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
                                         <span data-i18n="repo.hub.title">Multi-Repo Hub Server</span>
@@ -2272,7 +2302,7 @@
 
                             <!-- Card: Mini-Server Standalone -->
                             <div class="repo-card repo-card--optional">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -2493,7 +2523,7 @@
                                 <span class="repo-group-sub" data-i18n="repo.groupJoinSub">Coller l'adresse qu'on vous a donn&#233;e. Rien n'est &#233;crit avant l'aper&#231;u.</span>
                             </div>
                             <div class="repo-card repo-card--accent">
-                                <div class="repo-card-header">
+                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></button>
                                     <h3>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">

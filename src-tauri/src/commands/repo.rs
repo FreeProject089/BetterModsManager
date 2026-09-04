@@ -619,6 +619,8 @@ pub async fn export_server_repo(
     }
 
     // 13. Generate Mini Server if requested
+    // Remembered before the options are consumed below: the archive is named by what it holds.
+    let server_options_present = server_options.is_some();
     if let Some(opt) = server_options {
         println!("[REPO] Generating integrated mini-server...");
         let enable_docker = opt.enable_docker.unwrap_or(false);
@@ -650,7 +652,7 @@ pub async fn export_server_repo(
             current_file: "".to_string(),
         });
         
-        let zip_file_name = format!("BMM-Standalone-Server-{}.zip", chrono::Local::now().format("%Y%m%d-%H%M"));
+        let zip_file_name = format!("{}-{}.zip", if server_options_present { "BMM-Standalone-Server" } else { "BMM-Repo" }, chrono::Local::now().format("%Y%m%d-%H%M"));
         // Final destination is output_dir (user's selected folder)
         let final_dest = PathBuf::from(&output_dir);
         if !final_dest.exists() {

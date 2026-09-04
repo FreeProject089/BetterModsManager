@@ -285,3 +285,41 @@
 
 /* The no-repo.json fallback block sat flush under the options grid. */
 #btn-discover-server { margin-top: 12px; }
+
+/* ── Every repo card folds from its header chevron; sections inside a card fold too ───── */
+.repo-card-header { position: relative; padding-right: 34px; }
+.repo-card-fold {
+    position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+    width: 26px; height: 26px; display: grid; place-items: center;
+    background: var(--bmm-s04); border: 1px solid var(--bmm-s08); border-radius: 7px;
+    color: var(--bmm-text-secondary); cursor: pointer; transition: background .12s, color .12s;
+}
+.repo-card-fold:hover { background: var(--bmm-s09); color: var(--bmm-text-primary); }
+.repo-card-fold svg { transition: transform .18s ease; }
+.repo-card--folded .repo-card-fold svg { transform: rotate(-90deg); }
+.repo-card--folded .repo-card-body { display: none; }
+.repo-card--folded { opacity: .92; }
+
+/* Numbered, collapsible sections inside the Generate / Manifest cards — native <details>,
+   so a dense card reads as three headings you open one at a time. */
+.repo-sec { border: 1px solid var(--bmm-s08); background: var(--bmm-s02); border-radius: 12px; padding: 0 14px; margin: 0 0 12px; }
+.repo-sec > .repo-sec-h {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 9px;
+    padding: 12px 0; font-size: 12px; font-weight: 700; color: var(--bmm-text-primary);
+}
+.repo-sec > .repo-sec-h::-webkit-details-marker { display: none; }
+.repo-sec > .repo-sec-h::after {
+    content: ''; margin-left: auto; width: 8px; height: 8px;
+    border-right: 2px solid var(--bmm-text-muted); border-bottom: 2px solid var(--bmm-text-muted);
+    transform: rotate(-45deg); transition: transform .18s ease;
+}
+.repo-sec[open] > .repo-sec-h::after { transform: rotate(45deg); }
+.repo-sec[open] > .repo-sec-h { border-bottom: 1px solid var(--bmm-s08); margin-bottom: 12px; }
+.repo-sec > :not(.repo-sec-h):last-child { margin-bottom: 14px !important; }
+.repo-sec-n {
+    display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto;
+    border-radius: var(--radius-badge, 5px);
+    background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.3);
+    color: var(--cyan); font-size: 11px; font-weight: 800;
+}

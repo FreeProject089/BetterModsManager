@@ -2459,6 +2459,29 @@ export function initRepo() {
     };
     initRepoUpdate();
 
+    // ── Standalone-server sub-block: shown only when asked for. ──
+    {
+        const cb = document.getElementById('repo-export-server-enable') as HTMLInputElement | null;
+        const box = document.getElementById('repo-export-server-options');
+        if (cb && box) { const sync = () => { box.style.display = cb.checked ? '' : 'none'; }; cb.addEventListener('change', sync); sync(); }
+    }
+    // ── Every repo card folds from its header chevron; the state survives a restart. ──
+    {
+        const KEY = 'bmm_repo_card_folded';
+        let folded: Record<string, boolean> = {};
+        try { folded = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { folded = {}; }
+        const idOf = (card: HTMLElement) => card.id || card.dataset.method || '';
+        document.querySelectorAll<HTMLElement>('.repo-card').forEach((card) => { const k = idOf(card); if (k && folded[k]) card.classList.add('repo-card--folded'); });
+        document.addEventListener('click', (e) => {
+            const btn = (e.target instanceof Element) ? e.target.closest<HTMLElement>('.repo-card-fold') : null;
+            if (!btn) return;
+            const card = btn.closest<HTMLElement>('.repo-card'); if (!card) return;
+            e.preventDefault(); e.stopPropagation();
+            const on = card.classList.toggle('repo-card--folded');
+            const k = idOf(card); if (k) { folded[k] = on; try { localStorage.setItem(KEY, JSON.stringify(folded)); } catch { /* private mode */ } }
+        }, true);
+    }
+
     // ── Repo Hub (multi-repo Node server) ──
     const initRepoHub = () => {
         // The hub is an inline card in the Serve step now (#repo-hub-card), not a modal behind a
@@ -2778,8 +2801,11 @@ export function initRepo() {
                 // the Rust side leaves the field alone when it is None.
                 const modpacksShareConfig = null;
 
+                // The archive and the standalone server are independent: the zip used to imply the
+                // server. Only bundle one when the "also bundle a standalone server" box is ticked.
                 let serverOptions = null;
-                if (elements.cbZipEnable && elements.cbZipEnable.checked) {
+                const cbServerEnable = document.getElementById('repo-export-server-enable') as HTMLInputElement | null;
+                if (elements.cbZipEnable && elements.cbZipEnable.checked && cbServerEnable?.checked) {
                     serverOptions = {
                         port: parseInt(elements.inputZipPort.value) || 8000,
                         upload_limit: parseInt(elements.inputZipLimit.value) || 0,

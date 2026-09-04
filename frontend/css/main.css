@@ -9040,7 +9040,7 @@ select:focus {
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12);
     color: var(--accent);
     padding: 5px 14px;
-    border-radius: 20px;
+    border-radius: var(--radius-badge, 5px);
     font-size: 11px;
     font-weight: 800;
     font-family: var(--font-mono);
