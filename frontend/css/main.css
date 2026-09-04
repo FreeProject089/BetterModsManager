@@ -5757,7 +5757,7 @@ body.tut-docked.tut-min .app-shell {
 .api-table code, .api-code code, .docs-api-page p code, .api-steps code { font-family: var(--font-mono, ui-monospace, monospace); background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 5px; font-size: 0.92em; color: var(--text-primary); }
 .api-code { background: var(--bmm-bg-elevated, #15161d); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow: auto; font-size: 12.5px; line-height: 1.55; }
 .api-code code { background: none; padding: 0; }
-.perm { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap; }
+.perm { display: inline-block; padding: 2px 9px; border-radius: var(--radius-badge); font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap; }
 .perm.s-storage  { color: var(--cyan); border-color: #60a5fa55; background: #60a5fa18; }
 .perm.s-notify   { color: var(--success); border-color: #34d39955; background: #34d39918; }
 .perm.s-internet { color: var(--warning); border-color: #fbbf2455; background: #fbbf2418; }
@@ -5798,7 +5798,7 @@ body.tut-docked.tut-min .app-shell {
 .crashmgr-dot.is-crash { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.6); }
 .crashmgr-dot.is-session { background: #60a5fa; }
 .crashmgr-gtitle { flex: 1; }
-.crashmgr-gcount { font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 1px 8px; border-radius: 999px; }
+.crashmgr-gcount { font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 1px 8px; border-radius: var(--radius-badge); }
 .crashmgr-glist { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--border); }
 .crashmgr-glist .crashmgr-row { border-color: var(--border); }
 .crashmgr-rowdetail { padding: 4px 10px 10px; }
@@ -5824,7 +5824,7 @@ body.tut-docked.tut-min .app-shell {
 .crashmgr-fileview[hidden] { display: none; }
 .crashmgr-fileview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .crashmgr-fileview-name { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crashmgr-fileview-trunc { font-size: 10px; font-weight: 700; color: var(--warning); background: var(--bmm-warning-dim); padding: 1px 7px; border-radius: 999px; flex-shrink: 0; }
+.crashmgr-fileview-trunc { font-size: 10px; font-weight: 700; color: var(--warning); background: var(--bmm-warning-dim); padding: 1px 7px; border-radius: var(--radius-badge); flex-shrink: 0; }
 .crashmgr-fileview-head [data-fileclose] { margin-left: auto; flex-shrink: 0; }
 .crashmgr-fileview-body { max-height: 340px; }
 
@@ -12555,7 +12555,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-modal .sched-step-if > .sched-branch:first-of-type { border-left-color:var(--success); }
 .sched-modal .sched-step-if > .sched-branch:last-of-type  { border-left-color:var(--danger); }
 .sched-modal .sched-step-repeat > .sched-branch           { border-left-color:var(--sk-loop); }
-.sched-modal .sched-branch-label { font-size:9px; font-weight:800; letter-spacing:.08em; padding:2px 9px; border-radius:999px; margin:0 0 7px; }
+.sched-modal .sched-branch-label { font-size:9px; font-weight:800; letter-spacing:.08em; padding:2px 9px; border-radius: var(--radius-badge); margin:0 0 7px; }
 .sched-modal .sched-step-if > .sched-branch:first-of-type .sched-branch-label { color:var(--success); background:color-mix(in srgb, var(--success) 12%, transparent); }
 .sched-modal .sched-step-if > .sched-branch:last-of-type  .sched-branch-label { color:var(--danger);  background:color-mix(in srgb, var(--danger) 12%, transparent); }
 .sched-modal .sched-step-repeat .sched-branch-label       { color:var(--sk-loop); background:color-mix(in srgb, var(--sk-loop) 12%, transparent); }
@@ -14043,8 +14043,8 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
     border-bottom: 1px solid var(--border);
     background: var(--bmm-s03);
 }
-.plug-qt-status-ok  { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(34,197,94,0.18); color: var(--success); }
-.plug-qt-status-err { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(239,68,68,0.18); color: var(--danger); }
+.plug-qt-status-ok  { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-badge); background: rgba(34,197,94,0.18); color: var(--success); }
+.plug-qt-status-err { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-badge); background: rgba(239,68,68,0.18); color: var(--danger); }
 .plug-qt-path-label { font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-muted); }
 .plug-qt-body {
     padding: 10px 12px;
@@ -19636,7 +19636,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .bt-chev { flex: 0 0 auto; display: inline-flex; color: var(--text-muted); transition: transform .12s ease; }
 .bt-chev.is-open { transform: rotate(90deg); }
 .bt-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
-.bt-count { flex: 0 0 auto; font-size: 9.5px; color: var(--text-muted); padding: 0 5px; border-radius: 999px; background: var(--bg-hover); }
+.bt-count { flex: 0 0 auto; font-size: 9.5px; color: var(--text-muted); padding: 0 5px; border-radius: var(--radius-badge); background: var(--bg-hover); }
 .bt-none { font-size: 11px; color: var(--text-muted); margin: 6px 4px; }
 .sched-bl-picked { margin-bottom: 6px; }
 
@@ -19711,7 +19711,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pv-change .pv-eff { color: var(--accent); }
 .pv-already { opacity: .6; }
 .pv-unknown .pv-eff { color: var(--warning); }
-.pv-maybe { font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--bg-card); color: var(--warning); }
+.pv-maybe { font-size: 10px; padding: 0 6px; border-radius: var(--radius-badge); background: var(--bg-card); color: var(--warning); }
 .pv-note { font-size: 11px; color: var(--text-muted); flex: 1; line-height: 1.45; }
 
 /* Group headings in the reference. It lists all 151 entries now, so it needs somewhere for the
@@ -19730,7 +19730,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     background: var(--bg-card);
     padding: 3px 0;
 }
-.sched-ref-h span { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--bg-hover); }
+.sched-ref-h span { font-size: 10px; padding: 0 5px; border-radius: var(--radius-badge); background: var(--bg-hover); }
 
 
 /* Copy-id buttons (core/copy-id.ts).

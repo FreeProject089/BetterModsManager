@@ -121,7 +121,7 @@
 .dh-art-t { font-size: 15px; font-weight: 700; }
 .dh-art-s { font-size: 13px; color: var(--bmm-text-secondary, #a3adba); line-height: 1.5; }
 .dh-art-tags { display: flex; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
-.dh-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.dh-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: var(--radius-badge); }
 .dh-tag-tut { color: var(--bmm-accent, #3b82f6); background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 12%, transparent); }
 .dh-tag-dia { color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 14%, transparent); }
 .dh-tag-med { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 14%, transparent); }
@@ -656,7 +656,7 @@
 .doc-schedule { border: 1px solid var(--bmm-border); border-radius: 10px; margin: 16px 0; overflow: hidden; }
 .doc-schedule-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); }
 .doc-schedule-title { font-weight: 700; font-size: 14px; }
-.doc-schedule-tz { margin-left: auto; font-size: 11px; font-family: var(--bmm-font-mono, ui-monospace, monospace); color: var(--bmm-text-muted); border: 1px solid var(--bmm-border); border-radius: 999px; padding: 2px 8px; }
+.doc-schedule-tz { margin-left: auto; font-size: 11px; font-family: var(--bmm-font-mono, ui-monospace, monospace); color: var(--bmm-text-muted); border: 1px solid var(--bmm-border); border-radius: var(--radius-badge); padding: 2px 8px; }
 .doc-schedule-body { padding: 4px 14px; }
 .doc-schedule-note { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--bmm-text-muted); border-top: 1px dashed var(--bmm-border); }
 
