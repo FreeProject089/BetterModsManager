@@ -149,6 +149,36 @@
 #btn-open-repo-hub:hover,
 #btn-refresh-repo-profiles:hover { color: var(--bmm-text-primary); }
 
+/* ── Multi-repo hub modal — three numbered sections so the fields read as steps ───── */
+.repo-hub-sec {
+    border: 1px solid var(--bmm-s08);
+    background: var(--bmm-s02);
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+.repo-hub-sec-h {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin-bottom: 11px;
+}
+.repo-hub-sec-n {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    border-radius: var(--radius-badge, 5px);
+    background: rgba(6, 182, 212, 0.14);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: var(--cyan);
+    font-size: 11px;
+    font-weight: 800;
+}
+
 /* ── Copy buttons are utilities, not choices ───────────────────────────────── */
 #btn-copy-my-creator-id,
 #btn-copy-repo-url,

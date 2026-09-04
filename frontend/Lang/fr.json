@@ -1701,6 +1701,8 @@
   "repo.hub.runHint": "Lancez",
   "repo.hub.dashHint": "Dashboard :",
   "repo.hub.adminPw": "Mot de passe admin (vide = ouvert)",
+  "repo.hub.access": "Accès",
+  "repo.hub.accessHint": "Définis un mot de passe et le tableau de bord le demande avant que quiconque puisse gérer le hub. Laisse vide pour garder le tableau de bord ouvert sur ton réseau local.",
   "repo.hub.mode": "Mode du hub",
   "repo.hub.modeServe": "Servir les repos (Node)",
   "repo.hub.modeServeHint": "Un serveur Node héberge tous les repos + un dashboard par repo. Les repos sont online quand le hub tourne.",

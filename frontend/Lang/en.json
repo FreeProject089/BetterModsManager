@@ -1703,6 +1703,8 @@
   "repo.hub.runHint": "Run",
   "repo.hub.dashHint": "Dashboard:",
   "repo.hub.adminPw": "Admin password (blank = open)",
+  "repo.hub.access": "Access",
+  "repo.hub.accessHint": "Set a password and the dashboard asks for it before anyone can manage the hub. Leave blank to keep the dashboard open on your local network.",
   "repo.hub.mode": "Hub mode",
   "repo.hub.modeServe": "Serve repos (Node)",
   "repo.hub.modeServeHint": "One Node server hosts all repos + per-repo dashboards. Repos are online when the hub runs.",
