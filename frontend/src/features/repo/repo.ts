@@ -2452,26 +2452,24 @@ export function initRepo() {
 
     // ── Repo Hub (multi-repo Node server) ──
     const initRepoHub = () => {
-        const modal = document.getElementById('modal-repo-hub');
-        const btnOpen = document.getElementById('btn-open-repo-hub');
+        // The hub is an inline card in the Serve step now (#repo-hub-card), not a modal behind a
+        // button — so there is nothing to open; the fields are always mounted and start blank.
+        const card = document.getElementById('repo-hub-card');
         const pathInput = document.getElementById('repo-hub-path') as HTMLInputElement;
         const btnPick = document.getElementById('btn-pick-repo-hub-folder');
         const listEl = document.getElementById('repo-hub-list');
         const btnGen = document.getElementById('btn-generate-repo-hub') as HTMLButtonElement;
         const resultEl = document.getElementById('repo-hub-result');
-        if (!modal || !btnOpen) return;
+        if (!card || !pathInput || !listEl || !btnGen || !resultEl) return;
 
         let hubDir = '';
 
         const fmt = (b) => { if (!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
 
-        btnOpen.addEventListener('click', () => {
-            hubDir = ''; pathInput.value = '';
-            listEl.style.display = 'none'; listEl.innerHTML = '';
-            resultEl.style.display = 'none';
-            btnGen.disabled = true;
-            modal.classList.add('open');
-        });
+        // Blank state at boot — what the old "open" click used to reset.
+        listEl.style.display = 'none'; listEl.innerHTML = '';
+        resultEl.style.display = 'none';
+        btnGen.disabled = true;
 
         btnPick?.addEventListener('click', async () => {
             const folder = await pickFolder().catch(() => null);
@@ -2565,7 +2563,6 @@ export function initRepo() {
             }
         });
 
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
     };
     initRepoHub();
 

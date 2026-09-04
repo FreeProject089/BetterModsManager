@@ -137,7 +137,6 @@
 #btn-open-whitelist,
 #btn-open-bans,
 #btn-open-repo-update,
-#btn-open-repo-hub,
 #btn-refresh-repo-profiles {
     font-weight: 500;
     color: var(--bmm-text-secondary);
@@ -146,7 +145,6 @@
 #btn-open-whitelist:hover,
 #btn-open-bans:hover,
 #btn-open-repo-update:hover,
-#btn-open-repo-hub:hover,
 #btn-refresh-repo-profiles:hover { color: var(--bmm-text-primary); }
 
 /* ── Multi-repo hub modal — three numbered sections so the fields read as steps ───── */

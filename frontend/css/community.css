@@ -22,7 +22,7 @@
   gap: 8px;
   padding: 0 12px;
   border: 1px solid var(--bmm-border);
-  border-radius: 999px;
+  border-radius: var(--radius-badge, 5px);
   background: var(--bmm-bg-elevated);
   color: var(--bmm-text-muted);
   min-width: 200px;
@@ -39,7 +39,7 @@
 }
 .community-toolbar-right { display: flex; align-items: center; gap: 10px; }
 .community-lang {
-  border: 1px solid var(--bmm-border); border-radius: 999px; background: var(--bmm-bg-elevated);
+  border: 1px solid var(--bmm-border); border-radius: var(--radius-badge, 5px); background: var(--bmm-bg-elevated);
   color: var(--bmm-text-secondary); font-size: 13px; padding: 7px 10px; cursor: pointer; outline: none;
 }
 .community-lang:focus { border-color: var(--bmm-border-accent); }
@@ -73,7 +73,7 @@
 .community-author-name { color: var(--bmm-text-muted); font-size: 12px; margin-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .community-chip {
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-badge, 5px);
   border: 1px solid var(--bmm-border);
   background: var(--bmm-bg-elevated);
   color: var(--bmm-text-secondary);
@@ -123,7 +123,7 @@
   justify-content: center;
 }
 .community-hero-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.community-hero-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; color: var(--bmm-text-on-accent); background: var(--bmm-accent); }
+.community-hero-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: var(--radius-badge, 5px); color: var(--bmm-text-on-accent); background: var(--bmm-accent); }
 .community-hero-title { font-size: 27px; font-weight: 800; line-height: 1.18; margin: 0; color: var(--bmm-text-primary); }
 .community-hero-excerpt {
   font-size: 14px; line-height: 1.6; color: var(--bmm-text-muted); margin: 0;
@@ -197,7 +197,7 @@
 .community-inline-badge {
   --bc: var(--bmm-accent);
   display: inline-block; font-size: 11px; font-weight: 700; line-height: 1.7;
-  padding: 0 9px; margin: 0 2px; border-radius: 999px; vertical-align: middle; white-space: nowrap;
+  padding: 0 9px; margin: 0 2px; border-radius: var(--radius-badge, 5px); vertical-align: middle; white-space: nowrap;
   color: var(--bc); background: color-mix(in srgb, var(--bc) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--bc) 42%, transparent);
 }
@@ -331,7 +331,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-badge, 5px);
   border: 1px solid var(--bmm-border);
   background: var(--bmm-bg-elevated);
   font-size: 14px;
@@ -473,7 +473,7 @@
   content: attr(data-marker);
   position: absolute; left: 0; top: 0; width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1;
+  border-radius: var(--radius-badge, 5px); font-size: 12px; font-weight: 700; line-height: 1;
   /* `--stepc` is set by `:::steps{color=…}` (or by a single step). Falls back to the app
      accent, so a document that never mentions a colour looks exactly as it did. */
   color: var(--stepc, var(--bmm-accent)); background: color-mix(in srgb, var(--stepc, var(--bmm-accent)) 16%, transparent);
@@ -560,7 +560,7 @@
 .md-body .doc-schedule-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); }
 .md-body .doc-schedule-title { font-weight: 700; font-size: 14px; }
 /* The zone is the point of the card, not a footnote on it. */
-.md-body .doc-schedule-tz { margin-left: auto; font-size: 11px; font-family: var(--bmm-font-mono, ui-monospace, monospace); color: var(--bmm-text-muted); border: 1px solid var(--bmm-border); border-radius: 999px; padding: 2px 8px; }
+.md-body .doc-schedule-tz { margin-left: auto; font-size: 11px; font-family: var(--bmm-font-mono, ui-monospace, monospace); color: var(--bmm-text-muted); border: 1px solid var(--bmm-border); border-radius: var(--radius-badge, 5px); padding: 2px 8px; }
 .md-body .doc-schedule-body { padding: 4px 14px; }
 .md-body .doc-schedule-body table { margin: 10px 0; }
 .md-body .doc-schedule-note { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--bmm-text-muted); border-top: 1px dashed var(--bmm-border); }

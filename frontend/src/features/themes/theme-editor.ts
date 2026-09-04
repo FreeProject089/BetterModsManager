@@ -627,7 +627,6 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Archive explorer',   sel: '#modal-archive-explorer .modal' },
         { label: 'History',            sel: '#modal-history .modal, #modal-history-detail .modal' },
         { label: 'Repo browser',       sel: '#modal-repo-browser .modal' },
-        { label: 'Repo hub',           sel: '#modal-repo-hub .modal' },
         { label: 'Repo update',        sel: '#modal-repo-update .modal' },
         { label: 'Repo history',       sel: '#modal-repo-history .modal' },
         { label: 'Repo sync summary',  sel: '#modal-repo-sync-summary .modal' },

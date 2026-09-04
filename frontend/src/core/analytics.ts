@@ -449,7 +449,7 @@ const KNOWN_MODALS = [
     // credits / docs
     'modal-contributor-detail', 'modal-docs-diagram',
     // server repo
-    'modal-repo-update', 'modal-repo-hub', 'modal-repo-browser', 'modal-repo-sync-summary',
+    'modal-repo-update', 'modal-repo-browser', 'modal-repo-sync-summary',
     'modal-repo-history', 'modal-repo-verify-detail', 'modal-server',
     // i18n / feedback / crash
     'modal-i18n-sandbox', 'modal-crash-report', 'modal-betahub-bugreport', 'modal-betahub-feedback',

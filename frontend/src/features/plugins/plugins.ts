@@ -458,45 +458,41 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     const auOn = localStorage.getItem('bmm_plugin_au_' + manifest.id) !== 'off';
 
     card.innerHTML = `
-        <div class="plug-card-header">
+        <!-- The same anatomy as an app-catalogue tile: a tinted band with the icon centred and
+             the tier/strict badges pinned in its corner, then a body. Every class the handlers
+             bind to (plug-btn-*, plug-sha-badge, plug-card-ids, data-onerror) is unchanged. -->
+        <div class="plug-card-thumb">
+            <div class="plug-card-badges">
+                ${manifest.official
+                    ? `<span class="plug-badge-official">${IC.star} ${t('plugins.official')}</span>`
+                    : `<span class="plug-badge-community">${t('plugins.community')}</span>`}
+                ${source === 'installed' && hasModlist && manifest.modlist.strict ? `<span class="plug-badge-strict">${escHtml(t('plugins.strict'))}</span>` : ''}
+            </div>
             <div class="plug-card-icon-wrap">
                 ${plugin.icon_path
                     ? `<img src="${convertFileSrc(plugin.icon_path)}" class="plug-card-icon" data-onerror="swap-next">`
                     : ''}
                 <div class="plug-card-icon-default" ${plugin.icon_path ? 'style="display:none"' : ''}>${IC.puzzle}</div>
             </div>
-            <div class="plug-card-meta">
-                <div class="plug-card-name">
-                    <span class="plug-card-name-text">${escHtml(manifest.name)}</span>
-                    ${manifest.official
-                        ? `<span class="plug-badge-official">${IC.star} ${t('plugins.official')}</span>`
-                        : `<span class="plug-badge-community">${t('plugins.community')}</span>`}
-                </div>
-                <!-- Everything KNOWN about the plugin, on one line.
-                     It used to be four stacked bands — version, game, the two id buttons,
-                     and the checksum away at the bottom beside the ⋮ — so a card carrying a
-                     name, a version and one fact about itself was seven rows tall. None of
-                     these is an action, and none is worth a line of its own. -->
-                <div class="plug-card-facts">
-                    <span class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</span>
-                    ${source === 'installed' && hasModlist ? `
-                        <!-- A button, not a fact. It reads as the question ("which twelve, and
-                             do I have them?") and the answer already existed one row down,
-                             behind a word that does not obviously refer to it. -->
-                        <button type="button" class="plug-card-fact plug-card-fact-btn plug-btn-modlist"
-                                data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.modsRequiredTip'))}">
-                            ${IC.list} ${manifest.modlist.required_mods.length} ${escHtml(t('plugins.modsRequired'))}
-                        </button>
-                        ${manifest.modlist.strict ? `<span class="plug-badge-strict">${escHtml(t('plugins.strict'))}</span>` : ''}` : ''}
-                    ${source === 'installed' && plugin.install_dir ? `
-                    <!-- The checksum is a FACT about the plugin, like its id. It sat in the
-                         row of verbs, where it pushed the ⋮ onto a third line at any narrow
-                         column width — which is the "bouton cut dans la card". -->
-                    <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
-                        ${IC.hash} SHA
-                    </span>` : ''}
-                    <span class="plug-card-ids">${copyIdButtons('plugin', manifest.id, { compact: true })}</span>
-                </div>
+        </div>
+        <div class="plug-card-body">
+            <div class="plug-card-name">
+                <span class="plug-card-name-text">${escHtml(manifest.name)}</span>
+            </div>
+            <!-- Everything KNOWN about the plugin, on one line: version · author, then the facts
+                 that are worth acting on (mods required, checksum) and the copy-id buttons. -->
+            <div class="plug-card-facts">
+                <span class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</span>
+                ${source === 'installed' && hasModlist ? `
+                    <button type="button" class="plug-card-fact plug-card-fact-btn plug-btn-modlist"
+                            data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.modsRequiredTip'))}">
+                        ${IC.list} ${manifest.modlist.required_mods.length} ${escHtml(t('plugins.modsRequired'))}
+                    </button>` : ''}
+                ${source === 'installed' && plugin.install_dir ? `
+                <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
+                    ${IC.hash} SHA
+                </span>` : ''}
+                <span class="plug-card-ids">${copyIdButtons('plugin', manifest.id, { compact: true })}</span>
             </div>
         </div>
         ${manifest.description ? `<p class="plug-card-desc">${escHtml(manifest.description)}</p>` : ''}

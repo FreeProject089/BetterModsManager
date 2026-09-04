@@ -84,7 +84,7 @@
 .srv-tab-count {
     min-width: 18px;
     padding: 1px 6px;
-    border-radius: 999px;
+    border-radius: var(--radius-badge, 5px);
     background: var(--bmm-s10);
     color: var(--text-secondary);
     font-size: 10px;

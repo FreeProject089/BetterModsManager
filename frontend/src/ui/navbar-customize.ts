@@ -1506,7 +1506,6 @@ function modalActionDefs(): ModalActionDef[] {
         trigger('bans', 'Bans manager', 'btn-open-bans'),
         trigger('whitelist', 'Whitelist manager', 'btn-open-whitelist'),
         trigger('monitoring', 'Monitoring', 'btn-open-monitoring'),
-        trigger('repoHub', 'Repo hub', 'btn-open-repo-hub'),
         trigger('debug', 'Debug', 'btn-open-debug'),
     ].filter(a => a.avail());
 }

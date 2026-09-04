@@ -908,10 +908,9 @@
                                     </a>
                                 </div>
                             </div>
-                            <button class="btn btn-sm btn-ghost" data-act="openDocsArticleById" data-act-args='["activation"]'
-                                style="color:var(--accent); font-size:12px; height: 32px; border: 1px solid rgba(59,130,246,0.3); margin-right: 8px;">
+                            <button class="prof-how-btn" data-act="openDocsArticleById" data-act-args='["activation"]' style="margin-right:8px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2" style="margin-right:6px">
+                                    stroke-width="2.2">
                                     <circle cx="12" cy="12" r="10" />
                                     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                                     <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -941,10 +940,9 @@
                             par jeu ou par configuration.
                             Créez votre premier profil pour commencer à modder en toute sécurité.</p>
 
-                        <button class="btn btn-ghost btn-sm" data-act="openDocsArticleById" data-act-args='["activation"]'
-                            style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto;">
+                        <button class="prof-how-btn" data-act="openDocsArticleById" data-act-args='["activation"]' style="margin:0 auto;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.2" style="margin-right:6px">
+                                stroke-width="2.2">
                                 <circle cx="12" cy="12" r="10" />
                                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                                 <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -2209,18 +2207,68 @@
                                         </div>
                                     </div><!-- /repo-server-url-container -->
 
-                                    <!-- Serve EVERY repo from one Node server + web dashboard. A
-                                         serving concern, so it lives with the serve step, not in
-                                         the generate card where it used to sit. -->
-                                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bmm-s06);">
-                                        <button class="btn btn-secondary btn-sm" id="btn-open-repo-hub" style="width:100%;justify-content:center;gap:7px;">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
-                                            <span data-i18n="repo.hub.openBtn">Multi-repo hub server</span>
-                                        </button>
-                                        <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.hub.openHint">Serve all your repos from one Node server with a web dashboard.</p>
-                                    </div>
                                 </div><!-- /repo-card-body (http server) -->
                             </div><!-- /repo-card--green -->
+
+                            <!-- Card: Multi-repo hub — serve EVERY repo from one Node server + web dashboard.
+                                 A serving concern, so it sits in the serve step as its own card (it used to be a
+                                 button that opened a modal). All ids are the ones repo.ts's initRepoHub binds. -->
+                            <div class="repo-card repo-card--optional" id="repo-hub-card" data-method="hub">
+                                <div class="repo-card-header">
+                                    <h3>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
+                                        <span data-i18n="repo.hub.title">Multi-Repo Hub Server</span>
+                                    </h3>
+                                    <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
+                                </div>
+                                <div class="repo-card-body" style="display:flex;flex-direction:column;gap:14px;">
+                                    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0;" data-i18n="repo.hub.intro">Pick a folder that contains one sub-folder per repo (each with its own repo.json + mods/). The hub serves them all on one port with a web dashboard.</p>
+
+                                    <section class="repo-hub-sec">
+                                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">1</span><span data-i18n="repo.hub.folder">Hub folder (parent of your repos)</span></div>
+                                        <div style="display:flex; gap:8px;">
+                                            <input type="text" id="repo-hub-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
+                                            <button class="btn btn-secondary btn-sm" id="btn-pick-repo-hub-folder" data-i18n="repo.update.browse">Browse</button>
+                                        </div>
+                                        <div id="repo-hub-list" style="display:none;flex-direction:column;gap:8px;margin-top:12px;"></div>
+                                    </section>
+
+                                    <section class="repo-hub-sec">
+                                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">2</span><span data-i18n="repo.hub.mode">Hub mode</span></div>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                                            <label class="repo-hub-mode-opt" style="display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--cyan);border-radius:10px;padding:12px;cursor:pointer;">
+                                                <input type="radio" name="repo-hub-mode" value="serve" checked style="margin-top:2px;">
+                                                <span><b style="font-size:12px;" data-i18n="repo.hub.modeServe">Serve repos (Node)</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeServeHint">One Node server hosts all repos + per-repo dashboards. Repos are online when the hub runs.</span></span>
+                                            </label>
+                                            <label class="repo-hub-mode-opt" style="display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">
+                                                <input type="radio" name="repo-hub-mode" value="static" style="margin-top:2px;">
+                                                <span><b style="font-size:12px;" data-i18n="repo.hub.modeStatic">Static directory</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeStaticHint">Just a web page listing your repos (no Node). You host repos elsewhere and fill their URLs.</span></span>
+                                            </label>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px;">
+                                            <div>
+                                                <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.port">Port</label>
+                                                <input type="number" id="repo-hub-port" class="form-input" value="8080" style="font-size:13px;">
+                                            </div>
+                                            <div>
+                                                <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.limit">Upload limit (KB/s, 0 = ∞)</label>
+                                                <input type="number" id="repo-hub-limit" class="form-input" value="0" style="font-size:13px;">
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="repo-hub-sec">
+                                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">3</span><span data-i18n="repo.hub.access">Access</span></div>
+                                        <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.adminPw">Admin password (blank = open)</label>
+                                        <input type="text" id="repo-hub-adminpw" class="form-input" placeholder="admin" style="font-size:13px;max-width:320px;">
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.45;" data-i18n="repo.hub.accessHint">Set a password and the dashboard asks for it before anyone can manage the hub. Leave blank to keep the dashboard open on your local network.</div>
+                                    </section>
+
+                                    <div id="repo-hub-result" style="display:none;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;font-size:12px;color:var(--green);line-height:1.6;"></div>
+
+                                    <button class="btn btn-primary" id="btn-generate-repo-hub" disabled data-i18n="repo.hub.generate" style="align-self:flex-end;">Generate hub server</button>
+                                </div><!-- /repo-card-body (hub) -->
+                            </div><!-- /repo-card--optional (hub) -->
 
                             <!-- Card: Mini-Server Standalone -->
                             <div class="repo-card repo-card--optional">
@@ -6765,77 +6813,6 @@
 
         <!-- Repo History Modal -->
         <!-- Repo Hub Modal (multi-repo Node server) -->
-        <div class="modal-overlay" id="modal-repo-hub">
-            <div class="modal glass" style="max-width:720px; width:95%; max-height:84vh; display:flex; flex-direction:column;">
-                <div class="modal-header">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:38px;height:38px;background:rgba(6,182,212,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
-                        </div>
-                        <div>
-                            <h2 class="modal-title" style="font-size:17px;margin:0;" data-i18n="repo.hub.title">Multi-Repo Hub Server</h2>
-                            <p class="modal-subtitle" style="font-size:12px;margin:0;color:var(--text-muted);" data-i18n="repo.hub.subtitle">One Node server + dashboard for all your repos</p>
-                        </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-repo-hub">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding:18px 22px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:18px;">
-                    <p style="font-size:12px;color:var(--text-muted);line-height:1.55;margin:0;" data-i18n="repo.hub.intro">Pick a folder that contains one sub-folder per repo (each with its own repo.json + mods/). The hub serves them all on one port with a web dashboard.</p>
-
-                    <!-- Step 1 — the folder. Its own bordered section so the three concerns (what to
-                         serve, how, who can reach it) read as three steps, not one wall of fields. -->
-                    <section class="repo-hub-sec">
-                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">1</span><span data-i18n="repo.hub.folder">Hub folder (parent of your repos)</span></div>
-                        <div style="display:flex; gap:8px;">
-                            <input type="text" id="repo-hub-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-repo-hub-folder" data-i18n="repo.update.browse">Browse</button>
-                        </div>
-                        <div id="repo-hub-list" style="display:none;flex-direction:column;gap:8px;margin-top:12px;"></div>
-                    </section>
-
-                    <!-- Step 2 — mode + serving options, side by side to use the width. -->
-                    <section class="repo-hub-sec">
-                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">2</span><span data-i18n="repo.hub.mode">Hub mode</span></div>
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
-                            <label class="repo-hub-mode-opt" style="display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--cyan);border-radius:10px;padding:12px;cursor:pointer;">
-                                <input type="radio" name="repo-hub-mode" value="serve" checked style="margin-top:2px;">
-                                <span><b style="font-size:12px;" data-i18n="repo.hub.modeServe">Serve repos (Node)</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeServeHint">One Node server hosts all repos + per-repo dashboards. Repos are online when the hub runs.</span></span>
-                            </label>
-                            <label class="repo-hub-mode-opt" style="display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">
-                                <input type="radio" name="repo-hub-mode" value="static" style="margin-top:2px;">
-                                <span><b style="font-size:12px;" data-i18n="repo.hub.modeStatic">Static directory</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeStaticHint">Just a web page listing your repos (no Node). You host repos elsewhere and fill their URLs.</span></span>
-                            </label>
-                        </div>
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px;">
-                            <div>
-                                <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.port">Port</label>
-                                <input type="number" id="repo-hub-port" class="form-input" value="8080" style="font-size:13px;">
-                            </div>
-                            <div>
-                                <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.limit">Upload limit (KB/s, 0 = ∞)</label>
-                                <input type="number" id="repo-hub-limit" class="form-input" value="0" style="font-size:13px;">
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Step 3 — access. The one security control the generated hub honours today. -->
-                    <section class="repo-hub-sec">
-                        <div class="repo-hub-sec-h"><span class="repo-hub-sec-n">3</span><span data-i18n="repo.hub.access">Access</span></div>
-                        <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.adminPw">Admin password (blank = open)</label>
-                        <input type="text" id="repo-hub-adminpw" class="form-input" placeholder="admin" style="font-size:13px;max-width:320px;">
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.45;" data-i18n="repo.hub.accessHint">Set a password and the dashboard asks for it before anyone can manage the hub. Leave blank to keep the dashboard open on your local network.</div>
-                    </section>
-
-                    <div id="repo-hub-result" style="display:none;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;font-size:12px;color:var(--green);line-height:1.6;"></div>
-                </div>
-                <div class="modal-footer" style="padding:14px 22px;background:var(--bmm-s03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s08);">
-                    <button class="btn btn-ghost" data-close="modal-repo-hub" data-i18n="common.close">Close</button>
-                    <button class="btn btn-primary" id="btn-generate-repo-hub" disabled data-i18n="repo.hub.generate">Generate hub server</button>
-                </div>
-            </div>
-        </div>
 
         <!-- Repo Update Modal (incremental) -->
         <div class="modal-overlay" id="modal-repo-update">
