@@ -22,6 +22,17 @@
        Below every modal layer (the lowest is mapper.css's .modal-generic-overlay at
        9000): while a dialog is up, IT owns the screen. */
     z-index: 8995;
+    transition: opacity .18s ease, transform .18s ease;
+}
+
+/* When a highlighted step target sits UNDER the panel, the tracker adds this so the panel
+   fades back automatically and the control shows through — pointer-events off, so a click even
+   reaches the control behind it. Automatic: it no longer waits on the "Show me" button, and
+   the tracker removes the class the moment the target is no longer covered. */
+.tut-engine-panel.tut-dodge {
+    opacity: 0.26;
+    transform: scale(0.985);
+    pointer-events: none;
 }
 
 /* ── Topbar: the chips can no longer reach the buttons ───────────────────── */

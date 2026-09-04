@@ -1875,15 +1875,26 @@ function _startHighlightTracker(): void {
             clearInterval(_highlightTrackerInterval!);
             _highlightTrackerInterval = null;
             _renderScrollHint(null, null);
+            document.getElementById('tut-engine-panel')?.classList.remove('tut-dodge');
             return;
         }
         let anyInView = false;
+        let anyBehindPanel = false;
         let offTarget: { el: HTMLElement; dir: 'up' | 'down' | 'left' | 'right' | 'behind' } | null = null;
         // The sidebar can COVER a target horizontally — a step pointing at something behind it
         // used to draw a highlight nobody could see, with no cue. Detect that as its own case.
         const sidebar = document.querySelector('.sidebar') as HTMLElement | null;
         const sbRect = (sidebar && window.getComputedStyle(sidebar).display !== 'none' && sidebar.offsetWidth > 0)
             ? sidebar.getBoundingClientRect() : null;
+        // …and so can the tutorial panel itself: docked to a side or across the bottom, it sits
+        // OVER the app, so a step can point at a control the panel is covering. Detect that the
+        // same way, automatically — no longer only findable by pressing "Show me".
+        const tutPanel = document.getElementById('tut-engine-panel');
+        const tpRect = (tutPanel && !tutPanel.classList.contains('tut-min') && tutPanel.offsetWidth > 0
+            && window.getComputedStyle(tutPanel).display !== 'none')
+            ? tutPanel.getBoundingClientRect() : null;
+        const underRect = (rect: DOMRect | null, x: number, y: number) =>
+            !!rect && x <= rect.right && x >= rect.left && y >= rect.top && y <= rect.bottom;
         highlights.forEach(hlEl => {
             const hl     = hlEl as HTMLElement;
             const target = (hl as any)._tutTarget as HTMLElement | null;
@@ -1899,8 +1910,11 @@ function _startHighlightTracker(): void {
             const cy = r.top + r.height / 2;
             const cx = r.left + r.width / 2;
             const inViewV = cy >= vTop - 2 && cy <= vBottom + 2;
-            // Behind the sidebar: the target's centre sits inside the sidebar's rectangle.
-            const behindSidebar = !!sbRect && cx <= sbRect.right && cx >= sbRect.left && cy >= sbRect.top && cy <= sbRect.bottom;
+            // Behind the sidebar OR the tutorial panel: the target's centre sits inside either
+            // overlay's rectangle, so a highlight there would be drawn under something opaque.
+            const behindPanel = underRect(tpRect, cx, cy);
+            const behindSidebar = underRect(sbRect, cx, cy) || behindPanel;
+            if (behindPanel) anyBehindPanel = true;
             const inViewH = cx >= vLeft - 2 && cx <= vRight + 2 && !behindSidebar;
             const inView = inViewV && inViewH;
             hl.style.visibility = inView ? 'visible' : 'hidden';
@@ -1924,6 +1938,9 @@ function _startHighlightTracker(): void {
             hl.style.height      = `${r.height + pad * 2}px`;
             hl.style.borderRadius= `${baseRadius + pad}px`;
         });
+        // When the tutorial panel itself is covering the target, fade it back automatically so
+        // the highlighted control shows through — the cue no longer waits on "Show me".
+        if (tutPanel) tutPanel.classList.toggle('tut-dodge', anyBehindPanel && !anyInView);
         // Show a "scroll up/down" cue when the highlighted target is off-screen and
         // nothing else for this step is currently visible.
         if (!anyInView && offTarget) _renderScrollHint((offTarget as { dir: 'up' | 'down' | 'left' | 'right' | 'behind' }).dir, (offTarget as { el: HTMLElement }).el);
