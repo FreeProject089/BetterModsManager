@@ -17,7 +17,7 @@ graph TD
         PRIVATE["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.betahub.node.PRIVATE}}</div>"]
     end
 
-    subgraph CLOUD ["<div class='group-label' data-cluster-id='SYNC'><i class='icon-cloud'></i> BetaHub Cloud</div>"]
+    subgraph CLOUD ["<div class='group-label' data-cluster-id='SYNC'><i class='icon-cloud'></i> BetterCommunity feedback centre</div>"]
         SEND["<div class='node-content'><i class='icon-package'></i> {{docs.diagram.betahub.node.SEND}}</div>"]
     end
 

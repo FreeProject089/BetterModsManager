@@ -20,6 +20,7 @@ import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
+import { initFeedback } from '../feedback/bc-feedback.js';
 import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';
 import { initCardReorder } from './card-order.js';
@@ -2972,6 +2973,7 @@ export async function initSettings() {
 
     // ── BetaHub ──────────────────────────────────────────────
     initBetaHub();
+    initFeedback();
 
     document.getElementById('btn-settings-betahub-bugreport')
         ?.addEventListener('click', () => openBugReportModal());

@@ -8,6 +8,7 @@ import { BETAHUB_PROJECT_ID } from './betahub-config.local.js';
 import { invoke, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { solvePoW } from './betahub-pow.js';
+import { usesBetterCommunity, submitFeedback, fileToBase64, textToBase64, explainFeedbackError, feedbackWebUrl } from '../feedback/bc-feedback.js';
 import {
     createDraftIssue,
     uploadScreenshot,
@@ -403,6 +404,27 @@ async function handleFeedbackSubmit(): Promise<void> {
         const dueDate = getEffectiveDueDate(dateEl?.value);
 
         setPowState('feedback', 'upload');
+
+        // BetterCommunity first: the account the person already has, a thread they can follow,
+        // no third party. BetaHub only when links.json emptied feedback_endpoint.
+        if (usesBetterCommunity()) {
+            try {
+                const r = await submitFeedback({
+                    kind: 'feedback', title: titleEl?.value?.trim() || undefined, body: description,
+                    email: emailEl?.value?.trim() || undefined, discord: discordEl?.value?.trim() || undefined,
+                    meta: { dueDate, creatorId },
+                });
+                saveReportToHistory('feedback', titleEl?.value?.trim() || t('betahub.themeFeedback'), r.id || 'N/A', 'bc');
+                recordSubmission();
+                closeFeedbackModal();
+                toast(r.linked ? t('feedback.sentLinked') : t('betahub.successFeedback'), 'success');
+            } catch (e) {
+                const queued = explainFeedbackError(e);
+                setPowState('feedback', 'idle');
+                if (queued) closeFeedbackModal();
+            }
+            return;
+        }
 
         // Submit
         const result = await createFeatureRequest(
@@ -995,6 +1017,47 @@ async function handleBugReportSubmit(): Promise<void> {
 
         const contactEmail = contactEl?.value?.trim() || undefined;
 
+        if (usesBetterCommunity()) {
+            try {
+                const attachments: { name: string; type: string; data: string }[] = [];
+                for (const ss of selectedScreenshots) attachments.push({ name: ss.name, type: ss.type || 'image/png', data: await fileToBase64(ss) });
+                if (selectedVideo) attachments.push({ name: selectedVideo.name, type: selectedVideo.type || 'video/mp4', data: await fileToBase64(selectedVideo) });
+                if (includeLogsEl?.checked) {
+                    let logs = '';
+                    try { const { debugHub } = await import('../debug/debug.js'); logs = debugHub?.logs?.length ? debugHub.logs.map(l => `[${l.level.toUpperCase()}] ${l.message}`).join('\n') : t('betahub.errorNoLogs'); }
+                    catch { logs = t('betahub.errorNoLogs'); }
+                    attachments.push({ name: 'bmm_frontend.log', type: 'text/plain', data: textToBase64(logs) });
+                }
+                if (includeDxDiagEl?.checked) {
+                    const diag = await invoke('get_dxdiag_report').catch(() => null);
+                    if (diag) attachments.push({ name: 'dxdiag_report.txt', type: 'text/plain', data: textToBase64(String(diag)) });
+                }
+                for (const zipPath of selectedCrashZipPaths) {
+                    try {
+                        const data = await invoke('read_file_base64', { path: zipPath }) as string;
+                        attachments.push({ name: zipPath.split(/[\\/]/).pop() || 'crash_report.zip', type: 'application/zip', data });
+                    } catch { attachments.push({ name: 'crash_path.txt', type: 'text/plain', data: textToBase64(`Crash ZIP path: ${zipPath}`) }); }
+                }
+                const r = await submitFeedback({
+                    kind: selectedCrashZipPaths.length ? 'crash' : 'bug',
+                    title: titleEl?.value?.trim() || undefined,
+                    body: stepsToReproduce ? `${description}\n\n${t('betahub.fieldSteps')}\n${stepsToReproduce}` : description,
+                    email: contactEmail, discord: discordId === t('common.na') ? undefined : discordId,
+                    appVersion: String(appVersion || ''), meta: { buildDate, dueDate, creatorId, crashZips: selectedCrashZipPaths.length },
+                    attachments,
+                });
+                saveReportToHistory('bug', titleEl?.value?.trim() || t('betahub.themeBug'), r.id || 'N/A', 'bc');
+                recordSubmission();
+                closeBugReportModal();
+                toast(r.linked ? t('feedback.sentLinked') : t('betahub.successBugReport'), 'success');
+            } catch (e) {
+                const queued = explainFeedbackError(e);
+                setPowState('bug', 'idle');
+                if (queued) closeBugReportModal();
+            }
+            return;
+        }
+
         // Step 1: Create draft issue
         const { id: issueId, token: jwtToken } = await createDraftIssue(
             description,
@@ -1137,13 +1200,14 @@ function clearFieldErrors(prefix: string): void {
 /**
  * Save a summary of the report to local storage for the 'My Reports' history view.
  */
-function saveReportToHistory(type: 'feedback' | 'bug', title: string, issueId: string): void {
+function saveReportToHistory(type: 'feedback' | 'bug', title: string, issueId: string, source: 'betahub' | 'bc' = 'betahub'): void {
     try {
         const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
         history.unshift({
             id: issueId,
             type,
             title,
+            source,
             date: new Date().toISOString()
         });
         localStorage.setItem('bmm_report_history', JSON.stringify(history.slice(0, 10)));
@@ -1258,9 +1322,11 @@ function renderReportHistory(): void {
                 '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' :
                 '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-11.7 8.3 8.3 0 0 1 3.2.6"/>';
 
-            const url = item.type === 'bug' ? 
-                `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/issues/g-${item.id}` :
-                `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/feature_requests/${item.id}`;
+            // Where "view" goes depends on where the report went: the BetterCommunity dashboard
+            // (the thread, for a linked account) or the BetaHub page.
+            const url = item.source === 'bc' ? feedbackWebUrl()
+                : item.type === 'bug' ? `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/issues/g-${item.id}`
+                : `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/feature_requests/${item.id}`;
 
             const div = document.createElement('div');
             div.style.cssText = 'background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px; display:flex; align-items:center; gap:12px; transition:all 0.2s;';

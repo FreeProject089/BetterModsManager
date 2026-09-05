@@ -49,6 +49,17 @@ against a BCWEB that is not the production domain.
 The credits list. Read by `app.ts` and Rust `net.rs`. Unreachable → the credits screen falls
 back to whatever is bundled.
 
+### `feedback_endpoint`
+Where **Settings → Feedback & bug reports** posts. Read by `features/feedback/bc-feedback.ts`.
+Default: the BetterCommunity feedback centre for project `bmm`
+(`https://bettercommunity.ch/api/feedback/bmm`). Point it at a tunnel to test against a local
+BCWEB. Set it to `""` to send through the BetaHub client instead (the pre-2026 pipeline, kept
+as a fallback). Unreachable → the report is queued locally and retried on the next start.
+
+### `feedback_web`
+The page a linked user opens to follow their reports (the history list links there).
+Default `https://bettercommunity.ch/dashboard?s=reports`.
+
 ---
 
 ## Updates
