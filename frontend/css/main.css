@@ -12291,6 +12291,13 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-preset-open { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 .sched-preset-count { font-size:10px; font-weight:700; line-height:1; padding:3px 6px; border-radius:999px; background:var(--accent-dim, rgba(59,130,246,.18)); color:var(--accent); }
 /* ── Template gallery (scheduler presets) ─────────────────────────────── */
+/* WITHOUT THIS THE GALLERY IS INERT. `body` carries `pointer-events: none` for the custom
+   title bar's drag region and #app-window-outer switches it back on; this overlay and the
+   action/condition picker are appended to <body> (a transformed ancestor would break
+   `position: fixed`), so they inherited none and swallowed nothing — visible, laid out, and
+   completely unclickable. Above the scheduler modal (.modal-generic-overlay at 10000) too. */
+.spg-overlay { pointer-events: auto; z-index: 10060; }
+.skp { pointer-events: auto; }
 .spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:88vh; display:flex; flex-direction:column; padding:0; }
 .spg-head { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .spg-head-l { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
