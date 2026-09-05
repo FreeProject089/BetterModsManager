@@ -43,3 +43,22 @@ export function brandIconUrl(slug: string): string {
   if (!ENABLED || !s) return '';
   return `https://cdn.simpleicons.org/${s}`;
 }
+
+/**
+ * `ph:rocket` / `ph-bold:rocket` (thin · light · regular · bold · fill · duotone) → the
+ * `<weight>/<file>` path under Phosphor's assets, or null when the name is not a Phosphor one.
+ * The same spelling B.MD accepts on the website, so an icon named once draws in both places.
+ */
+export function phosphorRef(name: string): string | null {
+    const m = String(name || '').toLowerCase().match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    if (!m) return null;
+    const w = m[1] || 'regular';
+    return `${w}/${m[2]}${w === 'regular' ? '' : `-${w}`}`;
+}
+
+/** The mask URL for a Phosphor icon (a `phosphorRef` path), or '' when remote icons are off. */
+export function phosphorIconUrl(ref: string): string {
+    const r = String(ref || '').toLowerCase().replace(/[^a-z0-9/-]/g, '');
+    if (!ENABLED || !r) return '';
+    return `https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/${r}.svg`;
+}

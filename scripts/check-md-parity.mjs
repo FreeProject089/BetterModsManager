@@ -24,7 +24,7 @@ const BMM = 'frontend/src/ui/rich-markdown.ts';
 // The site's PARSER. B.MD's index.jsx was split and names no directives now; this file said
 // so on the first run — "read 0 directive(s) from the site renderer" — rather than comparing
 // BMM against an empty list and reporting parity.
-const SITE = 'BCW/BCWEB/apps/web/src/markdown/directives.js';
+const SITE = 'BCW/BCWEB/packages/bmd/src/directives.js';
 
 /**
  * Every directive the website answers to, as of the last time this was refreshed.
@@ -38,6 +38,10 @@ const SITE_DIRECTIVES = [
   'file', 'hint', 'hours', 'icon', 'important', 'info', 'kbd', 'left', 'link', 'note', 'phase',
   'progress', 'ref', 'replay', 'right', 'roadmap', 'row', 'schedule', 'stage', 'step', 'steps',
   'success', 'tab', 'tabs', 'tag', 'time', 'tip', 'toc', 'warning',
+  // B.MD 2.0 (the package release): timeline, compare, stats, quote, hero, changelog, spoiler,
+  // faq, checklist, grid, and the inline meter.
+  'after', 'before', 'changelog', 'checklist', 'compare', 'event', 'faq', 'grid', 'hero', 'kpi', 'meter', 'moment',
+  'q', 'question', 'quote', 'release', 'spoiler', 'stat', 'stats', 'testimonial', 'timeline', 'version',
 ];
 
 // Directives BMM deliberately does not implement, each with the reason. An entry here is a

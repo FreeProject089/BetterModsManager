@@ -7597,5 +7597,10 @@
   "sshsrv.secret": "Key passphrase or password",
   "sshsrv.secretPh": "Only if the key has one",
   "sshsrv.secretHint": "Read when you press Test or Browse, and kept nowhere. A key with no passphrase leaves this empty.",
-  "sshsrv.needHostUser": "A host and a user are needed before this server can be reached."
+  "sshsrv.needHostUser": "A host and a user are needed before this server can be reached.",
+  "md.before": "Before",
+  "md.after": "After",
+  "md.spoiler": "Spoiler — click to reveal",
+  "md.question": "Question",
+  "md.checklist": "Checklist"
 }

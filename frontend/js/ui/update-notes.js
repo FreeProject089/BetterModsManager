@@ -4,7 +4,7 @@
  * Extracted from app.js for modularity
  */
 import { invoke } from '../core/api.js';
-import { lucideIconUrl } from '../core/icon-cdn.js';
+import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
@@ -357,6 +357,14 @@ function ensurePurify() {
     DP.addHook('afterSanitizeAttributes', (node) => {
         // Lucide icon → real CSS mask (the url was carried on data-lucide so it
         // survived sanitisation; we only ever build it from [a-z0-9-], so it's safe).
+        // Phosphor, the same way: `data-ph` carries the `<weight>/<file>` path.
+        if (node.getAttribute && node.getAttribute('data-ph')) {
+            const url = phosphorIconUrl(String(node.getAttribute('data-ph')));
+            if (url) {
+                node.style.webkitMask = `url('${url}') center/contain no-repeat`;
+                node.style.mask = `url('${url}') center/contain no-repeat`;
+            }
+        }
         if (node.getAttribute && node.getAttribute('data-lucide')) {
             const name = String(node.getAttribute('data-lucide')).replace(/[^a-z0-9-]/g, '');
             const url = lucideIconUrl(name);

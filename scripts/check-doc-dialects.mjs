@@ -78,6 +78,9 @@ const hookKinds = new Set();
 const kindTable = hook.match(/_KIND = \{([\s\S]*?)\}/);
 if (kindTable) for (const m of kindTable[1].matchAll(/"([a-z-]+)"\s*:/g)) hookKinds.add(m[1]);
 for (const extra of ['details', 'collapse']) hookKinds.add(extra);
+// The 2.0 blocks the hook rewrites to md_in_html markup.
+const blockTable = hook.match(/_BLOCKS = \{([\s\S]*?)\}/);
+if (blockTable) for (const m of blockTable[1].matchAll(/"([a-z-]+)"\s*:/g)) hookKinds.add(m[1]);
 if (hookKinds.size < 8) {
   console.error(`✗ read ${hookKinds.size} kind(s) from the mkdocs hook — the extractor is stale`);
   process.exit(2);

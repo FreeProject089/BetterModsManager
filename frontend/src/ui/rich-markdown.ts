@@ -18,7 +18,7 @@ import { replaceEmoji } from '../core/emoji.js';
 // answers to that question is one too many, and this file had none.
 import { safeDocUrl } from '../docs/md-safe.js';
 // The two icon CDNs, in one place with a switch — see core/icon-cdn.ts.
-import { lucideIconUrl, brandIconUrl } from '../core/icon-cdn.js';
+import { lucideIconUrl, brandIconUrl, phosphorRef } from '../core/icon-cdn.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
   // `check` and `error` are the site's aliases for success and danger. They were absent
@@ -133,6 +133,10 @@ function mdInline(s: string): string {
 // into a real mask style AFTER sanitisation (see applyMaskIcons in update-notes.ts).
 export function iconImg(name: string): string {
   const n = String(name || '').trim().toLowerCase();
+  // Phosphor: the same `ph:` spelling as the website, drawn as a mask like a lucide name —
+  // the hydrator (update-notes' sanitiser hook) turns `data-ph` into the mask URL.
+  const ph = phosphorRef(n);
+  if (ph) return `<span class="md-inline-icon md-inline-icon--mask" data-ph="${escAttr(ph)}"></span>`;
   const simple = n.match(/^(?:simple|si):(.+)$/);
   if (simple) {
     const url = brandIconUrl(simple[1]);
@@ -337,6 +341,15 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
   // :time[2026-09-01T20:00]{tz=Europe/Paris} / :at[…] → that instant in the reader's zone.
   s = s.replace(/:(?:time|at)\[([^\]]+)\](?:\{([^}]*)\})?/g,
     (_m, raw, rawAttrs) => docTime(String(raw).trim(), parseDirAttrs(rawAttrs || '')));
+  // :meter[60]{label=Done max=100 color=#0a7} → a small inline progress bar, like the site's.
+  s = s.replace(/:meter\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, raw, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || '');
+    const max = Math.max(1, Number(a.max) || 100);
+    const val = Math.max(0, Math.min(max, Number(String(raw).replace(/[^0-9.]/g, '')) || 0));
+    const pct = Math.round((val * 100) / max);
+    const col = a.color ? ` style="--meter:${escAttr(a.color)}"` : '';
+    return `<span class="community-meter"${col} title="${escAttr(`${a.label ? `${a.label}: ` : ''}${pct}%`)}"><span class="community-meter-track"><span class="community-meter-fill" style="width:${pct}%"></span></span><span class="community-meter-text">${escHtml(a.label ? `${a.label} ` : '')}${pct}%</span></span>`;
+  });
   // :badge[Label]{color=..} → a coloured chip (same look as the site's tags).
   s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, attrs) => {
     const col = attrs && (attrs.match(/color=("|')?([^"'\s}]+)\1?/) || [])[2];
@@ -515,6 +528,106 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
         + `</div><div class="doc-schedule-body">${mdInline(innerMd)}</div>`
         + (note ? `<p class="doc-schedule-note">${escHtml(note)}</p>` : '')
         + `</div>`, '');
+    }
+    // ── B.MD 2.0 ──────────────────────────────────────────────────────────
+    // The same ten blocks the website added; each written here so a post using them reads
+    // the same in the app. Classes are the app's `community-*`, styled in community.css.
+    else if (name === 'timeline') {
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-timeline">${title ? `<div class="community-timeline-title">${escHtml(title)}</div>` : ''}${innerMd}</div>`, '');
+    }
+    else if (name === 'event' || name === 'moment') {
+      const raw = String(attrs.state || attrs.status || '').toLowerCase();
+      const state = ['done', 'past', 'shipped'].includes(raw) ? 'done' : ['now', 'current', 'active'].includes(raw) ? 'now' : 'next';
+      const col = attrs.color ? ` style="--ev:${escAttr(attrs.color)}"` : '';
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-event community-event-${state}"${col}><div class="community-event-marker"></div><div class="community-event-body">`
+        + (attrs.date ? `<div class="community-event-date">${escHtml(attrs.date)}</div>` : '')
+        + (title ? `<div class="community-event-title">${attrs.icon ? iconImg(attrs.icon) : ''}${escHtml(title)}</div>` : '')
+        + `${mdInline(innerMd)}</div></div>`, '');
+    }
+    else if (name === 'compare') {
+      // Side labels from the block's attributes reach the sides through the placeholders the
+      // sides left — a side names itself first, the block second.
+      let body = innerMd;
+      for (const side of ['before', 'after']) {
+        if (attrs[side]) body = body.replace(new RegExp(`(<div class="community-compare-label" data-side="${side}">)<span data-default>[^<]*</span>`), `$1${escHtml(attrs[side])}`);
+      }
+      body = body.replace(/<span data-default>([^<]*)<\/span>/g, '$1');
+      out.push('', `<div class="community-compare">${body}</div>`, '');
+    }
+    else if (name === 'before' || name === 'after') {
+      const lab = label || attrs.title || '';
+      const fallback = name === 'before' ? t('md.before') : t('md.after');
+      out.push('', `<div class="community-compare-side community-compare-${name}"><div class="community-compare-label" data-side="${name}">${lab ? escHtml(lab) : `<span data-default>${escHtml(fallback)}</span>`}</div>${mdInline(innerMd)}</div>`, '');
+    }
+    else if (name === 'stats') { out.push('', `<div class="community-stats">${innerMd}</div>`, ''); }
+    else if (name === 'stat' || name === 'kpi') {
+      const delta = String(attrs.delta ?? attrs.trend ?? '');
+      const dir = delta.startsWith('-') ? 'down' : delta.startsWith('+') ? 'up' : 'flat';
+      const col = attrs.color ? ` style="--stat:${escAttr(attrs.color)}"` : '';
+      out.push('', `<div class="community-stat"${col}>`
+        + (attrs.icon ? `<div class="community-stat-icon">${iconImg(attrs.icon)}</div>` : '')
+        + `<div class="community-stat-value">${escHtml(String(attrs.value ?? ''))}</div>`
+        + (label || attrs.label ? `<div class="community-stat-label">${escHtml(label || attrs.label)}</div>` : '')
+        + (delta ? `<div class="community-stat-delta community-stat-${dir}">${escHtml(delta)}</div>` : '')
+        + (innerMd.trim() ? `<div class="community-stat-note">${mdInline(innerMd)}</div>` : '')
+        + `</div>`, '');
+    }
+    else if (name === 'quote' || name === 'testimonial') {
+      const who = label || attrs.author || attrs.by || '';
+      const href = abs(attrs.href || attrs.url || '');
+      const col = attrs.color ? ` style="--q:${escAttr(attrs.color)}"` : '';
+      const author = who ? (href ? `<a class="community-quote-author" href="${escAttr(href)}" target="_blank" rel="noreferrer">${escHtml(who)}</a>` : `<span class="community-quote-author">${escHtml(who)}</span>`) : '';
+      const foot = (who || attrs.role || attrs.avatar)
+        ? `<div class="community-quote-foot">${attrs.avatar ? `<img class="community-quote-avatar" src="${escAttr(abs(attrs.avatar))}" alt="" loading="lazy">` : ''}<div class="community-quote-who">${author}${attrs.role ? `<span class="community-quote-role">${escHtml(attrs.role)}</span>` : ''}</div></div>`
+        : '';
+      out.push('', `<blockquote class="community-quote"${col}><div class="community-quote-body">${mdInline(innerMd)}</div>${foot}</blockquote>`, '');
+    }
+    else if (name === 'hero') {
+      const align = ['left', 'center', 'right'].includes(String(attrs.align)) ? attrs.align : 'left';
+      const col = attrs.color ? ` style="--hero:${escAttr(attrs.color)}"` : '';
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-hero community-hero-${align}"${col}>`
+        + (attrs.image ? `<img class="community-hero-media" src="${escAttr(abs(attrs.image))}" alt="${escAttr(title)}" loading="lazy">` : '')
+        + `<div class="community-hero-body">`
+        + (title ? `<div class="community-hero-title">${attrs.icon ? iconImg(attrs.icon) : ''}${escHtml(title)}</div>` : '')
+        + (attrs.subtitle ? `<div class="community-hero-sub">${escHtml(attrs.subtitle)}</div>` : '')
+        + `${mdInline(innerMd)}</div></div>`, '');
+    }
+    else if (name === 'changelog') {
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-changelog">${title ? `<div class="community-changelog-title">${escHtml(title)}</div>` : ''}${innerMd}</div>`, '');
+    }
+    else if (name === 'version' || name === 'release') {
+      const v = label || attrs.title || attrs.v || '';
+      out.push('', `<div class="community-version"><div class="community-version-head">`
+        + (v ? `<span class="community-version-tag">${escHtml(v)}</span>` : '')
+        + (attrs.date ? `<span class="community-version-date">${escHtml(attrs.date)}</span>` : '')
+        + (attrs.label ? `<span class="community-inline-badge">${escHtml(attrs.label)}</span>` : '')
+        + `</div><div class="community-version-body">${mdInline(innerMd)}</div></div>`, '');
+    }
+    else if (name === 'spoiler') {
+      out.push('', `<details class="community-spoiler"><summary>${escHtml(label || attrs.title || t('md.spoiler'))}</summary><div class="community-details-body">${mdInline(innerMd)}</div></details>`, '');
+    }
+    else if (name === 'faq') {
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-faq">${title ? `<div class="community-faq-title">${escHtml(title)}</div>` : ''}${innerMd}</div>`, '');
+    }
+    else if (name === 'q' || name === 'question') {
+      out.push('', `<details class="community-faq-item"${attrs.open != null ? ' open' : ''}><summary>${escHtml(label || attrs.title || t('md.question'))}</summary><div class="community-faq-a">${mdInline(innerMd)}</div></details>`, '');
+    }
+    else if (name === 'checklist') {
+      // Counted from the source: `- [x]` items are the ticks. marked draws the boxes itself.
+      const total = (innerMd.match(/^\s*[-*]\s+\[[ xX]\]/gm) || []).length;
+      const done = (innerMd.match(/^\s*[-*]\s+\[[xX]\]/gm) || []).length;
+      const pct = total ? Math.round((done * 100) / total) : 0;
+      const col = attrs.color ? ` style="--check:${escAttr(attrs.color)}"` : '';
+      out.push('', `<div class="community-checklist${total && done === total ? ' community-checklist-done' : ''}"${col}><div class="community-checklist-head"><span class="community-checklist-title">${escHtml(label || attrs.title || t('md.checklist'))}</span><span class="community-checklist-count">${done} / ${total}</span><span class="community-checklist-bar"><i style="width:${pct}%"></i></span></div>${mdInline(innerMd)}</div>`, '');
+    }
+    else if (name === 'grid') {
+      const cols = Math.min(6, Math.max(1, parseInt(attrs.cols || attrs.columns, 10) || 3));
+      out.push('', `<div class="community-grid" style="--cols:${cols}">${innerMd}</div>`, '');
     }
     else if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
     else if (name === 'columns' || name === 'row') { out.push('', `<div class="community-columns">${innerMd}</div>`, ''); }

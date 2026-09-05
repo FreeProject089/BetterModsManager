@@ -15,7 +15,7 @@
 import { t } from '../core/i18n.js';
 import { zoneDelta } from '../core/tz.js';
 import { typesetMath } from '../ui/md-math.js';
-import { lucideIconUrl } from '../core/icon-cdn.js';
+import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 
 /**
  * Tabs, delegated once for the whole document.
@@ -116,6 +116,25 @@ export function hydrateMdLite(host: HTMLElement): void {
     // The two other places md-lite leaves a word for somebody who has a dictionary.
     host.querySelectorAll('[data-md-toc-title]').forEach((el) => { el.textContent = t('md.toc.title'); });
     host.querySelectorAll('[data-md-open]').forEach((el) => { el.textContent = t('md.file.open'); });
+    // B.MD 2.0: the side labels of a compare, a spoiler's summary, a default question, a
+    // checklist's default title — English in no language until somebody with a dictionary
+    // passes. The compare sides carry a placeholder span so the block's own attribute can
+    // still win (md-lite fills it before this runs and drops the data attribute).
+    host.querySelectorAll('[data-md-before]').forEach((el) => { el.textContent = t('md.before'); });
+    host.querySelectorAll('[data-md-after]').forEach((el) => { el.textContent = t('md.after'); });
+    host.querySelectorAll('[data-md-spoiler]').forEach((el) => { el.textContent = t('md.spoiler'); });
+    host.querySelectorAll('[data-md-question]').forEach((el) => { el.textContent = t('md.question'); });
+    host.querySelectorAll('[data-md-checklist]').forEach((el) => { el.textContent = t('md.checklist'); });
+    // `:icon[ph:rocket]` → a mask from the Phosphor family, the same way as lucide below.
+    host.querySelectorAll<HTMLElement>('.doc-icon-mask[data-ph]').forEach((el) => {
+        if (el.dataset.masked) return;
+        el.dataset.masked = '1';
+        const src = phosphorIconUrl(String(el.dataset.ph || ''));
+        if (!src) return;
+        const url = `url('${src}') center/contain no-repeat`;
+        el.style.webkitMask = url;
+        el.style.mask = url;
+    });
     // `:icon[rocket]` → a real CSS mask, so the glyph takes the colour of the text around it.
     // The name was filtered to [a-z0-9-] before it reached the attribute, so building a URL
     // from it introduces nothing; an <img> here would be flat black on a dark page.

@@ -144,6 +144,12 @@ function inline(s) {
     // on a dark page. Brand marks come pre-coloured, so they stay images.
     s = s.replace(/:icon\[([^\]]+)\](?:\{[^}]*\})?/g, (_m, raw) => {
         const n = String(raw).trim().toLowerCase().replace(/[^a-z0-9:-]/g, '');
+        // Phosphor (`ph:rocket`, `ph-bold:rocket`): a mask too, hydrated from `data-ph`.
+        const ph = n.match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+        if (ph) {
+            const w = ph[1] || 'regular';
+            return keep(`<span class="doc-icon doc-icon-mask" data-ph="${w}/${ph[2]}${w === 'regular' ? '' : `-${w}`}"></span>`);
+        }
         const brand = n.match(/^(?:simple|si):(.+)$/);
         if (brand)
             return keep(`<img class="doc-icon" src="https://cdn.simpleicons.org/${brand[1]}" alt="" loading="lazy">`);
@@ -163,6 +169,14 @@ function inline(s) {
     s = s.replace(/:link\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
         const a = leafAttrs(rawAttrs);
         return keep(docLinkish(a, esc(txt), 'doc-link-c', a.color ? ` style="--lnk:${escRaw(a.color)}"` : ''));
+    });
+    // `:meter[60]{label=Done max=100 color=}` — an inline progress bar.
+    s = s.replace(/:meter\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, raw, rawAttrs) => {
+        const a = leafAttrs(rawAttrs);
+        const max = Math.max(1, Number(a.max) || 100);
+        const val = Math.max(0, Math.min(max, Number(String(raw).replace(/[^0-9.]/g, '')) || 0));
+        const pct = Math.round((val * 100) / max);
+        return keep(`<span class="doc-meter"${a.color ? ` style="--meter:${escRaw(a.color)}"` : ''}><span class="doc-meter-track"><span class="doc-meter-fill" style="width:${pct}%"></span></span><span class="doc-meter-text">${esc(a.label ? `${a.label} ` : '')}${pct}%</span></span>`);
     });
     // `:badge[New]{color=#0a7}` / `:tag[…]` — a coloured chip.
     s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
@@ -640,6 +654,91 @@ function renderDirective(dir, body) {
     // All three fell through to "render the body plainly", which is the fallback for a directive
     // this file has never heard of. So a page of link cards arrived as a run-on paragraph and a
     // download block as its own filename — no frame, no button, and no error either.
+    // ── B.MD 2.0 ────────────────────────────────────────────────────────────
+    // The website's ten newer blocks. Words a reader sees but an author did not write
+    // (Before / After, the spoiler summary, a default question) are left as data-md-* for
+    // hydrateMdLite to fill in the reader's language, like the schedule card's heading.
+    if (name === 'timeline')
+        return `<div class="doc-timeline">${label || attrs.title ? `<div class="doc-timeline-title">${esc(label || attrs.title)}</div>` : ''}${inner()}</div>`;
+    if (name === 'event' || name === 'moment') {
+        const raw = String(attrs.state || attrs.status || '').toLowerCase();
+        const state = ['done', 'past', 'shipped'].includes(raw) ? 'done' : ['now', 'current', 'active'].includes(raw) ? 'now' : 'next';
+        const title = label || attrs.title || '';
+        return `<div class="doc-event doc-event-${state}"${attrs.color ? ` style="--ev:${escRaw(attrs.color)}"` : ''}><div class="doc-event-marker"></div><div class="doc-event-body">`
+            + (attrs.date ? `<div class="doc-event-date">${esc(attrs.date)}</div>` : '')
+            + (title ? `<div class="doc-event-title">${esc(title)}</div>` : '')
+            + `${inner()}</div></div>`;
+    }
+    if (name === 'compare') {
+        let body = inner();
+        for (const side of ['before', 'after']) {
+            if (attrs[side])
+                body = body.replace(new RegExp(`(<div class="doc-compare-label")( data-md-${side})?(>)<span data-md-side><\\/span>`), `$1$3${esc(attrs[side])}`);
+        }
+        return `<div class="doc-compare">${body}</div>`;
+    }
+    if (name === 'before' || name === 'after') {
+        const lab = label || attrs.title || '';
+        return `<div class="doc-compare-side doc-compare-${name}"><div class="doc-compare-label"${lab ? '' : ` data-md-${name}`}>${lab ? esc(lab) : '<span data-md-side></span>'}</div>${inner()}</div>`;
+    }
+    if (name === 'stats')
+        return `<div class="doc-stats">${inner()}</div>`;
+    if (name === 'stat' || name === 'kpi') {
+        const delta = String(attrs.delta ?? attrs.trend ?? '');
+        const dir = delta.startsWith('-') ? 'down' : delta.startsWith('+') ? 'up' : 'flat';
+        const body = inner();
+        return `<div class="doc-stat"${attrs.color ? ` style="--stat:${escRaw(attrs.color)}"` : ''}>`
+            + `<div class="doc-stat-value">${esc(String(attrs.value ?? ''))}</div>`
+            + (label || attrs.label ? `<div class="doc-stat-label">${esc(label || attrs.label)}</div>` : '')
+            + (delta ? `<div class="doc-stat-delta doc-stat-${dir}">${esc(delta)}</div>` : '')
+            + (body.trim() ? `<div class="doc-stat-note">${body}</div>` : '')
+            + `</div>`;
+    }
+    if (name === 'quote' || name === 'testimonial') {
+        const who = label || attrs.author || attrs.by || '';
+        const author = who ? docLinkish({ href: attrs.href || attrs.url || '' }, esc(who), 'doc-quote-author', '') : '';
+        const foot = (who || attrs.role || attrs.avatar)
+            ? `<div class="doc-quote-foot">${attrs.avatar && safeDocUrl(attrs.avatar) ? `<img class="doc-quote-avatar" src="${escRaw(attrs.avatar)}" alt="" loading="lazy">` : ''}<div class="doc-quote-who">${author}${attrs.role ? `<span class="doc-quote-role">${esc(attrs.role)}</span>` : ''}</div></div>`
+            : '';
+        return `<blockquote class="doc-quote"${attrs.color ? ` style="--q:${escRaw(attrs.color)}"` : ''}><div class="doc-quote-body">${inner()}</div>${foot}</blockquote>`;
+    }
+    if (name === 'hero') {
+        const align = ['left', 'center', 'right'].includes(String(attrs.align)) ? attrs.align : 'left';
+        const title = label || attrs.title || '';
+        return `<div class="doc-hero doc-hero-${align}"${attrs.color ? ` style="--hero:${escRaw(attrs.color)}"` : ''}>`
+            + (attrs.image && safeDocUrl(attrs.image) ? `<img class="doc-hero-media" src="${escRaw(attrs.image)}" alt="${escRaw(title)}" loading="lazy">` : '')
+            + `<div class="doc-hero-body">${title ? `<div class="doc-hero-title">${esc(title)}</div>` : ''}${attrs.subtitle ? `<div class="doc-hero-sub">${esc(attrs.subtitle)}</div>` : ''}${inner()}</div></div>`;
+    }
+    if (name === 'changelog')
+        return `<div class="doc-changelog">${label || attrs.title ? `<div class="doc-changelog-title">${esc(label || attrs.title)}</div>` : ''}${inner()}</div>`;
+    if (name === 'version' || name === 'release') {
+        const v = label || attrs.title || attrs.v || '';
+        return `<div class="doc-version"><div class="doc-version-head">${v ? `<span class="doc-version-tag">${esc(v)}</span>` : ''}${attrs.date ? `<span class="doc-version-date">${esc(attrs.date)}</span>` : ''}${attrs.label ? `<span class="doc-badge">${esc(attrs.label)}</span>` : ''}</div><div class="doc-version-body">${inner()}</div></div>`;
+    }
+    if (name === 'spoiler') {
+        const lab = label || attrs.title || '';
+        return `<details class="doc-spoiler"><summary${lab ? '' : ' data-md-spoiler'}>${esc(lab)}</summary><div class="doc-details-body">${inner()}</div></details>`;
+    }
+    if (name === 'faq')
+        return `<div class="doc-faq">${label || attrs.title ? `<div class="doc-faq-title">${esc(label || attrs.title)}</div>` : ''}${inner()}</div>`;
+    if (name === 'q' || name === 'question') {
+        const lab = label || attrs.title || '';
+        return `<details class="doc-faq-item"${attrs.open != null ? ' open' : ''}><summary${lab ? '' : ' data-md-question'}>${esc(lab)}</summary><div class="doc-faq-a">${inner()}</div></details>`;
+    }
+    if (name === 'checklist') {
+        // The list renderer has no task boxes, so the ticks are drawn as glyphs in the source
+        // before it runs, and counted here from what the author wrote.
+        const total = body.filter((l) => /^\s*[-*]\s+\[[ xX]\]/.test(l)).length;
+        const done = body.filter((l) => /^\s*[-*]\s+\[[xX]\]/.test(l)).length;
+        const pct = total ? Math.round((done * 100) / total) : 0;
+        const ticked = body.map((l) => l.replace(/^(\s*[-*]\s+)\[[xX]\]\s*/, '$1☑ ').replace(/^(\s*[-*]\s+)\[ \]\s*/, '$1☐ '));
+        const lab = label || attrs.title || '';
+        return `<div class="doc-checklist${total && done === total ? ' doc-checklist-done' : ''}"${attrs.color ? ` style="--check:${escRaw(attrs.color)}"` : ''}><div class="doc-checklist-head"><span class="doc-checklist-title"${lab ? '' : ' data-md-checklist'}>${esc(lab)}</span><span class="doc-checklist-count">${done} / ${total}</span><span class="doc-checklist-bar"><i style="width:${pct}%"></i></span></div>${renderBlocks(ticked)}</div>`;
+    }
+    if (name === 'grid') {
+        const cols = Math.min(6, Math.max(1, parseInt(attrs.cols || attrs.columns, 10) || 3));
+        return `<div class="doc-grid" style="--cols:${cols}">${inner()}</div>`;
+    }
     if (name === 'cards')
         return `<div class="doc-cards">${inner()}</div>`;
     if (name === 'card' || name === 'ref') {
