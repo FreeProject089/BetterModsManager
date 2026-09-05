@@ -2948,7 +2948,7 @@ export function initRepo() {
         });
         // The close button's tooltip says this brings it back, so it has to. A promise in a
         // tooltip that nothing implements is worse than no tooltip.
-        document.querySelector('[data-act="openDocsArticleById"][data-act-args*="server-sync"]')
+        document.querySelector('[data-act="openDocsPageById"][data-act-args*="server-sync"]')
             ?.addEventListener('click', () => {
             if (!lede)
                 return;
