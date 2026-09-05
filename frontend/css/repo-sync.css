@@ -287,9 +287,10 @@
 #btn-discover-server { margin-top: 12px; }
 
 /* ── Every repo card folds from its header chevron; sections inside a card fold too ───── */
-.repo-card-header { position: relative; padding-right: 34px; }
+/* The chevron is a flex item pushed to the end of the header (order), never absolutely
+   positioned — that way the trailing badges / "How it works?" buttons keep a real gap. */
 .repo-card-fold {
-    position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+    order: 99; flex: 0 0 auto; margin-left: 10px;
     width: 26px; height: 26px; display: grid; place-items: center;
     background: var(--bmm-s04); border: 1px solid var(--bmm-s08); border-radius: 7px;
     color: var(--bmm-text-secondary); cursor: pointer; transition: background .12s, color .12s;
