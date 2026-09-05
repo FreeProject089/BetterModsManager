@@ -4538,7 +4538,334 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
             ],
         }),
     },
+    {
+        cat: 'mods', key: 'gameNight', icon: '<path d="M6 11h4"/><path d="M8 9v4"/><path d="M15 12h.01"/><path d="M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
+        title: 'Friday game night',
+        desc: 'Every Friday at 19:00, switch to the profile and the modpack you play with. Pick both in the steps.',
+        make: () => ({
+            name: 'Game night setup',
+            trigger: { type: 'weeklyAt', time: '19:00', days: [5] },
+            steps: [
+                { kind: 'action', action: { type: 'profile.activate', params: { id: '' } } },
+                { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Game night setup is on.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'cleanSlate', icon: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+        title: 'Start from a clean slate',
+        desc: 'Turn every mod off, then enable one modpack — the state you want, and nothing left over from last time.',
+        make: () => ({
+            name: 'Clean slate',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.disableAll', params: {} } },
+                { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Clean slate applied.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'monthlyBackup', icon: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>',
+        title: 'Full backup on the 1st',
+        desc: 'On the first of every month, a complete export of your data plus your modpacks — the one you restore from.',
+        make: () => ({
+            name: 'Monthly full backup',
+            trigger: { type: 'monthlyAt', day: 1, time: '07:00' },
+            steps: [
+                { kind: 'action', action: { type: 'data.exportAuto', params: { increment: false } } },
+                { kind: 'action', action: { type: 'mods.exportModpack', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Monthly full backup done.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'onlineUpdates', icon: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/>',
+        title: 'Check for updates only when online',
+        desc: 'The daily update check, skipped cleanly when there is no connection — so an offline morning never logs a failure.',
+        make: () => ({
+            name: 'Update check (online only)',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'online', params: {} },
+                    then: [
+                        { kind: 'action', action: { type: 'mods.checkUpdates', params: {} } },
+                        { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                        {
+                            kind: 'if',
+                            condition: { type: 'value', params: { source: 'update.available', op: '==', value: 1 } },
+                            then: [{ kind: 'action', action: { type: 'notify', params: { message: 'A BMM update is available.' } } }],
+                            else: [],
+                        },
+                    ],
+                    else: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'offline — skipped the update check' } } }],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'startupChecklist', icon: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+        title: 'Startup checklist',
+        desc: 'When BMM opens: rescan the library, then warn if the disk is under 15 GB. Silent when all is well.',
+        make: () => ({
+            name: 'Startup checklist',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 15 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Under 15 GB free — time to make room.', level: 'warning' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'fileArrived', icon: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>',
+        title: 'React when a file changes',
+        desc: 'Watches one file you name — a launcher log, a download marker — and rescans the library the moment it changes.',
+        make: () => ({
+            name: 'File watcher',
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'The watched file changed — library rescanned.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'gameProfile', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/><path d="M16 8h.01"/>',
+        title: 'Switch profile when the game starts',
+        desc: 'Every 2 minutes: if the game is running and its profile is not active, activate it. Name the program and pick the profile.',
+        make: () => ({
+            name: 'Profile follows the game',
+            trigger: { type: 'interval', everyMinutes: 2 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'appRunning', params: { name: '' } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'profileActive', params: { id: '' } },
+                            then: [],
+                            else: [
+                                { kind: 'action', action: { type: 'profile.activate', params: { id: '' } } },
+                                { kind: 'action', action: { type: 'notify', params: { message: 'Switched to the game profile.' } } },
+                            ],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'syncAfterTask', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        title: 'Sync once another task succeeds',
+        desc: 'A chain: runs right after the task you pick finishes WITHOUT error, and syncs the repo. Pick the task in the trigger.',
+        make: () => ({
+            name: 'Sync after…',
+            trigger: { type: 'afterTask', taskId: '', outcome: 'ok' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Synced after the other task finished.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'pollThrice', icon: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M12 7v5l3 3"/>',
+        title: 'Check three times, then stop',
+        desc: 'A repeat block: three checks ten minutes apart, warning under 10 GB — the shape of any wait-and-see task.',
+        make: () => ({
+            name: 'Three checks',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'repeat', mode: 'times', times: 3, maxIters: 3, everySec: 600,
+                    steps: [
+                        { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                        {
+                            kind: 'if',
+                            condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 10 } },
+                            then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Under 10 GB free.', level: 'warning' } } }],
+                            else: [],
+                        },
+                    ],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'nightTheme', icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+        title: 'Night theme in the evening',
+        desc: 'At 20:00 switch to a dark theme. Duplicate it with a morning time and a light theme for the other half.',
+        make: () => ({
+            name: 'Night theme',
+            trigger: { type: 'dailyAt', time: '20:00' },
+            steps: [
+                { kind: 'action', action: { type: 'theme.set', params: { id: 'bmm-void' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Night theme on.' } } },
+            ],
+        }),
+    },
 ];
+
+/** Replace the draft with a preset — after a confirmation when there is work in it. */
+async function applyPreset(modal: HTMLElement, p: (typeof PRESETS)[number]): Promise<boolean> {
+    const has = (_draft.steps?.length || 0) + (_draft.name ? 1 : 0);
+    if (has) {
+        const ok = await showConfirm(
+            t('sched.presetReplaceTitle') || 'Replace this task?',
+            (t('sched.presetReplaceBody') || 'Starting from a preset throws away what is in this task — {n} step(s), and its name, trigger and permissions. Continue?')
+                .replace('{n}', String(_draft.steps?.length || 0)),
+            true,
+        );
+        if (!ok) return false;
+    }
+    _snapshot();                   // undo covers this like any other edit
+    _draft = taskFromPreset(p);
+    renderModal(modal);
+    const desc = modal.querySelector<HTMLElement>('#sched-preset-desc');
+    if (desc) desc.textContent = (t('sched.pg.applied') || 'Started from “{t}” — everything below is yours to change.').replace('{t}', t('sched.preset.' + p.key) || p.title);
+    return true;
+}
+
+/** What a template needs granted, as the permission keys the editor shows. */
+function presetPerms(p: (typeof PRESETS)[number]): string[] {
+    const task = p.make();
+    const pm: Record<string, unknown> = { ...((task as any).permissions || {}), ...((task as any).perms || {}) };
+    return Object.keys(pm).filter((k) => pm[k] === true);
+}
+function countSteps(steps: any[] | undefined): number {
+    let n = 0;
+    for (const st of steps || []) {
+        n++;
+        for (const key of ['then', 'else', 'steps', 'body', 'catch', 'finally']) if (Array.isArray(st?.[key])) n += countSteps(st[key]);
+        if (Array.isArray(st?.cases)) for (const c of st.cases) n += countSteps(c?.steps);
+    }
+    return n;
+}
+
+let _gallery: HTMLElement | null = null;
+/**
+ * The template gallery: a modal with a category rail, a search box, one card per template
+ * (icon, name, what it does, the trigger, the step count, the permissions it needs) and a
+ * detail pane that lists the trigger and the steps of the selected one — so the choice is
+ * made on what a template DOES, not on its name. "Use this template" hands it to
+ * applyPreset, which asks before replacing a draft that has work in it.
+ */
+async function openPresetGallery(modal: HTMLElement): Promise<void> {
+    if (!_gallery) {
+        _gallery = document.createElement('div');
+        _gallery.className = 'modal-overlay spg-overlay';
+        _gallery.id = 'modal-sched-presets';
+        document.body.appendChild(_gallery);
+        _gallery.addEventListener('click', (e) => { if (e.target === _gallery) closeGallery(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _gallery?.classList.contains('open')) closeGallery(); });
+    }
+    const g = _gallery;
+    let cat: PresetCat | 'all' = 'all';
+    let q = '';
+    let selected: string | null = null;
+    const label = (p: (typeof PRESETS)[number]) => t('sched.preset.' + p.key) || p.title;
+    const descOf = (p: (typeof PRESETS)[number]) => t('sched.presetd.' + p.key) || p.desc;
+    const catLabel = (c: PresetCat) => { const row = PRESET_CATS.find((x) => x.cat === c); return row ? (t(row.key) || row.label) : c; };
+    const permLabel = (k: string) => t('sched.perm.' + k) || k;
+    const visible = () => PRESETS.filter((p) => (cat === 'all' || p.cat === cat))
+        .filter((p) => !q || (label(p) + ' ' + descOf(p) + ' ' + catLabel(p.cat)).toLowerCase().includes(q))
+        .sort((x, y) => label(x).localeCompare(label(y)));
+
+    const closeGallery = () => { g.classList.remove('open'); document.body.style.overflow = ''; };
+
+    const render = () => {
+        const list = visible();
+        const sel = selected ? PRESETS.find((p) => p.key === selected) || null : null;
+        const counts: Record<string, number> = { all: PRESETS.length };
+        for (const p of PRESETS) counts[p.cat] = (counts[p.cat] || 0) + 1;
+        const rail = [{ id: 'all', name: t('sched.pg.all') || 'All templates' }, ...PRESET_CATS.map((c) => ({ id: c.cat, name: t(c.key) || c.label }))]
+            .map((c) => `<button type="button" class="spg-cat${cat === c.id ? ' is-active' : ''}" data-cat="${escAttr(c.id)}"><span>${escHtml(c.name)}</span><span class="spg-cat-n">${counts[c.id] || 0}</span></button>`).join('');
+        const cards = list.map((p) => {
+            const task = p.make();
+            const perms = presetPerms(p);
+            const n = countSteps(task.steps as any[]);
+            return `<button type="button" class="spg-card${selected === p.key ? ' is-selected' : ''}" data-key="${escAttr(p.key)}">
+                <span class="spg-card-ico">${SVG16(p.icon)}</span>
+                <span class="spg-card-body">
+                    <span class="spg-card-title">${escHtml(label(p))}</span>
+                    <span class="spg-card-desc">${escHtml(descOf(p))}</span>
+                    <span class="spg-card-meta">
+                        <span class="spg-chip">${escHtml(task.trigger ? triggerLabel(task.trigger as Trigger) : (t('sched.trManual') || 'Manual'))}</span>
+                        <span class="spg-chip">${escHtml((t('sched.pg.steps') || '{n} step(s)').replace('{n}', String(n)))}</span>
+                        ${perms.length ? `<span class="spg-chip spg-chip-perm" title="${escAttr(t('sched.pg.permsTip') || 'Arrives with this permission unticked — grant it deliberately.')}">${escHtml(perms.map(permLabel).join(' · '))}</span>` : ''}
+                    </span>
+                </span>
+            </button>`;
+        }).join('');
+        let detail = `<div class="spg-detail-empty">${escHtml(t('sched.pg.pick') || 'Select a template to see exactly what it does.')}</div>`;
+        if (sel) {
+            const task = sel.make();
+            const perms = presetPerms(sel);
+            const steps = (task.steps || []) as Step[];
+            const stepRows = steps.map((st) => {
+                const inner = countSteps([st]) - 1;
+                return `<li>${escHtml(stepLabel(st))}${inner ? ` <span class="spg-inner">${escHtml((t('sched.pg.inner') || '+{n} inside').replace('{n}', String(inner)))}</span>` : ''}</li>`;
+            }).join('');
+            detail = `
+                <div class="spg-detail-head"><span class="spg-card-ico">${SVG16(sel.icon)}</span><div><div class="spg-detail-title">${escHtml(label(sel))}</div><div class="spg-detail-cat">${escHtml(catLabel(sel.cat))}</div></div></div>
+                <p class="spg-detail-desc">${escHtml(descOf(sel))}</p>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.trigger') || 'Runs')}</div>
+                <div class="spg-detail-trigger">${escHtml(task.trigger ? triggerLabel(task.trigger as Trigger) : (t('sched.trManual') || 'Manual'))}</div>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.does') || 'Steps')}</div>
+                <ol class="spg-detail-steps">${stepRows || `<li class="spg-inner">${escHtml(t('sched.pg.nosteps') || 'No steps yet.')}</li>`}</ol>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.perms') || 'Permissions')}</div>
+                <div class="spg-detail-perms">${perms.length ? escHtml((t('sched.pg.permsNeed') || 'Needs {p} — left unticked, grant it after reading the steps.').replace('{p}', perms.map(permLabel).join(', '))) : escHtml(t('sched.pg.permsNone') || 'None — nothing here touches other programs.')}</div>
+                <div class="spg-detail-actions">
+                    <button type="button" class="btn btn-primary" id="spg-use">${SVG16('<path d="M20 6 9 17l-5-5"/>')}<span>${escHtml(t('sched.pg.use') || 'Use this template')}</span></button>
+                    <span class="spg-detail-note">${escHtml(t('sched.pg.useNote') || 'Blanks in the steps are yours to fill.')}</span>
+                </div>`;
+        }
+        g.innerHTML = `
+            <div class="modal glass spg" role="dialog" aria-modal="true" aria-labelledby="spg-title">
+                <div class="modal-header spg-head">
+                    <div class="spg-head-l">
+                        <div class="spg-head-ico">${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}</div>
+                        <div><h2 id="spg-title">${escHtml(t('sched.pg.title') || 'Automation templates')}</h2><p>${escHtml((t('sched.pg.sub') || '{n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then make it yours.').replace('{n}', String(PRESETS.length)))}</p></div>
+                    </div>
+                    <div class="spg-search">${SVG16('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>')}<input id="spg-q" type="search" placeholder="${escAttr(t('sched.pg.search') || 'Search templates…')}" value="${escAttr(q)}" autocomplete="off"></div>
+                    <button type="button" class="modal-close" id="spg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${SVG16('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')}</button>
+                </div>
+                <div class="spg-body">
+                    <nav class="spg-rail">${rail}</nav>
+                    <div class="spg-grid">${cards || `<div class="spg-none">${escHtml(t('sched.pg.none') || 'Nothing matches — try another word.')}</div>`}</div>
+                    <aside class="spg-detail">${detail}</aside>
+                </div>
+            </div>`;
+        g.querySelector('#spg-close')?.addEventListener('click', closeGallery);
+        g.querySelectorAll<HTMLButtonElement>('.spg-cat').forEach((b) => b.addEventListener('click', () => { cat = b.dataset.cat as PresetCat | 'all'; render(); }));
+        g.querySelectorAll<HTMLButtonElement>('.spg-card').forEach((b) => {
+            b.addEventListener('click', () => { selected = b.dataset.key || null; render(); g.querySelector<HTMLElement>('.spg-detail')?.scrollTo({ top: 0 }); });
+            b.addEventListener('dblclick', () => { selected = b.dataset.key || null; void useSelected(); });
+        });
+        const qi = g.querySelector<HTMLInputElement>('#spg-q');
+        qi?.addEventListener('input', () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; render(); const again = g.querySelector<HTMLInputElement>('#spg-q'); again?.focus(); try { again?.setSelectionRange(pos, pos); } catch { /* not focusable */ } });
+        g.querySelector('#spg-use')?.addEventListener('click', () => { void useSelected(); });
+    };
+    const useSelected = async () => {
+        const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+        if (!p) return;
+        if (await applyPreset(modal, p)) closeGallery();
+    };
+    render();
+    g.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    g.querySelector<HTMLInputElement>('#spg-q')?.focus();
+}
 
 /** Build a full task from a preset. The id and createdAt are minted here, never stored in
  *  the preset itself — two tasks made from one preset must not share an id. */
@@ -4913,20 +5240,19 @@ function renderModal(modal: HTMLElement): void {
                     // Grouped, and alphabetical inside a group. Nineteen presets in one flat
                     // list, in the order somebody happened to write them, is a list you read
                     // top to bottom every single time.
-                    const groups = PRESET_CATS.map((c) => {
-                        const mine = PRESETS.filter((p) => p.cat === c.cat)
-                            .map((p) => ({ p, label: t('sched.preset.' + p.key) || p.title }))
-                            .sort((a, b) => a.label.localeCompare(b.label));
-                        if (!mine.length) return '';
-                        return `<optgroup label="${escAttr(t(c.key) || c.label)}">${mine.map(({ p, label }) =>
-                            `<option value="${escAttr(p.key)}">${escHtml(label)}</option>`).join('')}</optgroup>`;
-                    }).join('');
+                    // The gallery replaces the <select>: a grouped dropdown showed a name and
+                    // nothing else, and thirty-odd templates in optgroups is a list you scroll
+                    // blind. The modal shows every template as a card with what it does, lets
+                    // you search, and explains the trigger, the steps and the permissions
+                    // BEFORE anything replaces the draft.
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
                     <div class="sched-preset-row">
-                        <select class="input sched-preset-pick" id="sched-preset-pick">
-                            <option value="">${escHtml(t('sched.presetPick') || 'Pick one…')}</option>
-                            ${groups}
-                        </select>
+                        <button type="button" class="btn btn-sm btn-secondary sched-preset-open" id="sched-preset-open"
+                            data-tooltip="${escAttr(t('sched.pg.tip') || 'Ready-made automations, with what each one does explained before it replaces the draft.')}">
+                            ${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}
+                            <span>${escHtml(t('sched.pg.open') || 'Browse templates…')}</span>
+                            <span class="sched-preset-count">${PRESETS.length}</span>
+                        </button>
                         ${browse}
                     </div>
                     <div class="sched-preset-desc" id="sched-preset-desc"></div>`;
@@ -5091,42 +5417,7 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
-    {
-        const pick = modal.querySelector<HTMLSelectElement>('#sched-preset-pick');
-        const desc = modal.querySelector<HTMLElement>('#sched-preset-desc');
-        // Description on selection, before applying. A preset replaces the whole draft, so
-        // being able to read what one does WITHOUT committing to it is the difference
-        // between choosing and guessing — the tooltip on the old cards required hovering
-        // each one in turn, which nobody does.
-        pick?.addEventListener('change', () => {
-            const p = PRESETS.find((x) => x.key === pick.value);
-            if (desc) desc.textContent = p ? (t('sched.presetd.' + p.key) || p.desc) : '';
-            if (!p) return;
-            void (async () => {
-                // Applying REPLACES the draft. On a blank new task that costs nothing, so it
-                // happens straight away; once there is work in the draft it is a destructive
-                // edit, and it gets asked about with the count of what would go.
-                const has = (_draft.steps?.length || 0) + (_draft.name ? 1 : 0);
-                if (has) {
-                    const ok = await showConfirm(
-                        t('sched.presetReplaceTitle') || 'Replace this task?',
-                        (t('sched.presetReplaceBody') || 'Starting from a preset throws away what is in this task — {n} step(s), and its name, trigger and permissions. Undo brings it back.')
-                            .replace('{n}', String(_draft.steps?.length || 0)),
-                        true,
-                    );
-                    if (!ok) {
-                        // Put the picker back where it was, or it reads as applied.
-                        pick.value = '';
-                        if (desc) desc.textContent = '';
-                        return;
-                    }
-                }
-                _snapshot();                   // undo covers this like any other edit
-                _draft = taskFromPreset(p);
-                renderModal(modal!);
-            })();
-        });
-    }
+    modal.querySelector('#sched-preset-open')?.addEventListener('click', () => { void openPresetGallery(modal); });
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
     modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
