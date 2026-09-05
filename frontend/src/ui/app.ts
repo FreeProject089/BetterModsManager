@@ -1040,7 +1040,8 @@ async function main() {
     }
 
     // Bind Docs Diagram buttons
-    document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));
+    // The documentation page on syncing (chunks, resumed downloads), not the bare diagram.
+    document.getElementById('btn-docs-resumable')?.addEventListener('click', () => ((window as any).openDocsPageById || openDiagram)('server-sync'));
     document.getElementById('btn-faq-resumable')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();

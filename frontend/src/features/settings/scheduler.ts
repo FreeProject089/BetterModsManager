@@ -6912,6 +6912,73 @@ async function applyCredsFor(url: string, params: Record<string, any>): Promise<
     try { await invoke('key_auth_set_for_url', { url, name }); } catch { /* unprotected source */ }
 }
 
+// ── The kind picker ───────────────────────────────────────────────────────────
+// One popover for "which action" and "which condition": a search box, the kinds grouped
+// with an icon, a name and a one-line description. It replaces two <select>s that hid a
+// hundred options behind optgroups and could show no description at all — which is why
+// the list read as a wall of similar verbs.
+type PickItem = { v: string; label: string; desc?: string; group: string };
+type PickGroup = { g: string; label: string; icon?: string };
+function openKindPicker(anchor: HTMLElement, groups: PickGroup[], items: PickItem[], value: string, onPick: (v: string) => void): void {
+    document.querySelector('.skp')?.remove();
+    const pop = document.createElement('div');
+    pop.className = 'skp';
+    pop.setAttribute('role', 'dialog');
+    pop.innerHTML = `
+        <div class="skp-top"><input type="search" class="skp-search input" placeholder="${escAttr(t('sched.pick.search') || 'Search…')}" autocomplete="off" spellcheck="false"><button type="button" class="skp-close" aria-label="close">✕</button></div>
+        <div class="skp-body"></div>`;
+    const body = pop.querySelector('.skp-body') as HTMLElement;
+    const input = pop.querySelector('.skp-search') as HTMLInputElement;
+    const close = () => { pop.remove(); document.removeEventListener('keydown', onKey, true); document.removeEventListener('mousedown', onOut, true); };
+    const draw = (q: string) => {
+        const needle = q.trim().toLowerCase();
+        const hit = (it: PickItem) => !needle || `${it.label} ${it.desc || ''} ${it.v}`.toLowerCase().includes(needle);
+        body.innerHTML = groups.map((grp) => {
+            const list = items.filter((it) => it.group === grp.g && hit(it));
+            if (!list.length) return '';
+            return `<div class="skp-group"><div class="skp-gh">${grp.icon || ''}<span>${escHtml(grp.label)}</span></div><div class="skp-grid">${list.map((it) => `
+                <button type="button" class="skp-item${it.v === value ? ' is-on' : ''}" data-v="${escAttr(it.v)}" title="${escAttr(it.desc || '')}">
+                    <span class="skp-item-l">${escHtml(it.label)}</span>${it.desc ? `<span class="skp-item-d">${escHtml(it.desc)}</span>` : ''}
+                </button>`).join('')}</div></div>`;
+        }).join('') || `<div class="skp-empty">${escHtml(t('sched.pick.none') || 'Nothing matches.')}</div>`;
+        body.querySelectorAll<HTMLElement>('.skp-item').forEach((b) => b.addEventListener('click', () => { const v = b.dataset.v || ''; close(); onPick(v); }));
+    };
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+        if (e.key === 'Enter' && document.activeElement === input) { const first = body.querySelector<HTMLElement>('.skp-item'); if (first) { e.preventDefault(); first.click(); } }
+    };
+    const onOut = (e: MouseEvent) => { if (!pop.contains(e.target as Node)) close(); };
+    input.addEventListener('input', () => draw(input.value));
+    pop.querySelector('.skp-close')?.addEventListener('click', close);
+    document.body.appendChild(pop);
+    // Under the anchor, kept inside the viewport.
+    const r = anchor.getBoundingClientRect();
+    const W = Math.min(560, window.innerWidth - 16);
+    pop.style.width = `${W}px`;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - W - 8))}px`;
+    const below = window.innerHeight - r.bottom - 12;
+    pop.style.maxHeight = `${Math.max(240, Math.min(460, below > 260 ? below : r.top - 12))}px`;
+    pop.style.top = below > 260 ? `${r.bottom + 6}px` : '';
+    if (below <= 260) pop.style.bottom = `${window.innerHeight - r.top + 6}px`;
+    draw('');
+    document.addEventListener('keydown', onKey, true);
+    setTimeout(() => { document.addEventListener('mousedown', onOut, true); input.focus(); }, 0);
+    // The current one scrolled into view, so a long list opens where you are.
+    body.querySelector<HTMLElement>('.skp-item.is-on')?.scrollIntoView({ block: 'center' });
+}
+const actionPickItems = (): PickItem[] => ACTION_TYPES.map((a) => { const ad = t('sched.actd.' + a.v); return { v: a.v, label: t('sched.act.' + a.v) || a.label, desc: ad === ('sched.actd.' + a.v) ? '' : ad, group: a.group }; });
+const actionPickGroups = (): PickGroup[] => ACTION_GROUPS.map((g) => ({ g: g.g, label: t('sched.grp.' + g.g) || g.label, icon: GROUP_ICON[g.g] || '' }));
+// Conditions grouped the same way, each with its one-line description (sched.condd.*).
+const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
+    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
+    { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'modEnabled', 'modDisabled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
+    { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
+    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed'] },
+    { g: 'time', label: 'Time', kinds: ['timeReached', 'dayOfWeek', 'timeRange'] },
+];
+const condPickGroups = (): PickGroup[] => COND_GROUPS.map((g) => ({ g: g.g, label: t('sched.cgrp.' + g.g) || g.label, icon: GROUP_ICON[g.g === 'files' ? 'repo' : g.g === 'time' ? 'system' : g.g] || '' }));
+const condPickItems = (): PickItem[] => COND_TYPES.map((c) => { const grp = COND_GROUPS.find((g) => g.kinds.includes(c))?.g || 'logic'; const d = t('sched.condd.' + c); return { v: c, label: t('sched.cond.' + c) || c, desc: d === ('sched.condd.' + c) ? '' : d, group: grp }; });
+
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
@@ -6926,19 +6993,24 @@ function actionEditor(action: Action, onStructureChange?: () => void): HTMLEleme
                 return `<option value="${a.v}"${action.type === a.v ? ' selected' : ''} data-icon="${escAttr(GROUP_ICON[a.group] || '')}" data-desc="${escAttr(desc)}">${escHtml(t('sched.act.' + a.v) || a.label)}</option>`;
             }).join('')}</optgroup>`;
         }).join('');
+        void groupsHtml;
+        const ad = t('sched.actd.' + def.v); const desc = ad === ('sched.actd.' + def.v) ? '' : ad;
         el.className = 'sched-act-card';
         el.innerHTML = `
             <div class="sched-act-head">
                 <span class="sched-act-icon">${GROUP_ICON[def.group] || ''}</span>
                 <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
-                <select class="input sched-act-type">${groupsHtml}</select>
+                <button type="button" class="input sched-act-type sched-pickbtn" title="${escAttr(desc)}"><span class="sched-pickbtn-l">${escHtml(t('sched.act.' + def.v) || def.label)}</span><span class="sched-pickbtn-chev">▾</span></button>
             </div>
             <div class="sched-act-params"></div>`;
-        el.querySelector('.sched-act-type')?.addEventListener('change', (e) => {
-            _snapshot(); action.type = (e.target as HTMLSelectElement).value; action.params = {};
-            // Re-render the whole block (not just this card) so the injected step
-            // toolbar / fold controls survive the type switch.
-            if (onStructureChange) onStructureChange(); else render();
+        el.querySelector('.sched-act-type')?.addEventListener('click', (e) => {
+            openKindPicker(e.currentTarget as HTMLElement, actionPickGroups(), actionPickItems(), action.type, (v) => {
+                if (v === action.type) return;
+                _snapshot(); action.type = v; action.params = {};
+                // Re-render the whole block (not just this card) so the injected step
+                // toolbar / fold controls survive the type switch.
+                if (onStructureChange) onStructureChange(); else render();
+            });
         });
         const paramsHost = el.querySelector('.sched-act-params') as HTMLElement;
         renderParams(paramsHost, def?.needs, action.params);
@@ -8767,15 +8839,15 @@ function conditionEditor(cond: Condition): HTMLElement {
         el.innerHTML = `
             <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);margin-right:6px">
                 <input type="checkbox" class="sched-neg" ${cond.negate ? 'checked' : ''}> ${t('sched.not') || 'NOT'}</label>
-            <select class="input sched-cond-type" style="max-width:170px">
-                ${COND_TYPES.map(c => `<option value="${c}" ${cond.type === c ? 'selected' : ''}>${escHtml(t('sched.cond.' + c) || c)}</option>`).join('')}
-            </select>
+            <button type="button" class="input sched-cond-type sched-pickbtn" style="max-width:220px" title="${escAttr((() => { const d = t('sched.condd.' + cond.type); return d === ('sched.condd.' + cond.type) ? '' : d; })())}"><span class="sched-pickbtn-l">${escHtml(t('sched.cond.' + cond.type) || cond.type)}</span><span class="sched-pickbtn-chev">▾</span></button>
             <span class="sched-cond-params"></span>
             <button type="button" class="btn btn-xs btn-ghost sched-cond-try"
                 data-tooltip="${escAttr(t('sched.cond.tryHint'))}">${escHtml(t('sched.cond.try'))}</button>
             <span class="sched-cond-result"></span>`;
         el.querySelector('.sched-neg')?.addEventListener('change', (e) => { cond.negate = (e.target as HTMLInputElement).checked; });
-        el.querySelector('.sched-cond-type')?.addEventListener('change', (e) => { _snapshot(); cond.type = (e.target as HTMLSelectElement).value; cond.params = {}; render(); });
+        el.querySelector('.sched-cond-type')?.addEventListener('click', (e) => {
+            openKindPicker(e.currentTarget as HTMLElement, condPickGroups(), condPickItems(), cond.type, (v) => { if (v === cond.type) return; _snapshot(); cond.type = v; cond.params = {}; render(); });
+        });
         renderCondParams(el.querySelector('.sched-cond-params') as HTMLElement, cond);
 
         // Ask it now.

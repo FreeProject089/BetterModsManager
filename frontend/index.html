@@ -3805,14 +3805,13 @@
                                     alt="Tasky" />
                                 <span data-i18n="settings.taskyTitle">Tasky — Mascotte</span>
                             </h3>
-                            <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
+                            <div class="set-rows">
                                 <!-- Toggle Tasky visible -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.taskyVisible">Afficher Tasky</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.taskyVisibleDesc">Affiche ou masque la mascotte dans le
                                             coin de la fenêtre.</div>
                                     </div>
@@ -3824,12 +3823,11 @@
                                 </div>
                                 <!-- Popup notifications. The message is still RECORDED when this
                                      is off — what stops is the popup, not the information. -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.toastsMute">Notifications contextuelles</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.toastsMuteDesc">Desactive les bulles en bas de
                                             l'ecran. Tout reste consultable dans le centre de notifications, et les
                                             erreurs s'affichent toujours.</div>
@@ -3843,12 +3841,11 @@
                                      Switching these off STOPS THE POLL rather than hiding what
                                      it fetches: a request every ten minutes for messages
                                      nobody will read is a request nobody asked for. -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.notifBcweb">BetterCommunity notifications</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.notifBcwebDesc">...</div>
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
@@ -3859,21 +3856,19 @@
                                 <!-- Per-source popups. One switch for all of them was the only
                                      control, and "tell me about my repo, not about the site"
                                      had no answer. -->
-                                <div
-                                    style="padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
-                                    <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                <div class="set-row set-row--stack">
+                                    <div class="set-row-title"
                                         data-i18n="settings.notifPerSource">Which popups you want</div>
                                     <div style="font-size:11px;color:var(--text-muted);margin:2px 0 8px"
                                         data-i18n="settings.notifPerSourceDesc">...</div>
                                     <div id="notif-source-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
                                 </div>
                                 <!-- Toggle Tasky animation -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.taskyAnimation">Animation de Tasky</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.taskyAnimationDesc">Active ou désactive l'animation de
                                             flottement de la mascotte.</div>
                                     </div>
@@ -3889,12 +3884,11 @@
                                      — and somebody who found the spinning distracting had to
                                      turn off the float to stop it. Two behaviours, two
                                      switches. -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.taskySpin">Tasky tourne pendant les chargements</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.taskySpinDesc">La mascotte pivote pendant une
                                             synchronisation ou un scan. Indépendant de l'animation de flottement.</div>
                                     </div>
@@ -3905,12 +3899,11 @@
                                     </label>
                                 </div>
                                 <!-- Toggle Tasky tooltip -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.taskyTooltip">Bulles d'aide (Tooltips)</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.taskyTooltipDesc">Active ou désactive les bulles
                                             d'explication de Tasky au survol.</div>
                                     </div>
@@ -3922,12 +3915,11 @@
                                 </div>
 
                                 <!-- Toggle in-app tips (the unified kit-callout boxes) -->
-                                <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row">
                                     <div>
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.tipsVisible">Afficher les astuces</div>
-                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                        <div class="set-row-desc"
                                             data-i18n="settings.tipsVisibleDesc">Les encadrés d'explication dans les
                                             pages et réglages. Les masquer ne masque jamais les avertissements.</div>
                                     </div>
@@ -3942,11 +3934,10 @@
                                     </div>
                                 </div>
                                 <!-- Tasky tooltip opacity -->
-                                <div
-                                    style="padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                <div class="set-row set-row--stack">
                                     <div
                                         style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        <div class="set-row-title"
                                             data-i18n="settings.taskyOpacity">Transparence des bulles</div>
                                         <span id="tasky-opacity-value"
                                             style="font-size:12px;font-weight:700;color:var(--accent);font-family:var(--font-mono)">100%</span>
@@ -3959,10 +3950,10 @@
                                         style="width:100%;accent-color:var(--accent);cursor:pointer" />
                                 </div>
                                 <!-- Sound effects toggle (moved from Sound & Animations card) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
-                                    <div style="flex:1">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.soundEnabled">Enable sound effects</div>
-                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.soundEnabledDesc">Play sounds on app launch and close</div>
+                                <div class="set-row">
+                                    <div>
+                                        <div class="set-row-title" data-i18n="settings.soundEnabled">Enable sound effects</div>
+                                        <div class="set-row-desc" data-i18n="settings.soundEnabledDesc">Play sounds on app launch and close</div>
                                     </div>
                                     <label class="bmm-switch">
                                         <input type="checkbox" id="chk-sound-effects" checked>
@@ -3970,10 +3961,10 @@
                                     </label>
                                 </div>
                                 <!-- Toolbar density (Mod Library toolbar layout) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
-                                    <div style="flex:1">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarDensity">Library toolbar layout</div>
-                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarDensityDesc">How the Mod Library toolbar adapts. Auto = pick the best for the window size.</div>
+                                <div class="set-row">
+                                    <div>
+                                        <div class="set-row-title" data-i18n="settings.toolbarDensity">Library toolbar layout</div>
+                                        <div class="set-row-desc" data-i18n="settings.toolbarDensityDesc">How the Mod Library toolbar adapts. Auto = pick the best for the window size.</div>
                                     </div>
                                     <select id="setting-toolbar-density" class="form-input" style="width:150px;padding:5px 8px;font-size:12px;border-radius:6px;">
                                         <option value="auto" data-i18n="settings.toolbarAuto">Auto</option>
@@ -3984,10 +3975,10 @@
                                     </select>
                                 </div>
                                 <!-- Toolbar transparency (Mod Library action bar background) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
-                                    <div style="flex:1">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarTransparent">Transparent action bar</div>
-                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarTransparentDesc">Let the Mod Library action bar &amp; filter bar float with a translucent blur. Off = solid background.</div>
+                                <div class="set-row">
+                                    <div>
+                                        <div class="set-row-title" data-i18n="settings.toolbarTransparent">Transparent action bar</div>
+                                        <div class="set-row-desc" data-i18n="settings.toolbarTransparentDesc">Let the Mod Library action bar &amp; filter bar float with a translucent blur. Off = solid background.</div>
                                     </div>
                                     <label class="bmm-switch">
                                         <input type="checkbox" id="setting-toolbar-transparent" checked>
@@ -3997,7 +3988,7 @@
                                 <!-- Volume slider -->
                                 <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                                    <div style="flex:1">
+                                    <div>
                                         <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;" data-i18n="settings.soundVolume">Volume</div>
                                         <input type="range" id="setting-sound-volume" min="0" max="100" value="70" style="width:100%;accent-color:var(--accent);">
                                     </div>
@@ -4066,10 +4057,10 @@
                             <!-- Strict mode toggle -->
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div>
+                                    <div class="set-row-title"
                                         data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
+                                    <div class="set-row-desc"
                                         data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a
                                         mod</div>
                                 </div>
@@ -4082,10 +4073,10 @@
                             <!-- Enable Lazy SHA toggle -->
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div>
+                                    <div class="set-row-title"
                                         data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
+                                    <div class="set-row-desc"
                                         data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in
                                         the background</div>
                                 </div>
@@ -4133,10 +4124,10 @@
                             <!-- Mod auto-scan interval -->
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:8px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div>
+                                    <div class="set-row-title"
                                         data-i18n="settings.scanInterval">Auto-scan interval</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
+                                    <div class="set-row-desc"
                                         data-i18n="settings.scanIntervalDesc">Minimum time between automatic mod-folder
                                         scans (on app focus). 0 = use the default.</div>
                                 </div>
@@ -4152,10 +4143,10 @@
                             <!-- Mod update check interval -->
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div>
+                                    <div class="set-row-title"
                                         data-i18n="settings.updateCheckInterval">Mod update check interval</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
+                                    <div class="set-row-desc"
                                         data-i18n="settings.updateCheckIntervalDesc">How often BMM automatically checks
                                         linked repos for mod updates. 0 = manual only.</div>
                                 </div>
@@ -4167,7 +4158,7 @@
                             <!-- Global update repos -->
                             <div
                                 style="padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
-                                <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div class="set-row-title"
                                     data-i18n="settings.globalUpdateRepos">Global update repositories</div>
                                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"
                                     data-i18n="settings.globalUpdateReposDesc">One repo URL per line. Any installed mod is
@@ -4196,10 +4187,10 @@
 
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                <div>
+                                    <div class="set-row-title"
                                         data-i18n="settings.discordRpcToggle">Enable Rich Presence</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
+                                    <div class="set-row-desc"
                                         data-i18n="settings.discordRpcToggleDesc">Connect to Discord to show your status
                                     </div>
                                 </div>
@@ -4527,7 +4518,7 @@
                                 </div>
                             </div>
 
-                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+                            <div class="apv-actions">
                                 <button class="btn btn-ghost btn-sm" id="analytics-view-what">
                                     <span data-i18n="analytics.whatBtn">Ce qui est collecté</span>
                                 </button>

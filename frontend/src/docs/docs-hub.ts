@@ -2321,8 +2321,10 @@ Voir aussi [Référence des actions](doc:actions-reference) et [Plugins & API](d
         summary: { en: 'Measure how fast BMM scans, hashes and deploys on your machine.', fr: 'Mesurez la vitesse de scan, de hachage et de déploiement sur votre machine.' },
         keywords: 'benchmark performance speed hash blake3 measure performances vitesse',
         body: {
-          en: '<p>The built-in benchmark suite measures the three things BMM does most — <b>scanning</b> a folder, <b>hashing</b> file content (BLAKE3), and <b>copying / deploying</b> — and reports throughput for your actual disk and CPU.</p><ul><li>Run it to compare drives (an SSD vs. a network share), or to sanity-check a sync that felt slow.</li><li>Results stay local — nothing is uploaded.</li><li>Find it in <b>Settings</b>; for the internals, see <b>Developer → BLAKE3 hashing</b>.</li></ul>',
-          fr: '<p>La suite de benchmarks intégrée mesure les trois opérations que BMM fait le plus — <b>scanner</b> un dossier, <b>hacher</b> le contenu (BLAKE3) et <b>copier / déployer</b> — et rapporte le débit pour votre disque et votre CPU réels.</p><ul><li>Lancez-la pour comparer des disques (un SSD contre un partage réseau), ou vérifier une synchro qui a semblé lente.</li><li>Les résultats restent locaux — rien n’est envoyé.</li><li>Trouvez-la dans les <b>Réglages</b> ; pour les détails, voir <b>Développeur → Hachage BLAKE3</b>.</li></ul>',
+          en: '<p><b>Picking an action or a condition</b>: both open one panel — a search box and every kind grouped with a one-line description; type a word to filter, Enter takes the first match.</p>'
+            + '<p>The built-in benchmark suite measures the three things BMM does most — <b>scanning</b> a folder, <b>hashing</b> file content (BLAKE3), and <b>copying / deploying</b> — and reports throughput for your actual disk and CPU.</p><ul><li>Run it to compare drives (an SSD vs. a network share), or to sanity-check a sync that felt slow.</li><li>Results stay local — nothing is uploaded.</li><li>Find it in <b>Settings</b>; for the internals, see <b>Developer → BLAKE3 hashing</b>.</li></ul>',
+          fr: '<p><b>Choisir une action ou une condition</b> : les deux ouvrent un même panneau — une recherche et chaque type regroupé avec une ligne de description ; tape un mot pour filtrer, Entrée prend la première correspondance.</p>'
+            + '<p>La suite de benchmarks intégrée mesure les trois opérations que BMM fait le plus — <b>scanner</b> un dossier, <b>hacher</b> le contenu (BLAKE3) et <b>copier / déployer</b> — et rapporte le débit pour votre disque et votre CPU réels.</p><ul><li>Lancez-la pour comparer des disques (un SSD contre un partage réseau), ou vérifier une synchro qui a semblé lente.</li><li>Les résultats restent locaux — rien n’est envoyé.</li><li>Trouvez-la dans les <b>Réglages</b> ; pour les détails, voir <b>Développeur → Hachage BLAKE3</b>.</li></ul>',
         },
       },
       {
@@ -3268,6 +3270,9 @@ export async function docsSearchHits(): Promise<Array<{
 async function openPage(path: string, hash?: string) {
   await loadManifest();
   _pendingHash = hash;
+  // The palette calls this from ANY screen: go() alone repainted the hidden docs view and
+  // nothing visible changed — the "clicking a doc result does nothing" report.
+  showDocs();
   go({ view: 'page', page: path });          // paint() → fillPage(), including on a repaint
 }
 
