@@ -908,7 +908,7 @@
                                     </a>
                                 </div>
                             </div>
-                            <button class="prof-how-btn" data-act="openDocsArticleById" data-act-args='["activation"]' style="margin-right:8px;">
+                            <button class="prof-how-btn" data-act="openDocsPageById" data-act-args='["activation"]' style="margin-right:8px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <circle cx="12" cy="12" r="10" />
@@ -940,7 +940,7 @@
                             par jeu ou par configuration.
                             Créez votre premier profil pour commencer à modder en toute sécurité.</p>
 
-                        <button class="prof-how-btn" data-act="openDocsArticleById" data-act-args='["activation"]' style="margin:0 auto;">
+                        <button class="prof-how-btn" data-act="openDocsPageById" data-act-args='["activation"]' style="margin:0 auto;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
                                 <circle cx="12" cy="12" r="10" />
@@ -1337,7 +1337,7 @@
                                         </svg>
                                         <span data-i18n="repo.stepOneTitle">1. Générer le Dépôt</span>
                                     </h3>
-                                    <button class="btn btn-ghost btn-xs" data-act="openDocsArticleById" data-act-args='["server-sync"]'
+                                    <button class="btn btn-ghost btn-xs" data-act="openDocsPageById" data-act-args='["server-sync"]'
                                         data-tasky="repo.howItWorksTip" data-tasky-icon="icon-info"
                                        
                                         style="opacity:0.6; font-size:10px; border:1px solid rgba(0,194,255,0.2); padding:2px 8px; height:auto; flex-shrink:0;">
@@ -4600,61 +4600,39 @@
                                 Choisissez le niveau d'accès au disque accordé à l'interface de l'application.
                             </p>
 
-                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
-                                <div class="security-card" id="settings-sec-full"
-                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid var(--bmm-s06); background:var(--bmm-s02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
-                                    <div
-                                        style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-                                        <div id="settings-sec-full-icon"
-                                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s10); transition:all 0.3s;">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <path
-                                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                                                <line x1="12" y1="22.08" x2="12" y2="12" />
-                                            </svg>
-                                        </div>
-                                        <div class="check-indicator"
-                                            style="width:20px; height:20px; border-radius:50%; background:var(--accent); display:none; align-items:center; justify-content:center; color:var(--bmm-text-primary); box-shadow:0 0 15px rgba(59, 130, 246, 0.4);">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="4">
-                                                <polyline points="20 6 9 17 4 12" />
-                                            </svg>
-                                        </div>
+                            <div class="sec-modes" role="radiogroup" aria-label="File access mode">
+                                <div class="security-card sec-mode-row" id="settings-sec-full" role="radio" tabindex="0">
+                                    <div class="sec-mode-icon" id="settings-sec-full-icon">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                            <line x1="12" y1="22.08" x2="12" y2="12" />
+                                        </svg>
                                     </div>
-                                    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;"
-                                        data-i18n="security.modal.full">Full Access</div>
-                                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4;"
-                                        data-i18n="security.modal.fullDesc">Allows BMM to manage mods across all your
-                                        drives without restriction.</div>
+                                    <div class="sec-mode-text">
+                                        <div class="sec-mode-name" data-i18n="security.modal.full">Full Access</div>
+                                        <div class="sec-mode-desc" data-i18n="security.modal.fullDesc">Allows BMM to manage mods across all your drives without restriction.</div>
+                                    </div>
+                                    <div class="sec-mode-scope"><span data-i18n="security.scopeAll">All drives</span></div>
+                                    <div class="check-indicator sec-mode-check" style="display:none;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><polyline points="20 6 9 17 4 12" /></svg>
+                                    </div>
                                 </div>
-
-                                <div class="security-card" id="settings-sec-limited"
-                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid var(--bmm-s06); background:var(--bmm-s02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
-                                    <div
-                                        style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-                                        <div id="settings-sec-limited-icon"
-                                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s10); transition:all 0.3s;">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                            </svg>
-                                        </div>
-                                        <div class="check-indicator"
-                                            style="width:20px; height:20px; border-radius:50%; background:var(--accent); display:none; align-items:center; justify-content:center; color:#fff; box-shadow:0 0 15px rgba(59, 130, 246, 0.4);">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="4">
-                                                <polyline points="20 6 9 17 4 12" />
-                                            </svg>
-                                        </div>
+                                <div class="security-card sec-mode-row" id="settings-sec-limited" role="radio" tabindex="0">
+                                    <div class="sec-mode-icon" id="settings-sec-limited-icon">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
                                     </div>
-                                    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;"
-                                        data-i18n="security.modal.limited">Limited Access</div>
-                                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4;"
-                                        data-i18n="security.modal.limitedDesc">Restricts frontend access to only your
-                                        game and mod directories.</div>
+                                    <div class="sec-mode-text">
+                                        <div class="sec-mode-name" data-i18n="security.modal.limited">Limited Access</div>
+                                        <div class="sec-mode-desc" data-i18n="security.modal.limitedDesc">Restricts frontend access to only your game and mod directories.</div>
+                                    </div>
+                                    <div class="sec-mode-scope"><span data-i18n="security.scopeProfiles">Game &amp; mod folders</span></div>
+                                    <div class="check-indicator sec-mode-check" style="display:none;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><polyline points="20 6 9 17 4 12" /></svg>
+                                    </div>
                                 </div>
                             </div>
 

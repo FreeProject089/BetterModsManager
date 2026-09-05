@@ -2163,6 +2163,8 @@
   "__SECTION_SECURITY__": "--- SÉCURITÉ ---",
   "security.modal.apply": "Appliquer et Continuer",
   "security.modal.desc": "Choisissez comment BMM doit accéder à vos fichiers. Ce réglage assure le meilleur équilibre entre fonctionnalités et sécurité. Vous pourrez changer cela plus tard dans les paramètres.",
+  "security.scopeAll": "Tous les disques",
+  "security.scopeProfiles": "Dossiers jeu & mods",
   "security.modal.full": "Accès Complet (Recommandé)",
   "security.modal.fullDesc": "Permet à BMM de gérer tous vos jeux, mods et disques sans restrictions. Nécessaire pour le Storage Manager et les installations sur plusieurs disques.",
   "security.modal.limited": "Accès Limité",

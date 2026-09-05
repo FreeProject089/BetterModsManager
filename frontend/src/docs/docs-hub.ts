@@ -3752,6 +3752,22 @@ export function initDocsHub() {
     const f = findArticle(artId);
     if (f) openArticle(f.cat.id, f.art.id); else (window as any).openDocsHome();
   };
+  // The "How it works?" buttons around the app: the subject's documentation PAGE (the full
+  // write-up from the docs site, read in-app) when the article has one, else the article.
+  // Before this they opened the hub article, whose first visible action is "Open the diagram"
+  // — which is what people clicked, and then reported that the button "goes to a diagram".
+  (window as any).openDocsPageById = (artId: string) => {
+    const f = findArticle(artId);
+    if (!f) { (window as any).openDocsHome(); return; }
+    const path = f.art.docsPath;
+    if (path) {
+      void loadManifest().then(() => {
+        const known = (_manifest || []).some((p) => p.path === path);
+        if (known) { route = { ...route, view: 'page', page: path, part: f.cat.part, catId: f.cat.id, artId: f.art.id }; showDocs(); paint(); }
+        else openArticle(f.cat.id, f.art.id);
+      });
+    } else openArticle(f.cat.id, f.art.id);
+  };
   (window as any).openDocsHome = () => { route = { ...route, view: 'hub', catId: undefined, artId: undefined }; showDocs(); paint(); };
   (window as any).openHelpTo = (key: string) => {
     const map = LEGACY_HELP[key];

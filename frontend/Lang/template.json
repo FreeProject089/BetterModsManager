@@ -2102,6 +2102,8 @@
   "__SECTION_SECURITY__": "--- SECURITY ---",
   "security.modal.apply": "Apply and Continue",
   "security.modal.desc": "Choose how BMM should access your files. This setting ensures the best balance between functionality and security. You can change this later in settings.",
+  "security.scopeAll": "All drives",
+  "security.scopeProfiles": "Game & mod folders",
   "security.modal.full": "Full Access (Recommended)",
   "security.modal.fullDesc": "Allows BMM to manage all your games, mods, and disks without restrictions. Necessary for the Storage Manager and multi-drive setups.",
   "security.modal.limited": "Limited Access",
