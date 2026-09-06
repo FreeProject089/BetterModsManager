@@ -178,6 +178,31 @@ function inline(s) {
         const pct = Math.round((val * 100) / max);
         return keep(`<span class="doc-meter"${a.color ? ` style="--meter:${escRaw(a.color)}"` : ''}><span class="doc-meter-track"><span class="doc-meter-fill" style="width:${pct}%"></span></span><span class="doc-meter-text">${esc(a.label ? `${a.label} ` : '')}${pct}%</span></span>`);
     });
+    // ── B.MD 3.0, inline ──
+    s = s.replace(/:audio\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
+        const a = leafAttrs(rawAttrs);
+        const raw = a.src || a.href || '';
+        const src = safeDocUrl(raw) ? raw : '';
+        if (!src)
+            return esc(txt);
+        return keep(`<span class="doc-audio doc-audio-inline">${txt ? `<span class="doc-audio-title">${esc(txt)}</span>` : ''}<audio class="doc-audio-player" controls preload="none" src="${escRaw(src)}"></audio></span>`);
+    });
+    s = s.replace(/:(?:img|image)\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, alt, rawAttrs) => {
+        const a = leafAttrs(rawAttrs);
+        const raw = a.src || a.href || '';
+        const src = safeDocUrl(raw) ? raw : '';
+        if (!src)
+            return esc(alt);
+        const dim = (v) => (/^\d+$/.test(v) ? `${v}px` : v);
+        const style = [a.width ? `width:${escRaw(dim(a.width))}` : '', a.height ? `height:${escRaw(dim(a.height))}` : ''].filter(Boolean).join(';');
+        return keep(`<span class="doc-img doc-img-inline${a.align ? ` doc-img-${escRaw(a.align)}` : ''}${a.border != null ? ' doc-img-border' : ''}${a.rounded != null ? ' doc-img-rounded' : ''}"><img class="dh-md-img" src="${escRaw(src)}" alt="${escRaw(alt)}" loading="lazy"${style ? ` style="${style}"` : ''}>${a.caption ? `<span class="doc-img-caption">${esc(a.caption)}</span>` : ''}</span>`);
+    });
+    // Live on the website; a chip here. The title is filled by hydrateMdLite (this file has no
+    // dictionary), from `data-md-webonly`.
+    s = s.replace(/:(?:counter|fetch)\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt) => keep(`<span class="doc-webonly" data-md-webonly>${esc(txt)} —</span>`));
+    s = s.replace(/:action\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt) => keep(`<span class="doc-btn doc-btn-sm doc-btn-outline doc-webonly" data-md-webonly>${esc(txt)}</span>`));
+    s = s.replace(/==([^=\n]+?)==/g, (_m, inner) => keep(`<mark>${esc(inner)}</mark>`));
+    s = s.replace(/\[\[([^\]|#\n]*)(?:#([^\]|\n]+))?(?:\|([^\]\n]+))?\]\]/g, (_m, page, hash, text) => keep(`<span class="doc-ref" title="${escRaw(String(page || hash || '').trim())}">${esc(String(text || page || hash || '').trim())}</span>`));
     // `:badge[New]{color=#0a7}` / `:tag[…]` — a coloured chip.
     s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
         const a = leafAttrs(rawAttrs);
@@ -754,6 +779,60 @@ function renderDirective(dir, body) {
             : '';
         return `<div class="doc-card">${media}${head}<div class="doc-card-body">${inner()}</div></div>`;
     }
+    // ── B.MD 3.0 blocks ──
+    if (name === 'table') {
+        const styles = String(attrs.style || attrs.variant || attrs.look || '').toLowerCase().split(/[\s,+]+/).filter(Boolean).map((x) => ` doc-table-${escRaw(x)}`).join('');
+        const cap = label || attrs.caption || attrs.title || '';
+        return `<figure class="doc-table${styles}"${attrs.align ? ` data-align="${escRaw(attrs.align)}"` : ''}>${inner()}${cap ? `<figcaption class="doc-table-caption">${esc(cap)}</figcaption>` : ''}</figure>`;
+    }
+    if (name === 'audio') {
+        const raw = attrs.src || attrs.href || '';
+        const src = safeDocUrl(raw) ? raw : '';
+        const ttl = label || attrs.title || '';
+        return src ? `<figure class="doc-audio">${ttl ? `<figcaption class="doc-audio-title">${esc(ttl)}</figcaption>` : ''}<audio class="doc-audio-player" controls preload="none" src="${escRaw(src)}"></audio></figure>` : '';
+    }
+    if (name === 'youtube' || name === 'yt') {
+        const raw = String(attrs.src || attrs.href || attrs.id || '');
+        const m = raw.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{6,})/) || raw.match(/^([A-Za-z0-9_-]{6,})$/);
+        const start = parseInt(attrs.start || attrs.t || '', 10) || 0;
+        return m ? `<div class="doc-embed doc-embed-video"><iframe class="doc-embed-frame" src="https://www.youtube-nocookie.com/embed/${escRaw(m[1])}${start ? `?start=${start}` : ''}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>` : '';
+    }
+    if (name === 'spotify') {
+        const raw = String(attrs.src || attrs.href || '');
+        const m = raw.match(/open\.spotify\.com\/(?:embed\/)?(?:intl-[a-z]+\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]+)/) || raw.match(/^(?:spotify:)?(track|album|playlist|episode|show|artist)[:/]([A-Za-z0-9]+)$/);
+        return m ? `<div class="doc-embed doc-embed-spotify${attrs.compact != null ? ' doc-embed-compact' : ''}"><iframe class="doc-embed-frame" src="https://open.spotify.com/embed/${m[1]}/${escRaw(m[2])}" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></div>` : '';
+    }
+    if (name === 'img' || name === 'image') {
+        const raw = attrs.src || attrs.href || '';
+        const src = safeDocUrl(raw) ? raw : '';
+        if (!src)
+            return '';
+        const dim = (v) => (/^\d+$/.test(v) ? `${v}px` : v);
+        const style = [attrs.width ? `width:${escRaw(dim(attrs.width))}` : '', attrs.height ? `height:${escRaw(dim(attrs.height))}` : ''].filter(Boolean).join(';');
+        return `<figure class="doc-img${attrs.align ? ` doc-img-${escRaw(attrs.align)}` : ''}${attrs.border != null ? ' doc-img-border' : ''}${attrs.rounded != null ? ' doc-img-rounded' : ''}"><img class="dh-md-img" src="${escRaw(src)}" alt="${escRaw(label || attrs.alt || '')}" loading="lazy"${style ? ` style="${style}"` : ''}>${attrs.caption ? `<figcaption class="doc-img-caption">${esc(attrs.caption)}</figcaption>` : ''}</figure>`;
+    }
+    if (name === 'api' || name === 'endpoint') {
+        const sig = (label || attrs.title || `${attrs.method || ''} ${attrs.path || ''}`).trim();
+        const mm = sig.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|WS|SSE)\s+(\S.*)$/i);
+        const method = (mm ? mm[1] : attrs.method || 'GET').toUpperCase();
+        const path = mm ? mm[2] : (attrs.path || sig);
+        return `<div class="doc-api doc-api-${method.toLowerCase()}${attrs.deprecated != null ? ' doc-api-deprecated' : ''}"><div class="doc-api-head"><span class="doc-api-method">${esc(method)}</span><code class="doc-api-path">${esc(path)}</code>${attrs.auth ? `<span class="doc-api-auth">${esc(attrs.auth)}</span>` : ''}</div>${attrs.summary ? `<div class="doc-api-summary">${esc(attrs.summary)}</div>` : ''}<div class="doc-api-body">${inner()}</div></div>`;
+    }
+    if (name === 'request' || name === 'response' || name === 'params') {
+        const status = String(attrs.status || attrs.code || '');
+        const ttl = label || attrs.title || (name === 'params' ? 'Parameters' : name === 'request' ? 'Request' : `Response${status ? ` ${status}` : ''}`);
+        return `<div class="doc-api-section doc-api-${name}${status ? ` doc-api-status-${status[0]}xx` : ''}"><div class="doc-api-section-title">${esc(ttl)}</div>${inner()}</div>`;
+    }
+    if (name === 'mermaid' || name === 'diagram') {
+        // A fenced body is already a `dh-mermaid` element (renderBlocks); a bare one becomes one.
+        const fenced = body.some((l) => /^```/.test(l.trim()));
+        const drawn = fenced ? inner() : `<div class="dh-mermaid" data-mermaid="${escRaw(body.join('\n').trim())}"><div class="dh-mermaid-ph">◇ diagram</div></div>`;
+        return `<figure class="doc-mermaid">${drawn}${label ? `<figcaption class="doc-mermaid-cap">${esc(label)}</figcaption>` : ''}</figure>`;
+    }
+    if (name === 'openapi' || name === 'swagger' || name === 'include' || name === 'embed-md' || name === 'live') {
+        const src = attrs.src || attrs.href || '';
+        return `<div class="doc-webonly-block"><span class="doc-webonly" data-md-webonly></span>${src ? ` <code>${esc(src)}</code>` : ''}</div>`;
+    }
     if (name === 'file') {
         // A download row: `:::file[setup.exe]{href=… size="12 MB"}`. The button is the app's own
         // external-open handler, not an <a download> — the webview cannot save a file itself.
@@ -804,7 +883,10 @@ function renderDirective(dir, body) {
  * a card with a cover image mid-paragraph is not a card.
  */
 function promoteLeaves(src) {
-    return src.replace(/^[ \t]*:(file|ref|card)\[([^\]]*)\](\{[^}]*\})?[ \t]*$/gm, (_m, name, label, at) => `:::${name}[${label}]${at || ''}\n:::`);
+    return src.replace(/^[ \t]*:(file|ref|card)\[([^\]]*)\](\{[^}]*\})?[ \t]*$/gm, (_m, name, label, at) => `:::${name}[${label}]${at || ''}\n:::`)
+        // The 3.0 leaves: `::spotify{src=…}`, `::youtube{…}`, `::audio{…}`, `::include{…}` — and the
+        // inline `:audio[…]` / `:img[…]` when they are the whole line.
+        .replace(/^[ \t]*::?(spotify|youtube|yt|audio|include|embed-md|openapi|swagger|live|image|img)(\[[^\]]*\])?(\{[^}]*\})?[ \t]*$/gm, (_m, name, label, at) => `:::${name}${label || ''}${at || ''}\n:::`);
 }
 /**
  * `::toc` → "On this page", built from the headings that follow it.

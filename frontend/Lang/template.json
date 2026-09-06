@@ -7611,6 +7611,7 @@
   "sshsrv.needHostUser": "A host and a user are needed before this server can be reached.",
   "md.before": "Before",
   "md.after": "After",
+  "md.webonly": "Interactive on the website",
   "md.spoiler": "Spoiler — click to reveal",
   "md.question": "Question",
   "md.checklist": "Checklist"

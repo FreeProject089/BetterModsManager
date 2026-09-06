@@ -350,6 +350,31 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     const col = a.color ? ` style="--meter:${escAttr(a.color)}"` : '';
     return `<span class="community-meter"${col} title="${escAttr(`${a.label ? `${a.label}: ` : ''}${pct}%`)}"><span class="community-meter-track"><span class="community-meter-fill" style="width:${pct}%"></span></span><span class="community-meter-text">${escHtml(a.label ? `${a.label} ` : '')}${pct}%</span></span>`;
   });
+  // ── B.MD 3.0, inline ──────────────────────────────────────────────────────
+  // `==marked==` → <mark>. `[[Page]]` → a reference chip: the app has no page map, so the
+  // words stay and the chip says what they pointed at.
+  s = s.replace(/==([^=\n]+?)==/g, '<mark>$1</mark>');
+  s = s.replace(/\[\[([^\]|#\n]*)(?:#([^\]|\n]+))?(?:\|([^\]\n]+))?\]\]/g, (_m, page, hash, text) =>
+    `<span class="community-ref" title="${escAttr(String(page || hash || '').trim())}">${escHtml(String(text || page || hash || '').trim())}</span>`);
+  // `:audio[Title]{src=…}` → a player; `:img[Alt]{src= width= height= align= caption=}` → a picture.
+  s = s.replace(/:audio\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || ''); const src = abs(a.src || a.href || '');
+    if (!src) return escHtml(txt);
+    return `<span class="community-audio community-audio-inline">${txt ? `<span class="community-audio-title">${escHtml(txt)}</span>` : ''}<audio class="community-audio-player" controls preload="none" src="${escAttr(src)}"></audio></span>`;
+  });
+  s = s.replace(/:(?:img|image)\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, alt, rawAttrs) => {
+    const a = parseDirAttrs(rawAttrs || ''); const src = abs(a.src || a.href || '');
+    if (!src) return escHtml(alt);
+    const dim = (v: string) => (/^\d+$/.test(v) ? `${v}px` : v);
+    const style = [a.width ? `width:${escAttr(dim(a.width))}` : '', a.height ? `height:${escAttr(dim(a.height))}` : ''].filter(Boolean).join(';');
+    const cls = `community-img community-img-inline${a.align ? ` community-img-${escAttr(a.align)}` : ''}${a.border != null ? ' community-img-border' : ''}${a.rounded != null ? ' community-img-rounded' : ''}`;
+    return `<span class="${cls}"><img src="${escAttr(src)}" alt="${escAttr(alt)}" loading="lazy"${style ? ` style="${style}"` : ''}>${a.caption ? `<span class="community-img-caption">${escHtml(a.caption)}</span>` : ''}</span>`;
+  });
+  // `:counter` / `:fetch` / `:action` read or call a URL on the website. The app draws a quiet
+  // chip that says so rather than a number it did not fetch or a button that does nothing.
+  const webonly = t('md.webonly') || 'Interactive on the website';
+  s = s.replace(/:(?:counter|fetch)\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt) => `<span class="community-webonly" title="${escAttr(webonly)}">${escHtml(txt)} —</span>`);
+  s = s.replace(/:action\[([^\]]*)\](?:\{([^}]*)\})?/g, (_m, txt) => `<span class="doc-btn doc-btn-sm doc-btn-outline community-webonly" title="${escAttr(webonly)}">${escHtml(txt)}</span>`);
   // :badge[Label]{color=..} → a coloured chip (same look as the site's tags).
   s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, attrs) => {
     const col = attrs && (attrs.match(/color=("|')?([^"'\s}]+)\1?/) || [])[2];
@@ -367,6 +392,10 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
   // becomes a small link chip instead: a card with a cover image, mid-paragraph, is not a card.
   s = s.replace(/^[ \t]*:(file|ref|card)\[([^\]]*)\](\{[^}]*\})?[ \t]*$/gm,
     (_m, n, label, at) => `:::${n}[${label}]${at || ''}\n:::`);
+  // The 3.0 leaves written on their own line — `::spotify{src=…}`, `::youtube{…}`, `::audio{…}`,
+  // `::include{…}` — become blocks, so the scanner below draws them.
+  s = s.replace(/^[ \t]*::?(spotify|youtube|yt|audio|include|embed-md|openapi|swagger|live|image|img)(\[[^\]]*\])?(\{[^}]*\})?[ \t]*$/gm,
+    (_m, n, label, at) => `:::${n}${label || ''}${at || ''}\n:::`);
   // `[^:]` matters: the line above has just written `:::file[…]`, and without it this rule
   // matches the tail of its own output and leaves a stray `::` in front of a chip.
   s = s.replace(/(^|[^:]):(file|ref|card)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, before, n, txt, rawAttrs) => {
@@ -628,6 +657,59 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     else if (name === 'grid') {
       const cols = Math.min(6, Math.max(1, parseInt(attrs.cols || attrs.columns, 10) || 3));
       out.push('', `<div class="community-grid" style="--cols:${cols}">${innerMd}</div>`, '');
+    }
+    // ── B.MD 3.0 blocks ──
+    else if (name === 'table') {
+      const styles = String(attrs.style || attrs.variant || attrs.look || '').toLowerCase().split(/[\s,+]+/).filter(Boolean).map((x) => ` community-table-${escAttr(x)}`).join('');
+      const cap = label || attrs.caption || attrs.title || '';
+      out.push('', `<figure class="community-table${styles}"${attrs.align ? ` data-align="${escAttr(attrs.align)}"` : ''}>${mdInline(innerMd)}${cap ? `<figcaption class="community-table-caption">${escHtml(cap)}</figcaption>` : ''}</figure>`, '');
+    }
+    else if (name === 'audio') {
+      const src = abs(attrs.src || attrs.href || '');
+      const ttl = label || attrs.title || '';
+      if (src) out.push('', `<figure class="community-audio">${ttl ? `<figcaption class="community-audio-title">${escHtml(ttl)}</figcaption>` : ''}<audio class="community-audio-player" controls preload="none" src="${escAttr(src)}"></audio></figure>`, '');
+    }
+    else if (name === 'youtube' || name === 'yt') {
+      const raw = String(attrs.src || attrs.href || attrs.id || '');
+      const m = raw.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{6,})/) || raw.match(/^([A-Za-z0-9_-]{6,})$/);
+      const start = parseInt(attrs.start || attrs.t, 10) || 0;
+      if (m) out.push('', `<div class="community-embed community-embed-video"><iframe class="community-embed-frame" src="https://www.youtube-nocookie.com/embed/${escAttr(m[1])}${start ? `?start=${start}` : ''}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`, '');
+    }
+    else if (name === 'spotify') {
+      const raw = String(attrs.src || attrs.href || '');
+      const m = raw.match(/open\.spotify\.com\/(?:embed\/)?(?:intl-[a-z]+\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]+)/) || raw.match(/^(?:spotify:)?(track|album|playlist|episode|show|artist)[:/]([A-Za-z0-9]+)$/);
+      if (m) out.push('', `<div class="community-embed community-embed-spotify${attrs.compact != null ? ' community-embed-compact' : ''}"><iframe class="community-embed-frame" src="https://open.spotify.com/embed/${m[1]}/${escAttr(m[2])}" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></div>`, '');
+    }
+    else if (name === 'img' || name === 'image') {
+      const src = abs(attrs.src || attrs.href || '');
+      if (src) {
+        const dim = (v: string) => (/^\d+$/.test(v) ? `${v}px` : v);
+        const style = [attrs.width ? `width:${escAttr(dim(attrs.width))}` : '', attrs.height ? `height:${escAttr(dim(attrs.height))}` : ''].filter(Boolean).join(';');
+        out.push('', `<figure class="community-img${attrs.align ? ` community-img-${escAttr(attrs.align)}` : ''}${attrs.border != null ? ' community-img-border' : ''}${attrs.rounded != null ? ' community-img-rounded' : ''}"><img src="${escAttr(src)}" alt="${escAttr(label || attrs.alt || '')}" loading="lazy"${style ? ` style="${style}"` : ''}>${attrs.caption ? `<figcaption class="community-img-caption">${escHtml(attrs.caption)}</figcaption>` : ''}</figure>`, '');
+      }
+    }
+    else if (name === 'api' || name === 'endpoint') {
+      // An endpoint card, the website's shape: method, path, who may call it, then the body.
+      const sig = (label || attrs.title || `${attrs.method || ''} ${attrs.path || ''}`).trim();
+      const mm = sig.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|WS|SSE)\s+(\S.*)$/i);
+      const method = (mm ? mm[1] : attrs.method || 'GET').toUpperCase();
+      const path = mm ? mm[2] : (attrs.path || sig);
+      out.push('', `<div class="community-api community-api-${method.toLowerCase()}${attrs.deprecated != null ? ' community-api-deprecated' : ''}"><div class="community-api-head"><span class="community-api-method">${escHtml(method)}</span><code class="community-api-path">${escHtml(path)}</code>${attrs.auth ? `<span class="community-api-auth">${escHtml(attrs.auth)}</span>` : ''}</div>${attrs.summary ? `<div class="community-api-summary">${escHtml(attrs.summary)}</div>` : ''}<div class="community-api-body">${mdInline(innerMd)}</div></div>`, '');
+    }
+    else if (name === 'request' || name === 'response' || name === 'params') {
+      const status = String(attrs.status || attrs.code || '');
+      const ttl = label || attrs.title || (name === 'params' ? 'Parameters' : name === 'request' ? 'Request' : `Response${status ? ` ${status}` : ''}`);
+      out.push('', `<div class="community-api-section community-api-${name}${status ? ` community-api-status-${status[0]}xx` : ''}"><div class="community-api-section-title">${escHtml(ttl)}</div>${mdInline(innerMd)}</div>`, '');
+    }
+    else if (name === 'mermaid' || name === 'diagram') {
+      // The source, as code: the Community tab has no diagram engine (the docs hub has).
+      const code = innerMd.replace(/^```[^\n]*\n?/, '').replace(/\n?```\s*$/, '');
+      out.push('', `<pre class="community-mermaid"><code>${escHtml(code)}</code></pre>${label ? `<div class="community-mermaid-cap">${escHtml(label)}</div>` : ''}`, '');
+    }
+    else if (name === 'openapi' || name === 'swagger' || name === 'include' || name === 'embed-md' || name === 'live') {
+      // Fetched by the website. The app shows what it would fetch and says where it is live.
+      const src = attrs.src || attrs.href || '';
+      out.push('', `<div class="community-webonly-block"><span class="community-webonly">${escHtml(t('md.webonly') || 'Interactive on the website')}</span>${src ? ` <code>${escHtml(src)}</code>` : ''}</div>`, '');
     }
     else if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
     else if (name === 'columns' || name === 'row') { out.push('', `<div class="community-columns">${innerMd}</div>`, ''); }

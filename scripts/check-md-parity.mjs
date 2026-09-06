@@ -42,6 +42,10 @@ const SITE_DIRECTIVES = [
   // faq, checklist, grid, and the inline meter.
   'after', 'before', 'changelog', 'checklist', 'compare', 'event', 'faq', 'grid', 'hero', 'kpi', 'meter', 'moment',
   'q', 'question', 'quote', 'release', 'spoiler', 'stat', 'stats', 'testimonial', 'timeline', 'version',
+  // B.MD 3.0: styled tables, images, media embeds, API cards, the blocks that fetch (drawn as
+  // "interactive on the website" chips in the app), mermaid.
+  'table', 'audio', 'spotify', 'youtube', 'yt', 'img', 'image', 'api', 'endpoint', 'params', 'request', 'response',
+  'openapi', 'swagger', 'counter', 'fetch', 'live', 'action', 'include', 'embed-md', 'mermaid', 'diagram',
 ];
 
 // Directives BMM deliberately does not implement, each with the reason. An entry here is a

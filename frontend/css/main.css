@@ -12800,7 +12800,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sec-mode-desc { font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-top: 1px; }
 .sec-mode-scope { font-size: 10.5px; font-weight: 600; color: var(--text-secondary); padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; white-space: nowrap; }
 .sec-mode-check {
-    width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff;
+    width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--bmm-text-on-accent);
     align-items: center; justify-content: center; box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 @media (max-width: 640px) { .sec-mode-row { grid-template-columns: 36px minmax(0, 1fr) 22px; } .sec-mode-scope { display: none; } }

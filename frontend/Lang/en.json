@@ -10171,6 +10171,7 @@
   "md.file.open": "Open",
   "md.before": "Before",
   "md.after": "After",
+  "md.webonly": "Interactive on the website",
   "md.spoiler": "Spoiler — click to reveal",
   "md.question": "Question",
   "md.checklist": "Checklist",

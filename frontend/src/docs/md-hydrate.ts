@@ -102,6 +102,13 @@ function selectTab(wrap: HTMLElement, i: number): void {
  * Safe to call on a subtree with none of it: every query simply matches nothing.
  */
 export function hydrateMdLite(host: HTMLElement): void {
+  // B.MD 3.0 chips for the blocks that live on the website (`:counter`, `:action`, `::openapi`,
+  // `::include`): the renderer leaves the words to this file, which has the dictionary.
+  for (const el of Array.from(host.querySelectorAll<HTMLElement>('[data-md-webonly]'))) {
+    const words = t('md.webonly') || 'Interactive on the website';
+    el.setAttribute('title', words);
+    if (!el.textContent?.trim()) el.textContent = words;
+  }
     if (!host) return;
     // Fire and forget: KaTeX is 272 KB and nothing on the page waits for a formula. It
     // loads only when the subtree actually holds one.
