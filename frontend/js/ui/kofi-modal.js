@@ -12,9 +12,7 @@
 import { t } from '../core/i18n.js';
 import { getLinks } from '../core/links-config.js';
 import { escHtml, escAttr } from '../core/utils.js';
-
 const OPTOUT_KEY = 'bmm_kofi_optout';
-
 /** One drawn cup, reused for every tier.
  *
  *  The tiers used to be ☕, ☕☕☕ and ☕☕☕☕☕ — repeated emoji standing in for an
@@ -23,28 +21,32 @@ const OPTOUT_KEY = 'bmm_kofi_optout';
  *  it cannot take a colour from the theme; and counting cups is a worse way to read
  *  "3" than the numeral 3. One consistent cup, and the number does the talking. */
 const CUP_SVG = '<svg class="kofi-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7 2.5c0 1-.8 1.3-.8 2.3M10.5 2.5c0 1-.8 1.3-.8 2.3M14 2.5c0 1-.8 1.3-.8 2.3"/></svg>';
-
-function kofiUrl(): string {
-    try { return getLinks().kofi || 'https://ko-fi.com/I2I31ZIPPG'; }
-    catch { return 'https://ko-fi.com/I2I31ZIPPG'; }
-}
-
-/** Show the reminder on each start, unless the user opted out or onboarding is up. */
-export function maybeShowKofiReminder(): void {
+function kofiUrl() {
     try {
-        if (localStorage.getItem(OPTOUT_KEY) === '1') return;
+        return getLinks().kofi || 'https://ko-fi.com/I2I31ZIPPG';
+    }
+    catch {
+        return 'https://ko-fi.com/I2I31ZIPPG';
+    }
+}
+/** Show the reminder on each start, unless the user opted out or onboarding is up. */
+export function maybeShowKofiReminder() {
+    try {
+        if (localStorage.getItem(OPTOUT_KEY) === '1')
+            return;
         // Don't pile on top of the first-run onboarding overlay.
-        if (document.getElementById('onboarding-overlay')) return;
+        if (document.getElementById('onboarding-overlay'))
+            return;
         // Give the app a moment to settle visually.
         setTimeout(showKofiReminder, 1200);
-    } catch { /* localStorage unavailable — skip silently */ }
+    }
+    catch { /* localStorage unavailable — skip silently */ }
 }
-
-export function showKofiReminder(): void {
-    if (document.getElementById('kofi-overlay')) return;
+export function showKofiReminder() {
+    if (document.getElementById('kofi-overlay'))
+        return;
     injectStyles();
     const KOFI_URL = kofiUrl();
-
     const overlay = document.createElement('div');
     overlay.id = 'kofi-overlay';
     overlay.className = 'kofi-overlay';
@@ -89,10 +91,12 @@ export function showKofiReminder(): void {
     `;
     document.getElementById('app-window-outer')?.appendChild(overlay) || document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('open'));
-
     // Escape must dismiss it: the card declares role="dialog" aria-modal="true", so without
     // a key handler a keyboard user was stuck behind an overlay they couldn't close.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    const onKey = (e) => { if (e.key === 'Escape') {
+        e.stopPropagation();
+        close();
+    } };
     const close = () => {
         document.removeEventListener('keydown', onKey, true);
         overlay.classList.remove('open');
@@ -106,18 +110,22 @@ export function showKofiReminder(): void {
     overlay.querySelector('#kofi-later')?.addEventListener('click', close);
     // "Don't show again" → persist opt-out so it never reappears.
     overlay.querySelector('#kofi-optout')?.addEventListener('click', () => {
-        try { localStorage.setItem(OPTOUT_KEY, '1'); } catch {}
+        try {
+            localStorage.setItem(OPTOUT_KEY, '1');
+        }
+        catch { }
         close();
     });
     // Both the main button and the amount chips open Ko-fi, then close the reminder.
     overlay.querySelectorAll('#kofi-go, [data-kofi-go]').forEach((el) => el.addEventListener('click', () => setTimeout(close, 150)));
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.addEventListener('click', e => { if (e.target === overlay)
+        close(); });
     // Focus lands inside the dialog so the first Tab stays in it rather than walking the app.
-    (overlay.querySelector('#kofi-close') as HTMLElement | null)?.focus();
+    overlay.querySelector('#kofi-close')?.focus();
 }
-
-function injectStyles(): void {
-    if (document.getElementById('kofi-modal-styles')) return;
+function injectStyles() {
+    if (document.getElementById('kofi-modal-styles'))
+        return;
     const s = document.createElement('style');
     s.id = 'kofi-modal-styles';
     s.textContent = `
@@ -186,3 +194,4 @@ function injectStyles(): void {
     `;
     document.head.appendChild(s);
 }
+//# sourceMappingURL=kofi-modal.js.map
