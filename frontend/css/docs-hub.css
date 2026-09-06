@@ -124,6 +124,7 @@
 .dh-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: var(--radius-badge); }
 .dh-tag-tut { color: var(--bmm-accent, #3b82f6); background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 12%, transparent); }
 .dh-tag-dia { color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 14%, transparent); }
+.dh-tag-new { color: var(--bmm-success, #22c55e); background: color-mix(in srgb, var(--bmm-success, #22c55e) 16%, transparent); text-transform: uppercase; letter-spacing: .04em; font-weight: 800; font-size: 9.5px; }
 .dh-tag-med { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 14%, transparent); }
 
 /* ── the page reader: article + a sidebar, when there is room for one ──

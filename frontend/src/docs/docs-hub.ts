@@ -13,6 +13,7 @@
 // Content is co-located bilingual {en, fr} data — no Lang/*.json churn — picked via getLang().
 
 import { getLang, t, getSynonyms } from '../core/i18n.js';
+import { toast } from '../ui/app.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
 // md-lite leaves two things for afterwards on purpose — see md-hydrate.ts.
@@ -25,6 +26,40 @@ const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
 
 type L = { en: string; fr: string };
 const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
+
+// ── New-article tracking ──────────────────────────────────────────────────────
+// `known` = every article id the app has ever shown; on startup, ids present now but never
+// known are NEW → a one-time toast. `unread` = those new ids until the reader opens them → a
+// small "New" pill on the card. Both persist in localStorage (a private-mode throw is swallowed),
+// so a fresh install adopts everything silently and only genuinely-added articles ever nudge.
+const DOCS_KNOWN_KEY = 'bmm_docs_known';
+const DOCS_UNREAD_KEY = 'bmm_docs_unread';
+const allArticleIds = (): string[] => CATEGORIES.flatMap((c) => c.articles.map((a) => a.id));
+const lsArr = (k: string): string[] => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+const lsPut = (k: string, v: string[]): void => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+let unreadSet = new Set<string>(lsArr(DOCS_UNREAD_KEY));
+
+/** Called once at startup: nudge if the app now ships articles this install has never seen. */
+export function notifyNewArticles(): void {
+  const all = allArticleIds();
+  const known = new Set(lsArr(DOCS_KNOWN_KEY));
+  if (known.size === 0) { lsPut(DOCS_KNOWN_KEY, all); return; } // first ever run — adopt, don't shout
+  const fresh = all.filter((id) => !known.has(id));
+  if (fresh.length) {
+    for (const id of fresh) unreadSet.add(id);
+    lsPut(DOCS_UNREAD_KEY, [...unreadSet]);
+    const msg = getLang() === 'fr'
+      ? (fresh.length === 1 ? 'Nouvel article d’aide — Aide & autres' : `${fresh.length} nouveaux articles d’aide — Aide & autres`)
+      : (fresh.length === 1 ? 'New help article — Help & other' : `${fresh.length} new help articles — Help & other`);
+    try { toast(msg, 'info', 6000, 'book'); } catch { /* toast unavailable this early */ }
+  }
+  lsPut(DOCS_KNOWN_KEY, all);
+}
+
+/** Clear an article's "New" pill once opened (whichever path opened it). */
+function markArticleSeen(artId: string): void {
+  if (unreadSet.delete(artId)) lsPut(DOCS_UNREAD_KEY, [...unreadSet]);
+}
 
 // ── content model ────────────────────────────────────────────────────────────────
 type Part = 'user' | 'dev';
@@ -2772,6 +2807,7 @@ function articleCard(a: Article): string {
       <span class="dh-art-t">${tr(a.title)}</span>
       <span class="dh-art-s">${tr(a.summary)}</span>
       <span class="dh-art-tags">
+        ${unreadSet.has(a.id) ? `<span class="dh-tag dh-tag-new">${tr({ en: 'New', fr: 'Nouveau' })}</span>` : ''}
         ${a.tutorial ? `<span class="dh-tag dh-tag-tut">${svg('play', 11)} ${tr({ en: 'Tutorial', fr: 'Tutoriel' })}</span>` : ''}
         ${diaIds(a).length ? `<span class="dh-tag dh-tag-dia">${svg('diagram', 11)} ${tr({ en: 'Diagram', fr: 'Diagramme' })}${diaIds(a).length > 1 ? ` · ${diaIds(a).length}` : ''}</span>` : ''}
         ${a.media ? `<span class="dh-tag dh-tag-med">${svg('play', 11)} ${tr({ en: 'Demo', fr: 'Démo' })}</span>` : ''}
@@ -2978,7 +3014,7 @@ function onClick(e: Event) {
   if (catBtn) { const c = CATEGORIES.find((x) => x.id === catBtn.getAttribute('data-cat')); if (c) go({ view: 'cat', part: c.part, catId: c.id }); return; }
 
   const artBtn = hit('[data-art]');
-  if (artBtn) { const f = findArticle(artBtn.getAttribute('data-art') || ''); if (f) go({ view: 'art', part: f.cat.part, catId: f.cat.id, artId: f.art.id }); return; }
+  if (artBtn) { const f = findArticle(artBtn.getAttribute('data-art') || ''); if (f) { markArticleSeen(f.art.id); go({ view: 'art', part: f.cat.part, catId: f.cat.id, artId: f.art.id }); } return; }
 
   // Outward links from rendered markdown. None of these is an <a href>: in the Tauri webview a
   // web href is blocked by the CSP (and window.open is a no-op), and a relative one would
@@ -3732,6 +3768,7 @@ async function launchTutorial(id: string, part: string, step: string) {
 function showDocs() { const n = document.querySelector('.nav-item[data-view="docs"]') as HTMLElement | null; n?.click(); }
 function openArticle(catId: string, artId: string) {
   const c = CATEGORIES.find((x) => x.id === catId); const f = findArticle(artId);
+  markArticleSeen(artId);
   if (c && f) route = { ...route, view: 'art', part: c.part, catId, artId };
   showDocs(); paint();
 }
@@ -3752,6 +3789,9 @@ export function initDocsHub() {
   // documentation page to show, and that decision is synchronous. Repaint once it lands so the
   // very first article opened is not the only one that misses out.
   void loadManifest().then(() => { if (route.view === 'art') paint(); });
+  // Nudge once if this build ships help articles the install has never seen (after a short beat
+  // so the toast lands on a settled UI, not mid-boot).
+  setTimeout(() => { try { notifyNewArticles(); } catch { /* never block startup on a nudge */ } }, 2500);
   host.addEventListener('click', onClick);
   // Re-render on language switch — but KEEP the current route so you stay on the same page.
   document.addEventListener('langChanged', () => renderAll());
