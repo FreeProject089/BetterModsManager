@@ -2255,6 +2255,7 @@
   "update.downloading": "Downloading...",
   "update.quickUpdate": "Quick Update",
   "update.fullInstaller": "Full Installer (.msi)",
+  "update.majorManual": "This is a <b>major version</b>. It installs by hand: download the installer below and run it — it migrates your existing data and settings. There is no in-place quick update for a major version.",
   "update.recommended": "Recommended",
   "update.newVersion": "New version",
   "update.preReleaseTag": "Pre-release",

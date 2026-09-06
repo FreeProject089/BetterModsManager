@@ -18,6 +18,10 @@ pub struct UpdateInfo {
     pub manifest_url: Option<String>,
     /// True when the selected release is a GitHub pre-release.
     pub is_prerelease: bool,
+    /// True when the MAJOR version increases (e.g. 0.9.11 -> 1.0.0). Such a jump can change the
+    /// bundle id, the data layout and the installer itself, so an in-place incremental patch is
+    /// unsafe — the UI must offer only the full installer (run by hand), never "Quick Update".
+    pub major_bump: bool,
 }
 
 /// A single file entry in the incremental update manifest.
@@ -204,6 +208,9 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
         .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()));
 
     let has_update = is_newer_version(&tag_name, &current_version);
+    // The major component of each version (the digits before the first '.'), 0 if unparseable.
+    let major = |v: &str| v.trim_start_matches('v').split('.').next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let major_bump = major(&tag_name) > major(&current_version);
 
     Ok(UpdateInfo {
         has_update,
@@ -214,6 +221,7 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
         download_url,
         manifest_url,
         is_prerelease,
+        major_bump,
     })
 }
 

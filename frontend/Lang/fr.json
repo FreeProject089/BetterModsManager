@@ -2316,6 +2316,7 @@
   "update.downloading": "Téléchargement...",
   "update.quickUpdate": "Mise à jour rapide",
   "update.fullInstaller": "Installateur complet (.msi)",
+  "update.majorManual": "C’est une <b>version majeure</b>. Elle s’installe à la main : télécharge l’installeur ci-dessous et lance-le — il migre tes données et réglages existants. Il n’y a pas de mise à jour rapide en place pour une version majeure.",
   "update.recommended": "Recommandé",
   "update.newVersion": "Nouvelle version",
   "update.preReleaseTag": "Pré-version",
