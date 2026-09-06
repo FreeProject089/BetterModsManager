@@ -713,7 +713,7 @@ function renderDirective(dir, body) {
         const dir = delta.startsWith('-') ? 'down' : delta.startsWith('+') ? 'up' : 'flat';
         const body = inner();
         return `<div class="doc-stat"${attrs.color ? ` style="--stat:${escRaw(attrs.color)}"` : ''}>`
-            + `<div class="doc-stat-value">${esc(String(attrs.value ?? ''))}</div>`
+            + (attrs.src ? `<div class="doc-stat-value doc-webonly" data-md-webonly>${esc(String(attrs.value ?? '—'))}</div>` : `<div class="doc-stat-value">${esc(String(attrs.value ?? ''))}</div>`)
             + (label || attrs.label ? `<div class="doc-stat-label">${esc(label || attrs.label)}</div>` : '')
             + (delta ? `<div class="doc-stat-delta doc-stat-${dir}">${esc(delta)}</div>` : '')
             + (body.trim() ? `<div class="doc-stat-note">${body}</div>` : '')

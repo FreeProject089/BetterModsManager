@@ -333,6 +333,11 @@ bundled document offline, draws a small chip saying so instead of a number it di
 ::youtube{src=https://youtu.be/ID}
 ::spotify{src=https://open.spotify.com/track/ID}
 
+::::stats
+:::stat[Members]{src=/api/stats path=members format=compact refresh=60 icon=users}
+:::
+::::
+
 :::api[GET /api/things/:id]{auth=key summary="One thing"}
 :::params
 | Name | In | Type | Required | Description |

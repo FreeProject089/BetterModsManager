@@ -337,6 +337,11 @@ qu’elle n’a pas récupéré.
 ::youtube{src=https://youtu.be/ID}
 ::spotify{src=https://open.spotify.com/track/ID}
 
+::::stats
+:::stat[Membres]{src=/api/stats path=members format=compact refresh=60 icon=users}
+:::
+::::
+
 :::api[GET /api/things/:id]{auth=key summary="Une chose"}
 :::params
 | Nom | Où | Type | Requis | Description |

@@ -597,7 +597,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       const col = attrs.color ? ` style="--stat:${escAttr(attrs.color)}"` : '';
       out.push('', `<div class="community-stat"${col}>`
         + (attrs.icon ? `<div class="community-stat-icon">${iconImg(attrs.icon)}</div>` : '')
-        + `<div class="community-stat-value">${escHtml(String(attrs.value ?? ''))}</div>`
+        + (attrs.src ? `<div class="community-stat-value community-webonly" title="${escAttr(t('md.webonly') || 'Interactive on the website')}">${escHtml(String(attrs.value ?? '—'))}</div>` : `<div class="community-stat-value">${escHtml(String(attrs.value ?? ''))}</div>`)
         + (label || attrs.label ? `<div class="community-stat-label">${escHtml(label || attrs.label)}</div>` : '')
         + (delta ? `<div class="community-stat-delta community-stat-${dir}">${escHtml(delta)}</div>` : '')
         + (innerMd.trim() ? `<div class="community-stat-note">${mdInline(innerMd)}</div>` : '')
