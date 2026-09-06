@@ -17,6 +17,7 @@
     "features/apps",
     "features/mapper",
     "features/community",
+    "features/feedback",
     "features/settings",
     "features/command-palette",
     "features/launch-packs",
@@ -298,6 +299,21 @@
         "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
       },
       "words": 816,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/feedback",
+      "section": "features",
+      "title": {
+        "en": "Feedback, bugs & crash reports",
+        "fr": "Retours, bugs & rapports de plantage"
+      },
+      "summary": {
+        "en": "The in-app dialog that sends a suggestion, a bug or a crash to the BetterCommunity feedback centre — what it attaches, where it goes, and what happens when…",
+        "fr": "Le dialogue intégré qui envoie une suggestion, un bug ou un plantage au centre de retours BetterCommunity — ce qu'il joint, où ça va, et ce qui se passe quand…"
+      },
+      "words": 327,
       "diagrams": 0,
       "fr": true
     },
