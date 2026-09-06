@@ -2731,6 +2731,7 @@
   "fbm.send": "Send",
   "fbm.packing": "Packing the attachments…",
   "fbm.sending": "Sending…",
+  "fbm.pow": "Anti-spam check…",
   "fbm.sent": "Sent — thank you.",
   "fbm.tooShort": "Say a little more — ten characters at least.",
   "fbm.skippedBig": "{f} was left out: the total would pass the size limit.",

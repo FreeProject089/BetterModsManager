@@ -7,13 +7,9 @@
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, textToBase64, explainFeedbackError, feedbackWebUrl, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
-
-type Kind = FeedbackKind;
-interface OpenOpts { crashZip?: string }
-
-const esc = (s: unknown): string => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const base = (p: string): string => p.split(/[\\/]/).pop() || p;
+import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, textToBase64, explainFeedbackError, feedbackWebUrl } from './bc-feedback.js';
+const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const base = (p) => p.split(/[\\/]/).pop() || p;
 const IC = {
     bug: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>',
     bulb: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>',
@@ -25,52 +21,58 @@ const IC = {
     site: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
     check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
 };
-
-let _overlay: HTMLElement | null = null;
-let _kind: Kind = 'bug';
-let _shots: string[] = [];
-let _zips: string[] = [];
-let _steps: string[] = [''];
+let _overlay = null;
+let _kind = 'bug';
+let _shots = [];
+let _zips = [];
+let _steps = [''];
 let _busy = false;
-
-function overlay(): HTMLElement {
-    if (_overlay) return _overlay;
+function overlay() {
+    if (_overlay)
+        return _overlay;
     const o = document.createElement('div');
     o.className = 'modal-overlay fbm-overlay';
     o.id = 'modal-feedback';
     document.body.appendChild(o);
-    o.addEventListener('click', (e) => { if (e.target === o && !_busy) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && o.classList.contains('open') && !_busy) close(); });
+    o.addEventListener('click', (e) => { if (e.target === o && !_busy)
+        close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && o.classList.contains('open') && !_busy)
+        close(); });
     _overlay = o;
     return o;
 }
-function close(): void { _overlay?.classList.remove('open'); }
-
+function close() { _overlay?.classList.remove('open'); }
 /** Open the dialog. `kind` picks the tab; a crash zip pre-attaches itself. */
-export async function openFeedback(kind: Kind = 'bug', opts: OpenOpts = {}): Promise<void> {
+export async function openFeedback(kind = 'bug', opts = {}) {
     if (!usesBetterCommunity()) {
         // links.json says BetaHub: the older forms, untouched.
         const m = await import('../betahub/betahub-modals.js');
-        if (kind === 'feedback') m.openFeedbackModal(); else m.openBugReportModal(opts.crashZip);
+        if (kind === 'feedback')
+            m.openFeedbackModal();
+        else
+            m.openBugReportModal(opts.crashZip);
         return;
     }
-    _kind = kind; _shots = []; _zips = opts.crashZip ? [opts.crashZip] : []; _steps = ['']; _busy = false;
+    _kind = kind;
+    _shots = [];
+    _zips = opts.crashZip ? [opts.crashZip] : [];
+    _steps = [''];
+    _busy = false;
     const [linked, crashes, cfg] = await Promise.all([
         invoke('has_bcweb_api_key').then((v) => !!v).catch(() => false),
-        invoke('get_crash_reports').then((v) => (Array.isArray(v) ? (v as string[]) : [])).catch(() => [] as string[]),
+        invoke('get_crash_reports').then((v) => (Array.isArray(v) ? v : [])).catch(() => []),
         fetchFeedbackConfig(),
     ]);
-    if (_kind === 'crash' && !_zips.length && crashes.length) _zips = [crashes[0]];
+    if (_kind === 'crash' && !_zips.length && crashes.length)
+        _zips = [crashes[0]];
     render(linked, crashes, cfg);
     overlay().classList.add('open');
-    requestAnimationFrame(() => (document.getElementById('fbm-title') as HTMLInputElement | null)?.focus());
+    requestAnimationFrame(() => document.getElementById('fbm-title')?.focus());
 }
-
-function kindBtn(k: Kind, icon: string): string {
+function kindBtn(k, icon) {
     return `<button type="button" class="fbm-kind${_kind === k ? ' is-on' : ''}" data-kind="${k}" role="tab" aria-selected="${_kind === k}">${icon}<span><b>${esc(t(`fbm.kind.${k}`))}</b><small>${esc(t(`fbm.kindHint.${k}`))}</small></span></button>`;
 }
-
-function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
+function render(linked, crashes, cfg) {
     const o = overlay();
     const offline = !cfg;
     const disabled = cfg && !cfg.enabled;
@@ -116,8 +118,8 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
             <section class="fbm-sec">
                 <div class="fbm-sec-title">${esc(t('fbm.contact'))}</div>
                 ${linked
-                    ? `<div class="fbm-linked">${IC.check} <span>${esc(t('fbm.contactLinked'))}</span></div>`
-                    : `<div class="fbm-grid2">
+        ? `<div class="fbm-linked">${IC.check} <span>${esc(t('fbm.contactLinked'))}</span></div>`
+        : `<div class="fbm-grid2">
                         <div><label class="fbm-lbl" for="fbm-email">${esc(t('fbm.email'))}${needContact ? ' *' : ''}</label><input class="form-input fbm-input" id="fbm-email" type="email" placeholder="you@example.com"></div>
                         <div><label class="fbm-lbl" for="fbm-discord">${esc(t('fbm.discord'))}</label><input class="form-input fbm-input" id="fbm-discord" placeholder="username"></div>
                        </div>
@@ -132,115 +134,196 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
     </div>`;
     wire(o, linked, crashes, cfg);
 }
-
-function renderSteps(): void {
-    const host = document.getElementById('fbm-steps'); if (!host) return;
+function renderSteps() {
+    const host = document.getElementById('fbm-steps');
+    if (!host)
+        return;
     host.innerHTML = _steps.map((s, i) => `<div class="fbm-step"><span class="fbm-step-n">${i + 1}</span><input class="form-input fbm-input" data-step="${i}" value="${esc(s)}" placeholder="${esc(t('fbm.stepPh'))}"><button type="button" class="fbm-step-del" data-del="${i}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></div>`).join('');
 }
-function renderFiles(): void {
-    const host = document.getElementById('fbm-files'); if (!host) return;
+function renderFiles() {
+    const host = document.getElementById('fbm-files');
+    if (!host)
+        return;
     const items = [..._shots.map((p) => ({ p, kind: 'shot' })), ..._zips.map((p) => ({ p, kind: 'zip' }))];
     host.innerHTML = items.length ? items.map((it) => `<span class="fbm-file fbm-file-${it.kind}">${it.kind === 'shot' ? IC.image : IC.zip} <span>${esc(base(it.p))}</span><button type="button" data-rm="${esc(it.p)}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></span>`).join('') : `<span class="fbm-files-empty">${esc(t('fbm.noFiles'))}</span>`;
-    for (const cb of Array.from(document.querySelectorAll<HTMLInputElement>('input[data-zip]'))) cb.checked = _zips.includes(cb.dataset.zip || '');
+    for (const cb of Array.from(document.querySelectorAll('input[data-zip]')))
+        cb.checked = _zips.includes(cb.dataset.zip || '');
 }
-
-function wire(o: HTMLElement, linked: boolean, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
-    const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+function wire(o, linked, crashes, cfg) {
+    const q = (id) => document.getElementById(id);
     q('fbm-close')?.addEventListener('click', close);
     q('fbm-cancel')?.addEventListener('click', close);
-    for (const b of Array.from(o.querySelectorAll<HTMLButtonElement>('.fbm-kind'))) {
+    for (const b of Array.from(o.querySelectorAll('.fbm-kind'))) {
         b.addEventListener('click', () => {
-            _kind = (b.dataset.kind as Kind) || 'bug';
-            for (const x of Array.from(o.querySelectorAll<HTMLButtonElement>('.fbm-kind'))) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-selected', String(x === b)); }
-            const title = q<HTMLInputElement>('fbm-title'); if (title) title.placeholder = t(`fbm.fTitlePh.${_kind}`);
-            const desc = q<HTMLTextAreaElement>('fbm-desc'); if (desc) desc.placeholder = t(`fbm.fDescPh.${_kind}`);
-            const steps = q('fbm-steps-wrap'); if (steps) steps.hidden = _kind === 'feedback';
-            const logs = q<HTMLInputElement>('fbm-logs'); if (logs) logs.checked = _kind !== 'feedback';
-            const dx = q<HTMLInputElement>('fbm-dx'); if (dx) dx.checked = _kind === 'crash';
-            if (_kind === 'crash' && !_zips.length && crashes.length) { _zips = [crashes[0]]; renderFiles(); }
+            _kind = b.dataset.kind || 'bug';
+            for (const x of Array.from(o.querySelectorAll('.fbm-kind'))) {
+                x.classList.toggle('is-on', x === b);
+                x.setAttribute('aria-selected', String(x === b));
+            }
+            const title = q('fbm-title');
+            if (title)
+                title.placeholder = t(`fbm.fTitlePh.${_kind}`);
+            const desc = q('fbm-desc');
+            if (desc)
+                desc.placeholder = t(`fbm.fDescPh.${_kind}`);
+            const steps = q('fbm-steps-wrap');
+            if (steps)
+                steps.hidden = _kind === 'feedback';
+            const logs = q('fbm-logs');
+            if (logs)
+                logs.checked = _kind !== 'feedback';
+            const dx = q('fbm-dx');
+            if (dx)
+                dx.checked = _kind === 'crash';
+            if (_kind === 'crash' && !_zips.length && crashes.length) {
+                _zips = [crashes[0]];
+                renderFiles();
+            }
         });
     }
-    const desc = q<HTMLTextAreaElement>('fbm-desc');
-    desc?.addEventListener('input', () => { const c = q('fbm-count'); if (c) c.textContent = String(desc.value.length); });
-    renderSteps(); renderFiles();
-    q('fbm-steps')?.addEventListener('input', (e) => { const el = e.target as HTMLInputElement; if (el.dataset.step != null) _steps[Number(el.dataset.step)] = el.value; });
-    q('fbm-steps')?.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-del]'); if (!b) return; _steps.splice(Number(b.dataset.del), 1); if (!_steps.length) _steps = ['']; renderSteps(); });
-    q('fbm-add-step')?.addEventListener('click', () => { if (_steps.length < 30) { _steps.push(''); renderSteps(); (document.querySelector(`[data-step="${_steps.length - 1}"]`) as HTMLInputElement | null)?.focus(); } });
+    const desc = q('fbm-desc');
+    desc?.addEventListener('input', () => { const c = q('fbm-count'); if (c)
+        c.textContent = String(desc.value.length); });
+    renderSteps();
+    renderFiles();
+    q('fbm-steps')?.addEventListener('input', (e) => { const el = e.target; if (el.dataset.step != null)
+        _steps[Number(el.dataset.step)] = el.value; });
+    q('fbm-steps')?.addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (!b)
+        return; _steps.splice(Number(b.dataset.del), 1); if (!_steps.length)
+        _steps = ['']; renderSteps(); });
+    q('fbm-add-step')?.addEventListener('click', () => { if (_steps.length < 30) {
+        _steps.push('');
+        renderSteps();
+        document.querySelector(`[data-step="${_steps.length - 1}"]`)?.focus();
+    } });
     q('fbm-add-shots')?.addEventListener('click', async () => {
         const files = await pickFiles([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]);
-        for (const f of files) if (!_shots.includes(f)) _shots.push(f);
+        for (const f of files)
+            if (!_shots.includes(f))
+                _shots.push(f);
         renderFiles();
     });
     q('fbm-add-zip')?.addEventListener('click', async () => {
         const f = await pickFile([{ name: 'Archives', extensions: ['zip'] }]);
-        if (f && !_zips.includes(f)) { _zips.push(f); renderFiles(); }
+        if (f && !_zips.includes(f)) {
+            _zips.push(f);
+            renderFiles();
+        }
     });
-    q('fbm-files')?.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-rm]'); if (!b) return; const p = b.dataset.rm || ''; _shots = _shots.filter((x) => x !== p); _zips = _zips.filter((x) => x !== p); renderFiles(); });
-    o.querySelector('.fbm-crashes')?.addEventListener('change', (e) => { const cb = e.target as HTMLInputElement; const p = cb.dataset.zip || ''; if (!p) return; if (cb.checked) { if (!_zips.includes(p)) _zips.push(p); } else _zips = _zips.filter((x) => x !== p); renderFiles(); });
+    q('fbm-files')?.addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (!b)
+        return; const p = b.dataset.rm || ''; _shots = _shots.filter((x) => x !== p); _zips = _zips.filter((x) => x !== p); renderFiles(); });
+    o.querySelector('.fbm-crashes')?.addEventListener('change', (e) => { const cb = e.target; const p = cb.dataset.zip || ''; if (!p)
+        return; if (cb.checked) {
+        if (!_zips.includes(p))
+            _zips.push(p);
+    }
+    else
+        _zips = _zips.filter((x) => x !== p); renderFiles(); });
     q('fbm-send')?.addEventListener('click', () => send(linked, cfg));
 }
-
 // A small proof-of-work: a report is only sent after the client has spent some CPU finding a
 // nonce whose SHA-256 of `challenge:nonce` starts with `targetBits` zero bits. It is friction
 // against a script firing reports in a loop (on top of the client throttle) and is recorded on
 // the report; capped by a time budget so a slow machine never hangs on it.
-async function proofOfWork(challenge: string, targetBits = 13, maxMs = 2500): Promise<{ nonce: number; bits: number; ms: number } | null> {
-    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+async function proofOfWork(challenge, targetBits = 13, maxMs = 2500) {
+    if (typeof crypto === 'undefined' || !crypto.subtle)
+        return null;
     const enc = new TextEncoder();
     const started = Date.now();
-    const lead = (b: Uint8Array): number => { let z = 0; for (const x of b) { if (x === 0) { z += 8; } else { z += Math.clz32(x) - 24; break; } } return z; };
+    const lead = (b) => { let z = 0; for (const x of b) {
+        if (x === 0) {
+            z += 8;
+        }
+        else {
+            z += Math.clz32(x) - 24;
+            break;
+        }
+    } return z; };
     let best = { nonce: 0, bits: 0 };
     for (let nonce = 1; nonce < 50_000_000; nonce++) {
         const buf = await crypto.subtle.digest('SHA-256', enc.encode(`${challenge}:${nonce}`));
         const z = lead(new Uint8Array(buf));
-        if (z > best.bits) best = { nonce, bits: z };
-        if (z >= targetBits) return { nonce, bits: z, ms: Date.now() - started };
-        if ((nonce & 511) === 0 && Date.now() - started > maxMs) break; // best effort within the budget
+        if (z > best.bits)
+            best = { nonce, bits: z };
+        if (z >= targetBits)
+            return { nonce, bits: z, ms: Date.now() - started };
+        if ((nonce & 511) === 0 && Date.now() - started > maxMs)
+            break; // best effort within the budget
     }
     return { ...best, ms: Date.now() - started };
 }
-
-async function send(linked: boolean, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): Promise<void> {
-    if (_busy) return;
-    const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+async function send(linked, cfg) {
+    if (_busy)
+        return;
+    const q = (id) => document.getElementById(id);
     const status = q('fbm-status');
-    const title = q<HTMLInputElement>('fbm-title')?.value.trim() || '';
-    const desc = q<HTMLTextAreaElement>('fbm-desc')?.value.trim() || '';
-    const email = q<HTMLInputElement>('fbm-email')?.value.trim() || '';
-    const discord = q<HTMLInputElement>('fbm-discord')?.value.trim() || '';
-    const say = (msg: string, tone: '' | 'err' | 'ok' = '') => { if (status) { status.textContent = msg; status.className = `fbm-status${tone ? ` fbm-status-${tone}` : ''}`; } };
-    if (desc.length < 10) { say(t('fbm.tooShort'), 'err'); q('fbm-desc')?.focus(); return; }
-    if (!linked && cfg?.requireContact && !email) { say(t('feedback.contactRequired'), 'err'); q('fbm-email')?.focus(); return; }
-    const maxN = cfg?.maxAttachments ?? 6; const maxBytes = (cfg?.maxAttachMB ?? 25) * 1024 * 1024;
+    const title = q('fbm-title')?.value.trim() || '';
+    const desc = q('fbm-desc')?.value.trim() || '';
+    const email = q('fbm-email')?.value.trim() || '';
+    const discord = q('fbm-discord')?.value.trim() || '';
+    const say = (msg, tone = '') => { if (status) {
+        status.textContent = msg;
+        status.className = `fbm-status${tone ? ` fbm-status-${tone}` : ''}`;
+    } };
+    if (desc.length < 10) {
+        say(t('fbm.tooShort'), 'err');
+        q('fbm-desc')?.focus();
+        return;
+    }
+    if (!linked && cfg?.requireContact && !email) {
+        say(t('feedback.contactRequired'), 'err');
+        q('fbm-email')?.focus();
+        return;
+    }
+    const maxN = cfg?.maxAttachments ?? 6;
+    const maxBytes = (cfg?.maxAttachMB ?? 25) * 1024 * 1024;
     _busy = true;
-    const btn = q<HTMLButtonElement>('fbm-send'); if (btn) btn.disabled = true;
+    const btn = q('fbm-send');
+    if (btn)
+        btn.disabled = true;
     try {
         say(t('fbm.packing'));
-        const attachments: FeedbackAttachment[] = [];
+        const attachments = [];
         let bytes = 0;
-        const add = async (path: string, type: string) => {
-            if (attachments.length >= maxN) return;
-            const data = await invoke('read_file_base64', { path }) as string;
+        const add = async (path, type) => {
+            if (attachments.length >= maxN)
+                return;
+            const data = await invoke('read_file_base64', { path });
             const size = Math.floor(data.length * 0.75);
-            if (bytes + size > maxBytes) { toast(t('fbm.skippedBig').replace('{f}', base(path)), 'warning'); return; }
-            bytes += size; attachments.push({ name: base(path), type, data });
+            if (bytes + size > maxBytes) {
+                toast(t('fbm.skippedBig').replace('{f}', base(path)), 'warning');
+                return;
+            }
+            bytes += size;
+            attachments.push({ name: base(path), type, data });
         };
-        for (const p of _shots) await add(p, /\.png$/i.test(p) ? 'image/png' : /\.gif$/i.test(p) ? 'image/gif' : /\.webp$/i.test(p) ? 'image/webp' : 'image/jpeg');
-        for (const p of _zips) await add(p, 'application/zip');
-        if (q<HTMLInputElement>('fbm-logs')?.checked) {
+        for (const p of _shots)
+            await add(p, /\.png$/i.test(p) ? 'image/png' : /\.gif$/i.test(p) ? 'image/gif' : /\.webp$/i.test(p) ? 'image/webp' : 'image/jpeg');
+        for (const p of _zips)
+            await add(p, 'application/zip');
+        if (q('fbm-logs')?.checked) {
             let logs = '';
-            try { const { debugHub } = await import('../debug/debug.js'); logs = (debugHub as any)?.logs?.length ? (debugHub as any).logs.map((l: any) => `[${String(l.level).toUpperCase()}] ${l.message}`).join('\n') : ''; } catch { logs = ''; }
-            if (logs && attachments.length < maxN) attachments.push({ name: 'bmm_frontend.log', type: 'text/plain', data: textToBase64(logs) });
+            try {
+                const { debugHub } = await import('../debug/debug.js');
+                logs = debugHub?.logs?.length ? debugHub.logs.map((l) => `[${String(l.level).toUpperCase()}] ${l.message}`).join('\n') : '';
+            }
+            catch {
+                logs = '';
+            }
+            if (logs && attachments.length < maxN)
+                attachments.push({ name: 'bmm_frontend.log', type: 'text/plain', data: textToBase64(logs) });
         }
-        if (q<HTMLInputElement>('fbm-dx')?.checked) {
+        if (q('fbm-dx')?.checked) {
             const diag = await invoke('get_dxdiag_report').catch(() => null);
-            if (diag && attachments.length < maxN) attachments.push({ name: 'dxdiag_report.txt', type: 'text/plain', data: textToBase64(String(diag)) });
+            if (diag && attachments.length < maxN)
+                attachments.push({ name: 'dxdiag_report.txt', type: 'text/plain', data: textToBase64(String(diag)) });
         }
         const steps = _steps.map((s) => s.trim()).filter(Boolean);
         const body = steps.length ? `${desc}\n\n${t('fbm.fSteps')}\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : desc;
         // Anti-spam friction: a bit of proof-of-work before the report goes out. Shown so the
         // brief wait reads as "checking", not "stuck".
-        if (status) status.innerHTML = `<span class="fbm-pow"><span class="fbm-pow-dot"></span>${esc(t('fbm.pow') || 'Anti-spam check…')}</span>`;
+        if (status)
+            status.innerHTML = `<span class="fbm-pow"><span class="fbm-pow-dot"></span>${esc(t('fbm.pow') || 'Anti-spam check…')}</span>`;
         const pow = await proofOfWork(`${_kind}|${title}|${body.slice(0, 200)}|${Date.now()}`);
         say(t('fbm.sending'));
         const r = await submitFeedback({ kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length }, attachments });
@@ -249,27 +332,40 @@ async function send(linked: boolean, cfg: Awaited<ReturnType<typeof fetchFeedbac
             history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString() });
             localStorage.setItem('bmm_report_history', JSON.stringify(history.slice(0, 50)));
             document.getElementById('bh-history-refresh')?.click();
-        } catch { /* private mode */ }
+        }
+        catch { /* private mode */ }
         close();
         toast(r.linked ? t('feedback.sentLinked') : t('fbm.sent'), 'success');
-    } catch (e) {
+    }
+    catch (e) {
         const queued = explainFeedbackError(e);
-        if (queued) close(); else say(String((e as Error)?.message || e), 'err');
-    } finally {
+        if (queued)
+            close();
+        else
+            say(String(e?.message || e), 'err');
+    }
+    finally {
         _busy = false;
-        if (btn) btn.disabled = false;
+        if (btn)
+            btn.disabled = false;
     }
 }
-
 /** The settings card's badge and the "goes to" line follow the transport. */
-export function initFeedbackCard(): void {
+export function initFeedbackCard() {
     const badge = document.getElementById('fbc-badge');
     const where = document.getElementById('fbc-where');
     const bc = usesBetterCommunity();
-    if (badge) { badge.textContent = bc ? 'BetterCommunity' : 'BetaHub'; badge.classList.toggle('is-bc', bc); }
+    if (badge) {
+        badge.textContent = bc ? 'BetterCommunity' : 'BetaHub';
+        badge.classList.toggle('is-bc', bc);
+    }
     if (where) {
         const a = where.querySelector('a');
-        if (a) { a.href = bc ? feedbackWebUrl() : 'https://app.betahub.io'; a.textContent = bc ? t('fbc.followSite') : 'BetaHub'; }
+        if (a) {
+            a.href = bc ? feedbackWebUrl() : 'https://app.betahub.io';
+            a.textContent = bc ? t('fbc.followSite') : 'BetaHub';
+        }
         where.hidden = !bc;
     }
 }
+//# sourceMappingURL=feedback-modal.js.map

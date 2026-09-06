@@ -2729,6 +2729,7 @@
   "fbm.send": "Envoyer",
   "fbm.packing": "Préparation des pièces jointes…",
   "fbm.sending": "Envoi…",
+  "fbm.pow": "Vérification anti-spam…",
   "fbm.sent": "Envoyé — merci.",
   "fbm.tooShort": "Dis-en un peu plus — dix caractères au moins.",
   "fbm.skippedBig": "{f} a été laissé de côté : le total dépasserait la limite de taille.",

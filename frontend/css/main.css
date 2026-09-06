@@ -21331,3 +21331,35 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
     .csp-row { grid-template-columns: 18px minmax(0, 1fr); }
     .csp-row-body { grid-column: 2; }
 }
+
+/* ── Icon picker + nav customizer polish ──────────────────────────────────────
+   The icon-picker head (title + up to five tabs + Import + close) overflowed its
+   modal between ~580px and the point it all fits on one line, pushing the tabs
+   and Import button out past the rounded border. Let the head wrap at ANY width,
+   contain the modal, and keep the grid inside its box. */
+.ipk-modal { overflow: hidden; min-width: 0; }
+.ipk-head { flex-wrap: wrap; row-gap: 10px; }
+.ipk-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ipk-tabs { min-width: 0; flex-wrap: wrap; }
+.ipk-grid { min-width: 0; }
+.ipk-cell { min-width: 0; }
+.ipk-searchwrap { min-width: 0; }
+
+/* Nav customizer: more room to breathe. Bigger gap between the two columns, calmer
+   rows, and the add/pages panels sit on a faint surface so the left list and the right
+   forms read as two areas rather than one crowded sheet. */
+.nbe-modal { padding: 22px 24px; }
+@media (min-width: 860px) { .nbe-scroll { gap: 12px 22px; } }
+.nbe-row { padding: 8px 10px; gap: 11px; border-radius: 9px; }
+.nbe-row:hover { border-color: var(--bmm-s15, var(--border)); background: rgba(255,255,255,0.04); }
+.nbe-list { gap: 7px; }
+.nbe-scroll > .nbe-add:not(.nbe-pages),
+.nbe-scroll > .nbe-pages {
+    background: var(--bmm-s02); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+}
+.nbe-scroll > .nbe-add > summary,
+.nbe-scroll > .nbe-pages > summary { margin: -12px -14px 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.nbe-add-form { gap: 9px; }
+.nbe-icon-grid { grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 7px; }
+.nbe-icon-opt { height: 40px; border-radius: 9px; }
+.nbe-flbl { margin-top: 4px; }
