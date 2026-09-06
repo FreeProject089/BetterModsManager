@@ -41,6 +41,13 @@ la pilotiez.
 **Déclencheur → règles → action.** Le déclencheur demande *quand*, les règles demandent *si*,
 l'action est *quoi*.
 
+Dans l'éditeur, chaque étape est une carte dont la couleur dit le genre — bleu pour une action,
+ambre pour une condition, violet pour une boucle, vert pour une attente — sur son étiquette et
+sur son bord gauche, et les étapes imbriquées sous une condition ou une boucle pendent à un
+guide en pointillés. Une étape désactivée garde sa place avec un bord en pointillés ; une étape
+repliée garde son étiquette, pour qu'une longue automatisation se lise toujours comme un
+organigramme.
+
 ### 1. Déclencheur — quand
 
 | Type | Se déclenche |

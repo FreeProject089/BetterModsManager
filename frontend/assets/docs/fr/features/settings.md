@@ -156,6 +156,11 @@ Choisis la liberté accordée aux plugins : **accès complet** ou mode **limité
 C'est le garde-fou global des permissions par plugin que tu accordes dans
 [Plugins & API](doc-page:features/plugins) — resserre-le si tu exécutes des plugins que tu ne connais pas.
 
+La carte nomme le mode **en vigueur** dans son en-tête (une pastille verte pour l'accès complet,
+une pastille accent pour le limité), et les deux lignes en dessous sont le choix : la ligne
+active porte le rail accent et une icône allumée. Choisir l'autre ligne ne fait qu'activer
+**Appliquer** — rien ne change tant que tu n'as pas appuyé, et la pastille se met à jour ensuite.
+
 ### Discord Rich Presence
 
 Affiche ce que tu fais dans BMM sur ton profil Discord, ou coupe-le. Purement cosmétique.
@@ -242,7 +247,21 @@ n'est pas la fenêtre que tu regardes.
 
 ### Son & raccourcis clavier
 
-Active/coupe les sons de l'interface, et consulte les raccourcis clavier auxquels BMM répond.
+Active/coupe les sons de l'interface, et consulte les raccourcis clavier auxquels BMM répond. Le
+volume est une ligne de la même table : le curseur se remplit jusqu'à son niveau, et le chiffre
+à droite est la valeur enregistrée (appliquée pendant que tu glisses, sans bouton Enregistrer).
+
+### Navigation & pages personnalisées
+
+**Personnaliser la navigation** (le crayon en bas de la barre latérale) ouvre un éditeur sur
+deux colonnes quand la fenêtre est large : les éléments de la barre à gauche — glisser pour
+réordonner, renommer, masquer, ajouter un en-tête de section — et, à droite, deux cartes :
+**Ajouter un bouton personnalisé** (un onglet interne, une modale, une URL externe ou l'une de
+tes pages en bac à sable) et **Pages personnalisées** (nom, modèle de départ, HTML / CSS / JS,
+les documents de la page et les fichiers qu'elle embarque). Sur une fenêtre étroite les deux
+cartes passent sous la liste. L'ensemble voyage en code `bmm://` ou en bundle — voir la note
+sur les sauvegardes plus haut : la disposition, la source de chaque page et ses permissions
+sont trois choses séparées.
 
 ### Enregistreur de session (local)
 

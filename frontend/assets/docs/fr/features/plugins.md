@@ -71,6 +71,13 @@ tout lire d'un coup.
     plugin capable de définir ses propres permissions pourrait s'accorder les vingt-six, ce
     qui ferait de cette page la description de rien.
 
+!!! note "L'onglet API & scripts se dessine en deux temps"
+
+    Ouvrir l'onglet peint d'abord un squelette gris, puis le vrai panneau — jeton, liste des
+    endpoints, test rapide, éditeur de script — un instant plus tard. Avant, tout se construisait
+    dans le clic : le clic partait et rien ne bougeait pendant un battement, ce qui se lisait
+    comme un gel. Rien n'est chargé depuis le réseau entre-temps ; seul le dessin est différé.
+
 !!! tip "L'API n'est pas réservée aux plugins"
 
     La même API locale répond à vos propres scripts, un fichier `.bat`, PowerShell, ou un

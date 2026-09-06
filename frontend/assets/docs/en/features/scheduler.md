@@ -39,6 +39,11 @@ you driving it.
 **Trigger → rules → action.** The trigger asks *when*, the rules ask *whether*, the action is
 *what*.
 
+In the editor every step is a card whose colour says its kind — blue for an action, amber for a
+condition, purple for a loop, green for a wait — on its tag and on its left edge, and the steps
+nested under a condition or a loop hang off a dashed guide. A disabled step keeps its place with
+a dashed edge; a collapsed one keeps its tag so a long automation still reads as a flow chart.
+
 ### 1. Trigger — when
 
 | Type | Runs |

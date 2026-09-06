@@ -70,6 +70,13 @@ everything at once.
     plugin that could set its own permissions could grant itself all twenty-six, which would
     make this page a description of nothing.
 
+!!! note "The API & scripts tab draws itself in two beats"
+
+    Opening the tab paints a grey skeleton first and the real panel — token, endpoint list,
+    quick test, script editor — a moment later. It used to build all of that inside the click,
+    so the click landed and nothing moved for a beat, which read as a freeze. Nothing is loaded
+    from the network in between; it is only the drawing that is deferred.
+
 !!! tip "The API isn't only for plugins"
 
     The same local API answers your own scripts, a `.bat` file, PowerShell, or a `bmm://`

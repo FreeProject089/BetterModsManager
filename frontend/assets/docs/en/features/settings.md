@@ -146,6 +146,11 @@ Choose how much freedom plugins get: **full access** or a **limited/sandboxed** 
 the global backstop for the per-plugin permissions you grant in
 [Plugins & API](doc-page:features/plugins) — tighten it if you run plugins you don't fully trust.
 
+The card names the mode **in force** in its header (a green pill for full access, an accent one
+for limited), and the two rows below are the choice: the active one carries the accent rail and
+a lit icon. Picking the other row only enables **Apply** — nothing changes until you press it,
+and the pill updates when it has.
+
 ### Discord Rich Presence
 
 Show what you're doing in BMM on your Discord profile, or turn it off. Purely cosmetic.
@@ -227,7 +232,20 @@ you are looking at.
 
 ### Sound & keyboard shortcuts
 
-Toggle UI sounds, and review the keyboard shortcuts BMM responds to.
+Toggle UI sounds, and review the keyboard shortcuts BMM responds to. The volume is a row of
+the same table: the slider fills up to its level, and the figure on the right is the value
+that gets saved (it applies as you drag, no Save button).
+
+### Navigation & custom pages
+
+**Customize navigation** (the pencil at the bottom of the sidebar) opens an editor that is two
+columns on a wide window: the sidebar's items on the left — drag to reorder, rename, hide, add
+a section header — and, on the right, two cards: **Add a custom button** (an internal tab, a
+modal, an external URL or one of your sandboxed pages) and **Custom pages** (name, a starter
+template, HTML / CSS / JS, the documents inside the page and the files it ships). On a narrow
+window the two cards fold under the list. The whole layout travels as a `bmm://` code or a
+bundle — see the backup note above: the layout, each page's source and its permissions are
+three separate things.
 
 ### Session recorder (local)
 

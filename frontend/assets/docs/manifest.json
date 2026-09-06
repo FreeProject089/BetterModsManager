@@ -207,7 +207,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 2911,
+      "words": 2984,
       "diagrams": 0,
       "fr": true
     },
@@ -222,7 +222,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8275,
+      "words": 8353,
       "diagrams": 0,
       "fr": true
     },
@@ -312,7 +312,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 1871,
+      "words": 2089,
       "diagrams": 0,
       "fr": true
     },
