@@ -12817,15 +12817,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .apv-hero.on .apv-hero-icon { background:linear-gradient(135deg, rgba(52,211,153,0.25), rgba(52,211,153,0.10));
     border-color:rgba(52,211,153,0.40); color: var(--success); box-shadow:0 4px 12px rgba(52,211,153,0.18); }
 .apv-hero-text strong { letter-spacing:-0.01em; }
-/* Collected-categories chips — at-a-glance summary of what telemetry covers */
-/* What is collected, as a checklist — one row per category with a tick, not a row of chips
-   (chips are what buttons look like on this screen). */
-.apv-cats { display:grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap:4px 14px; margin:12px 0 4px; padding:10px 12px;
-    border:1px solid var(--border); border-radius:10px; background:var(--bmm-s02); }
-.apv-cat { display:flex; align-items:center; gap:7px; font-size:11.5px; font-weight:500; line-height:1.5;
-    color:var(--text-secondary); cursor:default; padding:2px 0; }
-.apv-cat svg { width:12px; height:12px; opacity:.85; color:var(--success); flex:none; }
-.apv-cat::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--success); opacity:.7; flex:none; }
 .apv-hero-text { display:flex; flex-direction:column; gap:1px; min-width:0; }
 .apv-hero-text strong { font-size:13px; }
 .apv-hero-sub { font-size:11px; color:var(--text-muted); }
@@ -21197,3 +21188,86 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 @media (max-width: 640px) {
     .ssh-action-row { flex-direction: column; align-items: stretch; }
 }
+
+/* ── Settings › Security (2026-09): the mode in force is named in the header, the active row
+   carries an accent rail and a lit icon tile — styled by class, not by inline colours. ─── */
+.sec-current-pill { margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 999px; color: var(--success);
+    background: color-mix(in srgb, var(--success) 14%, transparent); border: 1px solid color-mix(in srgb, var(--success) 40%, transparent); }
+.sec-current-pill:empty { display: none; }
+.sec-current-pill.is-limited { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.sec-mode-row { position: relative; }
+.sec-mode-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; transition: background .15s; }
+.sec-mode-row.active::before { background: var(--accent); }
+.sec-mode-row.active .sec-mode-icon { color: var(--accent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+.sec-mode-row.active .sec-mode-scope { border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text-primary); }
+
+/* ── Settings › sound: the volume as a row of the table, with a slider that shows its level. ── */
+.set-row--volume { gap: 18px; }
+.vol-ctl { display: flex; align-items: center; gap: 10px; flex: 0 0 min(260px, 55%); color: var(--text-muted); }
+.vol-range { --p: 70%; flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; outline: none; cursor: pointer;
+    background: linear-gradient(to right, var(--accent) 0 var(--p), var(--bmm-s10, rgba(255,255,255,.1)) var(--p) 100%); }
+.vol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--bmm-bg-elevated);
+    border: 2px solid var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.35); transition: transform .12s; }
+.vol-range:hover::-webkit-slider-thumb, .vol-range:focus-visible::-webkit-slider-thumb { transform: scale(1.12); }
+.vol-range:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.vol-value { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-secondary); min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Settings cards sit on one rhythm; Tasky's card is one of them, not a tinted one. ── */
+#view-settings .glass-card + .glass-card { margin-top: 16px; }
+.settings-card-tasky { border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); }
+.settings-card-tasky .set-rows { margin-top: 8px; }
+
+/* ── Plugins › API & scripts: what the tab shows while it builds itself. ── */
+.plug-skel { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+.plug-skel-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--bmm-s02, rgba(255,255,255,.02)); }
+.plug-skel-line { height: 10px; border-radius: 6px; margin: 8px 0; background: linear-gradient(90deg, var(--bmm-s05, rgba(255,255,255,.05)) 25%, var(--bmm-s10, rgba(255,255,255,.1)) 50%, var(--bmm-s05, rgba(255,255,255,.05)) 75%);
+    background-size: 200% 100%; animation: plug-skel-shimmer 1.2s linear infinite; }
+.plug-skel-line.w40 { width: 40%; } .plug-skel-line.w70 { width: 70%; }
+@keyframes plug-skel-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .plug-skel-line { animation: none; } }
+
+/* ── Scheduler › blocks mode: each step reads as a card of its kind — tinted tag, a rail, a
+   lift on hover — and a branch is indented under a soft guide line. ── */
+.sched-step { box-shadow: 0 1px 2px rgba(0,0,0,.12); transition: border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .15s ease; }
+.sched-step:hover { box-shadow: 0 4px 14px rgba(0,0,0,.18); transform: translateY(-1px); border-color: var(--bmm-border-hover, var(--border)); }
+.sched-step.collapsed { opacity: .85; }
+.sched-step.sched-disabled { opacity: .5; border-left-style: dashed; }
+.sched-step-tag.sched-do { color: var(--bmm-info); background: color-mix(in srgb, var(--bmm-info) 14%, transparent); }
+.sched-step-tag.sched-if { color: var(--bmm-warning); background: color-mix(in srgb, var(--bmm-warning) 14%, transparent); }
+.sched-step-tag.sched-repeat { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.sched-step-tag.sched-wait { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 14%, transparent); }
+.sched-step-tag.sched-pause { color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
+.sched-step-head .sched-step-tag { border: 1px solid color-mix(in srgb, currentColor 35%, transparent); }
+.sched-branch { margin: 6px 0 2px 10px; padding-left: 10px; border-left: 1.5px dashed var(--bmm-s15, rgba(255,255,255,.15)); border-radius: 0 0 0 8px; }
+.sched-steps > .sched-step + .sched-step { margin-top: 2px; }
+
+/* ── Customize navigation: two columns when there is room — the list on the left, the
+   "add a button" and "custom pages" panels on the right as cards rather than stacked
+   disclosures that pushed the list off screen. ── */
+.nbe-modal { width: min(900px, 96vw); }
+.nbe-scroll { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
+@media (min-width: 860px) {
+    .nbe-scroll { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "list add" "list pages" "addsec pages"; }
+    .nbe-scroll > #nbe-list { grid-area: list; }
+    .nbe-scroll > #nbe-add-section { grid-area: addsec; justify-self: start; }
+    .nbe-scroll > .nbe-add:not(.nbe-pages) { grid-area: add; margin-top: 0; border-top: 0; padding-top: 0; }
+    .nbe-scroll > .nbe-pages { grid-area: pages; margin-top: 0; border-top: 0; padding-top: 0; }
+}
+.nbe-add { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bmm-s02, rgba(255,255,255,.02)); }
+.nbe-add > summary { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-primary); list-style: none; }
+.nbe-add > summary::-webkit-details-marker { display: none; }
+.nbe-add > summary::before { content: '▸'; color: var(--text-muted); transition: transform .15s; }
+.nbe-add[open] > summary::before { transform: rotate(90deg); }
+.nbe-add[open] > summary { margin-bottom: 4px; }
+.nbe-row { transition: border-color .12s, background .12s; }
+.nbe-row:hover { border-color: var(--bmm-border-hover, var(--border)); background: var(--bmm-s03, rgba(255,255,255,.03)); }
+.nbe-row-group { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.nbe-section-tag { font-size: 9.5px; font-weight: 800; letter-spacing: .08em; color: var(--accent); padding: 2px 7px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.nbe-page-row, .nbe-page-block { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--bmm-s03, rgba(255,255,255,.03)); margin: 6px 0; }
+.nbe-page-row:hover { border-color: var(--bmm-border-hover, var(--border)); }
+.nbe-pagefiles-list, .nbe-subpages-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.nbe-pagefile-path { font-family: var(--font-mono); font-size: 11px; }
+.nbe-pagefile-size { font-size: 10.5px; color: var(--text-muted); }

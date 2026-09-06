@@ -426,7 +426,13 @@ function renderTab(tabId) {
         case 'scripts':
             // Pre-load installed apps state so quicktest forms can list them
             invoke('get_apps_state').then(s => { window.__latestAppsState = s; }).catch(() => { });
-            renderScripts(container);
+            // The tab used to build its whole panel — token card, endpoint list, quick test,
+            // script editor — in the click handler, so the click landed, nothing changed for
+            // a beat, and the app read as frozen. A skeleton is painted now and the real
+            // panel on the next tick, so the tab strip answers instantly.
+            container.innerHTML = `<div class="plug-skel" aria-busy="true">${'<div class="plug-skel-card"><div class="plug-skel-line w40"></div><div class="plug-skel-line"></div><div class="plug-skel-line w70"></div></div>'.repeat(3)}</div>`;
+            setTimeout(() => { if (_tab === 'scripts' && document.getElementById('plug-tab-content') === container)
+                renderScripts(container); }, 0);
             break;
         case 'perms':
             renderPerms(container);

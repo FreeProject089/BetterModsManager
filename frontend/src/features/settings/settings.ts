@@ -177,8 +177,12 @@ async function initSoundSettings() {
         const settings = await getSettings();
         chkSound.checked = settings.sound_effects_enabled !== false;
         volSlider.value = String(settings.sound_volume ?? 70);
+        volSlider.style.setProperty('--p', `${settings.sound_volume ?? 70}%`);
         if (volDisplay) volDisplay.textContent = String(settings.sound_volume ?? 70) + '%';
     } catch (e) { console.error('Failed to load sound settings:', e); }
+
+    // The track fills up to the thumb: the slider shows its level without reading the number.
+    volSlider.addEventListener('input', () => volSlider.style.setProperty('--p', `${volSlider.value}%`));
 
     const applySound = async () => {
         try {
@@ -1009,45 +1013,22 @@ async function initSecuritySettings() {
 
     function updateUI(mode) {
         currentSelected = mode;
+        const full = mode === 'full';
         const ciFull = cardFull.querySelector('.check-indicator') as HTMLElement | null;
         const ciLim  = cardLimited.querySelector('.check-indicator') as HTMLElement | null;
-        const iconFull    = document.getElementById('settings-sec-full-icon');
-        const iconLimited = document.getElementById('settings-sec-limited-icon');
-
-        if (mode === 'full') {
-            cardFull.classList.add('active');
-            cardLimited.classList.remove('active');
-            if (ciFull) ciFull.style.display = 'flex';
-            if (ciLim)  ciLim.style.display  = 'none';
-            // Icon box: active card gets accent colour, inactive goes muted
-            if (iconFull) {
-                iconFull.style.background = 'rgba(59,130,246,0.15)';
-                iconFull.style.color      = 'var(--accent)';
-                iconFull.style.border     = '1px solid rgba(59,130,246,0.3)';
-            }
-            if (iconLimited) {
-                iconLimited.style.background = 'rgba(255,255,255,0.05)';
-                iconLimited.style.color      = 'var(--text-muted)';
-                iconLimited.style.border     = '1px solid rgba(255,255,255,0.1)';
-            }
-        } else {
-            cardFull.classList.remove('active');
-            cardLimited.classList.add('active');
-            if (ciFull) ciFull.style.display = 'none';
-            if (ciLim)  ciLim.style.display  = 'flex';
-            if (iconFull) {
-                iconFull.style.background = 'rgba(255,255,255,0.05)';
-                iconFull.style.color      = 'var(--text-muted)';
-                iconFull.style.border     = '1px solid rgba(255,255,255,0.1)';
-            }
-            if (iconLimited) {
-                iconLimited.style.background = 'rgba(59,130,246,0.15)';
-                iconLimited.style.color      = 'var(--accent)';
-                iconLimited.style.border     = '1px solid rgba(59,130,246,0.3)';
-            }
+        cardFull.classList.toggle('active', full);
+        cardLimited.classList.toggle('active', !full);
+        cardFull.setAttribute('aria-checked', String(full));
+        cardLimited.setAttribute('aria-checked', String(!full));
+        if (ciFull) ciFull.style.display = full ? 'flex' : 'none';
+        if (ciLim)  ciLim.style.display  = full ? 'none' : 'flex';
+        // The icon tiles are styled by the row's `.active` class now — no inline colours.
+        const pill = document.getElementById('settings-sec-current');
+        if (pill) {
+            pill.textContent = t(full ? 'security.modal.full' : 'security.modal.limited');
+            pill.classList.toggle('is-limited', !full);
         }
 
-        btnApply.disabled = currentSelected === initialMode;
     }
 
     const addGlowEffect = (card) => {

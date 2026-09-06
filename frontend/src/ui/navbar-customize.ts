@@ -779,7 +779,7 @@ export function openNavbarEditor(): void {
             <div class="nbe-scroll">
             <div class="nbe-list" id="nbe-list">${rowsHtml}</div>
             <button class="btn btn-ghost btn-sm nbe-add-section-btn" id="nbe-add-section">+ ${t('navedit.addSection') || 'Add a section'}</button>
-            <details class="nbe-add">
+            <details class="nbe-add" ${window.innerWidth >= 860 ? 'open' : ''}>
                 <summary>+ ${t('navedit.addBtn') || 'Add a custom button'}</summary>
                 <div class="nbe-add-form">
                     <label class="nbe-flbl">${t('navedit.label') || 'Label'}</label>

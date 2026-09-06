@@ -3798,7 +3798,7 @@
                         </div>
 
                         <!-- ── Tasky Appearance Settings ── -->
-                        <div class="glass-card" style="border: 1px solid rgba(99,102,241,0.2);">
+                        <div class="glass-card settings-card-tasky">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
                                 <img src="assets/Tasky_Happy.png" id="settings-tasky-icon"
                                     style="width:22px;height:22px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(99,102,241,0.4))"
@@ -3986,13 +3986,15 @@
                                     </label>
                                 </div>
                                 <!-- Volume slider -->
-                                <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                                <div class="set-row set-row--volume">
                                     <div>
-                                        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;" data-i18n="settings.soundVolume">Volume</div>
-                                        <input type="range" id="setting-sound-volume" min="0" max="100" value="70" style="width:100%;accent-color:var(--accent);">
+                                        <div class="set-row-title" data-i18n="settings.soundVolume">Volume</div>
                                     </div>
-                                    <span id="setting-sound-volume-display" style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:36px;text-align:right;font-family:var(--font-mono);">70%</span>
+                                    <div class="vol-ctl">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5.5a9 9 0 0 1 0 13"/></svg>
+                                        <input type="range" id="setting-sound-volume" class="vol-range" min="0" max="100" value="70" style="--p:70%">
+                                        <span id="setting-sound-volume-display" class="vol-value">70%</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -4472,14 +4474,6 @@
                                 </label>
                             </div>
 
-                            <!-- At-a-glance: what telemetry covers (categories only, never contents) -->
-                            <div class="apv-cats">
-                                <span class="apv-cat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span data-i18n="analytics.cat.system">System &amp; hardware</span></span>
-                                <span class="apv-cat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg><span data-i18n="analytics.cat.perf">Performance</span></span>
-                                <span class="apv-cat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg><span data-i18n="analytics.cat.usage">Feature usage</span></span>
-                                <span class="apv-cat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span data-i18n="analytics.cat.geo">Approx. location</span></span>
-                                <span class="apv-cat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M12 7v5l3 2"/></svg><span data-i18n="analytics.cat.bench">Benchmarks</span></span>
-                            </div>
 
                             <div class="apv-detail" id="analytics-detail">
                                 <div class="setting-row" id="analytics-bench-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0">
@@ -4585,6 +4579,7 @@
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                                 </svg>
                                 <span data-i18n="security.modal.title">Sécurité des fichiers</span>
+                                <span class="sec-current-pill" id="settings-sec-current" aria-live="polite"></span>
                             </h3>
                             <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
                                 data-i18n="security.modal.desc">
