@@ -392,6 +392,15 @@ function ensurePurify() {
                 node.style.mask = `url('${url}') center/contain no-repeat`;
             }
         }
+        // `style` stays in ADD_ATTR (cards and badges carry a colour), but its VALUE is the risk:
+        // `position:fixed;inset:0;z-index:99999` from a Community article or a member's comment
+        // draws a full-window overlay INSIDE the BMM webview (which has IPC) — clickjacking with
+        // no script needed. Strip the whole attribute when it carries an overlay/expression/script
+        // URL, the same filter the docs renderer uses (docs/md-safe.ts).
+        const st = node.getAttribute && node.getAttribute('style');
+        if (st && /expression\s*\(|javascript\s*:|position\s*:\s*(fixed|sticky|absolute)|url\s*\(\s*['"]?\s*(?:javascript|data:text\/html)/i.test(st)) {
+            node.removeAttribute('style');
+        }
         // Only YouTube (no-cookie) iframes are allowed; anything else is neutralised.
         if (node.tagName === 'IFRAME') {
             const src = node.getAttribute('src') || '';
@@ -405,7 +414,9 @@ function ensurePurify() {
 }
 export function sanitizeMd(html: string): string {
     const DP = ensurePurify();
-    if (!DP || typeof DP.sanitize !== 'function') return html; // fail closed only if lib missing
+    // Fail CLOSED: if DOMPurify is somehow unavailable, escape the markup to inert text rather
+    // than returning raw HTML (the old branch said "fail closed" and did the opposite).
+    if (!DP || typeof DP.sanitize !== 'function') return escHtml(html);
     return DP.sanitize(html, {
         ADD_TAGS: ['iframe', 'video', 'source'],
         ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style', 'tabindex', 'download'],
