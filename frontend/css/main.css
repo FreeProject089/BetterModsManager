@@ -21271,3 +21271,19 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .nbe-pagefiles-list, .nbe-subpages-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 .nbe-pagefile-path { font-family: var(--font-mono); font-size: 11px; }
 .nbe-pagefile-size { font-size: 10.5px; color: var(--text-muted); }
+
+/* ── Settings rows: a select (native or the custom one) keeps its width and its margin
+   instead of stretching to the card's edge. ── */
+.set-row > select.form-input, .set-row > .bmm-csel { flex: 0 0 auto; width: 170px; max-width: 45%; margin-left: 12px; }
+.set-row > .bmm-csel .bmm-csel-trigger { width: 100%; }
+/* ── Security card: the directive names are <code>, and the global code styling gave them a
+   light chip with dark ink on a dark card. Plain text, the card's own colours. ── */
+.csp-directives { color: var(--text-primary); }
+.csp-row-name, code.csp-row-name { background: transparent; border: 0; padding: 0; color: var(--text-primary); font-size: 12px; }
+.csp-row-sources { color: var(--text-secondary); }
+.csp-row-sources em { color: var(--text-muted); }
+/* ── Scheduler: the two "start from" buttons share the row and wrap their words rather than
+   clipping them; centred, since they are the only things in it. ── */
+.sched-preset-row { flex-wrap: wrap; }
+.sched-preset-open, .sched-preset-browse { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; white-space: normal; line-height: 1.25; padding: 7px 10px; height: auto; }
+.sched-preset-open > span:first-of-type, .sched-preset-browse > span { min-width: 0; }

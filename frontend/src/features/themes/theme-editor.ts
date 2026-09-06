@@ -390,7 +390,18 @@ function buildPanel(): void {
         const btn = _panel.querySelector('#bte-file-menu-btn') as HTMLElement | null;
         const menu = _panel.querySelector('#bte-file-menu') as HTMLElement | null;
         if (btn && menu) {
-            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.hidden = !menu.hidden;
+                if (menu.hidden) return;
+                // Fixed to the viewport, above the button: the modal and the app frame clip
+                // their overflow, and an absolute menu opening upward was cut by both.
+                const r = btn.getBoundingClientRect();
+                menu.style.position = 'fixed';
+                menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`;
+                menu.style.bottom = `${Math.max(8, window.innerHeight - r.top + 6)}px`;
+                menu.style.top = 'auto';
+            });
             menu.addEventListener('click', () => { menu.hidden = true; });
             document.addEventListener('click', () => { menu.hidden = true; });
         }

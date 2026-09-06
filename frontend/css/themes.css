@@ -640,7 +640,9 @@ body.bte-picking #bte-elov, body.bte-picking #bte-elov * { cursor: auto !importa
     border: 1px solid var(--bmm-border-hover, var(--bmm-border));
     border-radius: 10px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-    z-index: 20;
+    /* Placed with position:fixed by the editor when it opens (the modal and the app frame
+       both clip overflow, and a menu cut in half is not a menu); the z-index sits above them. */
+    z-index: 10060;
 }
 .bte-file-menu[hidden] { display: none; }
 .bte-file-menu .btn { justify-content: flex-start; width: 100%; }
