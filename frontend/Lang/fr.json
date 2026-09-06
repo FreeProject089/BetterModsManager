@@ -2177,6 +2177,7 @@
   "crash.helpText": "Merci de partager ce fichier sur notre Discord pour nous aider à corriger le problème.",
   "crash.openFileTip": "Ouvrir le dossier contenant le fichier zip de diagnostic.",
   "crash.openZip": "Ouvrir dans l'Explorateur",
+  "crash.reportBc": "Signaler à BetterCommunity",
   "crash.openZipError": "Impossible d'ouvrir le fichier zip",
   "crash.pathLabel": "Fichier du rapport",
   "crash.subtitle": "Un diagnostic technique a été généré.",

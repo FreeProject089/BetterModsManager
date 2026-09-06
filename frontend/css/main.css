@@ -21287,3 +21287,47 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .sched-preset-row { flex-wrap: wrap; }
 .sched-preset-open, .sched-preset-browse { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; white-space: normal; line-height: 1.25; padding: 7px 10px; height: auto; }
 .sched-preset-open > span:first-of-type, .sched-preset-browse > span { min-width: 0; }
+
+/* ── CSP card, restyled as the rest of the settings: a real table of directives (state ·
+   name · sources as chips), the presets as one segmented control, the app's own buttons.
+   The previous list ran name-over-sources in a monospace column that read as a log dump. */
+.csp-card { padding: 16px 18px; border-radius: 12px; background: var(--bmm-s02); }
+.csp-head { margin-bottom: 4px; }
+.csp-intro { margin-bottom: 12px; }
+.csp-details { border: 1px solid var(--border); border-radius: 10px; background: var(--bmm-bg-base); margin: 0 0 16px; overflow: hidden; }
+.csp-summary { padding: 9px 12px; font-size: 10.5px; font-weight: 700; color: var(--text-secondary); background: var(--bmm-s03); }
+.csp-summary:hover { color: var(--text-primary); }
+.csp-details[open] > .csp-summary { border-bottom: 1px solid var(--border); }
+.csp-directives { max-height: 340px; overflow: auto; padding: 0; }
+.csp-row {
+    display: grid; grid-template-columns: 22px 150px minmax(0, 1fr); gap: 0 10px;
+    align-items: start; padding: 8px 12px; border-top: 1px solid var(--bmm-s06);
+}
+.csp-row:first-child { border-top: 0; }
+.csp-row:nth-child(even) { background: var(--bmm-s02); }
+.csp-row.is-warn { background: color-mix(in srgb, var(--bmm-warning) 5%, transparent); }
+.csp-row.is-severe { background: color-mix(in srgb, var(--bmm-danger) 6%, transparent); }
+.csp-row-state { font-family: var(--font-mono); font-weight: 800; font-size: 12px; line-height: 20px; text-align: center; }
+.csp-row-name { font-size: 11.5px; line-height: 20px; color: var(--text-primary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csp-row-body { min-width: 0; }
+.csp-row-sources { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.csp-src {
+    font-family: var(--font-mono); font-size: 10.5px; line-height: 1.4; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--bmm-s03); color: var(--text-secondary); word-break: break-all;
+}
+.csp-row-risk { font-size: 10.5px; margin-top: 5px; line-height: 1.45; }
+.csp-row-risk code { font-family: var(--font-mono); font-size: 10px; }
+.csp-section-label { margin: 0 0 8px; }
+.csp-presets { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; background: var(--bmm-bg-base); }
+.csp-presets .btn { border: 0 !important; border-right: 1px solid var(--border) !important; border-radius: 0 !important; background: transparent; color: var(--text-secondary); padding: 6px 12px !important; }
+.csp-presets .btn:last-child { border-right: 0 !important; }
+.csp-presets .btn:hover { background: var(--bmm-s05); color: var(--text-primary); }
+.csp-extra { border-radius: 8px; padding: 10px 12px; min-height: 84px; }
+.csp-extra:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.csp-actions { margin-top: 10px; gap: 8px; }
+.csp-actions .btn { height: 32px; padding: 0 14px !important; font-size: 12px !important; border-radius: 8px !important; }
+.csp-foot { margin-top: 10px; }
+@media (max-width: 720px) {
+    .csp-row { grid-template-columns: 18px minmax(0, 1fr); }
+    .csp-row-body { grid-column: 2; }
+}

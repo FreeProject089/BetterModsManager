@@ -90,6 +90,16 @@ Pour le désactiver, mets `autoupdate_api_fallback` à une chaîne vide. Un `lin
 | `analytics_endpoint` | Où les données d'usage anonymes sont envoyées. **Vide signifie que rien ne quitte ta machine** — les événements restent en mémoire tampon localement. |
 | `analytics_key` | Une clé d'ingestion *publique*. Elle ne permet que d'envoyer de la télémétrie et elle est déjà présente dans l'app : ce n'est pas un secret. La clé qui permet de lire ou de supprimer des données ne vit que sur le serveur. |
 
+### Retours et rapports de plantage
+
+`feedback_endpoint` est l’adresse où le dialogue **Envoyer à BetterCommunity** (Paramètres →
+Retours, et le bouton *Signaler à BetterCommunity* du dialogue de plantage) envoie une
+suggestion, un bug ou un plantage — par défaut `https://bettercommunity.ch/api/feedback/bmm`.
+`feedback_web` est la page où un compte lié suit ses rapports. Un `feedback_endpoint` **vide**
+ramène les anciens formulaires BetaHub. Un rapport que l’appli n’a pas pu envoyer (site
+injoignable) est gardé et envoyé au prochain démarrage ; l’appli se limite aussi elle-même
+(5 par 10 min, 20 par jour) avant que le serveur ait à le faire.
+
 ### Discord Rich Presence
 
 `WebSiteRPC1` / `WebSiteRPC2` et `github_RPC1` / `github_RPC2` sont les adresses candidates pour

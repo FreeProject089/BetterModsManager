@@ -70,3 +70,37 @@
 .fbc-where { font-size: 11px; color: var(--text-muted); margin-left: auto; }
 .fbc-where a { color: var(--accent); text-decoration: none; }
 .fbc-where a:hover { text-decoration: underline; }
+
+/* fbm-shadow-fix — the dialog used to clip its own shadow: `.modal` animates in with a
+   transform and this one added `overflow: hidden` for its rounded corners, so the box-shadow
+   was painted, then cut by the overflow box of a transformed element mid-animation and left
+   a hard edge. The corners are clipped by the head and the foot themselves instead. */
+.fbm-overlay .modal.fbm {
+    overflow: visible;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .55), 0 0 0 1px var(--bmm-s05);
+    border-radius: 18px;
+    max-width: 720px;
+}
+.fbm-head { border-radius: 18px 18px 0 0; background: var(--bmm-s02); padding: 16px 20px 14px; }
+.fbm-head-icon { border-radius: 12px; box-shadow: none; }
+.fbm-foot { border-radius: 0 0 18px 18px; background: var(--bmm-s02); padding: 12px 20px 14px; }
+.fbm-body { padding: 14px 20px 8px; gap: 12px; }
+.fbm-kinds { padding: 14px 20px 0; gap: 8px; }
+.fbm-kind { padding: 10px 12px; border-radius: 12px; gap: 11px; background: var(--bmm-bg-base); transform: none; }
+.fbm-kind:hover { transform: none; background: var(--bmm-s03); }
+.fbm-kind svg { width: 22px; height: 22px; padding: 4px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, transparent); box-sizing: content-box; }
+.fbm-kind.is-on { box-shadow: none; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bmm-bg-base)); }
+.fbm-kind.is-on svg { background: var(--accent); color: var(--bmm-text-on-accent, #fff); }
+.fbm-sec { border-radius: 12px; padding: 12px 14px 14px; background: var(--bmm-bg-base); }
+.fbm-sec-title { margin-bottom: 10px; }
+.fbm-input, .fbm-textarea { border-radius: 8px; }
+.fbm-textarea { min-height: 112px; }
+.fbm-crashes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; }
+.fbm-crash { padding: 5px 8px; border-radius: 8px; border: 1px solid transparent; }
+.fbm-crash:hover { background: var(--bmm-s03); border-color: var(--border); }
+.fbm-crash input, .fbm-check input { accent-color: var(--accent); }
+.fbm-check { padding: 4px 0; }
+.fbm-attach-row .btn { border-radius: 8px; }
+.fbm-send { border-radius: 9px; padding: 8px 16px; }
+.fbm-linked { border-radius: 10px; }
+.fbm-banner { border-radius: 10px; margin: 12px 20px 0; }

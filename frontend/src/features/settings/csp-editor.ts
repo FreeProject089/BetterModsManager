@@ -126,14 +126,15 @@ export const PRESETS: { id: string; label: string; note: string; policy: string 
 /** Render one directive row. */
 function directiveRow(d: Directive): string {
     const tone = d.severe ? 'var(--bmm-danger)' : d.risks.length ? 'var(--bmm-warning, #f59e0b)' : 'var(--text-muted)';
-    const mark = d.severe ? '!' : d.risks.length ? '~' : '';
+    const mark = d.severe ? '!' : d.risks.length ? '~' : '·';
+    // A table row: state · directive · its sources (each one a chip) · the risks under them.
     return `
-        <div class="csp-row${d.severe ? ' is-severe' : ''}">
-            <span class="csp-row-mark" style="color:${tone}">${mark}</span>
+        <div class="csp-row${d.severe ? ' is-severe' : d.risks.length ? ' is-warn' : ''}" role="row">
+            <span class="csp-row-state" style="color:${tone}" aria-hidden="true">${mark}</span>
+            <code class="csp-row-name">${escHtml(d.name)}</code>
             <div class="csp-row-body">
-                <code class="csp-row-name">${escHtml(d.name)}</code>
-                <div class="csp-row-sources">${d.sources.map((sv) => escHtml(sv)).join(' ') || `<em>${escHtml(t('csp.empty'))}</em>`}</div>
-                ${d.risks.map((r) => `<div class="csp-row-risk" style="color:${tone}">${escHtml(r.source)} — ${escHtml(r.why)}</div>`).join('')}
+                <div class="csp-row-sources">${d.sources.map((sv) => `<span class="csp-src">${escHtml(sv)}</span>`).join('') || `<em>${escHtml(t('csp.empty'))}</em>`}</div>
+                ${d.risks.map((r) => `<div class="csp-row-risk" style="color:${tone}"><code>${escHtml(r.source)}</code> — ${escHtml(r.why)}</div>`).join('')}
             </div>
         </div>`;
 }
@@ -165,14 +166,14 @@ export function renderCspEditor(): string {
 
         <div class="csp-section-label">${escHtml(t('csp.addPolicy'))}</div>
         <div id="csp-presets" class="csp-presets">
-            ${PRESETS.map((p) => `<button type="button" class="btn btn-xs" data-csp-preset="${escHtml(p.id)}" title="${escHtml(t(p.note))}">${escHtml(t(p.label))}</button>`).join('')}
+            ${PRESETS.map((p) => `<button type="button" class="btn btn-xs btn-secondary" data-csp-preset="${escHtml(p.id)}" title="${escHtml(t(p.note))}">${escHtml(t(p.label))}</button>`).join('')}
         </div>
         <textarea id="csp-extra" class="csp-extra" rows="4" spellcheck="false"
             placeholder="${escHtml(t('csp.placeholder'))}">${escHtml(extra)}</textarea>
         <div id="csp-msg" class="csp-msg"></div>
         <div class="csp-actions">
             <button type="button" id="csp-save" class="btn btn-xs btn-primary">${escHtml(t('csp.save'))}</button>
-            <button type="button" id="csp-clear" class="btn btn-xs">${escHtml(t('csp.clear'))}</button>
+            <button type="button" id="csp-clear" class="btn btn-xs btn-ghost">${escHtml(t('csp.clear'))}</button>
         </div>
         <p class="csp-foot">${escHtml(t('csp.appliesNextLaunch'))}</p>
     </div>`;

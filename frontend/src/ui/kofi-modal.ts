@@ -131,12 +131,12 @@ function injectStyles(): void {
     .kofi-overlay.closing{opacity:0}
     .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;overflow:hidden;
       background:linear-gradient(160deg, color-mix(in srgb, var(--kofi-brand) 12%, var(--bmm-bg-elevated)) 0%, var(--bmm-bg-elevated) 60%);
-      border:1px solid rgba(255,107,74,0.35);
-      box-shadow:0 24px 70px rgba(255,94,91,0.18),0 18px 50px rgba(0,0,0,0.55),0 4px 14px rgba(0,0,0,0.4);
+      border:1px solid rgba(255,107,74,0.22);
+      box-shadow:0 18px 50px rgba(0,0,0,0.5),0 4px 14px rgba(0,0,0,0.35);
       transform:translateY(18px) scale(.96);opacity:0;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .3s ease}
     .kofi-overlay.open .kofi-card{transform:translateY(0) scale(1);opacity:1}
     .kofi-glow{position:absolute;top:-40%;left:50%;width:280px;height:280px;transform:translateX(-50%);pointer-events:none;
-      background:radial-gradient(circle,rgba(255,107,74,0.35),transparent 70%);filter:blur(10px)}
+      background:radial-gradient(circle,rgba(255,107,74,0.16),transparent 68%);filter:blur(14px)}
     @media (prefers-reduced-motion: reduce){.kofi-heart{animation:none}.kofi-card{transition:opacity .2s ease}}
     .kofi-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:9px;border:none;cursor:pointer;
       display:flex;align-items:center;justify-content:center;color:var(--bmm-text-muted);background:var(--bmm-s05);transition:.15s}
@@ -145,7 +145,7 @@ function injectStyles(): void {
     .kofi-mascot img{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
     .kofi-heart{position:absolute;right:-6px;bottom:-2px;width:36px;height:36px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#ff6b4a,#ff5e5b);
-      box-shadow:0 4px 12px rgba(255,94,91,0.5);animation:kofi-beat 1.4s ease-in-out infinite}
+      box-shadow:0 3px 8px rgba(255,94,91,0.35);animation:kofi-beat 1.4s ease-in-out infinite}
     @keyframes kofi-beat{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
     .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--bmm-text-primary)}
     .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--bmm-text-secondary)}
@@ -160,7 +160,7 @@ function injectStyles(): void {
     .kofi-tier-amt{font-size:13px;line-height:1;letter-spacing:-1px}
     .kofi-tier-lbl{font-size:15px;font-weight:800;color:var(--bmm-text-primary)}
     .kofi-tier--pop{padding:14px 14px 12px;border-color:rgba(255,107,74,0.55);
-      background:linear-gradient(160deg,rgba(255,107,74,0.16),rgba(255,94,91,0.06));box-shadow:0 6px 18px rgba(255,94,91,0.2)}
+      background:linear-gradient(160deg,rgba(255,107,74,0.14),rgba(255,94,91,0.05));box-shadow:none}
     .kofi-tier--pop .kofi-tier-amt{font-size:15px}
     .kofi-tier--pop .kofi-tier-lbl{font-size:18px}
     .kofi-pop{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
@@ -172,8 +172,8 @@ function injectStyles(): void {
     .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
     .kofi-btn-primary{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;
       padding:12px 18px;border-radius:13px;font-size:14px;font-weight:800;color:var(--kofi-on-brand);cursor:pointer;
-      background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 8px 22px rgba(255,94,91,0.4);transition:.18s}
-    .kofi-btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(255,94,91,0.55)}
+      background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 6px 16px rgba(255,94,91,0.28);transition:.18s}
+    .kofi-btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(255,94,91,0.36)}
     .kofi-btn-ghost{padding:9px;border:none;background:transparent;cursor:pointer;font-size:12.5px;
       color:var(--bmm-text-muted);font-weight:600;transition:.15s}
     .kofi-btn-ghost:hover{color:var(--bmm-text-secondary)}

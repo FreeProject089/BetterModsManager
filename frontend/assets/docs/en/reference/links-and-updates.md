@@ -89,6 +89,16 @@ this existed behaves the same way.
 | `analytics_endpoint` | Where anonymous usage data is sent. **Empty means nothing leaves your machine** — events stay buffered locally. |
 | `analytics_key` | A *public* ingest key. It can only submit telemetry, and it already ships inside the app, so it is not a secret. The key that can read or delete data lives only on the server. |
 
+### Feedback and crash reports
+
+`feedback_endpoint` is where the in-app **Send to BetterCommunity** dialog (Settings →
+Feedback, and the crash dialog's *Report to BetterCommunity* button) posts a suggestion, a
+bug or a crash — by default `https://bettercommunity.ch/api/feedback/bmm`. `feedback_web` is
+the page where a linked account follows its reports. An **empty** `feedback_endpoint` turns
+the dialog back into the older BetaHub forms. A report the app could not send (site down)
+is kept and sent on the next start; the app also throttles itself (5 per 10 min, 20 a day)
+before the server has to.
+
 ### Discord Rich Presence
 
 `WebSiteRPC1` / `WebSiteRPC2` and `github_RPC1` / `github_RPC2` are the candidate addresses for
