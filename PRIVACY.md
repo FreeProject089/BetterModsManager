@@ -23,8 +23,10 @@ sent.
 - **We never sell your personal data.** Your data is not the product and is never sold or shared
   for advertising. (This is about your data — it is not a statement about BMM's products or any
   paid services that may exist now or in the future.)
-- **No file or mod contents, ever.** We never read or send the contents of your mods, files, or
-  what you type into inputs.
+- **No mod or game-file contents, and no ordinary input.** We never read or send the contents of
+  your mods, your game files, or what you type into ordinary inputs. The one exception is a
+  bug/feedback report you choose to send: it attaches the diagnostics you pick (a log, a DxDiag
+  report, a crash zip) and the description and contact you type — see §3.3.
 
 All your data — profiles, mods, modpacks, plugins, settings — is stored **locally** on your disk
 (in BMM's data folder). You can export or delete it at any time.
@@ -157,9 +159,34 @@ not your name) so other installs can verify it was not modified. Anyone you shar
 with can see that id. Documents you import are checked the same way; an unsigned or
 tampered file is labelled as such, not refused.
 
-### 3.3 BetaHub reports (bug reports & feedback)
-When you voluntarily submit a **bug report** or **feedback**, the information **you type** (plus
-any logs/screenshots you attach) is sent to the BetaHub service. Nothing is sent unless you submit.
+### 3.3 Bug reports & feedback (BetterCommunity feedback centre)
+When you voluntarily submit a **suggestion**, a **bug report** or a **crash report**, it is sent
+to the **BetterCommunity feedback centre** at `bettercommunity.ch` (`/api/feedback/bmm`). The
+older BetaHub forms are only a fallback, used when the app is configured with an empty
+`feedback_endpoint`.
+
+**Nothing is sent until you press Send.** When you do, BMM uploads:
+
+- the **title, description and reproduction steps** you type;
+- any **screenshots** you attach;
+- any **crash report `.zip`** you select — which itself bundles logs, a system-info snapshot and
+  a short masked session replay of the moments before the crash;
+- optionally the **app log** (`bmm_frontend.log`) — pre-ticked for bug and crash reports;
+- optionally a **DxDiag report** (`dxdiag_report.txt`) — pre-ticked for crash reports. This is the
+  raw `dxdiag /t` dump: a full hardware and driver inventory that ALSO contains machine / OS
+  identifiers and your **Windows account name**. It is broader than the telemetry "system profile"
+  in §2.1 (which carries no identifiers), so untick it if you would rather not include those.
+
+Your **Creator ID** accompanies the report (as a header), along with the app version, OS, locale
+and user-agent. The optional **email** or **Discord** you type are sent so staff can reply; with a
+linked BetterCommunity account, the report opens a thread in your dashboard instead. A small
+anti-spam **proof-of-work** runs in the app before sending — it costs a little CPU and sends no
+extra data.
+
+If the site is unreachable, the report is **stored locally and retried automatically on the next
+launch** — it is never sent anywhere else. BMM also keeps a local list of your last 50 submissions
+so you can find them again. Once received, a report is held in the BetterCommunity feedback centre
+under that platform's own terms and retention.
 
 ### 3.4 Update checks & downloads
 BMM checks GitHub for new releases and downloads plugins / catalog apps you request — standard
@@ -211,7 +238,7 @@ service you configured, under that service's own terms.
 | **Telemetry ON** (you turned it on, or left the installer's box ticked) | Yes | Anonymous usage, system profile, performance, approximate geo (counts/labels only — no contents/values) | Self‑hosted BMM dashboard |
 | Connect / sync a Server Repo | Yes | Public IP, Creator ID | The repo's owner/server |
 | Host a Server Repo | Yes (incoming) | Visitors' IP + Creator ID stored locally | You (host) |
-| Submit a BetaHub bug report / feedback | Yes | What you typed + attachments | BetaHub service |
+| Submit a suggestion / bug / crash report | Yes | What you type + the attachments you choose (app log, DxDiag hardware report incl. Windows account name, crash zip) + Creator ID and app/OS metadata | BetterCommunity feedback centre (BetaHub only as a fallback) |
 | Check for updates / download plugin/app | Yes | Your IP (standard HTTPS) | GitHub / download host |
 | Link a BetterCommunity account | Yes | Creator ID (an identifier, not a secret) | bettercommunity.ch |
 | **BetterCommunity notifications** (only with a stored API key) | Yes, every 10 min | An API key scoped to `notifications:read` | bettercommunity.ch |

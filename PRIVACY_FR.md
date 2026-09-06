@@ -24,8 +24,11 @@ quittent votre ordinateur, et exactement ce qui est envoyé.
 - **Nous ne vendons jamais vos données personnelles.** Vos données ne sont pas le produit et ne sont
   jamais vendues ni partagées à des fins publicitaires. (Ceci concerne vos données — ce n'est pas une
   déclaration sur les produits de BMM ni sur d'éventuels services payants, présents ou futurs.)
-- **Jamais le contenu de vos fichiers ou mods.** Nous ne lisons ni n'envoyons jamais le contenu de
-  vos mods, fichiers, ou ce que vous saisissez dans les champs.
+- **Jamais le contenu de vos mods ou fichiers de jeu, ni vos saisies ordinaires.** Nous ne lisons ni
+  n'envoyons jamais le contenu de vos mods, de vos fichiers de jeu, ni ce que vous saisissez dans les
+  champs ordinaires. La seule exception est un rapport de bug/retour que vous choisissez d'envoyer :
+  il joint les diagnostics que vous sélectionnez (un journal, un rapport DxDiag, un zip de plantage)
+  et la description et le contact que vous saisissez — voir §3.3.
 
 Toutes vos données — profils, mods, modpacks, plugins, réglages — sont stockées **localement** sur
 votre disque (dans le dossier de données de BMM). Vous pouvez les exporter ou les supprimer à tout moment.
@@ -168,10 +171,35 @@ qu'il n'a pas été modifié. Quiconque reçoit le fichier voit cet id. Les docu
 sont vérifiés de la même façon ; un fichier non signé ou altéré est signalé comme tel, pas
 refusé.
 
-### 3.3 Rapports BetaHub (bugs & retours)
-Quand vous envoyez volontairement un **rapport de bug** ou un **retour**, les informations **que vous
-saisissez** (plus les journaux/captures joints) sont envoyées au service BetaHub. Rien n'est envoyé
-sans validation.
+### 3.3 Rapports de bug & retours (centre de retours BetterCommunity)
+Quand vous envoyez volontairement une **suggestion**, un **rapport de bug** ou un **rapport de
+plantage**, il est envoyé au **centre de retours BetterCommunity** sur `bettercommunity.ch`
+(`/api/feedback/bmm`). Les anciens formulaires BetaHub ne servent qu'en secours, quand l'appli est
+configurée avec un `feedback_endpoint` vide.
+
+**Rien n'est envoyé tant que vous n'appuyez pas sur Envoyer.** À ce moment, BMM téléverse :
+
+- le **titre, la description et les étapes** que vous saisissez ;
+- les **captures d'écran** que vous joignez ;
+- tout **zip de plantage** que vous sélectionnez — qui contient lui-même des journaux, un instantané
+  d'infos système et une courte relecture masquée des instants précédant le plantage ;
+- en option le **journal de l'appli** (`bmm_frontend.log`) — pré-coché pour les bugs et plantages ;
+- en option un **rapport DxDiag** (`dxdiag_report.txt`) — pré-coché pour les plantages. C'est le
+  dump brut `dxdiag /t` : un inventaire matériel et pilotes complet qui contient AUSSI des
+  identifiants machine / OS et votre **nom de compte Windows**. Il est plus large que le « profil
+  système » de télémétrie du §2.1 (qui ne porte aucun identifiant) ; décochez-le si vous préférez ne
+  pas les inclure.
+
+Votre **Creator ID** accompagne le rapport (en en-tête), avec la version de l'appli, l'OS, la locale
+et le user-agent. L'**e-mail** ou le **Discord** optionnels que vous saisissez sont envoyés pour que
+l'équipe puisse répondre ; avec un compte BetterCommunity lié, le rapport ouvre plutôt un fil dans
+votre tableau de bord. Une petite **preuve de travail** anti-spam s'exécute dans l'appli avant
+l'envoi — elle coûte un peu de CPU et n'envoie aucune donnée supplémentaire.
+
+Si le site est injoignable, le rapport est **gardé localement et renvoyé automatiquement au prochain
+démarrage** — il n'est jamais envoyé ailleurs. BMM garde aussi une liste locale de vos 50 derniers
+envois pour les retrouver. Une fois reçu, un rapport est conservé dans le centre de retours
+BetterCommunity selon les conditions et la rétention de cette plateforme.
 
 ### 3.4 Vérifications de mise à jour & téléchargements
 BMM vérifie GitHub pour les nouvelles versions et télécharge les plugins / apps du catalogue que vous
@@ -227,7 +255,7 @@ données au service configuré, selon ses propres conditions.
 | **Télémétrie ON** (activée par vous, ou case de l'installateur laissée cochée) | Oui | Usage anonyme, profil système, performance, géo approximative (décomptes/libellés — pas de contenu/valeurs) | Tableau de bord BMM auto‑hébergé |
 | Connexion / sync d'un Server Repo | Oui | IP publique, Creator ID | Propriétaire/serveur du repo |
 | Héberger un Server Repo | Oui (entrant) | IP + Creator ID des visiteurs stockés localement | Vous (hôte) |
-| Envoyer un rapport/retour BetaHub | Oui | Ce que vous saisissez + pièces jointes | Service BetaHub |
+| Envoyer une suggestion / un bug / un plantage | Oui | Ce que vous saisissez + les pièces jointes choisies (journal de l'appli, rapport DxDiag matériel dont le nom de compte Windows, zip de plantage) + Creator ID et métadonnées appli/OS | Centre de retours BetterCommunity (BetaHub seulement en secours) |
 | Vérifier les MAJ / télécharger plugin/app | Oui | Votre IP (HTTPS standard) | GitHub / hôte de téléchargement |
 | Lier un compte BetterCommunity | Oui | Creator ID (un identifiant, pas un secret) | bettercommunity.ch |
 | **Notifications BetterCommunity** (uniquement avec une clé d'API enregistrée) | Oui, toutes les 10 min | Une clé d'API limitée à `notifications:read` | bettercommunity.ch |
