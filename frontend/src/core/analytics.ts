@@ -452,7 +452,7 @@ const KNOWN_MODALS = [
     'modal-repo-update', 'modal-repo-browser', 'modal-repo-sync-summary',
     'modal-repo-history', 'modal-repo-verify-detail', 'modal-server',
     // i18n / feedback / crash
-    'modal-i18n-sandbox', 'modal-crash-report', 'modal-betahub-bugreport', 'modal-betahub-feedback',
+    'modal-i18n-sandbox', 'modal-crash-report', 'modal-betahub-bugreport', 'modal-betahub-feedback', 'modal-feedback',
     // history / legal / misc
     'modal-history', 'modal-history-detail', 'modal-license', 'modal-tos', 'modal-privacy',
     'modal-mapper-input', 'modal-mapper-confirm', 'modal-archive-explorer', 'modal-stack',

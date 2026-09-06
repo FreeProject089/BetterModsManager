@@ -5,7 +5,7 @@
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
-import { openBugReportModal } from '../features/betahub/betahub-modals.js';
+import { openFeedback } from '../features/feedback/feedback-modal.js';
 
 interface StartupStatus {
     backend_crashed: boolean;
@@ -105,7 +105,7 @@ export function initCrashReportUI(): void {
             const crashModal = document.getElementById('modal-crash-report');
             if (crashModal) crashModal.classList.remove('open');
             // Open BetaHub bug report modal with crash zip pre-attached
-            openBugReportModal(zipPath && zipPath !== '—' ? zipPath : undefined);
+            openFeedback('crash', { crashZip: zipPath && zipPath !== '—' ? zipPath : undefined }).catch(() => {});
         });
     }
 }

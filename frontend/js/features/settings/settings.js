@@ -15,6 +15,7 @@ import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
 import { initFeedback } from '../feedback/bc-feedback.js';
+import { openFeedback, initFeedbackCard } from '../feedback/feedback-modal.js';
 import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';
 import { initCardReorder } from './card-order.js';
@@ -3137,9 +3138,12 @@ export async function initSettings() {
     // ── BetaHub ──────────────────────────────────────────────
     initBetaHub();
     initFeedback();
+    initFeedbackCard();
+    // The BetterCommunity dialog; it opens the older BetaHub forms itself when links.json
+    // empties feedback_endpoint.
     document.getElementById('btn-settings-betahub-bugreport')
-        ?.addEventListener('click', () => openBugReportModal());
+        ?.addEventListener('click', () => { openFeedback('bug').catch(() => openBugReportModal()); });
     document.getElementById('btn-settings-betahub-feedback')
-        ?.addEventListener('click', () => openFeedbackModal());
+        ?.addEventListener('click', () => { openFeedback('feedback').catch(() => openFeedbackModal()); });
 }
 //# sourceMappingURL=settings.js.map

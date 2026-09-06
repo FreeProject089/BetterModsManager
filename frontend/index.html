@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="css/mascot.css" />
     <link rel="stylesheet" href="css/debug.css" />
     <link rel="stylesheet" href="css/betahub.css" />
+    <link rel="stylesheet" href="css/feedback.css" />
     <link rel="stylesheet" href="css/modpack.css" />
     <link rel="stylesheet" href="css/community.css" />
     <link rel="stylesheet" href="css/mapper.css" />
@@ -4913,44 +4914,30 @@
                         </div>
 
 
-                        <!-- ── BetaHub — Feedback & Bug Reports ── -->
-                        <div class="glass-card"
-                            style="border:1px solid rgba(99,102,241,0.25); background: rgba(99,102,241,0.04);">
-                            <div
-                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
-                                <h3 class="card-title"
-                                    style="margin-bottom:0; color:color-mix(in srgb, var(--bmm-purple) 55%, var(--bmm-text-primary)); display:flex; align-items:center; gap:8px">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
+                        <!-- ── Feedback & bug reports — the BetterCommunity feedback centre (BetaHub when links.json says so) ── -->
+                        <div class="glass-card fbc-card" id="settings-feedback-card">
+                            <div class="fbc-head">
+                                <h3 class="card-title">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true">
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                                     </svg>
-                                    <span data-i18n="betahub.cardTitle">Feedback &amp; Bug Reports</span>
+                                    <span data-i18n="betahub.cardTitle">Feedback &amp; bug reports</span>
                                 </h3>
-                                <span
-                                    style="font-size:10px; padding:2px 6px; background:rgba(99,102,241,0.15); color:color-mix(in srgb, var(--bmm-purple) 30%, var(--bmm-text-primary)); border-radius:4px; font-weight:700">BETAHUB</span>
+                                <span class="fbc-badge" id="fbc-badge">BetterCommunity</span>
                             </div>
-                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.5"
-                                data-i18n="betahub.cardDesc">
-                                Help improve BMM by reporting bugs or submitting suggestions.
+                            <p class="fbc-desc" data-i18n="betahub.cardDesc">
+                                Help improve BMM: bug reports and suggestions go to the BetterCommunity feedback centre.
                             </p>
-                            <div style="display:flex; flex-wrap:wrap; gap:10px">
-                                <!-- Bug Report -->
-                                <button class="btn btn-secondary btn-sm" id="btn-settings-betahub-bugreport"
-                                    style="border-color:rgba(239,68,68,0.2); color:color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary)); background:rgba(239,68,68,0.05); gap:8px">
+                            <div class="fbc-actions">
+                                <button class="btn btn-secondary btn-sm" id="btn-settings-betahub-bugreport">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
-                                    <span data-i18n="betahub.btnBugReport">Report a Bug</span>
+                                    <span data-i18n="betahub.btnBugReport">Report a bug</span>
                                 </button>
-                                <!-- Feedback -->
-                                <button class="btn btn-ghost btn-sm" id="btn-settings-betahub-feedback"
-                                    style="gap:8px; border:1px solid rgba(99,102,241,0.25); color:color-mix(in srgb, var(--bmm-purple) 30%, var(--bmm-text-primary))">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2.2">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <line x1="12" y1="8" x2="12" y2="12" />
-                                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                                    </svg>
-                                    <span data-i18n="betahub.btnFeedback">Suggestion / Feedback</span>
+                                <button class="btn btn-ghost btn-sm" id="btn-settings-betahub-feedback">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                                    <span data-i18n="betahub.btnFeedback">Suggestion / feedback</span>
                                 </button>
+                                <span class="fbc-where" id="fbc-where"><span data-i18n="fbc.follow">Follow your reports:</span> <a href="https://bettercommunity.ch/dashboard?s=reports" target="_blank" rel="noreferrer" data-i18n="fbc.followSite">on your BetterCommunity dashboard</a></span>
                             </div>
 
                             <!-- My Reports History -->
