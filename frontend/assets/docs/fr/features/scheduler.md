@@ -311,6 +311,10 @@ Deux comportements à connaître, parce que ce sont ceux qu'on devine mal :
 - Un `all` **vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans le remplir tout
   de suite ne bloque pas la tâche que tu es en train d'écrire.
 
+## Choisir une action ou une condition
+
+Les deux sélecteurs ouvrent le même panneau : une recherche, puis chaque type regroupé (mods & profils, dépôt & partage, apps, apparence, benchmarks & stockage, confidentialité, logique, système — et pour les conditions : logique & valeurs, mods, fichiers, apps/réseau/tâches, temps), chacun avec son nom et une ligne qui dit ce qu'il fait. Tape un mot — *dépôt*, *fichier*, *stop* — et seuls les types correspondants restent ; Entrée prend le premier, Échap ferme. Le type actuel est surligné, et survoler le bouton dans l'étape réaffiche sa description.
+
 ## Les conditions — *si*
 
 Une tâche peut porter des conditions pour n'agir que quand l'état est le bon. Chaque condition
@@ -394,14 +398,25 @@ brouillon *non enregistré*, et le panneau latéral montre les dernières exécu
 durée). Pendant l'édition, :kbd[Ctrl+Z] / :kbd[Ctrl+Y] annulent et rétablissent, et chaque étape a
 son propre bouton *lancer juste cette étape*.
 
-## Partir d'un preset
+## Partir d'un modèle
 
-Une nouvelle tâche s'ouvre avec un **sélecteur de presets** et un bouton **Depuis un
-catalogue…**.
+Une nouvelle tâche s'ouvre avec un bouton **Parcourir les modèles…** (le nombre à côté est
+leur total) et un bouton **Depuis un catalogue…** pour les automatisations publiées par
+d'autres.
 
-Choisir un preset **remplace le brouillon**, donc le sélecteur n'apparaît que sur une tâche
-vierge : en choisir un par erreur ne coûte alors rien, puisqu'il n'y avait rien à perdre. La
-description s'affiche sous le sélecteur au fil du choix, avant toute application.
+**Parcourir les modèles…** ouvre la galerie : une colonne de catégories à gauche (*Mods et
+profils*, *Sauvegardes et entretien*, *Surveiller quelque chose*, *Dépôts et synchronisation*,
+*Enchaînements et variables*), une recherche, et une carte par modèle qui dit ce qu'il fait,
+quand il tourne, combien d'étapes il a et s'il demande une permission. Sélectionner une carte
+remplit le panneau de détail à droite — le déclencheur, chaque étape en mots, et les
+permissions nécessaires — pour choisir sur ce qu'un modèle **fait**, pas sur son nom.
+**Utiliser ce modèle** (ou un double-clic) l'envoie dans l'éditeur.
+
+Utiliser un modèle **remplace le brouillon**. Sur une tâche vierge c'est immédiat ; dès qu'il
+y a du travail dans la tâche, BMM demande d'abord et dit combien d'étapes partiraient. Les
+blancs d'un modèle (un profil à choisir, un programme à nommer, un chemin) sont à vous de
+remplir — un modèle ne les devine jamais, parce qu'un chemin deviné est une tâche qui a l'air
+configurée et ne fait rien.
 
 | Preset | Ce qu'il construit |
 |---|---|
@@ -414,6 +429,16 @@ description s'affiche sous le sélecteur au fil du choix, avant toute applicatio
 | Rescanner la bibliothèque chaque matin | Le même rescan, à l'heure plutôt qu'au démarrage |
 | Me prévenir quand un serveur ne répond plus | Appelle une adresse toutes les 30 minutes ; ne se manifeste que sur un statut ≠ 200 |
 | Partager une valeur avec vos autres tâches | Écrit une variable partagée comme point de départ |
+| Soirée jeu du vendredi | Chaque vendredi à 19h00, le profil et le modpack avec lesquels vous jouez |
+| Repartir de zéro | Tous les mods désactivés, puis un seul modpack activé |
+| Sauvegarde complète le 1er | Un export complet plus vos modpacks, chaque mois |
+| Vérifier les mises à jour seulement en ligne | La vérification quotidienne, sautée proprement sans connexion |
+| Checklist de démarrage | Rescan à l'ouverture, puis alerte sous 15 Go |
+| Réagir quand un fichier change | Surveille un fichier et rescanne quand il change |
+| Changer de profil quand le jeu démarre | Toutes les 2 minutes, active le profil du jeu tant qu'il tourne |
+| Synchroniser après le succès d'une autre tâche | Un enchaînement : synchronise le dépôt après la tâche choisie, si elle réussit |
+| Vérifier trois fois, puis s'arrêter | Un bloc de répétition — trois vérifications à dix minutes d'écart |
+| Thème de nuit le soir | Passe sur un thème sombre à 20h00 |
 
 Aucun n'arrive avec une permission déjà accordée. Un preset qui demanderait à exécuter des
 scripts avant que vous l'ayez lu vous entraînerait à accorder sans regarder — l'inverse de ce

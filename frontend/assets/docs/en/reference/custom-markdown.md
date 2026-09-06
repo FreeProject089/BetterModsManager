@@ -56,6 +56,23 @@ rendering rather than by the renderer itself. Nothing you write is affected.
 | `:badge` `:icon` (inline) | Yes | Yes | Yes |
 | `center` `left` `right` | Yes | Yes | Yes |
 | `::toc` | Yes | Yes | Yes |
+| `timeline` + `event` (`moment`) | Yes | Yes | Yes |
+| `compare` + `before` / `after` | Yes | Yes | Yes |
+| `stats` + `stat` (`kpi`) | Yes | Yes | Yes |
+| `quote` (`testimonial`) | Yes | Yes | Yes |
+| `hero` | Yes | Yes | Yes |
+| `changelog` + `version` (`release`) | Yes | Yes | Yes |
+| `spoiler` | Yes | Yes | Yes |
+| `faq` + `q` (`question`) | Yes | Yes | Yes |
+| `checklist` | Yes | Yes | Yes |
+| `grid` | Yes | Yes | Yes |
+| `:meter` (inline progress) | Yes | Yes | Yes |
+| `table` (styled tables, markdown in cells) | Yes | Yes | Yes |
+| `:img` / `image` (images with size, caption, link) | Yes | Yes | Yes |
+| `:audio` `youtube` `spotify` (media) | Yes | Yes | Yes |
+| `api` + `params` / `request` / `response` (endpoint cards) | Yes | Yes | Yes |
+| `mermaid` (`diagram`) | Yes | Yes | Yes |
+| `:counter` `:action` `openapi` `include` `live` (live on the website — a chip that says so in the app) | Yes | Yes | Yes |
 
 A block the renderer does not know is left as literal text, so a website-only block in a
 plugin's docs shows up as `:::cards` on the page rather than vanishing. That is deliberate:
@@ -226,6 +243,119 @@ not interchangeable until recently — ten `++esc++` in these pages drew keycaps
 and printed as literal text in the app, and four `:kbd[…]` did the reverse, in the same two
 files. `scripts/check-doc-dialects.mjs` in the BMM repository now fails the build when a page
 uses syntax only one of the two renders.
+
+## New in B.MD 2.0
+
+Ten more blocks, the same on all three surfaces. Each example is shown as source; the
+[website's Documentation blocks page](https://bettercommunity.ch/docs/documentation-blocks)
+renders every one of them live.
+
+```
+:::timeline[How we got here]
+:::event[First release]{date="2025-03-01" state=done}
+The library, profiles and the first catalog.
+:::
+:::event[Where we are]{date="now" state=now}
+Levels, the shop, the casino.
+:::
+:::
+
+:::compare{before="v1" after="v2"}
+:::before
+One profile at a time.
+:::
+:::after
+Profiles switch live.
+:::
+:::
+
+:::stats
+:::stat[Downloads]{value="12 400" delta="+8%" icon=download}
+:::
+:::
+
+:::quote[Ada Lovelace]{role="Analyst"}
+The engine might compose elaborate pieces of music.
+:::
+
+:::hero[Better Mods Manager]{subtitle="One library, every game." align=center}
+:button[Download]{href=/p/bmm}
+:::
+
+:::changelog
+:::version[1.4.0]{date="2026-09-01" label=latest}
+- [NEW] A template gallery for automations
+:::
+:::
+
+:::spoiler[The answer]
+Forty-two.
+:::
+
+:::faq[Questions]
+:::q[Is hosting free?]{open}
+There is a free tier.
+:::
+:::
+
+:::checklist[Launch day]
+- [x] Tag the release
+- [ ] Post on Discord
+:::
+
+:::grid{cols=3}
+…three blocks…
+:::
+
+Migration: :meter[72]{label=Done}
+```
+
+Icons now come from **Phosphor** too, in every place an icon name goes: `:icon[ph:rocket]`,
+and a weight as prefix — `:icon[ph-bold:rocket]`, `:icon[ph-fill:heart]`, `:icon[ph-duotone:star]`
+(thin, light, regular, bold, fill, duotone). The app draws them as masks, like lucide names.
+
+## New in B.MD 3.0
+
+Styled tables, images with their options, audio and video embeds, API endpoint cards, and
+Mermaid diagrams — on all three surfaces. The blocks that read or call a URL (`:counter`,
+`:action`, `::openapi`, `::include`, `::live`) are live on the website; the app, which reads a
+bundled document offline, draws a small chip saying so instead of a number it did not fetch.
+
+```
+:::table[A caption]{style="striped bordered" align=center}
+| Column | Column |
+|---|---|
+| **markdown** in cells | :icon[rocket] `code` |
+:::
+
+:img[Alt text]{src=/images/a.png width=480 align=center caption="A caption" link=/images/a.png}
+:audio[Episode 12]{src=/media/ep12.mp3}
+::youtube{src=https://youtu.be/ID}
+::spotify{src=https://open.spotify.com/track/ID}
+
+:::api[GET /api/things/:id]{auth=key summary="One thing"}
+:::params
+| Name | In | Type | Required | Description |
+|---|---|---|---|---|
+| `id` | path | string | yes | Which one |
+:::
+:::response{status=200}
+```json
+{ "id": "…" }
+```
+:::
+:::
+
+:::mermaid[How it flows]
+```
+graph LR
+  A[Write] --> B[Preview]
+```
+:::
+
+==marked==  [[Page]]  text[^1]   ::toc{depth=4 numbered}
+{radius=8} {variant=quiet} on any block
+```
 
 ## Maths
 

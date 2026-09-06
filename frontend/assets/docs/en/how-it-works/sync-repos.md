@@ -33,6 +33,16 @@ are done. BMM can also run it for you, from the **built-in mini-server** or a ge
 standalone server (Node, or a `.bat`/`.sh` script) on a dedicated machine. Either way, over
 HTTP — **HTTPS is strongly recommended**.
 
+!!! note "How the Host tab is laid out"
+    The **Generate** card is split into numbered sections you open one at a time (profiles ·
+    output & identity · distribution · include more & publish over SSH), and **Manifest only**
+    the same way. Every card on the tab folds from the chevron in its header. In *Distribution*,
+    **Compress as .zip** only packs the repo; bundling a **standalone server** is a separate,
+    optional tick inside it (the API's `zipOutput` and `generateServer` flags are independent
+    for the same reason — a plain archive is named `BMM-Repo-*`, one with a server
+    `BMM-Standalone-Server-*`). The **multi-repo hub** — one Node server and dashboard for all
+    your repos — is its own card in the *Serve the files* step.
+
 !!! warning "There is no way to publish a repo over files you already host"
 
     The local API's generation takes a `lightweight` flag that hashes the mods in place instead

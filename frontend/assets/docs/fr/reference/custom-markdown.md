@@ -56,6 +56,23 @@ sont remplis après le rendu plutôt que par le moteur. Rien de ce que vous écr
 | `:badge` `:icon` (en ligne) | Oui | Oui | Oui |
 | `center` `left` `right` | Oui | Oui | Oui |
 | `::toc` | Oui | Oui | Oui |
+| `timeline` + `event` (`moment`) | Oui | Yes | Oui |
+| `compare` + `before` / `after` | Oui | Yes | Oui |
+| `stats` + `stat` (`kpi`) | Oui | Yes | Oui |
+| `quote` (`testimonial`) | Oui | Yes | Oui |
+| `hero` | Oui | Yes | Oui |
+| `changelog` + `version` (`release`) | Oui | Yes | Oui |
+| `spoiler` | Oui | Yes | Oui |
+| `faq` + `q` (`question`) | Oui | Yes | Oui |
+| `checklist` | Oui | Yes | Oui |
+| `grid` | Oui | Yes | Oui |
+| `:meter` (jauge en ligne) | Oui | Yes | Oui |
+| `table` (tableaux stylés, markdown dans les cellules) | Oui | Oui | Oui |
+| `:img` / `image` (images avec taille, légende, lien) | Oui | Oui | Oui |
+| `:audio` `youtube` `spotify` (médias) | Oui | Oui | Oui |
+| `api` + `params` / `request` / `response` (fiches d’endpoint) | Oui | Oui | Oui |
+| `mermaid` (`diagram`) | Oui | Oui | Oui |
+| `:counter` `:action` `openapi` `include` `live` (en direct sur le site — une puce le dit dans l’appli) | Oui | Oui | Oui |
 
 Un bloc que le moteur ne connaît pas est laissé en texte brut : un bloc réservé au site, mis
 dans la doc d'un plugin, s'affiche donc `:::cards` au lieu de disparaître. C'est voulu — une
@@ -228,6 +245,121 @@ n'étaient pas interchangeables jusqu'ici : dix `++esc++` dans ces pages dessina
 sur le site et s'affichaient en texte brut dans l'app, et quatre `:kbd[…]` faisaient l'inverse,
 dans les deux mêmes fichiers. `scripts/check-doc-dialects.mjs` dans le dépôt BMM fait
 maintenant échouer la build si une page utilise une syntaxe qu'un seul des deux rend.
+
+## Nouveau dans B.MD 2.0
+
+Dix blocs de plus, identiques sur les trois surfaces. Chaque exemple est donné en source ; la
+[page Blocs de documentation du site](https://bettercommunity.ch/docs/documentation-blocks)
+les affiche tous en direct.
+
+```
+:::timeline[Comment on en est arrivé là]
+:::event[Première version]{date="2025-03-01" state=done}
+La bibliothèque, les profils et le premier catalogue.
+:::
+:::event[Où on en est]{date="now" state=now}
+Les niveaux, la boutique, le casino.
+:::
+:::
+
+:::compare{before="v1" after="v2"}
+:::before
+Un profil à la fois.
+:::
+:::after
+Les profils changent à chaud.
+:::
+:::
+
+:::stats
+:::stat[Téléchargements]{value="12 400" delta="+8%" icon=download}
+:::
+:::
+
+:::quote[Ada Lovelace]{role="Analyste"}
+La machine pourrait composer des morceaux de musique élaborés.
+:::
+
+:::hero[Better Mods Manager]{subtitle="Une bibliothèque, tous les jeux." align=center}
+:button[Télécharger]{href=/p/bmm}
+:::
+
+:::changelog
+:::version[1.4.0]{date="2026-09-01" label=latest}
+- [NEW] Une galerie de modèles d'automatisation
+:::
+:::
+
+:::spoiler[La réponse]
+Quarante-deux.
+:::
+
+:::faq[Questions]
+:::q[L'hébergement est-il gratuit ?]{open}
+Il y a un palier gratuit.
+:::
+:::
+
+:::checklist[Jour de sortie]
+- [x] Taguer la version
+- [ ] Poster sur Discord
+:::
+
+:::grid{cols=3}
+…trois blocs…
+:::
+
+Migration : :meter[72]{label=Fait}
+```
+
+Les icônes viennent aussi de **Phosphor**, partout où un nom d'icône est attendu :
+`:icon[ph:rocket]`, et la graisse en préfixe — `:icon[ph-bold:rocket]`, `:icon[ph-fill:heart]`,
+`:icon[ph-duotone:star]` (thin, light, regular, bold, fill, duotone). L'app les dessine en
+masques, comme les noms lucide.
+
+## Nouveau dans B.MD 3.0
+
+Tableaux stylés, images avec leurs options, lecteurs audio et vidéo, fiches d’endpoint d’API et
+diagrammes Mermaid — sur les trois surfaces. Les blocs qui lisent ou appellent une URL
+(`:counter`, `:action`, `::openapi`, `::include`, `::live`) sont en direct sur le site ; l’appli,
+qui lit un document embarqué hors ligne, dessine une petite puce qui le dit plutôt qu’un chiffre
+qu’elle n’a pas récupéré.
+
+```
+:::table[Une légende]{style="striped bordered" align=center}
+| Colonne | Colonne |
+|---|---|
+| du **markdown** dans les cellules | :icon[rocket] `code` |
+:::
+
+:img[Texte alternatif]{src=/images/a.png width=480 align=center caption="Une légende" link=/images/a.png}
+:audio[Épisode 12]{src=/media/ep12.mp3}
+::youtube{src=https://youtu.be/ID}
+::spotify{src=https://open.spotify.com/track/ID}
+
+:::api[GET /api/things/:id]{auth=key summary="Une chose"}
+:::params
+| Nom | Où | Type | Requis | Description |
+|---|---|---|---|---|
+| `id` | path | string | oui | Laquelle |
+:::
+:::response{status=200}
+```json
+{ "id": "…" }
+```
+:::
+:::
+
+:::mermaid[Le flux]
+```
+graph LR
+  A[Écrire] --> B[Aperçu]
+```
+:::
+
+==surligné==  [[Page]]  texte[^1]   ::toc{depth=4 numbered}
+{radius=8} {variant=quiet} sur n’importe quel bloc
+```
 
 ## Maths
 

@@ -78,6 +78,17 @@ est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**
 
 ### Trois façons de produire le manifeste
 
+!!! note "Comment l'onglet Héberger est organisé"
+    La carte **Générer** est découpée en sections numérotées qu'on ouvre une à la fois (profils ·
+    sortie & identité · distribution · inclure plus & publier via SSH), et **Manifeste seul** de
+    la même façon. Chaque carte de l'onglet se replie depuis le chevron de son en-tête. Dans
+    *Distribution*, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
+    est une case séparée et optionnelle à l'intérieur (les indicateurs `zipOutput` et
+    `generateServer` de l'API sont indépendants pour la même raison — une archive seule
+    s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Le **hub multi-dépôts** —
+    un serveur Node et un tableau de bord pour tous vos dépôts — est sa propre carte dans
+    l'étape *Servir les fichiers*.
+
 Ce sont des alternatives — choisis celle qui correspond à l'endroit où tes mods se trouvent
 déjà.
 

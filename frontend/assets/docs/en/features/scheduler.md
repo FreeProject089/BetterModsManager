@@ -265,6 +265,10 @@ The scheduler ships one, and it's a good shape to copy:
 Start there, swap the notification for a real action, and add a condition so it only fires
 when it should.
 
+## Picking an action or a condition
+
+Both pickers open the same panel: a search box, then every kind grouped (mods & profiles, repo & sharing, apps, appearance, benchmarks & storage, privacy, logic, system — and for conditions: logic & values, mods, files, apps/network/tasks, time), each with its name and a one-line description of what it does. Type a word — *repo*, *file*, *stop* — and only the matching kinds stay; Enter takes the first one, Escape closes. The current kind is highlighted, and hovering the button in the step shows its description again.
+
 ## Conditions — *whether*
 
 A task can carry conditions so it only acts when the state is right. Each condition can be
@@ -342,13 +346,23 @@ trigger), **Duplicate** (a copy is created **disabled** so it can't double-fire)
 panel shows the last runs (time · OK/ERR · duration). While editing, :kbd[Ctrl+Z] / :kbd[Ctrl+Y]
 undo and redo, and any single step has its own *run just this step* button.
 
-## Starting from a preset
+## Starting from a template
 
-A new task opens with a **preset picker** and a **From a catalogue…** button.
+A new task opens with a **Browse templates…** button (the count beside it is how many there
+are) and a **From a catalogue…** button for automations other people published.
 
-Picking a preset **replaces the draft**, so the picker only appears on a blank new task —
-choosing one by mistake then costs nothing, because there was nothing to lose. The
-description appears under the picker as you select, before anything is applied.
+**Browse templates…** opens the template gallery: a category rail on the left (*Mods &
+profiles*, *Backups & upkeep*, *Watching something*, *Repos & syncing*, *Chains & variables*),
+a search box, and one card per template showing what it does, when it runs, how many steps it
+has and whether it needs a permission. Selecting a card fills the detail pane on the right —
+the trigger, every step in words, and the permissions it would need — so the choice is made on
+what a template **does**, not on its name. **Use this template** (or a double-click) hands it
+to the editor.
+
+Using a template **replaces the draft**. On a blank new task that happens straight away; once
+there is work in the task, BMM asks first and says how many steps would go. Blanks in a
+template (a profile to pick, a program to name, a path) are yours to fill — a template never
+guesses those, because a guessed path is a task that looks configured and does nothing.
 
 | Preset | What it builds |
 |---|---|
@@ -361,6 +375,16 @@ description appears under the picker as you select, before anything is applied.
 | Rescan the library every morning | The same rescan, on a clock instead of on startup |
 | Tell me when a server stops answering | Calls an address every 30 minutes; speaks up only on a non-200 |
 | Share a value with your other tasks | Writes one shared variable as a starting point |
+| Friday game night | Every Friday at 19:00, the profile and the modpack you play with |
+| Start from a clean slate | Every mod off, then one modpack on |
+| Full backup on the 1st | A complete export plus your modpacks, monthly |
+| Check for updates only when online | The daily check, skipped cleanly with no connection |
+| Startup checklist | Rescan on open, then warn under 15 GB |
+| React when a file changes | Watches one file and rescans when it changes |
+| Switch profile when the game starts | Every 2 minutes, activates the game's profile while it runs |
+| Sync once another task succeeds | A chain: sync the repo after the task you pick finishes without error |
+| Check three times, then stop | A repeat block — three checks ten minutes apart |
+| Night theme in the evening | Switches to a dark theme at 20:00 |
 
 None of them arrives with a permission already granted. A preset that asked to run scripts
 before you had read it would train you to grant that without looking, which is the opposite

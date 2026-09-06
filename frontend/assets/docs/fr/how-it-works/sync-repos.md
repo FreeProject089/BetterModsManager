@@ -35,6 +35,17 @@ répertoire exporté et c'est fini. BMM peut aussi s'en charger, via son **mini-
 ou un serveur autonome généré (Node, ou un script `.bat`/`.sh`) sur une machine dédiée. Dans tous
 les cas en HTTP — **le HTTPS est fortement recommandé**.
 
+!!! note "Comment l'onglet Héberger est organisé"
+    La carte **Générer** est découpée en sections numérotées qu'on ouvre une à la fois (profils ·
+    sortie & identité · distribution · inclure plus & publier via SSH), et **Manifeste seul** de
+    la même façon. Chaque carte de l'onglet se replie depuis le chevron de son en-tête. Dans
+    *Distribution*, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
+    est une case séparée et optionnelle à l'intérieur (les indicateurs `zipOutput` et
+    `generateServer` de l'API sont indépendants pour la même raison — une archive seule
+    s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Le **hub multi-dépôts** —
+    un serveur Node et un tableau de bord pour tous vos dépôts — est sa propre carte dans
+    l'étape *Servir les fichiers*.
+
 !!! warning "Impossible de publier un dépôt par-dessus des fichiers déjà hébergés"
 
     La génération de l'API locale accepte un drapeau `lightweight` qui hache les mods sur place

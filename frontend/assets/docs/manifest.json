@@ -192,7 +192,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 5222,
+      "words": 5336,
       "diagrams": 1,
       "fr": true
     },
@@ -222,7 +222,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8051,
+      "words": 8275,
       "diagrams": 0,
       "fr": true
     },
@@ -387,7 +387,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 796,
+      "words": 807,
       "diagrams": 0,
       "fr": true
     },
@@ -537,7 +537,7 @@
         "en": "A server repo turns one person's profile into a hosted source of truth: everyone who subscribes converges on the exact same mods, versions and order — and…",
         "fr": "Un dépôt serveur transforme le profil d'une personne en source de vérité hébergée : tous les abonnés convergent vers exactement les mêmes mods, versions et…"
       },
-      "words": 1179,
+      "words": 1293,
       "diagrams": 2,
       "fr": true
     },
@@ -732,7 +732,7 @@
         "en": "B.MD (better.markdown) is the block vocabulary shared by BMM and BetterCommunity.",
         "fr": "Partout où du texte est affiché — la documentation d'un plugin, une page personnalisée, un article de la communauté sur BetterCommunity — vous avez le…"
       },
-      "words": 1278,
+      "words": 1435,
       "diagrams": 0,
       "fr": true
     },
