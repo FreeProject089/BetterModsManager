@@ -71,13 +71,17 @@
 .fbc-where a { color: var(--accent); text-decoration: none; }
 .fbc-where a:hover { text-decoration: underline; }
 
-/* fbm-clean — the dialog is deliberately light: one moderate shadow (the old one stacked a
-   heavy 0.55 drop over the base .modal shadow and read as a black slab on the dark backdrop),
-   flat sections separated by a hairline instead of three stacked boxes, and `overflow: visible`
-   so the transform-animated modal never clips its own shadow to a hard edge. */
+/* fbm-clean — flat sections separated by a hairline instead of three stacked boxes.
+   Shadow + clipping are DELIBERATELY the standard `.modal` treatment (main.css:3371): the
+   previous custom `0 12px 40px rgba(0,0,0,.38)` was a wide, soft drop, and over the dim's
+   already-dark blurred backdrop it read as a murky rectangular halo around the card — the
+   "shadow on the invisible div". Matching the base modal makes it sit exactly like every
+   other dialog (e.g. the crash & sessions modal). `overflow: hidden` clips the scrolling body
+   and any child fill to the 16px radius, so nothing pokes past the rounded corners; a modal's
+   own box-shadow is painted outside its border box and is never clipped by its own overflow. */
 .fbm-overlay .modal.fbm {
-    overflow: visible;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, .38);
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
     border: 1px solid var(--border);
     border-radius: 16px;
     max-width: 620px;
@@ -91,7 +95,8 @@
 .fbm-kind { padding: 9px 12px; border-radius: 10px; gap: 10px; background: var(--bmm-s02); border: 1px solid transparent; transform: none; }
 .fbm-kind:hover { transform: none; background: var(--bmm-s04); }
 .fbm-kind svg { width: 18px; height: 18px; padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); box-sizing: content-box; }
-.fbm-kind.is-on { box-shadow: none; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.fbm-kind.is-on { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.fbm-kind.is-on b { color: var(--text-primary); }
 .fbm-kind.is-on svg { background: transparent; color: var(--accent); }
 .fbm-kind small { color: var(--text-muted); }
 /* Flat sections: no box, just a hairline between them. */
