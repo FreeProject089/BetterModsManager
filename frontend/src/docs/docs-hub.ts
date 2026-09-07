@@ -2806,6 +2806,33 @@ function crumbs(): string {
   return parts.join('');
 }
 
+/**
+ * Bundled pages this part covers that no article introduces.
+ *
+ * 52 documentation pages ship inside the app and the curated hub attaches 35 of them to an
+ * article. The other 17 — the architecture write-up, the settings reference, MCP, writing a
+ * theme, integrity hashing, passphrases… — were reachable only by knowing to open "Full
+ * documentation" and scrolling. They are real pages, several of them the longest in the set,
+ * and the hub said nothing about them.
+ *
+ * Computed from the manifest rather than listed by hand, so a page added to BMM Docs tomorrow
+ * appears here by itself instead of waiting for somebody to remember this file.
+ */
+const PART_SECTIONS: Record<Part, string[]> = {
+  user: ['getting-started', 'features'],
+  dev: ['how-it-works', 'reference'],
+};
+function articleDocsPaths(): Set<string> {
+  const out = new Set<string>();
+  for (const c of CATEGORIES) for (const a of c.articles) if (a.docsPath) out.add(a.docsPath.replace(/\/+$/, ''));
+  return out;
+}
+function unattachedPages(part: Part): DocPageMeta[] {
+  const refd = articleDocsPaths();
+  const secs = PART_SECTIONS[part] || [];
+  return (_manifest || []).filter((p) => secs.includes(p.section) && !refd.has(p.path.replace(/\/+$/, '')));
+}
+
 function hubView(): string {
   const cards = catsOf(route.part).map((c) => `
     <button class="dh-cat" data-cat="${c.id}">
@@ -2825,7 +2852,19 @@ function hubView(): string {
         <span class="dh-cat-n">${Object.keys(diagrams).length} ${tr({ en: 'diagrams', fr: 'diagrammes' })} ${svg('arrow', 14)}</span>
       </span>
     </button>`;
-  return `<div class="dh-grid">${cards}${diag}</div>`;
+  const extra = unattachedPages(route.part);
+  const extraHtml = extra.length ? `
+    <div class="dh-sec-h">${tr({ en: 'Also in the manual', fr: 'Aussi dans le manuel' })} · ${extra.length}</div>
+    <p class="dh-lead">${tr({
+      en: 'Bundled pages with no article of their own — they open in the reader, offline, like every other page here.',
+      fr: 'Des pages embarquées sans article dédié — elles s’ouvrent dans le lecteur, hors ligne, comme toutes les autres.',
+    })}</p>
+    <div class="dh-pgs">${extra.map((p) => `
+      <button class="dh-pg" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
+        <div class="dh-pg-t">${escapeHtml(tr(p.title))}</div>
+        ${p.summary ? `<div class="dh-pg-s">${escapeHtml(tr(p.summary))}</div>` : ''}
+      </button>`).join('')}</div>` : '';
+  return `<div class="dh-grid">${cards}${diag}</div>${extraHtml}`;
 }
 
 function articleCard(a: Article): string {
@@ -3852,7 +3891,9 @@ export function initDocsHub() {
   // Load the page index up front: paint() consults it to decide whether an article has a
   // documentation page to show, and that decision is synchronous. Repaint once it lands so the
   // very first article opened is not the only one that misses out.
-  void loadManifest().then(() => { if (route.view === 'art') paint(); });
+  // 'hub' and 'search' read it too now — the hub lists the pages no article introduces, and a
+  // search matches them — so repaint on any of the three rather than only on an open article.
+  void loadManifest().then(() => { if (route.view === 'art' || route.view === 'hub' || route.view === 'search') paint(); });
   // Nudge once if this build ships help articles the install has never seen (after a short beat
   // so the toast lands on a settled UI, not mid-boot).
   setTimeout(() => { try { notifyNewArticles(); } catch { /* never block startup on a nudge */ } }, 2500);
