@@ -2694,6 +2694,7 @@
   "betahub.submitting": "Envoi en cours...",
   "betahub.successBugReport": "Rapport de bug envoyé ! Merci d'aider à améliorer BMM.",
   "fbm.title": "Envoyer à BetterCommunity",
+  "fbm.kindPick": "Type de rapport",
   "fbm.sub": "Une suggestion, un bug ou un plantage — avec ce qu’il faut à l’équipe pour agir. Rien ne part sans ton Envoyer.",
   "fbm.offline": "BetterCommunity est injoignable pour l’instant. Tu peux quand même écrire : le rapport est gardé et envoyé au prochain démarrage.",
   "fbm.kind.feedback": "Suggestion",

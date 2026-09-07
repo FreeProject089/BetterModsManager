@@ -2696,6 +2696,7 @@
   "betahub.submitting": "Submitting...",
   "betahub.successBugReport": "Bug report submitted! Thank you for helping improve BMM.",
   "fbm.title": "Send to BetterCommunity",
+  "fbm.kindPick": "Report type",
   "fbm.sub": "A suggestion, a bug or a crash — with what the team needs to act on it. Nothing leaves without your Send.",
   "fbm.offline": "BetterCommunity is unreachable right now. You can still write: the report is kept and sent at the next start.",
   "fbm.kind.feedback": "Suggestion",

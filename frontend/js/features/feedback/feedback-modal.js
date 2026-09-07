@@ -89,8 +89,12 @@ function render(linked, crashes, cfg) {
             </div>
             <button type="button" class="fbm-close" id="fbm-close" aria-label="${esc(t('common.close') || 'Close')}">${IC.x}</button>
         </div>
-        ${offline ? `<div class="fbm-banner fbm-banner-warn">${esc(t('fbm.offline'))}</div>` : disabled ? `<div class="fbm-banner fbm-banner-warn">${esc(t('feedback.disabled'))}</div>` : ''}
-        <div class="fbm-kinds" role="tablist">${kindBtn('feedback', IC.bulb)}${kindBtn('bug', IC.bug)}${kindBtn('crash', IC.crash)}</div>
+        <div class="fbm-main">
+        <aside class="fbm-rail">
+            ${offline ? `<div class="fbm-banner fbm-banner-warn">${esc(t('fbm.offline'))}</div>` : disabled ? `<div class="fbm-banner fbm-banner-warn">${esc(t('feedback.disabled'))}</div>` : ''}
+            <div class="fbm-rail-lbl">${esc(t('fbm.kindPick'))}</div>
+            <div class="fbm-kinds" role="tablist">${kindBtn('feedback', IC.bulb)}${kindBtn('bug', IC.bug)}${kindBtn('crash', IC.crash)}</div>
+        </aside>
         <div class="fbm-body">
             <section class="fbm-sec">
                 <div class="fbm-sec-title">${esc(t('fbm.what'))}</div>
@@ -125,6 +129,7 @@ function render(linked, crashes, cfg) {
                        </div>
                        <div class="fbm-hint">${esc(t('fbm.contactHint'))}</div>`}
             </section>
+        </div>
         </div>
         <div class="fbm-quality" id="fbm-quality">
             <div class="fbm-quality-top">

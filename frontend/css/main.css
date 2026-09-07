@@ -12307,16 +12307,16 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    action/condition picker are appended to <body> (a transformed ancestor would break
    `position: fixed`), so they inherited none and swallowed nothing — visible, laid out, and
    completely unclickable. Above the scheduler modal (.modal-generic-overlay at 10000) too. */
-/* overflow:visible — same shadow-clip fix as the feedback dialog: the base .modal-overlay
-   sets overflow:hidden, which trims the modal's drop-shadow to a hard rectangle a few px out
-   from the card (the "shadow buggée" on the gallery). The modal scrolls internally, so the
-   overlay never needed to clip; opting out lets the shadow breathe. */
-.spg-overlay { pointer-events: auto; z-index: 10060; overflow: visible; padding: 28px; }
+/* No overlay override here. An earlier pass set `overflow: visible; padding: 28px` on this
+   overlay believing the base `overflow: hidden` was clipping the card's drop-shadow. It
+   isn't — the overlay is `inset: 0`, so its padding box IS the viewport and nothing is
+   trimmed. What that override actually did was let the base shadow's
+   `0 8px 20px rgba(0,0,0,.7)` paint unbounded over the dim, which on a 1040px-wide card
+   reads as a dark band sitting under the gallery. The gallery now elevates exactly like
+   every other modal. */
+.spg-overlay { pointer-events: auto; z-index: 10060; }
 .skp { pointer-events: auto; }
-.spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:calc(100vh - 56px); display:flex; flex-direction:column; padding:0;
-    /* The SAME contained shadow as every other dialog (the base .modal / the scheduler's own
-       task editor) — an even ring, not a big downward blob that reads as a dark band below. */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05); }
+.spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:calc(100vh - 64px); display:flex; flex-direction:column; padding:0; }
 .spg-head { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .spg-head-l { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
 .spg-head-l h2 { margin:0; font-size:15px; }

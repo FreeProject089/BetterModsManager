@@ -71,33 +71,37 @@
 .fbc-where a { color: var(--accent); text-decoration: none; }
 .fbc-where a:hover { text-decoration: underline; }
 
-/* THE shadow fix. The real culprit was never the modal — it was the OVERLAY. The base
-   `.modal-overlay` sets `overflow: hidden` (main.css), which trims the modal's drop-shadow
-   along the overlay's padding box: a hard rectangular cut a few px out from the card, which
-   over the dark blurred dim reads as "the shadow bleeds into an invisible div". A modal's own
-   `overflow: hidden` never clips its OWN shadow (painted outside the border box), so earlier
-   fixes that only touched the modal changed nothing. Opt THIS overlay out of clipping — the
-   dialog scrolls internally (.fbm-body), so the overlay never needs to — and keep the modal
-   safely inside the viewport so the soft shadow always has room to breathe. */
-.fbm-overlay { overflow: visible; padding: 28px; }
+/* Elevation: inherit, don't reinvent. Every earlier attempt here added its own overlay
+   `overflow: visible; padding: 28px` and its own `box-shadow`, then dropped the card's
+   1px border. Rendered side by side against the base `.modal` those three changes are
+   exactly what "the shadow is broken / the modal is ugly" looked like: with no border the
+   card has no crisp edge, and with the overlay no longer clipping, the base shadow's
+   `0 8px 20px rgba(0,0,0,.7)` paints unbounded over the dim and reads as a dark smudge
+   sitting under the dialog. So: no overlay override at all, and no shadow override — the
+   dialog now elevates identically to every other modal in the app. */
 .fbm-overlay .modal.fbm {
     overflow: hidden;                       /* clip children to the rounded corners only */
     background: var(--bmm-bg-elevated);
-    /* The SAME contained shadow as every other dialog (base .modal / the crash-manager modal):
-       an even ring, not a big downward blob that read as a dark band below the card. */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
-    border: 0;
+    border: 1px solid var(--border);        /* the crisp edge the base modal has */
     border-radius: 16px;
-    max-width: 620px;
-    max-height: calc(100vh - 56px);
+    max-width: 820px;                       /* two columns: rail + form */
+    max-height: calc(100vh - 64px);
 }
 .fbm-head { border-radius: 16px 16px 0 0; background: transparent; padding: 16px 20px 10px; border-bottom: 0; align-items: center; }
 .fbm-head-icon { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .fbm-head .modal-title { font-size: 15px; }
 .fbm-foot { border-radius: 0 0 16px 16px; background: transparent; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
-.fbm-body { padding: 6px 20px 4px; gap: 0; }
-.fbm-kinds { padding: 6px 20px 2px; gap: 8px; }
-.fbm-kind { padding: 9px 12px; border-radius: 10px; gap: 10px; background: var(--bmm-s02); border: 1px solid transparent; transform: none; }
+/* Two columns: a rail that holds the "what kind of report" choice (and the offline notice),
+   and the form itself. The old layout stacked three wide kind-tiles above one long scroll,
+   which is why the dialog felt cramped and endless — the choice now costs no vertical room
+   in the form, and the form is the only thing that scrolls. */
+.fbm-main { display: flex; min-height: 0; flex: 1; }
+.fbm-rail { flex: 0 0 208px; width: 208px; border-right: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; background: var(--bmm-s02); }
+.fbm-rail-lbl { font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); padding: 2px 2px 0; }
+.fbm-rail .fbm-banner { margin: 0; }
+.fbm-body { flex: 1; min-width: 0; padding: 6px 20px 4px; gap: 0; }
+.fbm-kinds { display: flex; flex-direction: column; padding: 0; gap: 6px; }
+.fbm-kind { padding: 9px 12px; border-radius: 10px; gap: 10px; background: var(--bmm-s02); border: 1px solid transparent; transform: none; align-items: flex-start; }
 .fbm-kind:hover { transform: none; background: var(--bmm-s04); }
 .fbm-kind svg { width: 18px; height: 18px; padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); box-sizing: content-box; }
 .fbm-kind.is-on { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -137,3 +141,14 @@
 .fbm-q-weak { color: var(--bmm-danger); } .fbm-q-fair { color: var(--bmm-warning); }
 .fbm-q-good { color: var(--accent); } .fbm-q-great { color: var(--bmm-success); }
 @media (prefers-reduced-motion: reduce) { .fbm-quality-fill { transition: none; } }
+
+/* Under 760px the rail folds to the top and the kinds go back to a row — the dialog is one
+   column again, but the form still never has to share width with the chooser. */
+@media (max-width: 760px) {
+    .fbm-main { flex-direction: column; }
+    .fbm-rail { flex: 0 0 auto; width: auto; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; padding: 10px 14px; }
+    .fbm-rail-lbl { display: none; }
+    .fbm-kinds { flex-direction: row; }
+    .fbm-kind { flex: 1; min-width: 0; }
+    .fbm-kind small { display: none; }
+}
