@@ -119,3 +119,16 @@
 .fbm-pow-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-top-color: var(--accent); animation: fbm-spin .7s linear infinite; }
 @keyframes fbm-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .fbm-pow-dot { animation: none; } }
+
+/* Report-quality gauge: a live meter that scores the report (title, detail, steps,
+   attachments, contact) and nudges the one thing most worth adding. Sits above the footer. */
+.fbm-quality { padding: 10px 20px 0; }
+.fbm-quality-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.fbm-quality-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+.fbm-quality-tier { font-size: 12px; font-weight: 700; }
+.fbm-quality-track { height: 6px; border-radius: 999px; background: var(--bmm-s03); overflow: hidden; }
+.fbm-quality-fill { height: 100%; border-radius: 999px; width: 0; background: var(--accent); transition: width .35s cubic-bezier(.4,0,.2,1), background-color .3s; }
+.fbm-quality-tip { margin-top: 6px; font-size: 11.5px; color: var(--text-muted); min-height: 1em; }
+.fbm-q-weak { color: var(--bmm-danger); } .fbm-q-fair { color: var(--bmm-warning); }
+.fbm-q-good { color: var(--accent); } .fbm-q-great { color: var(--bmm-success); }
+@media (prefers-reduced-motion: reduce) { .fbm-quality-fill { transition: none; } }

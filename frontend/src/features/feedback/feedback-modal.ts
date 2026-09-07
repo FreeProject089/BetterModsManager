@@ -124,6 +124,14 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
                        <div class="fbm-hint">${esc(t('fbm.contactHint'))}</div>`}
             </section>
         </div>
+        <div class="fbm-quality" id="fbm-quality">
+            <div class="fbm-quality-top">
+                <span class="fbm-quality-lbl">${esc(t('fbm.quality'))}</span>
+                <span class="fbm-quality-tier" id="fbm-quality-tier"></span>
+            </div>
+            <div class="fbm-quality-track"><div class="fbm-quality-fill" id="fbm-quality-fill"></div></div>
+            <div class="fbm-quality-tip" id="fbm-quality-tip"></div>
+        </div>
         <div class="fbm-foot">
             <span class="fbm-status" id="fbm-status"></span>
             <button type="button" class="btn btn-ghost btn-sm" id="fbm-cancel">${esc(t('common.cancel') || 'Cancel')}</button>
@@ -136,12 +144,62 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
 function renderSteps(): void {
     const host = document.getElementById('fbm-steps'); if (!host) return;
     host.innerHTML = _steps.map((s, i) => `<div class="fbm-step"><span class="fbm-step-n">${i + 1}</span><input class="form-input fbm-input" data-step="${i}" value="${esc(s)}" placeholder="${esc(t('fbm.stepPh'))}"><button type="button" class="fbm-step-del" data-del="${i}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></div>`).join('');
+    updateQuality();
 }
 function renderFiles(): void {
     const host = document.getElementById('fbm-files'); if (!host) return;
     const items = [..._shots.map((p) => ({ p, kind: 'shot' })), ..._zips.map((p) => ({ p, kind: 'zip' }))];
     host.innerHTML = items.length ? items.map((it) => `<span class="fbm-file fbm-file-${it.kind}">${it.kind === 'shot' ? IC.image : IC.zip} <span>${esc(base(it.p))}</span><button type="button" data-rm="${esc(it.p)}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></span>`).join('') : `<span class="fbm-files-empty">${esc(t('fbm.noFiles'))}</span>`;
     for (const cb of Array.from(document.querySelectorAll<HTMLInputElement>('input[data-zip]'))) cb.checked = _zips.includes(cb.dataset.zip || '');
+    updateQuality();
+}
+
+// A live "how good is this report" meter. Scores the pieces that make a report actionable —
+// a title, enough detail, steps (for a bug/crash), an attachment, a way to reply — and points
+// at the single most valuable thing still missing. Never blocks Send; it only coaches.
+type Tier = 'weak' | 'fair' | 'good' | 'great';
+function scoreQuality(): { pct: number; tier: Tier; tipKey: string } {
+    const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+    const title = q<HTMLInputElement>('fbm-title')?.value.trim() || '';
+    const desc = q<HTMLTextAreaElement>('fbm-desc')?.value.trim() || '';
+    const hasFiles = _shots.length > 0 || _zips.length > 0;
+    const logs = !!q<HTMLInputElement>('fbm-logs')?.checked;
+    const stepsN = _steps.map((s) => s.trim()).filter(Boolean).length;
+    const linked = !!document.querySelector('.fbm-linked');
+    const email = q<HTMLInputElement>('fbm-email')?.value.trim() || '';
+    const wantsSteps = _kind !== 'feedback';
+    // Weights sum to 100. With no steps (a suggestion), the detail carries that weight instead.
+    const wTitle = 15, wAttach = 15, wContact = 10;
+    const wDesc = wantsSteps ? 45 : 60;
+    const wSteps = wantsSteps ? 15 : 0;
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+    const sTitle = title.length >= 6 ? wTitle : title.length > 0 ? wTitle * 0.5 : 0;
+    const sDesc = desc.length < 10 ? 0 : clamp01((desc.length - 10) / 210) * wDesc;
+    const sSteps = wantsSteps ? (stepsN >= 2 ? wSteps : stepsN === 1 ? wSteps * 0.6 : 0) : 0;
+    const sAttach = hasFiles ? wAttach : logs ? wAttach * 0.4 : 0;
+    const sContact = (linked || email) ? wContact : 0;
+    const pct = Math.round(sTitle + sDesc + sSteps + sAttach + sContact);
+    const tier: Tier = pct >= 80 ? 'great' : pct >= 60 ? 'good' : pct >= 35 ? 'fair' : 'weak';
+    let tipKey = 'fbm.q.tipReady';
+    if (desc.length < 60) tipKey = 'fbm.q.tipDesc';
+    else if (wantsSteps && stepsN === 0) tipKey = 'fbm.q.tipSteps';
+    else if (!hasFiles) tipKey = 'fbm.q.tipAttach';
+    else if (title.length < 6) tipKey = 'fbm.q.tipTitle';
+    else if (!linked && !email) tipKey = 'fbm.q.tipContact';
+    return { pct, tier, tipKey };
+}
+function updateQuality(): void {
+    const fill = document.getElementById('fbm-quality-fill');
+    const tierEl = document.getElementById('fbm-quality-tier');
+    const tipEl = document.getElementById('fbm-quality-tip');
+    if (!fill || !tierEl || !tipEl) return;
+    const { pct, tier, tipKey } = scoreQuality();
+    const color = tier === 'great' ? 'var(--bmm-success)' : tier === 'good' ? 'var(--accent)' : tier === 'fair' ? 'var(--bmm-warning)' : 'var(--bmm-danger)';
+    fill.style.width = `${pct}%`;
+    fill.style.background = color;
+    tierEl.textContent = t(`fbm.q.${tier}`);
+    tierEl.className = `fbm-quality-tier fbm-q-${tier}`;
+    tipEl.textContent = t(tipKey);
 }
 
 function wire(o: HTMLElement, linked: boolean, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
@@ -158,10 +216,14 @@ function wire(o: HTMLElement, linked: boolean, crashes: string[], cfg: Awaited<R
             const logs = q<HTMLInputElement>('fbm-logs'); if (logs) logs.checked = _kind !== 'feedback';
             const dx = q<HTMLInputElement>('fbm-dx'); if (dx) dx.checked = _kind === 'crash';
             if (_kind === 'crash' && !_zips.length && crashes.length) { _zips = [crashes[0]]; renderFiles(); }
+            updateQuality();
         });
     }
     const desc = q<HTMLTextAreaElement>('fbm-desc');
     desc?.addEventListener('input', () => { const c = q('fbm-count'); if (c) c.textContent = String(desc.value.length); });
+    // Any typing or toggle re-scores the report quality (steps/files call updateQuality themselves).
+    o.addEventListener('input', updateQuality);
+    o.addEventListener('change', updateQuality);
     renderSteps(); renderFiles();
     q('fbm-steps')?.addEventListener('input', (e) => { const el = e.target as HTMLInputElement; if (el.dataset.step != null) _steps[Number(el.dataset.step)] = el.value; });
     q('fbm-steps')?.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-del]'); if (!b) return; _steps.splice(Number(b.dataset.del), 1); if (!_steps.length) _steps = ['']; renderSteps(); });
