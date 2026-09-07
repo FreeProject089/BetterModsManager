@@ -522,6 +522,20 @@ export function expandDocBlocks(md, opts = {}, _top = true) {
                 // inside it — the site renders **bold** there and the app printed the asterisks.
                 + `<div class="community-step-body">${mdInline(innerMd)}</div></div>`, '');
         }
+        else if (name === 'field' || name === 'setting') {
+            // A labelled configuration row, matching the site's `:::field[Label]{key= type= icon=}`:
+            // a bold label, an optional TYPE tag, an optional monospace KEY, then the description.
+            const fLabel = label || attrs.title || attrs.label || '';
+            const fType = String(attrs.type || attrs.kind || '');
+            const fKey = String(attrs.key || attrs.name || attrs.id || '');
+            const iconName = attrs.icon ? String(attrs.icon).toLowerCase().replace(/[^a-z0-9:_-]/g, '') : '';
+            const col = attrs.color ? ` style="--fieldc:${escAttr(attrs.color)}"` : '';
+            out.push('', `<div class="community-field"${col}>`
+                + `<div class="community-field-head">${iconName ? iconImg(iconName) : ''}<span class="community-field-label">${escHtml(fLabel)}</span>`
+                + (fType ? `<span class="community-field-type">${escHtml(fType)}</span>` : '')
+                + (fKey ? `<code class="community-field-key">${escHtml(fKey)}</code>` : '')
+                + `</div><div class="community-field-desc">${mdInline(innerMd)}</div></div>`, '');
+        }
         else if (name === 'roadmap' || name === 'progress') {
             // THREE sources on the site, and the app knew only one of them:
             //

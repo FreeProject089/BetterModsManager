@@ -46,6 +46,8 @@ const SITE_DIRECTIVES = [
   // "interactive on the website" chips in the app), mermaid.
   'table', 'audio', 'spotify', 'youtube', 'yt', 'img', 'image', 'api', 'endpoint', 'params', 'request', 'response',
   'openapi', 'swagger', 'counter', 'fetch', 'live', 'action', 'include', 'embed-md', 'mermaid', 'diagram',
+  // B.MD 3.x additions: a labelled configuration row (settings-card as B.MD).
+  'field', 'setting',
 ];
 
 // Directives BMM deliberately does not implement, each with the reason. An entry here is a

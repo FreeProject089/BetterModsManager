@@ -494,6 +494,14 @@
 }
 .community-step-glyph .md-inline-icon { width: 14px; height: 14px; }
 .community-step-title { font-weight: 700; margin-bottom: 4px; padding-top: 4px; }
+/* :::field / :::setting — a labelled configuration row (settings card, as B.MD). */
+.community-field { border: 1px solid var(--bmm-border, rgba(255,255,255,.12)); border-radius: 10px; padding: 11px 14px; margin: 8px 0; background: var(--bmm-s02, rgba(255,255,255,.02)); }
+.community-field-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.community-field-label { font-weight: 700; }
+.community-field-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--fieldc, var(--bmm-accent)) 14%, transparent); color: var(--fieldc, var(--bmm-accent)); }
+.community-field-key { margin-left: auto; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px; color: var(--bmm-text-muted); background: var(--bmm-s03, rgba(0,0,0,.2)); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--bmm-border, rgba(255,255,255,.12)); white-space: nowrap; }
+.community-field-desc { color: var(--bmm-text-muted); font-size: .95em; }
+.community-field-desc > :last-child { margin-bottom: 0; }
 .community-step-body > :first-child { margin-top: 0; }
 .community-step-body > :last-child { margin-bottom: 0; }
 
