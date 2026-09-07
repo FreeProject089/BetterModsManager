@@ -756,3 +756,28 @@ mark { background: color-mix(in srgb, #fbbf24 45%, transparent); color: inherit;
 .community-mermaid { margin: 1em 0; } .community-mermaid-cap { font-size: 12.5px; color: var(--bmm-text-muted); text-align: center; margin-top: 4px; }
 .community-webonly { font-size: .9em; color: var(--bmm-text-muted); border-bottom: 1px dotted var(--bmm-text-muted); cursor: help; }
 .community-webonly-block { margin: 1em 0; padding: 10px 14px; border: 1px dashed var(--bmm-border); border-radius: 12px; font-size: .9em; color: var(--bmm-text-muted); }
+
+/* ── :::divider, and the two attributes every block understands ────────────────
+   Mirrors packages/bmd/src/markdown.css on the website. `---` still draws a plain
+   rule in both places; this one exists because a thematic break takes no
+   attributes, so the block whose whole job is separation was the only one that
+   could not say how much separation to leave. */
+.community-divider { display: flex; align-items: center; gap: 12px; margin: 1.5em 0; }
+.community-divider::before,
+.community-divider::after { content: ""; flex: 1; height: 1px; background: var(--bmm-border); }
+.community-divider:not(.community-divider-labelled)::after { display: none; }
+.community-divider-label { flex: 0 0 auto; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--bmm-text-muted); }
+.community-divider.doc-variant-b { justify-content: center; }
+.community-divider.doc-variant-b::before,
+.community-divider.doc-variant-b::after { flex: 0 0 44px; }
+.community-divider.doc-variant-b:not(.community-divider-labelled)::after { display: block; }
+
+/* `space=` — the gap a block leaves under itself. The same six steps the site ships,
+   so a post written on the website keeps its rhythm when it is read in the app. */
+.community-md .doc-space-none { margin-bottom: 0 !important; }
+.community-md .doc-space-xs   { margin-bottom: 6px !important; }
+.community-md .doc-space-sm   { margin-bottom: 12px !important; }
+.community-md .doc-space-md   { margin-bottom: 22px !important; }
+.community-md .doc-space-lg   { margin-bottom: 38px !important; }
+.community-md .doc-space-xl   { margin-bottom: 64px !important; }

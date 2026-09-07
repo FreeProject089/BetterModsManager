@@ -776,6 +776,16 @@ function renderDirective(dir: { name: string; label: string; attrs: Record<strin
       + (size ? `<span class="doc-file-size">${esc(size)}</span>` : '')
       + `</span>${action}</div>`;
   }
+  // `:::divider` — the site's steerable rule. `---` still means a plain <hr>; this carries
+  // `space=` and `variant=`, which a thematic break cannot. Same class names as the site.
+  if (name === 'divider') {
+    const cls = ['doc-divider', ...(label ? ['doc-divider-labelled'] : [])];
+    const v = String(attrs.variant || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (v) cls.push(`doc-variant-${v}`);
+    const sp = String(attrs.space || '').toLowerCase();
+    if (['none', 'xs', 'sm', 'md', 'lg', 'xl'].includes(sp)) cls.push(`doc-space-${sp}`);
+    return `<div class="${cls.join(' ')}">${label ? `<span class="doc-divider-label">${esc(label)}</span>` : ''}</div>`;
+  }
   // `:::center` / `:::left` / `:::right` — the alignment the website offers. Written as a class
   // rather than an inline style so a theme can override it; three classes, one per direction.
   if (name === 'center' || name === 'left' || name === 'right') {

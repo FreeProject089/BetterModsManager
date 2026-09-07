@@ -781,6 +781,15 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
           + `<span class="bmm-replay-embed-text"><span class="bmm-replay-embed-title">${escHtml(title || (t('watcher.replayTitle') || 'Session replay'))}</span>`
           + `<span class="bmm-replay-embed-sub">${escHtml(caption)}</span></span></button>`, '');
       }
+    } else if (name === 'divider') {
+      // The site's steerable rule. `---` still means a plain <hr> in both places; this one
+      // exists because a thematic break takes no attributes, so it could not carry the
+      // spacing or the quiet variant. Rendered with the same class names the site uses, so
+      // a post written there and read here separates in the same place.
+      const cls = ['community-divider', ...(label ? ['community-divider-labelled'] : []),
+        ...(attrs.variant ? [`doc-variant-${String(attrs.variant).toLowerCase().replace(/[^a-z0-9-]/g, '')}`] : []),
+        ...(['none', 'xs', 'sm', 'md', 'lg', 'xl'].includes(String(attrs.space || '').toLowerCase()) ? [`doc-space-${String(attrs.space).toLowerCase()}`] : [])];
+      out.push('', `<div class="${cls.join(' ')}">${label ? `<span class="community-divider-label">${escHtml(label)}</span>` : ''}</div>`, '');
     } else if (name === 'center' || name === 'left' || name === 'right') {
       out.push('', `<div class="community-align" style="text-align:${name}">${mdInline(innerMd)}</div>`, '');
     } else if (CALLOUT_ALERT[name]) {

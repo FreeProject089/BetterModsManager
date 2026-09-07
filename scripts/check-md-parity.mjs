@@ -34,7 +34,7 @@ const SITE = 'BCW/BCWEB/packages/bmd/src/directives.js';
  */
 const SITE_DIRECTIVES = [
   'at', 'badge', 'bmmreplay', 'btn', 'button', 'callout', 'card', 'cards', 'caution', 'center',
-  'check', 'col', 'collapse', 'column', 'columns', 'custom', 'danger', 'details', 'error',
+  'check', 'col', 'collapse', 'column', 'columns', 'custom', 'danger', 'details', 'divider', 'error',
   'file', 'hint', 'hours', 'icon', 'important', 'info', 'kbd', 'left', 'link', 'note', 'phase',
   'progress', 'ref', 'replay', 'right', 'roadmap', 'row', 'schedule', 'stage', 'step', 'steps',
   'success', 'tab', 'tabs', 'tag', 'time', 'tip', 'toc', 'warning',

@@ -845,3 +845,24 @@ button.doc-card-title:hover { color: var(--bmm-accent, #3b82f6); }
 /* "Also in the manual" — the band under the category grid. Its own heading spacing, so the
    two grids read as two sections rather than as one grid that changed its mind. */
 .dh-also-head { margin-top: 34px; }
+
+/* ── :::divider, and `space=` ──────────────────────────────────────────────────
+   The documentation renderer's half of the same block. Mirrors
+   packages/bmd/src/markdown.css so a page reads the same on both surfaces. */
+.doc-divider { display: flex; align-items: center; gap: 12px; margin: 1.5em 0; }
+.doc-divider::before,
+.doc-divider::after { content: ""; flex: 1; height: 1px; background: var(--bmm-border); }
+.doc-divider:not(.doc-divider-labelled)::after { display: none; }
+.doc-divider-label { flex: 0 0 auto; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--bmm-text-muted); }
+.doc-divider.doc-variant-b { justify-content: center; }
+.doc-divider.doc-variant-b::before,
+.doc-divider.doc-variant-b::after { flex: 0 0 44px; }
+.doc-divider.doc-variant-b:not(.doc-divider-labelled)::after { display: block; }
+
+.doc-space-none { margin-bottom: 0 !important; }
+.doc-space-xs   { margin-bottom: 6px !important; }
+.doc-space-sm   { margin-bottom: 12px !important; }
+.doc-space-md   { margin-bottom: 22px !important; }
+.doc-space-lg   { margin-bottom: 38px !important; }
+.doc-space-xl   { margin-bottom: 64px !important; }
