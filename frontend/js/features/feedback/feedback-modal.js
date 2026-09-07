@@ -27,6 +27,14 @@ let _shots = [];
 let _zips = [];
 let _steps = [''];
 let _busy = false;
+/**
+ * Measured size of each picked file, in WIRE bytes (base64), keyed by path.
+ *
+ * Measured, not estimated: the budget shown has to be the budget enforced, and the thing that
+ * gets refused is the encoded payload. Filled when a file is picked; a path that has not been
+ * measured yet simply does not count towards the bar until it has.
+ */
+const _sizes = new Map();
 function overlay() {
     if (_overlay)
         return _overlay;
@@ -130,11 +138,23 @@ function render(linked, crashes, cfg) {
             <details class="fbm-fold" id="fbm-attach-wrap">
                 <summary><span class="fbm-fold-t">${esc(t('fbm.attachFold'))}</span><span class="fbm-fold-sum" id="fbm-attach-sum"></span></summary>
                 <div class="fbm-fold-in">
-                    <div class="fbm-sec-hint">${esc(t('fbm.attachCap').replace('{n}', String(maxN)).replace('{mb}', String(maxMB)))}</div>
+                    <!-- Two DROP TARGETS rather than two grey buttons in a row. They say what
+                         they take and how big it may be, and they carry the running total —
+                         which is the number that decides whether Send will work, and it used
+                         to be invisible until the server refused the whole submission. -->
                     <div class="fbm-attach-row">
-                        <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-shots">${IC.image} ${esc(t('fbm.addShots'))}</button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-zip">${IC.zip} ${esc(t('fbm.addZip'))}</button>
+                        <button type="button" class="fbm-drop" id="fbm-add-shots">
+                            <span class="fbm-drop-ico">${IC.image}</span>
+                            <span class="fbm-drop-t">${esc(t('fbm.addShots'))}</span>
+                            <span class="fbm-drop-h">${esc(t('fbm.addShots.h'))}</span>
+                        </button>
+                        <button type="button" class="fbm-drop" id="fbm-add-zip">
+                            <span class="fbm-drop-ico">${IC.zip}</span>
+                            <span class="fbm-drop-t">${esc(t('fbm.addZip'))}</span>
+                            <span class="fbm-drop-h">${esc(t('fbm.addZip.h'))}</span>
+                        </button>
                     </div>
+                    <div class="fbm-budget" id="fbm-budget" data-max="${maxMB}" data-maxn="${maxN}"></div>
                     <div class="fbm-files" id="fbm-files"></div>
                     ${crashes.length ? `<div class="fbm-crashes"><div class="fbm-lbl">${esc(t('fbm.crashList'))}</div>${crashes.slice(0, 6).map((p) => `<label class="fbm-crash"><input type="checkbox" data-zip="${esc(p)}" ${_zips.includes(p) ? 'checked' : ''}> <span class="fbm-crash-name">${esc(base(p))}</span></label>`).join('')}</div>` : ''}
                     <label class="fbm-check"><input type="checkbox" id="fbm-logs" ${_kind !== 'feedback' ? 'checked' : ''}> <span>${esc(t('fbm.includeLogs'))}</span></label>
@@ -183,6 +203,52 @@ function renderSteps() {
     host.innerHTML = _steps.map((s, i) => `<div class="fbm-step"><span class="fbm-step-n">${i + 1}</span><input class="form-input fbm-input" data-step="${i}" value="${esc(s)}" placeholder="${esc(t('fbm.stepPh'))}"><button type="button" class="fbm-step-del" data-del="${i}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></div>`).join('');
     updateQuality();
 }
+/**
+ * Measure every picked file and redraw the budget bar.
+ *
+ * `read_file_base64` is what the send path uses, so the number here is exactly the number that
+ * will travel — no estimate, no 4/3 arithmetic that drifts from reality. Files already
+ * measured are skipped, so re-picking is free.
+ */
+async function measurePicked() {
+    for (const path of [..._shots, ..._zips]) {
+        if (_sizes.has(path))
+            continue;
+        try {
+            _sizes.set(path, String(await invoke('read_file_base64', { path })).length);
+        }
+        catch {
+            _sizes.set(path, 0);
+        } // unreadable here means unreadable at send time too
+        renderBudget();
+    }
+    renderBudget();
+}
+/** The "how much of the allowance is used" line, in the units that get refused. */
+function renderBudget() {
+    const el = document.getElementById('fbm-budget');
+    if (!el)
+        return;
+    const maxMB = Number(el.dataset.max || 25);
+    const maxN = Number(el.dataset.maxn || 6);
+    const paths = [..._shots, ..._zips];
+    const known = paths.filter((p) => _sizes.has(p));
+    const used = known.reduce((a, p) => a + (_sizes.get(p) || 0), 0);
+    const max = maxMB * 1024 * 1024;
+    const pct = Math.min(100, Math.round((used / max) * 100));
+    const mb = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;
+    const over = used > max || paths.length > maxN;
+    if (!paths.length) {
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML = `
+        <div class="fbm-budget-bar"><div class="fbm-budget-fill${over ? ' is-over' : ''}" style="width:${pct}%"></div></div>
+        <div class="fbm-budget-line${over ? ' is-over' : ''}">
+            ${esc(t('fbm.budget').replace('{used}', mb(used)).replace('{max}', mb(max)).replace('{n}', String(paths.length)).replace('{maxn}', String(maxN)))}
+            ${known.length < paths.length ? ` <span class="fbm-budget-wait">${esc(t('fbm.budget.measuring'))}</span>` : ''}
+        </div>`;
+}
 function renderFiles() {
     const host = document.getElementById('fbm-files');
     if (!host)
@@ -191,6 +257,7 @@ function renderFiles() {
     host.innerHTML = items.length ? items.map((it) => `<span class="fbm-file fbm-file-${it.kind}">${it.kind === 'shot' ? IC.image : IC.zip} <span>${esc(base(it.p))}</span><button type="button" data-rm="${esc(it.p)}" aria-label="${esc(t('common.remove') || 'Remove')}">${IC.x}</button></span>`).join('') : `<span class="fbm-files-empty">${esc(t('fbm.noFiles'))}</span>`;
     for (const cb of Array.from(document.querySelectorAll('input[data-zip]')))
         cb.checked = _zips.includes(cb.dataset.zip || '');
+    renderBudget();
     updateQuality();
 }
 function scoreQuality() {
@@ -335,12 +402,14 @@ function wire(o, linked, crashes, cfg) {
             if (!_shots.includes(f))
                 _shots.push(f);
         renderFiles();
+        void measurePicked();
     });
     q('fbm-add-zip')?.addEventListener('click', async () => {
         const f = await pickFile([{ name: 'Archives', extensions: ['zip'] }]);
         if (f && !_zips.includes(f)) {
             _zips.push(f);
             renderFiles();
+            void measurePicked();
         }
     });
     q('fbm-files')?.addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (!b)
@@ -442,16 +511,27 @@ async function send(linked, cfg) {
         say(t('fbm.packing'));
         const attachments = [];
         let bytes = 0;
+        // Budget what TRAVELS, not what the file weighs.
+        //
+        // This measured `data.length * 0.75` — the DECODED size — against the server's
+        // maxAttachMB. But an attachment goes out as base64 inside the JSON, so a submission
+        // the client considered "25 MB, within budget" was a ~34 MB HTTP request. Anything in
+        // front of the API with a body limit below that answers 413, and the app had already
+        // decided it was inside the limit, so the message made no sense.
+        //
+        // Counting the encoded length is also strictly safer against the server's own check,
+        // which compares DECODED bytes to the same number: encoded is always larger, so a
+        // request that fits here cannot trip it there.
         const add = async (path, type) => {
             if (attachments.length >= maxN)
                 return;
             const data = await invoke('read_file_base64', { path });
-            const size = Math.floor(data.length * 0.75);
-            if (bytes + size > maxBytes) {
+            const wire = data.length; // what actually goes on the wire
+            if (bytes + wire > maxBytes) {
                 toast(t('fbm.skippedBig').replace('{f}', base(path)), 'warning');
                 return;
             }
-            bytes += size;
+            bytes += wire;
             attachments.push({ name: base(path), type, data });
         };
         for (const p of _shots)

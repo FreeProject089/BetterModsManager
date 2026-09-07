@@ -198,3 +198,29 @@
     .fbm-kind { flex: 1; min-width: 0; }
     .fbm-kind small { display: none; }
 }
+
+/* ── Attachments: two targets, and the budget that decides whether Send works ──
+   Two grey buttons side by side said nothing about what they took or how much was
+   left. These say both, and the bar under them is the number the SERVER measures:
+   base64 bytes, not the size on disk. That difference is why a submission the app
+   called "25 MB" was a 34 MB request and came back 413. */
+.fbm-drop {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 14px 10px; cursor: pointer; text-align: center;
+    border: 1px dashed var(--border); border-radius: 12px; background: transparent; color: var(--text-secondary);
+    transition: border-color .15s, background .15s, color .15s;
+}
+.fbm-drop:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--text-primary); }
+.fbm-drop-ico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.fbm-drop-t { font-size: 12.5px; font-weight: 700; }
+.fbm-drop-h { font-size: 10.5px; color: var(--text-muted); }
+
+.fbm-budget { margin-top: 10px; }
+.fbm-budget-bar { height: 3px; border-radius: 999px; background: var(--bmm-s03); overflow: hidden; }
+.fbm-budget-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .25s ease; }
+.fbm-budget-fill.is-over { background: var(--bmm-danger); }
+.fbm-budget-line { margin-top: 5px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.fbm-budget-line.is-over { color: var(--bmm-danger); font-weight: 600; }
+.fbm-budget-wait { opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .fbm-budget-fill { transition: none; } }
