@@ -21,6 +21,34 @@ import { BMMS_REFERENCE } from './bmms-reference.gen.js';
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
+/**
+ * The whole documentation as one PDF, the same file the website's "Download the PDF" button
+ * serves (BMM Docs/overrides/main.html builds the identical path; mkdocs.pdf.yml writes it to
+ * `pdf/bettermodsmanager.pdf`). Fetched from the site rather than bundled: it is 15 MB, which
+ * is a lot to add to every installer for a file most people never open.
+ *
+ * Four files, not one — the PDF is rendered per language AND per theme, so a French reader on
+ * the dark theme gets the French dark one instead of an English light one.
+ */
+function pdfUrl(dark = isDarkTheme()) {
+    const loc = getLang() === 'fr' ? 'fr/' : '';
+    return `${DOCS_SITE}${loc}pdf/bettermodsmanager${dark ? '-dark' : ''}.pdf`;
+}
+/** Whether the app is currently on a dark theme — decides which PDF to offer first. */
+function isDarkTheme() {
+    const el = document.documentElement;
+    const attr = (el.getAttribute('data-theme') || el.getAttribute('data-bmm-theme') || '').toLowerCase();
+    if (attr.includes('light'))
+        return false;
+    if (attr.includes('dark'))
+        return true;
+    // No explicit attribute: read the painted background rather than guessing.
+    const bg = getComputedStyle(document.body).backgroundColor || '';
+    const m = bg.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if (!m)
+        return true;
+    return (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1000 < 128;
+}
 const tr = (s) => (getLang() === 'fr' ? s.fr : s.en);
 // ── New-article tracking ──────────────────────────────────────────────────────
 // `known` = every article id the app has ever shown; on startup, ids present now but never
@@ -2704,6 +2732,7 @@ function chrome() {
       <div class="dh-actions">
         <button class="dh-btn dh-btn-primary" data-act="tutorial">${svg('play', 16)} ${tr({ en: 'Interactive tutorial', fr: 'Tutoriel interactif' })}</button>
         <button class="dh-btn" data-view2="pages">${svg('book', 16)} ${tr({ en: 'Full documentation', fr: 'Documentation complète' })}</button>
+        <button class="dh-btn" data-pdf="1" data-tooltip="${tr({ en: 'The whole documentation as one PDF (about 15 MB), in your language and theme.', fr: 'Toute la documentation en un PDF (environ 15 Mo), dans ta langue et ton thème.' })}">${svg('book', 16)} ${tr({ en: 'Download the PDF', fr: 'Télécharger le PDF' })}</button>
         <button class="dh-btn" data-ext="${DOCS_SITE}">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</button>
       </div>
     </div>
@@ -2885,12 +2914,33 @@ function searchView(q) {
         }
     arts.sort((a, b) => b.s - a.s);
     const dias = diagramList().filter((d) => scoreHay((d.title + ' ' + d.id).toLowerCase(), terms) > 0);
-    if (!arts.length && !dias.length) {
+    // The bundled documentation pages. 52 of them ship inside the app and only 35 are attached
+    // to an article, so a third of what BMM carries — the architecture write-up, the settings
+    // reference, MCP, writing a theme — answered nothing typed into this box. The Ctrl+K palette
+    // has searched them the whole time (docsSearchHits below), which made the box on the docs
+    // page itself the weaker of the two search fields in the app.
+    //
+    // Titles and summaries in BOTH languages, like the palette: people search in the language
+    // they think in. Pages that already back an article are dropped — they are in Articles above,
+    // and listing the same topic twice is not a second result.
+    const artPaths = new Set(arts.map(({ art }) => (art.docsPath || '').replace(/\/+$/, '')).filter(Boolean));
+    const pages = (_manifest || [])
+        .filter((p) => !artPaths.has(p.path.replace(/\/+$/, '')))
+        .map((p) => ({ p, s: scoreHay(`${p.title.en} ${p.title.fr} ${p.summary?.en || ''} ${p.summary?.fr || ''} ${p.path}`.toLowerCase(), terms) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 12);
+    if (!arts.length && !dias.length && !pages.length) {
         return `<div class="dh-empty">${svg('search', 26)}<p>${tr({ en: 'No results for', fr: 'Aucun résultat pour' })} “${escapeHtml(q)}”.</p><p class="dh-empty-sub">${route.mode === 'classic' ? tr({ en: 'Try Semantic mode, the full docs, or the tutorial.', fr: 'Essayez le mode Sémantique, la doc complète ou le tutoriel.' }) : tr({ en: 'Try the full documentation or the interactive tutorial.', fr: 'Essayez la documentation complète ou le tutoriel interactif.' })}</p></div>`;
     }
     const artHtml = arts.length ? `<div class="dh-sec-h">${tr({ en: 'Articles', fr: 'Articles' })} · ${arts.length}</div><div class="dh-arts">${arts.map(({ art }) => articleCard(art)).join('')}</div>` : '';
     const diaHtml = dias.length ? `<div class="dh-sec-h">${tr({ en: 'Diagrams', fr: 'Diagrammes' })} · ${dias.length}</div><div class="dh-dias">${dias.map((d) => `<button class="dh-dia" data-diagram="${d.id}"><span class="dh-dia-ic">${svg('diagram', 18)}</span><span class="dh-dia-t">${d.title}</span></button>`).join('')}</div>` : '';
-    return artHtml + diaHtml;
+    const pageHtml = pages.length ? `<div class="dh-sec-h">${tr({ en: 'Documentation pages', fr: 'Pages de documentation' })} · ${pages.length}</div><div class="dh-pgs">${pages.map(({ p }) => `
+      <button class="dh-pg" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
+        <div class="dh-pg-t">${escapeHtml(tr(p.title))}</div>
+        ${p.summary ? `<div class="dh-pg-s">${escapeHtml(tr(p.summary))}</div>` : ''}
+      </button>`).join('')}</div>` : '';
+    return artHtml + diaHtml + pageHtml;
 }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 // ── controller ───────────────────────────────────────────────────────────────────
@@ -2965,8 +3015,15 @@ function wireSearch() {
             window.clearTimeout(deb);
         deb = window.setTimeout(() => {
             const q = input.value.trim();
-            if (q.length >= 2)
+            if (q.length >= 2) {
                 go({ view: 'search', q });
+                // The bundled pages are part of the results (see searchView). The manifest is small
+                // and loaded once; repaint when it lands so the first search of a session gets them
+                // too rather than only the second.
+                if (!_manifest)
+                    void loadManifest().then(() => { if (route.view === 'search')
+                        paint(); });
+            }
             else
                 go({ view: 'hub', q: '' });
         }, 120);
@@ -3049,6 +3106,16 @@ function onClick(e) {
     const ext = hit('[data-ext]');
     if (ext) {
         window.openExternal?.(ext.getAttribute('data-ext') || '');
+        return;
+    }
+    // The PDF. Same outward path as any other link (the CSP blocks an <a href> in this webview),
+    // so the browser handles the download and its progress rather than the app inventing one for
+    // a 15 MB file. The toast says what is happening, because a browser opening behind the app
+    // window otherwise looks like a button that did nothing.
+    const pdfBtn = hit('[data-pdf]');
+    if (pdfBtn) {
+        window.openExternal?.(pdfUrl());
+        toast(tr({ en: 'Opening the PDF in your browser…', fr: 'Ouverture du PDF dans ton navigateur…' }), 'info');
         return;
     }
     const dl = hit('[data-deeplink]');
