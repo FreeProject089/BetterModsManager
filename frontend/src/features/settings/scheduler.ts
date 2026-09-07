@@ -4765,7 +4765,10 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
         _gallery = document.createElement('div');
         _gallery.className = 'modal-overlay spg-overlay';
         _gallery.id = 'modal-sched-presets';
-        document.body.appendChild(_gallery);
+        // Into the app FRAME — see the same note on the feedback dialog. On <body> the overlay
+        // keeps `position: fixed; inset: 0` and spreads over the transparent 40px margin the
+        // window leaves for the mascot, so the gallery's dim and shadow sit on nothing.
+        (document.getElementById('app-window-outer') || document.body).appendChild(_gallery);
         _gallery.addEventListener('click', (e) => { if (e.target === _gallery) closeGallery(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _gallery?.classList.contains('open')) closeGallery(); });
     }

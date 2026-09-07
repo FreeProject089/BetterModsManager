@@ -33,7 +33,14 @@ function overlay() {
     const o = document.createElement('div');
     o.className = 'modal-overlay fbm-overlay';
     o.id = 'modal-feedback';
-    document.body.appendChild(o);
+    // Into the app FRAME, not <body>. The Tauri window is transparent and the app is a rounded
+    // rectangle inset 40px from its top/left — the gap Tasky leans out of. A `.modal-overlay`
+    // parked on <body> stays `position: fixed; inset: 0`, so its dim and the dialog's shadow
+    // paint across that invisible margin: the shadow appears to float on nothing beside the
+    // mascot, which is what "la shadow se met sur la partie invisible" is. Inside the frame,
+    // mascot.css pins the overlay to the app rectangle and #app-window-outer's `contain: paint`
+    // clips it at the rounded edge — the same thing every other hand-built overlay here does.
+    (document.getElementById('app-window-outer') || document.body).appendChild(o);
     o.addEventListener('click', (e) => { if (e.target === o && !_busy)
         close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && o.classList.contains('open') && !_busy)
