@@ -58,6 +58,16 @@ const FORM = {
   phase: ':::roadmap[R]\n:::phase[Done]{state=done}\n- a\n:::\n:::',
   replay: ':::replay[T]{src=/x.bmmreplay}\n:::',
   bmmreplay: ':::bmmreplay[T]{src=/x.bmmreplay}\n:::',
+  // Media leaves. These render a THING that lives somewhere, so `src` is not decoration — with
+  // no source there is nothing to draw and drawing nothing is the correct answer. The default
+  // form has no attributes, so both suites were reporting six renderer failures that were the
+  // test asking for a picture without saying which picture.
+  image: ':::image[T]{src=/x.png}\n:::',
+  img: ':::img[T]{src=/x.png}\n:::',
+  audio: ':::audio[T]{src=/x.mp3}\n:::',
+  youtube: ':::youtube[T]{src=https://youtu.be/abcdefghijk}\n:::',
+  yt: ':::yt[T]{src=https://youtu.be/abcdefghijk}\n:::',
+  spotify: ':::spotify[T]{src=https://open.spotify.com/track/abc}\n:::',
   schedule: ':::schedule[S]{tz=Europe/Paris}\n| a | b |\n|---|---|\n| c | d |\n:::',
   hours: ':::hours[S]{tz=Europe/Paris}\n| a | b |\n|---|---|\n| c | d |\n:::',
 };
