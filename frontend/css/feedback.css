@@ -69,6 +69,13 @@
 .fbc-where { font-size: 11px; color: var(--text-muted); margin-left: auto; }
 .fbc-where a { color: var(--accent); text-decoration: none; }
 .fbc-where a:hover { text-decoration: underline; }
+/* The endpoint test result. Three outcomes, three colours — the whole point is that
+   "unreachable", "reachable but off" and "working" stop looking like the same answer. */
+.fbc-test-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.fbc-test-out { font-size: 11px; color: var(--text-muted); min-width: 0; }
+.fbc-test-out.is-ok { color: var(--bmm-success); }
+.fbc-test-out.is-warn { color: var(--bmm-warning); }
+.fbc-test-out.is-bad { color: var(--bmm-danger); }
 
 /* Elevation: inherit, don't reinvent. Every earlier attempt here added its own overlay
    `overflow: visible; padding: 28px` and its own `box-shadow`, then dropped the card's

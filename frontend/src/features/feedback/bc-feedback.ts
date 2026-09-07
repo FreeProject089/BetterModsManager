@@ -124,6 +124,42 @@ async function baseMeta(): Promise<Record<string, unknown>> {
 
 /** One POST. Throws FeedbackError with a code: offline · rate_limited · disabled · too_large ·
  *  filtered · version · contact_required · rejected. Never throws anything else. */
+/**
+ * Ask the configured endpoint what it is, and report exactly what came back.
+ *
+ * Until now the only way to find out whether `feedback_endpoint` was right was to write a
+ * report and press Send — and every way of being wrong (bad host, wrong path, unknown project,
+ * reports switched off) surfaced as one of two sentences that both read like "the feature is
+ * off". This does the same GET the modal does, and returns the distinction: unreachable vs
+ * reachable-but-off vs working, with the limits it will actually enforce.
+ *
+ * `force` bypasses the config cache — testing a URL you just changed must not answer from the
+ * answer the old URL gave.
+ */
+export interface EndpointTest {
+    state: 'no_url' | 'unreachable' | 'disabled' | 'ok';
+    url: string;
+    why?: string;
+    cfg?: FeedbackRemoteConfig;
+}
+export async function testFeedbackEndpoint(): Promise<EndpointTest> {
+    const ep = feedbackEndpoint();
+    if (!ep) return { state: 'no_url', url: '' };
+    const tm = withTimeout(6000);
+    try {
+        const r = await fetch(`${ep}/config`, { signal: tm.signal, headers: { Accept: 'application/json' } });
+        if (!r.ok) return { state: 'unreachable', url: ep, why: `HTTP ${r.status}` };
+        const cfg = await r.json() as FeedbackRemoteConfig;
+        cfgCache = { at: Date.now(), cfg };
+        return cfg?.enabled ? { state: 'ok', url: ep, cfg } : { state: 'disabled', url: ep, cfg };
+    } catch (e) {
+        // A timeout and a DNS failure are both "no answer" to fetch, but they mean different
+        // things to whoever typed the URL, so the reason is passed through rather than summarised.
+        const why = (e as Error)?.name === 'AbortError' ? 'timeout (6 s)' : String((e as Error)?.message || e);
+        return { state: 'unreachable', url: ep, why };
+    } finally { tm.done(); }
+}
+
 export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOffline?: boolean } = {}): Promise<FeedbackResult> {
     const ep = feedbackEndpoint();
     if (!ep) throw new FeedbackError('disabled', t('feedback.disabled'));
@@ -146,8 +182,22 @@ export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOf
         const s = Number(j.retryAfterSec || 60);
         throw new FeedbackError('rate_limited', t('feedback.rateLimited').replace('{s}', String(s)), s);
     }
-    if (r.status === 404) throw new FeedbackError('disabled', t('feedback.disabled'));
-    if (r.status === 413) throw new FeedbackError('too_large', t('feedback.tooLarge'));
+    // A 404 here is NOT "reports are off". The endpoint answered — it just does not know this
+    // project key, which in practice means feedback_endpoint in the link config points at the
+    // wrong path or the wrong deployment. Reporting it as "disabled" (the same sentence the
+    // server sends when a project really is switched off) sent people looking for a setting to
+    // turn on, when what was wrong was a URL.
+    if (r.status === 404) throw new FeedbackError('disabled', t('feedback.noProject'));
+    // Three different limits, three different fixes, and the server names which one it was and
+    // by how much. Collapsing them into "the report is too big" threw all of that away: a
+    // 300-byte crash log that tripped the ATTACHMENT COUNT read as "your text is too long".
+    if (r.status === 413) {
+        const j = await r.json().catch(() => ({})) as { error?: string; maxBodyKB?: number; max?: number; maxAttachMB?: number };
+        if (j.error === 'body_too_large') throw new FeedbackError('too_large', t('feedback.tooLongBody').replace('{n}', String(j.maxBodyKB ?? '?')));
+        if (j.error === 'too_many_attachments') throw new FeedbackError('too_large', t('feedback.tooManyFiles').replace('{n}', String(j.max ?? '?')));
+        if (j.error === 'attachments_too_large') throw new FeedbackError('too_large', t('feedback.filesTooBig').replace('{n}', String(j.maxAttachMB ?? '?')));
+        throw new FeedbackError('too_large', t('feedback.tooLarge'));
+    }
     if (r.status === 422) {
         const j = await r.json().catch(() => ({})) as { error?: string; minVersion?: string };
         if (j.error === 'version_too_old' || j.error === 'version_blocked') throw new FeedbackError('version', t('feedback.versionRefused').replace('{v}', j.minVersion || ''));

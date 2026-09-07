@@ -4940,6 +4940,17 @@
                                 <span class="fbc-where" id="fbc-where"><span data-i18n="fbc.follow">Follow your reports:</span> <a href="https://bettercommunity.ch/dashboard?s=reports" target="_blank" rel="noreferrer" data-i18n="fbc.followSite">on your BetterCommunity dashboard</a></span>
                             </div>
 
+                            <!-- Until this button existed, the only way to find out whether
+                                 feedback_endpoint was correct was to write a whole report and
+                                 press Send — and a wrong URL, a wrong path and a switched-off
+                                 project all came back as one sentence that read like "the
+                                 feature is off". This does the real round-trip and says which
+                                 of those it is, plus the limits the server will enforce. -->
+                            <div class="fbc-test-row">
+                                <button class="btn btn-ghost btn-xs" id="btn-fbc-test" data-i18n="fbc.test">Test the endpoint</button>
+                                <span class="fbc-test-out" id="fbc-test-out" role="status" aria-live="polite"></span>
+                            </div>
+
                             <!-- My Reports History -->
                             <div id="bh-history-section"
                                 style="margin-top:20px; border-top:1px solid rgba(99,102,241,0.15); padding-top:16px; display:none;">

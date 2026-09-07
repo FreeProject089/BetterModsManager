@@ -7,7 +7,7 @@
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, textToBase64, explainFeedbackError, feedbackWebUrl, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
+import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
 
 type Kind = FeedbackKind;
 interface OpenOpts { crashZip?: string }
@@ -422,4 +422,35 @@ export function initFeedbackCard(): void {
         if (a) { a.href = bc ? feedbackWebUrl() : 'https://app.betahub.io'; a.textContent = bc ? t('fbc.followSite') : 'BetaHub'; }
         where.hidden = !bc;
     }
+    wireEndpointTest();
+}
+
+/** "Test the endpoint" — a real GET against whatever the link config points at. */
+function wireEndpointTest(): void {
+    const btn = document.getElementById('btn-fbc-test') as HTMLButtonElement | null;
+    const out = document.getElementById('fbc-test-out');
+    if (!btn || !out || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        out.className = 'fbc-test-out';
+        out.textContent = t('fbc.testing');
+        const r = await testFeedbackEndpoint();
+        btn.disabled = false;
+        if (r.state === 'no_url') { out.className = 'fbc-test-out is-warn'; out.textContent = t('fbc.testNoUrl'); return; }
+        if (r.state === 'unreachable') {
+            out.className = 'fbc-test-out is-bad';
+            out.textContent = t('fbc.testFail').replace('{url}', r.url).replace('{why}', r.why || '');
+            return;
+        }
+        if (r.state === 'disabled') { out.className = 'fbc-test-out is-warn'; out.textContent = t('fbc.testOff'); return; }
+        const c = r.cfg ?? ({} as NonNullable<typeof r.cfg>);
+        // The limits are echoed because they are the ones a failed Send will quote back.
+        out.className = 'fbc-test-out is-ok';
+        out.textContent = t('fbc.testOk')
+            .replace('{kinds}', Object.entries(c.kinds || {}).filter(([, on]) => on).map(([k]) => t(`fbm.kind.${k}`) || k).join(', ') || '—')
+            .replace('{kb}', String(c.maxBodyKB ?? '?'))
+            .replace('{n}', String(c.maxAttachments ?? '?'))
+            .replace('{mb}', String(c.maxAttachMB ?? '?'));
+    });
 }
