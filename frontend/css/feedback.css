@@ -71,20 +71,23 @@
 .fbc-where a { color: var(--accent); text-decoration: none; }
 .fbc-where a:hover { text-decoration: underline; }
 
-/* fbm-clean — flat sections separated by a hairline instead of three stacked boxes.
-   Shadow + clipping are DELIBERATELY the standard `.modal` treatment (main.css:3371): the
-   previous custom `0 12px 40px rgba(0,0,0,.38)` was a wide, soft drop, and over the dim's
-   already-dark blurred backdrop it read as a murky rectangular halo around the card — the
-   "shadow on the invisible div". Matching the base modal makes it sit exactly like every
-   other dialog (e.g. the crash & sessions modal). `overflow: hidden` clips the scrolling body
-   and any child fill to the 16px radius, so nothing pokes past the rounded corners; a modal's
-   own box-shadow is painted outside its border box and is never clipped by its own overflow. */
+/* THE shadow fix. The real culprit was never the modal — it was the OVERLAY. The base
+   `.modal-overlay` sets `overflow: hidden` (main.css), which trims the modal's drop-shadow
+   along the overlay's padding box: a hard rectangular cut a few px out from the card, which
+   over the dark blurred dim reads as "the shadow bleeds into an invisible div". A modal's own
+   `overflow: hidden` never clips its OWN shadow (painted outside the border box), so earlier
+   fixes that only touched the modal changed nothing. Opt THIS overlay out of clipping — the
+   dialog scrolls internally (.fbm-body), so the overlay never needs to — and keep the modal
+   safely inside the viewport so the soft shadow always has room to breathe. */
+.fbm-overlay { overflow: visible; padding: 28px; }
 .fbm-overlay .modal.fbm {
-    overflow: hidden;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    overflow: hidden;                       /* clip children to the rounded corners only */
+    background: var(--bmm-bg-elevated);
+    box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
+    border: 0;
+    border-radius: 18px;
     max-width: 620px;
+    max-height: calc(100vh - 56px);
 }
 .fbm-head { border-radius: 16px 16px 0 0; background: transparent; padding: 16px 20px 10px; border-bottom: 0; align-items: center; }
 .fbm-head-icon { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
