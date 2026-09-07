@@ -7,7 +7,7 @@
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl } from './bc-feedback.js';
+import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen } from './bc-feedback.js';
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const base = (p) => p.split(/[\\/]/).pop() || p;
 const IC = {
@@ -28,10 +28,13 @@ let _zips = [];
 let _steps = [''];
 let _busy = false;
 /**
- * Measured size of each picked file, in WIRE bytes (base64), keyed by path.
+ * Measured size of each picked file, in DECODED bytes, keyed by path.
  *
- * Measured, not estimated: the budget shown has to be the budget enforced, and the thing that
- * gets refused is the encoded payload. Filled when a file is picked; a path that has not been
+ * Measured, not estimated: the file is read through the very call the send path uses, so the
+ * budget shown is the budget enforced. Decoded rather than encoded because that is the limit
+ * the reader was quoted (maxAttachMB) — the larger encoded size is a second ceiling the send
+ * path checks separately, and putting it in the bar would mean a reader reconciling 34 MB
+ * against a file manager saying 25. Filled when a file is picked; a path that has not been
  * measured yet simply does not count towards the bar until it has.
  */
 const _sizes = new Map();
@@ -206,16 +209,16 @@ function renderSteps() {
 /**
  * Measure every picked file and redraw the budget bar.
  *
- * `read_file_base64` is what the send path uses, so the number here is exactly the number that
- * will travel — no estimate, no 4/3 arithmetic that drifts from reality. Files already
- * measured are skipped, so re-picking is free.
+ * `read_file_base64` is what the send path uses, so what is cached here is exactly what will
+ * be sent — read, not guessed from a stat. Files already measured are skipped, so re-picking
+ * is free.
  */
 async function measurePicked() {
     for (const path of [..._shots, ..._zips]) {
         if (_sizes.has(path))
             continue;
         try {
-            _sizes.set(path, String(await invoke('read_file_base64', { path })).length);
+            _sizes.set(path, decodedLen(String(await invoke('read_file_base64', { path }))));
         }
         catch {
             _sizes.set(path, 0);
@@ -224,7 +227,15 @@ async function measurePicked() {
     }
     renderBudget();
 }
-/** The "how much of the allowance is used" line, in the units that get refused. */
+/**
+ * The "how much of the allowance is used" line.
+ *
+ * Shown in DECODED bytes against maxAttachMB, because that is the limit the person was told
+ * and the one the server measures its files by — a bar reading 34 MB for 25 MB of files it
+ * then accepts would be its own bug report. The larger encoded size is a second, separate
+ * ceiling the send path enforces; it belongs there, not in a number the reader has to
+ * reconcile with what the file manager says.
+ */
 function renderBudget() {
     const el = document.getElementById('fbm-budget');
     if (!el)
@@ -501,8 +512,9 @@ async function send(linked, cfg) {
         q('fbm-email')?.focus();
         return;
     }
-    const maxN = cfg?.maxAttachments ?? 6;
-    const maxBytes = (cfg?.maxAttachMB ?? 25) * 1024 * 1024;
+    // Both ceilings, resolved in one place — see attachLimits for why there are two.
+    const lim = attachLimits(cfg);
+    const maxN = lim.maxAttachments;
     _busy = true;
     const btn = q('fbm-send');
     if (btn)
@@ -510,29 +522,29 @@ async function send(linked, cfg) {
     try {
         say(t('fbm.packing'));
         const attachments = [];
-        let bytes = 0;
-        // Budget what TRAVELS, not what the file weighs.
-        //
-        // This measured `data.length * 0.75` — the DECODED size — against the server's
-        // maxAttachMB. But an attachment goes out as base64 inside the JSON, so a submission
-        // the client considered "25 MB, within budget" was a ~34 MB HTTP request. Anything in
-        // front of the API with a body limit below that answers 413, and the app had already
-        // decided it was inside the limit, so the message made no sense.
-        //
-        // Counting the encoded length is also strictly safer against the server's own check,
-        // which compares DECODED bytes to the same number: encoded is always larger, so a
-        // request that fits here cannot trip it there.
+        // Both ceilings are tracked as files are added — the decoded total against the
+        // server's maxAttachMB, the encoded total against the request ceiling it publishes.
+        // A file that would break either is skipped rather than sent to be refused.
+        const used = { count: 0, bytes: 0, wire: 0 };
+        // Everything goes through here, files and generated text alike. The log dump and the
+        // dxdiag report used to be pushed past the budget on a bare count check — they are
+        // usually small, but "usually" is not a limit, and a long session's log is the one
+        // attachment nobody picked and nobody sized.
+        const put = (name, type, data) => {
+            if (!fitsBudget(used, data, lim))
+                return false;
+            used.count += 1;
+            used.bytes += decodedLen(data);
+            used.wire += data.length;
+            attachments.push({ name, type, data });
+            return true;
+        };
         const add = async (path, type) => {
-            if (attachments.length >= maxN)
+            if (used.count >= maxN)
                 return;
             const data = await invoke('read_file_base64', { path });
-            const wire = data.length; // what actually goes on the wire
-            if (bytes + wire > maxBytes) {
+            if (!put(base(path), type, data))
                 toast(t('fbm.skippedBig').replace('{f}', base(path)), 'warning');
-                return;
-            }
-            bytes += wire;
-            attachments.push({ name: base(path), type, data });
         };
         for (const p of _shots)
             await add(p, /\.png$/i.test(p) ? 'image/png' : /\.gif$/i.test(p) ? 'image/gif' : /\.webp$/i.test(p) ? 'image/webp' : 'image/jpeg');
@@ -547,13 +559,13 @@ async function send(linked, cfg) {
             catch {
                 logs = '';
             }
-            if (logs && attachments.length < maxN)
-                attachments.push({ name: 'bmm_frontend.log', type: 'text/plain', data: textToBase64(logs) });
+            if (logs && !put('bmm_frontend.log', 'text/plain', textToBase64(logs)))
+                toast(t('fbm.skippedBig').replace('{f}', 'bmm_frontend.log'), 'warning');
         }
         if (q('fbm-dx')?.checked) {
             const diag = await invoke('get_dxdiag_report').catch(() => null);
-            if (diag && attachments.length < maxN)
-                attachments.push({ name: 'dxdiag_report.txt', type: 'text/plain', data: textToBase64(String(diag)) });
+            if (diag && !put('dxdiag_report.txt', 'text/plain', textToBase64(String(diag))))
+                toast(t('fbm.skippedBig').replace('{f}', 'dxdiag_report.txt'), 'warning');
         }
         const steps = _steps.map((s) => s.trim()).filter(Boolean);
         const body = steps.length ? `${desc}\n\n${t('fbm.fSteps')}\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : desc;

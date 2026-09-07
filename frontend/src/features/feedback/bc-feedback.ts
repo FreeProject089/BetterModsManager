@@ -36,9 +36,18 @@ export interface FeedbackRemoteConfig {
     maxBodyKB?: number;
     maxAttachMB?: number;
     maxAttachments?: number;
+    /** How large the whole REQUEST may be, base64 included — a different limit from
+     *  maxAttachMB, which counts the DECODED bytes the server stores. Optional because a
+     *  server older than the field does not send it. */
+    maxRequestMB?: number;
     requireContact?: boolean;
     minVersion?: string;
 }
+
+// The attachment budget lives in its own import-free module so it can be exercised
+// without loading this file's transport chain; re-exported here because every caller of
+// submitFeedback also needs to know what fits.
+export { attachLimits, decodedLen, fitsBudget, type AttachBudget, type AttachUsed } from './feedback-budget.js';
 
 /** Thrown by submit(); `code` is what the caller switches on. */
 export class FeedbackError extends Error {
