@@ -485,7 +485,8 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       const fKey = String(attrs.key || attrs.name || attrs.id || '');
       const iconName = attrs.icon ? String(attrs.icon).toLowerCase().replace(/[^a-z0-9:_-]/g, '') : '';
       const col = attrs.color ? ` style="--fieldc:${escAttr(attrs.color)}"` : '';
-      out.push('', `<div class="community-field"${col}>`
+      const anchor = attrs.anchor ? ` id="${escAttr(String(attrs.anchor))}"` : '';
+      out.push('', `<div class="community-field"${anchor}${col}>`
         + `<div class="community-field-head">${iconName ? iconImg(iconName) : ''}<span class="community-field-label">${escHtml(fLabel)}</span>`
         + (fType ? `<span class="community-field-type">${escHtml(fType)}</span>` : '')
         + (fKey ? `<code class="community-field-key">${escHtml(fKey)}</code>` : '')
