@@ -6,14 +6,6 @@ sa provenance. Si tu ne devais apprendre qu'un seul écran de BMM, prends celui-
 reste (profils, modpacks, listes) n'est qu'une façon différente d'organiser ce qu'elle
 contient.
 
-![L'écran Bibliothèque](assets/docs/media/screens/library.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Recherche** | Filtre à la frappe, sur les noms de mods et les noms de tags. |
-| **2** | **Filtres** | Restreint par jeu, catégorie ou état d'installation. |
-| **3** | **Installer** | Ajoute le mod sélectionné au profil sur lequel tu es. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="Ajouter un mod et l'activer"></div>
 
 

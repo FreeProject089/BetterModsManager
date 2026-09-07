@@ -10,14 +10,6 @@ Ce n'est pas un interrupteur clair/sombre. BMM livre **treize** thèmes intégr�
 fichier que quelqu'un
 importe en un clic.
 
-![L'éditeur de thèmes](assets/docs/media/screens/themes.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Installés** | Tes thèmes. Clique pour appliquer. |
-| **2** | **Éditeur** | Trois onglets — voir plus bas. |
-| **3** | **Catalogue** | Thèmes officiels, partenaires et communautaires. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
 
 

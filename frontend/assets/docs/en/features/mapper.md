@@ -6,14 +6,6 @@ fixes that without you unzipping anything by hand.
 
 > Reorganize your mod structure to match the destination folder.
 
-![The Mod Mapper](assets/docs/media/screens/mapper.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Source tree** | What the mod actually contains. |
-| **2** | **Target** | Where those files must land for the game to see them. |
-| **3** | **Diagnostic** | Shows the final location *before* you commit. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Remapping a badly-packaged mod"></div>
 
 

@@ -8,14 +8,6 @@ hand stays at the version you installed, forever, silently.
 
 > Browse Server Repositories — official and partner server repositories.
 
-![The Server Repo screen](assets/docs/media/screens/repo.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Repo list** | Sources you've added. |
-| **2** | **Browse** | Official and partner repos. |
-| **3** | **Add** | Point BMM at a repo URL. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Connecting to a repo and syncing"></div>
 
 

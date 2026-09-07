@@ -6,14 +6,6 @@
 Si BMM ne fait pas ce dont tu as besoin, c'est ici que ça s'ajoute — sans attendre une
 version.
 
-![L'écran Plugins](assets/docs/media/screens/plugins.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Installés** | Tes plugins. |
-| **2** | **Parcourir** | Les plugins communautaires. |
-| **3** | **API** | Les endpoints qu'un plugin peut appeler. |
-
 !!! warning "Les plugins communautaires ne sont pas relus"
 
     BMM le dit franchement sur sa bannière : ces plugins sont créés par la communauté et ne

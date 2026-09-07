@@ -10,14 +10,6 @@ Not a light/dark switch. BMM ships **thirteen** built-in themes — dark ones in
 that can rebuild the app's entire look — then export it as a file someone else imports in one
 click.
 
-![The Theme Editor](assets/docs/media/screens/themes.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Installed** | Your themes. Click to apply. |
-| **2** | **Editor** | Three tabs — see below. |
-| **3** | **Catalogue** | Official, partner & community themes. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
 
 

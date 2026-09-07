@@ -6,14 +6,6 @@
 If BMM doesn't do the thing you need, this is where the thing gets added — without waiting
 for a release.
 
-![The Plugins screen](assets/docs/media/screens/plugins.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Installed** | Your plugins. |
-| **2** | **Browse** | Community plugins. |
-| **3** | **API** | The endpoints a plugin can call. |
-
 !!! warning "Community plugins are not reviewed"
 
     BMM says it plainly on the banner: these plugins are created by the community and are

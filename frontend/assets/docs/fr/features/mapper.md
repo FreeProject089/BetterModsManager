@@ -6,14 +6,6 @@ Mapper corrige ça sans que tu dézippes quoi que ce soit à la main.
 
 > Réorganise la structure de ton mod pour correspondre au dossier de destination.
 
-![Le Mod Mapper](assets/docs/media/screens/mapper.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Arbre source** | Ce que le mod contient réellement. |
-| **2** | **Cible** | Où ces fichiers doivent atterrir pour que le jeu les voie. |
-| **3** | **Diagnostic** | Montre l'emplacement final *avant* de valider. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Recartographier un mod mal packagé"></div>
 
 

@@ -6,14 +6,6 @@ Un modpack est un **lot de mods nommé, activable en un clic**. Là où un
 groupe de mods, ensemble » — et l'écran de BMM appelle l'action *Quick Apply* : un clic
 active ou désactive le pack.
 
-![L'écran Modpacks](assets/docs/media/screens/modpacks.annotated.png)
-
-| | | |
-|---|---|---|
-| **1** | **Carte du pack** | Le clic active ou désactive tout le pack. |
-| **2** | **Exporter** | Produit un fichier à transmettre. |
-| **3** | **Importer** | Lit le pack de quelqu'un d'autre. |
-
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
 
 
