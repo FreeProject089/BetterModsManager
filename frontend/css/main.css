@@ -12287,18 +12287,34 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    thing being skimmed here is "your API token travels inside any file you export". */
 .sched-var-warn { color: var(--warning); }
 
-.sched-preset-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
-.sched-preset-open { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
-.sched-preset-count { font-size:10px; font-weight:700; line-height:1; padding:3px 6px; border-radius:999px; background:var(--accent-dim, rgba(59,130,246,.18)); color:var(--accent); }
+/* The two "start from a template" tiles — proper feature buttons, not tiny secondary btns.
+   A surface, an accent icon chip, a bold label and (for the gallery) a live count, with a
+   lift on hover. Two equal columns that stack on a narrow panel. */
+.sched-preset-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:8px; margin-bottom:8px; }
+.sched-preset-tile { display:flex; align-items:center; gap:11px; text-align:left; cursor:pointer; font:inherit;
+    padding:11px 13px; border-radius:12px; border:1px solid var(--border); background:var(--bmm-s02);
+    color:var(--text-primary); transition:border-color .15s, background .15s, transform .15s, box-shadow .15s; }
+.sched-preset-tile:hover { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--bmm-s02)); transform:translateY(-1px); box-shadow:0 6px 16px -8px color-mix(in srgb, var(--accent) 60%, transparent); }
+.sched-preset-tile svg { flex:0 0 auto; width:30px; height:30px; padding:6px; border-radius:8px; box-sizing:border-box; background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accent); }
+.sched-preset-tile > span { min-width:0; font-size:12.5px; font-weight:600; line-height:1.2; }
+.sched-preset-count { margin-left:auto; font-size:10px; font-weight:700; line-height:1; padding:3px 7px; border-radius:999px; background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
+/* The gallery tile is the primary action — accent-tinted; the catalogue tile stays neutral. */
+.sched-preset-open { background:color-mix(in srgb, var(--accent) 7%, var(--bmm-s02)); border-color:color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.sched-preset-browse { background:var(--bmm-s02); }
 /* ── Template gallery (scheduler presets) ─────────────────────────────── */
 /* WITHOUT THIS THE GALLERY IS INERT. `body` carries `pointer-events: none` for the custom
    title bar's drag region and #app-window-outer switches it back on; this overlay and the
    action/condition picker are appended to <body> (a transformed ancestor would break
    `position: fixed`), so they inherited none and swallowed nothing — visible, laid out, and
    completely unclickable. Above the scheduler modal (.modal-generic-overlay at 10000) too. */
-.spg-overlay { pointer-events: auto; z-index: 10060; }
+/* overflow:visible — same shadow-clip fix as the feedback dialog: the base .modal-overlay
+   sets overflow:hidden, which trims the modal's drop-shadow to a hard rectangle a few px out
+   from the card (the "shadow buggée" on the gallery). The modal scrolls internally, so the
+   overlay never needed to clip; opting out lets the shadow breathe. */
+.spg-overlay { pointer-events: auto; z-index: 10060; overflow: visible; padding: 28px; }
 .skp { pointer-events: auto; }
-.spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:88vh; display:flex; flex-direction:column; padding:0; }
+.spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:calc(100vh - 56px); display:flex; flex-direction:column; padding:0;
+    box-shadow: 0 24px 60px -12px rgba(0,0,0,.6), 0 4px 12px rgba(0,0,0,.4), 0 0 0 1px var(--border); }
 .spg-head { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .spg-head-l { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
 .spg-head-l h2 { margin:0; font-size:15px; }
@@ -12345,7 +12361,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     .spg-search { max-width:50%; }
 }
 .sched-preset-pick { flex:1; min-width:0; font-size:12px; }
-.sched-preset-browse { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
 .sched-preset-desc { font-size:11px; color:var(--text-muted); margin-bottom:12px; min-height:1em; }
 
 .sched-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
@@ -21282,11 +21297,7 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .csp-row-name, code.csp-row-name { background: transparent; border: 0; padding: 0; color: var(--text-primary); font-size: 12px; }
 .csp-row-sources { color: var(--text-secondary); }
 .csp-row-sources em { color: var(--text-muted); }
-/* ── Scheduler: the two "start from" buttons share the row and wrap their words rather than
-   clipping them; centred, since they are the only things in it. ── */
-.sched-preset-row { flex-wrap: wrap; }
-.sched-preset-open, .sched-preset-browse { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; white-space: normal; line-height: 1.25; padding: 7px 10px; height: auto; }
-.sched-preset-open > span:first-of-type, .sched-preset-browse > span { min-width: 0; }
+.sched-preset-tile > span:first-of-type { min-width: 0; }
 
 /* ── CSP card, restyled as the rest of the settings: a real table of directives (state ·
    name · sources as chips), the presets as one segmented control, the app's own buttons.

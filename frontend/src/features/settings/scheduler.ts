@@ -5222,7 +5222,7 @@ function renderModal(modal: HTMLElement): void {
                     // report, so that button stays available the whole time: wanting to look
                     // at what other people published does not stop being reasonable the
                     // moment you have typed a name.
-                    const browse = `<button type="button" class="btn btn-sm btn-secondary sched-preset-browse" id="sched-preset-catalog"
+                    const browse = `<button type="button" class="sched-preset-tile sched-preset-browse" id="sched-preset-catalog"
                             data-tooltip="${escAttr(t('sched.pc.tip') || 'Automations published by other people. Each one is inspected before anything is imported.')}">
                             ${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}
                             <span>${escHtml(t('sched.pc.browse') || 'From a catalogue…')}</span>
@@ -5247,7 +5247,7 @@ function renderModal(modal: HTMLElement): void {
                     // BEFORE anything replaces the draft.
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
                     <div class="sched-preset-row">
-                        <button type="button" class="btn btn-sm btn-secondary sched-preset-open" id="sched-preset-open"
+                        <button type="button" class="sched-preset-tile sched-preset-open" id="sched-preset-open"
                             data-tooltip="${escAttr(t('sched.pg.tip') || 'Ready-made automations, with what each one does explained before it replaces the draft.')}">
                             ${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}
                             <span>${escHtml(t('sched.pg.open') || 'Browse templates…')}</span>
