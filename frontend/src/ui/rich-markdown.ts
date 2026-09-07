@@ -432,6 +432,11 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       // places, and a CSS counter cannot be relied on anywhere the HTML is reused (an
       // e-mail, a copied snippet, a theme that resets counters).
       const kind = String(attrs.type || attrs.marker || '1').toLowerCase();
+      // `marker=icon` turns the list into an ICON list: each step's own `icon=` is its marker
+      // glyph instead of a number/letter/dot. The glyph is always emitted by the step and only
+      // revealed by CSS under this wrapper, so the block reaches every step without the parent
+      // having to reach into each one (the app renders steps bottom-up).
+      const iconMode = kind === 'icon';
       let n = Math.max(1, parseInt(attrs.start, 10) || 1);
       // Only direct `step` children are numbered — a stray paragraph between two steps
       // must not consume a marker, or the list silently skips a number.
@@ -442,7 +447,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       // The class may now carry a state, and the tag may carry a style — so the marker is
       // found by its ATTRIBUTE rather than by the exact opening tag. A step with `status=done`
       // silently lost its number until this stopped matching on the class alone.
-      const numbered = innerMd.replace(/(<div class="community-step[^"]*") data-marker="[^"]*"/g, (_m, head) => {
+      const numbered = iconMode ? innerMd : innerMd.replace(/(<div class="community-step[^"]*") data-marker="[^"]*"/g, (_m, head) => {
         const m = stepMarker(kind, n); n += 1;
         return `${head} data-marker="${escAttr(m)}"`;
       });
@@ -450,7 +455,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       // `color=` paints the markers, like the site. Carried as a CSS variable on the wrapper so
       // one attribute colours every step under it, and a step may still override its own.
       const col = attrs.color ? ` style="--stepc:${escAttr(attrs.color)}"` : '';
-      out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}"${col}>${numbered}</div>`, '');
+      out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}${iconMode ? ' community-steps-icon' : ''}"${col}>${numbered}</div>`, '');
     }
     else if (name === 'step') {
       // The marker is stamped by the parent above. A step used on its own still renders —
@@ -460,7 +465,13 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       // a status that is not `done` is simply no status rather than a third state nobody set.
       const own = attrs.color ? ` style="--stepc:${escAttr(attrs.color)}"` : '';
       const state = String(attrs.status || '').toLowerCase() === 'done' ? ' community-step-done' : '';
-      out.push('', `<div class="community-step${state}" data-marker="•"${own}>`
+      // Icon marker: the step's `icon=` becomes its marker glyph. Always emitted when an icon
+      // is set; revealed as the marker by CSS only in icon mode (`:::steps{marker=icon}`, which
+      // adds `community-steps-icon` to the wrapper, or a lone step with `marker=icon`).
+      const iconName = attrs.icon ? String(attrs.icon).toLowerCase().replace(/[^a-z0-9:_-]/g, '') : '';
+      const glyph = iconName ? `<span class="community-step-glyph">${iconImg(iconName)}</span>` : '';
+      const perStepIcon = iconName && attrs.marker === 'icon' ? ' community-step-icon' : '';
+      out.push('', `<div class="community-step${state}${perStepIcon}" data-marker="•"${own}>${glyph}`
         + (title ? `<div class="community-step-title">${escHtml(title)}</div>` : '')
         // The body is MARKDOWN. Handing it through as raw HTML means `marked` never looks
         // inside it — the site renders **bold** there and the app printed the asterisks.

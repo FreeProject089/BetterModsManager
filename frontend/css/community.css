@@ -479,6 +479,20 @@
   color: var(--stepc, var(--bmm-accent)); background: color-mix(in srgb, var(--stepc, var(--bmm-accent)) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--stepc, var(--bmm-accent)) 40%, transparent);
 }
+/* Icon list markers (`:::steps{marker=icon}` or a step with `marker=icon`): the step's icon
+   is the marker glyph. The glyph is always emitted but hidden until icon mode reveals it, and
+   the number badge (::after) is suppressed so the two never stack. */
+.community-step-glyph { display: none; }
+.community-steps-icon .community-step::after,
+.community-step-icon::after { content: none !important; }
+.community-steps-icon > .community-step > .community-step-glyph,
+.community-step-icon > .community-step-glyph {
+  display: flex; position: absolute; left: 0; top: 0; width: 26px; height: 26px;
+  align-items: center; justify-content: center; border-radius: var(--radius-badge, 5px);
+  color: var(--stepc, var(--bmm-accent)); background: color-mix(in srgb, var(--stepc, var(--bmm-accent)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stepc, var(--bmm-accent)) 40%, transparent);
+}
+.community-step-glyph .md-inline-icon { width: 14px; height: 14px; }
 .community-step-title { font-weight: 700; margin-bottom: 4px; padding-top: 4px; }
 .community-step-body > :first-child { margin-top: 0; }
 .community-step-body > :last-child { margin-bottom: 0; }
