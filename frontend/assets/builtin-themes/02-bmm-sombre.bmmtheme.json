@@ -1,8 +1,8 @@
 {
   "id": "bmm-sombre",
-  "name": "Sombre",
+  "name": "Graphite",
   "author": "BMM Team",
-  "description": "Soft dark grey with a blurple accent — calm, low-contrast surfaces.",
+  "description": "Soft dark grey with an indigo accent — calm, low-contrast surfaces.",
   "vars": {
     "--bmm-bg-base": "#1a1a1e",
     "--bmm-bg-elevated": "#232328",

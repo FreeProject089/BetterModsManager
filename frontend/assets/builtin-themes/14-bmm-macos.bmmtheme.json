@@ -1,8 +1,8 @@
 {
   "id": "bmm-macos",
-  "name": "macOS",
+  "name": "Cobalt",
   "author": "BMM Team",
-  "description": "macOS Sonoma dark — graphite vibrancy, hairline borders, 10 px corners, the system blue accent and SF-style type.",
+  "description": "Graphite dark with hairline borders, 10 px corners and a bright cobalt-blue accent.",
   "vars": {
     "--bmm-bg-base": "#1e1e1e",
     "--bmm-bg-elevated": "#2a2a2c",

@@ -3194,7 +3194,7 @@
   "docs.diagram.themeSystem.node.EDITOR": "Éditeur de thèmes",
   "docs.diagram.themeSystem.node.EDITOR.desc": "Panneau flottant : mode Simple, pioche d'éléments, suivi des modifs, sauvegarde/partage.",
   "docs.diagram.themeSystem.node.PRESET": "Presets intégrés",
-  "docs.diagram.themeSystem.node.PRESET.desc": "7 thèmes prêts à l'emploi (Sombre, Void, Full White, Discord, Orange, Spotify…).",
+  "docs.diagram.themeSystem.node.PRESET.desc": "7 thèmes prêts à l'emploi (Graphite, Pure Black, Daylight, Indigo, Ember, Neon…).",
   "docs.diagram.themeSystem.node.GEN": "Auto-palette",
   "docs.diagram.themeSystem.node.GEN.desc": "Génère un thème complet et cohérent (sombre ou clair) depuis une seule couleur.",
   "docs.diagram.themeSystem.node.PICK": "Pioche d'éléments",

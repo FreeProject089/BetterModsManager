@@ -1,8 +1,8 @@
 {
   "id": "bmm-discord",
-  "name": "Discord",
+  "name": "Indigo",
   "author": "BMM Team",
-  "description": "The Discord dark look — layered greys and blurple, 8 px corners.",
+  "description": "Layered warm greys with an indigo accent and 8 px corners.",
   "vars": {
     "--bmm-bg-base": "#313338",
     "--bmm-bg-elevated": "#2b2d31",

@@ -1,8 +1,8 @@
 {
   "id": "bmm-sakura",
-  "name": "Sakura",
+  "name": "Blossom",
   "author": "BMM Team",
-  "description": "Soft cherry-blossom light theme — warm ivory canvas, petal-pink accent, deep plum text.",
+  "description": "A soft light theme — warm ivory canvas, petal-pink accent, deep plum text.",
   "mode": "light",
   "vars": {
     "--bmm-bg-base": "#faf4f2",

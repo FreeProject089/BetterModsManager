@@ -1,8 +1,8 @@
 {
   "id": "bmm-vscode",
-  "name": "VS Code",
+  "name": "Editor",
   "author": "BMM Team",
-  "description": "Visual Studio Code “Dark Modern” — charcoal surfaces, 1 px borders, the blue focus accent, small square corners.",
+  "description": "A code-editor dark look — charcoal surfaces, 1 px borders, a blue focus accent and small square corners.",
   "vars": {
     "--bmm-bg-base": "#1f1f1f",
     "--bmm-bg-elevated": "#252526",

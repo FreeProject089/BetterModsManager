@@ -219,8 +219,8 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 
 ### Système de thèmes v2
 - Moteur + éditeur de thèmes personnalisés complet : thématisation à base de tokens, un
-  ensemble croissant de thèmes intégrés (BMM Sombre, White, Discord, Spotify, Brutal,
-  Claude, Nord, Sakura…), et un **mode clair** de première classe. Les thèmes sont des
+  ensemble croissant de thèmes intégrés (Graphite, Daylight, Indigo, Neon, Newsprint,
+  Clay, Arctic, Blossom…), et un **mode clair** de première classe. Les thèmes sont des
   fichiers `.bmmtheme.json` partageables.
 
 ### API Plugins & Planificateur

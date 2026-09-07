@@ -675,7 +675,7 @@ A complete theming engine that restyles 100% of BMM with **no CSS knowledge requ
 
 | Feature | Description |
 | :--- | :--- |
-| **12 Built-in Presets** | Ready-made themes (BMM Default, Sombre, Void, Full White, Discord, Orange, Spotify Green, Brutalist, Glass, Clay, Nord, Sakura), including light themes. |
+| **12 Built-in Presets** | Ready-made themes (Default, Graphite, Pure Black, Daylight, Indigo, Ember, Neon Green, Brutalist, Glass, Clay, Nord, Sakura), including light themes. |
 | **Auto-Palette** | Pick a single colour and generate a full, coherent dark or light theme from it. |
 | **Element Picker** | Right-click any element in the app to edit its text/background/border colours, hover & active states, custom CSS, icon (SVG swap) or image. |
 | **Design Tokens** | Themes are JSON of `--bmm-*` CSS variables injected as `<style>` blocks — source files are never modified, everything is reversible. |
@@ -715,8 +715,8 @@ A built-in tool (Settings → Translation Sandbox) that lets anyone create or fi
 
 ## 52. Theme Store & Sharing (v1.0.0+)
 
-- A growing library of built-in themes (Sombre, White, Discord, Spotify, Brutal,
-  Claude, Nord, Sakura…) plus a **first-class light mode**, and shareable
+- A growing library of built-in themes (Graphite, Daylight, Indigo, Neon, Newsprint,
+  Clay, Arctic, Blossom…) plus a **first-class light mode**, and shareable
   `.bmmtheme.json` files exported/imported from the theme editor.
 
 ## 53. Interactive Tutorial Hub (v1.0.0+)

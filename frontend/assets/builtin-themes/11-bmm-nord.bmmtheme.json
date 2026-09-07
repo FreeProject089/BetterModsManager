@@ -1,8 +1,8 @@
 {
   "id": "bmm-nord",
-  "name": "Nord",
+  "name": "Arctic",
   "author": "BMM Team",
-  "description": "Arctic, north-bluish calm — polar-night surfaces, snow-storm text, frost accent.",
+  "description": "Cool north-bluish calm — deep slate surfaces, snow-white text, a frost-blue accent.",
   "vars": {
     "--bmm-bg-base": "#2e3440",
     "--bmm-bg-elevated": "#3b4252",

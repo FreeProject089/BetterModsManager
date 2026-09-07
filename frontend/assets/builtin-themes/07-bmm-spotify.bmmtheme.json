@@ -1,8 +1,8 @@
 {
   "id": "bmm-spotify",
-  "name": "Spotify Green",
+  "name": "Neon",
   "author": "BMM Team",
-  "description": "Near-black with the green accent and pill buttons.",
+  "description": "Near-black with a bright green accent and pill-shaped buttons.",
   "vars": {
     "--bmm-bg-base": "#121212",
     "--bmm-bg-elevated": "#181818",

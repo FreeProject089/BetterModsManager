@@ -235,7 +235,7 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 
 ### Theme System v2
 - Full custom-theme engine + editor: token-based theming, a growing set of built-in
-  themes (BMM Sombre, White, Discord, Spotify, Brutal, Claude, Nord, Sakura…), and a
+  themes (Graphite, Daylight, Indigo, Neon, Newsprint, Clay, Arctic, Blossom…), and a
   first-class **light mode**. Themes are shareable `.bmmtheme.json` files.
 
 ### Plugins API & Scheduler

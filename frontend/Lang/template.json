@@ -3130,7 +3130,7 @@
   "docs.diagram.themeSystem.node.EDITOR": "Theme Editor",
   "docs.diagram.themeSystem.node.EDITOR.desc": "Floating panel: Simple mode, element picker, change tracker, save/share.",
   "docs.diagram.themeSystem.node.PRESET": "Built-in Presets",
-  "docs.diagram.themeSystem.node.PRESET.desc": "7 ready-made themes (Sombre, Void, Full White, Discord, Orange, Spotify…).",
+  "docs.diagram.themeSystem.node.PRESET.desc": "7 ready-made themes (Graphite, Pure Black, Daylight, Indigo, Ember, Neon…).",
   "docs.diagram.themeSystem.node.GEN": "Auto-Palette",
   "docs.diagram.themeSystem.node.GEN.desc": "Generates a full coherent dark or light theme from a single colour.",
   "docs.diagram.themeSystem.node.PICK": "Element Picker",

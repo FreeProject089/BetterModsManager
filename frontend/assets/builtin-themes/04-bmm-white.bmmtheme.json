@@ -1,8 +1,8 @@
 {
   "id": "bmm-white",
-  "name": "Full White",
+  "name": "Daylight",
   "author": "BMM Team",
-  "description": "A clean, flat white interface — light-grey canvas, crisp white cards, dark text.",
+  "description": "A clean, flat light interface — light-grey canvas, crisp white cards, dark text.",
   "mode": "light",
   "vars": {
     "--bmm-bg-base": "#f5f6f8",
