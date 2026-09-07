@@ -109,25 +109,44 @@ function render(linked, crashes, cfg) {
                 <input class="form-input fbm-input" id="fbm-title" maxlength="200" placeholder="${esc(t(`fbm.fTitlePh.${_kind}`))}">
                 <label class="fbm-lbl" for="fbm-desc">${esc(t('fbm.fDesc'))} <span class="fbm-count" id="fbm-count">0</span></label>
                 <textarea class="form-input fbm-input fbm-textarea" id="fbm-desc" rows="5" maxlength="6000" placeholder="${esc(t(`fbm.fDescPh.${_kind}`))}"></textarea>
-                <div class="fbm-steps" id="fbm-steps-wrap" ${_kind === 'feedback' ? 'hidden' : ''}>
-                    <label class="fbm-lbl">${esc(t('fbm.fSteps'))}</label>
+            </section>
+
+            <!-- Everything past "what happened" folds away.
+                 All of it used to be open at once: steps, two attach buttons, the crash-zip
+                 list, two long diagnostic checkboxes, two contact fields and a paragraph of
+                 hint — a wall of controls in front of someone who came here to type one
+                 sentence about a bug. Folded, the dialog asks for a title and a description
+                 and nothing else; the rest is one line each, and each line SAYS what it holds
+                 (fbm-fold-sum, kept live by updateSummaries) so folding never hides a
+                 decision. Nothing was removed. -->
+            <details class="fbm-fold" id="fbm-steps-wrap" ${_kind === 'feedback' ? 'hidden' : ''}>
+                <summary><span class="fbm-fold-t">${esc(t('fbm.fSteps'))}</span><span class="fbm-fold-sum" id="fbm-steps-sum"></span></summary>
+                <div class="fbm-fold-in">
                     <div id="fbm-steps"></div>
                     <button type="button" class="btn btn-ghost btn-xs" id="fbm-add-step">+ ${esc(t('fbm.addStep'))}</button>
                 </div>
-            </section>
-            <section class="fbm-sec">
-                <div class="fbm-sec-title">${esc(t('fbm.attach'))} <span class="fbm-sec-hint">${esc(t('fbm.attachCap').replace('{n}', String(maxN)).replace('{mb}', String(maxMB)))}</span></div>
-                <div class="fbm-attach-row">
-                    <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-shots">${IC.image} ${esc(t('fbm.addShots'))}</button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-zip">${IC.zip} ${esc(t('fbm.addZip'))}</button>
+            </details>
+
+            <details class="fbm-fold" id="fbm-attach-wrap">
+                <summary><span class="fbm-fold-t">${esc(t('fbm.attachFold'))}</span><span class="fbm-fold-sum" id="fbm-attach-sum"></span></summary>
+                <div class="fbm-fold-in">
+                    <div class="fbm-sec-hint">${esc(t('fbm.attachCap').replace('{n}', String(maxN)).replace('{mb}', String(maxMB)))}</div>
+                    <div class="fbm-attach-row">
+                        <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-shots">${IC.image} ${esc(t('fbm.addShots'))}</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="fbm-add-zip">${IC.zip} ${esc(t('fbm.addZip'))}</button>
+                    </div>
+                    <div class="fbm-files" id="fbm-files"></div>
+                    ${crashes.length ? `<div class="fbm-crashes"><div class="fbm-lbl">${esc(t('fbm.crashList'))}</div>${crashes.slice(0, 6).map((p) => `<label class="fbm-crash"><input type="checkbox" data-zip="${esc(p)}" ${_zips.includes(p) ? 'checked' : ''}> <span class="fbm-crash-name">${esc(base(p))}</span></label>`).join('')}</div>` : ''}
+                    <label class="fbm-check"><input type="checkbox" id="fbm-logs" ${_kind !== 'feedback' ? 'checked' : ''}> <span>${esc(t('fbm.includeLogs'))}</span></label>
+                    <label class="fbm-check"><input type="checkbox" id="fbm-dx" ${_kind === 'crash' ? 'checked' : ''}> <span>${esc(t('fbm.includeDx'))}</span></label>
                 </div>
-                <div class="fbm-files" id="fbm-files"></div>
-                ${crashes.length ? `<div class="fbm-crashes"><div class="fbm-lbl">${esc(t('fbm.crashList'))}</div>${crashes.slice(0, 6).map((p) => `<label class="fbm-crash"><input type="checkbox" data-zip="${esc(p)}" ${_zips.includes(p) ? 'checked' : ''}> <span class="fbm-crash-name">${esc(base(p))}</span></label>`).join('')}</div>` : ''}
-                <label class="fbm-check"><input type="checkbox" id="fbm-logs" ${_kind !== 'feedback' ? 'checked' : ''}> <span>${esc(t('fbm.includeLogs'))}</span></label>
-                <label class="fbm-check"><input type="checkbox" id="fbm-dx" ${_kind === 'crash' ? 'checked' : ''}> <span>${esc(t('fbm.includeDx'))}</span></label>
-            </section>
-            <section class="fbm-sec">
-                <div class="fbm-sec-title">${esc(t('fbm.contact'))}</div>
+            </details>
+
+            <!-- Open from the start only when the server insists on a contact: a required
+                 field behind a fold is a dead end you only find by pressing Send. -->
+            <details class="fbm-fold" id="fbm-contact-wrap" ${needContact ? 'open' : ''}>
+                <summary><span class="fbm-fold-t">${esc(t('fbm.contact'))}</span><span class="fbm-fold-sum" id="fbm-contact-sum"></span></summary>
+                <div class="fbm-fold-in">
                 ${linked
         ? `<div class="fbm-linked">${IC.check} <span>${esc(t('fbm.contactLinked'))}</span></div>`
         : `<div class="fbm-grid2">
@@ -135,18 +154,21 @@ function render(linked, crashes, cfg) {
                         <div><label class="fbm-lbl" for="fbm-discord">${esc(t('fbm.discord'))}</label><input class="form-input fbm-input" id="fbm-discord" placeholder="username"></div>
                        </div>
                        <div class="fbm-hint">${esc(t('fbm.contactHint'))}</div>`}
-            </section>
+                </div>
+            </details>
         </div>
-        </div>
-        <div class="fbm-quality" id="fbm-quality">
-            <div class="fbm-quality-top">
-                <span class="fbm-quality-lbl">${esc(t('fbm.quality'))}</span>
-                <span class="fbm-quality-tier" id="fbm-quality-tier"></span>
-            </div>
-            <div class="fbm-quality-track"><div class="fbm-quality-fill" id="fbm-quality-fill"></div></div>
-            <div class="fbm-quality-tip" id="fbm-quality-tip"></div>
         </div>
         <div class="fbm-foot">
+            <!-- The quality meter used to be a block of its own — label, tier, track, tip, four
+                 stacked rows above the buttons. It is coaching, not a control, so it rides the
+                 footer now: one track, the tier, and the single next thing to improve. -->
+            <div class="fbm-quality" id="fbm-quality" title="${esc(t('fbm.quality'))}">
+                <div class="fbm-quality-track"><div class="fbm-quality-fill" id="fbm-quality-fill"></div></div>
+                <div class="fbm-quality-line">
+                    <span class="fbm-quality-tier" id="fbm-quality-tier"></span>
+                    <span class="fbm-quality-tip" id="fbm-quality-tip"></span>
+                </div>
+            </div>
             <span class="fbm-status" id="fbm-status"></span>
             <button type="button" class="btn btn-ghost btn-sm" id="fbm-cancel">${esc(t('common.cancel') || 'Cancel')}</button>
             <button type="button" class="btn btn-primary btn-sm fbm-send" id="fbm-send" ${disabled ? 'disabled' : ''}>${IC.send} <span>${esc(t('fbm.send'))}</span></button>
@@ -206,7 +228,43 @@ function scoreQuality() {
         tipKey = 'fbm.q.tipContact';
     return { pct, tier, tipKey };
 }
+/**
+ * What each folded row is currently holding, said on the row itself.
+ *
+ * The whole point of folding is that you do not have to look inside; that only works if the
+ * outside is honest. "Include the app log" is checked by default for a bug — fold it away
+ * silently and the report carries a file the person never agreed to. So the summary names it,
+ * and it re-reads the live controls on every input/change rather than caching a guess.
+ */
+function updateSummaries() {
+    const q = (id) => document.getElementById(id);
+    const set = (id, txt, filled) => {
+        const el = q(id);
+        if (!el)
+            return;
+        el.textContent = txt;
+        el.classList.toggle('is-set', filled);
+    };
+    const none = t('fbm.sumNone');
+    const stepsN = _steps.map((s) => s.trim()).filter(Boolean).length;
+    set('fbm-steps-sum', stepsN ? t('fbm.sumSteps').replace('{n}', String(stepsN)) : none, stepsN > 0);
+    const files = _shots.length + _zips.length;
+    const bits = [];
+    if (files)
+        bits.push(t('fbm.sumFiles').replace('{n}', String(files)));
+    if (q('fbm-logs')?.checked)
+        bits.push(t('fbm.sumLogs'));
+    if (q('fbm-dx')?.checked)
+        bits.push(t('fbm.sumDx'));
+    set('fbm-attach-sum', bits.length ? bits.join(' · ') : none, bits.length > 0);
+    const linked = !!document.querySelector('.fbm-linked');
+    const email = q('fbm-email')?.value.trim() || '';
+    const discord = q('fbm-discord')?.value.trim() || '';
+    const who = linked ? t('fbm.sumContactLinked') : email || discord || t('fbm.sumContactOpt');
+    set('fbm-contact-sum', who, linked || !!email || !!discord);
+}
 function updateQuality() {
+    updateSummaries();
     const fill = document.getElementById('fbm-quality-fill');
     const tierEl = document.getElementById('fbm-quality-tier');
     const tipEl = document.getElementById('fbm-quality-tip');
@@ -294,6 +352,30 @@ function wire(o, linked, crashes, cfg) {
     }
     else
         _zips = _zips.filter((x) => x !== p); renderFiles(); });
+    // The coaching line points at something that is now behind a fold, so make it the way in:
+    // clicking "Add steps to reproduce" opens the steps row and puts the cursor in it. Telling
+    // someone what is missing and leaving them to find the control is worse than not telling them.
+    const tip = q('fbm-quality-tip');
+    tip?.addEventListener('click', () => {
+        const target = {
+            'fbm.q.tipSteps': ['fbm-steps-wrap', '[data-step="0"]'],
+            'fbm.q.tipAttach': ['fbm-attach-wrap', '#fbm-add-shots'],
+            'fbm.q.tipContact': ['fbm-contact-wrap', '#fbm-email'],
+            'fbm.q.tipDesc': ['', '#fbm-desc'],
+            'fbm.q.tipTitle': ['', '#fbm-title'],
+        }[scoreQuality().tipKey];
+        if (!target)
+            return;
+        const [foldId, sel] = target;
+        if (foldId) {
+            const d = q(foldId);
+            if (d && !d.hidden)
+                d.open = true;
+        }
+        const el = o.querySelector(sel);
+        el?.scrollIntoView({ block: 'nearest' });
+        el?.focus();
+    });
     q('fbm-send')?.addEventListener('click', () => send(linked, cfg));
 }
 // A small proof-of-work: a report is only sent after the client has spent some CPU finding a

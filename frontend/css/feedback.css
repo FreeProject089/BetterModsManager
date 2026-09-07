@@ -31,7 +31,6 @@
 .fbm-input { width: 100%; box-sizing: border-box; font-size: 12.5px; }
 .fbm-textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .fbm-count { float: right; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.fbm-steps { margin-top: 8px; }
 .fbm-step { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .fbm-step-n { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); flex-shrink: 0; }
 .fbm-step-del { width: 24px; height: 24px; border-radius: 6px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; }
@@ -129,15 +128,55 @@
 @keyframes fbm-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .fbm-pow-dot { animation: none; } }
 
+/* ── Folded rows ──────────────────────────────────────────────────────────────
+   Steps, attachments+diagnostics and contact each collapse to one line. A closed row
+   still states what it holds ("2 file(s) · app log"), so folding hides the controls,
+   never the outcome — the app log is on by default for a bug and a silent fold would
+   have shipped it without the person ever seeing the checkbox.
+   `<details>` and not a hand-rolled toggle: it is keyboard- and screen-reader-correct
+   for free, and Ctrl+F in the browser opens it. */
+.fbm-fold { border-top: 1px solid var(--border); }
+.fbm-fold > summary {
+    display: flex; align-items: baseline; gap: 10px; cursor: pointer;
+    padding: 11px 0; list-style: none; user-select: none;
+}
+.fbm-fold > summary::-webkit-details-marker { display: none; }
+/* The chevron is drawn rather than inherited so it can rotate; ::before keeps it out of
+   the flex gap arithmetic of the two text spans. */
+.fbm-fold > summary::before {
+    content: ''; width: 7px; height: 7px; flex: 0 0 auto; align-self: center;
+    border-right: 1.6px solid var(--text-muted); border-bottom: 1.6px solid var(--text-muted);
+    transform: rotate(-45deg); transition: transform .18s ease;
+}
+.fbm-fold[open] > summary::before { transform: rotate(45deg); }
+.fbm-fold > summary:hover::before { border-color: var(--text-secondary); }
+.fbm-fold-t { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.fbm-fold > summary:hover .fbm-fold-t { color: var(--text-secondary); }
+/* The live contents line. Muted while empty, and in normal ink once it carries something,
+   so a row that WILL send a file does not read the same as one that will not. */
+.fbm-fold-sum { font-size: 11.5px; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbm-fold-sum.is-set { color: var(--text-secondary); }
+.fbm-fold-in { padding: 0 0 10px; }
+.fbm-fold:focus-within > summary .fbm-fold-t { color: var(--text-primary); }
+@media (prefers-reduced-motion: reduce) { .fbm-fold > summary::before { transition: none; } }
+
 /* Report-quality gauge: a live meter that scores the report (title, detail, steps,
-   attachments, contact) and nudges the one thing most worth adding. Sits above the footer. */
-.fbm-quality { padding: 10px 20px 0; }
-.fbm-quality-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
-.fbm-quality-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
-.fbm-quality-tier { font-size: 12px; font-weight: 700; }
-.fbm-quality-track { height: 6px; border-radius: 999px; background: var(--bmm-s03); overflow: hidden; }
+   attachments, contact) and nudges the one thing most worth adding.
+   It rides IN the footer now. As its own block it was four stacked rows — label, tier,
+   track, tip — of coaching sitting between the form and the Send button, which is a lot
+   of furniture for something that never blocks anything. */
+.fbm-quality { flex: 1 1 auto; min-width: 0; margin-right: 4px; }
+.fbm-quality-track { height: 4px; border-radius: 999px; background: var(--bmm-s03); overflow: hidden; }
 .fbm-quality-fill { height: 100%; border-radius: 999px; width: 0; background: var(--accent); transition: width .35s cubic-bezier(.4,0,.2,1), background-color .3s; }
-.fbm-quality-tip { margin-top: 6px; font-size: 11.5px; color: var(--text-muted); min-height: 1em; }
+.fbm-quality-line { display: flex; align-items: baseline; gap: 8px; margin-top: 5px; min-width: 0; }
+.fbm-quality-tier { font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+/* The tip is the way IN to whatever it names — the control it points at may be folded. */
+.fbm-quality-tip {
+    font-size: 11.5px; color: var(--text-muted); cursor: pointer;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
+}
+.fbm-quality-tip:hover { color: var(--text-secondary); }
 .fbm-q-weak { color: var(--bmm-danger); } .fbm-q-fair { color: var(--bmm-warning); }
 .fbm-q-good { color: var(--accent); } .fbm-q-great { color: var(--bmm-success); }
 @media (prefers-reduced-motion: reduce) { .fbm-quality-fill { transition: none; } }
