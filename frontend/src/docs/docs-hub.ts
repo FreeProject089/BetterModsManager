@@ -2853,16 +2853,26 @@ function hubView(): string {
       </span>
     </button>`;
   const extra = unattachedPages(route.part);
+  // Same card as the categories above it, not the one from the "Full documentation" listing.
+  // These sit directly under a grid of `.dh-cat` tiles — icon plate, title, blurb, a meta line
+  // — and using the other shape made the band read as a different page pasted underneath.
+  // A card is a card: same plate, same rhythm; only the meta line differs, because a page has
+  // a reading time where a category has an article count.
   const extraHtml = extra.length ? `
-    <div class="dh-sec-h">${tr({ en: 'Also in the manual', fr: 'Aussi dans le manuel' })} · ${extra.length}</div>
-    <p class="dh-lead">${tr({
-      en: 'Bundled pages with no article of their own — they open in the reader, offline, like every other page here.',
-      fr: 'Des pages embarquées sans article dédié — elles s’ouvrent dans le lecteur, hors ligne, comme toutes les autres.',
-    })}</p>
-    <div class="dh-pgs">${extra.map((p) => `
-      <button class="dh-pg" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
-        <div class="dh-pg-t">${escapeHtml(tr(p.title))}</div>
-        ${p.summary ? `<div class="dh-pg-s">${escapeHtml(tr(p.summary))}</div>` : ''}
+    <div class="dh-cat-head dh-also-head">${svg('book', 24)}<div>
+      <h2>${tr({ en: 'Also in the manual', fr: 'Aussi dans le manuel' })}</h2>
+      <p>${tr({
+        en: 'Bundled pages with no article of their own — they open in the reader, offline, like every other page here.',
+        fr: 'Des pages embarquées sans article dédié — elles s’ouvrent dans le lecteur, hors ligne, comme toutes les autres.',
+      })}</p></div></div>
+    <div class="dh-grid">${extra.map((p) => `
+      <button class="dh-cat" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
+        <span class="dh-cat-ic">${svg('book', 22)}</span>
+        <span class="dh-cat-tx">
+          <span class="dh-cat-t">${escapeHtml(tr(p.title))}</span>
+          ${p.summary ? `<span class="dh-cat-b">${escapeHtml(tr(p.summary))}</span>` : ''}
+          <span class="dh-cat-n">${Math.max(1, Math.round((p.words || 0) / 220))} ${tr({ en: 'min read', fr: 'min de lecture' })} ${svg('arrow', 14)}</span>
+        </span>
       </button>`).join('')}</div>` : '';
   return `<div class="dh-grid">${cards}${diag}</div>${extraHtml}`;
 }
