@@ -252,6 +252,10 @@ export function verifyProof(proof, authorised, audience) {
   // Expiry and audience before the signature: a flood of stale or misdirected proofs then
   // costs a comparison rather than a public-key operation each.
   if (payload.exp * 1000 <= Date.now()) return { ok: false, reason: 'expired' };
+  // A captured proof is a bearer secret until it expires, so cap how long that window can be:
+  // the honest client uses ~120s, and refusing a proof valid for more than 10 minutes shrinks
+  // the replay window of a leaked one (a log, a HAR export) without a nonce store.
+  if (payload.exp * 1000 - Date.now() > 10 * 60 * 1000) return { ok: false, reason: 'exp_too_far' };
   if (payload.aud !== audience) return { ok: false, reason: 'audience' };
 
   const allowed = (authorised || []).map(pubkeyFromOpenssh).filter(Boolean);
