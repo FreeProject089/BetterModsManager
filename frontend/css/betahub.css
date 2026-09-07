@@ -1035,10 +1035,20 @@
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
 }
-/* ── Premium Crash Modal Buttons ── */
+/* ── Premium Crash Modal Buttons ──
+   Two items, not four: "Close" on the left, the action group on the right.
+
+   The old rule laid all four buttons out as one wrapping row with
+   `margin-right: auto` on Close. Four buttons do not fit the modal at its real
+   width, so the row wrapped — and because the leftover was one button against
+   `justify-content: flex-end`, "Join Discord" ended up alone on a second line,
+   right-aligned, reading as a mistake. Wrapping a row of buttons is fine; what
+   is not fine is which button gets left behind being decided by pixel
+   arithmetic. Grouping makes it a designed decision: the actions wrap as a
+   block or not at all. */
 .bh-crash-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     padding: 20px 28px;
     background: rgba(0,0,0,0.22);
@@ -1047,21 +1057,84 @@
     flex-wrap: wrap;
 }
 
-.bh-crash-footer .bh-btn-ghost {
-    margin-right: auto;
+.bh-crash-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    /* Beats the footer's own `flex-wrap` to the punch: the group is allowed to
+       shrink and take the whole leftover line before Close is pushed off. */
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-@media (max-width: 650px) {
+/* The two secondary actions carry long labels in some languages and are not what
+   the modal is for; a slightly tighter box buys the row enough width to stay on
+   one line in French without touching the primary. */
+.bh-crash-actions .bh-btn-glass,
+.bh-crash-actions .bh-btn-discord {
+    padding: 0 14px;
+    gap: 8px;
+}
+
+/* Discord loses its solid fill HERE ONLY (the class keeps it everywhere else).
+   Side by side, #5865F2 and the indigo gradient are the same button to the eye:
+   two filled blue rectangles, and whichever is bigger wins the attention — which
+   was Discord. Outlined, it keeps its brand mark and its colour and stops
+   competing with the one action this modal is asking for.
+
+   The label is the brand blue mixed INTO the theme's own text colour rather than
+   a fixed periwinkle: on a dark theme that lands light, on a light theme it lands
+   dark, and either way it stays readable. A literal hex here is the light-theme
+   "white on white" bug waiting to happen — and the colour guard says so. */
+.bh-crash-actions .bh-btn-discord {
+    background: color-mix(in srgb, #5865F2 12%, transparent);
+    border-color: color-mix(in srgb, #5865F2 45%, transparent);
+    color: color-mix(in srgb, #5865F2 55%, var(--bmm-text-primary));
+    box-shadow: none;
+}
+
+.bh-crash-actions .bh-btn-discord:hover {
+    background: color-mix(in srgb, #5865F2 22%, transparent);
+    border-color: #5865F2;
+    color: color-mix(in srgb, #5865F2 30%, var(--bmm-text-primary));
+    box-shadow: 0 4px 15px rgba(88, 101, 242, 0.22);
+}
+
+/* One primary. "Report to BetterCommunity" is the thing this modal exists for,
+   so it sits last — the end of the row is where the eye lands and where the
+   confirm button lives in every other modal here. Discord was there before,
+   in full blurple, out-shouting it. */
+.bh-crash-actions .bh-btn-indigo {
+    margin-left: 2px;
+}
+
+/* Narrow: stop competing for one line and stack. Every control gets the full
+   width in the order it is read — actions first, "Close" last, because a
+   stacked dismiss button at the top is a trap for a thumb.
+
+   Unreachable as things stand: tauri.conf.json pins minWidth to 1120, so the
+   viewport never gets here and the row above is what ships. Kept as the floor
+   if that minimum is ever lowered — which is also why the row above was made to
+   fit on one line rather than left to rely on this. */
+@media (max-width: 720px) {
     .bh-crash-footer {
-        justify-content: center;
+        flex-direction: column-reverse;
+        align-items: stretch;
         gap: 10px;
         padding: 16px;
     }
-    
-    .bh-crash-footer .bh-btn-ghost {
-        margin-right: 0;
+
+    .bh-crash-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .bh-crash-footer .bh-btn-premium,
+    .bh-crash-footer .bh-btn-premium:is(a) {
         width: 100%;
-        min-width: 200px;
         justify-content: center;
     }
 }
