@@ -1283,3 +1283,16 @@ assez souvent pour en faire une contrainte de conception, pas une préférence.
 **Corrigé dans le corps :** le tableau d'architecture disait Tauri v1 ; l'application est
 sur **Tauri v2** depuis la migration de juin (`com.bettermm.desktop`, IPC à capacités, tray
 et updater v2).
+
+## 74. Où va un rapport, et pourquoi rien n'est perdu
+
+Le dialogue de retours poste vers le `feedback_endpoint` de `links.json` — le centre
+BetterCommunity — en portant le Creator ID, la version de l'appli, l'OS et la locale en
+en-têtes. Un envoi qui échoue n'est pas jeté : il est écrit dans une **file locale et renvoyé au
+prochain démarrage**, et là seulement — l'endpoint est le seul endroit où un rapport part
+jamais. Une **preuve de travail** côté client et une **auto-limitation** (quelques-uns par dix
+minutes, des dizaines par jour) sont devant, pour qu'une boucle bloquée ne noie pas le centre.
+BetaHub survit en **secours passif** : un `feedback_endpoint` vide renvoie aux anciens
+formulaires, donc une mauvaise config se dégrade au lieu d'échouer. La relecture du zip de
+plantage est masquée par défaut ; le dump DxDiag n'est pré-coché que pour un plantage et est
+décochable, car il est large (identifiants machine/OS, nom d'utilisateur Windows).

@@ -1323,3 +1323,15 @@ that it is now a design constraint, not a preference.
 **Corrected in place:** the architecture table said Tauri v1; the app has been on **Tauri
 v2** since the June migration (`com.bettermm.desktop`, capability-scoped IPC, the v2 tray
 and updater APIs).
+
+## 74. Where a report goes, and why nothing is lost
+
+The feedback dialog posts to `links.json`'s `feedback_endpoint` — the BetterCommunity centre —
+carrying the Creator ID, app version, OS and locale as headers. A send that fails is not
+dropped: it is written to a **local queue and retried at the next launch**, and only there —
+the endpoint is the single place a report is ever sent. A client-side **proof-of-work** and a
+self-imposed **throttle** (a few per ten minutes, dozens a day) sit in front of it so a stuck
+loop cannot flood the centre. BetaHub survives as a **dead-man's fallback**: an empty
+`feedback_endpoint` routes back to the old forms, so a misconfiguration degrades rather than
+fails. The crash zip's replay is masked by default; the DxDiag dump is pre-ticked only for a
+crash and is untickable, because it is broad (machine/OS ids, the Windows user name).

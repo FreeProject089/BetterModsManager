@@ -778,3 +778,45 @@ that asks, and a name already on your ring is skipped rather than overwritten.
 - **A plugin's bundled README went into `innerHTML` raw.** With `withGlobalTauri` on, that is
   third-party HTML with every Tauri command in reach. Untrusted documentation is sanitised
   and **fails closed** (no sanitiser → escaped text, never markup).
+
+## [MAJOR] Feedback & crash reports → the BetterCommunity feedback centre
+- **Feedback, bugs and crashes now go to the BetterCommunity feedback centre** (`links.json`
+  `feedback_endpoint`), not BetaHub — the old BetaHub forms remain only as a fallback when the
+  endpoint is left empty. One dialog (Settings → Feedback & bug reports, or the button on the
+  crash dialog) sends a suggestion, a bug or a crash.
+- **What it attaches, stated plainly:** title/description/steps always; optional screenshots,
+  the app log (`bmm_frontend.log`, pre-ticked for bug/crash), a crash zip (logs + a system
+  snapshot + a masked replay of the moments before the crash), and a DxDiag report (pre-ticked
+  for a crash only — a broad hardware/driver dump that also carries machine/OS ids and your
+  Windows user name; untickable).
+- **Nothing leaves the machine until Send.** A report the site could not accept is **kept
+  locally and retried automatically at the next launch**, never sent anywhere else; the app
+  keeps a local list of the last 50 submissions and throttles itself (a handful per ten
+  minutes, a couple of dozen a day). A small anti-spam proof-of-work runs client-side before
+  each send.
+- **Linked vs anonymous:** with a linked BetterCommunity account a report opens a **thread in
+  your dashboard** and BMM notifies you of replies; otherwise you leave an e-mail or Discord.
+  The Creator ID rides along as a header with the app version, OS and locale.
+- Privacy Policy §3.3 and the Terms §8 were rewritten to describe exactly this (and de-BetaHub'd
+  across the legal pages and Help & other).
+
+## [CHANGED] Auto-update — a major version bump is a manual, one-time install
+- The updater now separates a normal in-place patch from a **major version bump**. For a patch
+  (1.0.0 → 1.0.1) it offers the incremental **Quick Update** (only the changed files, each
+  SHA-256-checked) or the full **BetterInstaller** pass — both replace only the app's files and
+  never touch the data folder.
+- A **major bump** (e.g. 0.9.x → 1.0) hides Quick Update and says "install by hand": the jump
+  changes the bundle id, the data layout and the installer, so a file swap would leave a
+  half-migrated install. BetterInstaller does the real migration; first launch copies the old
+  data folder to the new one (no data loss).
+
+## [NEW] New-article notification + dialog polish
+- BMM surfaces a notification when a new Help & other / docs article ships.
+- **Crash dialog**: the report-file card is neutral (it was tinted like an error), the danger
+  header is softer with a glowing icon, and a "Report to BetterCommunity" button sits beside
+  "Open in Explorer".
+- **Ko-fi reminder**: the tier chips read as amounts (a larger numeral, the cup tinted on the
+  popular/hover state), a warm top rule and an inner ring on the card.
+- **Feedback dialog**: dropped the wide soft drop-shadow that read as a murky halo on the dim
+  backdrop ("a shadow on the invisible div") for the standard modal shadow, so it sits exactly
+  like every other dialog; crisper selected-kind ring.

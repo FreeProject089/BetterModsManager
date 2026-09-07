@@ -1115,3 +1115,17 @@ le plugin propose, vous décidez.
 secours — peut être marquée comme demandant un mot de passe ou une clé. La marque ne change
 rien sur votre machine (BMM demande déjà quand il est refusé) ; elle voyage avec une liste ou
 un dépôt partagé, pour que le destinataire le sache avant le premier 401 et non grâce à lui.
+
+## 79. Retours, bugs & rapports de plantage vont à BetterCommunity (v1.0.0+)
+
+Réglages → **Retours & rapports de bug**, ou le bouton du dialogue de plantage, ouvre un seul
+dialogue qui envoie une **suggestion**, un **bug** ou un **plantage** au centre de retours
+BetterCommunity. Il ne joint que ce que tu coches — captures, journal de l'appli, zip de
+plantage (journaux + un instantané système + une relecture masquée des instants d'avant), un
+rapport DxDiag — et **rien ne quitte ta machine tant que tu n'as pas appuyé sur Envoyer**. Un
+rapport que le site ne peut pas prendre est gardé localement et renvoyé au prochain démarrage,
+jamais ailleurs, derrière une auto-limitation et une preuve de travail anti-spam côté client.
+Lie ton compte BetterCommunity et un rapport ouvre un **fil dans ton tableau de bord** avec des
+notifications de réponse ; sinon laisse un e-mail ou un Discord. Les anciens formulaires BetaHub
+ne servent qu'en secours quand l'endpoint est vide. Détail complet : Politique de
+confidentialité §3.3.

@@ -1190,3 +1190,15 @@ plugin suggests, you decide.
 as asking for a password or a key. The mark changes nothing on your machine (BMM already
 asks when refused); it travels with a shared list or repo, so whoever receives it knows
 before the first 401 instead of from it.
+
+## 79. Feedback, bugs & crash reports go to BetterCommunity (v1.0.0+)
+
+Settings → **Feedback & bug reports**, or the button on the crash dialog, opens one dialog that
+sends a **suggestion**, a **bug** or a **crash** to the BetterCommunity feedback centre. It
+attaches only what you tick — screenshots, the app log, a crash zip (logs + a system snapshot +
+a masked replay of the moments before the crash), a DxDiag report — and **nothing leaves your
+machine until you press Send**. A report the site can't take is kept locally and retried at the
+next launch, never sent anywhere else, behind a self-imposed throttle and a client-side
+anti-spam proof-of-work. Link your BetterCommunity account and a report opens a **thread in your
+dashboard** with reply notifications; otherwise leave an e-mail or Discord. The older BetaHub
+forms remain only as a fallback when the endpoint is unset. Full detail: Privacy Policy §3.3.

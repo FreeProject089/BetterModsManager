@@ -810,3 +810,47 @@ est ignoré, jamais écrasé.
   actif, c'est du HTML tiers avec toutes les commandes Tauri à portée. La documentation non
   fiable est assainie et **échoue fermé** (pas d'assainisseur → texte échappé, jamais du
   balisage).
+
+## [MAJEUR] Retours & rapports de plantage → le centre de retours BetterCommunity
+- **Les retours, bugs et plantages vont maintenant au centre de retours BetterCommunity**
+  (`links.json` `feedback_endpoint`), plus BetaHub — les anciens formulaires BetaHub ne servent
+  qu'en secours quand l'endpoint est laissé vide. Un seul dialogue (Réglages → Retours &
+  rapports de bug, ou le bouton du dialogue de plantage) envoie une suggestion, un bug ou un
+  plantage.
+- **Ce qu'il joint, dit clairement :** titre/description/étapes toujours ; en option des
+  captures, le journal de l'appli (`bmm_frontend.log`, pré-coché pour bug/plantage), un zip de
+  plantage (journaux + un instantané système + une relecture masquée des instants d'avant), et
+  un rapport DxDiag (pré-coché pour un plantage seulement — un dump matériel/pilotes large qui
+  porte aussi des identifiants machine/OS et ton nom d'utilisateur Windows ; décochable).
+- **Rien ne quitte la machine tant que tu n'as pas appuyé sur Envoyer.** Un rapport que le site
+  n'a pas pu accepter est **gardé localement et renvoyé automatiquement au prochain démarrage**,
+  jamais ailleurs ; l'appli garde une liste locale des 50 derniers envois et se limite
+  elle-même (quelques-uns par dix minutes, quelques dizaines par jour). Une petite preuve de
+  travail anti-spam s'exécute côté client avant chaque envoi.
+- **Lié ou anonyme :** avec un compte BetterCommunity lié, un rapport ouvre un **fil dans ton
+  tableau de bord** et BMM te notifie des réponses ; sinon tu laisses un e-mail ou un Discord.
+  Le Creator ID accompagne le rapport en en-tête, avec la version de l'appli, l'OS et la locale.
+- La Politique de confidentialité §3.3 et les CGU §8 ont été réécrites pour décrire exactement
+  ça (et dé-BetaHub sur les pages légales et Aide & autres).
+
+## [CHANGÉ] Mise à jour auto — un saut de version majeure est une install manuelle unique
+- Le système de mise à jour sépare maintenant un patch en place d'un **saut de version
+  majeure**. Pour un patch (1.0.0 → 1.0.1) il propose la **Quick Update** incrémentale (que les
+  fichiers changés, chacun vérifié en SHA-256) ou la passe **BetterInstaller** complète — les
+  deux ne remplacent que les fichiers de l'appli et ne touchent jamais au dossier de données.
+- Un **saut majeur** (ex. 0.9.x → 1.0) masque la Quick Update et affiche « installe à la main » :
+  le saut change l'id du bundle, la disposition des données et l'installeur, donc un simple
+  échange de fichiers laisserait une install à moitié migrée. BetterInstaller fait la vraie
+  migration ; au premier lancement l'ancien dossier de données est recopié vers le nouveau
+  (aucune perte).
+
+## [NOUVEAU] Notification de nouvel article + polish des dialogues
+- BMM affiche une notification quand un nouvel article Aide & autres / docs sort.
+- **Dialogue de plantage** : la carte du fichier de rapport est neutre (elle était teintée comme
+  une erreur), l'en-tête danger est plus doux avec une icône qui « glow », et un bouton
+  « Signaler à BetterCommunity » est à côté de « Ouvrir dans l'Explorateur ».
+- **Rappel Ko-fi** : les paliers se lisent comme des montants (un chiffre plus gros, la tasse
+  teintée au survol/populaire), un filet chaud en haut et un anneau interne sur la carte.
+- **Dialogue de retours** : l'ombre large et diffuse qui faisait un halo trouble sur le fond
+  sombre (« une ombre sur la div invisible ») remplacée par l'ombre standard des modals, pour
+  qu'il se pose exactement comme les autres ; anneau de sélection plus net.
