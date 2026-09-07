@@ -2761,6 +2761,8 @@
   "kofi.text": "BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way.",
   "kofi.support": "Support on Ko-fi",
   "kofi.popular": "Popular",
+  "kofi.text2": "Free, ad-free, no account — and built on my own time. If it saves you some, a coffee keeps it going.",
+  "kofi.snoozeHint": "Hides this for a month.",
   "kofi.tierHint": "Pick an amount — it opens Ko-fi.",
   "kofi.later": "Maybe later",
   "kofi.dontShow": "Don't show again",
@@ -7685,5 +7687,6 @@
   "md.webonly": "Interactive on the website",
   "md.spoiler": "Spoiler — click to reveal",
   "md.question": "Question",
-  "md.checklist": "Checklist"
+  "md.checklist": "Checklist",
+  "kofi.anchor": "Any amount. Nothing is locked behind it — there is no paid version."
 }

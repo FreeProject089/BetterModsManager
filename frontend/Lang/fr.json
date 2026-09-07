@@ -2822,6 +2822,8 @@
   "kofi.text": "BMM est gratuit et développé sur mon temps libre. S’il vous en fait gagner, un petit pourboire sur Ko-fi garde le projet vivant et sans publicité. Aucune pression — il reste 100 % gratuit dans tous les cas.",
   "kofi.support": "Soutenir sur Ko-fi",
   "kofi.popular": "Populaire",
+  "kofi.text2": "Gratuit, sans pub, sans compte — et développé sur mon temps libre. S’il t’en fait gagner, un café le garde en vie.",
+  "kofi.snoozeHint": "Masque ce message pendant un mois.",
   "kofi.tierHint": "Choisissez un montant — ça ouvre Ko-fi.",
   "kofi.later": "Plus tard",
   "kofi.dontShow": "Ne plus afficher",
@@ -10323,5 +10325,6 @@
   "sshact.labelExport": "Publier cet export, ou récupérer le dépôt",
   "sshact.labelManifest": "Publier repo.json seul",
   "sshact.labelUpdate": "Publier le dépôt mis à jour",
-  "sshact.labelCatalog": "Publier ce catalogue"
+  "sshact.labelCatalog": "Publier ce catalogue",
+  "kofi.anchor": "Le montant que tu veux. Rien n’est verrouillé derrière — il n’y a pas de version payante."
 }

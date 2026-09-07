@@ -13,6 +13,14 @@ import { t } from '../core/i18n.js';
 import { getLinks } from '../core/links-config.js';
 import { escHtml, escAttr } from '../core/utils.js';
 const OPTOUT_KEY = 'bmm_kofi_optout';
+/**
+ * "Maybe later" used to mean "ask me again in four hours, or whenever you next open BMM" —
+ * which, for a dialog that shows on EVERY start, is not a later at all. The only way to stop
+ * it was "never". A month is the middle option the two buttons were missing, and it is what
+ * people already assume "later" means.
+ */
+const SNOOZE_KEY = 'bmm_kofi_snooze_until';
+const SNOOZE_DAYS = 30;
 /** One drawn cup, reused for every tier.
  *
  *  The tiers used to be ☕, ☕☕☕ and ☕☕☕☕☕ — repeated emoji standing in for an
@@ -33,6 +41,11 @@ function kofiUrl() {
 export function maybeShowKofiReminder() {
     try {
         if (localStorage.getItem(OPTOUT_KEY) === '1')
+            return;
+        const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
+        // NaN and a clock moved backwards both land here as "not snoozed", which is the safe
+        // way round: a corrupt value shows the reminder rather than silencing it forever.
+        if (until > Date.now())
             return;
         // Don't pile on top of the first-run onboarding overlay.
         if (document.getElementById('onboarding-overlay'))
@@ -57,6 +70,7 @@ export function showKofiReminder() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
 
+        <div class="kofi-top">
         <div class="kofi-mascot">
           <img src="assets/Tasky_Happy.png" alt="Tasky" />
           <span class="kofi-heart">
@@ -64,27 +78,23 @@ export function showKofiReminder() {
           </span>
         </div>
 
-        <h3 class="kofi-title" id="kofi-title">${t('kofi.title') || 'Enjoying Better Mods Manager?'}</h3>
-        <p class="kofi-text">${t('kofi.text') || 'BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way.'}</p>
+        <div class="kofi-say">
+          <h3 class="kofi-title" id="kofi-title">${escHtml(t('kofi.title') || 'Enjoying Better Mods Manager?')}</h3>
+          <p class="kofi-text">${escHtml(t('kofi.text2') || 'Free, ad-free, no account — and built on my own time. If it saves you some, a coffee keeps it going.')}</p>
+          <div class="kofi-badge">${escHtml(t('kofi.freeBadge') || '100% free · No ads · No account')}</div>
+        </div>
+        </div>
 
         <div class="kofi-actions">
-          <div class="kofi-tiers" role="group" aria-label="${escAttr(t('kofi.tierHint') || 'Pick an amount')}">
-            ${[1, 3, 5].map(n => `
-            <a class="kofi-tier${n === 3 ? ' kofi-tier--pop' : ''}" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go
-               aria-label="${escAttr((t('kofi.tierAria') || 'Tip {n} on Ko-fi').replace('{n}', String(n)))}">
-              ${n === 3 ? `<span class="kofi-pop">${escHtml(t('kofi.popular') || 'Popular')}</span>` : ''}
-              ${CUP_SVG}
-              <span class="kofi-tier-amt">${n}</span>
-            </a>`).join('')}
-          </div>
-          <div class="kofi-tier-hint">${t('kofi.tierHint') || 'Pick an amount — it opens Ko-fi.'}</div>
           <a class="kofi-btn-primary" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" id="kofi-go">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 7h15a4 4 0 0 1 0 8h-1.1A6 6 0 0 1 10 19H7a5 5 0 0 1-5-5V7zm15 6a2 2 0 0 0 0-4h-1v4h1z"/></svg>
-            <span>${t('kofi.support') || 'Support on Ko-fi'}</span>
+            ${CUP_SVG}
+            <span>${escHtml(t('kofi.support') || 'Support on Ko-fi')}</span>
           </a>
+          <div class="kofi-anchor">${escHtml(t('kofi.anchor') || 'Any amount. Nothing is locked behind it — there is no paid version.')}</div>
           <div class="kofi-secondary-row">
-            <button class="kofi-btn-ghost" id="kofi-later">${t('kofi.later') || 'Maybe later'}</button>
-            <button class="kofi-btn-ghost kofi-btn-optout" id="kofi-optout">${t('kofi.dontShow') || "Don't show again"}</button>
+            <button class="kofi-btn-ghost" id="kofi-later" title="${escAttr(t('kofi.snoozeHint') || 'Hides this for a month.')}">${escHtml(t('kofi.later') || 'Maybe later')}</button>
+            <span class="kofi-dot" aria-hidden="true">·</span>
+            <button class="kofi-btn-ghost kofi-btn-optout" id="kofi-optout">${escHtml(t('kofi.dontShow') || "Don't show again")}</button>
           </div>
         </div>
       </div>
@@ -105,9 +115,16 @@ export function showKofiReminder() {
         setTimeout(() => overlay.remove(), 400);
     };
     document.addEventListener('keydown', onKey, true);
-    // "Maybe later" / X → close, will show again next launch.
+    // The X is a dismissal, not an answer: it closes and changes nothing, so the reminder is
+    // back next launch. "Maybe later" is the answer — it buys a month.
     overlay.querySelector('#kofi-close')?.addEventListener('click', close);
-    overlay.querySelector('#kofi-later')?.addEventListener('click', close);
+    overlay.querySelector('#kofi-later')?.addEventListener('click', () => {
+        try {
+            localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 86400_000));
+        }
+        catch { /* private mode: it just asks again */ }
+        close();
+    });
     // "Don't show again" → persist opt-out so it never reappears.
     overlay.querySelector('#kofi-optout')?.addEventListener('click', () => {
         try {
@@ -137,7 +154,13 @@ function injectStyles() {
       backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease}
     .kofi-overlay.open{opacity:1}
     .kofi-overlay.closing{opacity:0}
-    .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;overflow:hidden;
+    /* The card reads left-to-right now: mascot beside the words, then ONE button.
+       It used to be a 520px-tall centred column — mascot, four centred lines of prose, three
+       amount chips, a hint about the chips, and a button that did exactly what the chips did.
+       The chips were the worst of it: 1 / 3 / 5 with a "Popular" badge, all three linking to
+       the same plain Ko-fi page. No amount is passed anywhere, so picking 5 and picking 1 led
+       to the identical screen — a choice that isn't one. Removed rather than faked. */
+    .kofi-card{position:relative;width:min(480px,92vw);padding:30px 28px 22px;border-radius:22px;overflow:hidden;
       background:linear-gradient(160deg, color-mix(in srgb, var(--kofi-brand) 12%, var(--bmm-bg-elevated)) 0%, var(--bmm-bg-elevated) 60%);
       border:1px solid rgba(255,107,74,0.22);
       box-shadow:0 18px 50px rgba(0,0,0,0.5),0 4px 14px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.04) inset;
@@ -152,43 +175,40 @@ function injectStyles() {
     .kofi-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:9px;border:none;cursor:pointer;
       display:flex;align-items:center;justify-content:center;color:var(--bmm-text-muted);background:var(--bmm-s05);transition:.15s}
     .kofi-close:hover{background:var(--bmm-s10);color:var(--bmm-text-primary)}
-    .kofi-mascot{position:relative;width:96px;height:96px;margin:4px auto 14px}
-    .kofi-mascot img{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
-    .kofi-heart{position:absolute;right:-6px;bottom:-2px;width:36px;height:36px;border-radius:50%;
+    /* Mascot beside the text, not stacked above it: a 96px picture on its own line pushed
+       every word below the fold of the eye. 72px next to the title carries the same warmth
+       in a third of the height. */
+    .kofi-top{display:flex;align-items:flex-start;gap:16px;margin-bottom:18px}
+    .kofi-mascot{position:relative;width:72px;height:72px;flex:0 0 auto;margin-top:2px}
+    .kofi-mascot img{width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
+    .kofi-heart{position:absolute;right:-4px;bottom:0;width:30px;height:30px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#ff6b4a,#ff5e5b);
       box-shadow:0 3px 8px rgba(255,94,91,0.35);animation:kofi-beat 1.4s ease-in-out infinite}
+    .kofi-heart svg{width:17px;height:17px}
     @keyframes kofi-beat{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-    .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--bmm-text-primary)}
-    .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--bmm-text-secondary)}
-    .kofi-actions{display:flex;flex-direction:column;gap:10px}
-    /* Anchored amount chips: the middle "popular" tier sits larger + highlighted so it
-       becomes the mental reference point (contrast/anchoring). All open Ko-fi. */
-    .kofi-tiers{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin-bottom:2px}
-    .kofi-tier{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;cursor:pointer;
-      padding:12px 14px;min-width:66px;border-radius:14px;color:var(--bmm-text-secondary);
-      border:1px solid var(--bmm-s10);background:var(--bmm-s05);
-      transition:transform .16s ease,border-color .16s ease,background .16s ease,color .16s ease}
-    .kofi-tier .kofi-cup{width:20px;height:20px;color:var(--bmm-text-muted);transition:color .16s ease}
-    .kofi-tier:hover{transform:translateY(-3px);border-color:rgba(255,107,74,0.5);color:var(--bmm-text-primary);
-      background:color-mix(in srgb,var(--kofi-brand) 8%,var(--bmm-s05));box-shadow:0 8px 18px rgba(255,94,91,0.16)}
-    .kofi-tier:hover .kofi-cup{color:var(--kofi-brand)}
-    .kofi-tier-amt{font-size:17px;font-weight:800;line-height:1;color:var(--bmm-text-primary)}
-    .kofi-tier--pop{padding:16px 16px 13px;border-color:rgba(255,107,74,0.55);
-      background:linear-gradient(160deg,rgba(255,107,74,0.16),rgba(255,94,91,0.05));box-shadow:0 6px 16px rgba(255,94,91,0.14)}
-    .kofi-tier--pop .kofi-cup{color:var(--kofi-brand)}
-    .kofi-tier--pop .kofi-tier-amt{font-size:20px}
-    .kofi-pop{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
-      font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:999px;color:var(--kofi-on-brand);
-      background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 3px 8px rgba(255,94,91,0.45)}
-    .kofi-tier-hint{font-size:11px;color:var(--bmm-text-muted);margin:-2px 0 6px}
-    .kofi-secondary-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:2px}
-    .kofi-btn-optout{opacity:0.7;font-size:11.5px}
-    .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
+    .kofi-say{min-width:0;flex:1}
+    /* Left-aligned. Four lines of centred prose is a poster, not something you read. */
+    .kofi-title{margin:0 0 7px;font-size:18px;font-weight:800;line-height:1.25;color:var(--bmm-text-primary)}
+    .kofi-text{margin:0 0 10px;font-size:13px;line-height:1.55;color:var(--bmm-text-secondary)}
+    /* The promise, as a chip rather than another clause in the paragraph. */
+    .kofi-badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.02em;
+      padding:4px 9px;border-radius:999px;color:var(--kofi-brand);
+      background:color-mix(in srgb,var(--kofi-brand) 12%,transparent);
+      border:1px solid color-mix(in srgb,var(--kofi-brand) 28%,transparent)}
+    .kofi-actions{display:flex;flex-direction:column;gap:8px}
     .kofi-btn-primary{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;
-      padding:12px 18px;border-radius:13px;font-size:14px;font-weight:800;color:var(--kofi-on-brand);cursor:pointer;
+      padding:13px 18px;border-radius:13px;font-size:14px;font-weight:800;color:var(--kofi-on-brand);cursor:pointer;
       background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 6px 16px rgba(255,94,91,0.28);transition:.18s}
+    .kofi-btn-primary .kofi-cup{width:19px;height:19px;color:currentColor}
     .kofi-btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(255,94,91,0.36)}
-    .kofi-btn-ghost{padding:9px;border:none;background:transparent;cursor:pointer;font-size:12.5px;
+    /* Says what the button will and won't do, in place of three chips that said neither. */
+    .kofi-anchor{text-align:center;font-size:11px;line-height:1.45;color:var(--bmm-text-muted)}
+    .kofi-secondary-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:2px}
+    .kofi-dot{color:var(--bmm-text-muted);opacity:.5;font-size:11px}
+    /* "Later" and "never" are not the same size of decision, and now they do not look it. */
+    .kofi-btn-optout{opacity:0.65;font-size:11px}
+    .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
+    .kofi-btn-ghost{padding:8px 6px;border:none;background:transparent;cursor:pointer;font-size:12.5px;
       color:var(--bmm-text-muted);font-weight:600;transition:.15s}
     .kofi-btn-ghost:hover{color:var(--bmm-text-secondary)}
     `;
