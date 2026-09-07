@@ -770,6 +770,14 @@ const OTHER = {
             ],
         },
         // ── Part 3 : Bug Report ────────────────────────────────────
+        //
+        // Rewritten with the feedback centre. This part used to end on "to file a manual report
+        // or a feature request, visit the GitHub Issues page linked in Credits" — which was true
+        // when the only in-app path was the automatic crash reporter. It is not true now: BMM has
+        // its own form, sending to BetterCommunity, with three report kinds, reproduction steps,
+        // attachments, opt-in diagnostics, a live quality gauge and an offline queue. A tutorial
+        // that sends people to a browser for something the app does better is worse than no
+        // tutorial, because the reader believes it.
         {
             id: 'bugreport',
             title_key: 'tut.other.bugreport.title',
@@ -778,12 +786,40 @@ const OTHER = {
                     id: 's1',
                     title_key: 'tut.other.bugreport.s1.title',
                     text_key: 'tut.other.bugreport.s1.text',
+                    nav: 'settings',
                     icon: ICON.bug,
                 },
                 {
                     id: 's2',
                     title_key: 'tut.other.bugreport.s2.title',
                     text_key: 'tut.other.bugreport.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-settings-betahub-bugreport',
+                    // The form is built when it opens, so none of these ids exist until the
+                    // reader clicks — which is exactly what modal_selector/modal_fields are for.
+                    modal_selector: 'fbm-send',
+                    modal_fields: [
+                        { sel: 'fbm-title', key: 'tut.other.bugreport.f.title' },
+                        { sel: 'fbm-desc', key: 'tut.other.bugreport.f.desc' },
+                        { sel: 'fbm-steps-wrap', key: 'tut.other.bugreport.f.steps' },
+                        { sel: 'fbm-attach-wrap', key: 'tut.other.bugreport.f.attach' },
+                        { sel: 'fbm-quality', key: 'tut.other.bugreport.f.quality' },
+                        { sel: 'fbm-send', key: 'tut.other.bugreport.f.send' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.bugreport.s3.title',
+                    text_key: 'tut.other.bugreport.s3.text',
+                    nav: 'settings',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.bugreport.s4.title',
+                    text_key: 'tut.other.bugreport.s4.text',
+                    nav: 'settings',
+                    selector: 'btn-fbc-test',
                 },
             ],
         },
