@@ -2648,6 +2648,25 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         // Written into the run's variables rather than printed, so the next step can
         // compare it. Printing it would answer the question for a human reading a log and
         // for nobody else.
+        // Same shape as app.buildInfo, and the same reason for the prefix: two of these in
+        // one task, before and after an import, is how you measure what the import brought.
+        case 'library.counts': {
+            const at = String(p.into || 'lib').trim() || 'lib';
+            const [mods, profiles, packs, plugins] = await Promise.all([
+                invoke('get_all_mods').catch(() => []) as Promise<any[]>,
+                invoke('load_profiles').catch(() => []) as Promise<any[]>,
+                invoke('load_modpacks').catch(() => []) as Promise<any[]>,
+                invoke('get_installed_plugins').catch(() => []) as Promise<any[]>,
+            ]);
+            const enabled = mods.filter((m) => m?.enabled).length;
+            ctx.nums[`${at}.mods`] = mods.length;
+            ctx.nums[`${at}.enabled`] = enabled;
+            ctx.nums[`${at}.disabled`] = mods.length - enabled;
+            ctx.nums[`${at}.profiles`] = profiles.length;
+            ctx.nums[`${at}.modpacks`] = packs.length;
+            ctx.nums[`${at}.plugins`] = plugins.length;
+            break;
+        }
         case 'app.buildInfo': {
             const info = await invoke('app_build_info') as Record<string, unknown>;
             const at = String(p.into || 'bmm').trim() || 'bmm';
@@ -3300,6 +3319,32 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             const mods: any[] = await invoke('get_all_mods').catch(() => []);
             const m = mods.find(x => x.id === p.id);
             return !!m && !m.enabled;
+        }
+        // NOT the same question as either of the two above. Both of those answer false for
+        // a mod that is not installed at all, so a task could not tell "it is here and off"
+        // from "it was never here" — and those want opposite next steps.
+        case 'modInstalled': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            return mods.some((m) => m.id === want);
+        }
+        // A task can create, rename and delete profiles. Without this, "make this season's
+        // profile" is written as delete-then-create, which throws away the one that is
+        // already there and correct.
+        case 'profileExists': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const list: any[] = await invoke('load_profiles').catch(() => []);
+            return list.some((x) => String(x?.id || '') === want);
+        }
+        // The other half of `theme.set`. The "night theme" preset applied a theme every
+        // evening whether or not it was already on, because asking was not possible.
+        case 'themeActive': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const active = await invoke('get_active_theme').catch(() => null);
+            return String(active || '') === want;
         }
         case 'appRunning':
             return await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false);
@@ -4704,13 +4749,131 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
     {
         cat: 'advanced', key: 'nightTheme', icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
         title: 'Night theme in the evening',
-        desc: 'At 20:00 switch to a dark theme. Duplicate it with a morning time and a light theme for the other half.',
+        desc: 'At 20:00 switch to a dark theme, unless it is already on. Duplicate it with a morning time and a light theme for the other half.',
         make: () => ({
             name: 'Night theme',
             trigger: { type: 'dailyAt', time: '20:00' },
             steps: [
-                { kind: 'action', action: { type: 'theme.set', params: { id: 'bmm-void' } } },
-                { kind: 'action', action: { type: 'notify', params: { message: 'Night theme on.' } } },
+                // The guard is the point. Before `themeActive` existed this preset re-applied
+                // the theme every evening and said "Night theme on." every evening, whether
+                // or not anything changed — a notification that means nothing is one people
+                // learn to ignore, including the ones that matter.
+                {
+                    kind: 'if',
+                    condition: { type: 'themeActive', negate: true, params: { id: 'bmm-void' } },
+                    then: [
+                        { kind: 'action', action: { type: 'theme.set', params: { id: 'bmm-void' } } },
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Night theme on.' } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+
+    // ── Asking before doing ────────────────────────────────────────────
+    //
+    // Each of these is a shape that could not be written before: the task could do the
+    // thing and could not ask about it first, so the only version that existed did it
+    // every time.
+    {
+        cat: 'mods', key: 'enableIfInstalled', icon: '<path d="M20 6 9 17l-5-5"/><circle cx="12" cy="12" r="10"/>',
+        title: 'Enable a mod, or say it is missing',
+        desc: 'Enables the mod you pick when it is installed, and tells you when it is not — instead of failing silently on a mod that was removed.',
+        make: () => ({
+            name: 'Enable if installed',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'modInstalled', params: { id: '' } },
+                    then: [ { kind: 'action', action: { type: 'mod.enable', params: { id: '' } } } ],
+                    else: [ { kind: 'action', action: { type: 'notify', params: { message: 'That mod is not installed on this machine.' } } } ],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'profileOnce', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/>',
+        title: 'Make a profile, once',
+        desc: 'Creates the profile only when it is not already there — so a monthly or seasonal task can run every time without replacing the one you have been using.',
+        make: () => ({
+            name: 'Profile, once',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'profileExists', negate: true, params: { id: '' } },
+                    then: [
+                        { kind: 'action', action: { type: 'profile.create', params: { name: 'New season' } } },
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Created the profile.' } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'librarySize', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
+        title: 'Warn when the library gets big',
+        desc: 'Reads the counts and says something when this install passes 400 mods — the point where scanning and deploying start to be worth watching.',
+        make: () => ({
+            name: 'Library size',
+            trigger: { type: 'weeklyAt', days: [1], time: '09:00' },
+            steps: [
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'lib' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'lib.mods', op: '>', value: 400 } },
+                    then: [ { kind: 'action', action: { type: 'notify', params: { message: '{lib.mods} mods installed, {lib.enabled} of them on.' } } } ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'pluginVault', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/>',
+        title: 'Keep a copy of every plugin',
+        desc: 'Exports the plugin you pick to a folder every week. Give the destination and it runs without the save dialog — duplicate the step per plugin.',
+        make: () => ({
+            name: 'Plugin vault',
+            trigger: { type: 'weeklyAt', days: [0], time: '04:00' },
+            steps: [
+                { kind: 'action', action: { type: 'deeplink', params: { url: 'bmm://api?method=POST&path=/api/plugins/export&id=&destDir=' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Plugin copied.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'countsAround', icon: '<path d="M12 2v20M2 12h20"/>',
+        title: 'Measure what a step changed',
+        desc: 'Counts the library before and after, then reports the difference. The shape for "did that import actually bring anything in?".',
+        make: () => ({
+            name: 'Before and after',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'before' } } },
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'after' } } },
+                { kind: 'action', action: { type: 'math.set', params: { name: 'GAINED', expr: '{after.mods} - {before.mods}' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'The scan found {GAINED} more mod(s).' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'themeGuard', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z"/>',
+        title: 'Put the theme back',
+        desc: 'Every hour, if the theme is not the one you chose, set it back. For a shared machine, or after trying something out and forgetting.',
+        make: () => ({
+            name: 'Theme guard',
+            trigger: { type: 'interval', everyMinutes: 60 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'themeActive', negate: true, params: { id: '' } },
+                    then: [ { kind: 'action', action: { type: 'theme.set', params: { id: '' } } } ],
+                    else: [],
+                },
             ],
         }),
     },
@@ -6971,6 +7134,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // report that says "it broke" without saying on which build, are both this question
     // unanswered — and until now it could not be asked from an automation at all.
     { v: 'app.buildInfo', label: 'Read this BMM\u2019s version', needs: 'buildInfo', group: 'app' },
+    // The sizes of the library, as numbers a condition can compare. Nothing wrote them, so
+    // "warn me when this profile passes 400 mods" and "only build a pack if there is one"
+    // were both unwritable.
+    { v: 'library.counts', label: 'Read how big the library is', needs: 'buildInfo', group: 'app' },
     { v: 'repo.gen', label: 'Generate repo (opens the screen)', group: 'repo' },
     // The one that actually produces a repo without anybody there. `repo.gen` opens the
     // screen prefilled, which is the right answer for a person and no answer at all for a
@@ -7265,9 +7432,9 @@ const actionPickGroups = (): PickGroup[] => ACTION_GROUPS.map((g) => ({ g: g.g, 
 // Conditions grouped the same way, each with its one-line description (sched.condd.*).
 const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
     { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
-    { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'modEnabled', 'modDisabled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
+    { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
     { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
-    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed'] },
+    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive'] },
     { g: 'time', label: 'Time', kinds: ['timeReached', 'dayOfWeek', 'timeRange'] },
 ];
 const condPickGroups = (): PickGroup[] => COND_GROUPS.map((g) => ({ g: g.g, label: t('sched.cgrp.' + g.g) || g.label, icon: GROUP_ICON[g.g === 'files' ? 'repo' : g.g === 'time' ? 'system' : g.g] || '' }));
@@ -9032,7 +9199,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -9227,7 +9394,9 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.querySelector('.sched-cp2')?.addEventListener('input', (e) => { p.expect = (e.target as HTMLInputElement).value; });
         return;
     }
-    else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
+    else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modInstalled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
+    else if (cond.type === 'profileExists') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_profiles, p.id)}</select>`;
+    else if (cond.type === 'themeActive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_themes, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
     // Both pick from a list rather than taking a typed id. A plugin id is `com.someone.thing`
     // and a task id is a millisecond timestamp: typed by hand, both are a silent `false`
@@ -9320,15 +9489,22 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
             host.querySelector('.sched-cp-member')?.addEventListener('change', (e) => { p.member = (e.target as HTMLSelectElement).value; });
         }
     } else if (cond.type === 'value') {
+        // A datalist, not a <select>. Some actions write their numbers under a prefix the
+        // author picks — `app.buildInfo` puts every field of the build under `<prefix>.<key>`
+        // — so those names CANNOT be in VALUE_SOURCES, and a fixed dropdown made every one of
+        // them unreachable by the only condition that compares numbers. The list is still
+        // offered; it is now a list of suggestions rather than the whole vocabulary.
         host.innerHTML = `
-            <select class="input sched-cp-src" style="max-width:170px">
-                ${VALUE_SOURCES.map(s => `<option value="${s}"${p.source === s ? ' selected' : ''}>${escHtml(s)}</option>`).join('')}
-            </select>
+            <input class="input sched-cp-src" list="sched-value-sources" spellcheck="false" style="max-width:170px"
+                placeholder="${escAttr(t('sched.phVarName') || 'variable')}" value="${escAttr(p.source || '')}">
+            <datalist id="sched-value-sources">
+                ${VALUE_SOURCES.map(s => `<option value="${escAttr(s)}"></option>`).join('')}
+            </datalist>
             <select class="input sched-cp-op" style="max-width:70px">
                 ${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}
             </select>
             <input class="input sched-cp-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(p.value ?? '')}" style="max-width:110px">`;
-        host.querySelector('.sched-cp-src')?.addEventListener('change', (e) => { p.source = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.source = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
     } else if (cond.type === 'textIs') {

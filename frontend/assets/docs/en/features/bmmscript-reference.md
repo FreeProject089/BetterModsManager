@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    103 actions · 34 conditions · 32 values · 8 loop sources
+    104 actions · 37 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -168,14 +168,17 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `fileContains` | A file contains… |
 | `enumIs` | variable is an enum member |
 | `profileActive` | Profile is active |
+| `profileExists` | Profile exists |
 | `modEnabled` | Mod is enabled |
 | `modDisabled` | Mod is disabled |
+| `modInstalled` | Mod is installed |
 | `modWins` | Mod wins its shared files |
 | `fileIsValid` | File is a valid BMM document |
 | `modpackActive` | Modpack is active |
 | `modpackInactive` | Modpack is inactive |
 | `allModsActive` | All active-profile mods are on |
 | `pluginInstalled` | Plugin is installed |
+| `themeActive` | Theme is active |
 | `taskArmed` | Another task is armed |
 | `appRunning` | App is running |
 | `appNotRunning` | App is NOT running |

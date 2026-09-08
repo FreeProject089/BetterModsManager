@@ -169,6 +169,12 @@
       "group": "app"
     },
     {
+      "type": "library.counts",
+      "label": "Read how big the library is",
+      "needs": "buildInfo",
+      "group": "app"
+    },
+    {
       "type": "repo.gen",
       "label": "Generate repo (opens the screen)",
       "needs": null,

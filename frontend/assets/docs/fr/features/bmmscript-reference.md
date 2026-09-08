@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    103 actions · 34 conditions · 32 valeurs · 8 sources de boucle
+    104 actions · 37 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -168,14 +168,17 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `fileContains` | Un fichier contient… |
 | `enumIs` | la variable vaut un membre d’enum |
 | `profileActive` | Profil actif |
+| `profileExists` | Le profil existe |
 | `modEnabled` | Mod activé |
 | `modDisabled` | Mod désactivé |
+| `modInstalled` | Le mod est installé |
 | `modWins` | Le mod gagne ses fichiers partagés |
 | `fileIsValid` | Le fichier est un document BMM valide |
 | `modpackActive` | Modpack actif |
 | `modpackInactive` | Modpack inactif |
 | `allModsActive` | Tous les mods du profil actif sont activés |
 | `pluginInstalled` | Le plugin est installé |
+| `themeActive` | Le thème est actif |
 | `taskArmed` | Une autre tâche est armée |
 | `appRunning` | L’app est lancée |
 | `appNotRunning` | L’app n’est PAS lancée |

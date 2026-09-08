@@ -44,6 +44,18 @@ const offered = new Set([...block[1].matchAll(/'([a-zA-Z0-9._]+)'/g)].map((m) =>
 const unreachable = [...written].filter((v) => !offered.has(v)).sort();
 const alwaysZero = [...offered].filter((v) => !written.has(v)).sort();
 
+// Some actions write under a PREFIX the task author picks: `library.counts` writes
+// `${into}.mods`, `${into}.enabled` and so on, so the full name cannot be in VALUE_SOURCES
+// — the first half of it does not exist until somebody writes the task. What IS fixed is
+// the second half, so that is what gets checked: a source of the form `<anything>.mods` is
+// legitimate exactly when some action writes a templated key ending in `.mods`.
+//
+// Without this, the only way to make such an action usable was to leave it out of every
+// preset, which is how `app.buildInfo` ended up with no example anywhere.
+const templatedSuffixes = new Set(
+    [...src.matchAll(/ctx(?:\.nums|\.text)?\[`\$\{[^}]*\}\.([a-zA-Z0-9_]+)`\]\s*=/g)].map((m) => m[1]),
+);
+
 // ── Presets may only name things that exist ──────────────────────────────────────
 //
 // A preset is offered as the correct way to do something, so an invented action type or
@@ -66,7 +78,12 @@ const badRefs = [];
     const knownConds = (src.match(/const COND_TYPES = \[(.*?)\];/s) || [, ''])[1];
     const condSet = new Set([...knownConds.matchAll(/'([a-zA-Z0-9._]+)'/g)].map((m) => m[1]));
 
-    for (const m of body.matchAll(/type: '([a-zA-Z0-9._]+)', params:/g)) {
+    // `negate: true` sits between the type and the params on a negated condition, and the
+    // pattern used to require them adjacent — so every negated condition in every preset
+    // was unchecked. Found by planting `themeIsActive` in one and watching this pass.
+    // Still anchored on `params:` rather than loosened to any `type:`, because a TRIGGER is
+    // also `{ type: 'weeklyAt', … }` and is neither an action nor a condition.
+    for (const m of body.matchAll(/type: '([a-zA-Z0-9._]+)',(?: negate: (?:true|false),)? params:/g)) {
         // One arm names an action, the other a condition; a name in neither is a typo.
         if (!knownActions.has(m[1]) && !condSet.has(m[1])) {
             badRefs.push(`preset uses '${m[1]}', which is neither an action nor a condition type`);
@@ -85,14 +102,15 @@ const badRefs = [];
         [...body.matchAll(/type: 'textIs', params: \{[^}]*source: '([a-zA-Z0-9._]+)'/g)].map((m) => m[1]),
     );
     for (const m of body.matchAll(/source: '([a-zA-Z0-9._]+)'/g)) {
-        if (!offered.has(m[1]) && !freeSourced.has(m[1])) {
-            badRefs.push(`preset reads value source '${m[1]}', which is not in VALUE_SOURCES`);
+        const suffix = m[1].includes('.') ? m[1].slice(m[1].indexOf('.') + 1) : '';
+        if (!offered.has(m[1]) && !freeSourced.has(m[1]) && !templatedSuffixes.has(suffix)) {
+            badRefs.push(`preset reads value source '${m[1]}', which is not in VALUE_SOURCES and is not a prefixed write either`);
         }
     }
 }
 
 if (unreachable.length === 0 && alwaysZero.length === 0 && badRefs.length === 0) {
-    console.log(`✓ scheduler variables: ${written.size} written, all readable, none dangling`);
+    console.log(`✓ scheduler variables: ${written.size} written, all readable, none dangling, ${templatedSuffixes.size} prefixed`);
     if (presetBlock) console.log('✓ presets reference only real actions, conditions and value sources');
     process.exit(0);
 }

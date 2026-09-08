@@ -205,6 +205,13 @@
       ]
     },
     {
+      "type": "library.counts",
+      "group": "app",
+      "params": [
+        "into"
+      ]
+    },
+    {
       "type": "repo.gen",
       "group": "repo",
       "params": []
@@ -870,14 +877,17 @@
     "fileContains",
     "enumIs",
     "profileActive",
+    "profileExists",
     "modEnabled",
     "modDisabled",
+    "modInstalled",
     "modWins",
     "fileIsValid",
     "modpackActive",
     "modpackInactive",
     "allModsActive",
     "pluginInstalled",
+    "themeActive",
     "taskArmed",
     "appRunning",
     "appNotRunning",
