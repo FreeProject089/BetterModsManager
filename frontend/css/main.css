@@ -21422,110 +21422,62 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .nbe-flbl { margin-top: 4px; }
 
 /* ── BetterCommunity screen ──────────────────────────────────────────
-   Two halves, side by side, each with its own accent — so "a site, and a bot" is
-   visible before a word is read. The previous version was one column of eight
-   near-identical rows under two small captions, which made noticing that they are
-   two different things the reader's job. */
-.bc-modal { max-width: 780px; }
+   Type and space, and nothing else. Two earlier versions of this screen were
+   progressively more decorated — eight rows with tinted icon squares, then two
+   bordered panels with coloured top rails — and the chrome was the problem both
+   times: a short explanation dressed as a product page reads as marketing.
+   The only thing drawn here is the hairline under the header. */
+.bc-modal { max-width: 680px; }
 
-/* The hero band. Its own header rather than .modal-header: this screen introduces a
-   place, and a title bar with a rule under it introduces a form. */
 .bc-hero {
-    display: flex; align-items: center; gap: 13px;
-    padding: 20px 20px 17px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 20px 22px 16px;
     border-bottom: 1px solid var(--border);
-    background:
-        radial-gradient(120% 180% at 12% 0%, color-mix(in srgb, var(--bmm-warning) 13%, transparent) 0%, transparent 62%),
-        var(--bmm-s02);
-    border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
 }
-/* The mark is black-and-yellow and the app is dark by default, so the black half would
-   disappear. A LITERAL #fff, not a token: a chip tuned to the dark theme is the thing
-   that vanishes in the light one, and this mark needs light behind it in both. */
+/* Not decoration: the mark is half black and the app is dark, so without a light chip
+   half the logo is not there. A LITERAL #fff and not a token — a chip tuned to the dark
+   theme is the thing that vanishes in the light one, and this needs light in both. */
 .bc-mark {
-    width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
     display: grid; place-items: center;
-    background: #fff; border: 1px solid var(--border);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    background: #fff;
 }
-.bc-mark img { width: 32px; height: 32px; display: block; }
-.bc-hero-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.bc-hero-t { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+.bc-mark img { width: 28px; height: 28px; display: block; }
+.bc-hero-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.bc-hero-t { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; color: var(--text-primary); }
 .bc-hero-s { font-size: 11.5px; color: var(--text-muted); }
 .bc-x {
     flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
-    border: 1px solid transparent; background: transparent;
+    border: none; background: transparent;
     color: var(--text-muted); font-size: 19px; line-height: 1; cursor: pointer;
 }
-.bc-x:hover { background: var(--bmm-s06); color: var(--text-primary); border-color: var(--border); }
+.bc-x:hover { background: var(--bmm-s06); color: var(--text-primary); }
 
-.bc-body { display: block; padding: 18px 20px; }
-.bc-lede { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 16px; }
+.bc-body { display: block; padding: 18px 22px 20px; }
+.bc-lede { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 10px; }
+/* The sentence that answers what somebody actually wants to know when a dialog appears
+   at startup. A paragraph, not a callout box: it is a sentence, and putting a border
+   round it would make it look like a disclaimer rather than the point. */
+.bc-opt { font-size: 12.5px; line-height: 1.6; color: var(--text-muted); margin: 0 0 22px; }
+.bc-opt strong { color: var(--text-primary); font-weight: 650; }
 
-/* Two columns, folding to one when they no longer fit.
-   auto-fit on the GRID and not a viewport media query: the window has a minWidth of
-   1120 (tauri.conf.json), so a `@media (max-width: 700px)` here is a rule that can
-   never fire — which is what the first version of this was. The modal is capped at
-   780px and two 260px tracks fit inside it, so in this app it is always two; the fold
-   is there for the day the cap or the content changes, and it happens on its own. */
-.bc-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 13px; }
+.bc-h {
+    font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-secondary); margin: 0 0 3px;
+}
+.bc-h + .bc-note { margin-top: 0; }
+.bc-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0 0 10px; }
 
-.bc-panel {
-    border: 1px solid var(--border); border-radius: 12px;
-    padding: 13px 13px 6px;
-    background: var(--bmm-s02);
-    border-top: 2px solid var(--bmm-warning);
-    min-width: 0;
+/* Term on the left, definition on the right. minmax and not a fixed width: "The blog and
+   the docs" is three times the length of "Hosting", and a fixed column either clips the
+   long term or strands the short ones in a lake of space. */
+.bc-dl {
+    display: grid; grid-template-columns: minmax(90px, 152px) 1fr;
+    gap: 10px 16px; margin: 0 0 24px; padding: 0;
 }
-/* The two halves, named rather than one styled by omission: `bc-panel-${kind}` puts both
-   classes in the DOM, and a class no stylesheet mentions is what check-modal-shell is
-   for. The site half is the app's own amber; the bot half is Discord's blurple. */
-.bc-panel-site { border-top-color: var(--bmm-warning); }
-/* Discord's blurple, declared once and derived from three times. It is their brand
-   colour and not a theme token, but every USE of it is mixed rather than literal so the
-   panel follows the theme instead of being tuned to the dark one. */
-.bc-panel-bot { --bc-blurple: #5865F2; border-top-color: var(--bc-blurple); }
-.bc-panel-h { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
-.bc-panel-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bmm-warning); flex-shrink: 0; }
-.bc-panel-bot .bc-panel-dot { background: var(--bc-blurple); }
-.bc-panel-t {
-    font-size: 10.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
-    color: var(--text-secondary);
-}
-.bc-panel-note { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0 0 9px; }
-
-.bc-list { list-style: none; margin: 0; padding: 0; }
-.bc-item { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; border-top: 1px solid var(--bmm-s05); }
-.bc-item:first-child { border-top: none; }
-.bc-item-ic {
-    width: 24px; height: 24px; border-radius: 7px; flex-shrink: 0; margin-top: 1px;
-    display: grid; place-items: center;
-    background: color-mix(in srgb, var(--bmm-warning) 15%, transparent);
-    color: var(--bmm-warning);
-}
-.bc-panel-bot .bc-item-ic {
-    background: color-mix(in srgb, var(--bc-blurple) 16%, transparent);
-    /* Mixed toward the theme's own text colour, so it lightens on dark and darkens on
-       light. The literal it replaces was picked by eye against the dark theme and would
-       have been a pale lilac on white. */
-    color: color-mix(in srgb, var(--bc-blurple) 58%, var(--bmm-text-primary));
-}
-.bc-item-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.bc-item-t { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-.bc-item-b { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
-
-/* The closing statement, and the most important sentence on the screen: none of this is
-   required. Full width under both panels, so it reads as applying to both. */
-.bc-optional {
-    /* Above the panels, not after them: at the 680px minimum window height the body
-       scrolls, and this was what scrolled off — the one sentence answering the question
-       somebody has when a dialog appears at startup. */
-    margin: 0 0 14px; padding: 11px 13px; border-radius: 10px;
-    background: var(--bmm-s04); border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-}
-.bc-optional-t { display: block; font-size: 12.5px; color: var(--text-primary); margin-bottom: 2px; }
-.bc-optional-b { display: block; font-size: 11.5px; color: var(--text-muted); line-height: 1.55; }
+.bc-dl:last-child { margin-bottom: 0; }
+.bc-t { font-size: 12.5px; font-weight: 650; color: var(--text-primary); margin: 0; }
+.bc-d { font-size: 12px; color: var(--text-muted); line-height: 1.55; margin: 0; }
 
 .bc-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 /* Holds the actions to the right when there is no "don't show again" to balance them. */

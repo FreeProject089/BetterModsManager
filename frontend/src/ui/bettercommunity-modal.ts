@@ -9,11 +9,16 @@
 // that none of it is required. BMM manages mods on a machine with no network and no account;
 // everything here is the optional half.
 //
-// THE LAYOUT IS THE ARGUMENT. The first version was one column of eight near-identical
-// rows, which left the reader to notice for themselves that they fall into two groups.
-// Here the two halves sit side by side under their own headers, each with its own accent,
-// so the shape of the answer — a site, and a bot — is visible before a word is read. On a
-// narrow window they stack and the headers keep the grouping.
+// NO CHROME. Two earlier versions of this screen got progressively more decorated —
+// first eight rows in one column, then two bordered panels with coloured top rails — and
+// the decoration was the problem both times. A short explanation dressed as a product
+// page reads as marketing, and a person meeting a dialog at startup is already primed to
+// think that.
+//
+// So: two labelled groups, a term on the left and a line on the right, and nothing
+// separating anything but space. No boxes, no rails, no tinted icons. The reader can
+// take in the terms in one pass and read only the lines that interest them, which is
+// what a term-and-definition list is for.
 //
 // Every address comes from the links registry (links-config.ts), never typed here. That
 // registry is loaded from BCWEB at startup with a bundled fallback, which is the whole point
@@ -27,57 +32,44 @@ import { raiseAboveAll } from './layer.js';
 /** Set once "Don't show again" is ticked. Never shown at start after that. */
 const OPTOUT_KEY = 'bmm_bc_intro_optout';
 
-/** One row of the "what it does" lists: an icon path, a title, a line of explanation. */
-interface Row { icon: string; title: string; body: string; }
+/** One entry: what it is called, and one line saying what it is. No icon — eight small
+ *  glyphs on one screen decorate it without telling anybody anything. */
+interface Row { title: string; body: string; }
 
-const svg = (d: string): string =>
-    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-
-const ICON = {
-    server: '<rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/>',
-    box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M12 22V12"/>',
-    news: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6Z"/>',
-    user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-    gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
-    trend: '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',
-};
-
-/** The rows are declared, not inlined, so the two lists read as two lists. */
+/**
+ * The site's three.
+ *
+ * It had four, and two of them were the same thing: "Server Repos" and "Catalogues" are
+ * both HOSTING, which is what the site actually sells, and splitting them made the answer
+ * to "what is this place" longer without making it fuller. Hosting is one entry that says
+ * what it holds today and what it will hold — somebody's own website or Discord bot —
+ * because that is the direction of the thing and a person deciding whether to care should
+ * hear it.
+ */
 const SITE_ROWS = (): Row[] => [
-    { icon: ICON.server, title: t('bc.site.repo'), body: t('bc.site.repo.d') },
-    { icon: ICON.box, title: t('bc.site.cat'), body: t('bc.site.cat.d') },
-    { icon: ICON.news, title: t('bc.site.blog'), body: t('bc.site.blog.d') },
-    { icon: ICON.user, title: t('bc.site.acct'), body: t('bc.site.acct.d') },
+    { title: t('bc.site.host'), body: t('bc.site.host.d') },
+    { title: t('bc.site.pub'), body: t('bc.site.pub.d') },
+    { title: t('bc.site.blog'), body: t('bc.site.blog.d') },
 ];
 
+/** The bot's four are unchanged — they were right. Only their presentation is different. */
 const BOT_ROWS = (): Row[] => [
-    { icon: ICON.bell, title: t('bc.bot.news'), body: t('bc.bot.news.d') },
-    { icon: ICON.shield, title: t('bc.bot.roles'), body: t('bc.bot.roles.d') },
-    { icon: ICON.gift, title: t('bc.bot.give'), body: t('bc.bot.give.d') },
-    { icon: ICON.trend, title: t('bc.bot.level'), body: t('bc.bot.level.d') },
+    { title: t('bc.bot.news'), body: t('bc.bot.news.d') },
+    { title: t('bc.bot.roles'), body: t('bc.bot.roles.d') },
+    { title: t('bc.bot.give'), body: t('bc.bot.give.d') },
+    { title: t('bc.bot.level'), body: t('bc.bot.level.d') },
 ];
 
-const rowHtml = (r: Row): string => `
-        <li class="bc-item">
-            <span class="bc-item-ic">${svg(r.icon)}</span>
-            <span class="bc-item-txt">
-                <b class="bc-item-t">${escHtml(r.title)}</b>
-                <span class="bc-item-b">${escHtml(r.body)}</span>
-            </span>
-        </li>`;
+/** A term and its definition. `<dt>`/`<dd>` because that is what these are, which also
+ *  gives a screen reader the pairing the two columns give everyone else. */
+const rowHtml = (r: Row): string =>
+    `<dt class="bc-t">${escHtml(r.title)}</dt><dd class="bc-d">${escHtml(r.body)}</dd>`;
 
-/** One half of the answer: a titled panel with its own accent and its own list. */
-const panelHtml = (kind: 'site' | 'bot', title: string, note: string, rows: Row[]): string => `
-        <section class="bc-panel bc-panel-${kind}">
-            <header class="bc-panel-h">
-                <span class="bc-panel-dot"></span>
-                <span class="bc-panel-t">${escHtml(title)}</span>
-            </header>
-            <p class="bc-panel-note">${escHtml(note)}</p>
-            <ul class="bc-list">${rows.map(rowHtml).join('')}</ul>
-        </section>`;
+/** One half of the answer: a label, a line about it, and its terms. */
+const groupHtml = (title: string, note: string, rows: Row[]): string => `
+        <h3 class="bc-h">${escHtml(title)}</h3>
+        <p class="bc-note">${escHtml(note)}</p>
+        <dl class="bc-dl">${rows.map(rowHtml).join('')}</dl>`;
 
 let _open: HTMLElement | null = null;
 
@@ -161,14 +153,11 @@ export function openBetterCommunity(atStart = false): void {
             </div>
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
-                <div class="bc-optional">
-                    <strong class="bc-optional-t">${escHtml(t('bc.opt.t'))}</strong>
-                    <span class="bc-optional-b">${escHtml(t('bc.opt.b'))}</span>
-                </div>
-                <div class="bc-cols">
-                    ${panelHtml('site', t('bc.site'), t('bc.site.lede'), SITE_ROWS())}
-                    ${panelHtml('bot', t('bc.bot'), t('bc.bot.lede'), BOT_ROWS())}
-                </div>
+                <p class="bc-opt">
+                    <strong>${escHtml(t('bc.opt.t'))}</strong> ${escHtml(t('bc.opt.b'))}
+                </p>
+                ${groupHtml(t('bc.site'), t('bc.site.lede'), SITE_ROWS())}
+                ${groupHtml(t('bc.bot'), t('bc.bot.lede'), BOT_ROWS())}
             </div>
             <div class="modal-footer bc-foot">
                 ${atStart
