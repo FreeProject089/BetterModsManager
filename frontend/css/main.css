@@ -19044,6 +19044,41 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     transition: transform .15s ease; color: var(--text-muted);
 }
 .csp-details[open] > .csp-summary::before { transform: rotate(90deg); }
+
+/* ── "What BMM connects to" ──
+   The evidence for what the "Pin the network" preset writes. It shares .csp-details, so it
+   opens collapsed like the shipped policy above it: a reader who wants the list can have it,
+   and a reader who just wants the button is not handed a table first. */
+.csp-conns .csp-conn-note {
+    margin: 6px 0 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--bmm-text-muted, var(--text-muted));
+}
+.csp-conn-list { display: flex; flex-direction: column; gap: 2px; }
+.csp-conn-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 5px 8px;
+    border-radius: 6px;
+}
+.csp-conn-row:nth-child(odd) { background: var(--bmm-bg-base, rgba(255, 255, 255, .03)); }
+.csp-conn-origin {
+    font-family: var(--bmm-font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    color: var(--bmm-text-primary, var(--text-primary));
+    /* An origin is one token and must not be broken across lines mid-host, but a long
+       self-hosted base with a port has to be able to wrap somewhere. */
+    overflow-wrap: anywhere;
+}
+.csp-conn-what {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--bmm-text-muted, var(--text-muted));
+}
 .csp-severe-count { color: var(--bmm-danger); }
 
 .csp-directives { max-height: 300px; overflow: auto; padding: 2px 0 0 18px; }

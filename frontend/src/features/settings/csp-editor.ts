@@ -15,6 +15,8 @@
 // moment from localStorage, which is the only store readable synchronously that early.
 import { escHtml } from '../../core/utils.js';
 import { t } from '../../core/i18n.js';
+import { getLinks, bcRoot } from '../../core/links-config.js';
+import { connections, networkPolicy, type Connection } from './csp-hosts.js';
 
 const KEY = 'bmm.csp.extra';
 
@@ -113,7 +115,11 @@ export const PRESETS: { id: string; label: string; note: string; policy: string 
         id: 'network',
         label: 'csp.preset.network',
         note: 'csp.preset.network.note',
-        policy: "connect-src 'self' http://127.0.0.1:* http://localhost:* ipc: tauri: https://bettercommunity.ch https://api.github.com https://raw.githubusercontent.com; object-src 'none'; base-uri 'self'",
+        // Empty on purpose — filled by presetPolicy() from the links the app actually
+        // resolved. A literal here is what let this preset drift away from the app and start
+        // blocking telemetry, bug reports, the offline probe and any self-hosted BCWEB. The
+        // constant below is only the shape it falls back to before links.json has loaded.
+        policy: '',
     },
     {
         id: 'strict',
@@ -122,6 +128,45 @@ export const PRESETS: { id: string; label: string; note: string; policy: string 
         policy: "script-src 'self'; object-src 'none'; base-uri 'self'",
     },
 ];
+
+/**
+ * The policy a preset installs, resolved when the button is pressed.
+ *
+ * Only `network` is dynamic; the others are fixed strings and come back unchanged. Resolving
+ * at press time rather than at module load matters because links.json arrives asynchronously
+ * — building the preset once at startup would bake in the built-in defaults for anybody whose
+ * BetterCommunity is self-hosted, which is the exact failure this replaced.
+ */
+export function presetPolicy(id: string): string {
+    const p = PRESETS.find((x) => x.id === id);
+    if (!p) return '';
+    if (p.id !== 'network') return p.policy;
+    try { return networkPolicy(connections(getLinks(), bcRoot())); } catch { return FALLBACK_NETWORK; }
+}
+
+/** Used only if the links registry cannot be read at all. Deliberately the production hosts
+ *  plus the ones the old literal forgot, so even the fallback no longer breaks the app. */
+const FALLBACK_NETWORK = "connect-src 'self' ipc: tauri: http://127.0.0.1:* http://localhost:*"
+    + ' https://bettercommunity.ch https://telemetry.bettercommunity.ch https://api.github.com'
+    + " https://raw.githubusercontent.com https://app.betahub.io https://www.gstatic.com https://cloudflare.com; object-src 'none'; base-uri 'self'";
+
+/** The connections table shown under the presets — the evidence for what the button writes. */
+function connectionsTable(): string {
+    let conns: Connection[] = [];
+    try { conns = connections(getLinks(), bcRoot()); } catch { conns = []; }
+    if (!conns.length) return '';
+    const rows = conns.map((c) => `
+        <div class="csp-conn-row">
+            <code class="csp-conn-origin">${escHtml(c.origin)}</code>
+            <span class="csp-conn-what">${escHtml(c.whatKeys.map((k) => t(k)).join(' · '))}</span>
+        </div>`).join('');
+    return `
+    <details class="csp-details csp-conns">
+        <summary class="csp-summary">${escHtml(t('csp.conns').replace('{n}', String(conns.length)))}</summary>
+        <p class="csp-conn-note">${escHtml(t('csp.conns.note'))}</p>
+        <div class="csp-conn-list">${rows}</div>
+    </details>`;
+}
 
 /** Render one directive row. */
 function directiveRow(d: Directive): string {
@@ -163,6 +208,8 @@ export function renderCspEditor(): string {
             <summary class="csp-summary">${summary}</summary>
             <div id="csp-directives" class="csp-directives">${shipped.map(directiveRow).join('')}</div>
         </details>
+
+        ${connectionsTable()}
 
         <div class="csp-section-label">${escHtml(t('csp.addPolicy'))}</div>
         <div id="csp-presets" class="csp-presets">
@@ -208,7 +255,7 @@ export function setExtraPolicy(policy: string): string | null {
 export function applyPresetById(id: string): boolean {
     const p = PRESETS.find((x) => x.id === id);
     if (!p) return false;
-    return setExtraPolicy(p.policy) === null;
+    return setExtraPolicy(presetPolicy(p.id)) === null;
 }
 
 /** Repaint on a language change.
@@ -252,7 +299,7 @@ export function bindCspEditor(root: ParentNode = document): void {
         b.addEventListener('click', () => {
             const p = PRESETS.find((x) => x.id === b.dataset.cspPreset);
             if (!p) return;
-            ta.value = p.policy;
+            ta.value = presetPolicy(p.id);
             say(t(p.note), true);
         });
     });
