@@ -8464,6 +8464,110 @@ function _actionCatalog(): _ActionDef[] {
           desc: d('actionGuardStopDesc', 'Exits the script immediately if a condition is true — a guard clause to bail out early. Write the condition in the target language.'),
           iconSvg: sv('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>'),
           fields: [ { key: 'cond', label: d('fldCondExpr', 'Condition'), type: 'text', placeholder: 'A < 0' } ] },
+
+        // ── Import / export ──────────────────────────────────────────
+        //
+        // Every one of these opens a native dialog when its path is left empty and runs
+        // unattended when it is filled in. A generated script wants the second, and until
+        // now could not ask for either.
+        { id: 'import_modlist',  cat: 'mods', label: d('actionImportModlist', 'Import a mod list'),
+          desc: d('actionImportModlistDesc', 'Imports a .mm mod list. Leave the path empty to open the file picker instead.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+          fields: [ { key: 'path', label: d('fldFile', 'File'), type: 'file', placeholder: d('phDialogIfEmpty', 'empty = open the picker') } ] },
+        { id: 'export_modlist',  cat: 'mods', label: d('actionExportModlist', 'Export the mod list'),
+          desc: d('actionExportModlistDesc', 'Writes the active profile\'s mod list to a file. Leave the path empty to open the save dialog.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+          fields: [ { key: 'path', label: d('fldFile', 'File'), type: 'file', placeholder: d('phDialogIfEmpty', 'empty = open the picker') } ] },
+        { id: 'import_modpack',  cat: 'mods', label: d('actionImportModpack', 'Import a modpack'),
+          desc: d('actionImportModpackDesc', 'Imports a .bmp modpack. Leave the path empty to open the file picker.'),
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="9 12 12 15 15 12"/>'),
+          fields: [ { key: 'path', label: d('fldFile', 'File'), type: 'file', placeholder: d('phDialogIfEmpty', 'empty = open the picker') } ] },
+        { id: 'export_modpack',  cat: 'mods', label: d('actionExportModpack', 'Export a modpack'),
+          desc: d('actionExportModpackDesc', 'Writes one modpack to a .bmp. Give a destination folder to run without the save dialog.'),
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="9 15 12 12 15 15"/>'),
+          fields: [
+            { key: 'id',      label: d('fldModpackId', 'Modpack ID'), type: 'text' },
+            { key: 'destDir', label: d('fldDestFolder', 'Destination folder'), type: 'folder', placeholder: d('phDialogIfEmpty', 'empty = open the picker'), half: true },
+          ] },
+        { id: 'import_plugin',   cat: 'system', label: d('actionImportPlugin', 'Install a plugin from a file'),
+          desc: d('actionImportPluginDesc', 'Installs a .bmmplug. Leave the path empty to open the file picker.'),
+          iconSvg: sv('<path d="M12 2v6m0 0 3-3m-3 3L9 5"/><rect x="3" y="10" width="18" height="12" rx="2"/>'),
+          fields: [ { key: 'path', label: d('fldFile', 'File'), type: 'file', placeholder: d('phDialogIfEmpty', 'empty = open the picker') } ] },
+        { id: 'export_plugin',   cat: 'system', label: d('actionExportPlugin', 'Export a plugin'),
+          desc: d('actionExportPluginDesc', 'Writes an installed plugin to a .bmmplug. Give a destination folder to run without the save dialog.'),
+          iconSvg: sv('<rect x="3" y="2" width="18" height="12" rx="2"/><path d="M12 22v-6m0 0 3 3m-3-3-3 3"/>'),
+          fields: [
+            { key: 'id',      label: d('fldPluginId', 'Plugin ID'), type: 'text' },
+            { key: 'destDir', label: d('fldDestFolder', 'Destination folder'), type: 'folder', placeholder: d('phDialogIfEmpty', 'empty = open the picker'), half: true },
+          ] },
+        { id: 'uninstall_plugin', cat: 'system', label: d('actionUninstallPlugin', 'Uninstall a plugin'),
+          desc: d('actionUninstallPluginDesc', 'Removes a plugin from the registry, drops its stored permissions, and deletes its files.'),
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+          fields: [ { key: 'id', label: d('fldPluginId', 'Plugin ID'), type: 'text' } ] },
+        { id: 'import_data',     cat: 'system', label: d('actionImportData', 'Restore a BMM data export'),
+          desc: d('actionImportDataDesc', 'Restores a full BMM data export. Opens the file picker — this one replaces everything, so it is deliberately not unattended.'),
+          iconSvg: sv('<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/>') },
+        { id: 'import_language', cat: 'system', label: d('actionImportLanguage', 'Install a language file'),
+          desc: d('actionImportLanguageDesc', 'Installs a translated .json. Leave the path empty to open the file picker.'),
+          iconSvg: sv('<path d="m5 8 6 6M4 14l6-6 2-3"/><path d="M2 5h12M7 2h1"/><path d="m22 22-5-10-5 10M14 18h6"/>'),
+          fields: [ { key: 'path', label: d('fldFile', 'File'), type: 'file', placeholder: d('phDialogIfEmpty', 'empty = open the picker') } ] },
+
+        // ── Reads a script can branch on ──────────────────────────────────
+        { id: 'list_schedules',  cat: 'read', label: d('actionListSchedules', 'List saved tasks'),
+          desc: d('actionListSchedulesDesc', 'id, name, whether each is armed, and its trigger — not its steps.'),
+          iconSvg: sv('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') },
+        { id: 'list_catalogs',   cat: 'read', label: d('actionListCatalogs', 'List followed catalogues'),
+          desc: d('actionListCatalogsDesc', 'Every catalogue this BMM follows, by type.'),
+          iconSvg: sv('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') },
+        { id: 'list_keys',       cat: 'read', label: d('actionListKeys', 'List identity keys'),
+          desc: d('actionListKeysDesc', 'Names and paths only — the private half is never returned.'),
+          iconSvg: sv('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.8-8.8M17 6l2 2M14 9l2 2"/>') },
+        { id: 'read_hook',       cat: 'system', label: d('actionReadHook', 'Read a hook\'s rings'),
+          desc: d('actionReadHookDesc', 'What actually arrived on one named hook, payloads included, without consuming it.'),
+          iconSvg: sv('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'),
+          fields: [ { key: 'name', label: d('fldHookName', 'Hook name'), type: 'text', placeholder: 'nightly-done' } ] },
+        { id: 'clear_hooks',     cat: 'system', label: d('actionClearHooks', 'Forget every hook ring'),
+          desc: d('actionClearHooksDesc', 'Empties the record of what has rung. A task waiting on a hook is unaffected — it waits for the next ring.'),
+          iconSvg: sv('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><line x1="2" y1="2" x2="22" y2="22"/>') },
+
+        // ── The rest of what a mod carries ────────────────────────────────
+        { id: 'mod_config',      cat: 'mods', label: d('actionModConfig', 'Set where a mod updates from'),
+          desc: d('actionModConfigDesc', 'Points one mod at the repo, or the direct URL, its updates come from. An empty value clears that field.'),
+          iconSvg: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+          fields: [
+            { key: 'modId',     label: d('fldModId', 'Mod ID'), type: 'text' },
+            { key: 'updateUrl', label: d('fldUpdateUrl', 'Update repo URL'), type: 'text', placeholder: d('phEmptyClears', 'empty clears it'), half: true },
+            { key: 'repoModId', label: d('fldRepoModId', 'Its id in that repo'), type: 'text', placeholder: d('phEmptyClears', 'empty clears it'), half: true },
+            { key: 'directUrl', label: d('fldDirectUrl', 'Direct download URL'), type: 'text', placeholder: d('phOptional', '(optional)') },
+          ] },
+        { id: 'update_mods',     cat: 'mods', label: d('actionUpdateMods', 'Update mods from a repo'),
+          desc: d('actionUpdateModsDesc', 'Runs the update pass. Leave the URL empty to use each mod\'s own configured source.'),
+          iconSvg: sv('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>'),
+          fields: [ { key: 'repoUrl', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: d('phOptional', '(optional)') } ] },
+        { id: 'set_mod_order',   cat: 'mods', label: d('actionSetModOrder', 'Set which mod wins shared files'),
+          desc: d('actionSetModOrderDesc', 'Reorders the active mods and re-copies the files that change hands. The list must be a permutation of what is active; last in the list wins.'),
+          iconSvg: sv('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/>'),
+          fields: [
+            { key: 'order',     label: d('fldModOrder', 'Mod ids, in order'), type: 'text', placeholder: 'mod-a, mod-b, mod-c' },
+            { key: 'profileId', label: d('fldProfileIdOpt', 'Profile (optional)'), type: 'text', placeholder: d('phActiveProfile', '(the active one)'), half: true },
+          ] },
+
+        // ── The escape hatch ─────────────────────────────────────────
+        //
+        // MCP has `bmm_api_call` and the CLI has `call`, both documented as exactly this.
+        // The generator was the only one of the three surfaces with no way to reach a route
+        // nobody had written a card for, so anything unusual meant leaving the generator.
+        { id: 'api_call',        cat: 'system', label: d('actionApiCall', 'Call any endpoint'),
+          desc: d('actionApiCallDesc', 'Any route on the local API, by method and path. The token is added for you. Use it for what has no card of its own — the API &amp; Script tab lists every route and its fields.'),
+          iconSvg: sv('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="13" y1="4" x2="11" y2="20"/>'),
+          fields: [
+            { key: 'method', label: d('fldMethod', 'Method'), type: 'select', default: 'GET', half: true, options: [
+                { value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' },
+                { value: 'PUT', label: 'PUT' }, { value: 'DELETE', label: 'DELETE' },
+            ] },
+            { key: 'path',   label: d('fldApiPath', 'Path'), type: 'text', placeholder: '/api/status', half: true },
+            { key: 'body',   label: d('fldJsonBody', 'JSON body'), type: 'textarea', placeholder: '{ }' },
+          ] },
     ];
 }
 
@@ -9633,6 +9737,33 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
         case 'repo_host_now':      return { method: 'POST', path: '/api/repo/host-now',         body: _prune({ path: s('path'), port: parseInt(s('port'), 10) || 0, downloadPassword: s('downloadPassword') }) };
         case 'repo_update_now':    return { method: 'POST', path: '/api/repo/update-now',       body: _prune({ repoDir: s('repoDir'), authorName: s('authorName') }) };
         case 'content_id':         return { method: 'POST', path: '/api/content-id',            body: { kind: s('kind'), doc: _json(s('doc')) } };
+
+        // Import / export. `_prune` matters here: these routes read an ABSENT path as
+        // "open the picker" and an empty string as a path that is empty, which fails.
+        case 'import_modlist':     return { method: 'POST', path: '/api/modlists/import',        body: _prune({ path: s('path') }) };
+        case 'export_modlist':     return { method: 'POST', path: '/api/modlists/export',        body: _prune({ path: s('path') }) };
+        case 'import_modpack':     return { method: 'POST', path: '/api/modpacks/import',        body: _prune({ path: s('path') }) };
+        case 'export_modpack':     return { method: 'POST', path: '/api/modpacks/export',        body: _prune({ id: s('id'), destDir: s('destDir') }) };
+        case 'import_plugin':      return { method: 'POST', path: '/api/plugins/import',         body: {} };
+        case 'export_plugin':      return { method: 'POST', path: '/api/plugins/export',         body: _prune({ id: s('id'), destDir: s('destDir') }) };
+        case 'uninstall_plugin':   return { method: 'DELETE', path: `/api/plugins/${s('id') || 'PLUGIN_ID'}`, body: {} };
+        case 'import_data':        return { method: 'POST', path: '/api/data/import',            body: {} };
+        case 'import_language':    return { method: 'POST', path: '/api/language/import',        body: _prune({ path: s('path') }) };
+
+        // Reads a script can branch on
+        case 'list_schedules':     return { method: 'GET', path: '/api/schedules',               body: {} };
+        case 'list_catalogs':      return { method: 'GET', path: '/api/catalogs',                body: {} };
+        case 'list_keys':          return { method: 'GET', path: '/api/keys',                    body: {} };
+        case 'read_hook':          return { method: 'GET', path: `/api/hook/${encodeURIComponent(s('name') || 'HOOK_NAME')}`, body: {} };
+        case 'clear_hooks':        return { method: 'DELETE', path: '/api/hook',                 body: {} };
+
+        case 'mod_config':         return { method: 'POST', path: '/api/mod/config',             body: _prune({ modId: s('modId'), updateUrl: s('updateUrl'), repoModId: s('repoModId'), directUrl: s('directUrl') }) };
+        case 'update_mods':        return { method: 'POST', path: '/api/mod/update',             body: _prune({ repoUrl: s('repoUrl') }) };
+        // Typed as a comma-separated list for the same reason repo_gen_now's profileIds is:
+        // a generated script has no place for a multi-select.
+        case 'set_mod_order':      return { method: 'POST', path: '/api/mods/order',             body: _prune({ order: s('order').split(',').map((x) => x.trim()).filter(Boolean), profileId: s('profileId') }) };
+
+        case 'api_call':           return { method: (s('method') || 'GET').toUpperCase(), path: s('path') || '/api/status', body: _json(s('body')) };
         case 'open_view':          return { method: 'POST', path: '/api/view',                  body: { id: s('id') } };
         // `modsDir`, not `dir`. GenerateManifestArgs is camelCase and has no `dir` at all, so
         // serde dropped it without a word and the route ran with no source — the folder you
