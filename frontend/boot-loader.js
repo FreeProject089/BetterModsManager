@@ -32,6 +32,19 @@
     function buildBrand() {
         const wrap = document.getElementById('ld-brand');
         if (!wrap) return;
+        /* The app's own mark, in front of the name it belongs to. Tasky above is the
+           mascot and keeps the stage; this is the logo, and the splash showed the name
+           without it. White chip, because the mark is half black and this screen is not
+           -- the same chip the BetterCommunity credit wears two lines below, so the two
+           read as a pair rather than as two unrelated pictures. */
+        const mark = document.createElement('img');
+        mark.id = 'ld-mark';
+        mark.src = 'assets/BMm_white.webp';
+        mark.alt = '';
+        mark.style.cssText = 'width:19px;height:19px;border-radius:6px;background:#fff;'
+            + 'padding:1.5px;align-self:center;display:block;opacity:0;'
+            + 'box-shadow:0 1px 4px rgba(0,0,0,0.35);will-change:transform,opacity;';
+        wrap.appendChild(mark);
         [{ text: 'Better', cls: 'ld-w1' }, { text: 'Mod.Manager', cls: 'ld-w2' }].forEach(part => {
             const word = document.createElement('div');
             word.style.cssText = 'display:flex;align-items:baseline;overflow:visible;';
@@ -142,6 +155,15 @@
                     duration: 0.5, stagger: { each: 0.033, ease: 'power2.out' }, ease: 'back.out(2)'
                 }
             );
+            /* The mark lands with the first letters, not before them: it is part of the
+               wordmark, and a logo that arrived on its own would read as a third element.
+               Guarded like the chars above -- on a fast boot the loader is already gone. */
+            if (document.getElementById('ld-mark')) {
+                gsap.fromTo('#ld-mark',
+                    { opacity: 0, scale: 0.55, rotate: -30 },
+                    { opacity: 1, scale: 1, rotate: 0, duration: 0.55, ease: 'back.out(2.2)' }
+                );
+            }
         }, null, 1.0);
 
         /* 1.4 — version */

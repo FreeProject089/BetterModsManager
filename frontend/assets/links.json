@@ -21,7 +21,7 @@
   "_4_telemetry": "TELEMETRY (opt-in). analytics_key is a PUBLIC ingest key: it only permits SUBMITTING telemetry and already ships inside the app. Keeping both here means the collector can move, or the key rotate, without waiting for a BMM release. EMPTY analytics_endpoint = events stay buffered locally and nothing leaves the machine.",
   "analytics_endpoint": "https://telemetry.bettercommunity.ch/batch/",
   "analytics_key": "bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb",
-  "_5_community": "COMMUNITY LINKS. WARNING: of these, only `kofi` is actually read by the app. github_repo, discord, reddit, ed_forum, kofi_community and bettercommunity are hardcoded in frontend/index.html, so editing them here changes nothing a user sees. Kept for now because deleting them, or wiring index.html to this registry, is a decision rather than a cleanup — see LINKS.md.",
+  "_5_community": "COMMUNITY LINKS. All of these reach a user: the app's static markup carries data-link-key=\"<key>\" on each one and app.ts rewrites it from this file at startup, so changing an address here moves it without a release. scripts/check-links.mjs fails the build if a URL in index.html has no key, names a key that is not here, or disagrees with the value here.",
   "kofi": "https://ko-fi.com/I2I31ZIPPG",
   "discord": "https://discord.com/invite/CTaaEF9R75",
   "github_repo": "https://github.com/FreeProject089/BetterModsManager",

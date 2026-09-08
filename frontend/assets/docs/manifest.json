@@ -719,7 +719,7 @@
         "en": "Every external address BMM touches — catalogues, the repo list, telemetry, the update feed — lives in one file, links.json, so any of them can be changed…",
         "fr": "Toutes les adresses externes que BMM utilise — catalogues, liste des dépôts, télémétrie, flux de mises à jour — vivent dans un seul fichier, links.json, pour…"
       },
-      "words": 662,
+      "words": 736,
       "diagrams": 0,
       "fr": true
     },

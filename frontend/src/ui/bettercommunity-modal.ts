@@ -101,7 +101,7 @@ export function openBetterCommunity(): void {
         <div class="modal bc-modal" role="dialog" aria-modal="true" aria-labelledby="bc-title">
             <div class="modal-header">
                 <div class="bc-head">
-                    <span class="bc-mark"><img src="assets/BetterCommunity.png" alt=""></span>
+                    <span class="bc-mark"><img src="assets/BC_white.webp" alt=""></span>
                     <div>
                         <div class="modal-title" id="bc-title">BetterCommunity</div>
                         <div class="bc-sub">${escHtml(t('bc.sub') || 'The platform BMM is part of.')}</div>

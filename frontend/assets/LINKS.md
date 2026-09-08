@@ -135,31 +135,43 @@ JSON itself.
 
 ---
 
-## ⚠️ Declared but never read
+## How the community links reach a user
 
-**These six keys are in the file and in the TypeScript interface, and nothing reads them.**
-The links they describe are **hardcoded in `frontend/index.html`**, so editing them here — or
-in the BCWEB copy — changes nothing a user sees.
+Every external URL in `frontend/index.html` carries `data-link-key="<key>"`, and
+`patchHtmlLinks()` in `app.ts` rewrites it from the registry once the file has loaded. A
+rotated Discord invite or a moved forum thread therefore reaches installed copies without a
+release — which is the whole point of the file.
 
-| Key | Where the real value lives |
+| Key | Where it appears |
 |---|---|
-| `github_repo` | `index.html` (credits card) |
-| `reddit` | `index.html` (credits card) |
-| `ed_forum` | `index.html` (credits card) |
-| `kofi_community` | `index.html` (quicklink card 2) |
-| `bettercommunity` | hardcoded at each use site |
-| `catalog_index` | nothing reads it; `settings.ts` has a similarly-named *localStorage* key, which is not this |
+| `github_repo` | credits card; the BetterCommunity screen |
+| `reddit` | credits card |
+| `ed_forum` | credits card |
+| `kofi_community` | quicklink card 2; the BetterCommunity screen |
+| `bettercommunity` | credits card; the BetterCommunity screen; `repo-sync.ts` |
+| `discord` | credits card; the crash report; quicklink card 1; the BetterCommunity screen |
+| `kofi` | credits card; `kofi-modal.ts` |
+| `feedback_web` | the "follow your reports" line in Settings |
+| `catalog_index` | not fetched by anything, but `csp-hosts.ts` takes its HOST into the connect-src allowlist |
 
-Verified by counting reads of `getLinks().<key>` / `links.<key>` outside `links-config.ts`:
-all six return zero. `kofi` **is** read — once, in `kofi-modal.ts`, with the current URL as an
-inline default — so it is the one link of this group that works. (`app.ts` and
-`theme-editor.ts` contain the word "kofi" in class and function names and do **not** read the
-key; counting file matches rather than reads is what makes a list like this wrong.)
+### An earlier version of this section was wrong, and the way it was wrong is worth keeping
 
-Two ways to resolve it, and it is a real decision rather than an oversight to sweep up:
-either delete the dead keys so the file stops implying it controls those links, or replace the
-hardcoded values in `index.html` with reads from the registry. The second is the point of
-having a registry at all, but it touches a file that is frequently edited by hand.
+It said those six keys were dead, "verified by counting reads of `getLinks().<key>` /
+`links.<key>` outside `links-config.ts`: all six return zero."
+
+The count was correct and the conclusion was not. `patchHtmlLinks` reads the key **out of the
+element** — `links[el.getAttribute('data-link-key')]` — so no key name is ever spelled out in
+the TypeScript and a grep for spelled-out reads finds nothing however many there are. A
+dynamic lookup is invisible to a static count of named ones.
+
+One link genuinely was hardcoded, and the wrong claim hid it rather than exposing it: the
+"follow your reports" anchor in Settings, added after its neighbours, without the attribute.
+`feedback_web` was in the registry and unreachable. It has the attribute now.
+
+**`scripts/check-links.mjs` is what keeps this true.** It fails the build if an external URL in
+`index.html` has no `data-link-key`, names a key that is not in `links.json`, or disagrees with
+the value there. The third case matters most: the URL in the markup is what a person sees
+before the registry loads, and what they keep if it cannot be reached at all.
 
 ---
 

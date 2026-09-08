@@ -114,11 +114,16 @@ change the `bettercommunity.ch` host in `server_browse`, `contributors`, `preset
 Since source 1 is BetterCommunity itself, editing *its* copy is not how you do this: edit the
 GitHub copy or the bundled file.
 
-## A caveat worth knowing
+## Every address here reaches a user
 
-Six entries are present in `links.json` and **nothing reads them**: `github_repo`, `reddit`,
-`ed_forum`, `kofi_community`, `bettercommunity` and `catalog_index`. Those addresses are fixed
-in the app's markup, so changing them here has no effect. `kofi` **is** read and does work.
+Including the ones in the app's own markup. Each external link in the interface names its
+registry key, and BMM rewrites it from this file at startup — so a rotated Discord invite or a
+moved forum thread takes effect on installed copies with no release.
+
+A build check enforces it: a link in the markup that names no key, names one this file does not
+have, or carries an address that disagrees with the one here, fails the build. That last case
+is the one that would otherwise bite quietly — the address written into the markup is what
+somebody sees before this file loads, and what they keep if it cannot be reached at all.
 
 There is a fuller account, aimed at whoever maintains the file, in
 `frontend/assets/LINKS.md`.

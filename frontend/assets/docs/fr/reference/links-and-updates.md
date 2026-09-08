@@ -115,12 +115,17 @@ locale — change l'hôte `bettercommunity.ch` dans `server_browse`, `contributo
 Comme la source 1 **est** BetterCommunity, modifier *sa* copie n'est pas la bonne méthode :
 modifie la copie GitHub ou le fichier embarqué.
 
-## Une réserve à connaître
+## Toutes les adresses d'ici atteignent l'utilisateur
 
-Six entrées sont présentes dans `links.json` et **rien ne les lit** : `github_repo`, `reddit`,
-`ed_forum`, `kofi_community`, `bettercommunity` et `catalog_index`. Ces adresses sont figées
-dans le balisage de l'application, donc les changer ici n'a aucun effet. `kofi`, lui, **est**
-lu et fonctionne.
+Y compris celles du balisage de l'application. Chaque lien externe de l'interface nomme sa clé
+de registre, et BMM la réécrit depuis ce fichier au démarrage — une invitation Discord
+renouvelée ou un fil de forum déplacé prend donc effet sur les installations existantes sans
+nouvelle version.
+
+Un contrôle de build l'impose : un lien du balisage qui ne nomme aucune clé, qui en nomme une
+absente de ce fichier, ou qui porte une adresse en désaccord avec celle d'ici, fait échouer le
+build. C'est ce dernier cas qui mordrait en silence — l'adresse écrite dans le balisage est
+celle qu'on voit avant que ce fichier soit chargé, et celle qu'on garde s'il est injoignable.
 
 Un exposé plus complet, destiné à qui maintient le fichier, se trouve dans
 `frontend/assets/LINKS.md`.

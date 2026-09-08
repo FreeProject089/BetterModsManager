@@ -331,6 +331,36 @@ function bindDomBehaviours(): void {
     document.addEventListener('submit', (e) => {
         if (e.target instanceof HTMLElement && e.target.matches('[data-no-submit]')) e.preventDefault();
     });
+
+    // An external <a> opens in the system browser instead of doing nothing.
+    //
+    // `target="_blank"` is a NO-OP in the Tauri v2 webview — see openExternal in app.ts,
+    // where the same finding is recorded as the reason the credits links died after the
+    // v2 migration. The fix was applied there to the contributor buttons and to the
+    // quicklink cards; every plain anchor in the app was left behind, which is a lot of
+    // them: the six credits cards, "Join Discord" in the crash report, the Ko-fi support
+    // button, and every link inside rendered markdown.
+    //
+    // Delegated, so the next `<a href="https://…" target="_blank">` written anywhere in
+    // the app is correct without anybody remembering this.
+    document.addEventListener('click', (e) => {
+        // Already handled. community.ts and the docs hub intercept their own markdown
+        // links and call openExternal themselves; without this test their links would
+        // open twice — two browser windows from one click.
+        if (e.defaultPrevented) return;
+        const a = (e.target instanceof Element) ? e.target.closest('a') : null;
+        // `href` is the resolved absolute URL, so read the attribute: an in-app `#tab`
+        // resolves to a full tauri.localhost address and would look external here.
+        const href = a?.getAttribute('href') || '';
+        // http/https only. An in-app anchor keeps its normal behaviour, and a
+        // `javascript:` href out of rendered markdown never reaches the opener.
+        if (!/^https?:\/\//i.test(href)) return;
+        // A data-act handler owns this element and has already run (bindActions is
+        // attached before this listener); leave it alone rather than open twice.
+        if (a?.dataset.act !== undefined) return;
+        e.preventDefault();
+        (window as any).openExternal?.(href);
+    });
 }
 
 /** Build the attributes for a delegated click action, correctly escaped.

@@ -147,7 +147,7 @@
                 <div id="ld-by" style="margin-top:14px;opacity:0;">
                     <span style="display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.08em;color:var(--bmm-text-muted);">
                         By
-                        <img src="assets/BetterCommunity.png" alt=""
+                        <img src="assets/BC_white.webp" alt=""
                             style="width:14px;height:14px;border-radius:4px;background:#fff;padding:1px;display:block;">
                         <b style="font-weight:600;color:var(--bmm-text-secondary);">BetterCommunity</b>
                     </span>
@@ -4950,7 +4950,7 @@
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
                                     <span data-i18n="betahub.btnFeedback">Suggestion / feedback</span>
                                 </button>
-                                <span class="fbc-where" id="fbc-where"><span data-i18n="fbc.follow">Follow your reports:</span> <a href="https://bettercommunity.ch/dashboard?s=reports" target="_blank" rel="noreferrer" data-i18n="fbc.followSite">on your BetterCommunity dashboard</a></span>
+                                <span class="fbc-where" id="fbc-where"><span data-i18n="fbc.follow">Follow your reports:</span> <a href="https://bettercommunity.ch/dashboard?s=reports" target="_blank" rel="noreferrer" data-link-key="feedback_web" data-i18n="fbc.followSite">on your BetterCommunity dashboard</a></span>
                             </div>
 
                             <!-- Until this button existed, the only way to find out whether
@@ -5250,11 +5250,11 @@
                                 <span data-i18n="crash.discord">Join Discord</span>
                             </a>
                             <button class="bh-btn-premium bh-btn-indigo" id="btn-crash-report-betahub">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10" /><path d="M2 12h20" />
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                                </svg>
+                                <!-- The mark, not a globe. A globe says "this opens a website"; the
+                                     question at this moment is WHICH one, and the button beside it
+                                     already carries Discord's mark for exactly that reason. -->
+                                <img src="assets/BC_white.webp" alt="" aria-hidden="true"
+                                    style="width:18px;height:18px;border-radius:5px;background:#fff;padding:1px;display:block;flex-shrink:0;">
                                 <span data-i18n="crash.reportBc">Report to BetterCommunity</span>
                             </button>
                         </div>
