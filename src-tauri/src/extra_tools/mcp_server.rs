@@ -284,6 +284,22 @@ enum Commands {
         plugin_id: String,
     },
 
+    /// List the files a plugin ships in its assets/ folder
+    #[command(name = "plugin-assets")]
+    PluginAssets {
+        /// Plugin id
+        plugin_id: String,
+    },
+
+    /// Print one of a plugin's shipped files. Text only; nothing is executed.
+    #[command(name = "plugin-asset")]
+    PluginAsset {
+        /// Plugin id
+        plugin_id: String,
+        /// Path relative to assets/, e.g. README.md
+        path: String,
+    },
+
     /// Show the App Catalog state (installed apps, favourites, community sources)
     Apps,
 
@@ -324,40 +340,6 @@ enum Commands {
     },
 
     // ── What a repo carries besides mods ──────────────────────────
-
-    /// List the files a plugin ships in its assets/ folder
-    #[command(name = "plugin-assets")]
-    PluginAssets {
-        /// Plugin id
-        plugin_id: String,
-    },
-
-    /// Print one of a plugin's shipped files. Text only; nothing is executed.
-    #[command(name = "plugin-asset")]
-    PluginAsset {
-        /// Plugin id
-        plugin_id: String,
-        /// Path relative to assets/, e.g. README.md
-        path: String,
-    },
-
-    /// Arm or disarm one saved task
-    #[command(name = "schedule-set")]
-    ScheduleSet {
-        /// Task id, from `schedules`
-        id: String,
-        /// Turn it off instead of on
-        #[arg(long, default_value_t = false)]
-        off: bool,
-    },
-
-    /// Ring a doorbell a task may be waiting on (wait.hook)
-    Signal {
-        /// The signal name
-        name: String,
-        /// Optional JSON payload for the waiting task
-        data: Option<String>,
-    },
 
     /// List the catalogues this BMM follows, by type.
     Catalogs,
@@ -416,6 +398,8 @@ enum Commands {
         kind: Option<String>,
     },
 
+    // ── The escape hatch ──────────────────────────────────────────────
+
     /// Call the RUNNING BMM app's local API (e.g. `call GET /api/status`)
     Call {
         /// HTTP method: GET or POST
@@ -425,6 +409,8 @@ enum Commands {
         /// JSON body for POST requests
         body: Option<String>,
     },
+
+    // ── Privacy, recorder & sessions ──────────────────────────────────
 
     /// Configure the local Session recorder (running app)
     Recorder {
@@ -464,8 +450,28 @@ enum Commands {
         bench: Option<bool>,
     },
 
+    // ── Scheduling & automation ───────────────────────────────────────
+
     /// List the saved Scheduling & automation tasks
     Schedules,
+
+    /// Arm or disarm one saved task
+    #[command(name = "schedule-set")]
+    ScheduleSet {
+        /// Task id, from `schedules`
+        id: String,
+        /// Turn it off instead of on
+        #[arg(long, default_value_t = false)]
+        off: bool,
+    },
+
+    /// Ring a doorbell a task may be waiting on (wait.hook)
+    Signal {
+        /// The signal name
+        name: String,
+        /// Optional JSON payload for the waiting task
+        data: Option<String>,
+    },
 
     /// Trigger a saved scheduler task by id (running app)
     RunSchedule {
@@ -490,6 +496,8 @@ enum Commands {
         /// Task id (see `schedules`)
         id: String,
     },
+
+    // ── Authoring: plugins & BMMScript ────────────────────────────────
 
     /// Scaffold a plugin draft (plugin.json + README + bundled scripts) in
     /// <app-data>/plugin-drafts/<id>/. Authoring only — zip the draft and install it
@@ -545,6 +553,8 @@ enum Commands {
         json: Option<String>,
     },
 
+    // ── Benchmarks ────────────────────────────────────────────────────
+
     /// Launch a benchmark (running app)
     Benchmark {
         /// Dataset: sandbox (generated) or real (my mods)
@@ -566,6 +576,8 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         auto: bool,
     },
+
+    // ── Language & themes ─────────────────────────────────────────────
 
     /// Download the translation template JSON (running app)
     LangTemplate {

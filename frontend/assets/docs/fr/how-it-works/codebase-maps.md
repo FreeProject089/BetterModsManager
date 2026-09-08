@@ -17,7 +17,7 @@ compilateur se satisfait de n'importe quel graphe qui résout.
 
 | Question | Pourquoi ce n'est pas évident |
 |---|---|
-| Quel module est le **pivot** ? | `core/i18n.ts` est importé par 66 autres. Un changement là n'est jamais petit, et rien ne le dit. |
+| Quel module est le **pivot** ? | `core/i18n.ts` est importé par 100 autres. Un changement là n'est jamais petit, et rien ne le dit. |
 | Quels modules sont **injoignables** ? | `tsc` les compile et le bundle les embarque. `docs/docs-ui.ts` est resté mort des mois. |
 | Quels imports forment un **cycle** ? | Les modules ES tolèrent les cycles jusqu'à ce que l'un lise une liaison à l'évaluation — c'est alors `undefined` à l'exécution, avec une pile qui pointe le mauvais fichier. |
 
@@ -40,7 +40,7 @@ docs/docs-hub.ts
 ### La barrière
 
 `node scripts/dep-graph.mjs --check` tourne dans `npm run ci`. C'est un **cliquet contre une
-référence versionnée**, pas une exigence de zéro : ce code a aujourd'hui 77 cycles et 7
+référence versionnée**, pas une exigence de zéro : ce code a aujourd'hui 95 cycles et 6
 modules injoignables, et une barrière qui exige zéro dès le premier jour est une barrière
 que quelqu'un désactive la deuxième semaine. Elle échoue quand un nombre *augmente*, et le
 signale quand il diminue.
@@ -58,14 +58,14 @@ frappe compile parfaitement et échoue à l'exécution en promesse rejetée.
 `check-invoke-names.mjs` garde déjà un sens — tout nom passé à `invoke()` doit atteindre une
 commande enregistrée. Voici le reste de la forme :
 
-- **368** commandes enregistrées, **324** appelées depuis le frontend, **63** modules qui en
-  appellent au moins une. `features/settings/scheduler.ts` en touche 54 à lui seul.
+- **483** commandes enregistrées, **426** appelées depuis le frontend, **87** modules qui en
+  appellent au moins une. `features/settings/scheduler.ts` en touche 101 à lui seul.
 - Par module Rust, la part réellement utilisée par l'interface.
-- **44 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
+- **57 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
   « inutilisées » : le serveur MCP, la CLI et les deeplinks `bmm://` atteignent des commandes
   que l'UI ne touche jamais. L'outil ne sait pas distinguer une commande réservée au MCP
   d'une commande oubliée, et ne prétend pas le savoir.
-- Les **invocations dynamiques** — `invoke(nom)` plutôt que `invoke('nom')`. Il y en a 3, et
+- Les **invocations dynamiques** — `invoke(nom)` plutôt que `invoke('nom')`. Il y en a 38, et
   ce compte est la mesure honnête de ce qui échappe à toute vérification.
 
 ---

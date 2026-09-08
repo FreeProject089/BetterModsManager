@@ -14,7 +14,7 @@ npm run dev        # TypeScript watch + the Tauri window, together
 npm run ci         # every gate, in the order CI runs them
 ```
 
-`npm run ci` is 43 steps. It is slow on purpose — it is the difference between "it compiles"
+`npm run ci` is 80 steps. It is slow on purpose — it is the difference between "it compiles"
 and "it works".
 
 ## Building

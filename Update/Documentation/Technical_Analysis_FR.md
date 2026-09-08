@@ -435,7 +435,7 @@ BMM v1.0.0 propose une implémentation JSON-RPC de niveau professionnel pour l'i
 | :--- | :--- |
 | **Protocole** | JSON-RPC 2.0 sur les flux d'entrées/sorties standard (stdio). |
 | **Sérialisation** | Utilisation intensive de `serde` et `serde_json` pour les définitions d'outils typées et le mapping des résultats. |
-| **Surface d'Outils** | ~50 outils atomiques exposés via le binaire `mcp-server`, couvrant toute la surface de commande de BMM. |
+| **Surface d'Outils** | 69 outils atomiques exposés via le binaire `mcp-server`, plus 62 sous-commandes CLI sur le même binaire, couvrant toute la surface de commande de BMM. |
 | **Pont d'État** | Le binaire MCP initialise une instance secondaire du moteur `AppState` pour accéder aux données locales sans nécessiter que l'interface principale de BMM soit lancée. |
 | **Gestion Asynchrone** | Traitement des requêtes entièrement asynchrone utilisant `tokio` pour gérer les appels d'outils concurrents des agents IA. |
 

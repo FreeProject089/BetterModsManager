@@ -15,7 +15,7 @@ compiler is happy with any graph that resolves.
 
 | Question | Why it is not obvious |
 |---|---|
-| Which module is the **hub**? | `core/i18n.ts` is imported by 66 others. A change there is never small, and nothing says so. |
+| Which module is the **hub**? | `core/i18n.ts` is imported by 100 others. A change there is never small, and nothing says so. |
 | Which modules are **unreachable**? | `tsc` compiles them and the bundle carries them. `docs/docs-ui.ts` sat dead for months. |
 | Which imports form a **cycle**? | ES modules tolerate cycles until one reads a binding at evaluation time — then it is `undefined` at runtime, with a stack pointing at the wrong file. |
 
@@ -38,7 +38,7 @@ docs/docs-hub.ts
 ### The gate
 
 `node scripts/dep-graph.mjs --check` runs in `npm run ci`. It is a **ratchet against a
-committed baseline**, not a demand for zero: this codebase has 77 cycles and 7 unreachable
+committed baseline**, not a demand for zero: this codebase has 95 cycles and 6 unreachable
 modules today, and a gate insisting on zero on day one is a gate somebody switches off in
 week two. It fails when a number *grows*, and says so when it shrinks.
 
@@ -55,13 +55,13 @@ A typo compiles perfectly and fails at runtime as a rejected promise.
 `check-invoke-names.mjs` already gates one direction — every `invoke()` name must reach a
 registered command. This is the rest of the shape:
 
-- **368** commands registered, **324** called from the frontend, **63** modules calling at
-  least one. `features/settings/scheduler.ts` alone touches 54.
+- **483** commands registered, **426** called from the frontend, **87** modules calling at
+  least one. `features/settings/scheduler.ts` alone touches 101.
 - Per Rust module, how much of it the UI actually uses.
-- **44 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
+- **57 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
   the MCP server, the CLI and `bmm://` deeplinks all reach commands the UI never touches.
   This tool cannot tell an MCP-only command from a forgotten one and does not pretend to.
-- **Dynamic invokes** — `invoke(name)` rather than `invoke('name')`. There are 3, and the
+- **Dynamic invokes** — `invoke(name)` rather than `invoke('name')`. There are 38, and the
   count is the honest measure of how much of the surface is being checked at all.
 
 ---
