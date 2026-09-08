@@ -902,6 +902,8 @@
   "community.showAll": "Afficher tous les articles",
   "community.openWeb": "Ouvrir le site",
   "bc.sub": "La plateforme dont BMM fait partie.",
+  "bc.site.lede": "Le site lui-même, sur bettercommunity.ch. Y lire quoi que ce soit ne demande aucun compte.",
+  "bc.hide": "Ne plus afficher au démarrage",
   "bc.lede": "BetterCommunity héberge les dépôts, les catalogues et le blog que BMM lit. C’est là qu’une liste de mods devient quelque chose que d’autres peuvent installer.",
   "bc.site": "Le site",
   "bc.site.repo": "Dépôts serveur",

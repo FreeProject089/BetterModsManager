@@ -1253,11 +1253,28 @@ async function main() {
             startOnboarding();
         }, 800);
     } else {
-        // Not a first run → gently remind (once) that BMM has a Ko-fi.
+        // ONE nudge per launch, and this is the slot. Two dialogs stacked at boot means one
+        // is behind the other with no way to tell which, so they take turns rather than
+        // both firing.
+        //
+        // BetterCommunity goes first while it is still being shown: it says what the place
+        // this app talks to all day actually is, which is worth more early than a tip jar.
+        // The moment somebody ticks "don't show again", Ko-fi has the slot back.
+        let nudged = false;
         try {
-            const { maybeShowKofiReminder } = await import('./kofi-modal.js');
-            maybeShowKofiReminder();
-        } catch (e) { console.error('kofi reminder failed', e); }
+            const { maybeShowBetterCommunityIntro } = await import('./bettercommunity-modal.js');
+            nudged = maybeShowBetterCommunityIntro();
+        } catch (e) { console.error('BetterCommunity intro failed', e); }
+        // Not a first run → gently remind (once) that BMM has a Ko-fi. A flag and not an
+        // early `return`: this is inside main(), so returning here would also skip
+        // auto-calibration, the collapsible settings cards, interaction logging and the
+        // debug menu — all of which are below, and none of which tsc would say a word about.
+        if (!nudged) {
+            try {
+                const { maybeShowKofiReminder } = await import('./kofi-modal.js');
+                maybeShowKofiReminder();
+            } catch (e) { console.error('kofi reminder failed', e); }
+        }
     }
 
     // ── Auto-Calibration trigger at startup ──

@@ -904,6 +904,8 @@
   "community.showAll": "Show all posts",
   "community.openWeb": "Open website",
   "bc.sub": "The platform BMM is part of.",
+  "bc.site.lede": "The website itself, at bettercommunity.ch. Reading anything on it needs no account.",
+  "bc.hide": "Don't show this at startup",
   "bc.lede": "BetterCommunity hosts the repos, catalogues and blog that BMM reads. It is where a mod list becomes something other people can install.",
   "bc.site": "The site",
   "bc.site.repo": "Server Repos",
