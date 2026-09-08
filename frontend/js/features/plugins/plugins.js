@@ -8600,8 +8600,13 @@ function _actionCatalog() {
                         { value: 'repo', label: 'repo' }, { value: 'app', label: 'app' },
                         { value: 'modlist', label: 'modlist' }, { value: 'bundle', label: 'bundle' },
                     ] },
-                { key: 'id', label: d('fldCidId', 'Its id in BMM'), type: 'text', half: true },
-                { key: 'path', label: d('fldCidPath', 'Or a file to read'), type: 'text' },
+                // The route takes the DOCUMENT and nothing else, deliberately: a by-id form
+                // would answer "does this machine hold X" to anyone holding a token. This card
+                // used to offer "its id in BMM" and "a file to read", and sent them as `id` and
+                // `path` — two names the route does not declare, so serde dropped both and the
+                // request went out with no document at all. It answered 400 every time.
+                { key: 'doc', label: d('fldCidDoc', 'The document, as JSON'), type: 'textarea',
+                    placeholder: '{ "name": "My pack", "mods": […] }' },
             ] },
         { id: 'open_view', cat: 'system', label: d('actionOpenView', 'Open a screen'),
             desc: d('actionOpenViewDesc', 'Switches BMM to a screen. Useful at the end of a script somebody is watching.'),
@@ -9972,7 +9977,7 @@ function _apiBodyFor(a) {
         case 'repo_gen_now': return { method: 'POST', path: '/api/repo/gen-now', body: _prune({ outputDir: s('outputDir'), authorName: s('authorName'), profileIds: s('profileIds').split(',').map((x) => x.trim()).filter(Boolean), seed: s('seed'), zipOutput: bool('zipOutput'), zipMods: bool('zipMods') }) };
         case 'repo_host_now': return { method: 'POST', path: '/api/repo/host-now', body: _prune({ path: s('path'), port: parseInt(s('port'), 10) || 0, downloadPassword: s('downloadPassword') }) };
         case 'repo_update_now': return { method: 'POST', path: '/api/repo/update-now', body: _prune({ repoDir: s('repoDir'), authorName: s('authorName') }) };
-        case 'content_id': return { method: 'POST', path: '/api/content-id', body: _prune({ kind: s('kind'), id: s('id'), path: s('path') }) };
+        case 'content_id': return { method: 'POST', path: '/api/content-id', body: { kind: s('kind'), doc: _json(s('doc')) } };
         case 'open_view': return { method: 'POST', path: '/api/view', body: { id: s('id') } };
         // `modsDir`, not `dir`. GenerateManifestArgs is camelCase and has no `dir` at all, so
         // serde dropped it without a word and the route ran with no source — the folder you
@@ -9997,6 +10002,25 @@ function _prune(o) {
         if (v !== '' && v != null)
             out[k] = v;
     return out;
+}
+/**
+ * A field the route wants as JSON, not as a string holding JSON.
+ *
+ * `{"doc": "{\"a\":1}"}` is valid JSON and is a STRING to the server, which then reads no
+ * fields out of it and answers with the id of an empty document — a wrong answer rather
+ * than an error. Unparseable text is left as-is so the generated script carries what was
+ * typed and the server says what is wrong with it.
+ */
+function _json(raw) {
+    const t = (raw || '').trim();
+    if (!t)
+        return {};
+    try {
+        return JSON.parse(t);
+    }
+    catch {
+        return raw;
+    }
 }
 // Actions that have a native bmm:// deeplink. Anything else that has an API
 // call must fall back to HTTP (and therefore needs a token) even in deeplink
