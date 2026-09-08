@@ -161,13 +161,13 @@ export function openBetterCommunity(atStart = false): void {
             </div>
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
-                <div class="bc-cols">
-                    ${panelHtml('site', t('bc.site'), t('bc.site.lede'), SITE_ROWS())}
-                    ${panelHtml('bot', t('bc.bot'), t('bc.bot.lede'), BOT_ROWS())}
-                </div>
                 <div class="bc-optional">
                     <strong class="bc-optional-t">${escHtml(t('bc.opt.t'))}</strong>
                     <span class="bc-optional-b">${escHtml(t('bc.opt.b'))}</span>
+                </div>
+                <div class="bc-cols">
+                    ${panelHtml('site', t('bc.site'), t('bc.site.lede'), SITE_ROWS())}
+                    ${panelHtml('bot', t('bc.bot'), t('bc.bot.lede'), BOT_ROWS())}
                 </div>
             </div>
             <div class="modal-footer bc-foot">

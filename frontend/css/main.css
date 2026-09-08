@@ -21517,7 +21517,10 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 /* The closing statement, and the most important sentence on the screen: none of this is
    required. Full width under both panels, so it reads as applying to both. */
 .bc-optional {
-    margin-top: 14px; padding: 11px 13px; border-radius: 10px;
+    /* Above the panels, not after them: at the 680px minimum window height the body
+       scrolls, and this was what scrolled off — the one sentence answering the question
+       somebody has when a dialog appears at startup. */
+    margin: 0 0 14px; padding: 11px 13px; border-radius: 10px;
     background: var(--bmm-s04); border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
 }
