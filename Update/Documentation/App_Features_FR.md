@@ -276,9 +276,20 @@ BMM introduit un système complet de cycle de vie des modpacks pour organiser, p
 
 ---
 
-## 28. Intégration BetaHub — Rapports de bugs (v0.9.9)
+## 28. Intégration BetaHub — Rapports de bugs (v0.9.9, désormais le repli)
 
-BMM s'intègre avec BetaHub pour des rapports de bugs structurés et des retours communautaires.
+**Les rapports partent vers BetterCommunity, pas vers BetaHub.** Le centre de retours est le
+chemin que prend toute installation livrée ; BetaHub est ce vers quoi BMM se replie quand il
+n'y a pas de BetterCommunity à qui envoyer.
+
+C'est un repli vivant, pas du code mort, et il se déclenche **à distance** :
+`feedbackEndpoint()` ne renvoie `''` que si `links.json` met `feedback_endpoint` à `""` ou
+`null`, ce qu'un admin peut faire depuis Admin → Téléchargements & ressources. Toutes les
+installations basculent alors sur les formulaires BetaHub ci-dessous, sans nouvelle version de
+BMM. C'est pourquoi `app.betahub.io` reste dans la CSP livrée et dans la politique de
+confidentialité : le retirer laisserait un chemin qui échouerait en silence dès qu'on l'active.
+
+Le tableau ci-dessous décrit ce repli.
 
 | Fonctionnalité | Description |
 | :--- | :--- |

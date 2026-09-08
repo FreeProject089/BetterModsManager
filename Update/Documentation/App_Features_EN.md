@@ -357,9 +357,20 @@ BMM introduces a complete modpack lifecycle system for curating, sharing, and ve
 
 ---
 
-## 28. BetaHub Bug Reporting Integration (v0.9.9)
+## 28. BetaHub Bug Reporting Integration (v0.9.9, now the fallback)
 
-BMM integrates with BetaHub for structured bug reporting and community feedback.
+**Reports go to BetterCommunity, not BetaHub.** The feedback centre in §…/Feedback is the
+path every shipped install takes; BetaHub is what BMM falls back to when there is no
+BetterCommunity to send to.
+
+It is a live fallback, not dead code, and it is switched **remotely**: `feedbackEndpoint()`
+returns `''` only when `links.json` sets `feedback_endpoint` to `""` or `null`, which an
+admin can do from Admin → Downloads & assets. Every install then uses the BetaHub forms
+below, with no new BMM build. That is why `app.betahub.io` stays in the shipped CSP and in
+the privacy policy: removing it would leave a path that silently fails the moment somebody
+turns it on.
+
+The table below describes that fallback.
 
 | Feature | Description |
 | :--- | :--- |
