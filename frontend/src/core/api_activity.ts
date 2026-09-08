@@ -637,6 +637,20 @@ export async function initApiActivity(): Promise<void> {
             }
             case 'plugin/export': {
                 if (!params.id) { navClick('plugins', ''); break; }
+                // A destination given by the caller runs unattended; without one the save
+                // dialog opens and a person picks the path. The route gates the first form
+                // on `plugins.write` for exactly that reason — the read scope covers
+                // exporting, not choosing where somebody else's file lands.
+                //
+                // The field parsed and was dropped here until now, so the API panel offered
+                // a box that did nothing.
+                if (params.destDir) {
+                    await run('export_plugin', {
+                        pluginId: params.id,
+                        destPath: `${String(params.destDir).replace(/[\\/]+$/, '')}/${params.id}.bmmplug`,
+                    }, t('plugins.exported') || 'Plugin exported');
+                    break;
+                }
                 const tauri = (window as any).__TAURI__;
                 try {
                     const dest = await tauri?.dialog?.save({ defaultPath: `${params.id}.bmmplug`, filters: [{ name: 'BMM Plugin', extensions: ['bmmplug'] }] });

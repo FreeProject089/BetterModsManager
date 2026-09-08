@@ -1025,6 +1025,58 @@ fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value { catstore::read_kind
 fn catalog_write_kind(h: &tauri::AppHandle, kind: &str, cat: &serde_json::Value) -> Result<(), String> { catstore::write_kind(h, kind, cat) }
 fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> { catstore::write_kind(h, "app", cat) }
 
+/// Does this bearer token hold this scope? The same rule `require_permission` applies,
+/// as a plain function, for the routes that cannot decide which scope they need until
+/// they have read the BODY.
+///
+/// A filter runs before the body is parsed, so "read is enough unless you named a
+/// destination" is not expressible as one. Identity still comes from the TOKEN and never
+/// from `X-BMM-Plugin-Id` (CWE-862/863); the admin token holds everything.
+/// An export that names its own destination is a write. Returns `Err(reply)` — a 403
+/// naming the scope — when a caller asked for one without holding it.
+///
+/// The scope is checked against the BODY rather than in a filter because a filter runs
+/// before the body exists, and the answer depends on whether `destDir` is there.
+fn unattended_write_allowed(
+    data: &Arc<std::sync::Mutex<AppData>>,
+    auth: Option<&str>,
+    dest_dir: Option<&str>,
+    write_scope: &'static str,
+) -> Result<(), warp::reply::WithStatus<warp::reply::Json>> {
+    let named = dest_dir.map(|d| !d.trim().is_empty()).unwrap_or(false);
+    if !named {
+        return Ok(());
+    }
+    let d = data.lock().unwrap_or_else(|p| p.into_inner());
+    if token_has_permission(&d, auth, write_scope) {
+        return Ok(());
+    }
+    Err(warp::reply::with_status(
+        warp::reply::json(&ApiError {
+            error: format!(
+                "Forbidden: writing to a destination you chose needs '{write_scope}'. Omit destDir to export through the save dialog instead."
+            ),
+        }),
+        StatusCode::FORBIDDEN,
+    ))
+}
+
+fn token_has_permission(data: &AppData, auth: Option<&str>, permission: &str) -> bool {
+    let provided = auth.unwrap_or("");
+    let token = provided.strip_prefix("Bearer ").unwrap_or("");
+    if ct_eq(token, &data.settings.api_token) {
+        return true;
+    }
+    match data.settings.plugin_tokens.get(token) {
+        Some(pid) => data
+            .plugin_permissions
+            .get(pid)
+            .map(|p| p.contains(&permission.to_string()))
+            .unwrap_or(false),
+        None => false,
+    }
+}
+
 fn require_permission(
     data: Arc<std::sync::Mutex<AppData>>,
     permission: &'static str,
@@ -3301,12 +3353,24 @@ pub async fn start_api_server(
             api_exec_reply(&h, "modpack/import", serde_json::json!({ "path": path }))
         });
 
-    // POST /api/modpacks/export — export a modpack to .bmp (body: { id })
+    // POST /api/modpacks/export — export a modpack to .bmp (body: { id, destDir? })
+    //
+    // `modpacks.read` opens the save dialog; naming a `destDir` needs `modpacks.write`.
+    // Writing a file to a path the CALLER chose, with nobody asked, is a write — and a
+    // read scope that can drop a zip into the Startup folder is not a read scope.
     let t6 = token.clone(); let h6 = app_handle.clone();
+    let d6 = data.clone();
     let io_modpack_export = warp::path!("api" / "modpacks" / "export").and(warp::post())
         .and(require_token(t6)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h6))
         .and(require_permission(token.clone(), "modpacks.read"))
-        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id, "destDir": b.dest_dir })));
+        .and(warp::header::optional::<String>("authorization"))
+        .and(with_data(d6))
+        .map(|b: IoIdBody, h: tauri::AppHandle, auth: Option<String>, d: Arc<std::sync::Mutex<AppData>>| {
+            if let Err(r) = unattended_write_allowed(&d, auth.as_deref(), b.dest_dir.as_deref(), "modpacks.write") {
+                return r;
+            }
+            api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id, "destDir": b.dest_dir }))
+        });
 
     // POST /api/plugins/import — import a .bmmplug plugin
     let t7 = token.clone(); let h7 = app_handle.clone();
@@ -3315,12 +3379,25 @@ pub async fn start_api_server(
         .and(require_permission(token.clone(), "plugins.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "plugin/import", serde_json::json!({})));
 
-    // POST /api/plugins/export — export a plugin to .bmmplug (body: { id })
+    // POST /api/plugins/export — export a plugin to .bmmplug (body: { id, destDir? })
+    //
+    // `destDir` was accepted by the body struct, dropped here, and advertised by the API
+    // panel — a field that parses, documents itself, and does nothing. Forwarded now, on
+    // the same terms as its modpack twin: the dialog is a read, a caller-chosen path is
+    // a write.
     let t8 = token.clone(); let h8 = app_handle.clone();
+    let d8 = data.clone();
     let io_plugin_export = warp::path!("api" / "plugins" / "export").and(warp::post())
         .and(require_token(t8)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h8))
         .and(require_permission(token.clone(), "plugins.read"))
-        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "plugin/export", serde_json::json!({ "id": b.id })));
+        .and(warp::header::optional::<String>("authorization"))
+        .and(with_data(d8))
+        .map(|b: IoIdBody, h: tauri::AppHandle, auth: Option<String>, d: Arc<std::sync::Mutex<AppData>>| {
+            if let Err(r) = unattended_write_allowed(&d, auth.as_deref(), b.dest_dir.as_deref(), "plugins.write") {
+                return r;
+            }
+            api_exec_reply(&h, "plugin/export", serde_json::json!({ "id": b.id, "destDir": b.dest_dir }))
+        });
 
     // POST /api/language/import — import a language .json file.
     // Optional JSON body { "path": "C:/.../fr.json" } imports that file directly;

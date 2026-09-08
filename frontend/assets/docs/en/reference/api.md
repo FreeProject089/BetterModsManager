@@ -436,9 +436,9 @@ is `data/export-auto`.
 | `POST` | `/api/data/export-auto` | `data.read` | `dir`*, `name`, `increment` · **unattended**, no dialog | ✓ |
 | `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, metadata only, no mod files | |
 | `POST` | `/api/modpacks/import` | `modpacks.write` | `path` | |
-| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` | |
+| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` · naming a `destDir` also needs `modpacks.write`: no dialog opens, so nobody is asked where the file lands | |
 | `POST` | `/api/plugins/import` | `plugins.write` | — | |
-| `POST` | `/api/plugins/export` | `plugins.read` | `id`* → `.bmmplug` | |
+| `POST` | `/api/plugins/export` | `plugins.read` | `id`*, `destDir` → `.bmmplug` · same rule: a caller-chosen `destDir` needs `plugins.write` | |
 | `POST` | `/api/language/import` | `system.write` | `path` · the filename becomes the language code; `template.json` is refused | ✓ |
 | `POST` | `/api/profiles/import/ovgme` | `profiles.write` | — · scans `%PROGRAMDATA%/OvGME` | |
 | `POST` | `/api/profiles/import/omm` | `profiles.write` | — · OpenModManager `.omm`/`.omx` | |

@@ -448,9 +448,9 @@ exception est `data/export-auto`.
 | `POST` | `/api/data/export-auto` | `data.read` | `dir`*, `name`, `increment` · **sans intervention**, aucune boîte de dialogue | ✓ |
 | `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, métadonnées seules, aucun fichier de mod | |
 | `POST` | `/api/modpacks/import` | `modpacks.write` | `path` | |
-| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` | |
+| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` · nommer un `destDir` exige aussi `modpacks.write` : aucune boîte ne s’ouvre, donc personne n’est consulté sur l’endroit où le fichier atterrit | |
 | `POST` | `/api/plugins/import` | `plugins.write` | — | |
-| `POST` | `/api/plugins/export` | `plugins.read` | `id`* → `.bmmplug` | |
+| `POST` | `/api/plugins/export` | `plugins.read` | `id`*, `destDir` → `.bmmplug` · même règle : un `destDir` choisi par l’appelant exige `plugins.write` | |
 | `POST` | `/api/language/import` | `system.write` | `path` · le nom de fichier devient le code de langue ; `template.json` est refusé | ✓ |
 | `POST` | `/api/profiles/import/ovgme` | `profiles.write` | — · scanne `%PROGRAMDATA%/OvGME` | |
 | `POST` | `/api/profiles/import/omm` | `profiles.write` | — · OpenModManager `.omm`/`.omx` | |
