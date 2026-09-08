@@ -486,21 +486,27 @@ externes sans instrumenter ton propre script.
 
 Consignées parce que le registre in-app et le serveur ne s'accordent pas sur tous les détails :
 
-- **Les barrières de permission sont plus étroites qu'elles n'y paraissent.** `mod/check-updates`,
-  `mod/update`, `repo/update`, `repo/host` (les deux méthodes), les deux routes d'annulation,
-  `DELETE /api/plugins/:id` et toutes les routes `/api/apps/permissions*` sont **token seul** — un
-  token plugin sans aucune permission y passe.
-- **`POST /api/repo/gen`** : la liste in-app montre `serverVersion` deux fois avec des types
-  contradictoires. Le serveur a `serverVersion` (nombre) **et** `serverType` (`"std"` / `"lux"`) —
-  la chaîne va dans `serverType`, un nom que la liste in-app ne mentionne jamais. `lightweight` est
-  aussi accepté.
-- **`POST /api/repo/host`** est décrit comme démarrant un serveur de fichiers statique ; en réalité
-  il pilote l'UI native Dépôt Serveur et renvoie `202`, pas `200`.
-- **`DELETE /api/plugins/:id`** a un deeplink fonctionnel (`bmm://plugin/delete`) mais est absent de
-  la table endpoint→deeplink, donc le badge `bmm://` in-app ne s'affiche pas pour lui.
-- **`bmm://telemetry/settings`** apparaît dans une description mais n'est **pas routé** — seul
-  `bmm://telemetry/set` fonctionne.
-- Les réponses d'erreur rajoutent `access-control-allow-origin: *` sans condition, même en release.
+- **Les réponses d'erreur rajoutent `access-control-allow-origin: *` sans condition**, même en
+  release et même quand le réglage CORS nomme des origines précises. Les réponses en succès
+  passent par la politique configurée : ce qui fuit, ce sont les échecs — et ça suffit à n'importe
+  quelle page web pour distinguer un `401` d'un `403` d'un `404` sur `127.0.0.1`, donc pour
+  détecter BMM et confirmer ou infirmer un token deviné depuis un site simplement visité. Le
+  gestionnaire de rejet est placé *après* `.with(cors)` dans la chaîne de filtres, il doit donc
+  poser les en-têtes lui-même ; le correctif est de faire passer la récupération à l'intérieur du
+  wrapper CORS, ce qui change aussi la façon de répondre aux échecs CORS eux-mêmes — une passe à
+  part, pas une rustine.
+
+Cinq entrées qui figuraient ici ont disparu parce que le code a changé, et elles sont nommées pour
+que personne n'aille les chercher : les barrières de permission (chaque route listée déclare
+désormais une portée, et les trois routes `/api/apps/permissions*` exigent le token **admin**, donc
+un token plugin ne les atteint plus du tout), le `serverVersion` en double sur
+`POST /api/repo/gen`, la description fausse de `POST /api/repo/host`, le badge `bmm://` manquant sur
+`DELETE /api/plugins/:id`, et `bmm://telemetry/settings`, qui n'apparaît plus nulle part.
+
+Trois d'entre elles sont maintenant tenues par un check et non par une note —
+`check-endpoint-fields.mjs` compare chaque champ du test rapide à la structure Rust qu'il prétend
+décrire, et `check-deeplink-panel.mjs` compare la table des badges aux routes et aux actions. Une
+note se périme en silence ; un check, non.
 
 ---
 

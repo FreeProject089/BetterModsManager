@@ -285,7 +285,9 @@ struct ScheduleEnabledBody {
 struct RepoModpacksBody {
     /// The repo folder, the one that holds repo.json.
     dir: String,
-    /// The whole list. Absent reads instead of writing.
+    /// The whole list. Absent reads instead of writing — which needs `default`, because
+    /// `Option<T>` on its own still requires the KEY to be there.
+    #[serde(default)]
     shares: Option<Vec<crate::models::repo::RepoModpackShare>>,
 }
 
@@ -3388,7 +3390,7 @@ pub async fn start_api_server(
         app_title: String,
         download_url: String,
         file_type: String,
-        install_path: String,
+        #[serde(default)] install_path: String,
         #[serde(default)] version: Option<String>,
         #[serde(default)] category: Option<String>,
         #[serde(default)] thumb: Option<String>,

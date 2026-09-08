@@ -474,20 +474,25 @@ your own script.
 
 Recorded because the in-app registry and the server do not agree on every detail:
 
-- **Permission gates are narrower than they look.** `mod/check-updates`, `mod/update`,
-  `repo/update`, `repo/host` (both methods), both cancel routes, `DELETE /api/plugins/:id` and every
-  `/api/apps/permissions*` route are **token-only** — a plugin token with zero permissions passes
-  them.
-- **`POST /api/repo/gen`**: the in-app list shows `serverVersion` twice with conflicting types. The
-  server has `serverVersion` (number) **and** `serverType` (`"std"` / `"lux"`) — the string goes in
-  `serverType`, a name the in-app list never mentions. `lightweight` is also accepted.
-- **`POST /api/repo/host`** is described as starting a static file server; it actually drives the
-  native Server Repo UI and returns `202`, not `200`.
-- **`DELETE /api/plugins/:id`** has a working deeplink (`bmm://plugin/delete`) but is absent from the
-  endpoint→deeplink map, so the in-app `bmm://` badge does not render for it.
-- **`bmm://telemetry/settings`** appears in one description but is **not routed** — only
-  `bmm://telemetry/set` works.
-- Error responses re-add `access-control-allow-origin: *` unconditionally, even in release.
+- **Error responses re-add `access-control-allow-origin: *` unconditionally**, even in release and
+  even when the CORS setting names specific origins. Successful responses go through the configured
+  policy, so what leaks is the failures — and that is enough for any web page to tell a `401` from a
+  `403` from a `404` on `127.0.0.1`, which detects BMM and confirms or denies a guessed token from a
+  site the user merely visited. The rejection handler sits *after* `.with(cors)` in the filter
+  chain, so it has to add the headers itself; the fix is to move the recovery inside the CORS
+  wrapper, which also changes how CORS failures themselves are answered — its own pass, not a patch.
+
+Five entries that used to be here are gone because the code changed, and are named so nobody goes
+looking for them: the permission gates (every route that was listed now declares a scope, and the
+three `/api/apps/permissions*` routes take the **admin** token, so a plugin token cannot reach them
+at all), the duplicated `serverVersion` on `POST /api/repo/gen`, the wrong description of
+`POST /api/repo/host`, the missing `bmm://` badge on `DELETE /api/plugins/:id`, and
+`bmm://telemetry/settings`, which no longer appears anywhere.
+
+Three of those are now held by a check rather than by a note — `check-endpoint-fields.mjs` compares
+every quick-test field to the Rust body struct it claims to describe, and `check-deeplink-panel.mjs`
+compares the badge map to the routes and to the actions. A note goes stale in silence; a check does
+not.
 
 ---
 

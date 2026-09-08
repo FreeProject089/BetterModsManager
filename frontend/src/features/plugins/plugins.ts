@@ -5627,6 +5627,16 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/schedule/run':       'bmm://schedule/run?id=<task_id>',
         'POST /api/discord/rpc':        'bmm://discord/rpc?enabled=<1|0>',
         'POST /api/data/export-auto':   'bmm://data/export-auto?dir=<folder>&name=<template>&increment=<paren|underscore|timestamp|overwrite>',
+        // Nine routes had a working deeplink and no badge here, so the screen said they
+        // had none. The catalogue ones were the whole catalogue subsystem.
+        'DELETE /api/plugins/:id':      'bmm://plugin/delete?id=<plugin_id>',
+        'POST /api/catalog/publish':    'bmm://catalog/publish?kind=<kind>&dir=<folder>&name=<name>&base=<baseUrl>',
+        'POST /api/catalog/import':     'bmm://catalog/import?url=<indexUrl>&type=<kind>&password=<pw>&key=<keyRef>&passphrase=<pp>',
+        'POST /api/catalog/entries':    'bmm://catalog/entry?mode=add&type=<kind>&id=<entry_id>&fields=<json>',
+        'POST /api/catalogs':           'bmm://catalog/follow?type=<kind>&url=<indexUrl>  ·  bmm://catalog/unfollow?type=<kind>&url=<indexUrl>',
+        'DELETE /api/catalog':          'bmm://catalog/delete?type=<kind>',
+        'POST /api/schedules/enabled':  'bmm://schedule/enable?id=<task_id>&on=<1|0>',
+        'POST /api/hook':               'bmm://hook?name=<hook_name>&data=<json>',
         // Every other endpoint is reachable via the generic passthrough:
         //   bmm://api?method=<M>&path=<path>&<field>=<value>…
     };
@@ -6396,6 +6406,8 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'version',     type: 'string', required: false, desc: 'Chaîne de version, ex : "1.2.3".' },
                 { name: 'author',      type: 'string', required: false, desc: 'Nom de l\'auteur ou du créateur.' },
                 { name: 'description', type: 'string', required: false, desc: 'Description courte affichée dans les détails du mod.' },
+                { name: 'tags',          type: 'array',  required: false, desc: t('plugins.epF.modTags') },
+                { name: 'install_notes', type: 'string', required: false, desc: t('plugins.epF.modInstallNotes') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod": { "id": "mod-uuid", "name": "Updated Name" } }' },
@@ -6428,7 +6440,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'game_path',   type: 'string', required: true,  desc: 'Chemin absolu vers le dossier d\'installation du jeu.' },
                 { name: 'mods_path',   type: 'string', required: true,  desc: 'Chemin absolu vers le dossier où sont stockés les mods.' },
                 { name: 'backup_path', type: 'string', required: true,  desc: 'Chemin absolu où les copies de backup sont sauvegardées.' },
-                { name: 'game_name',   type: 'string', required: false, desc: 'Label du jeu optionnel, ex : "DCS World".' },
+                { name: 'game_name',   type: 'string', required: true,  desc: 'Label du jeu, ex : "DCS World". Obligatoire à la création — la clé n\'a pas de défaut côté serveur.' },
                 { name: 'color',       type: 'string', required: false, desc: 'Couleur d\'accentuation hex, ex : "#3b82f6". Bleu par défaut.' },
                 { name: 'icon',        type: 'string', required: false, desc: 'Identifiant d\'icône affiché à côté du profil, ex : "star".' },
             ],
@@ -6452,6 +6464,7 @@ function getEndpointDefs(): EndpointDef[] {
             about: t('plugins.epAbout.profilePatch'),
             fields: [
                 { name: 'name',        type: 'string', required: false, desc: 'Nouveau nom d\'affichage.' },
+                { name: 'game_name',   type: 'string', required: false, desc: t('plugins.epF.profGameName') },
                 { name: 'color',       type: 'string', required: false, desc: 'Nouvelle couleur d\'accentuation hex, ex : "#ef4444".' },
                 { name: 'icon',        type: 'string', required: false, desc: 'Nouvel identifiant d\'icône.' },
                 { name: 'game_path',   type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier de destination.' },
@@ -6511,7 +6524,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/modpacks/enable', auth: true,
             desc: t('plugins.endpointEnableModpack'), about: 'Active tous les mods associés au modpack donné. Pratique pour activer en un clic l\'ensemble d\'un preset.',
-            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID du LocalModpack dont tous les mods seront activés.' }],
+            fields: [
+                { name: 'modpack_id', type: 'string', required: true,  desc: 'UUID du LocalModpack dont tous les mods seront activés.' },
+                { name: 'profile_id', type: 'string', required: false, desc: t('plugins.epF.mpProfileId') },
+            ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "enabled_count": 5 }' },
                 e401, e404,
@@ -6520,7 +6536,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/modpacks/disable', auth: true,
             desc: t('plugins.endpointDisableModpack'), about: 'Désactive tous les mods associés au modpack donné.',
-            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID du LocalModpack dont tous les mods seront désactivés.' }],
+            fields: [
+                { name: 'modpack_id', type: 'string', required: true,  desc: 'UUID du LocalModpack dont tous les mods seront désactivés.' },
+                { name: 'profile_id', type: 'string', required: false, desc: t('plugins.epF.mpProfileId') },
+            ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "disabled_count": 5 }' },
                 e401, e404,
@@ -6596,7 +6615,6 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'gameDir',                            type: 'string',  required: false, desc: t('plugins.apiGameDirDesc') },
                 { name: 'modsDir',                            type: 'string',  required: false, desc: 'Dossier racine des mods (requis si création d\'un nouveau profil).' },
                 { name: 'backupDir',                          type: 'string',  required: false, desc: 'Dossier de backup (requis si création d\'un nouveau profil).' },
-                { name: 'creatorId',                          type: 'string',  required: false, desc: 'Creator ID à envoyer en header X-Creator-ID (pour repos privés).' },
                 { name: 'password',                           type: 'string',  required: false, desc: 'Mot de passe de téléchargement, si le repo auto-hébergé est protégé. Envoyé en header X-Repo-Password.' },
                 { name: 'overwriteAll',                       type: 'boolean', required: false, desc: 'Si true, re-télécharge tous les fichiers même si le hash correspond. Défaut : false.' },
                 { name: 'deleteExtra',                        type: 'boolean', required: false, desc: 'Si true, supprime les fichiers locaux absents du repo distant. Défaut : false.' },
@@ -6653,9 +6671,11 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'enableDocker',  type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur.' },
                 { name: 'dockerHostType',type: 'string',  required: false, desc: 'Type d\'hôte Docker : "linux" ou "windows".' },
                 { name: 'zipOutput',     type: 'boolean', required: false, desc: 'Compresse la sortie en .zip — active également la config serveur de distribution.' },
-                { name: 'useDocker',     type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur de distribution.' },
-                { name: 'dockerOs',      type: 'string',  required: false, desc: 'OS hôte Docker : "linux" (défaut) ou "windows".' },
-                { name: 'serverVersion', type: 'string',  required: false, desc: 'Version serveur : "std" (standard) ou "lux" (premium).' },
+                { name: 'zipMods',       type: 'boolean', required: false, desc: t('plugins.epF.genZipMods') },
+                // `serverType` is the name the server reads. This row used to be a SECOND
+                // `serverVersion` — same name, so the same input id as the numeric one
+                // above: the number was unreachable, and the string went to a field typed u8.
+                { name: 'serverType',    type: 'string',  required: false, desc: t('plugins.epF.genServerType') },
                 // Accepted since it was written, offered by the scheduler's own action, and
                 // never shown here — so the one screen that exists to try a route could not
                 // try the option that changes what the route DOES.
@@ -6695,6 +6715,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'repoModId',     type: 'string', required: false, desc: 'This mod\'s stable id inside its repo manifest. Empty string clears it.' },
                 { name: 'updateUrl',     type: 'string', required: false, desc: 'Primary update repo URL (for mods added from a site). Empty clears it.' },
                 { name: 'updateSources', type: 'array',  required: false, desc: 'Additional repos: [{ "repoUrl": "https://…/repo.json", "repoModId": "…" }]. repoModId is optional (falls back to repoModId above).' },
+                { name: 'directUrl',     type: 'string', required: false, desc: t('plugins.epF.mcDirectUrl') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "…" }' },
@@ -6832,6 +6853,7 @@ function getEndpointDefs(): EndpointDef[] {
             about: '<strong>What:</strong> the installed plugin identified by <code>id</code>, packaged as a <code>.bmmplug</code> file. <strong>Where:</strong> you choose the destination in the native save dialog.<br><br>Get the id from <code>GET /api/plugins</code>.',
             fields: [
                 { name: 'id', type: 'string', required: true, desc: 'ID of the installed plugin to export (from GET /api/plugins).' },
+                { name: 'destDir', type: 'string', required: false, desc: t('plugins.epF.pxDestDir') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "plugin/export" }' },
@@ -6915,7 +6937,6 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'multi_profile',        type: 'boolean', required: false, desc: 'Autoriser des mods de plusieurs profils.' },
                 { name: 'skip_integrity_check', type: 'boolean', required: false, desc: 'Ignorer la vérification d\'intégrité des fichiers.' },
                 { name: 'dependency_mode',      type: 'string',  required: false, desc: 'Mode de résolution : "none", "all", "manual".' },
-                { name: 'mod_overrides',        type: 'array',   required: false, desc: 'Surcharges par mod (download_link, include_dependencies, etc.).' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "uuid", "mod_count": 12 }' },
@@ -7055,6 +7076,8 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'partner_catalogs',   type: 'array',  required: false, desc: 'Array of partner catalog URLs to include.' },
                 { name: 'community_imports',  type: 'array',  required: false, desc: 'Array of community catalog URLs.' },
                 { name: 'apps',               type: 'array',  required: false, desc: 'Initial app entries (same structure as Add App).' },
+                { name: 'type',               type: 'string', required: false, desc: t('plugins.epF.cnType') },
+                { name: 'entries',            type: 'array',  required: false, desc: t('plugins.epF.cnEntries') },
             ],
             responseStatuses: [
                 { code: 201, label: 'Created', body: '{ "ok": true, "catalog": { "version": "1.0", "name": "My Catalog", "apps": [] } }' },
@@ -7176,7 +7199,9 @@ function getEndpointDefs(): EndpointDef[] {
             method: 'POST', path: '/api/replay/export', auth: true,
             desc: t('plugins.ep.replayExport') || 'Export replay',
             about: 'Exporte la session rrweb en cours dans un fichier <code>.bmmreplay</code> (ouvre le sélecteur de destination dans l\'UI). Équivalent deeplink : <code>bmm://replay/export</code>.',
-            fields: [],
+            fields: [
+                { name: 'path', type: 'string', required: false, desc: t('plugins.epF.rxPath') },
+            ],
             responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "replay/export" }' }, e401],
         },
         {
@@ -7200,6 +7225,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'mode',     type: 'string', required: false, desc: '"manual" (ouvre l\'UI) ou "auto".' },
                 { name: 'sources',  type: 'array',  required: false, desc: 'Chemins de dossiers de mods (dataset="real").' },
                 { name: 'profiles', type: 'array',  required: false, desc: 'IDs de profils à benchmarker.' },
+                { name: 'mb',       type: 'number', required: false, desc: t('plugins.epF.bmMb') },
             ],
             responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "benchmark/run" }' }, e401],
         },
@@ -7524,7 +7550,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'port', type: 'number', required: true, desc: t('plugins.epF.hnPort') },
                 { name: 'uploadLimit', type: 'number', required: false, desc: t('plugins.epF.hnLimit') },
                 { name: 'downloadPassword', type: 'string', required: false, desc: t('plugins.epF.hnPw') },
-                { name: 'authorizedKeys', type: 'string', required: false, desc: t('plugins.epF.hnKeys') },
+                { name: 'authorizedKeys', type: 'array', required: false, desc: t('plugins.epF.hnKeys') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/host-now" }' },
@@ -7538,7 +7564,7 @@ function getEndpointDefs(): EndpointDef[] {
             fields: [
                 { name: 'outputDir', type: 'string', required: true, desc: t('plugins.epF.gnOut') },
                 { name: 'authorName', type: 'string', required: true, desc: t('plugins.epF.gnAuthor') },
-                { name: 'profileIds', type: 'string', required: true, desc: t('plugins.epF.gnProfiles') },
+                { name: 'profileIds', type: 'array', required: true, desc: t('plugins.epF.gnProfiles') },
                 { name: 'seed', type: 'string', required: false, desc: t('plugins.epF.gnSeed') },
                 { name: 'zipOutput', type: 'boolean', required: false, desc: t('plugins.epF.gnZip') },
                 { name: 'zipMods', type: 'boolean', required: false, desc: t('plugins.epF.gnZipMods') },
@@ -7576,9 +7602,7 @@ function getEndpointDefs(): EndpointDef[] {
             about: t('plugins.epAbout.contentId'),
             fields: [
                 { name: 'kind', type: 'string', required: true, desc: t('plugins.epF.cidKind') },
-                { name: 'id', type: 'string', required: false, desc: t('plugins.epF.cidId') },
-                { name: 'path', type: 'string', required: false, desc: t('plugins.epF.cidPath') },
-                { name: 'doc', type: 'string', required: false, desc: t('plugins.epF.cidDoc') },
+                { name: 'doc', type: 'object', required: true, desc: t('plugins.epF.cidDoc') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "content_id": "plugin-3f221aad\u2026" }' },
@@ -7603,7 +7627,7 @@ function getEndpointDefs(): EndpointDef[] {
             about: t('plugins.epAbout.repoModpacksSet'),
             fields: [
                 { name: 'dir', type: 'string', required: true, desc: t('plugins.epF.rmDirSet') },
-                { name: 'shares', type: 'string', required: false, desc: t('plugins.epF.rmShares') },
+                { name: 'shares', type: 'array', required: false, desc: t('plugins.epF.rmShares') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "written": 2 }' },

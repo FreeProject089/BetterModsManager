@@ -76,5 +76,58 @@ if (absent.length || partial.length) {
 `);
   process.exit(1);
 }
+// ── ENDPOINT_TO_DL: the "bmm://" badge on an endpoint row ─────────────────────────────
+//
+// A separate list, and a third chance to disagree. It is keyed by "<METHOD> <path>", so a
+// key that does not name a real endpoint renders no badge and nothing says why; a target
+// that names no real action offers a link that does nothing when clicked.
+//
+// It was also incomplete in the direction nobody notices: `DELETE /api/plugins/:id` and the
+// whole catalogue subsystem had working deeplinks and no badge, so the screen said they had
+// none. The reference page even recorded the plugin one as a known inconsistency — a note
+// that stayed true for as long as it was written down instead of checked.
+const mapAt = panel.indexOf('const ENDPOINT_TO_DL');
+if (mapAt < 0) { console.error('✗ ENDPOINT_TO_DL not found — refusing to report success'); process.exit(2); }
+const mapSrc = panel.slice(mapAt, panel.indexOf('};', mapAt));
+const mapKeys = [...mapSrc.matchAll(/^\s*'([A-Z]+ \/api\/[^']+)':/gm)].map((m) => m[1]);
+const mapTargets = [...mapSrc.matchAll(/bmm:\/\/([a-z0-9/_-]+)/g)].map((m) => m[1]);
+if (mapKeys.length < 20) { console.error(`✗ parsed ${mapKeys.length} ENDPOINT_TO_DL row(s) — the shape changed`); process.exit(2); }
+
+const defsAt = panel.indexOf('function getEndpointDefs()');
+const endpoints = new Set([...panel.slice(defsAt).matchAll(/^[ \t]*method: '(\w+)', path: '([^']+)'/gm)].map((m) => `${m[1]} ${m[2]}`));
+const actions = new Set(real.map((a) => a.action));
+
+// UI-only on purpose: a deeplink that opens a screen, or drives something the HTTP API does
+// not expose. Listed rather than inferred, so a new action with a route behind it fails here
+// until somebody decides which endpoint it belongs to.
+const NO_ENDPOINT = new Set([
+  'api',                                        // the generic passthrough — it IS every endpoint
+  'benchmark/open', 'docs/open', 'view/open',   // open a screen
+  'settings/layout', 'settings/navbar',
+  'theme/apply', 'theme/editor', 'theme/import', 'theme/import-inline',
+  'language/import-inline',                     // the payload rides in the link, not a body
+  'repo/fetch-ssh', 'repo/publish-ssh',         // git-over-SSH, no HTTP route
+  'download', 'import', 'install',              // one-word aliases that dispatch by file kind
+  'catalog/unfollow',                           // same route as catalog/follow, one row for both
+]);
+
+const mapBad = [];
+for (const k of mapKeys) if (!endpoints.has(k)) mapBad.push(`KEY       ${k} — no endpoint by that name, so the badge never renders`);
+for (const tgt of mapTargets) if (!actions.has(tgt)) mapBad.push(`TARGET    bmm://${tgt} — the app handles no such action`);
+for (const a of actions) {
+  if (NO_ENDPOINT.has(a) || INTERNAL.has(a)) continue;
+  if (!mapTargets.includes(a)) mapBad.push(`UNBADGED  ${a} has a working deeplink and no endpoint row — the screen says it has none`);
+}
+if (mapBad.length) {
+  console.error('✗ the endpoint ↔ deeplink map does not match the app:\n');
+  for (const b of mapBad) console.error(`  ${b}`);
+  console.error(`
+  ENDPOINT_TO_DL in ${PANEL} is what puts the bmm:// badge on an endpoint row. Fix the row,
+  or declare the action UI-only in NO_ENDPOINT here.
+`);
+  process.exit(1);
+}
+
 const total = real.reduce((n, a) => n + a.params.length, 0);
 console.log(`✓ deeplink reference OK — ${real.length} action(s), ${total} parameter(s), all documented`);
+console.log(`✓ endpoint ↔ deeplink map OK — ${mapKeys.length} badge(s), every key an endpoint and every target an action`);

@@ -2030,11 +2030,9 @@ Each opens the matching in-app flow and returns \`202\`. They are **not** headle
 
 Recorded because this page and the server do not agree on every detail:
 
-- **Permission gates are narrower than they look.** \`mod/check-updates\`, \`mod/update\`, \`repo/update\`, \`repo/host\` (both methods), both cancel routes, \`DELETE /api/plugins/:id\` and every \`/api/apps/permissions*\` route are **token-only** — a plugin token with zero permissions passes them.
-- **\`POST /api/repo/gen\`** takes \`serverVersion\` (a number) **and** \`serverType\` (\`"std"\` / \`"lux"\`) — the string goes in \`serverType\`.
-- **\`POST /api/repo/host\`** drives the native Server Repo UI and returns \`202\`, not \`200\`.
-- **\`bmm://telemetry/settings\`** is **not routed** — only \`bmm://telemetry/set\` works.
-- Error responses re-add \`access-control-allow-origin: *\` unconditionally, even in release.
+- **Error responses re-add \`access-control-allow-origin: *\` unconditionally**, even in release and even when the CORS setting names specific origins. Successful responses go through the configured policy, so what leaks is the failures — enough for any web page to tell a \`401\` from a \`403\` from a \`404\` on \`127.0.0.1\`, and so to detect BMM and confirm or deny a guessed token from a site the user merely visited.
+
+Five entries that used to be here are gone because the code changed: the permission gates (every route listed now declares a scope, and the three \`/api/apps/permissions*\` routes take the **admin** token), the duplicated \`serverVersion\` on \`POST /api/repo/gen\`, the wrong description of \`POST /api/repo/host\`, the missing \`bmm://\` badge on \`DELETE /api/plugins/:id\`, and \`bmm://telemetry/settings\`. Three are now held by a check instead of a note — a note goes stale in silence.
 
 Every \`/api/\` request emits an event carrying method, path and status — that is what produces the toasts and the API log on the Plugins & API page, so you can watch external calls arrive without instrumenting your own script.
 
@@ -2387,11 +2385,9 @@ Chacun ouvre le flux in-app correspondant et renvoie \`202\`. Ils ne sont **pas*
 
 Consignées parce que cette page et le serveur ne s’accordent pas sur tous les détails :
 
-- **Les barrières de permission sont plus étroites qu’elles n’y paraissent.** \`mod/check-updates\`, \`mod/update\`, \`repo/update\`, \`repo/host\` (les deux méthodes), les deux routes d’annulation, \`DELETE /api/plugins/:id\` et toutes les routes \`/api/apps/permissions*\` sont **token seul** — un token plugin sans aucune permission y passe.
-- **\`POST /api/repo/gen\`** prend \`serverVersion\` (un nombre) **et** \`serverType\` (\`"std"\` / \`"lux"\`) — la chaîne va dans \`serverType\`.
-- **\`POST /api/repo/host\`** pilote l’UI native Dépôt Serveur et renvoie \`202\`, pas \`200\`.
-- **\`bmm://telemetry/settings\`** n’est **pas routé** — seul \`bmm://telemetry/set\` fonctionne.
-- Les réponses d’erreur rajoutent \`access-control-allow-origin: *\` sans condition, même en release.
+- **Les réponses d’erreur rajoutent \`access-control-allow-origin: *\` sans condition**, même en release et même quand le réglage CORS nomme des origines précises. Les réponses en succès passent par la politique configurée : ce qui fuit, ce sont les échecs — assez pour que n’importe quelle page web distingue un \`401\` d’un \`403\` d’un \`404\` sur \`127.0.0.1\`, donc détecte BMM et confirme ou infirme un token deviné depuis un site simplement visité.
+
+Cinq entrées qui figuraient ici ont disparu parce que le code a changé : les barrières de permission (chaque route listée déclare désormais une portée, et les trois routes \`/api/apps/permissions*\` exigent le token **admin**), le \`serverVersion\` en double sur \`POST /api/repo/gen\`, la description fausse de \`POST /api/repo/host\`, le badge \`bmm://\` manquant sur \`DELETE /api/plugins/:id\`, et \`bmm://telemetry/settings\`. Trois sont maintenant tenues par un check et non par une note — une note se périme en silence.
 
 Chaque requête \`/api/\` émet un événement portant la méthode, le chemin et le statut — c’est ce qui produit les toasts et le journal API de la page Plugins & API : tu peux donc voir arriver les appels externes sans instrumenter ton propre script.
 
