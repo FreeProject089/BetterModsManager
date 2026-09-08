@@ -1716,37 +1716,71 @@ function renderUqtForm(ep, formEl) {
             return opt(_allModpacks, m => m.id, m => `${m.name} (${m.mod_count ?? m.mods?.length ?? 0})`);
         return null;
     };
+    /**
+     * One field: its name, whether it is required, WHAT IT IS, and what it is for.
+     *
+     * The type was the missing half. A form that asks for `mods` and `count` and `options`
+     * with three identical boxes is a form you fill in wrong and find out from a 400 — the
+     * badge says string / number / true-false / JSON before you type, which is the difference
+     * between a tester and a guessing game.
+     *
+     * Everything here is a class rather than a style attribute. It was eight inline `style=`
+     * runs across five branches, which is why the rows did not line up with each other: each
+     * branch had its own idea of the font and the spacing.
+     */
+    const TYPE_LABEL = {
+        boolean: t('plugins.qtTypeBool') || 'true / false',
+        number: t('plugins.qtTypeNum') || 'number',
+        object: 'JSON',
+        array: t('plugins.qtTypeList') || 'list',
+    };
     const fieldRow = (f) => {
-        const req = f.required ? ` <span style="color:var(--danger)">*</span>` : ` <span style="color:var(--text-muted);font-size:10px;">(${t('common.optional') || 'optional'})</span>`;
-        const lbl = `<label class="plug-uqt-flabel">${escHtml(f.name)}${req}</label>`;
-        const desc = f.desc ? `<div class="plug-uqt-fdesc">${escHtml(f.desc)}</div>` : '';
-        let input = '';
         const id = `uqt-f-${f.name}`;
+        const type = f.type || 'string';
         const smartOpts = optsFor(f.name);
+        const badge = `<span class="plug-uqt-ftype">${escHtml(smartOpts ? (t('plugins.qtTypePick') || 'pick one') : (TYPE_LABEL[type] || 'text'))}</span>`;
+        const req = f.required
+            ? `<span class="plug-uqt-freq">${escHtml(t('plugins.qtRequired') || 'required')}</span>`
+            : `<span class="plug-uqt-fopt">${escHtml(t('common.optional') || 'optional')}</span>`;
+        const lbl = `<label class="plug-uqt-flabel" for="${id}"><code>${escHtml(f.name)}</code>${badge}${req}</label>`;
+        const desc = f.desc ? `<div class="plug-uqt-fdesc">${escHtml(f.desc)}</div>` : '';
+        const reqAttr = f.required ? ' data-freq="1"' : '';
+        let input = '';
         if (smartOpts) {
-            input = `<select id="${id}" class="select select-sm" data-fname="${escAttr(f.name)}" data-ftype="string">${smartOpts}</select>`;
+            input = `<select id="${id}" class="select select-sm plug-uqt-input" data-fname="${escAttr(f.name)}" data-ftype="string"${reqAttr}>${smartOpts}</select>`;
         }
-        else if (f.type === 'boolean') {
-            input = `<label class="plug-uqt-check"><input type="checkbox" id="${id}" data-fname="${escAttr(f.name)}" data-ftype="boolean"> <span>${escHtml(f.name)}</span></label>`;
-            return `<div class="plug-uqt-field">${input}${desc}</div>`;
+        else if (type === 'boolean') {
+            // The name used to be printed twice — once as the label and once beside the box.
+            // The word next to a checkbox should say what ticking it DOES, not repeat the key.
+            input = `<label class="plug-uqt-check"><input type="checkbox" id="${id}" data-fname="${escAttr(f.name)}" data-ftype="boolean"${reqAttr}> <span>${escHtml(t('plugins.qtSendTrue') || 'send as true')}</span></label>`;
         }
-        else if (f.type === 'object' || f.type === 'array') {
-            const ph = f.type === 'array' ? '["a","b"]' : '{ "key": "value" }';
-            input = `<textarea id="${id}" class="input" rows="2" data-fname="${escAttr(f.name)}" data-ftype="${f.type}" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></textarea>`;
+        else if (type === 'object' || type === 'array') {
+            const ph = type === 'array' ? '["a", "b"]' : '{ "key": "value" }';
+            input = `<textarea id="${id}" class="input plug-uqt-input plug-uqt-json" rows="3" data-fname="${escAttr(f.name)}" data-ftype="${type}" placeholder="${ph}"${reqAttr}></textarea>`
+                + `<div class="plug-uqt-jsonmsg" data-for="${id}"></div>`;
         }
-        else if (f.type === 'number') {
-            input = `<input type="number" id="${id}" class="input" data-fname="${escAttr(f.name)}" data-ftype="number">`;
+        else if (type === 'number') {
+            input = `<input type="number" id="${id}" class="input plug-uqt-input" data-fname="${escAttr(f.name)}" data-ftype="number"${reqAttr} placeholder="${escAttr(f.placeholder || '')}">`;
         }
         else {
             const isPath = /path|dir|folder/i.test(f.name);
-            input = `<div style="display:flex;gap:6px;"><input type="text" id="${id}" class="input" data-fname="${escAttr(f.name)}" data-ftype="string" placeholder="${escAttr(f.placeholder || '')}" style="flex:1;font-family:var(--font-mono);font-size:12px;">${isPath ? `<button type="button" class="btn btn-sm btn-secondary plug-uqt-browse" data-target="${id}" data-kind="${/dir|folder/i.test(f.name) ? 'dir' : 'file'}">${t('plugins.qtBrowse') || 'Browse'}</button>` : ''}</div>`;
+            input = `<div class="plug-uqt-inrow"><input type="text" id="${id}" class="input plug-uqt-input" data-fname="${escAttr(f.name)}" data-ftype="string"${reqAttr} placeholder="${escAttr(f.placeholder || '')}">`
+                + `${isPath ? `<button type="button" class="btn btn-sm btn-secondary plug-uqt-browse" data-target="${id}" data-kind="${/dir|folder/i.test(f.name) ? 'dir' : 'file'}">${t('plugins.qtBrowse') || 'Browse'}</button>` : ''}</div>`;
         }
         return `<div class="plug-uqt-field">${lbl}${input}${desc}</div>`;
     };
+    // The REAL parameter name. It was hardcoded to ":id", and `/api/hook/:name` is a hook
+    // name — so on those two routes the form asked for an id, the placeholder said id, and
+    // the help text said id, for something that is not one.
+    const paramName = ep.path.match(/:([a-zA-Z_]+)/)?.[1] || 'id';
     const pathParamRow = hasPathParam
-        ? `<div class="plug-uqt-field"><label class="plug-uqt-flabel">:id <span style="color:var(--danger)">*</span></label>
-           <input type="text" id="uqt-pathparam" class="input" placeholder="${escAttr(ep.path)}" style="font-family:var(--font-mono);font-size:12px;">
-           <div class="plug-uqt-fdesc">${t('plugins.qtPathParam') || 'Replaces :id in the URL.'}</div></div>`
+        ? `<div class="plug-uqt-field">
+             <label class="plug-uqt-flabel" for="uqt-pathparam"><code>${escHtml(paramName)}</code>
+               <span class="plug-uqt-ftype">${escHtml(t('plugins.qtTypeUrl') || 'in the address')}</span>
+               <span class="plug-uqt-freq">${escHtml(t('plugins.qtRequired') || 'required')}</span></label>
+             <input type="text" id="uqt-pathparam" class="input plug-uqt-input" data-freq="1" placeholder="${escAttr(ep.path)}">
+             <div class="plug-uqt-fdesc">${escHtml(t('plugins.qtPathParam', { n: paramName }))}</div>
+           </div>`
         : '';
     const authChip = ep.auth
         ? `<span class="plug-uqt-auth"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${t('plugins.requiresToken') || 'token required'}</span>`
@@ -1755,14 +1789,95 @@ function renderUqtForm(ep, formEl) {
         <div class="plug-uqt-about">${ep.about}</div>
         <div class="plug-uqt-meta">${authChip}</div>
         ${pathParamRow}
-        ${fields.length ? fields.map(fieldRow).join('') : (hasPathParam ? '' : `<div class="plug-uqt-fdesc" style="padding:4px 0;">${t('plugins.qtNoBody') || 'No parameters required.'}</div>`)}
+        ${fields.length ? fields.map(fieldRow).join('') : (hasPathParam ? '' : `<div class="plug-uqt-fdesc plug-uqt-empty">${t('plugins.qtNoBody') || 'No parameters required.'}</div>`)}
         <div class="plug-uqt-actions">
             <button class="btn btn-sm btn-ghost" id="uqt-curl">${IC.copy} cURL</button>
-            <button class="btn btn-sm btn-ghost" id="uqt-copybody" style="display:${fields.length ? '' : 'none'};">${IC.copy} JSON</button>
-            <span style="flex:1;"></span>
+            <button class="btn btn-sm btn-ghost" id="uqt-copybody"${fields.length ? '' : ' hidden'}>${IC.copy} JSON</button>
+            <button class="btn btn-sm btn-ghost" id="uqt-reset"${fields.length || hasPathParam ? '' : ' hidden'}>${IC.refresh} ${t('common.clear') || 'Clear'}</button>
+            <span class="plug-uqt-spacer"></span>
             <button class="btn btn-sm btn-accent" id="uqt-run">${IC.play} ${t('plugins.run') || 'Run'}</button>
         </div>`;
     formEl.style.display = 'block';
+    /**
+     * Say what is wrong BEFORE the request goes out.
+     *
+     * A required field left empty used to be sent as an absent key, and the answer came back
+     * as a 400 from the other side of an IPC bridge — which tells you something failed, not
+     * which box you forgot. Marked here instead, on the box.
+     */
+    const markInvalid = (el, bad) => {
+        if (el)
+            el.classList.toggle('plug-uqt-bad', bad);
+    };
+    const validate = () => {
+        let ok = true;
+        formEl.querySelectorAll('[data-freq="1"]').forEach(el => {
+            const inp = el;
+            const empty = inp.type === 'checkbox' ? false : !(inp.value || '').trim();
+            markInvalid(el, empty);
+            if (empty)
+                ok = false;
+        });
+        // A JSON box holding something that is not JSON is worse than an empty one: it would
+        // have been dropped in silence by the collector below.
+        formEl.querySelectorAll('.plug-uqt-json').forEach(el => {
+            const raw = el.value.trim();
+            if (!raw)
+                return;
+            try {
+                JSON.parse(raw);
+                markInvalid(el, false);
+            }
+            catch {
+                markInvalid(el, true);
+                ok = false;
+            }
+        });
+        return ok;
+    };
+    // Live, while typing, for the JSON boxes only — the one field where "is this valid" is a
+    // question you cannot answer by looking.
+    formEl.querySelectorAll('.plug-uqt-json').forEach(el => {
+        const msg = formEl.querySelector(`.plug-uqt-jsonmsg[data-for="${el.id}"]`);
+        el.addEventListener('input', () => {
+            const raw = el.value.trim();
+            if (!raw) {
+                markInvalid(el, false);
+                if (msg)
+                    msg.textContent = '';
+                return;
+            }
+            try {
+                JSON.parse(raw);
+                markInvalid(el, false);
+                if (msg) {
+                    msg.textContent = '';
+                    msg.className = 'plug-uqt-jsonmsg';
+                }
+            }
+            catch (e) {
+                markInvalid(el, true);
+                if (msg) {
+                    msg.textContent = String(e?.message || 'invalid JSON');
+                    msg.className = 'plug-uqt-jsonmsg is-bad';
+                }
+            }
+        });
+    });
+    formEl.querySelectorAll('[data-freq="1"]').forEach(el => {
+        el.addEventListener('input', () => markInvalid(el, false));
+        el.addEventListener('change', () => markInvalid(el, false));
+    });
+    formEl.querySelector('#uqt-reset')?.addEventListener('click', () => {
+        formEl.querySelectorAll('input, textarea, select').forEach(el => {
+            if (el.type === 'checkbox')
+                el.checked = false;
+            else
+                el.value = '';
+            markInvalid(el, false);
+        });
+        formEl.querySelectorAll('.plug-uqt-jsonmsg').forEach(m => { m.textContent = ''; m.className = 'plug-uqt-jsonmsg'; });
+    });
     // Browse buttons
     formEl.querySelectorAll('.plug-uqt-browse').forEach(b => {
         b.addEventListener('click', async () => {
@@ -1827,6 +1942,13 @@ function renderUqtForm(ep, formEl) {
         return { path, body };
     };
     formEl.querySelector('#uqt-run')?.addEventListener('click', () => {
+        // Refused here rather than by the API: a 400 arriving from the other side of an IPC
+        // bridge tells you something failed, not which box you left empty.
+        if (!validate()) {
+            toast(t('plugins.qtFillRequired') || 'Fill the fields marked required, and fix any invalid JSON.', 'error');
+            formEl.querySelector('.plug-uqt-bad')?.focus();
+            return;
+        }
         const { path, body } = collect();
         handleQuickTest(ep.method, path, body || undefined);
     });

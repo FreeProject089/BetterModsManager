@@ -15549,10 +15549,33 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 .plug-uqt-auth { font-size: 10px; color: var(--amber); display: inline-flex; align-items: center; gap: 5px; }
 .plug-uqt-noauth { font-size: 10px; color: var(--success); }
 .plug-uqt-field { margin-bottom: 11px; }
-.plug-uqt-flabel { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+/* A field label is now a row of facts, not a word: the key, what type it wants, and
+   whether it is required. It has to wrap — some keys are long and the chips must not
+   push the name out of the box. */
+.plug-uqt-flabel { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; }
+.plug-uqt-flabel code { font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); background: var(--bmm-s06); padding: 1px 6px; border-radius: 5px; }
+.plug-uqt-ftype { font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--bmm-s08); color: var(--text-muted); }
+.plug-uqt-freq { font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--danger); }
+.plug-uqt-fopt { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
 .plug-uqt-fdesc { font-size: 10px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+/* One width and one type face for every box in the form. Five branches each carried their
+   own inline style, which is why the rows did not line up with one another. */
+.plug-uqt-input { width: 100%; box-sizing: border-box; }
+input.plug-uqt-input, textarea.plug-uqt-input { font-family: var(--font-mono); font-size: 12px; }
+.plug-uqt-inrow { display: flex; gap: 6px; align-items: stretch; }
+.plug-uqt-inrow .plug-uqt-input { flex: 1; min-width: 0; }
+.plug-uqt-inrow .btn { flex-shrink: 0; }
+.plug-uqt-json { resize: vertical; min-height: 56px; line-height: 1.5; }
+.plug-uqt-jsonmsg { font-size: 10px; line-height: 1.4; margin-top: 3px; color: var(--text-muted); }
+.plug-uqt-jsonmsg.is-bad { color: var(--danger); }
+/* Colour AND a ring: a red border alone on a dark surface is a thin line a good share of
+   readers will not see, and this mark is the only thing saying which box is the problem.
+   The !important is not decoration — .input sets `border` with !important. */
+.plug-uqt-bad, .plug-uqt-bad:focus { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22); }
 .plug-uqt-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .plug-uqt-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bmm-s07); }
+.plug-uqt-spacer { flex: 1; }
+.plug-uqt-empty { padding: 4px 0; }
 
 /* ── Per-plugin permission domains ──────────────────────────────────────── */
 .plug-perm-domains { display: flex; flex-direction: column; gap: 9px; margin: 10px 0; }
