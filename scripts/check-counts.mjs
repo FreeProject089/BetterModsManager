@@ -104,7 +104,7 @@ const WANT = [
   { what: 'endpoints', truth: routes.size, re: /(\d{2,3}) (?:endpoints|routes)\b/g },
   // `outils` on its own would catch "trois outils de développement" and every other tool in
   // the prose, so both languages are anchored on the words beside the number.
-  { what: 'MCP tools', truth: tools.size, re: /(\d{2,3}) (?:MCP tools|tools an AI client|atomic tools|outils atomiques|outils qu'un client IA)\b/g },
+  { what: 'MCP tools', truth: tools.size, re: /(\d{2,3}) (?:MCP tools|tools an AI client|atomic tools|outils MCP|outils atomiques|outils qu'un client IA)\b/g },
   { what: 'CLI commands', truth: cli.length, re: /(\d{2,3}) (?:CLI subcommands|subcommands|sous-commandes CLI|sous-commandes)\b/g },
   { what: 'registered commands', truth: cmds.size, re: /(\d{2,4})\*{0,2} (?:commands (?:are )?registered|commandes enregistr\u00e9es)\b/g },
   { what: 'import cycles', truth: baseline.cycles, re: /(\d{2,3}) (?:cycles)\b/g },
