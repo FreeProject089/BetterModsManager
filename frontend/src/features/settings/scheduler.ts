@@ -2654,7 +2654,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             const at = String(p.into || 'lib').trim() || 'lib';
             const [mods, profiles, packs, plugins] = await Promise.all([
                 invoke('get_all_mods').catch(() => []) as Promise<any[]>,
-                invoke('load_profiles').catch(() => []) as Promise<any[]>,
+                invoke('get_profiles').catch(() => []) as Promise<any[]>,
                 invoke('load_modpacks').catch(() => []) as Promise<any[]>,
                 invoke('get_installed_plugins').catch(() => []) as Promise<any[]>,
             ]);
@@ -3335,7 +3335,7 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         case 'profileExists': {
             const want = String(p.id || '').trim();
             if (!want) return false;
-            const list: any[] = await invoke('load_profiles').catch(() => []);
+            const list: any[] = await invoke('get_profiles').catch(() => []);
             return list.some((x) => String(x?.id || '') === want);
         }
         // The other half of `theme.set`. The "night theme" preset applied a theme every
