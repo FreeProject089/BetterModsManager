@@ -61,6 +61,7 @@ const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
 const DOCS_KNOWN_KEY = 'bmm_docs_known';
 const DOCS_UNREAD_KEY = 'bmm_docs_unread';
 const allArticleIds = (): string[] => CATEGORIES.flatMap((c) => c.articles.map((a) => a.id));
+const LS_ALSO = 'bmm.docs.alsoOpen';
 const lsArr = (k: string): string[] => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 const lsPut = (k: string, v: string[]): void => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
 let unreadSet = new Set<string>(lsArr(DOCS_UNREAD_KEY));
@@ -121,6 +122,9 @@ const ICON: Record<string, string> = {
   bolt: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
   diagram: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M14 6h4a2 2 0 0 1 2 2v3M10 18H6a2 2 0 0 1-2-2v-3"/>',
   life: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.9" y1="4.9" x2="9.2" y2="9.2"/><line x1="14.8" y1="14.8" x2="19.1" y2="19.1"/><line x1="14.8" y1="9.2" x2="19.1" y2="4.9"/><line x1="9.2" y1="14.8" x2="4.9" y2="19.1"/>',
+  // The PDF button lost its label, so its icon has to carry the whole meaning: a tray with
+  // an arrow coming down, not the book that three other things here already wear.
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   play: '<polygon points="5 3 19 12 5 21 5 3"/>',
   ext: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
@@ -2748,11 +2752,17 @@ function chrome(): string {
         <h1>${tr({ en: 'Help & documentation', fr: 'Aide et documentation' })}</h1>
         <p>${tr({ en: 'Everything about BMM — searchable, with hands-on tutorials and interactive diagrams.', fr: 'Tout sur BMM — recherchable, avec des tutoriels guidés et des diagrammes interactifs.' })}</p>
       </div>
+      <!-- Four buttons of equal weight is four buttons nobody reads. Only ONE of them is
+           what a person opening Help wants first; the other three are the same documentation
+           in another wrapper (in-app reader, PDF, website). So: one primary, one secondary,
+           and the two "same thing, elsewhere" ones shrink to icons with tooltips. -->
       <div class="dh-actions">
         <button class="dh-btn dh-btn-primary" data-act="tutorial">${svg('play', 16)} ${tr({ en: 'Interactive tutorial', fr: 'Tutoriel interactif' })}</button>
         <button class="dh-btn" data-view2="pages">${svg('book', 16)} ${tr({ en: 'Full documentation', fr: 'Documentation complète' })}</button>
-        <button class="dh-btn" data-pdf="1" data-tooltip="${tr({ en: 'The whole documentation as one PDF (about 15 MB), in your language and theme.', fr: 'Toute la documentation en un PDF (environ 15 Mo), dans ta langue et ton thème.' })}">${svg('book', 16)} ${tr({ en: 'Download the PDF', fr: 'Télécharger le PDF' })}</button>
-        <button class="dh-btn" data-ext="${DOCS_SITE}">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</button>
+        <span class="dh-actions-min">
+          <button class="dh-btn dh-btn-ic" data-pdf="1" aria-label="${tr({ en: 'Download the PDF', fr: 'Télécharger le PDF' })}" data-tooltip="${tr({ en: 'The whole documentation as one PDF (about 15 MB), in your language and theme.', fr: 'Toute la documentation en un PDF (environ 15 Mo), dans ta langue et ton thème.' })}">${svg('download', 16)}</button>
+          <button class="dh-btn dh-btn-ic" data-ext="${DOCS_SITE}" aria-label="${tr({ en: 'On the website', fr: 'Sur le site' })}" data-tooltip="${tr({ en: 'The same documentation on the website, in a browser.', fr: 'La même documentation sur le site, dans un navigateur.' })}">${svg('ext', 16)}</button>
+        </span>
       </div>
     </div>
     <!-- The part toggle and the search sit on ONE row: both answer "narrow what I am
@@ -2779,6 +2789,10 @@ function chrome(): string {
 }
 
 function crumbs(): string {
+  // At the root the trail would read "Help ▸ User guide" — both of which are the two controls
+  // directly above it, one of them a segmented toggle showing the same word highlighted. A
+  // breadcrumb that repeats its own header is a band of chrome that tells you nothing.
+  if (route.view === 'hub') return '';
   const home = `<button class="dh-crumb" data-view2="hub">${tr({ en: 'Help', fr: 'Aide' })}</button>`;
   const partName: L = route.part === 'dev' ? { en: 'Developer', fr: 'Développeur' } : { en: 'User guide', fr: 'Guide utilisateur' };
   const sep = `<span class="dh-crumb-sep">${svg('arrow', 12)}</span>`;
@@ -2853,19 +2867,24 @@ function hubView(): string {
       </span>
     </button>`;
   const extra = unattachedPages(route.part);
+  // Folded by default. These are the pages NO article introduces — real, but the least
+  // curated thing on the page, and as tiles they carried as much visual weight as the whole
+  // hub above them: eight more identical cards, so "Getting started" and a stray reference
+  // page looked equally important. One line that says how many, and opens.
+  const alsoOpen = lsArr(LS_ALSO).includes(route.part);
   // Same card as the categories above it, not the one from the "Full documentation" listing.
   // These sit directly under a grid of `.dh-cat` tiles — icon plate, title, blurb, a meta line
   // — and using the other shape made the band read as a different page pasted underneath.
   // A card is a card: same plate, same rhythm; only the meta line differs, because a page has
   // a reading time where a category has an article count.
   const extraHtml = extra.length ? `
-    <div class="dh-cat-head dh-also-head">${svg('book', 24)}<div>
-      <h2>${tr({ en: 'Also in the manual', fr: 'Aussi dans le manuel' })}</h2>
-      <p>${tr({
-        en: 'Bundled pages with no article of their own — they open in the reader, offline, like every other page here.',
-        fr: 'Des pages embarquées sans article dédié — elles s’ouvrent dans le lecteur, hors ligne, comme toutes les autres.',
-      })}</p></div></div>
-    <div class="dh-grid">${extra.map((p) => `
+    <button class="dh-also-toggle ${alsoOpen ? 'on' : ''}" data-also="${route.part}" aria-expanded="${alsoOpen ? 'true' : 'false'}">
+      ${svg('book', 16)}
+      <span>${tr({ en: 'Also in the manual', fr: 'Aussi dans le manuel' })}</span>
+      <em>${extra.length} ${tr({ en: 'pages with no article of their own', fr: 'pages sans article dédié' })}</em>
+      <span class="dh-also-caret">${svg('arrow', 14)}</span>
+    </button>
+    <div class="dh-grid dh-also-grid" ${alsoOpen ? '' : 'hidden'}>${extra.map((p) => `
       <button class="dh-cat" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
         <span class="dh-cat-ic">${svg('book', 22)}</span>
         <span class="dh-cat-tx">
@@ -3056,6 +3075,12 @@ function go(next: Partial<Route>) { route = { ...route, ...next }; paint(); }
 function wireSearch() {
   const input = host?.querySelector('.dh-search') as HTMLInputElement | null;
   if (!input) return;
+  // The search-mode toggle is revealed by CSS on focus; `has-q` is what keeps it visible once
+  // focus moves to the results, where changing the mode is the whole point.
+  const bar = input.closest('.dh-searchbar') as HTMLElement | null;
+  const syncBar = () => bar?.classList.toggle('has-q', !!input.value.trim());
+  input.addEventListener('input', syncBar);
+  syncBar();
   if (route.view === 'search') input.value = route.q || '';
   let deb: number | null = null;
   input.addEventListener('input', () => {
@@ -3089,6 +3114,16 @@ function onClick(e: Event) {
     const p = partBtn.getAttribute('data-part') as Part;
     host?.querySelectorAll('.dh-seg').forEach((s) => s.classList.toggle('on', s.getAttribute('data-part') === p));
     go({ part: p, view: 'hub', catId: undefined, artId: undefined });
+    return;
+  }
+  const alsoBtn = hit('[data-also]');
+  if (alsoBtn) {
+    // Remembered per part, because someone who opens it in the User guide has said what they
+    // want; making them say it again every visit is the same nagging in slower motion.
+    const p = alsoBtn.getAttribute('data-also') || '';
+    const open = lsArr(LS_ALSO);
+    lsPut(LS_ALSO, open.includes(p) ? open.filter((x) => x !== p) : [...open, p]);
+    paint();
     return;
   }
   const rep = hit('[data-replay]');

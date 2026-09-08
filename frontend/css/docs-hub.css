@@ -37,6 +37,11 @@
 .dh-btn-primary { background: var(--bmm-accent, #3b82f6); border-color: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff); }
 .dh-btn-primary:hover { filter: brightness(1.08); background: var(--bmm-accent, #3b82f6); }
 .dh-btn svg, .dh-rel svg, .dh-cat-n svg, .dh-back svg { flex-shrink: 0; }
+/* The PDF and website buttons: the same documentation in another wrapper, so they keep the
+   button shape and lose the label. Square, quieter text colour, tooltip carries the name. */
+.dh-actions-min { display: inline-flex; gap: 6px; }
+.dh-btn-ic { padding: 9px; color: var(--bmm-text-secondary, #a3adba); }
+.dh-btn-ic:hover { color: var(--bmm-text-primary, #e6edf3); }
 
 /* ── User/Dev part toggle ── */
 .dh-parts { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 16px; border-radius: 12px; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
@@ -63,7 +68,12 @@
   color: var(--bmm-text-primary, #e6edf3); font-family: inherit;
 }
 .dh-search::placeholder { color: var(--bmm-text-muted, #7c8698); }
-.dh-modes { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bmm-bg-elevated, #1a2130); border: 1px solid var(--bmm-border, #2a3242); flex-shrink: 0; }
+/* Classic/Semantic only means something once there is a query to run either way on. Two
+   buttons and a highlighted pill sat on the resting page permanently, offering a choice about
+   nothing. Revealed on focus, and kept while a query stands — because changing the mode with
+   results on screen is exactly when it is wanted. */
+.dh-modes { display: none; gap: 2px; padding: 3px; border-radius: 8px; background: var(--bmm-bg-elevated, #1a2130); border: 1px solid var(--bmm-border, #2a3242); flex-shrink: 0; }
+.dh-searchbar:focus-within .dh-modes, .dh-searchbar.has-q .dh-modes { display: inline-flex; }
 .dh-mode { cursor: pointer; font-family: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--bmm-text-secondary, #a3adba); transition: background .12s, color .12s; }
 .dh-mode:hover { color: var(--bmm-text-primary, #e6edf3); }
 .dh-mode.on { background: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff); }
@@ -78,25 +88,58 @@
 
 /* ── category grid (hub) ── */
 .dh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--dh-gap); }
+/* Tiles are an INDEX, not a page of content. At 18px padding, a 44px icon plate and an
+   unbounded blurb, fifteen of them made a 2000px landing on which "Getting started" and a
+   stray reference page looked exactly as important as each other. Tighter padding, a smaller
+   plate, and the blurb clamped to two lines: same information, about a third of the height,
+   and the titles become the thing you scan. */
 .dh-cat {
-  display: flex; align-items: flex-start; gap: 14px; text-align: left; cursor: pointer;
-  padding: 18px; border-radius: var(--bmm-radius-card, 16px);
+  display: flex; align-items: flex-start; gap: 12px; text-align: left; cursor: pointer;
+  padding: 14px 15px; border-radius: var(--bmm-radius-card, 16px);
   background: var(--bmm-bg-elevated, #1a2130); border: 1px solid var(--bmm-border, #2a3242);
   transition: border-color .16s, transform .16s, box-shadow .16s; color: inherit; font-family: inherit;
 }
-.dh-cat:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); transform: translateY(-3px); box-shadow: var(--bmm-shadow-card, 0 16px 40px -18px rgba(0,0,0,.6)); }
+.dh-cat:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); transform: translateY(-2px); box-shadow: var(--bmm-shadow-card, 0 16px 40px -18px rgba(0,0,0,.6)); }
 .dh-cat-ic {
-  display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px;
+  display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px;
   color: var(--bmm-accent, #3b82f6);
   background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--bmm-accent, #3b82f6) 30%, transparent);
 }
 .dh-cat-diagram .dh-cat-ic { color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 14%, transparent); border-color: color-mix(in srgb, var(--bmm-purple) 30%, transparent); }
 .dh-cat-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.dh-cat-t { font-size: 16px; font-weight: 700; }
-.dh-cat-b { font-size: 13px; color: var(--bmm-text-secondary, #a3adba); line-height: 1.45; }
-.dh-cat-n { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 12px; font-weight: 600; color: var(--bmm-text-muted, #7c8698); }
+.dh-cat-t { font-size: 15px; font-weight: 700; }
+.dh-cat-b {
+  font-size: 12.5px; color: var(--bmm-text-secondary, #a3adba); line-height: 1.4;
+  /* Clamped, not shortened: the blurbs are worth reading in the category header, where there
+     is one of them. Fifteen at once is a wall. */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.dh-cat-n { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-muted, #7c8698); }
 .dh-cat:hover .dh-cat-n { color: var(--bmm-accent, #3b82f6); }
+
+/* ── "Also in the manual", folded ──
+   A row, not a section header with eight tiles under it. It used to announce itself with a
+   24px icon, an <h2> and a paragraph — the loudest heading on a page whose actual job is the
+   grid above it — and then repeat the grid at greater length. */
+.dh-also-toggle {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 18px;
+  padding: 11px 14px; border-radius: 12px; cursor: pointer; font-family: inherit; text-align: left;
+  background: transparent; border: 1px dashed var(--bmm-border, #2a3242);
+  color: var(--bmm-text-secondary, #a3adba); transition: border-color .14s, background .14s, color .14s;
+}
+.dh-also-toggle:hover { border-color: var(--bmm-border-hover, #3a4556); background: var(--bmm-bg-elevated, #1a2130); color: var(--bmm-text-primary, #e6edf3); }
+.dh-also-toggle > span:first-of-type { font-size: 13.5px; font-weight: 600; color: var(--bmm-text-primary, #e6edf3); }
+.dh-also-toggle em { flex: 1; font-style: normal; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.dh-also-caret { display: inline-flex; transition: transform .18s; }
+.dh-also-toggle.on { border-style: solid; }
+.dh-also-toggle.on .dh-also-caret { transform: rotate(90deg); }
+/* `[hidden]` is a UA rule at the lowest specificity, and `.dh-grid` sets `display: grid` — so
+   the class wins and the folded grid stayed fully visible. The fold looked implemented, and
+   was not. */
+.dh-also-grid { margin-top: 12px; }
+.dh-also-grid[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .dh-also-caret { transition: none; } }
 
 /* ── back link + category header ── */
 .dh-back {
