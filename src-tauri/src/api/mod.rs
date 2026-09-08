@@ -889,6 +889,70 @@ pub const PLUGIN_SCOPES: [&str; 26] = [
     "telemetry.write",
 ];
 
+/// Which value belongs in `access-control-allow-origin` for THIS request, if any.
+///
+/// `None` means: send no CORS header at all, and the browser will refuse to let the page
+/// read the response. That is the correct answer for an origin nobody allowed, and it is
+/// the answer error responses were never giving.
+///
+/// A request with no `Origin` gets `None` too, which costs nothing: browsers only enforce
+/// CORS when they sent one, and curl, the CLI and a plugin script do not care either way.
+fn cors_origin_for<'a>(
+    origin: Option<&'a str>,
+    allow_any: bool,
+    allowed: &[String],
+) -> Option<&'a str> {
+    let o = origin?;
+    if allow_any {
+        return Some("*");
+    }
+    allowed.iter().any(|a| a == o).then_some(o)
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::cors_origin_for;
+
+    fn allowed() -> Vec<String> {
+        vec!["http://tauri.localhost".into(), "https://bettercommunity.ch".into()]
+    }
+
+    /// The app's own webview reads its own 401s — which is what the unconditional `*` was
+    /// there for, and the reason this cannot simply send nothing.
+    #[test]
+    fn an_allowed_origin_is_echoed_exactly() {
+        assert_eq!(
+            cors_origin_for(Some("http://tauri.localhost"), false, &allowed()),
+            Some("http://tauri.localhost"),
+        );
+    }
+
+    /// The whole point. A page on any other site gets no header, so the browser refuses to
+    /// let it read the response — and a readable 401 stops being distinguishable from an
+    /// unreadable success, which is what made this a token oracle.
+    #[test]
+    fn any_other_site_gets_nothing() {
+        assert_eq!(cors_origin_for(Some("https://evil.example"), false, &allowed()), None);
+        assert_eq!(cors_origin_for(Some("null"), false, &allowed()), None);
+        // Not a prefix match, not a suffix match: a lookalike host is another site.
+        assert_eq!(cors_origin_for(Some("https://bettercommunity.ch.evil.example"), false, &allowed()), None);
+        assert_eq!(cors_origin_for(Some("https://notbettercommunity.ch"), false, &allowed()), None);
+    }
+
+    /// `*` in the setting is an explicit opt-in, and debug builds set the same flag.
+    #[test]
+    fn allow_any_still_answers_star() {
+        assert_eq!(cors_origin_for(Some("https://evil.example"), true, &[]), Some("*"));
+    }
+
+    /// No Origin header, no CORS answer. curl and the CLI never send one.
+    #[test]
+    fn no_origin_means_no_header() {
+        assert_eq!(cors_origin_for(None, false, &allowed()), None);
+        assert_eq!(cors_origin_for(None, true, &allowed()), None);
+    }
+}
+
 #[cfg(test)]
 mod identity_tests {
     use super::{RepoSyncBody, RepoExtraBody};
@@ -3979,26 +4043,33 @@ pub async fn start_api_server(
     };
     let cors_allow_any = user_cors_origins.iter().any(|o| o == "*");
 
+    // ONE list, read twice: by the CORS filter for successful responses, and by the last
+    // `map` below for the failures the filter never sees. It used to live inside the
+    // filter, so the rejection path had nothing to consult and answered `*` to everybody.
+    let allowed_origins: Vec<String> = {
+        let mut origins: Vec<String> = vec![
+            "https://tauri.localhost".into(),
+            "tauri://localhost".into(),
+            "http://tauri.localhost".into(),
+            "https://bettercommunity.ch".into(),
+        ];
+        origins.extend(user_cors_origins.iter().filter(|o| *o != "*").cloned());
+        origins
+    };
+    // Debug builds allow any origin so a browser harness can drive the API during
+    // development. `cfg!` rather than `#[cfg]` so both halves are type-checked in both
+    // profiles — a release-only branch that stopped compiling would be found by a release
+    // build and by nothing else.
+    let allow_any_origin = cors_allow_any || cfg!(debug_assertions);
+
     let cors = {
         let b = warp::cors()
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_headers(vec!["Content-Type", "Authorization"]);
-        if cors_allow_any {
-            // Explicit user opt-in: any website may call the API.
+        if allow_any_origin {
             b.allow_any_origin()
         } else {
-            // Default Tauri WebView origins + any extra origins the user added.
-            let mut origins: Vec<String> = vec![
-                "https://tauri.localhost".into(),
-                "tauri://localhost".into(),
-                "http://tauri.localhost".into(),
-                "https://bettercommunity.ch".into(),
-            ];
-            origins.extend(user_cors_origins.iter().filter(|o| *o != "*").cloned());
-            #[cfg(debug_assertions)]
-            { let _ = &origins; b.allow_any_origin() }
-            #[cfg(not(debug_assertions))]
-            { b.allow_origins(origins.iter().map(|s| s.as_str())) }
+            b.allow_origins(allowed_origins.iter().map(|s| s.as_str()))
         }
     };
 
@@ -4612,6 +4683,42 @@ pub async fn start_api_server(
         .or(group_apps)
         .with(cors)
         .recover(handle_rejection);
+
+    // The CORS headers a REJECTED request gets, decided here because this is the last place
+    // that can see both the Origin and the finished response. `handle_rejection` runs after
+    // `.with(cors)` and has neither.
+    //
+    // Only ever ADDS a header, never replaces one: a successful response was already stamped
+    // by the CORS filter and must keep exactly what that filter decided. `Vary: Origin` goes
+    // with it, because the answer now depends on who asked.
+    let cors_err_allowed = std::sync::Arc::new(allowed_origins);
+    let routes = warp::header::optional::<String>("origin")
+        .and(routes)
+        .map(move |origin: Option<String>, reply| {
+            let mut res = warp::Reply::into_response(reply);
+            if res.headers().contains_key("access-control-allow-origin") {
+                return res;
+            }
+            let Some(value) = cors_origin_for(origin.as_deref(), allow_any_origin, &cors_err_allowed)
+            else {
+                return res;
+            };
+            let Ok(v) = warp::http::HeaderValue::from_str(value) else {
+                return res;
+            };
+            let h = res.headers_mut();
+            h.insert("access-control-allow-origin", v);
+            h.insert("vary", warp::http::HeaderValue::from_static("Origin"));
+            h.insert(
+                "access-control-allow-methods",
+                warp::http::HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"),
+            );
+            h.insert(
+                "access-control-allow-headers",
+                warp::http::HeaderValue::from_static("Content-Type, Authorization, X-BMM-Plugin-Id"),
+            );
+            res
+        });
 
     // Per-request activity notifier: emit one `bmm://api-action` event for every
     // API call so the frontend can show a toast + keep a log — mirroring the
@@ -5422,10 +5529,11 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std:
         (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
     };
 
-    let base = warp::reply::with_status(warp::reply::json(&ApiError { error: msg }), code);
-    let r = warp::reply::with_header(base, "access-control-allow-origin", "*");
-    let r = warp::reply::with_header(r, "access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
-    let r = warp::reply::with_header(r, "access-control-allow-headers", "Content-Type, Authorization, X-BMM-Plugin-Id");
-    Ok(r)
+    // No CORS headers here. They used to be added unconditionally, `*` included, because
+    // this handler runs after `.with(cors)` and a recovered response would otherwise carry
+    // none — which let any web page read a 401 from 127.0.0.1 and tell it apart from a
+    // success it could not read. The `map` at the end of the chain adds them now, for the
+    // origins that are actually allowed, because unlike this function it can see the request.
+    Ok(warp::reply::with_status(warp::reply::json(&ApiError { error: msg }), code))
 }
 

@@ -482,31 +482,44 @@ externes sans instrumenter ton propre script.
 
 ---
 
-## Incohérences connues
+## CORS, et qui a le droit de lire un échec
 
-Consignées parce que le registre in-app et le serveur ne s'accordent pas sur tous les détails :
+Les réponses en succès passent par la politique CORS configurée : les origines de la webview Tauri,
+`bettercommunity.ch`, et ce que tu ajoutes dans **Réglages → Identité & API**. Rien d'autre ne peut
+en lire une.
 
-- **Les réponses d'erreur rajoutent `access-control-allow-origin: *` sans condition**, même en
-  release et même quand le réglage CORS nomme des origines précises. Les réponses en succès
-  passent par la politique configurée : ce qui fuit, ce sont les échecs — et ça suffit à n'importe
-  quelle page web pour distinguer un `401` d'un `403` d'un `404` sur `127.0.0.1`, donc pour
-  détecter BMM et confirmer ou infirmer un token deviné depuis un site simplement visité. Le
-  gestionnaire de rejet est placé *après* `.with(cors)` dans la chaîne de filtres, il doit donc
-  poser les en-têtes lui-même ; le correctif est de faire passer la récupération à l'intérieur du
-  wrapper CORS, ce qui change aussi la façon de répondre aux échecs CORS eux-mêmes — une passe à
-  part, pas une rustine.
+Les échecs, eux, étaient différents. Le gestionnaire de rejet tourne *après* le filtre CORS dans la
+chaîne warp : une réponse récupérée ne porte donc aucun en-tête CORS — et plutôt que de laisser
+l'app incapable de lire ses propres `401`, il posait `access-control-allow-origin: *` sur chaque
+échec, y compris en release.
 
-Cinq entrées qui figuraient ici ont disparu parce que le code a changé, et elles sont nommées pour
-que personne n'aille les chercher : les barrières de permission (chaque route listée déclare
-désormais une portée, et les trois routes `/api/apps/permissions*` exigent le token **admin**, donc
-un token plugin ne les atteint plus du tout), le `serverVersion` en double sur
-`POST /api/repo/gen`, la description fausse de `POST /api/repo/host`, le badge `bmm://` manquant sur
-`DELETE /api/plugins/:id`, et `bmm://telemetry/settings`, qui n'apparaît plus nulle part.
+C'est un oracle à token. Une page de n'importe quel site peut faire un `fetch()` sur l'API locale :
+un mauvais token donne un `401` LISIBLE, un bon donne un succès que le filtre CORS refuse d'exposer,
+ce que la page voit comme une erreur réseau. Deux résultats, distinguables, depuis un site
+simplement visité.
 
-Trois d'entre elles sont maintenant tenues par un check et non par une note —
-`check-endpoint-fields.mjs` compare chaque champ du test rapide à la structure Rust qu'il prétend
-décrire, et `check-deeplink-panel.mjs` compare la table des badges aux routes et aux actions. Une
-note se périme en silence ; un check, non.
+Les deux chemins lisent maintenant une seule liste. Un rejet reçoit l'origine qui a demandé quand
+elle est autorisée, avec `Vary: Origin` à côté, et rien du tout sinon — un site inconnu ne peut pas
+plus lire un `401` qu'un `200`. Une requête sans en-tête `Origin` (curl, la CLI, un script de
+plugin) ne reçoit aucun en-tête CORS et n'en a jamais eu besoin.
+
+---
+
+## Corrigées, et nommées pour que personne ne les cherche
+
+Six entrées qui figuraient ici ont disparu parce que le code a changé : les barrières de permission
+(chaque route listée déclare désormais une portée, et les trois routes `/api/apps/permissions*`
+exigent le token **admin**, donc un token plugin ne les atteint plus du tout), le `serverVersion` en
+double sur `POST /api/repo/gen`, la description fausse de `POST /api/repo/host`, le badge `bmm://`
+manquant sur `DELETE /api/plugins/:id`, `bmm://telemetry/settings`, qui n'apparaît plus nulle part,
+et la fuite CORS ci-dessus.
+
+Quatre d'entre elles sont tenues par un check et non par une note — `check-endpoint-fields.mjs`
+compare chaque champ du test rapide à la structure Rust qu'il prétend décrire,
+`check-deeplink-panel.mjs` compare la table des badges aux routes et aux actions, et
+`cors_origin_for` a quatre tests unitaires, dont celui du domaine sosie
+(`bettercommunity.ch.evil.example`) qu'une comparaison par préfixe laisserait passer. Une note se
+périme en silence ; un check, non.
 
 ---
 

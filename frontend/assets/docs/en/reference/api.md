@@ -470,29 +470,41 @@ your own script.
 
 ---
 
-## Known inconsistencies
+## CORS, and who may read a failure
 
-Recorded because the in-app registry and the server do not agree on every detail:
+Successful responses go through the configured CORS policy: the Tauri webview's own origins,
+`bettercommunity.ch`, and anything you add in **Settings → Identity & API**. Nothing else can read
+one.
 
-- **Error responses re-add `access-control-allow-origin: *` unconditionally**, even in release and
-  even when the CORS setting names specific origins. Successful responses go through the configured
-  policy, so what leaks is the failures — and that is enough for any web page to tell a `401` from a
-  `403` from a `404` on `127.0.0.1`, which detects BMM and confirms or denies a guessed token from a
-  site the user merely visited. The rejection handler sits *after* `.with(cors)` in the filter
-  chain, so it has to add the headers itself; the fix is to move the recovery inside the CORS
-  wrapper, which also changes how CORS failures themselves are answered — its own pass, not a patch.
+Failures used to be different. The rejection handler runs *after* the CORS filter in warp's chain,
+so a recovered response carries no CORS headers of its own — and rather than leave the app unable to
+read its own `401`s, it stamped `access-control-allow-origin: *` on every failure, in release too.
 
-Five entries that used to be here are gone because the code changed, and are named so nobody goes
-looking for them: the permission gates (every route that was listed now declares a scope, and the
-three `/api/apps/permissions*` routes take the **admin** token, so a plugin token cannot reach them
-at all), the duplicated `serverVersion` on `POST /api/repo/gen`, the wrong description of
-`POST /api/repo/host`, the missing `bmm://` badge on `DELETE /api/plugins/:id`, and
-`bmm://telemetry/settings`, which no longer appears anywhere.
+That is a token oracle. A page on any site can `fetch()` the local API: a wrong token gives a
+READABLE `401`, and a right one gives a success the CORS filter refuses to expose, which the page
+sees as a network error. Two outcomes, distinguishable, from a site the user merely visited.
 
-Three of those are now held by a check rather than by a note — `check-endpoint-fields.mjs` compares
-every quick-test field to the Rust body struct it claims to describe, and `check-deeplink-panel.mjs`
-compares the badge map to the routes and to the actions. A note goes stale in silence; a check does
-not.
+Both paths now read one list. A rejection is stamped with the requesting origin when that origin is
+allowed, with `Vary: Origin` beside it, and with nothing at all otherwise — so an unrecognised site
+cannot read a `401` any more than it can read a `200`. A request with no `Origin` header (curl, the
+CLI, a plugin script) gets no CORS header and never needed one.
+
+---
+
+## Fixed, and named so nobody goes looking
+
+Six entries that used to be listed here are gone because the code changed: the permission gates
+(every route that was listed now declares a scope, and the three `/api/apps/permissions*` routes
+take the **admin** token, so a plugin token cannot reach them at all), the duplicated `serverVersion`
+on `POST /api/repo/gen`, the wrong description of `POST /api/repo/host`, the missing `bmm://` badge
+on `DELETE /api/plugins/:id`, `bmm://telemetry/settings`, which no longer appears anywhere, and the
+CORS leak above.
+
+Four of them are now held by a check rather than by a note — `check-endpoint-fields.mjs` compares
+every quick-test field to the Rust body struct it claims to describe, `check-deeplink-panel.mjs`
+compares the badge map to the routes and the actions, and `cors_origin_for` has four unit tests, one
+of which is the lookalike host (`bettercommunity.ch.evil.example`) that a prefix match would let
+through. A note goes stale in silence; a check does not.
 
 ---
 
