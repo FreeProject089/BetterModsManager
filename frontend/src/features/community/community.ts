@@ -11,6 +11,7 @@ import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { renderMarkdown } from '../../ui/update-notes.js';
 import { bcRoot, bcApi } from '../../core/links-config.js';
+import { openBetterCommunity } from '../../ui/bettercommunity-modal.js';
 
 // BetterCommunity base resolution is centralized in links-config.ts and driven by
 // app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
@@ -259,6 +260,13 @@ function render(): void {
         <p class="view-subtitle">${escHtml(t('community.subtitle') || 'News & posts from the BetterCommunity blogs.')}</p>
       </div>
       <div class="view-actions">
+        <!-- Before "Open website", because the question it answers comes first: this screen
+             is a feed from a place the app never named, and sending somebody to a browser to
+             find out what that place is was the only answer available. -->
+        <button class="btn btn-secondary" id="community-about" style="gap:6px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          ${escHtml(t('community.about') || 'What is BetterCommunity?')}
+        </button>
         <button class="btn btn-secondary" id="community-open-web" style="gap:6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           ${escHtml(t('community.openWeb') || 'Open website')}
@@ -361,6 +369,7 @@ function wire(): void {
   _view.querySelector('#community-show-all')?.addEventListener('click', () => { _filter = 'all'; render(); });
   _view.querySelector('#community-refresh')?.addEventListener('click', async () => { _posts = null; await loadPosts(); render(); });
   _view.querySelector('#community-retry')?.addEventListener('click', async () => { await loadPosts(); render(); });
+  _view.querySelector('#community-about')?.addEventListener('click', () => openBetterCommunity());
   _view.querySelector('#community-open-web')?.addEventListener('click', () => openExternal(`${bcRoot()}/blog`));
   const lang = _view.querySelector('#community-lang') as HTMLSelectElement | null;
   if (lang) lang.addEventListener('change', () => { _blogLang = lang.value; render(); });

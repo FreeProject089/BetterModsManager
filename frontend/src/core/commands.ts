@@ -709,6 +709,9 @@ function registerCore() {
 
   // ── Help ────────────────────────────────────────────────────────────────────
   registerCommand({ id: 'help.search', category: 'help', title: { en: 'Search the documentation', fr: 'Rechercher dans la documentation' }, keywords: 'docs help search find', run: () => { (window as any).openDocsHome?.(); (document.querySelector('.nav-item[data-view="docs"]') as HTMLElement)?.click(); setTimeout(() => (document.querySelector('#view-docs .dh-search') as HTMLInputElement)?.focus(), 80); }, defaultChord: null });
+  // Loaded on demand: the palette is core and this screen is not, so importing it here
+  // would put an unused module in the boot path for a command most people never run.
+  registerCommand({ id: 'help.bettercommunity', category: 'help', title: { en: 'What is BetterCommunity?', fr: 'C’est quoi BetterCommunity ?' }, keywords: 'bettercommunity community site discord bot about who', run: () => { void import('../ui/bettercommunity-modal.js').then((m) => m.openBetterCommunity()); }, defaultChord: null });
 }
 
 /** Wire the command system: register commands + start the global keyboard dispatcher. */

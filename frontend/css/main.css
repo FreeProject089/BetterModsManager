@@ -21420,3 +21420,52 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .nbe-icon-grid { grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 7px; }
 .nbe-icon-opt { height: 40px; border-radius: 9px; }
 .nbe-flbl { margin-top: 4px; }
+
+/* ── BetterCommunity screen ───────────────────────────────────────────────────
+   The mark is black-and-yellow and the app is dark by default, so the black half
+   would disappear into the background. It sits on a light chip — the standard
+   treatment, and the one that survives a light theme too, where a chip tuned for
+   dark would be the thing that vanishes instead. */
+.bc-modal { max-width: 640px; }
+.bc-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bc-mark {
+    width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: #fff; border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.bc-mark img { width: 30px; height: 30px; display: block; }
+.bc-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.bc-body { display: block; }
+.bc-lede { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 4px; }
+.bc-sec-h {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text-muted); margin: 18px 0 8px;
+}
+.bc-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin: -2px 0 9px; }
+.bc-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
+.bc-row-ic {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: var(--bmm-s06); color: var(--accent);
+}
+.bc-row-txt { min-width: 0; }
+.bc-row-t { font-size: 13px; font-weight: 600; }
+.bc-row-b { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-top: 1px; }
+.bc-optional {
+    margin-top: 18px; padding: 11px 13px; border-radius: 10px;
+    background: var(--bmm-s04); border: 1px solid var(--border);
+    font-size: 11.5px; color: var(--text-muted); line-height: 1.55;
+}
+.bc-optional strong { color: var(--text-primary); display: block; margin-bottom: 2px; }
+.bc-foot { flex-wrap: wrap; gap: 8px; }
+
+/* "By BetterCommunity" under the splash wordmark, and the same line in the sidebar
+   footer. Small, and deliberately quieter than the app's own name: Tasky and the
+   wordmark are what the screen is for. */
+.bc-by {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; letter-spacing: 0.07em; color: var(--text-muted);
+}
+.bc-by img { width: 13px; height: 13px; border-radius: 3px; background: #fff; padding: 1px; }
+.bc-by b { font-weight: 600; color: var(--text-secondary); }

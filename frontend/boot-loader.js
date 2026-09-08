@@ -147,6 +147,11 @@
         /* 1.4 — version */
         tl.fromTo('#ld-ver', { opacity: 0, x: 6 }, { opacity: 1, x: 0, duration: 0.4 }, 1.4);
 
+        /* 1.52 — by BetterCommunity, after the version and before the bar. Last of the
+           three lines on purpose: the mascot and the wordmark own this screen, and a
+           credit that arrived first would take the moment from them. */
+        tl.fromTo('#ld-by', { opacity: 0, y: 4 }, { opacity: 1, y: 0, duration: 0.45 }, 1.52);
+
         /* 1.55 — progress */
         tl.to('#ld-prog', { opacity: 1, duration: 0.3 }, 1.55);
         tl.to('#ld-prog', { width: '100%', duration: 2.0, ease: 'power1.inOut' }, 1.6);
