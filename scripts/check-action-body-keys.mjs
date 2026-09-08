@@ -17,6 +17,14 @@ const SRC = 'frontend/src/features/plugins/plugins.ts';
 if (!existsSync(SRC)) { console.error(`✗ ${SRC} is missing — refusing to report success`); process.exit(2); }
 const src = readFileSync(SRC, 'utf8');
 
+// `apiBodyFor` lives in its own module now, so that a test can execute it rather than only
+// read it as text. It is still read as text HERE — these three questions are about the
+// list's shape, which is not a thing you can ask by calling the function once.
+const REQ = 'frontend/src/features/plugins/script-request.ts';
+if (!existsSync(REQ)) { console.error(`✗ ${REQ} is missing — refusing to report success`); process.exit(2); }
+const req = readFileSync(REQ, 'utf8');
+
+
 // Keys a route accepts that the tester deliberately does not advertise. Each needs a reason,
 // and the reason has to be that the ROUTE takes it — not that the check is inconvenient.
 const UNDECLARED = {
@@ -35,10 +43,10 @@ for (const m of src.matchAll(/method: '(\w+)', path: '([^']+)'[\s\S]{0,600}?fiel
 }
 
 // ── what each action sends ──
-const bodyAt = src.indexOf('function _apiBodyFor(');
-const bodyEnd = src.indexOf('\nfunction _prune(', bodyAt);
-if (bodyAt < 0 || bodyEnd < 0) { console.error('✗ _apiBodyFor moved — this check cannot be trusted'); process.exit(2); }
-const region = src.slice(bodyAt, bodyEnd);
+const bodyAt = req.indexOf('export function apiBodyFor(');
+const bodyEnd = req.length;
+if (bodyAt < 0) { console.error('✗ apiBodyFor moved — this check cannot be trusted'); process.exit(2); }
+const region = req.slice(bodyAt, bodyEnd);
 
 const problems = [];
 let checked = 0;

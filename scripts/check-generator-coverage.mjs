@@ -20,11 +20,15 @@ import { readFileSync } from 'node:fs';
 
 const PANEL = 'frontend/src/features/plugins/plugins.ts';
 const src = readFileSync(PANEL, 'utf8');
+// `apiBodyFor` moved to its own module so a test could execute it; the endpoint list
+// it is compared against is still in the panel.
+const REQ = 'frontend/src/features/plugins/script-request.ts';
+const reqSrc = readFileSync(REQ, 'utf8');
 
 // ── what the generator can reach ──────────────────────────────────────────────────────
-const swAt = src.indexOf('switch (a.action_type)');
+const swAt = reqSrc.indexOf('switch (a.action_type)');
 if (swAt < 0) { console.error('✗ the request builder was not found — refusing to report success'); process.exit(2); }
-const builder = src.slice(swAt, src.indexOf('\n    }', swAt));
+const builder = reqSrc.slice(swAt);
 const reachable = new Set();
 for (const m of builder.matchAll(/method: '(\w+)',\s*\n?\s*path: (`[^`]*`|'[^']*')/g)) {
   const path = m[2].slice(1, -1).split('?')[0].replace(/\$\{[^}]*\}/g, ':id');

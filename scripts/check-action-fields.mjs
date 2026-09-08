@@ -27,6 +27,14 @@ const SRC = 'frontend/src/features/plugins/plugins.ts';
 if (!existsSync(SRC)) { console.error(`✗ ${SRC} is missing — refusing to report success`); process.exit(2); }
 const src = readFileSync(SRC, 'utf8');
 
+// `apiBodyFor` lives in its own module now, so that a test can execute it rather than only
+// read it as text. It is still read as text HERE — these three questions are about the
+// list's shape, which is not a thing you can ask by calling the function once.
+const REQ = 'frontend/src/features/plugins/script-request.ts';
+if (!existsSync(REQ)) { console.error(`✗ ${REQ} is missing — refusing to report success`); process.exit(2); }
+const req = readFileSync(REQ, 'utf8');
+
+
 // ── what each action DECLARES as form fields ──
 // By BLOCK boundary, not by a closing bracket at a guessed indentation. The first version
 // required `] }` at exactly ten spaces, silently missed thirteen actions, and then reported
@@ -52,11 +60,11 @@ const collectCode = collect.replace(/^\s*\/\/.*$/gm, '');
 const copiesEverything = /default:\s*\n\s*Object\.assign\(extra, raw\);/.test(collectCode);
 
 // ── what each body READS out of extra ──
-const bodyAt = src.indexOf('function _apiBodyFor(');
-const bodyEnd = src.indexOf('\nfunction _prune(', bodyAt);
-if (bodyAt < 0 || bodyEnd < 0) { console.error('✗ _apiBodyFor moved — this check cannot be trusted'); process.exit(2); }
+const bodyAt = req.indexOf('export function apiBodyFor(');
+const bodyEnd = req.length;
+if (bodyAt < 0) { console.error('✗ apiBodyFor moved — this check cannot be trusted'); process.exit(2); }
 const bodies = new Map();
-for (const m of src.slice(bodyAt, bodyEnd).matchAll(/case '(\w+)':([\s\S]*?)\n? *\};/g)) bodies.set(m[1], m[2]);
+for (const m of req.slice(bodyAt, bodyEnd).matchAll(/case '(\w+)':([\s\S]*?)\n? *\};/g)) bodies.set(m[1], m[2]);
 
 if (declared.size < 20 || reshaped.size < 20 || bodies.size < 30) {
   console.error(`✗ read ${declared.size} declared / ${reshaped.size} reshaped / ${bodies.size} bodies — the extractors are stale`);
