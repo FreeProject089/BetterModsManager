@@ -42,18 +42,30 @@ import { raiseAboveAll } from './layer.js';
 /** Set once "Don't show again" is ticked. Never shown at start after that. */
 const OPTOUT_KEY = 'bmm_bc_intro_optout';
 
+/** Discord's own glyph, on both buttons that lead to Discord. Two buttons sharing a mark
+ *  and sitting side by side say "these are the same place" without a word. */
+const DISCORD_GLYPH = '<svg class="bc-btn-i" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.08.08 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.06.06 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z"/></svg>';
+
+/** The BetterCommunity mark, on the button that opens BetterCommunity. Same image as the
+ *  one at the top of this dialog, so the accent button is visibly the same destination. */
+const BC_GLYPH = '<img class="bc-btn-mark" src="assets/BC_white.webp" alt="" aria-hidden="true">';
+
 /**
- * One column: a label, what it is, and what else it is.
+ * One column: a label, then as many lines as it has.
  *
- * Two lines and a deliberate weight difference between them — the first is the answer, the
- * second is the part somebody reads only if the first interested them. Rendering both the
- * same made the whole screen one grey block, which is most of what was wrong with it.
+ * The FIRST line is set brighter than the rest — it is the answer, and what follows is
+ * detail somebody reads only if that answer interested them. Rendering every line the same
+ * made the whole screen one grey block, which was most of what was wrong with it.
+ *
+ * Variable-length on purpose: the site does three distinct things (host files, give a
+ * project a page, developer tools) and the bot does two. Forcing both to two meant one of
+ * the site's three was quietly dropped from the screen for symmetry — and the one that got
+ * dropped was the project page, which is the part people are least likely to know about.
  */
 const columnHtml = (title: string, lines: string[]): string => `
             <section class="bc-col">
                 <h3 class="bc-h">${escHtml(title)}</h3>
-                <p class="bc-p">${escHtml(lines[0])}</p>
-                <p class="bc-p bc-p-dim">${escHtml(lines[1])}</p>
+                ${lines.map((l, i) => `<p class="bc-p${i ? ' bc-p-dim' : ''}">${escHtml(l)}</p>`).join('')}
             </section>`;
 
 let _open: HTMLElement | null = null;
@@ -123,8 +135,12 @@ export function openBetterCommunity(atStart = false): void {
     //
     // A link the registry does not carry renders as nothing at all rather than as a dead
     // button: an address that is not configured is not a feature the reader should see.
-    const link = (href: string, label: string, cls = 'btn btn-sm btn-secondary'): string =>
-        href ? `<button type="button" class="${cls}" data-bc-url="${escAttr(href)}">${escHtml(label)}</button>` : '';
+    // Each button wears the mark of the place it opens, and that is the grouping: the two
+    // Discord buttons carry the same glyph and sit next to each other, so "add the bot" and
+    // "join the server" read as two doors into one thing rather than as three unrelated
+    // options. The site's button carries the mark already at the top of this dialog.
+    const link = (href: string, label: string, icon: string, cls = 'btn btn-sm btn-secondary'): string =>
+        href ? `<button type="button" class="${cls}" data-bc-url="${escAttr(href)}">${icon}${escHtml(label)}</button>` : '';
 
     ov.innerHTML = `
         <div class="modal bc-modal" role="dialog" aria-modal="true" aria-labelledby="bc-title">
@@ -139,7 +155,7 @@ export function openBetterCommunity(atStart = false): void {
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
                 <div class="bc-split">
-                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')])}
+                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2'), t('bc.site.l3')])}
                     ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')])}
                 </div>
                 <!-- A ticked line, not a third grey paragraph. It is the one piece of GOOD
@@ -155,9 +171,9 @@ export function openBetterCommunity(atStart = false): void {
         ? `<label class="bc-hide"><input type="checkbox" id="bc-optout"> ${escHtml(t('bc.hide'))}</label>`
         : '<span class="bc-foot-gap"></span>'}
                 <span class="bc-actions">
-                    ${link(L.discord_bot_invite, t('bc.addbot'))}
-                    ${link(L.discord, t('bc.join'))}
-                    ${link(L.bettercommunity, t('bc.open'), 'btn btn-sm btn-accent')}
+                    ${link(L.discord_bot_invite, t('bc.addbot'), DISCORD_GLYPH)}
+                    ${link(L.discord, t('bc.join'), DISCORD_GLYPH)}
+                    ${link(L.bettercommunity, t('bc.open'), BC_GLYPH, 'btn btn-sm btn-accent')}
                 </span>
             </div>
         </div>`;

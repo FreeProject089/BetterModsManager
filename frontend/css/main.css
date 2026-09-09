@@ -21474,7 +21474,11 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 /* The first line is the answer; the second is what somebody reads only if the first
    interested them. Rendering both the same is most of what made this a grey block. */
 .bc-p { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 7px; }
-.bc-p-dim { font-size: 11.5px; color: var(--text-muted); margin-bottom: 0; }
+.bc-p-dim { font-size: 11.5px; color: var(--text-muted); }
+/* Only the LAST line loses its margin. `margin-bottom: 0` on every dim line ran the site
+   column's two of them together into one paragraph — they are separate things and read as
+   one sentence that had lost its full stop. */
+.bc-col .bc-p:last-child { margin-bottom: 0; }
 
 /* The one piece of good news on the screen. Set like the paragraphs above it, it read as
    another caveat; a tick is what it actually is. */
@@ -21499,6 +21503,16 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
    on the LEFT — the actions would jump to the opposite side of the dialog at the width
    where one more word is added to a label. */
 .bc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+/* The glyph on each action. `currentColor` and not a brand colour: on the accent button the
+   label goes dark, and a blurple mark that ignored that would be the one unreadable thing
+   on the screen. */
+.bc-btn-i { flex-shrink: 0; }
+/* The mark is half black, so it needs light behind it on the secondary buttons AND stays
+   legible on the light accent one. A literal #fff for the same reason as the header chip. */
+.bc-btn-mark {
+    width: 15px; height: 15px; flex-shrink: 0;
+    border-radius: 4px; background: #fff; padding: 1px; display: block;
+}
 
 /* "By BetterCommunity" under the splash wordmark, and the same line in the sidebar
    footer. Small, and deliberately quieter than the app's own name: Tasky and the
