@@ -21422,16 +21422,17 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .nbe-flbl { margin-top: 4px; }
 
 /* ── BetterCommunity screen ──────────────────────────────────────────
-   Type and space, and nothing else. Two earlier versions of this screen were
-   progressively more decorated — eight rows with tinted icon squares, then two
-   bordered panels with coloured top rails — and the chrome was the problem both
-   times: a short explanation dressed as a product page reads as marketing.
-   The only thing drawn here is the hairline under the header. */
-.bc-modal { max-width: 680px; }
+   Four layouts got here. The third had almost no decoration and still read as a
+   wall, which is the lesson: the problem was never chrome, it was that everything
+   was the same size and the same grey, with buttons dropped in the middle of it.
+
+   So: a real type hierarchy, exactly ONE drawn line (between the two columns), and
+   the actions on one row in the footer where a footer's actions belong. */
+.bc-modal { max-width: 700px; }
 
 .bc-hero {
-    display: flex; align-items: center; gap: 12px;
-    padding: 20px 22px 16px;
+    display: flex; align-items: center; gap: 13px;
+    padding: 20px 22px 17px;
     border-bottom: 1px solid var(--border);
 }
 /* Not decoration: the mark is half black and the app is dark, so without a light chip
@@ -21444,7 +21445,7 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .bc-mark img { width: 28px; height: 28px; display: block; }
 .bc-hero-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.bc-hero-t { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; color: var(--text-primary); }
+.bc-hero-t { font-size: 16.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--text-primary); }
 .bc-hero-s { font-size: 11.5px; color: var(--text-muted); }
 .bc-x {
     flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
@@ -21453,34 +21454,47 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .bc-x:hover { background: var(--bmm-s06); color: var(--text-primary); }
 
-.bc-body { display: block; padding: 18px 22px 20px; }
-.bc-lede { font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 10px; }
-/* The sentence that answers what somebody actually wants to know when a dialog appears
-   at startup. A paragraph, not a callout box: it is a sentence, and putting a border
-   round it would make it look like a disclaimer rather than the point. */
-.bc-opt { font-size: 12.5px; line-height: 1.6; color: var(--text-muted); margin: 0 0 22px; }
-.bc-opt strong { color: var(--text-primary); font-weight: 650; }
+.bc-body { display: block; padding: 19px 22px 20px; }
+
+/* Biggest thing in the body, and the only text at this size. It is the answer to the
+   question the reader actually has; everything under it is elaboration. */
+.bc-lede { font-size: 14px; line-height: 1.62; color: var(--text-primary); margin: 0 0 20px; }
+
+/* Two columns and one hairline. A line says "there are two things here" without drawing
+   a box round either — which is what the bordered panels two versions ago got wrong.
+   FIXED at two: the modal is 700px inside a window whose minWidth is 1120, so it can
+   never be narrow enough to fold, and an auto-fit would be a rule that never fires. */
+.bc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.bc-col + .bc-col { padding-left: 24px; border-left: 1px solid var(--border); }
 
 .bc-h {
-    font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-secondary); margin: 0 0 3px;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 7px;
 }
-.bc-p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 4px; }
-.bc-p + .bc-p { color: var(--text-muted); font-size: 12px; }
-/* The action belongs to the half above it, not to a footer where two buttons sat side
-   by side with nothing saying which was for what. */
-.bc-g { margin-bottom: 20px; }
-.bc-g:last-child { margin-bottom: 0; }
-.bc-g .btn { margin-top: 8px; }
+/* The first line is the answer; the second is what somebody reads only if the first
+   interested them. Rendering both the same is most of what made this a grey block. */
+.bc-p { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 7px; }
+.bc-p-dim { font-size: 11.5px; color: var(--text-muted); margin-bottom: 0; }
 
-/* Term on the left, definition on the right. minmax and not a fixed width: "The blog and
-   the docs" is three times the length of "Hosting", and a fixed column either clips the
-   long term or strands the short ones in a lake of space. */
+/* The one piece of good news on the screen. Set like the paragraphs above it, it read as
+   another caveat; a tick is what it actually is. */
+.bc-ok {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin: 20px 0 0; padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px; line-height: 1.6; color: var(--text-muted);
+}
+.bc-ok-i { flex-shrink: 0; margin-top: 2px; color: var(--bmm-success, var(--accent)); }
+.bc-ok b { color: var(--text-primary); font-weight: 650; }
+
 .bc-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 /* Holds the actions to the right when there is no "don't show again" to balance them. */
 .bc-foot-gap { flex: 1; }
 .bc-hide { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; }
 .bc-hide input { cursor: pointer; }
+/* One row, primary last — where the eye lands, and where every other dialog in the app
+   puts the thing it wants pressed. */
+.bc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* "By BetterCommunity" under the splash wordmark, and the same line in the sidebar
    footer. Small, and deliberately quieter than the app's own name: Tasky and the

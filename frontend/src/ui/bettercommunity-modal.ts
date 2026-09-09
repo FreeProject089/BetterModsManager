@@ -15,12 +15,20 @@
 // was below the fold, which tells you the real problem was never the chrome — it was that
 // a dialog appearing uninvited at startup was answering questions nobody had asked yet.
 //
-// One question is asked: what is this place. So each half now states what we DO in one
-// line and offers the one action that follows from it. Anybody who wants the detail can
-// press the button; that is what the button is for.
+// One question is asked: what is this place. So each half states what we DO in a line,
+// and the detail is what the buttons are for.
 //
-// The actions live INSIDE their halves. They were in the footer, two buttons side by side
-// with nothing saying which belonged to what.
+// THE ACTIONS ARE IN THE FOOTER, and getting there took two wrong turns. First they were
+// in the footer unlabelled, where nothing said which belonged to what. Then they moved
+// INTO each half, directly under its lines — which stops the reading twice, once going
+// down and once coming back, and left two buttons aligned with nothing.
+//
+// The fix for the original ambiguity was never position. It was labels: "Explore the
+// site", "Join the Discord", "Add the bot" each say what they do standing alone.
+//
+// What carries the structure instead is one vertical hairline. Two columns divided by a
+// line say "there are two things here" without drawing a box round either — which is what
+// the bordered panels two versions ago got wrong.
 //
 // Every address comes from the links registry (links-config.ts), never typed here. That
 // registry is loaded from BCWEB at startup with a bundled fallback, which is the whole point
@@ -35,18 +43,18 @@ import { raiseAboveAll } from './layer.js';
 const OPTOUT_KEY = 'bmm_bc_intro_optout';
 
 /**
- * One half: a label, what it does in a sentence or two, and the action that follows.
+ * One column: a label, what it is, and what else it is.
  *
- * `lines` are statements, not explanations. "Hosting: repositories, catalogues, files" is
- * what somebody needs to decide whether to press the button; how catalogue publishing
- * works is what the button is for.
+ * Two lines and a deliberate weight difference between them — the first is the answer, the
+ * second is the part somebody reads only if the first interested them. Rendering both the
+ * same made the whole screen one grey block, which is most of what was wrong with it.
  */
-const groupHtml = (title: string, lines: string[], cta: string): string => `
-        <section class="bc-g">
-            <h3 class="bc-h">${escHtml(title)}</h3>
-            ${lines.map((l) => `<p class="bc-p">${escHtml(l)}</p>`).join('')}
-            ${cta}
-        </section>`;
+const columnHtml = (title: string, lines: string[]): string => `
+            <section class="bc-col">
+                <h3 class="bc-h">${escHtml(title)}</h3>
+                <p class="bc-p">${escHtml(lines[0])}</p>
+                <p class="bc-p bc-p-dim">${escHtml(lines[1])}</p>
+            </section>`;
 
 let _open: HTMLElement | null = null;
 
@@ -130,21 +138,27 @@ export function openBetterCommunity(atStart = false): void {
             </div>
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
-                <p class="bc-opt">
-                    <strong>${escHtml(t('bc.opt.t'))}</strong> ${escHtml(t('bc.opt.b'))}
+                <div class="bc-split">
+                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')])}
+                    ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')])}
+                </div>
+                <!-- A ticked line, not a third grey paragraph. It is the one piece of GOOD
+                     news on the screen — nothing is being asked of you — and set like the
+                     rest it read as another caveat. -->
+                <p class="bc-ok">
+                    <svg class="bc-ok-i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    <span><b>${escHtml(t('bc.opt.t'))}</b> ${escHtml(t('bc.opt.b'))}</span>
                 </p>
-                ${groupHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')],
-        link(L.bettercommunity, t('bc.open'), 'btn btn-sm btn-accent'))}
-                ${groupHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')],
-        // The invite first and in the accent: adding the bot is what this half is FOR.
-        // Joining our server is the other question — come and ask before you install it —
-        // and neither replaces the other.
-        link(L.discord_bot_invite, t('bc.addbot'), 'btn btn-sm btn-accent') + link(L.discord, t('bc.join')))}
             </div>
             <div class="modal-footer bc-foot">
                 ${atStart
         ? `<label class="bc-hide"><input type="checkbox" id="bc-optout"> ${escHtml(t('bc.hide'))}</label>`
         : '<span class="bc-foot-gap"></span>'}
+                <span class="bc-actions">
+                    ${link(L.discord_bot_invite, t('bc.addbot'))}
+                    ${link(L.discord, t('bc.join'))}
+                    ${link(L.bettercommunity, t('bc.open'), 'btn btn-sm btn-accent')}
+                </span>
             </div>
         </div>`;
 
