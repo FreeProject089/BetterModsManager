@@ -21479,14 +21479,23 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
     font-size: 10px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase;
     color: var(--text-muted); margin: 0 0 7px;
 }
-/* The first line is the answer; the second is what somebody reads only if the first
-   interested them. Rendering both the same is most of what made this a grey block. */
-.bc-p { font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); margin: 0 0 7px; }
-.bc-p-dim { font-size: 11.5px; color: var(--text-muted); }
-/* Only the LAST line loses its margin. `margin-bottom: 0` on every dim line ran the site
-   column's two of them together into one paragraph — they are separate things and read as
-   one sentence that had lost its full stop. */
-.bc-col .bc-p:last-child { margin-bottom: 0; }
+/* A list, because each half IS one. Written as prose, five items became a paragraph the
+   reader had to hold whole to find the one row that applied to them.
+
+   The marker is a ::before dot rather than list-style: a real bullet cannot be positioned
+   against a wrapped second line, and every one of these wraps at some width. */
+.bc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bc-li {
+    position: relative; padding-left: 14px;
+    font-size: 12px; line-height: 1.45; color: var(--text-secondary);
+}
+/* Sits on the FIRST line's optical centre, so a two-line item still reads as one row rather
+   than as a bullet floating beside a block. */
+.bc-li::before {
+    content: ''; position: absolute; left: 3px; top: 7px;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--text-muted);
+}
 
 /* The one piece of good news on the screen, and it stays even though the mock dropped it:
    a dialog that appears uninvited to talk about an online platform owes the reader the

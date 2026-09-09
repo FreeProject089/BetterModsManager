@@ -68,21 +68,22 @@ const DISCORD_GLYPH = '<svg class="bc-btn-i" width="14" height="14" viewBox="0 0
 const BC_GLYPH = '<img class="bc-btn-mark" src="assets/BC_white.webp" alt="" aria-hidden="true">';
 
 /**
- * One column: a label, then as many lines as it has.
+ * One column: a label, then its items as a list.
  *
- * The FIRST line is set brighter than the rest — it is the answer, and what follows is
- * detail somebody reads only if that answer interested them. Rendering every line the same
- * made the whole screen one grey block, which was most of what was wrong with it.
+ * It used to be two prose lines with the first set brighter, which was the right shape for
+ * two prose lines. Each half is really a list — five separate doors on the site side, a
+ * feature set on the bot side — and five things written as prose is a paragraph nobody
+ * finishes: the reader has to hold the whole sentence to find the one item that applies to
+ * them. A list lets the eye pick its row and skip the rest.
  *
- * Variable-length on purpose: the site does three distinct things (host files, give a
- * project a page, developer tools) and the bot does two. Forcing both to two meant one of
- * the site's three was quietly dropped from the screen for symmetry — and the one that got
- * dropped was the project page, which is the part people are least likely to know about.
+ * Variable-length on purpose, so neither half has to pad or drop an item to match the other.
  */
 const columnHtml = (title: string, lines: string[]): string => `
             <section class="bc-col">
                 <h3 class="bc-h">${escHtml(title)}</h3>
-                ${lines.map((l, i) => `<p class="bc-p${i ? ' bc-p-dim' : ''}">${escHtml(l)}</p>`).join('')}
+                <ul class="bc-list">
+                    ${lines.map((l) => `<li class="bc-li">${escHtml(l)}</li>`).join('')}
+                </ul>
             </section>`;
 
 let _open: HTMLElement | null = null;
@@ -172,8 +173,16 @@ export function openBetterCommunity(atStart = false): void {
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
                 <div class="bc-split">
-                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')])}
-                    ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')])}
+                    <!-- Each key written out rather than mapped over an array of them:
+                         Array.map hands the INDEX to t()'s second parameter, and a key list
+                         built at runtime is invisible to check-i18n-keys, which reads
+                         literal t() calls. -->
+                    ${columnHtml(t('bc.site'), [
+        t('bc.site.1'), t('bc.site.2'), t('bc.site.3'), t('bc.site.4'), t('bc.site.5'),
+    ])}
+                    ${columnHtml(t('bc.bot'), [
+        t('bc.bot.1'), t('bc.bot.2'), t('bc.bot.3'), t('bc.bot.4'), t('bc.bot.5'), t('bc.bot.6'),
+    ])}
                 </div>
                 <!-- Kept, as one muted line, even though the mock dropped it. A dialog
                      that opens by itself to talk about an online platform owes the reader
