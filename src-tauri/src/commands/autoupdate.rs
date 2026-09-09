@@ -344,9 +344,10 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
     // Execute installer depending on the OS
     #[cfg(target_os = "windows")]
     {
-        crate::commands::proc::hidden_command("cmd")
-            .args(["/C", "start", "", &file_path.to_string_lossy()])
-            .spawn()
+        // The installer's filename comes from the update manifest, which is fetched over
+        // the network — so this is the same shell-injection shape as open_external, with a
+        // remote source. open::that never puts it on a command line.
+        open::that(file_path.as_os_str())
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "macos")]

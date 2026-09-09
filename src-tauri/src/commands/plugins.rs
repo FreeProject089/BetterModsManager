@@ -2686,22 +2686,29 @@ pub fn run_plugin_scripts(
         }
         let p_str = path.to_string_lossy().to_string();
 
+        // io::Result<()> rather than io::Result<Child>: the child is discarded below in
+        // either case, and the default arm no longer produces one.
         #[cfg(target_os = "windows")]
         let spawn = match ext.as_str() {
             "ps1" => crate::commands::proc::hidden_command("powershell")
                 .args(["-ExecutionPolicy", "Bypass", "-File", &p_str])
-                .spawn(),
+                .spawn()
+                .map(|_| ()),
             "vbs" => crate::commands::proc::hidden_command("wscript")
                 .arg(&p_str)
-                .spawn(),
-            _ => crate::commands::proc::hidden_command("cmd")
-                .args(["/C", "start", "", &p_str])
-                .spawn(),
+                .spawn()
+                .map(|_| ()),
+            // Was `cmd /C start "" <path>`. The path is interpolated into a line cmd
+            // re-parses, and `&` is legal in a Windows filename — a plugin script called
+            // `x&payload.exe` would have run the second half. open::that is the same
+            // "open it with whatever handles it" and never builds a command line.
+            _ => open::that(&p_str),
         };
         #[cfg(not(target_os = "windows"))]
         let spawn = crate::commands::proc::hidden_command("sh")
             .arg(&p_str)
-            .spawn();
+            .spawn()
+            .map(|_| ());
 
         match spawn {
             Ok(_) => {

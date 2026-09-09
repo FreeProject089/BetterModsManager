@@ -965,7 +965,11 @@ pub fn launch_app(
         }
         Some("bat") | Some("cmd") => {
             let mut c = crate::commands::proc::hidden_command("cmd");
-            c.args(["/C", &exe_path]);
+            // QUOTED. Running a .bat is what cmd is for here, so it stays — but the path is
+            // interpolated into a line cmd re-parses, and `&` is legal in a filename. Inside
+            // double quotes a metacharacter is just a character, which is cmd's own
+            // documented answer to this.
+            c.args(["/C", &format!("\"{exe_path}\"")]);
             c
         }
         Some("py") => { let mut c = crate::commands::proc::hidden_command("python"); c.arg(&exe_path); c }
