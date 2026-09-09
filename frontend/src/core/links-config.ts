@@ -101,7 +101,7 @@ const DEFAULTS: BmmLinks = {
     analytics_key:      'bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
-    discord_bot_invite: '',
+    discord_bot_invite: 'https://discord.com/oauth2/authorize?client_id=1521962060173283448&permissions=8&integration_type=0&scope=bot',
     reddit:           'https://www.reddit.com/r/BetterModManager/',
     kofi:             'https://ko-fi.com/I2I31ZIPPG',
     kofi_community:   'https://ko-fi.com/bettercommunity',

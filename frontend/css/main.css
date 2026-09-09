@@ -21493,8 +21493,12 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .bc-hide { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; }
 .bc-hide input { cursor: pointer; }
 /* One row, primary last — where the eye lands, and where every other dialog in the app
-   puts the thing it wants pressed. */
-.bc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+   puts the thing it wants pressed.
+   `margin-left: auto` and not only the footer's space-between: with three buttons and a
+   checkbox the row can wrap, and space-between on a wrapped flex line puts the lone item
+   on the LEFT — the actions would jump to the opposite side of the dialog at the width
+   where one more word is added to a label. */
+.bc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 
 /* "By BetterCommunity" under the splash wordmark, and the same line in the sidebar
    footer. Small, and deliberately quieter than the app's own name: Tasky and the
