@@ -111,6 +111,29 @@ not just the latest text.
     collaborative announcement credits everyone who worked on it, not just whoever clicked
     publish.
 
+## The screen that opens at startup
+
+The first time BMM starts — and on later starts, until you say otherwise — a short dialog
+introduces BetterCommunity: what the site is, what you can do there, and what the Discord bot
+does. It carries three buttons (open the site, join the Discord, add the bot to your own
+server) and a **Don't show at startup** checkbox.
+
+Ticking that box is remembered the moment you tick it, not when the dialog closes — so ticking
+it and then pressing `Escape` still counts. Nothing about it is required: BMM installs and
+manages your mods offline, with no account, and the dialog says so itself.
+
+It is deliberately **not** first-run-only. A one-shot notice is a control that does nothing
+for somebody who dismissed it unread on the day they installed BMM, and that person is exactly
+who might want to read it the second time.
+
+Two things stand aside for each other, so a launch never stacks two overlays: the dialog does
+not appear while the [tutorial](doc-page:getting-started/first-launch) is running, and when it does
+appear it takes the launch's one interruption, leaving other start-up notices for another day.
+
+To see it again after dismissing it, open it from the Community screen or the command palette
+(`Ctrl+K`) — opened deliberately, it drops the checkbox, since there is nothing to suppress
+about something you just asked for.
+
 ## How it fits the rest of BMM
 
 The blog is the visible tip of BetterCommunity. The same platform:

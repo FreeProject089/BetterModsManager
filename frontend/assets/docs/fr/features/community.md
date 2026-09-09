@@ -114,6 +114,30 @@ vois l'avant et l'après, pas seulement le texte final.
     contributeur, pour qu'une annonce collaborative crédite tous ceux qui y ont travaillé, pas
     seulement celui qui a cliqué sur publier.
 
+## L'écran qui s'ouvre au démarrage
+
+Au premier lancement de BMM — et aux suivants, tant que tu ne dis pas le contraire — une courte
+fenêtre présente BetterCommunity : ce qu'est le site, ce que tu peux y faire, et ce que fait le
+bot Discord. Elle porte trois boutons (ouvrir le site, rejoindre le Discord, ajouter le bot à
+ton propre serveur) et une case **Ne plus afficher au démarrage**.
+
+Cocher cette case est retenu au moment où tu la coches, pas à la fermeture — donc la cocher
+puis appuyer sur `Échap` compte quand même. Rien là-dedans n'est obligatoire : BMM installe et
+gère tes mods hors ligne, sans compte, et la fenêtre le dit elle-même.
+
+Ce n'est **pas** volontairement réservé au premier lancement. Un avis unique est un contrôle qui
+ne sert à rien pour quelqu'un qui l'a balayé sans le lire le jour de l'installation — et c'est
+exactement la personne qui pourrait vouloir le lire la deuxième fois.
+
+Deux choses se laissent la place, pour qu'un lancement n'empile jamais deux surcouches : la
+fenêtre n'apparaît pas pendant le [tutoriel](doc-page:getting-started/first-launch.fr), et quand elle
+apparaît elle prend l'unique interruption du lancement, laissant les autres avis pour une
+prochaine fois.
+
+Pour la revoir après l'avoir masquée, ouvre-la depuis l'écran Communauté ou la palette de
+commandes (`Ctrl+K`) — ouverte exprès, elle perd la case à cocher : il n'y a rien à masquer
+dans quelque chose que tu viens de demander.
+
 ## Comment ça s'articule avec le reste de BMM
 
 Le blog est la partie visible de BetterCommunity. La même plateforme :
