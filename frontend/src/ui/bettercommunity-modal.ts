@@ -155,8 +155,8 @@ export function openBetterCommunity(atStart = false): void {
             <div class="modal-body bc-body">
                 <p class="bc-lede">${escHtml(t('bc.lede'))}</p>
                 <div class="bc-split">
-                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2'), t('bc.site.l3')])}
-                    ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2'), t('bc.bot.l3')])}
+                    ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')])}
+                    ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')])}
                 </div>
                 <!-- A ticked line, not a third grey paragraph. It is the one piece of GOOD
                      news on the screen — nothing is being asked of you — and set like the
