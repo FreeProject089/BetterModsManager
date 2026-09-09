@@ -15,8 +15,24 @@
 // was below the fold, which tells you the real problem was never the chrome — it was that
 // a dialog appearing uninvited at startup was answering questions nobody had asked yet.
 //
-// One question is asked: what is this place. So each half states what we DO in a line,
-// and the detail is what the buttons are for.
+// One question is asked: what is this place. Answering it took one more round than it
+// should have, because four versions running answered a DIFFERENT question — they listed
+// what you can do here (host your repos, tools for devs, one bot in your server) and never
+// once said what the place is. Somebody who did not already know finished the screen still
+// not knowing.
+//
+// So the two facts that were missing hold the two positions that carry:
+//
+//   the SUBTITLE says what it is      — the site every Better* project shares
+//   the LEDE says why you are seeing it — BMM takes its repos, catalogues and news from
+//                                        there, and you can publish yours
+//
+// and neither repeats the other, which the pair before them did: the subtitle said "where
+// the Better* projects live" and the lede said BMM reads from "here", so the screen named
+// the same relationship twice and defined the place once, in six words, in a header.
+//
+// The two halves then carry only what the lede has not. The detail is what the buttons
+// are for.
 //
 // THE ACTIONS ARE IN THE FOOTER, and getting there took two wrong turns. First they were
 // in the footer unlabelled, where nothing said which belonged to what. Then they moved
