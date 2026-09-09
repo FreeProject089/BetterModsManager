@@ -21465,26 +21465,22 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
     font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--text-secondary); margin: 0 0 3px;
 }
-.bc-h + .bc-note { margin-top: 0; }
-.bc-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: 0 0 10px; }
+.bc-p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 4px; }
+.bc-p + .bc-p { color: var(--text-muted); font-size: 12px; }
+/* The action belongs to the half above it, not to a footer where two buttons sat side
+   by side with nothing saying which was for what. */
+.bc-g { margin-bottom: 20px; }
+.bc-g:last-child { margin-bottom: 0; }
+.bc-g .btn { margin-top: 8px; }
 
 /* Term on the left, definition on the right. minmax and not a fixed width: "The blog and
    the docs" is three times the length of "Hosting", and a fixed column either clips the
    long term or strands the short ones in a lake of space. */
-.bc-dl {
-    display: grid; grid-template-columns: minmax(90px, 152px) 1fr;
-    gap: 10px 16px; margin: 0 0 24px; padding: 0;
-}
-.bc-dl:last-child { margin-bottom: 0; }
-.bc-t { font-size: 12.5px; font-weight: 650; color: var(--text-primary); margin: 0; }
-.bc-d { font-size: 12px; color: var(--text-muted); line-height: 1.55; margin: 0; }
-
 .bc-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 /* Holds the actions to the right when there is no "don't show again" to balance them. */
 .bc-foot-gap { flex: 1; }
 .bc-hide { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; }
 .bc-hide input { cursor: pointer; }
-.bc-actions { display: flex; align-items: center; gap: 8px; }
 
 /* "By BetterCommunity" under the splash wordmark, and the same line in the sidebar
    footer. Small, and deliberately quieter than the app's own name: Tasky and the

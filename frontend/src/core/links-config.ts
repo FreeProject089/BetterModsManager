@@ -57,6 +57,9 @@ export interface BmmLinks {
     // Community / social links (patched into HTML at runtime)
     github_repo:      string;
     discord:          string;
+    /** OAuth2 authorize URL that adds the bot to somebody else’s server. Empty until
+     *  the real client id is filled in — every button offering it is hidden while it is. */
+    discord_bot_invite: string;
     reddit:           string;
     kofi:             string;
     kofi_community:   string;
@@ -98,6 +101,7 @@ const DEFAULTS: BmmLinks = {
     analytics_key:      'bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
+    discord_bot_invite: '',
     reddit:           'https://www.reddit.com/r/BetterModManager/',
     kofi:             'https://ko-fi.com/I2I31ZIPPG',
     kofi_community:   'https://ko-fi.com/bettercommunity',
