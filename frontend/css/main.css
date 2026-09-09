@@ -21460,12 +21460,20 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
    question the reader actually has; everything under it is elaboration. */
 .bc-lede { font-size: 14px; line-height: 1.62; color: var(--text-primary); margin: 0 0 20px; }
 
-/* Two columns and one hairline. A line says "there are two things here" without drawing
-   a box round either — which is what the bordered panels two versions ago got wrong.
-   FIXED at two: the modal is 700px inside a window whose minWidth is 1120, so it can
-   never be narrow enough to fold, and an auto-fit would be a rule that never fires. */
-.bc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
-.bc-col + .bc-col { padding-left: 24px; border-left: 1px solid var(--border); }
+/* Two cards. The version before this used a single hairline between two columns, on the
+   argument that a line says "there are two things here" without boxing either — but it
+   left the right column's text against the modal edge with nothing holding it. The
+   bordered panels that failed earlier failed for being tall and icon-laden, not for
+   having borders.
+   FIXED at two columns: the modal is 700px inside a window whose minWidth is 1120, so it
+   can never be narrow enough to fold, and an auto-fit here would be a rule that never
+   fires. */
+.bc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.bc-col {
+    padding: 14px 16px 15px;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--bmm-s03);
+}
 
 .bc-h {
     font-size: 10px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase;
@@ -21480,16 +21488,15 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
    one sentence that had lost its full stop. */
 .bc-col .bc-p:last-child { margin-bottom: 0; }
 
-/* The one piece of good news on the screen. Set like the paragraphs above it, it read as
-   another caveat; a tick is what it actually is. */
+/* The one piece of good news on the screen, and it stays even though the mock dropped it:
+   a dialog that appears uninvited to talk about an online platform owes the reader the
+   sentence saying they need none of it. One muted line under the cards — the rule and the
+   tick it used to carry were doing structural work the card borders now do. */
 .bc-ok {
-    display: flex; align-items: flex-start; gap: 8px;
-    margin: 20px 0 0; padding-top: 16px;
-    border-top: 1px solid var(--border);
+    margin: 16px 0 0;
     font-size: 11.5px; line-height: 1.6; color: var(--text-muted);
 }
-.bc-ok-i { flex-shrink: 0; margin-top: 2px; color: var(--bmm-success, var(--accent)); }
-.bc-ok b { color: var(--text-primary); font-weight: 650; }
+.bc-ok b { color: var(--text-secondary); font-weight: 650; }
 
 .bc-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 /* Holds the actions to the right when there is no "don't show again" to balance them. */

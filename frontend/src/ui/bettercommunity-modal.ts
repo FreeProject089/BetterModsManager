@@ -26,9 +26,10 @@
 // The fix for the original ambiguity was never position. It was labels: "Explore the
 // site", "Join the Discord", "Add the bot" each say what they do standing alone.
 //
-// What carries the structure instead is one vertical hairline. Two columns divided by a
-// line say "there are two things here" without drawing a box round either — which is what
-// the bordered panels two versions ago got wrong.
+// What carries the structure is two cards. A single hairline was tried first, on the
+// argument that a line separates without boxing — but it left the right half's text sitting
+// against the modal edge with nothing holding it. The bordered panels that failed earlier
+// failed for being tall, icon-laden and full of prose, not for having borders.
 //
 // Every address comes from the links registry (links-config.ts), never typed here. That
 // registry is loaded from BCWEB at startup with a bundled fallback, which is the whole point
@@ -158,13 +159,11 @@ export function openBetterCommunity(atStart = false): void {
                     ${columnHtml(t('bc.site'), [t('bc.site.l1'), t('bc.site.l2')])}
                     ${columnHtml(t('bc.bot'), [t('bc.bot.l1'), t('bc.bot.l2')])}
                 </div>
-                <!-- A ticked line, not a third grey paragraph. It is the one piece of GOOD
-                     news on the screen — nothing is being asked of you — and set like the
-                     rest it read as another caveat. -->
-                <p class="bc-ok">
-                    <svg class="bc-ok-i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    <span><b>${escHtml(t('bc.opt.t'))}</b> ${escHtml(t('bc.opt.b'))}</span>
-                </p>
+                <!-- Kept, as one muted line, even though the mock dropped it. A dialog
+                     that opens by itself to talk about an online platform owes the reader
+                     the sentence saying they need none of it. The tick and the rule it used
+                     to wear were carrying structure the card borders carry now. -->
+                <p class="bc-ok"><b>${escHtml(t('bc.opt.t'))}</b> ${escHtml(t('bc.opt.b'))}</p>
             </div>
             <div class="modal-footer bc-foot">
                 ${atStart
