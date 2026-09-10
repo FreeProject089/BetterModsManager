@@ -89,6 +89,18 @@ const columnHtml = (title: string, lines: string[]): string => `
 let _open: HTMLElement | null = null;
 
 /**
+ * Is another dialog already on screen?
+ *
+ * Asked as "is anything up", not "is onboarding up". A screen that stands aside for whatever
+ * is there needs no list of the things it must stand aside for — and the next dialog somebody
+ * adds is covered without anybody remembering to come back here, which is the part that did
+ * not happen last time.
+ */
+function somethingElseIsUp(): boolean {
+    return !!document.querySelector('#onboarding-overlay, .modal, [role="dialog"], .ptb-modal, #upd-card');
+}
+
+/**
  * Show it at start unless the reader has said not to.
  *
  * Deliberately NOT "first run only". An opt-out that had one chance to fire is a control
@@ -104,10 +116,17 @@ let _open: HTMLElement | null = null;
 export function maybeShowBetterCommunityIntro(): boolean {
     try {
         if (localStorage.getItem(OPTOUT_KEY) === '1') return false;
-        if (document.getElementById('onboarding-overlay')) return false;
+        if (somethingElseIsUp()) return false;
         // Long enough for the app to have painted; short enough to still read as part of
         // starting up rather than as something that interrupted you later.
-        setTimeout(() => openBetterCommunity(true), 900);
+        //
+        // Checked AGAIN when the timer fires, and that is the whole fix. Checking only here
+        // asks the question 900 ms before the answer matters: on a fresh profile the
+        // onboarding sequence starts inside that window, so the check passed, the timer
+        // fired, and two overlays ended up stacked — exactly what the comment above claims
+        // this prevents. The update-notes screen did the same, because it was never in the
+        // list of things to stand aside for.
+        setTimeout(() => { if (!somethingElseIsUp()) openBetterCommunity(true); }, 900);
         return true;
     } catch {
         // localStorage can throw outright (a locked-down profile), and the safe direction is
