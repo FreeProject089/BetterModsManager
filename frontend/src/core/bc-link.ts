@@ -11,6 +11,12 @@
 //
 // So the question lives here once, phrased the way the server answers it, and the link flow
 // that fixes a "no" lives beside it instead of only inside the Settings page.
+//
+// NOTHING HERE TOASTS. This is `core/`, and reaching up into `ui/app.js` for a toast would
+// close an import cycle — which the dependency ratchet caught the first time this file was
+// written. It is also the better shape: the two callers want different things said. Settings
+// wants a toast; the report dialog wants a line inside the panel somebody is already reading.
+// So the flow REPORTS what happened and the caller says it.
 import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { bcRoot } from './links-config.js';
@@ -29,6 +35,14 @@ export type BcLinkState = {
     displayName?: string;
     discord?: { linked: boolean; username?: string | null };
 };
+
+/** What `openAccountLinkFlow` did, for the caller to put into words. */
+export type LinkAttempt =
+    | { result: 'opened'; code: string }
+    | { result: 'already' }
+    | { result: 'offline' }
+    | { result: 'no-creator' }
+    | { result: 'error' };
 
 const TTL_MS = 60_000;
 let _cache: { at: number; value: BcLinkState } | null = null;
@@ -84,11 +98,13 @@ export function forgetBcLinkState(): void { _cache = null; }
  *
  * Lives here rather than in Settings because it is the fix for every "you are not linked" the
  * app shows, and a fix the user has to go and find somewhere else is one they mostly do not.
+ *
+ * `onLinked` fires when the code is actually accepted on the website — see the poll in
+ * `showLinkCodeModal`, which is the part that was missing.
  */
-export async function openAccountLinkFlow(): Promise<void> {
-    const { toast } = await import('../ui/app.js');
+export async function openAccountLinkFlow(onLinked?: (st: BcLinkState) => void): Promise<LinkAttempt> {
     const cid = await creatorId();
-    if (!cid) { toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning'); return; }
+    if (!cid) return { result: 'no-creator' };
     const base = bcRoot();
     let data: { linked?: boolean; code?: string } | undefined;
     try {
@@ -97,16 +113,12 @@ export async function openAccountLinkFlow(): Promise<void> {
             { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch {
-        toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
-        return;
+        return { result: 'offline' };
     }
-    if (data?.linked) {
-        forgetBcLinkState();
-        toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
-        return;
-    }
-    if (!data?.code) { toast(t('common.error') || 'Failed to get a link code.', 'error'); return; }
-    showLinkCodeModal(data.code, base);
+    if (data?.linked) { forgetBcLinkState(); return { result: 'already' }; }
+    if (!data?.code) return { result: 'error' };
+    showLinkCodeModal(data.code, base, onLinked);
+    return { result: 'opened', code: data.code };
 }
 
 const escHtml = (s: unknown): string => String(s ?? '')
@@ -118,9 +130,9 @@ const escHtml = (s: unknown): string => String(s ?? '')
  * The poll is the part that was missing: the code was shown and the dialog sat there until
  * dismissed, so whatever opened the flow never learned the answer and went on showing "not
  * linked" until the next launch. Now the modal closes itself the moment the server agrees, and
- * `onLinked` lets the caller redraw.
+ * `onLinked` lets the caller redraw and say so.
  */
-export function showLinkCodeModal(code: string, base: string, onLinked?: () => void): void {
+export function showLinkCodeModal(code: string, base: string, onLinked?: (st: BcLinkState) => void): void {
     document.getElementById('bc-link-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'bc-link-modal';
@@ -150,18 +162,21 @@ export function showLinkCodeModal(code: string, base: string, onLinked?: () => v
         if (st.state !== 'linked') return;
         window.clearInterval(poll);
         modal.remove();
-        const { toast } = await import('../ui/app.js');
-        toast((t('settings.link.done') || 'Linked as {name}').replace('{name}', st.displayName || ''), 'success');
-        try { onLinked?.(); } catch { /* the link is what mattered */ }
+        try { onLinked?.(st); } catch { /* the link is what mattered */ }
     }, 4000);
     const stop = (): void => { window.clearInterval(poll); modal.remove(); };
 
     modal.addEventListener('click', (e) => { if (e.target === modal) stop(); });
     document.getElementById('bc-link-close')?.addEventListener('click', stop);
-    document.getElementById('bc-link-copy')?.addEventListener('click', async () => {
+    // The button confirms on itself rather than raising a toast. A toast would mean importing
+    // ui/app.js from core/ (see the module note), and a confirmation that appears on the thing
+    // you just pressed is the better one anyway.
+    document.getElementById('bc-link-copy')?.addEventListener('click', (e) => {
         navigator.clipboard.writeText(code);
-        const { toast } = await import('../ui/app.js');
-        toast(t('update.copied') || 'Copied!', 'success');
+        const b = e.currentTarget as HTMLButtonElement;
+        const was = b.textContent;
+        b.textContent = t('update.copied') || 'Copied!';
+        window.setTimeout(() => { if (b.isConnected) b.textContent = was; }, 1200);
     });
     document.getElementById('bc-link-open')?.addEventListener('click', () => {
         invoke('open_external_url', { url: `${base}/profile` }).catch(() => window.open(`${base}/profile`, '_blank'));

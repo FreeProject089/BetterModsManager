@@ -370,9 +370,20 @@ function wire(o: HTMLElement, who: Who, crashes: string[], cfg: Awaited<ReturnTy
     // panel is redrawn as "linked" without anybody reopening the dialog — which is the
     // difference between offering a fix and mentioning that one exists.
     document.getElementById('fbm-link')?.addEventListener('click', () => {
-        void openAccountLinkFlow().then(async () => {
+        const say = (msg: string, tone: '' | 'err' | 'ok' = '') => {
+            const el = document.getElementById('fbm-status');
+            if (el) { el.textContent = msg; el.className = `fbm-status${tone ? ` fbm-status-${tone}` : ''}`; }
+        };
+        // Said in the footer line, not as a toast: this dialog is what the reader is looking
+        // at, and a toast over it would cover the panel that raised the question.
+        void openAccountLinkFlow(async () => {
             forgetBcLinkState();
             render(await bcLinkState(true), crashes, cfg);
+        }).then(async (r) => {
+            if (r.result === 'offline') say(t('fbm.offline'), 'err');
+            else if (r.result === 'no-creator') say(t('settings.link.noCreator'), 'err');
+            else if (r.result === 'error') say(t('common.error'), 'err');
+            else if (r.result === 'already') { forgetBcLinkState(); render(await bcLinkState(true), crashes, cfg); }
         });
     });
     const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;

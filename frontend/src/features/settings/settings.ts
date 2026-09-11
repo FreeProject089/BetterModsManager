@@ -1576,7 +1576,18 @@ async function initSecurityInfoCard() {
         btn.id = 'btn-bc-link';
         btn.className = 'btn btn-sm btn-accent';
         btn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
-        btn.addEventListener('click', async () => { await openAccountLinkFlow(); forgetBcLinkState(); setTimeout(refreshBcLinkStatus, 400); });
+        btn.addEventListener('click', async () => {
+            // The flow reports what happened; saying it is this screen's job (see the note in
+            // core/bc-link.ts). The modal polls, so the card is redrawn when the code is
+            // actually accepted rather than on a timer's guess.
+            const r = await openAccountLinkFlow(() => { forgetBcLinkState(); refreshBcLinkStatus(); });
+            if (r.result === 'no-creator') toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning');
+            else if (r.result === 'offline') toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
+            else if (r.result === 'already') toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
+            else if (r.result === 'error') toast(t('common.error') || 'Failed to get a link code.', 'error');
+            forgetBcLinkState();
+            setTimeout(refreshBcLinkStatus, 400);
+        });
         row.appendChild(btn);
 
         const dbtn = document.createElement('button');
