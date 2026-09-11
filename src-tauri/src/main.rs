@@ -814,6 +814,7 @@ fn main() {
             commands::repo_server::get_connected_clients,
             commands::repo_server::get_active_downloads,
             commands::security::get_creator_id,
+            commands::security::creator_proof,
             commands::security::bc_api_get,
             commands::security::set_bcweb_api_key,
             commands::security::has_bcweb_api_key,

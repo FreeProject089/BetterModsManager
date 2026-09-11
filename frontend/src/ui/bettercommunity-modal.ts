@@ -55,6 +55,7 @@ import { escHtml, escAttr } from '../core/utils.js';
 import { getLinks } from '../core/links-config.js';
 import { invoke } from '../core/api.js';
 import { raiseAboveAll } from './layer.js';
+import { isDialogOnScreen } from './dialog-traffic.js';
 
 /** Set once "Don't show again" is ticked. Never shown at start after that. */
 const OPTOUT_KEY = 'bmm_bc_intro_optout';
@@ -88,17 +89,9 @@ const columnHtml = (title: string, lines: string[]): string => `
 
 let _open: HTMLElement | null = null;
 
-/**
- * Is another dialog already on screen?
- *
- * Asked as "is anything up", not "is onboarding up". A screen that stands aside for whatever
- * is there needs no list of the things it must stand aside for — and the next dialog somebody
- * adds is covered without anybody remembering to come back here, which is the part that did
- * not happen last time.
- */
-function somethingElseIsUp(): boolean {
-    return !!document.querySelector('#onboarding-overlay, .modal, [role="dialog"], .ptb-modal, #upd-card');
-}
+// Is another dialog already on screen? One shared answer — see dialog-traffic.ts for why the
+// selector list that used to live here was not only duplicated but wrong.
+const somethingElseIsUp = (): boolean => isDialogOnScreen();
 
 /**
  * Show it at start unless the reader has said not to.

@@ -8,7 +8,7 @@ import { initProfiles, renderProfiles, updateProfileChip, openNewProfileModal, g
 import { initMods, refreshMods } from '../features/mods/mods.js';
 import { initI18n, applyTranslations, t, getLang } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
-import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
+import { shouldShowOnboarding, startOnboarding, startOnboardingWhenClear } from './onboarding.js';
 import { initNavbarCustomize } from './navbar-customize.js';
 import { initInlineActions, actAttrs } from '../core/inline-actions.js';
 import { openTutorialHub } from './tutorial-hub.js';
@@ -1248,9 +1248,12 @@ async function main() {
     // 5. Show onboarding on first launch (it handles language too, so the standalone
     // picker above won't be repeated — see startOnboarding).
     if (isFirstRun) {
-        // Delay slightly to allow UI to render
+        // Delay slightly to allow UI to render — then, if something opened in the meantime,
+        // wait for it. "Report this crash" closes the crash notice to open the feedback
+        // dialog, which satisfies the `waitForModalClosed` above and let the tour land on
+        // top of a report being written.
         setTimeout(() => {
-            startOnboarding();
+            void startOnboardingWhenClear();
         }, 800);
     } else {
         // ONE nudge per launch, and this is the slot. Two dialogs stacked at boot means one

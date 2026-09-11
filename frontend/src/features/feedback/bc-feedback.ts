@@ -60,6 +60,12 @@ const QUEUE_MAX = 5;
 const QUEUE_ITEM_MAX_BYTES = 2 * 1024 * 1024; // attachments beyond this are dropped from a queued copy, not the report
 const CLIENT_MAX_PER_10MIN = 5;
 const CLIENT_MAX_PER_DAY = 20;
+// An unrecognised sender has no account to answer and no name to write back to, and the
+// server now gives them their own tighter budget rather than letting them spend the one
+// everybody behind the same address shares. Matched here so the refusal arrives BEFORE
+// somebody spends ten minutes writing a report that gets a 429.
+const ANON_MAX_PER_10MIN = 2;
+const ANON_MAX_PER_DAY = 4;
 const CONFIG_TTL_MS = 10 * 60 * 1000;
 
 /** Where reports go. `feedback_endpoint` in links.json; '' means "not BetterCommunity". */
@@ -86,11 +92,32 @@ function withTimeout(ms: number): { signal: AbortSignal; done: () => void } {
     return { signal: c.signal, done: () => clearTimeout(id) };
 }
 
+/**
+ * Who is sending this, and the proof of it.
+ *
+ * `X-Creator-ID` on its own is a claim anybody who has seen the id can make — it is an
+ * ed25519 PUBLIC key, and handing it to repo owners for whitelisting is what it is for. The
+ * server therefore ignores it unless `X-Creator-Proof` verifies: a two-minute, origin-bound
+ * signature made with the private half, which only this install has.
+ *
+ * Both headers are optional. No creator id, an older build with no `creator_proof` command, a
+ * server that does not look at it — all of them land on "anonymous", which is what every BMM
+ * report was until now anyway. Nothing here can fail a submission.
+ */
 async function creatorHeader(): Promise<Record<string, string>> {
+    let id = '';
+    try { id = await invoke('get_creator_id') as string; } catch { return {}; }
+    if (!id || typeof id !== 'string' || id === '\u2014') return {};
+    const out: Record<string, string> = { 'X-Creator-ID': id };
     try {
-        const id = await invoke('get_creator_id') as string;
-        return id && typeof id === 'string' ? { 'X-Creator-ID': id } : {};
-    } catch { return {}; }
+        // The AUDIENCE is the origin of wherever this report is going — read from the
+        // endpoint we are about to post to, not from a constant, so a tunnelled or
+        // self-hosted BetterCommunity gets a proof addressed to itself.
+        const aud = new URL(feedbackEndpoint()).origin;
+        const proof = await invoke('creator_proof', { aud }, { quiet: true }) as string;
+        if (proof) out['X-Creator-Proof'] = proof;
+    } catch { /* older build, or no endpoint — the report goes anonymously */ }
+    return out;
 }
 
 /** The project's live limits, or null when BetterCommunity cannot be reached. Cached 10 min. */
@@ -113,13 +140,17 @@ export async function fetchFeedbackConfig(force = false): Promise<FeedbackRemote
 function sentTimes(): number[] {
     try { return (JSON.parse(localStorage.getItem(SENT_KEY) || '[]') as number[]).filter((x) => Date.now() - x < 86_400_000); } catch { return []; }
 }
-export function clientThrottleOk(): { ok: boolean; waitSec: number } {
+export function clientThrottleOk(linked = true): { ok: boolean; waitSec: number } {
     const now = Date.now(); const s = sentTimes();
+    const per10 = linked ? CLIENT_MAX_PER_10MIN : ANON_MAX_PER_10MIN;
+    const perDay = linked ? CLIENT_MAX_PER_DAY : ANON_MAX_PER_DAY;
     const last10 = s.filter((x) => now - x < 600_000);
-    if (last10.length >= CLIENT_MAX_PER_10MIN) return { ok: false, waitSec: Math.ceil((600_000 - (now - last10[0])) / 1000) };
-    if (s.length >= CLIENT_MAX_PER_DAY) return { ok: false, waitSec: Math.ceil((86_400_000 - (now - s[0])) / 1000) };
+    if (last10.length >= per10) return { ok: false, waitSec: Math.ceil((600_000 - (now - last10[0])) / 1000) };
+    if (s.length >= perDay) return { ok: false, waitSec: Math.ceil((86_400_000 - (now - s[0])) / 1000) };
     return { ok: true, waitSec: 0 };
 }
+/** What an anonymous sender is allowed, for the dialog to say out loud. */
+export const anonLimits = { per10min: ANON_MAX_PER_10MIN, perDay: ANON_MAX_PER_DAY };
 function recordSent(): void {
     try { localStorage.setItem(SENT_KEY, JSON.stringify([...sentTimes(), Date.now()])); } catch { /* private mode */ }
 }
@@ -169,10 +200,10 @@ export async function testFeedbackEndpoint(): Promise<EndpointTest> {
     } finally { tm.done(); }
 }
 
-export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOffline?: boolean } = {}): Promise<FeedbackResult> {
+export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOffline?: boolean; linked?: boolean } = {}): Promise<FeedbackResult> {
     const ep = feedbackEndpoint();
     if (!ep) throw new FeedbackError('disabled', t('feedback.disabled'));
-    const thr = clientThrottleOk();
+    const thr = clientThrottleOk(opts.linked !== false);
     if (!thr.ok) throw new FeedbackError('rate_limited', t('feedback.rateLimited').replace('{s}', String(thr.waitSec)), thr.waitSec);
     const m = await baseMeta();
     const body: FeedbackPayload = { ...payload, appVersion: payload.appVersion || String(m.appVersion || ''), os: payload.os || String(m.os || ''), meta: { ...m, ...(payload.meta || {}) } };

@@ -6,6 +6,7 @@ import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../c
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
+import { bcLinkState, openAccountLinkFlow, forgetBcLinkState } from '../../core/bc-link.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
 import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, forgetHistoryAt, isDisabled, setDisabled, INDEX_TYPES, } from '../catalogs/catalog-index.js';
@@ -1404,64 +1405,9 @@ window.recalculateAllHashesPrompt = async () => {
 // TEST MODE is now driven by app.cfg (BCTestMode / BCTestBase), resolved once at
 // startup in links-config.ts. `bcTestMode()` / `bcTestBase()` / `bcRoot()` are imported
 // from there — Settings only DISPLAYS the state (read-only); to change it, edit app.cfg.
-async function openAccountLinkFlow() {
-    let creatorId = '';
-    try {
-        creatorId = (await invoke('get_creator_id'));
-    }
-    catch (_) { }
-    if (!creatorId || creatorId === '—') {
-        toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning');
-        return;
-    }
-    const base = bcBase();
-    let data;
-    // Go through the native process (bc_api_post) — a direct webview fetch to the
-    // BCWEB API is cross-origin (tauri.localhost) and is blocked by CORS preflight.
-    // Rust isn't subject to CORS, so the request actually goes through.
-    try {
-        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) }, { quiet: true });
-        data = JSON.parse(raw);
-    }
-    catch (_) {
-        toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
-        return;
-    }
-    if (data?.linked) {
-        toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
-        return;
-    }
-    if (!data?.code) {
-        toast(t('common.error') || 'Failed to get a link code.', 'error');
-        return;
-    }
-    showLinkCodeModal(data.code, base);
-}
-function showLinkCodeModal(code, base) {
-    document.getElementById('bc-link-modal')?.remove();
-    const modal = document.createElement('div');
-    modal.id = 'bc-link-modal';
-    // Absolutely fill the APP window container (not the OS window) so the backdrop
-    // stays inside BMM's rounded frame and clicks land on the modal, not behind it.
-    modal.style.cssText = 'position:absolute;inset:0;z-index:10500;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)';
-    modal.innerHTML = `
-      <div style="width:100%;max-width:420px;background:var(--bmm-bg-elevated,#15171e);border:1px solid rgba(249,115,22,0.3);border-radius:18px;padding:24px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,0.5)">
-        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${escHtml(t('settings.link.title') || 'Link your BetterCommunity account')}</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">${escHtml(t('settings.link.desc') || 'Enter this code on the website (Profile → Creator IDs). It expires in 15 minutes.')}</div>
-        <div style="font-family:var(--font-mono,monospace);font-size:28px;font-weight:800;letter-spacing:4px;color:var(--bmm-warning);padding:14px;border-radius:12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);margin-bottom:14px">${escHtml(code)}</div>
-        <div style="display:flex;gap:8px;justify-content:center">
-          <button id="bc-link-copy" class="btn btn-sm btn-accent">${escHtml(t('common.copy') || 'Copy')}</button>
-          <button id="bc-link-open" class="btn btn-sm">${escHtml(t('settings.link.open') || 'Open website')}</button>
-          <button id="bc-link-close" class="btn btn-sm btn-ghost">${escHtml(t('common.close') || 'Close')}</button>
-        </div>
-      </div>`;
-    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal)
-        modal.remove(); });
-    document.getElementById('bc-link-close')?.addEventListener('click', () => modal.remove());
-    document.getElementById('bc-link-copy')?.addEventListener('click', () => { navigator.clipboard.writeText(code); toast(t('update.copied') || 'Copied!', 'success'); });
-    document.getElementById('bc-link-open')?.addEventListener('click', () => { invoke('open_external_url', { url: `${base}/profile` }).catch(() => window.open(`${base}/profile`, '_blank')); });
-}
+// The flow itself lives in core/bc-link.ts. It was private here, so the feedback dialog —
+// which needs exactly this button — could not call it and invented its own (wrong) answer to
+// "is this install linked" instead. One copy, two callers.
 // (BetterCommunity discover modal removed — linking + Discord actions live in the identity card below.)
 function bcBase() {
     return bcRoot();
@@ -1484,21 +1430,17 @@ async function refreshBcLinkStatus() {
             discordBtn.style.display = 'none';
         return;
     }
-    let data = null;
-    // Via the native process (bc_api_get) — a webview fetch to the BCWEB API is
-    // cross-origin (tauri.localhost) and trips CORS; Rust isn't subject to it.
-    try {
-        data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }, { quiet: true }));
-    }
-    catch (_) { }
-    if (!data) {
+    // The SAME read the feedback dialog does — one question, one cache, so the two screens
+    // cannot disagree about the same account.
+    const wasLinked = localStorage.getItem('bc_linked') === '1';
+    const st = await bcLinkState(true);
+    if (st.state === 'unknown') {
         if (statusEl)
             statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).';
         return;
     }
-    const wasLinked = localStorage.getItem('bc_linked') === '1';
+    const data = { linked: st.state === 'linked', displayName: st.displayName, discord: st.discord };
     if (data.linked) {
-        localStorage.setItem('bc_linked', '1');
         const dtxt = data.discord?.linked
             ? ` · Discord: ${escHtml(data.discord.username || 'linked')}`
             : ` · ${escHtml(t('settings.link.noDiscord') || 'Discord not linked')}`;
@@ -1518,7 +1460,6 @@ async function refreshBcLinkStatus() {
             }
             catch (_) { }
         }
-        localStorage.setItem('bc_linked', '0');
         if (statusEl)
             statusEl.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;flex-shrink:0"></span> ${escHtml(t('settings.link.notLinked') || 'Not linked to a BetterCommunity account.')}`;
         if (linkBtn)
@@ -1680,7 +1621,7 @@ async function initSecurityInfoCard() {
         btn.id = 'btn-bc-link';
         btn.className = 'btn btn-sm btn-accent';
         btn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
-        btn.addEventListener('click', async () => { await openAccountLinkFlow(); setTimeout(refreshBcLinkStatus, 400); });
+        btn.addEventListener('click', async () => { await openAccountLinkFlow(); forgetBcLinkState(); setTimeout(refreshBcLinkStatus, 400); });
         row.appendChild(btn);
         const dbtn = document.createElement('button');
         dbtn.id = 'btn-bc-discord';

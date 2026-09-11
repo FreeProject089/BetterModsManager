@@ -8,6 +8,7 @@
  */
 import { t, getLang, setLang, getLanguages } from '../core/i18n.js';
 import { openTutorialHub } from './tutorial-hub.js';
+import { isDialogOnScreen, whenDialogsClear } from './dialog-traffic.js';
 
 let _langStep = false;
 
@@ -28,6 +29,27 @@ export async function markOnboardingShown() {
         settings.onboarding_shown = true;
         await updateSettings(settings);
     } catch (e) { console.error('Failed to save onboarding state:', e); }
+}
+
+/**
+ * The first-launch tour, but only once the screen is free.
+ *
+ * This is the automatic path, and an automatic overlay must never land on top of something
+ * somebody is using. Reporting a crash on a fresh profile did exactly that: the crash notice
+ * closes in order to OPEN the feedback dialog, so boot's `waitForModalClosed` was satisfied
+ * and the tour arrived 800 ms later over a half-written report.
+ *
+ * It waits rather than skips — a fresh install with no tour is not a fix for a stacked one.
+ * `whenDialogsClear` has its own ceiling, so a dialog left open cannot mean the tour silently
+ * never runs.
+ *
+ * `startOnboarding()` stays immediate, because the Settings button that calls it is somebody
+ * ASKING for the tour: a requested dialog does not queue behind the screen it was requested
+ * from.
+ */
+export async function startOnboardingWhenClear() {
+    if (isDialogOnScreen()) await whenDialogsClear();
+    startOnboarding();
 }
 
 /** Called on first launch — shows language selection, then opens the hub. */

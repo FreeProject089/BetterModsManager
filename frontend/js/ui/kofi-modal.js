@@ -12,6 +12,7 @@
 import { t } from '../core/i18n.js';
 import { getLinks } from '../core/links-config.js';
 import { escHtml, escAttr } from '../core/utils.js';
+import { isDialogOnScreen } from './dialog-traffic.js';
 const OPTOUT_KEY = 'bmm_kofi_optout';
 /**
  * "Maybe later" used to mean "ask me again in four hours, or whenever you next open BMM" —
@@ -47,11 +48,14 @@ export function maybeShowKofiReminder() {
         // way round: a corrupt value shows the reminder rather than silencing it forever.
         if (until > Date.now())
             return;
-        // Don't pile on top of the first-run onboarding overlay.
-        if (document.getElementById('onboarding-overlay'))
+        // Don't pile on top of anything already on screen — not just onboarding, which is
+        // all this used to look for. Checked again when the timer fires, because 1200 ms is
+        // long enough for a dialog to open in the gap.
+        if (isDialogOnScreen())
             return;
         // Give the app a moment to settle visually.
-        setTimeout(showKofiReminder, 1200);
+        setTimeout(() => { if (!isDialogOnScreen())
+            showKofiReminder(); }, 1200);
     }
     catch { /* localStorage unavailable — skip silently */ }
 }

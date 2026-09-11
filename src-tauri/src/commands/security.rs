@@ -419,6 +419,62 @@ pub fn get_creator_id(handle: AppHandle) -> Result<String, String> {
     Ok(hex::encode(verifying_key.to_bytes()))
 }
 
+/// How long a creator proof stays valid. It is a bearer token — whoever holds a live one can
+/// replay it at the audience it names — so the window is small. Making another costs one
+/// signature, which is nothing.
+const CREATOR_PROOF_TTL_SECONDS: u64 = 120;
+
+/// Prove this install holds the private half of its Creator ID, to one named audience.
+///
+/// Returns `bmmc1.<base64url(payload)>.<base64url(signature)>`, where the payload is
+/// `{"cid":<hex public key>,"aud":<origin>,"exp":<unix seconds>}`.
+///
+/// `aud` is the ONLY thing the caller decides, and it is an origin: scheme, host and port,
+/// with anything else refused rather than trimmed. That is what stops a proof captured by one
+/// server from opening another, and it is also why this is not a signing oracle — everything
+/// else in the signed bytes is written here.
+#[tauri::command]
+pub fn creator_proof(handle: AppHandle, aud: String) -> Result<String, String> {
+    use base64::Engine;
+    let b64u = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    // An origin, not a URL. `https://host` or `https://host:port` — a path, a query or a
+    // fragment means the caller passed a whole URL, and signing that would bind the proof to
+    // one endpoint of a server instead of to the server.
+    let aud = aud.trim().trim_end_matches('/');
+    let rest = aud
+        .strip_prefix("https://")
+        .or_else(|| aud.strip_prefix("http://"))
+        .ok_or_else(|| "Audience must be an http(s) origin".to_string())?;
+    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
+        return Err("Audience must be an origin, not a URL".to_string());
+    }
+
+    let signing_key = load_or_generate_keys(&handle)?;
+    let verifying_key: VerifyingKey = (&signing_key).into();
+    let exp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "System clock is before the epoch".to_string())?
+        .as_secs()
+        + CREATOR_PROOF_TTL_SECONDS;
+
+    // Hand-built rather than serde: three fields, and the field ORDER is part of what gets
+    // signed. A derived struct that someone later reorders would silently change the bytes.
+    let payload = format!(
+        r#"{{"cid":"{}","aud":"{}","exp":{}}}"#,
+        hex::encode(verifying_key.to_bytes()),
+        aud,
+        exp
+    );
+    let payload_b64 = b64u.encode(payload.as_bytes());
+    let signature: Signature = signing_key.sign(payload_b64.as_bytes());
+    Ok(format!(
+        "bmmc1.{}.{}",
+        payload_b64,
+        b64u.encode(signature.to_bytes())
+    ))
+}
+
 /// Shared HTTP client for the BetterCommunity API calls (blog feed, account link,
 /// avatars) — the process-wide pooled client from `commands::net`, so these keep-alive
 /// to the BC host instead of rebuilding a client + TLS handshake per call. Per-request

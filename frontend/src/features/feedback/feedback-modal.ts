@@ -7,10 +7,13 @@
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
+import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen, anonLimits, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
+import { bcLinkState, openAccountLinkFlow, forgetBcLinkState, type BcLinkState } from '../../core/bc-link.js';
 
 type Kind = FeedbackKind;
 interface OpenOpts { crashZip?: string }
+/** Whether the SERVER will recognise this sender — not whether a key file exists here. */
+type Who = BcLinkState;
 
 const esc = (s: unknown): string => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const base = (p: string): string => p.split(/[\\/]/).pop() || p;
@@ -24,6 +27,7 @@ const IC = {
     x: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
     site: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
     check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    link: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
 };
 
 let _overlay: HTMLElement | null = null;
@@ -73,13 +77,15 @@ export async function openFeedback(kind: Kind = 'bug', opts: OpenOpts = {}): Pro
         return;
     }
     _kind = kind; _shots = []; _zips = opts.crashZip ? [opts.crashZip] : []; _steps = ['']; _busy = false;
-    const [linked, crashes, cfg] = await Promise.all([
-        invoke('has_bcweb_api_key').then((v) => !!v).catch(() => false),
+    // `bcLinkState` replaces `has_bcweb_api_key` here. See the module note in core/bc-link.ts:
+    // the key file answers a different question and answered it wrongly in both directions.
+    const [who, crashes, cfg] = await Promise.all([
+        bcLinkState(),
         invoke('get_crash_reports').then((v) => (Array.isArray(v) ? (v as string[]) : [])).catch(() => [] as string[]),
         fetchFeedbackConfig(),
     ]);
     if (_kind === 'crash' && !_zips.length && crashes.length) _zips = [crashes[0]];
-    render(linked, crashes, cfg);
+    render(who, crashes, cfg);
     overlay().classList.add('open');
     requestAnimationFrame(() => (document.getElementById('fbm-title') as HTMLInputElement | null)?.focus());
 }
@@ -88,12 +94,16 @@ function kindBtn(k: Kind, icon: string): string {
     return `<button type="button" class="fbm-kind${_kind === k ? ' is-on' : ''}" data-kind="${k}" role="tab" aria-selected="${_kind === k}">${icon}<span><b>${esc(t(`fbm.kind.${k}`))}</b><small>${esc(t(`fbm.kindHint.${k}`))}</small></span></button>`;
 }
 
-function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
+function render(who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
     const o = overlay();
     const offline = !cfg;
     const disabled = cfg && !cfg.enabled;
     const maxMB = cfg?.maxAttachMB ?? 25;
     const maxN = cfg?.maxAttachments ?? 6;
+    const linked = who.state === 'linked';
+    // `unknown` gets the contact fields too. Not because the sender is anonymous — we do not
+    // know that — but because an address is the only way a reply reaches somebody we could
+    // not confirm, and offering it costs nothing if it turns out to be unnecessary.
     const needContact = !linked && !!cfg?.requireContact;
     o.innerHTML = `
     <div class="modal fbm" role="dialog" aria-labelledby="fbm-heading">
@@ -169,8 +179,22 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
                 <summary><span class="fbm-fold-t">${esc(t('fbm.contact'))}</span><span class="fbm-fold-sum" id="fbm-contact-sum"></span></summary>
                 <div class="fbm-fold-in">
                 ${linked
-                    ? `<div class="fbm-linked">${IC.check} <span>${esc(t('fbm.contactLinked'))}</span></div>`
-                    : `<div class="fbm-grid2">
+                    ? `<div class="fbm-linked">${IC.check} <span>${esc(who.displayName
+                            ? t('fbm.contactLinkedAs').replace('{name}', who.displayName)
+                            : t('fbm.contactLinked'))}</span></div>`
+                    : `${who.state === 'unknown'
+                          // Said plainly rather than folded into "not linked". BMM works
+                          // offline, and inviting somebody to link an account they already
+                          // have is worse than admitting we could not ask.
+                          ? `<div class="fbm-banner fbm-banner-warn">${esc(t('fbm.contactUnknown'))}</div>`
+                          : `<div class="fbm-anon">
+                               <div class="fbm-anon-txt">
+                                 <b>${esc(t('fbm.anonTitle'))}</b>
+                                 <small>${esc(t('fbm.anonWhy').replace('{n}', String(anonLimits.perDay)))}</small>
+                               </div>
+                               <button type="button" class="btn btn-sm btn-accent" id="fbm-link">${IC.link} <span>${esc(t('fbm.anonLink'))}</span></button>
+                             </div>`}
+                       <div class="fbm-grid2">
                         <div><label class="fbm-lbl" for="fbm-email">${esc(t('fbm.email'))}${needContact ? ' *' : ''}</label><input class="form-input fbm-input" id="fbm-email" type="email" placeholder="you@example.com"></div>
                         <div><label class="fbm-lbl" for="fbm-discord">${esc(t('fbm.discord'))}</label><input class="form-input fbm-input" id="fbm-discord" placeholder="username"></div>
                        </div>
@@ -195,7 +219,7 @@ function render(linked: boolean, crashes: string[], cfg: Awaited<ReturnType<type
             <button type="button" class="btn btn-primary btn-sm fbm-send" id="fbm-send" ${disabled ? 'disabled' : ''}>${IC.send} <span>${esc(t('fbm.send'))}</span></button>
         </div>
     </div>`;
-    wire(o, linked, crashes, cfg);
+    wire(o, who, crashes, cfg);
 }
 
 function renderSteps(): void {
@@ -341,7 +365,16 @@ function updateQuality(): void {
     tipEl.textContent = t(tipKey);
 }
 
-function wire(o: HTMLElement, linked: boolean, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
+function wire(o: HTMLElement, who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): void {
+    // Link from here. The pairing flow polls and closes itself, so when it succeeds this
+    // panel is redrawn as "linked" without anybody reopening the dialog — which is the
+    // difference between offering a fix and mentioning that one exists.
+    document.getElementById('fbm-link')?.addEventListener('click', () => {
+        void openAccountLinkFlow().then(async () => {
+            forgetBcLinkState();
+            render(await bcLinkState(true), crashes, cfg);
+        });
+    });
     const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
     q('fbm-close')?.addEventListener('click', close);
     q('fbm-cancel')?.addEventListener('click', close);
@@ -397,7 +430,7 @@ function wire(o: HTMLElement, linked: boolean, crashes: string[], cfg: Awaited<R
         el?.scrollIntoView({ block: 'nearest' });
         el?.focus();
     });
-    q('fbm-send')?.addEventListener('click', () => send(linked, cfg));
+    q('fbm-send')?.addEventListener('click', () => send(who, cfg));
 }
 
 // A small proof-of-work: a report is only sent after the client has spent some CPU finding a
@@ -420,7 +453,8 @@ async function proofOfWork(challenge: string, targetBits = 13, maxMs = 2500): Pr
     return { ...best, ms: Date.now() - started };
 }
 
-async function send(linked: boolean, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): Promise<void> {
+async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): Promise<void> {
+    const linked = who.state === 'linked';
     if (_busy) return;
     const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
     const status = q('fbm-status');
@@ -476,7 +510,13 @@ async function send(linked: boolean, cfg: Awaited<ReturnType<typeof fetchFeedbac
         if (status) status.innerHTML = `<span class="fbm-pow"><span class="fbm-pow-dot"></span>${esc(t('fbm.pow') || 'Anti-spam check…')}</span>`;
         const pow = await proofOfWork(`${_kind}|${title}|${body.slice(0, 200)}|${Date.now()}`);
         say(t('fbm.sending'));
-        const r = await submitFeedback({ kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length }, attachments });
+        // `linked` picks which client throttle applies. `unknown` counts as linked here on
+        // purpose: the tighter budget is for people we KNOW are anonymous, and refusing
+        // somebody a report because their connection was down would be the worst version of
+        // this feature. The server applies its own limit either way.
+        const r = await submitFeedback(
+            { kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length }, attachments },
+            { linked: who.state !== 'anonymous' });
         try {
             const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
             history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString() });
