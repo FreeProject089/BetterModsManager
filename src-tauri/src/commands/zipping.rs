@@ -21,6 +21,12 @@ pub enum ZipMethod { Stored, Deflate, Bzip2, Zstd }
 
 impl ZipMethod {
     /// The names a caller may pass, in the order the pickers list them.
+    ///
+    /// Read by the MCP server's tool schema (the `compression` enum of `bmm_generate_repo`)
+    /// and by the tests; the app binary only ever *parses* names, so rustc reports this
+    /// constant unused there. The MCP server is a cargo example that compiles this file
+    /// through `#[path]`, not a module of the binary, hence the targeted allow.
+    #[allow(dead_code)]
     pub const NAMES: [&'static str; 4] = ["deflate", "zstd", "bzip2", "stored"];
 
     /// `None` and the empty string mean the default; the rest is a small set of spellings

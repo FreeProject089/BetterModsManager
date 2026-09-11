@@ -223,7 +223,7 @@ pub async fn export_server_repo(
     let zip_method = ZipMethod::parse(compression.as_deref())?;
 
     let mut _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/export")
-        .with_subject(format!("{} profile(s) → {}", profile_ids.len(), output_dir));
+        .with_subject(format!("{} profile(s) → {} ({})", profile_ids.len(), output_dir, zip_method.name()));
 
     let mut _temp_dir: Option<tempfile::TempDir> = None;
     let output_path = if zip_output {

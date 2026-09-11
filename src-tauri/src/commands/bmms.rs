@@ -2617,7 +2617,7 @@ mod tests {
     }
 
     #[test]
-    fn a_task_built_from_BRICKS_round_trips_through_code() {
+    fn a_task_built_from_bricks_round_trips_through_code() {
         // The direction that matters for the promise "open it in either mode": this starts
         // from the tree the EDITOR produces, not from hand-written source. A printer that
         // is merely pretty would pass the source-first test and lose a field here.

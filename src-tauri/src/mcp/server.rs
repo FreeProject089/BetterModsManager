@@ -587,7 +587,7 @@ impl ServerHandler for BmmMcpServer {
             "properties": {
                 "name": { "type": "string", "description": "Name written into repo.json and shown to whoever connects to it." },
                 "zip_mods": { "type": "boolean", "description": "Pack each mod into one mods/<id>.zip instead of copying its files — smaller downloads, unpacked by the receiver. Default false." },
-                "compression": { "type": "string", "enum": ["deflate", "zstd", "bzip2", "stored"], "description": "How those zips are compressed. deflate (default) is read by every unzipper; zstd is much faster and about as small; bzip2 smaller and slower; stored is no compression. Only meaningful with zip_mods." },
+                "compression": { "type": "string", "enum": crate::commands::zipping::ZipMethod::NAMES, "description": "How those zips are compressed. deflate (default) is read by every unzipper; zstd is much faster and about as small; bzip2 smaller and slower; stored is no compression. Only meaningful with zip_mods." },
                 "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods to publish, by id (from bmm_list_mods). Empty or absent publishes the active profile's mods." }
             },
             "required": ["name", "mod_ids"]

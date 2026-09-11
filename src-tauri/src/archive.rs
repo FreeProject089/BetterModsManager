@@ -346,3 +346,139 @@ mod path_safety_tests {
         }
     }
 }
+
+/// The repo sync path, end to end, for every compression a repo export can write.
+///
+/// `export_server_repo` (and the MCP `bmm_generate_repo`) write `mods/<id>.zip` with
+/// `commands::zipping::zip_dir` and a `ZipMethod`. A syncing client then either unpacks that
+/// zip with `extract_to` (the "unzip archives" setting) or keeps it as an archived mod, which
+/// every later reader opens through `mod_read_root` / `archive_entries`. The writer's own
+/// test proves the zip crate can read what it wrote; THESE prove the three functions the
+/// sync actually calls hand the same bytes back, for zstd and bzip2 as much as for deflate.
+#[cfg(test)]
+mod repo_sync_round_trip_tests {
+    use super::{archive_entries, extract_to, mod_read_root};
+    use crate::commands::zipping::{zip_dir, ZipMethod};
+    use std::collections::BTreeMap;
+    use std::path::Path;
+
+    const METHODS: [ZipMethod; 4] = [ZipMethod::Deflate, ZipMethod::Zstd, ZipMethod::Bzip2, ZipMethod::Stored];
+
+    /// A mod folder with the shapes a real one has: nested dirs, an empty file, a text file,
+    /// and a binary blob big enough that every method actually compresses (not a header-only zip).
+    fn write_mod_folder(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut blob = Vec::with_capacity(300 * 1024);
+        let mut x: u32 = 0x9E37_79B9;
+        for i in 0..(300 * 1024) {
+            // Half repetitive, half pseudo-random: compressible, but not trivially so.
+            x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+            blob.push(if i % 2 == 0 { (i / 64) as u8 } else { (x & 0xFF) as u8 });
+        }
+        let files: Vec<(&str, Vec<u8>)> = vec![
+            ("readme.txt", b"hello from the mod\n".to_vec()),
+            ("empty.bin", Vec::new()),
+            ("Data/textures/big.dds", blob),
+            ("Data/scripts/nested/deeper/a.lua", b"print('a')\n".to_vec()),
+            ("mod.json", br#"{"name":"round trip"}"#.to_vec()),
+        ];
+        let mut expected = BTreeMap::new();
+        for (rel, bytes) in files {
+            let p = root.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, &bytes).unwrap();
+            expected.insert(rel.to_string(), bytes);
+        }
+        // An empty directory: the writer records it, the reader must not choke on it.
+        std::fs::create_dir_all(root.join("Data/empty_dir")).unwrap();
+        expected
+    }
+
+    /// Every file under `root`, minus `.bmm_extracted`: that marker is what `materialize`
+    /// writes to say "this cache dir is complete", so it is part of the cache view by design.
+    fn read_tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut out = BTreeMap::new();
+        for e in walkdir::WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+            if e.path().is_file() && e.file_name() != ".bmm_extracted" {
+                let rel = e.path().strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                out.insert(rel, std::fs::read(e.path()).unwrap());
+            }
+        }
+        out
+    }
+
+    /// Same set of paths and, per path, the same bytes — reported by name, not by dumping
+    /// a 300 KB blob into the assertion message.
+    fn assert_same_tree(got: &BTreeMap<String, Vec<u8>>, want: &BTreeMap<String, Vec<u8>>, ctx: &str) {
+        let got_names: Vec<&String> = got.keys().collect();
+        let want_names: Vec<&String> = want.keys().collect();
+        assert_eq!(got_names, want_names, "{ctx}: file list differs");
+        for (name, bytes) in want {
+            assert!(got[name] == *bytes, "{ctx}: {name} differs ({} vs {} bytes)", got[name].len(), bytes.len());
+        }
+    }
+
+    fn zip_with(src: &Path, dst: &Path, m: ZipMethod) {
+        let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        zip_dir(src, dst, noflag, m).unwrap_or_else(|e| panic!("{m:?}: zip_dir failed: {e}"));
+    }
+
+    /// `sync_server_repo` with "unzip archives": `extract_to` → `extract_zip_parallel`.
+    #[test]
+    fn extract_to_returns_the_same_bytes_for_every_method() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        let expected = write_mod_folder(&src);
+        for m in METHODS {
+            let zip = td.path().join(format!("{}.zip", m.name()));
+            zip_with(&src, &zip, m);
+            let dest = td.path().join(format!("out-{}", m.name()));
+            extract_to(&zip, &dest).unwrap_or_else(|e| panic!("{m:?}: extract_to failed: {e}"));
+            assert_same_tree(&read_tree(&dest), &expected, &format!("{m:?} extract_to"));
+        }
+    }
+
+    /// `sync_server_repo` keeping the zip: the archived mod is listed with `archive_entries`
+    /// (content_id fingerprint) and read through `mod_read_root` (the extracted cache view).
+    #[test]
+    fn archived_mod_readers_see_the_same_bytes_for_every_method() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        let expected = write_mod_folder(&src);
+        let expected_sizes: Vec<(String, u64)> =
+            expected.iter().map(|(k, v)| (k.clone(), v.len() as u64)).collect();
+        for m in METHODS {
+            // A distinct stem per method: mod_read_root's cache is keyed by stem+size+mtime
+            // and a same-second rewrite must not hand one method the other's extraction.
+            let zip = td.path().join(format!("kept-{}.zip", m.name()));
+            zip_with(&src, &zip, m);
+
+            let mut listed = archive_entries(&zip).unwrap_or_else(|e| panic!("{m:?}: archive_entries failed: {e}"));
+            listed.sort();
+            assert_eq!(listed, expected_sizes, "{m:?}: archive_entries differs from the source");
+
+            let root = mod_read_root(&zip);
+            assert_ne!(root, zip, "{m:?}: mod_read_root fell back to the archive path (extraction failed)");
+            assert_same_tree(&read_tree(&root), &expected, &format!("{m:?} mod_read_root"));
+            let _ = std::fs::remove_dir_all(&root);
+        }
+    }
+
+    /// Past 8000 entries `extract_zip_parallel` hands the whole archive to the crate's own
+    /// serial `extract`. One method is enough to prove that branch is wired: it is the same
+    /// decoder either way, and zstd is the one feature-gated codec the parallel path does
+    /// not share code with.
+    #[test]
+    fn the_serial_fallback_for_huge_archives_reads_zstd() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        std::fs::create_dir_all(src.join("many")).unwrap();
+        for i in 0..8_001u32 {
+            std::fs::write(src.join("many").join(format!("{i}.txt")), i.to_le_bytes()).unwrap();
+        }
+        let zip = td.path().join("huge.zip");
+        zip_with(&src, &zip, ZipMethod::Zstd);
+        let dest = td.path().join("out");
+        extract_to(&zip, &dest).unwrap();
+        assert_same_tree(&read_tree(&dest), &read_tree(&src), "Zstd serial fallback");
+    }
+}
