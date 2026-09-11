@@ -3354,6 +3354,20 @@ body.bmm-toolbar-opaque .lib-header-shell {
        paint containment to save. */
 }
 
+/* "N more waiting" while a start-up card is up (ui/nudge-queue.ts). Above every overlay,
+   below nothing that matters; small and in the corner, because it is context, not a
+   control. */
+.nudge-pill {
+    position: absolute; right: 18px; bottom: 18px; z-index: 12000;
+    padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
+    color: var(--text); background: var(--bg-solid, var(--bmm-bg-elevated));
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    pointer-events: none;
+    animation: fadeIn .18s ease;
+}
+
 .modal-overlay.open {
     display: flex;
 }

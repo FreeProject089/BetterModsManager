@@ -106,9 +106,14 @@ const somethingElseIsUp = (): boolean => isDialogOnScreen();
  * Returns whether it took the slot, so the caller can leave the other start-up nudge for
  * another day. One interruption per launch.
  */
+/** Does the intro want to show this launch? The opt-out only — WHEN is the queue's call. */
+export function bcIntroWanted(): boolean {
+    try { return localStorage.getItem(OPTOUT_KEY) !== '1'; } catch { return false; }
+}
+
 export function maybeShowBetterCommunityIntro(): boolean {
     try {
-        if (localStorage.getItem(OPTOUT_KEY) === '1') return false;
+        if (!bcIntroWanted()) return false;
         if (somethingElseIsUp()) return false;
         // Long enough for the app to have painted; short enough to still read as part of
         // starting up rather than as something that interrupted you later.

@@ -38,15 +38,28 @@ function kofiUrl() {
         return 'https://ko-fi.com/I2I31ZIPPG';
     }
 }
-/** Show the reminder on each start, unless the user opted out or onboarding is up. */
-export function maybeShowKofiReminder() {
+/**
+ * Does the reminder want to show this launch? The opt-out and the month-long snooze, and
+ * nothing about timing — WHEN is the start-up queue's decision (ui/nudge-queue.ts), so this
+ * can never land on top of another card.
+ */
+export function kofiWanted() {
     try {
         if (localStorage.getItem(OPTOUT_KEY) === '1')
-            return;
+            return false;
         const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
         // NaN and a clock moved backwards both land here as "not snoozed", which is the safe
         // way round: a corrupt value shows the reminder rather than silencing it forever.
-        if (until > Date.now())
+        return !(until > Date.now());
+    }
+    catch {
+        return false;
+    }
+}
+/** Show the reminder on each start, unless the user opted out or onboarding is up. */
+export function maybeShowKofiReminder() {
+    try {
+        if (!kofiWanted())
             return;
         // Don't pile on top of anything already on screen — not just onboarding, which is
         // all this used to look for. Checked again when the timer fires, because 1200 ms is

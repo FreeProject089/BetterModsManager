@@ -2884,6 +2884,8 @@
   "kofi.tierHint": "Pick an amount — it opens Ko-fi.",
   "kofi.later": "Maybe later",
   "kofi.dontShow": "Don't show again",
+  "nudge.waiting.one": "1 more message waiting",
+  "nudge.waiting.many": "{n} more messages waiting",
   "kofi.freeBadge": "100% free · No ads · No account",
   "credits.kofiSub": "Support development",
   "credits.license": "License",

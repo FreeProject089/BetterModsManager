@@ -1249,34 +1249,31 @@ async function main() {
         }, 800);
     }
     else {
-        // ONE nudge per launch, and this is the slot. Two dialogs stacked at boot means one
-        // is behind the other with no way to tell which, so they take turns rather than
-        // both firing.
+        // The start-up cards take TURNS, in this order, one at a time, with a pill in the
+        // corner saying how many are still waiting. It used to be "one per launch": whichever
+        // fired first won and the other was simply never seen — and before that, both fired
+        // and stacked. The queue waits for anything already on screen (an update, a crash
+        // notice) to close before the first one opens, and for each card to close before the
+        // next. Not awaited: this is inside main(), and everything below it must still run.
         //
-        // BetterCommunity goes first while it is still being shown: it says what the place
-        // this app talks to all day actually is, which is worth more early than a tip jar.
-        // The moment somebody ticks "don't show again", Ko-fi has the slot back.
-        let nudged = false;
-        try {
-            const { maybeShowBetterCommunityIntro } = await import('./bettercommunity-modal.js');
-            nudged = maybeShowBetterCommunityIntro();
-        }
-        catch (e) {
-            console.error('BetterCommunity intro failed', e);
-        }
-        // Not a first run → gently remind (once) that BMM has a Ko-fi. A flag and not an
-        // early `return`: this is inside main(), so returning here would also skip
-        // auto-calibration, the collapsible settings cards, interaction logging and the
-        // debug menu — all of which are below, and none of which tsc would say a word about.
-        if (!nudged) {
+        // BetterCommunity first while it is still being shown: it says what the place this
+        // app talks to all day actually is, which is worth more early than a tip jar.
+        void (async () => {
             try {
-                const { maybeShowKofiReminder } = await import('./kofi-modal.js');
-                maybeShowKofiReminder();
+                const [{ runNudges }, bc, kofi] = await Promise.all([
+                    import('./nudge-queue.js'),
+                    import('./bettercommunity-modal.js'),
+                    import('./kofi-modal.js'),
+                ]);
+                await runNudges([
+                    { id: 'bettercommunity', wants: bc.bcIntroWanted, show: () => bc.openBetterCommunity(true) },
+                    { id: 'kofi', wants: kofi.kofiWanted, show: kofi.showKofiReminder },
+                ]);
             }
             catch (e) {
-                console.error('kofi reminder failed', e);
+                console.error('start-up nudges failed', e);
             }
-        }
+        })();
     }
     // ── Auto-Calibration trigger at startup ──
     setTimeout(async () => {

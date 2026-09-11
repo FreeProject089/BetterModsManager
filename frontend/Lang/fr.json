@@ -2882,6 +2882,8 @@
   "kofi.tierHint": "Choisissez un montant — ça ouvre Ko-fi.",
   "kofi.later": "Plus tard",
   "kofi.dontShow": "Ne plus afficher",
+  "nudge.waiting.one": "1 autre message en attente",
+  "nudge.waiting.many": "{n} autres messages en attente",
   "kofi.freeBadge": "100% gratuit · Sans pub · Sans compte",
   "credits.kofiSub": "Soutenir le développement",
   "credits.license": "Licence",
