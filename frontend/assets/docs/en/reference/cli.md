@@ -72,7 +72,7 @@ arguments are written `<like-this>`, flags `--like-this`.
 
 | Command | Arguments | What it does |
 |---|---|---|
-| `generate-repo` | `--name`\*, `--mod-ids` | Generate a mod repository, signed with this installation's identity |
+| `generate-repo` | `--name`\*, `--mod-ids`, `--zip-mods` (`false`), `--compression` (`deflate` / `zstd` / `bzip2` / `stored`) | Generate a mod repository, signed with this installation's identity. `--zip-mods` packs each mod into one `mods/<id>.zip`; `--compression` picks how those zips are compressed |
 | `start-server` | `--path`\*, `--port` (`8080`) | Start the repository HTTP server, with a Cloudflare tunnel if one is configured |
 | `generate-lightweight` | `--repo-path`\*, `--port` (`8000`), `--auto-start` (`false`), `--cloudflare` (`false`), `--upnp` (`false`), `--upload-limit` (`0`), `--server-version` (`2`), `--password` (`admin`) | Write a standalone `.bat` that serves a repo folder, for a machine that will not have BMM on it |
 

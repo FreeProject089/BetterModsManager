@@ -51,7 +51,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.connect` | Ajoute un repo distant | `url` · `name` · `password` |
 | `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` · `password` |
 | `repo.gen` | Ouvre la génération de repo | — |
-| `repo.genNow` | Génère le dépôt sur place, sans ouvrir la page — contrairement à « Générer un dépôt », qui ne fait que t’y emmener. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
+| `repo.genNow` | Génère le dépôt sur place, sans ouvrir la page — contrairement à « Générer un dépôt », qui ne fait que t’y emmener. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
 | `repo.update` | Met à jour un repo exporté | `dir` |
 | `repo.host` | Sert un repo en HTTP | `dir` · `port` |
 | `repo.manifest` | Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante. | `dir` · `name` · `author` |

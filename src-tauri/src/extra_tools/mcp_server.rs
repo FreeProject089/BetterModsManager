@@ -41,6 +41,8 @@ mod mcp;
 mod commands {
     #[path = "../../commands/proc.rs"]
     pub mod proc;
+    #[path = "../../commands/zipping.rs"]
+    pub mod zipping;
     // Reading a plugin's shipped files, and the path guard that keeps a `..` from leaving
     // the folder. Mounted rather than reimplemented: the CLI reads the same archives the app
     // does, and a second guard is the one that gets forgotten.
@@ -164,6 +166,14 @@ enum Commands {
         /// Mod IDs to include (comma-separated)
         #[arg(short, long, value_delimiter = ',')]
         mod_ids: Vec<String>,
+
+        /// Pack each mod into one mods/<id>.zip instead of copying its files
+        #[arg(long)]
+        zip_mods: bool,
+
+        /// How those zips are compressed: deflate (default), zstd, bzip2, stored
+        #[arg(long)]
+        compression: Option<String>,
     },
 
     /// Start the repository HTTP server + Cloudflare tunnel
@@ -1463,9 +1473,9 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
 
         // ── Repository ───────────────────────────────────────────────
-        Commands::GenerateRepo { name, mod_ids } => {
+        Commands::GenerateRepo { name, mod_ids, zip_mods, compression } => {
             println!("  {} Generating repository \"{}\" with {} mods...", "⏳".yellow(), name.cyan(), mod_ids.len());
-            match mods::generate_repo(&name, mod_ids) {
+            match mods::generate_repo(&name, mod_ids, zip_mods, compression.as_deref()) {
                 Ok(msg) => println!("  {} {}", "✓".green().bold(), msg),
                 Err(e) => println!("  {} {}", "✗".red().bold(), e),
             }

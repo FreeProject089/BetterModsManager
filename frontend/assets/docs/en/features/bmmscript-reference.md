@@ -51,7 +51,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.connect` | Add a remote repo | `url` · `name` · `password` |
 | `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
 | `repo.gen` | Open repo generation | — |
-| `repo.genNow` | Generates the repo where it stands, without opening the page — unlike “Generate a repo”, which only takes you there. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
+| `repo.genNow` | Generates the repo where it stands, without opening the page — unlike “Generate a repo”, which only takes you there. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |

@@ -392,8 +392,8 @@ pub fn generate_betahub_report(title: &str, description: &str) -> Result<serde_j
 }
 
 /// List available languages
-pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> Result<String, String> {
-    state_bridge::generate_repo(name, mod_ids).map_err(|e| e.to_string())
+pub fn generate_repo(name: &str, mod_ids: Vec<String>, zip_mods: bool, compression: Option<&str>) -> Result<String, String> {
+    state_bridge::generate_repo(name, mod_ids, zip_mods, compression).map_err(|e| e.to_string())
 }
 
 pub fn start_repo_server(path: &str, port: u16) -> Result<String, String> {

@@ -1490,6 +1490,20 @@
                                             </span>
                                         </label>
 
+                                        <!-- One method for both zips (the archive and the per-mod ones). Deflate is the
+                                             default because every unzipper reads it; the others are for people who
+                                             know what will open the file. -->
+                                        <div style="display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                                            <label for="repo-export-zip-method" style="font-size:12.5px; font-weight:600; color:var(--text-secondary);" data-i18n="repo.zipMethod">Compression</label>
+                                            <select id="repo-export-zip-method" class="select select-sm" style="max-width:320px;">
+                                                <option value="deflate" data-i18n="repo.zipMethod.deflate">Deflate — standard, read everywhere (default)</option>
+                                                <option value="zstd" data-i18n="repo.zipMethod.zstd">Zstandard — much faster, about as small</option>
+                                                <option value="bzip2" data-i18n="repo.zipMethod.bzip2">Bzip2 — smaller, slower</option>
+                                                <option value="stored" data-i18n="repo.zipMethod.stored">Stored — no compression, fastest</option>
+                                            </select>
+                                            <span style="font-size:11.5px; color:var(--text-muted); flex-basis:100%;" data-i18n="repo.zipMethodHint">Applies to the repo archive and to per-mod zips. Anything but Deflate needs BMM or a modern unzipper on the receiving end.</span>
+                                        </div>
+
                                         <div id="repo-export-zip-options"
                                             style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bmm-s05);">
                                             <!-- The archive and the standalone server are two different things. The zip used

@@ -2289,6 +2289,12 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     <input type="checkbox" id="plug-qt-s-zip-mods" style="accent-color:var(--accent);">
                     ${IC.upload} zip_mods (${t('plugins.qt.zipMods') || 'one .zip per mod'})
                 </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+                    compression
+                    <select id="plug-qt-s-compression" class="select select-sm">
+                        ${['deflate', 'zstd', 'bzip2', 'stored'].map((m) => `<option value="${m}">${m}</option>`).join('')}
+                    </select>
+                </label>
             </div>
             ${serverPanel}`;
 
@@ -2660,6 +2666,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const seed      = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
             const zipOutput = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
             const zipMods   = (overlay.querySelector('#plug-qt-s-zip-mods')       as HTMLInputElement)?.checked || false;
+            const compression = (overlay.querySelector('#plug-qt-s-compression')  as HTMLSelectElement)?.value || 'deflate';
             const srvType   = (overlay.querySelector('#plug-qt-s-server-type')    as HTMLSelectElement)?.value || 'user';
             const isServerType = srvType === 'server';
             const useCf     = isServerType ? false : ((overlay.querySelector('#plug-qt-s-use-cf')  as HTMLInputElement)?.checked || false);
@@ -2671,7 +2678,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const portStr   = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
             const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
-            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, zipMods, serverType: srvType, useCloudflare: useCf, useUpnp, autoStart };
+            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, zipMods, compression, serverType: srvType, useCloudflare: useCf, useUpnp, autoStart };
             if (seed)    bodyObj.seed          = seed;
             if (portStr) bodyObj.port          = parseInt(portStr, 10) || 8080;
             if (ulStr)   bodyObj.uploadLimit   = parseInt(ulStr, 10) || 0;
@@ -3338,6 +3345,10 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const author      = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed        = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
             const zipOutput   = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
+            // The form has had a zip_mods box and now a compression picker; this builder
+            // read neither, so "send" and "copy as script" disagreed about the same form.
+            const zipMods     = (overlay.querySelector('#plug-qt-s-zip-mods')       as HTMLInputElement)?.checked || false;
+            const compression = (overlay.querySelector('#plug-qt-s-compression')    as HTMLSelectElement)?.value || 'deflate';
             const srvType     = (overlay.querySelector('#plug-qt-s-server-type')    as HTMLSelectElement)?.value || 'user';
             const isServerT   = srvType === 'server';
             const useCf       = isServerT ? false : ((overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false);
@@ -3359,6 +3370,8 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 authorName: author,
                 generateServer: zipOutput,
                 zipOutput,
+                zipMods,
+                compression,
                 serverType: srvType,
                 useCloudflare: useCf,
                 useUpnp,
@@ -5047,7 +5060,7 @@ function renderScripts(container: HTMLElement) {
             // camelCase — Rust backend uses #[serde(rename_all = "camelCase")]
             '/api/repo/sync':        '{\n  "url": "https://monserveur.com/repo.json",\n  "gameDir": "C:/Games/MonJeu",\n  "modsDir": "C:/Games/MonJeu/Mods",\n  "backupDir": "C:/BMM/Backups",\n  "choices": [{ "repoProfileId": "prof-uuid" }],\n  "overwriteAll": false,\n  "deleteExtra": false,\n  "downloadLimit": 0,\n  "password": "",\n  "unzipArchives": true\n}',
             '/api/repo/manifest':    '{\n  "modsDir": "C:/host/mods",\n  "name": "Mon depot",\n  "author": "MonPseudo",\n  "filesBaseUrl": "https://monserveur.com/mods"\n}',
-            '/api/repo/gen':         '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "zipMods": false,\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
+            '/api/repo/gen':         '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "zipMods": false,\n  "compression": "deflate",\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
             '/api/repo/host':        '{\n  "serveDir": "C:/BMM/Export",\n  "port": 8080,\n  "uploadLimit": 0\n}',
             // DELETE routes that carry a body
             '/api/repo':             '{\n  "url": "https://monserveur.com/repo.json"\n}',
@@ -6673,6 +6686,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'dockerHostType',type: 'string',  required: false, desc: 'Type d\'hôte Docker : "linux" ou "windows".' },
                 { name: 'zipOutput',     type: 'boolean', required: false, desc: 'Compresse la sortie en .zip — active également la config serveur de distribution.' },
                 { name: 'zipMods',       type: 'boolean', required: false, desc: t('plugins.epF.genZipMods') },
+                { name: 'compression',   type: 'string',  required: false, desc: t('plugins.epF.genCompression') },
                 // `serverType` is the name the server reads. This row used to be a SECOND
                 // `serverVersion` — same name, so the same input id as the numeric one
                 // above: the number was unreachable, and the string went to a field typed u8.
@@ -7569,6 +7583,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'seed', type: 'string', required: false, desc: t('plugins.epF.gnSeed') },
                 { name: 'zipOutput', type: 'boolean', required: false, desc: t('plugins.epF.gnZip') },
                 { name: 'zipMods', type: 'boolean', required: false, desc: t('plugins.epF.gnZipMods') },
+                { name: 'compression', type: 'string', required: false, desc: t('plugins.epF.gnCompression') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/gen-now" }' },
@@ -8013,6 +8028,13 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'upload_limit', label: d('fldUlLimit', 'UL limit (KB/s)'),type: 'number', placeholder: d('phUnlimited', '0 = unlimited'), default: '0', half: true },
             { key: 'lightweight',      label: d('fldLightweight', 'Lightweight'),      type: 'switch', default: false, half: true },
             { key: 'zip',              label: d('fldZipOutput', 'Zip output'),       type: 'switch', default: true,  half: true },
+            { key: 'zip_mods',         label: d('fldZipMods', 'Zip each mod'),       type: 'switch', default: false, half: true },
+            { key: 'compression',      label: d('fldCompression', 'Compression'),    type: 'select', default: 'deflate', half: true, options: [
+                { value: 'deflate', label: d('optZipDeflate', 'Deflate (default, read everywhere)') },
+                { value: 'zstd', label: d('optZipZstd', 'Zstandard (much faster)') },
+                { value: 'bzip2', label: d('optZipBzip2', 'Bzip2 (smaller, slower)') },
+                { value: 'stored', label: d('optZipStored', 'Stored (no compression)') },
+            ] },
             { key: 'generate_server',  label: d('fldGenerateServer', 'Generate server'),  type: 'switch', default: false, half: true },
             { key: 'auto_start',       label: d('fldAutoStart', 'Auto start'),       type: 'switch', default: false, half: true },
           ] },
@@ -8253,6 +8275,12 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'seed', label: d('fldSeed', 'Seed'), type: 'text', half: true },
             { key: 'zipOutput', label: d('fldZipOutput', 'Zip the whole repo'), type: 'switch', default: false },
             { key: 'zipMods', label: d('fldZipMods', 'Zip each mod'), type: 'switch', default: false },
+            { key: 'compression', label: d('fldCompression', 'Compression'), type: 'select', default: 'deflate', half: true, options: [
+                { value: 'deflate', label: d('optZipDeflate', 'Deflate (default, read everywhere)') },
+                { value: 'zstd', label: d('optZipZstd', 'Zstandard (much faster)') },
+                { value: 'bzip2', label: d('optZipBzip2', 'Bzip2 (smaller, slower)') },
+                { value: 'stored', label: d('optZipStored', 'Stored (no compression)') },
+            ] },
           ] },
         { id: 'repo_host_now', cat: 'repo', label: d('actionRepoHostNow', 'Host a repo (starts now)'),
           desc: d('actionRepoHostNowDesc', 'Starts serving. The only way to host a PROTECTED repo without a person: it carries the download password and the allowed keys.'),

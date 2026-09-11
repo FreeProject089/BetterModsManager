@@ -28,6 +28,7 @@ pub mod sandbox_gen;
 pub mod disk;
 pub mod image;
 pub mod repo;
+pub mod zipping;
 pub mod repo_server;
 pub mod repo_ssh;
 pub mod modpack_catalog;

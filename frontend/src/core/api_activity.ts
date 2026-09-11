@@ -413,6 +413,7 @@ export async function initApiActivity(): Promise<void> {
                         modpacksShareConfig: null,
                         zipOutput: params.zipOutput === true,
                         zipMods: params.zipMods === true,
+                        compression: String(params.compression || '').trim() || null,
                         serverOptions: null,
                     });
                     // Whatever "Include in the repo\u2026" is holding goes in, as it does when

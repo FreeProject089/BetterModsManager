@@ -73,7 +73,7 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 
 | Commande | Arguments | Ce que ça fait |
 |---|---|---|
-| `generate-repo` | `--name`\*, `--mod-ids` | Génère un dépôt de mods, signé avec l'identité de cette installation |
+| `generate-repo` | `--name`\*, `--mod-ids`, `--zip-mods` (`false`), `--compression` (`deflate` / `zstd` / `bzip2` / `stored`) | Génère un dépôt de mods, signé avec l'identité de cette installation. `--zip-mods` emballe chaque mod dans un seul `mods/<id>.zip` ; `--compression` choisit comment ces zips sont compressés |
 | `start-server` | `--path`\*, `--port` (`8080`) | Démarre le serveur HTTP du dépôt, avec un tunnel Cloudflare s'il est configuré |
 | `generate-lightweight` | `--repo-path`\*, `--port` (`8000`), `--auto-start` (`false`), `--cloudflare` (`false`), `--upnp` (`false`), `--upload-limit` (`0`), `--server-version` (`2`), `--password` (`admin`) | Écrit un `.bat` autonome qui sert un dossier de dépôt, pour une machine qui n'aura pas BMM |
 

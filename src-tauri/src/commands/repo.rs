@@ -206,6 +206,9 @@ pub async fn export_server_repo(
     modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
     zip_output: bool,
     zip_mods: bool,
+    // How the zips this export writes are compressed — the whole-repo archive and the
+    // per-mod ones alike. `None` is deflate, the one every unzipper understands.
+    compression: Option<String>,
     server_options: Option<MiniServerExportOptions>,
     // Credentials for the protected sources this repo's mods point at, sealed with the
     // passphrase the export screen asked for. `None` on every export that did not use the
@@ -215,6 +218,9 @@ pub async fn export_server_repo(
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
     }
+    // Refused up front, before a single file is copied: an unknown method is a typo in a
+    // scheduled task or a script, and the place to learn about it is not a half-written repo.
+    let zip_method = ZipMethod::parse(compression.as_deref())?;
 
     let mut _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/export")
         .with_subject(format!("{} profile(s) → {}", profile_ids.len(), output_dir));
@@ -427,7 +433,7 @@ pub async fn export_server_repo(
             // ── "Zip mods" mode: pack the whole mod into a single mods/<id>.zip ──
             if zip_mods {
                 let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
-                zip_directory(&read_root, &zip_path, cancel_flag.clone())
+                zip_directory(&read_root, &zip_path, cancel_flag.clone(), zip_method)
                     .map_err(|e| format!("repo.errZipMod:{}", e))?;
                 let size = fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, _) = compute_file_hash_and_chunks(&zip_path, false)?;
@@ -661,7 +667,7 @@ pub async fn export_server_repo(
         let zip_path = final_dest.join(&zip_file_name);
         
         let cancel_flag_zip = cancel_flag.clone();
-        match zip_directory(&output_path, &zip_path, cancel_flag_zip) {
+        match zip_directory(&output_path, &zip_path, cancel_flag_zip, zip_method) {
             Ok(_) => {
                 println!("[REPO] Zip created at: {:?}", zip_path);
             },
@@ -1826,41 +1832,7 @@ pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
     serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))
 }
 
-pub(crate) fn zip_directory(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<(), String> {
-    use zip::write::FileOptions;
-    use std::io::{copy, BufWriter};
-    use walkdir::WalkDir;
-    use std::sync::atomic::Ordering;
-
-    let file = fs::File::create(dst_file).map_err(|e| e.to_string())?;
-    // Use BufWriter for better performance with large files
-    let writer = BufWriter::with_capacity(128 * 1024, file);
-    let mut zip = zip::ZipWriter::new(writer);
-    
-    // Enable ZIP64 for files > 4GB and overall archive > 4GB
-    let options = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o755)
-        .large_file(true); // <--- Enable ZIP64 support
-
-    for entry in WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return Err("repo.cancelled".to_string());
-        }
-        let path = entry.path();
-        let name = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
-
-        if path.is_file() {
-            zip.start_file(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
-            let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
-            copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
-        } else if !name.as_os_str().is_empty() {
-            zip.add_directory(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
-        }
-    }
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(())
-}
+pub use super::zipping::{ZipMethod, zip_dir as zip_directory};
 
 #[tauri::command]
 pub async fn cancel_repo_export(state: State<'_, AppState>) -> Result<(), String> {
@@ -3062,6 +3034,60 @@ pub fn pause_repo_sync(state: State<'_, AppState>) {
 #[tauri::command]
 pub fn resume_repo_sync(state: State<'_, AppState>) {
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(test)]
+mod zip_method_tests {
+    use super::*;
+
+    #[test]
+    fn parse_accepts_the_four_names_their_spellings_and_the_default() {
+        assert_eq!(ZipMethod::parse(None).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some("")).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some(" Deflated ")).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some("ZSTD")).unwrap(), ZipMethod::Zstd);
+        assert_eq!(ZipMethod::parse(Some("bz2")).unwrap(), ZipMethod::Bzip2);
+        assert_eq!(ZipMethod::parse(Some("none")).unwrap(), ZipMethod::Stored);
+        for n in ZipMethod::NAMES { assert_eq!(ZipMethod::parse(Some(n)).unwrap().name(), n); }
+    }
+
+    #[test]
+    fn parse_refuses_anything_else_and_names_it() {
+        let e = ZipMethod::parse(Some("lzma")).unwrap_err();
+        assert!(e.starts_with("repo.errCompression|"), "{e}");
+        assert!(e.ends_with("lzma"), "{e}");
+    }
+
+    /// A zip written with each method opens with the reader the sync path uses, and every
+    /// entry reads back byte for byte. The one that matters is zstd: the crate feature is
+    /// what makes it readable, and a build without it would write archives it cannot open.
+    #[test]
+    fn every_method_round_trips_through_the_readers_the_app_uses() {
+        let src = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("sub")).unwrap();
+        let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(src.path().join("a.bin"), &body).unwrap();
+        std::fs::write(src.path().join("sub/b.txt"), b"hello hello hello hello").unwrap();
+        let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut sizes = std::collections::HashMap::new();
+        for m in [ZipMethod::Stored, ZipMethod::Deflate, ZipMethod::Bzip2, ZipMethod::Zstd] {
+            let out = tempfile::tempdir().unwrap();
+            let zip_path = out.path().join("x.zip");
+            zip_directory(src.path(), &zip_path, noflag.clone(), m).unwrap();
+            let mut ar = zip::ZipArchive::new(std::fs::File::open(&zip_path).unwrap()).unwrap();
+            let mut got = Vec::new();
+            std::io::Read::read_to_end(&mut ar.by_name("a.bin").unwrap(), &mut got).unwrap();
+            assert_eq!(got, body, "{m:?}");
+            let mut txt = String::new();
+            std::io::Read::read_to_string(&mut ar.by_name("sub/b.txt").unwrap(), &mut txt).unwrap();
+            assert_eq!(txt, "hello hello hello hello", "{m:?}");
+            sizes.insert(m, std::fs::metadata(&zip_path).unwrap().len());
+        }
+        // Stored is the biggest by construction; the three real methods all shrink it.
+        for m in [ZipMethod::Deflate, ZipMethod::Bzip2, ZipMethod::Zstd] {
+            assert!(sizes[&m] < sizes[&ZipMethod::Stored], "{m:?} did not compress: {:?}", sizes);
+        }
+    }
 }
 
 #[cfg(test)]

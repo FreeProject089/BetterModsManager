@@ -586,6 +586,8 @@ impl ServerHandler for BmmMcpServer {
             "type": "object",
             "properties": {
                 "name": { "type": "string", "description": "Name written into repo.json and shown to whoever connects to it." },
+                "zip_mods": { "type": "boolean", "description": "Pack each mod into one mods/<id>.zip instead of copying its files — smaller downloads, unpacked by the receiver. Default false." },
+                "compression": { "type": "string", "enum": ["deflate", "zstd", "bzip2", "stored"], "description": "How those zips are compressed. deflate (default) is read by every unzipper; zstd is much faster and about as small; bzip2 smaller and slower; stored is no compression. Only meaningful with zip_mods." },
                 "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods to publish, by id (from bmm_list_mods). Empty or absent publishes the active profile's mods." }
             },
             "required": ["name", "mod_ids"]
@@ -1151,7 +1153,9 @@ impl ServerHandler for BmmMcpServer {
             let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
             let ids = args.get("mod_ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_ids", None))?;
             let ids_vec: Vec<String> = ids.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
-            match mods::generate_repo(name, ids_vec) {
+            let zip_mods = args.get("zip_mods").and_then(|v| v.as_bool()).unwrap_or(false);
+            let compression = args.get("compression").and_then(|v| v.as_str());
+            match mods::generate_repo(name, ids_vec, zip_mods, compression) {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),
             }

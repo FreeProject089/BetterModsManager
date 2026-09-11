@@ -74,7 +74,15 @@ You can turn your own mods into a repo other people sync from. The Host tab is s
     **Compress as .zip** only packs the repo; bundling a **standalone server** is a separate,
     optional tick inside it (the API's `zipOutput` and `generateServer` flags are independent
     for the same reason — a plain archive is named `BMM-Repo-*`, one with a server
-    `BMM-Standalone-Server-*`). The **multi-repo hub** — one Node server and dashboard for all
+    `BMM-Standalone-Server-*`). A **Compression** picker beside those boxes chooses the method
+    for the archive and the per-mod zips: **Deflate** (default — read by every unzipper),
+    **Zstandard** (much faster to write and read, about as small), **Bzip2** (smaller, slower)
+    or **Stored** (no compression, for mods that are already archives). The same `compression`
+    value — `deflate` / `zstd` / `bzip2` / `stored` — is accepted by the `repo.genNow`
+    scheduler action, `/api/repo/gen` and `/api/repo/gen-now`, the script generator, the CLI
+    (`generate-repo --zip-mods --compression zstd`) and the `bmm_generate_repo` MCP tool. The
+    file stays an ordinary `.zip` whatever you pick; only Deflate is guaranteed to open in every
+    third-party unzipper. The **multi-repo hub** — one Node server and dashboard for all
     your repos — is its own card in the *Serve the files* step.
 
 They are alternatives — pick the one that matches where your mods already are.

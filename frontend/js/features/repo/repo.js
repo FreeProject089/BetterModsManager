@@ -768,6 +768,7 @@ export function initRepo() {
         // --- Distribution ZIP ---
         cbZipEnable: document.getElementById('repo-export-zip-enable'),
         cbZipMods: document.getElementById('repo-export-zip-mods'),
+        selZipMethod: document.getElementById('repo-export-zip-method'),
         zipOptionsPanel: document.getElementById('repo-export-zip-options'),
         inputZipPort: document.getElementById('repo-export-server-port'),
         inputZipLimit: document.getElementById('repo-export-server-limit'),
@@ -1016,6 +1017,13 @@ export function initRepo() {
                     elements.cbZipEnable.checked = true;
                     elements.cbZipEnable.dispatchEvent(new Event('change', { bubbles: true }));
                 }
+                // The per-mod zips and the method were not prefilled before — an API call
+                // asking for zipMods opened a form with the box unticked, and the person
+                // pressing Generate shipped something other than what the caller asked for.
+                if (prefill.zipMods && elements.cbZipMods)
+                    elements.cbZipMods.checked = true;
+                if (prefill.compression && elements.selZipMethod)
+                    elements.selZipMethod.value = String(prefill.compression);
                 // ── Server distribution options (only apply when zip output is active) ──
                 if (prefill.zipOutput) {
                     requestAnimationFrame(() => {
@@ -2883,6 +2891,7 @@ export function initRepo() {
                     modpacksShareConfig,
                     zipOutput: elements.cbZipEnable ? elements.cbZipEnable.checked : false,
                     zipMods: elements.cbZipMods ? elements.cbZipMods.checked : false,
+                    compression: elements.selZipMethod ? elements.selZipMethod.value : null,
                     serverOptions: serverOptions
                 });
                 saveHostHistory(outPath);

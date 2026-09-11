@@ -2938,6 +2938,9 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 modpacksShareConfig: null,
                 zipOutput: p.zipOutput === true,
                 zipMods: p.zipMods === true,
+                // deflate / zstd / bzip2 / stored; the command refuses anything else before
+                // it copies a file, so a typo here fails the task rather than the repo.
+                compression: String(p.compression || '').trim() || null,
                 serverOptions: null,
             });
             // Whatever "Include in the repo\u2026" is holding goes in, the same as when a
@@ -7935,6 +7938,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                     <div><b>${escHtml(t('sched.gen.zipT'))}</b><span>${escHtml(t('sched.gen.zip'))}</span></div></label>
                 <label class="sched-opt"><input type="checkbox" class="sched-g-zipmods"${params.zipMods ? ' checked' : ''}>
                     <div><b>${escHtml(t('sched.gen.zipModsT'))}</b><span>${escHtml(t('sched.gen.zipMods'))}</span></div></label>
+                <label class="sched-cmd-label" style="margin-top:8px">${escHtml(t('sched.gen.methodT'))}</label>
+                <select class="select sched-g-method" style="max-width:320px">${['deflate', 'zstd', 'bzip2', 'stored'].map((m) =>
+                    `<option value="${m}"${(params.compression || 'deflate') === m ? ' selected' : ''}>${escHtml(t(`repo.zipMethod.${m}`))}</option>`).join('')}</select>
+                <span class="sched-cmd-hint">${escHtml(t('sched.gen.method'))}</span>
             </details>
             <span class="sched-cmd-hint">${escHtml(t('sched.gen.hint'))}</span>
         </div>`;
@@ -7944,6 +7951,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         g('.sched-g-seed')?.addEventListener('input', (e) => { params.seed = (e.target as HTMLInputElement).value; });
         g('.sched-g-zip')?.addEventListener('change', (e) => { params.zipOutput = (e.target as HTMLInputElement).checked; });
         g('.sched-g-zipmods')?.addEventListener('change', (e) => { params.zipMods = (e.target as HTMLInputElement).checked; });
+        g('.sched-g-method')?.addEventListener('change', (e) => { params.compression = (e.target as HTMLSelectElement).value; });
         host.querySelectorAll('.sched-g-prof').forEach((cb) => cb.addEventListener('change', () => {
             params.profileIds = Array.from(host.querySelectorAll<HTMLInputElement>('.sched-g-prof:checked')).map((x) => x.value);
         }));

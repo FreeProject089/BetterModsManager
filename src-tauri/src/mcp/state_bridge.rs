@@ -828,8 +828,9 @@ pub fn read_language_file(lang_code: &str) -> anyhow::Result<String> {
 }
 
 /// Generate a production-ready repository manifest and copy files
-pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> anyhow::Result<String> {
+pub fn generate_repo(name: &str, mod_ids: Vec<String>, zip_mods: bool, compression: Option<&str>) -> anyhow::Result<String> {
     require_plain_name(name)?; // CWE-22: the name becomes a folder under Exports/
+    let zip_method = crate::commands::zipping::ZipMethod::parse(compression).map_err(|e| anyhow::anyhow!("{}", e))?;
     let app_data = read_app_data()?;
     let base_path = get_bmm_data_dir();
     let output_path = base_path.join("Exports").join(name);
@@ -848,10 +849,25 @@ pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> anyhow::Result<String>
     for mod_id in mod_ids {
         if let Some(m) = app_data.mods.iter().find(|m| m.id == mod_id || m.name == mod_id) {
             let mut repo_files = Vec::new();
+            let mut archive = serde_json::Value::Null;
 
             // Recursively find and copy files
             let source_path = &m.mod_folder_path;
-            if source_path.exists() && source_path.is_dir() {
+            // "Zip mods": one mods/<id>.zip per mod, the same shape the export screen
+            // writes, so a client syncs it the same way — and the same writer, so the
+            // compression asked for is the compression written.
+            if zip_mods && source_path.exists() && source_path.is_dir() {
+                let zip_path = mods_dir.join(format!("{}.zip", m.id));
+                let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                crate::commands::zipping::zip_dir(source_path, &zip_path, noflag, zip_method)
+                    .map_err(|e| anyhow::anyhow!("zip {}: {}", m.id, e))?;
+                archive = serde_json::json!({
+                    "relative_path": format!("mods/{}.zip", m.id),
+                    "size": std::fs::metadata(&zip_path)?.len(),
+                    "sha256_hash": compute_sha256(&zip_path)?,
+                    "chunks": null
+                });
+            } else if source_path.exists() && source_path.is_dir() {
                 for entry in walkdir::WalkDir::new(source_path) {
                     let entry = entry?;
                     if entry.file_type().is_file() {
@@ -886,6 +902,7 @@ pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> anyhow::Result<String>
                 "description": m.description,
                 "tags": m.tags.iter().map(|t| serde_json::json!({"id": t, "name": t, "color_bg": "#444", "color_text": "#fff"})).collect::<Vec<_>>(),
                 "files": repo_files,
+                "archive": archive,
                 "download_links": m.download_links
             }));
         }

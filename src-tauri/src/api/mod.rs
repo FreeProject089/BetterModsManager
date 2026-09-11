@@ -463,6 +463,9 @@ struct RepoGenNowBody {
     zip_output: bool,
     #[serde(default)]
     zip_mods: bool,
+    /// `stored` / `deflate` / `bzip2` / `zstd` for the zips above; absent is deflate.
+    #[serde(default)]
+    compression: Option<String>,
 }
 
 /// `POST /api/repo/sync-now` — a sync that actually runs.
@@ -590,6 +593,9 @@ struct RepoGenBody {
     /// Pack each mod into a single mods/<id>.zip (instead of raw per-file copy).
     #[serde(default)]
     zip_mods: bool,
+    /// `stored` / `deflate` / `bzip2` / `zstd` for the zips above; absent is deflate.
+    #[serde(default)]
+    compression: Option<String>,
 }
 
 /// POST /api/repo/update — incrementally update an existing repo
@@ -2741,6 +2747,7 @@ pub async fn start_api_server(
                 // every profile on somebody's machine because a field was omitted is not a
                 // thing an API should be able to do by accident.
                 else if body.profile_ids.is_empty() { Some("profileIds must name at least one profile") }
+                else if crate::commands::repo::ZipMethod::parse(body.compression.as_deref()).is_err() { Some("compression must be one of deflate, zstd, bzip2, stored") }
                 else { None };
             if let Some(msg) = bad {
                 return warp::reply::with_status(
@@ -2757,6 +2764,7 @@ pub async fn start_api_server(
                     "seed": body.seed,
                     "zipOutput": body.zip_output,
                     "zipMods": body.zip_mods,
+                    "compression": body.compression,
                 }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -3007,6 +3015,12 @@ pub async fn start_api_server(
         .and(with_atomic(gen_running_gen))
         .and(with_atomic(gen_cancel_gen))
         .map(|body: RepoGenBody, _d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            if crate::commands::repo::ZipMethod::parse(body.compression.as_deref()).is_err() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "compression must be one of deflate, zstd, bzip2, stored".into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
             // Reject if a generation/export is already in progress.
             {
                 let st = handle.state::<crate::commands::repo_server::RepoServerState>();
@@ -3038,6 +3052,8 @@ pub async fn start_api_server(
                     "autoStart": body.auto_start,
                     "generateServer": body.generate_server,
                     "zipOutput": body.zip_output,
+                    "zipMods": body.zip_mods,
+                    "compression": body.compression,
                 }
             }));
             warp::reply::with_status(
@@ -5189,32 +5205,14 @@ async fn do_api_repo_sync(
     }));
 }
 
-/// Zip a directory recursively into a .zip file using the `zip` crate.
-fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path) -> Result<(), String> {
-    let file = std::fs::File::create(dst_zip).map_err(|e| e.to_string())?;
-    let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o644);
-    for entry in walkdir::WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
-        let path = entry.path();
-        let rel = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
-        let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if path.is_dir() {
-            if !rel_str.is_empty() {
-                writer.add_directory(format!("{}/", rel_str), options).map_err(|e| e.to_string())?;
-            }
-        } else {
-            writer.start_file(&rel_str, options).map_err(|e| e.to_string())?;
-            // Copy through a reader instead of `fs::read` — that pulled each ENTIRE file into
-            // memory before handing it to the zip writer, so exporting a folder holding a
-            // multi-GB mod spiked RSS by the size of its largest file.
-            let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
-            std::io::copy(&mut f, &mut writer).map_err(|e| e.to_string())?;
-        }
-    }
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(())
+/// Zip a directory recursively into a .zip file.
+///
+/// The export command's writer, not a second one: this used to be a private copy with
+/// deflate hard-wired, which is exactly how a compression option added to the app would have
+/// silently not applied to the API. Streams file by file (never `fs::read` of a whole mod).
+fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path, method: crate::commands::repo::ZipMethod) -> Result<(), String> {
+    let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    crate::commands::repo::zip_directory(src_dir, dst_zip, noflag, method)
 }
 
 #[allow(dead_code)] // Retained for reference; gen is now driven through the BMM UI.
@@ -5225,6 +5223,8 @@ async fn do_api_repo_gen(
     job_id: String,
     cancel: Arc<AtomicBool>,
 ) {
+    // Validated by the route before this runs; here it can only be a known name.
+    let zip_method = crate::commands::repo::ZipMethod::parse(body.compression.as_deref()).unwrap_or(crate::commands::repo::ZipMethod::Deflate);
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
 
     macro_rules! emit {
@@ -5379,8 +5379,7 @@ async fn do_api_repo_gen(
             // "Zip mods": pack the whole mod into one mods/<id>.zip (full mode only).
             if body.zip_mods && !body.lightweight {
                 let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
-                let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-                if crate::commands::repo::zip_directory(&read_root, &zip_path, noflag).is_ok() {
+                if zip_directory(&read_root, &zip_path, zip_method).is_ok() {
                     let size = std::fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
                     if let Ok(sha) = api_sha256_file(&zip_path) {
                         repo_mod.archive = Some(RepoFile {
@@ -5487,7 +5486,7 @@ async fn do_api_repo_gen(
             "job_id": &job_id, "step": "Creating zip archive…", "progress": 95.0, "current_file": "",
         }));
         let zip_path = output_path.with_extension("zip");
-        match zip_directory(&output_path, &zip_path) {
+        match zip_directory(&output_path, &zip_path, zip_method) {
             Ok(_) => emit!("bmm://repo-export-progress", serde_json::json!({
                 "job_id": &job_id,
                 "step": format!("Zip ready: {}", zip_path.display()),

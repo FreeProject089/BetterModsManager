@@ -77,7 +77,16 @@ est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**
     *Distribution*, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
     est une case séparée et optionnelle à l'intérieur (les indicateurs `zipOutput` et
     `generateServer` de l'API sont indépendants pour la même raison — une archive seule
-    s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Le **hub multi-dépôts** —
+    s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Un sélecteur
+    **Compression** à côté de ces cases choisit la méthode pour l'archive et les zips par mod :
+    **Deflate** (par défaut — lu par tous les décompresseurs), **Zstandard** (bien plus rapide à
+    écrire et à lire, à peu près aussi petit), **Bzip2** (plus petit, plus lent) ou **Stored**
+    (aucune compression, pour des mods déjà archivés). La même valeur `compression` — `deflate`
+    / `zstd` / `bzip2` / `stored` — est acceptée par l'action `repo.genNow` du planificateur,
+    `/api/repo/gen` et `/api/repo/gen-now`, le générateur de scripts, le CLI
+    (`generate-repo --zip-mods --compression zstd`) et l'outil MCP `bmm_generate_repo`. Le
+    fichier reste un `.zip` ordinaire quel que soit le choix ; seul Deflate est garanti de
+    s'ouvrir dans n'importe quel décompresseur tiers. Le **hub multi-dépôts** —
     un serveur Node et un tableau de bord pour tous vos dépôts — est sa propre carte dans
     l'étape *Servir les fichiers*.
 

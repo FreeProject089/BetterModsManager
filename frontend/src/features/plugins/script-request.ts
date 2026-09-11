@@ -64,7 +64,8 @@ export function apiBodyFor(a: any): { method: string; path: string; body: Record
             ...(s('password') ? { password: s('password') } : {}) } };
         case 'gen_repo':         return { method: 'POST', path: '/api/repo/gen', body: {
             profileIds: s('profile_id') ? [s('profile_id')] : [], outputDir: s('output_dir'), authorName: s('author') || 'Author',
-            lightweight: bool('lightweight'), zipOutput: bool('zip'), generateServer: bool('generate_server'),
+            lightweight: bool('lightweight'), zipOutput: bool('zip'), zipMods: bool('zip_mods'), generateServer: bool('generate_server'),
+            ...(s('compression') ? { compression: s('compression') } : {}),
             autoStart: bool('auto_start'), port: num('port', 8080) || 8080, adminPassword: s('admin_pass'), uploadLimit: num('upload_limit') } };
         case 'http_host':        return { method: 'POST', path: '/api/repo/host', body: {
             serveDir: s('serve_dir'), port: num('port', 8080) || 8080, uploadLimit: num('upload_limit') } };
@@ -143,7 +144,7 @@ export function apiBodyFor(a: any): { method: string; path: string; body: Record
         case 'repo_sync_now':      return { method: 'POST', path: '/api/repo/sync-now',         body: _prune({ url: s('url'), repoProfile: s('repoProfile'), targetProfile: s('targetProfile'), gameDir: s('gameDir'), modsDir: s('modsDir'), backupDir: s('backupDir'), password: s('password'), overwriteAll: bool('overwriteAll'), deleteExtra: bool('deleteExtra') }) };
         // Typed as a comma-separated list, because a generated script has no place for a
         // multi-select. Split here so the body carries the array the route expects.
-        case 'repo_gen_now':       return { method: 'POST', path: '/api/repo/gen-now',          body: _prune({ outputDir: s('outputDir'), authorName: s('authorName'), profileIds: s('profileIds').split(',').map((x) => x.trim()).filter(Boolean), seed: s('seed'), zipOutput: bool('zipOutput'), zipMods: bool('zipMods') }) };
+        case 'repo_gen_now':       return { method: 'POST', path: '/api/repo/gen-now',          body: _prune({ outputDir: s('outputDir'), authorName: s('authorName'), profileIds: s('profileIds').split(',').map((x) => x.trim()).filter(Boolean), seed: s('seed'), zipOutput: bool('zipOutput'), zipMods: bool('zipMods'), compression: s('compression') }) };
         case 'repo_host_now':      return { method: 'POST', path: '/api/repo/host-now',         body: _prune({ path: s('path'), port: parseInt(s('port'), 10) || 0, downloadPassword: s('downloadPassword') }) };
         case 'repo_update_now':    return { method: 'POST', path: '/api/repo/update-now',       body: _prune({ repoDir: s('repoDir'), authorName: s('authorName') }) };
         case 'content_id':         return { method: 'POST', path: '/api/content-id',            body: { kind: s('kind'), doc: _json(s('doc')) } };

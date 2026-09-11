@@ -106,7 +106,7 @@ donne les valeurs acceptées.
 | Outil | Paramètres | Requiert | Ce que ça fait |
 |---|---|---|---|
 | `bmm_list_connected_repos` | — |  | Liste les Dépôts Serveur connectés (nom, url, état de synchro) |
-| `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Génère un dépôt depuis une liste de mods |
+| `bmm_generate_repo` | `name`\*, `mod_ids`\*, `zip_mods`, `compression` |  | Génère un dépôt depuis une liste de mods. `zip_mods` emballe chaque mod dans un seul `mods/<id>.zip` ; `compression` vaut `deflate` (défaut) / `zstd` / `bzip2` / `stored` |
 | `bmm_plugin_assets` | `plugin_id`\* |  | Les fichiers qu'un plugin livre dans `assets/` — `{ path, kind, size, readable }`. Lit le DOSSIER : un fichier que le manifeste n'a jamais mentionné apparaît quand même. Marche BMM fermé |
 | `bmm_read_plugin_asset` | `plugin_id`\*, `path`\* |  | En lire un en texte. Types texte uniquement ; rien n'est exécuté — lire un script livré montre ce qu'il ferait. Marche BMM fermé |
 | `bmm_list_catalogs` | — | app | Les catalogues que ce BMM suit, par type, avec `written_at` — absent veut dire que l'app n'a pas encore poussé sa liste, ce qui n'est pas la même chose que n'en suivre aucun |

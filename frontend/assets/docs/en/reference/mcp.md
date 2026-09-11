@@ -104,7 +104,7 @@ values.
 | Tool | Parameters | Needs | What it does |
 |---|---|---|---|
 | `bmm_list_connected_repos` | — |  | List the Server-Repos this BMM is connected to (name, url, sync state) |
-| `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Generate a repository from a list of mods |
+| `bmm_generate_repo` | `name`\*, `mod_ids`\*, `zip_mods`, `compression` |  | Generate a repository from a list of mods. `zip_mods` packs each mod into one `mods/<id>.zip`; `compression` is `deflate` (default) / `zstd` / `bzip2` / `stored` |
 | `bmm_start_repo_server` | `path`\*, `port`\* | app | Start the repository server |
 | `bmm_plugin_assets` | `plugin_id`\* |  | The files a plugin ships in `assets/` — `{ path, kind, size, readable }`. Reads the FOLDER, so a file the manifest never mentioned still appears. Works with BMM closed |
 | `bmm_read_plugin_asset` | `plugin_id`\*, `path`\* |  | Read one as text. Text kinds only; nothing is executed — reading a shipped script shows you what it would do. Works with BMM closed |
