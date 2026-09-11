@@ -87,10 +87,20 @@ const html = readFileSync(HTML_PATH, 'utf8');
 /** Line number of a character offset, so a failure names a place to go. */
 const lineOf = (idx) => html.slice(0, idx).split('\n').length;
 
-/** The `key="value"` attributes of one tag, tolerant of newlines inside the tag. */
+/** The `key="value"` attributes of one tag, tolerant of newlines inside the tag.
+ *
+ * Values are ENTITY-DECODED, because an attribute is entity-encoded and the registry is not.
+ * A URL with a query string is written `?a=1&amp;b=2` in HTML — that is the correct spelling,
+ * not a second URL — and comparing it raw against `?a=1&b=2` reports a disagreement between a
+ * value and itself. Only the five that matter in an attribute; anything else in a URL is
+ * percent-encoded, where `&` and `<` cannot appear as entities in the first place. */
 function attrs(tag) {
   const out = {};
-  for (const m of tag.matchAll(/([a-zA-Z-]+)\s*=\s*"([^"]*)"/g)) out[m[1]] = m[2];
+  const decode = (v) => v
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&');   // last, so `&amp;lt;` decodes to `&lt;` and not to `<`
+  for (const m of tag.matchAll(/([a-zA-Z-]+)\s*=\s*"([^"]*)"/g)) out[m[1]] = decode(m[2]);
   return out;
 }
 

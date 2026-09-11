@@ -790,11 +790,20 @@ export function updateSelectProfileIcon(selectEl, profiles, iconPaths, iconEl) {
 // value from links.json, so no URL is hardcoded in static HTML.
 function patchHtmlLinks() {
     const links = getLinks();
+    // A key that is not in the registry used to be skipped in silence, which left the
+    // hardcoded href in the markup — exactly the frozen URL the attribute exists to replace,
+    // and invisible, because the link still opens. It just opens the wrong place. Named here,
+    // once, so a typo or a key dropped from a hand-edited links.json is findable.
+    const missing = [];
     document.querySelectorAll('[data-link-key]').forEach(el => {
         const key = el.getAttribute('data-link-key');
-        if (!key || !(key in links))
+        if (!key)
             return;
         const url = links[key];
+        if (typeof url !== 'string' || !url) {
+            missing.push(key);
+            return;
+        }
         // <a href="...">
         if (el instanceof HTMLAnchorElement)
             el.href = url;
@@ -802,6 +811,8 @@ function patchHtmlLinks() {
         if (el.dataset.url !== undefined)
             el.dataset.url = url;
     });
+    if (missing.length)
+        console.warn(`[BMM] links.json has no entry for: ${[...new Set(missing)].join(', ')} — those elements keep the URL hardcoded in index.html`);
 }
 // Open an external URL in the system browser. `window.open(url,'_blank')` is a
 // no-op in the Tauri v2 webview, so route through the backend `open_external`

@@ -13,7 +13,12 @@
  */
 
 // ── BCWEB-hosted links.json (primary; served at /api/assets/links.json) ─────
-const BCWEB_LINKS_URL = 'https://bettercommunity.ch/api/assets/links.json';
+//
+// The production address, and the fallback for when app.cfg cannot be read. The URL actually
+// fetched comes from `bcwebLinksUrl()` below, which follows the CONFIGURED BetterCommunity —
+// see the note there for why a literal here was wrong.
+const BCWEB_LINKS_ORIGIN = 'https://bettercommunity.ch';
+const LINKS_PATH_ON_BCWEB = '/api/assets/links.json';
 
 // ── GitHub copy (fallback if BCWEB is unreachable) ─────────────────────────
 const REMOTE_LINKS_URL = 'https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json';
@@ -134,14 +139,41 @@ async function tryFetch(url: string): Promise<BmmLinks | null> {
     return null;
 }
 
+/**
+ * Where to ask BetterCommunity for the registry.
+ *
+ * Not a literal, which is what it used to be. BCTestMode in app.cfg exists so BMM can be
+ * pointed at a tunnelled or self-hosted BCWEB — and the registry, of all things, was exempt:
+ * the test instance could be running perfectly while BMM read its list of addresses from the
+ * production domain, and then used every address that copy named. Exactly the trap the
+ * catalogue keys were pulled out of, one layer lower down.
+ *
+ * `bcRoot()` needs `loadBcConfig()`, which reads app.cfg through a Tauri command and touches
+ * no network — so loadLinks awaits it first. With test mode off this resolves to the same
+ * domain that was hardcoded, so nothing changes for anybody not using it.
+ */
+function bcwebLinksUrl(): string {
+    const root = (_bcTestMode ? bcTestBase() : BCWEB_LINKS_ORIGIN).replace(/\/+$/, '');
+    return `${root}${LINKS_PATH_ON_BCWEB}`;
+}
+
 export async function loadLinks(): Promise<void> {
     if (_loaded) return;
 
+    // Before choosing the first source, not after: it decides WHICH BetterCommunity that is.
+    // Local only, idempotent, and already guarded — an unreadable app.cfg leaves test mode
+    // off, which is the production address.
+    await loadBcConfig();
+
     let source = 'built-in defaults';
 
-    // Try each source in priority order; first success wins.
+    // Try each source in priority order; first success wins. BetterCommunity is authoritative;
+    // GitHub covers it being down; the bundled copy covers having no network at all (and
+    // check-links keeps it complete, so it is a real step and not a hole); the built-in
+    // DEFAULTS are the last resort and also fill any key a reachable source omitted.
+    const bcweb = bcwebLinksUrl();
     const sources: Array<[string, string]> = [
-        [BCWEB_LINKS_URL,  `BCWEB (${BCWEB_LINKS_URL})`],
+        [bcweb,            `BCWEB (${bcweb})`],
         [REMOTE_LINKS_URL, `GitHub (${REMOTE_LINKS_URL})`],
         [LOCAL_LINKS_PATH, `local file (${LOCAL_LINKS_PATH})`],
     ];
