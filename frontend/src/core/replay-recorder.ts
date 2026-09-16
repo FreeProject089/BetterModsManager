@@ -303,7 +303,13 @@ export class TelemetryReplay {
   start() {
     this._buf = [];
     this._seq = 0;
-    subscribeReplay(this.listener);
+    // When the shared recorder is ALREADY running (the crash-tail watcher keeps it on), a new
+    // subscriber only receives incremental events until the next 2-minute checkout — so the
+    // telemetry stream opened without a Meta + FullSnapshot and the dashboard player had an
+    // empty DOM to apply mutations to (a black frame, for the whole session when it was
+    // shorter than the checkout). Force a checkout at subscription so every stream starts
+    // playable; a fresh recorder emits one on start anyway and the extra one is harmless.
+    subscribeReplay(this.listener).then(() => loadRrweb()).then((r) => { try { r?.record?.takeFullSnapshot?.(true); } catch { /* ignore */ } }).catch(() => {});
     if (this._flushTimer === null) this._flushTimer = window.setInterval(() => this.flushChunk(), 10000);
   }
 

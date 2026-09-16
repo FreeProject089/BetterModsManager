@@ -338,6 +338,52 @@ pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: Ap
     }))
 }
 
+// ── Sampling (set from the dashboard, applied per install) ───────────────────
+// The telemetry server answers every /batch with a `sampling` document: a `total` cap plus
+// one percentage per element kind (events, replay, errors, perf, benchmarks, logs). The
+// decision is deterministic per install and per kind — fnv1a-32 of "{creator_id}:{kind}"
+// modulo 10000 against pct*100 — so an install is either fully in or fully out of a kind
+// and the collected data stays coherent. The server applies the same rule on ingest; this
+// side only saves the upload. Kept in sync with `server/src/sampling.rs` in the dashboard.
+fn sampling_path(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("telemetry_sampling.json")
+}
+static SAMPLING: std::sync::OnceLock<std::sync::Mutex<Option<Value>>> = std::sync::OnceLock::new();
+fn sampling_cache() -> &'static std::sync::Mutex<Option<Value>> { SAMPLING.get_or_init(|| std::sync::Mutex::new(None)) }
+fn load_sampling(app: &AppHandle) -> Option<Value> {
+    if let Ok(g) = sampling_cache().lock() { if g.is_some() { return g.clone(); } }
+    let v: Option<Value> = std::fs::read_to_string(sampling_path(app)).ok().and_then(|s| serde_json::from_str(&s).ok());
+    if let (Some(v), Ok(mut g)) = (v.as_ref(), sampling_cache().lock()) { *g = Some(v.clone()); }
+    v
+}
+fn store_sampling(app: &AppHandle, v: &Value) {
+    if !v.is_object() { return; }
+    if let Ok(s) = serde_json::to_string(v) { let _ = std::fs::write(sampling_path(app), s); }
+    if let Ok(mut g) = sampling_cache().lock() { *g = Some(v.clone()); }
+}
+fn fnv1a32(s: &str) -> u32 {
+    let mut h: u32 = 0x811c9dc5;
+    for b in s.bytes() { h ^= b as u32; h = h.wrapping_mul(0x01000193); }
+    h
+}
+fn sampling_kind(event: &str) -> &'static str {
+    match event {
+        "$replay" => "replay",
+        "$log_js" | "$log_rust" => "logs",
+        "perf" | "$web_vitals" | "web_vitals" => "perf",
+        "benchmark" => "benchmarks",
+        e if e.starts_with("$error") || e == "error" || e == "crash" || e == "js_error" || e == "rust_panic" => "errors",
+        _ => "events",
+    }
+}
+/// Is this install inside the sampled population for `event`? No document = send everything.
+pub fn sampling_allows(sampling: Option<&Value>, distinct_id: &str, event: &str) -> bool {
+    let Some(s) = sampling else { return true };
+    let pct = |k: &str| s.get(k).and_then(Value::as_f64).unwrap_or(100.0).clamp(0.0, 100.0);
+    let inside = |k: &str| ((fnv1a32(&format!("{distinct_id}:{k}")) % 10000) as f64) < pct(k) * 100.0;
+    inside("total") && inside(sampling_kind(event))
+}
+
 // ── Event tracking ────────────────────────────────────────────────────────────
 fn now_iso() -> String { chrono::Utc::now().to_rfc3339() }
 
@@ -350,6 +396,10 @@ pub fn analytics_track(
     distinct_id: Option<String>,
 ) -> Result<(), String> {
     if !consent_granted(&state) { return Ok(()); } // hard gate
+    // Sampling set from the dashboard: an install outside the population for this kind
+    // of element never queues it (the session_end beacon is the one path that skips this
+    // and it is trimmed server-side by the same rule).
+    if !sampling_allows(load_sampling(&app_handle).as_ref(), distinct_id.as_deref().unwrap_or(""), &event) { return Ok(()); }
     let p = queue_path(&app_handle);
     // Hard limit: 10MB file size to avoid unbounded growth if offline
     if let Ok(meta) = std::fs::metadata(&p) {
@@ -427,6 +477,10 @@ pub async fn analytics_flush(
     if resp.status().is_success() {
         let n = batch.len();
         clear_queue(&app_handle); // clear only after a confirmed send
+        // The response carries the current sampling document — keep it for the next tracks.
+        if let Ok(body) = resp.json::<Value>().await {
+            if let Some(s) = body.get("sampling") { store_sampling(&app_handle, s); }
+        }
         // Record the sent packet locally: id + time + count + a privacy-safe
         // breakdown of WHICH event types it held (names + counts only — never the
         // property values / content).
@@ -1003,4 +1057,23 @@ pub fn replay_asset_data_url(url: String) -> String {
     };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     format!("data:{mime};base64,{b64}")
+}
+
+#[cfg(test)]
+mod sampling_tests {
+    use super::*;
+    #[test]
+    fn fnv1a_reference_vectors() {
+        assert_eq!(fnv1a32(""), 0x811c9dc5);
+        assert_eq!(fnv1a32("a"), 0xe40c292c);
+        assert_eq!(fnv1a32("foobar"), 0xbf9cf968);
+    }
+    #[test]
+    fn no_document_sends_everything_and_zero_sends_nothing() {
+        assert!(sampling_allows(None, "abc", "$replay"));
+        let s = json!({ "total": 100, "replay": 0, "events": 100 });
+        assert!(!sampling_allows(Some(&s), "abc", "$replay"));
+        assert!(sampling_allows(Some(&s), "abc", "page_enter"));
+        assert!(!sampling_allows(Some(&json!({ "total": 0 })), "abc", "page_enter"));
+    }
 }
