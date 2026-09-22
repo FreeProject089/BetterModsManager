@@ -42,12 +42,11 @@ Better Mods Manager provides functionality to connect to community-hosted or off
 - Circumventing a permanent ban using alternate accounts, VPNs, or proxy services is strictly prohibited.
 
 ## 8. PRIVACY & DATA
-Better Mods Manager respects your privacy:
-- No personal data is collected or transmitted to external servers without your explicit consent.
-- **Optional telemetry (opt‑in):** BMM includes an optional analytics feature that is **OFF by default**. If — and only if — you explicitly enable it, BMM sends **anonymous, aggregated** usage and performance data (e.g. anonymous Creator ID, hardware/system profile, which views/features/modals you use, FPS/frame‑time/jank/memory, benchmark throughput, content **counts**, and an **approximate** IP‑based location that is never precise) to a self‑hosted BMM dashboard. It never includes the contents of your files/mods or the values you type. You can disable it at any time, export or clear the local buffer, and **request erasure of any individual data packet** (applied after a short mandatory review of ≤72h, or immediately on admin approval). Collected data is auto‑purged after a retention period. See **PRIVACY.md** for full details.
-- **Crash Reports:** In the event of an application crash, a diagnostic report is generated locally. You may choose to send it — from the in-app feedback dialog to the BetterCommunity feedback centre, or by sharing it with the developers on Discord. It is sent only when you submit it, may include the diagnostics you select (logs, a DxDiag hardware report, the crash zip), and is governed by the Privacy Policy (§3.3) and the BetterCommunity platform terms.
-- **Auto-Updates:** If enabled, the Software will check for new versions on GitHub.
-- **Plugin API:** All Plugin API traffic is local to your machine. No API requests, tokens, or query data are transmitted to BMM servers.
+How the Software handles your data is described in one place only: the Privacy Policy
+(**PRIVACY.md**). It covers what stays on your machine, what can leave it (telemetry, bug and crash
+reports, update checks, repository connections, account linking), the default setting of each, and
+your rights (access, erasure). These Terms do not repeat it; on any question about data, the
+Privacy Policy is the reference.
 
 ## 9. COMMUNITY & SUPPORT
 BMM is a community-driven project. Support is provided on a best-effort basis through our community channels (Discord, Forums).

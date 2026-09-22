@@ -42,12 +42,12 @@ Better Mods Manager offre la possibilité de se connecter à des dépôts de ser
 - Le contournement d'un bannissement permanent à l'aide de comptes alternatifs, de VPN ou de services proxy est strictement interdit.
 
 ## 8. VIE PRIVÉE ET DONNÉES
-Better Mods Manager respecte votre vie privée :
-- Aucune donnée personnelle n'est collectée ou transmise à des serveurs externes sans votre consentement explicite.
-- **Télémétrie optionnelle (opt‑in) :** BMM inclut une fonction d'analytique optionnelle **DÉSACTIVÉE par défaut**. Si — et seulement si — vous l'activez explicitement, BMM envoie des données d'usage et de performance **anonymes et agrégées** (par ex. Creator ID anonyme, profil matériel/système, quelles vues/fonctions/modals vous utilisez, FPS/temps de frame/jank/mémoire, débit du benchmark, **décomptes** de contenu, et une localisation **approximative** basée sur l'IP, jamais précise) vers un tableau de bord BMM auto‑hébergé. Cela n'inclut jamais le contenu de vos fichiers/mods ni les valeurs que vous saisissez. Vous pouvez la désactiver à tout moment, exporter ou effacer le cache local, et **demander l'effacement de n'importe quel paquet de données** (appliqué après une vérification obligatoire de ≤72h, ou immédiatement sur approbation d'un admin). Les données collectées sont purgées automatiquement après une période de conservation. Voir **PRIVACY_FR.md** pour les détails.
-- **Rapports de plantage :** En cas de plantage, un rapport de diagnostic est généré localement. Vous pouvez choisir de l'envoyer — depuis le dialogue de retours de l'appli vers le centre de retours BetterCommunity, ou en le partageant avec les développeurs sur Discord. Il n'est envoyé que si vous le validez, peut inclure les diagnostics que vous sélectionnez (journaux, rapport matériel DxDiag, zip de plantage), et est régi par la Politique de confidentialité (§3.3) et les conditions de la plateforme BetterCommunity.
-- **Mises à jour automatiques :** Si activé, le Logiciel vérifiera les nouvelles versions sur GitHub.
-- **API Plugin :** Tout le trafic de l'API Plugin est local à votre machine. Aucune requête API, aucun jeton ni aucune donnée de requête n'est transmis aux serveurs BMM.
+La manière dont le Logiciel traite vos données est décrite à un seul endroit : la Politique de
+confidentialité (**PRIVACY_FR.md**). Elle couvre ce qui reste sur votre machine, ce qui peut en
+sortir (télémétrie, rapports de bug et de plantage, vérification des mises à jour, connexions aux
+dépôts, liaison de compte), le réglage par défaut de chacun, et vos droits (accès, effacement). Les
+présentes Conditions ne la répètent pas ; pour toute question relative aux données, c'est la
+Politique de confidentialité qui fait référence.
 
 ## 9. COMMUNAUTÉ ET SUPPORT
 BMM est un projet communautaire. Le support est fourni au mieux de nos capacités via nos canaux communautaires (Discord, Forums).
