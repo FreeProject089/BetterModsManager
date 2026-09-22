@@ -156,8 +156,9 @@ function pick(p) {
 }
 function projOf(p) { return p.project?.key || (p.showcaseProject ? 'community' : 'community'); }
 function projName(p) { return p.project?.name || p.showcaseProject?.name || 'Community'; }
+function locale() { return getLang() === 'fr' ? 'fr-FR' : 'en-US'; }
 function fmtDate(d) { try {
-    return d ? new Date(d).toLocaleDateString(getLang() === 'fr' ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    return d ? new Date(d).toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 }
 catch {
     return '';
@@ -230,16 +231,29 @@ function render() {
     }).join('');
     let bodyHtml;
     if (_loading) {
-        // A skeleton grid mirroring the real cards (cover + title + excerpt) instead of a lone
-        // spinner — it shows the shape of what's loading, so the list doesn't pop in from blank.
-        const skCard = '<div class="community-sk-card" aria-hidden="true">'
+        // A skeleton in the shape of the real edition (lead + the pair below it), not a generic
+        // grid: the point of a skeleton is that the thing that arrives lands where the grey
+        // boxes were. Its picture boxes carry the SAME aspect ratios as the real ones, so the
+        // swap from skeleton to posts moves nothing either.
+        const skCard = '<div class="community-sk-card">'
             + '<div class="skeleton community-sk-cover"></div>'
             + '<div class="community-sk-body">'
             + '<div class="skeleton skeleton-line sk-lg"></div>'
             + '<div class="skeleton skeleton-line"></div>'
             + '<div class="skeleton skeleton-line sk-sm"></div>'
             + '</div></div>';
-        bodyHtml = `<div class="community-grid" aria-busy="true">${new Array(6).fill(skCard).join('')}</div>`;
+        bodyHtml = `<div class="community-edition" aria-busy="true" aria-hidden="true">
+      <div class="community-sk-lead">
+        <div class="skeleton community-sk-lead-cover"></div>
+        <div class="community-sk-body">
+          <div class="skeleton skeleton-line sk-sm"></div>
+          <div class="skeleton skeleton-line sk-lg"></div>
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line sk-sm"></div>
+        </div>
+      </div>
+      <div class="community-pair">${skCard}${skCard}</div>
+    </div>`;
     }
     else if (_posts === null) {
         // Two different situations, two different sentences: no network at all is the
@@ -259,12 +273,7 @@ function render() {
     else {
         const list = filtered();
         if (list.length) {
-            // Like the website's blog: the newest post is a wide "featured" hero, the rest
-            // fill the card grid. Only when browsing unfiltered/unsearched (so the hero is
-            // always the true latest, not a coincidental first match).
-            const hero = (_filter === 'all' && !_search.trim() && list.length > 1) ? list[0] : null;
-            const rest = hero ? list.slice(1) : list;
-            bodyHtml = `${hero ? heroCard(hero) : ''}<div class="community-grid">${rest.map(card).join('')}</div>`;
+            bodyHtml = edition(list);
         }
         else if (_filter !== 'all' && _posts.length) {
             // Nothing in this project yet, but other posts exist — nudge to "All".
@@ -320,60 +329,170 @@ const REACTION_EMOJI = {
     'thumbs-up': '👍', heart: '❤️', fire: '🔥', party: '🎉', star: '⭐',
     rocket: '🚀', laugh: '😂', smile: '🙂', sparkles: '✨', check: '✅',
 };
+// ── The edition layout ────────────────────────────────────────────────────────
+// The same rhythm as the website's public blog (BCWEB blog.jsx BlogList): the newest post
+// leads with a large card (picture beside the text when there is room, stacked below when
+// there is not), the next two sit side by side, and everything older is an archive grouped
+// by month — a dateline, a title, two lines of summary, a small picture. Three shapes
+// because the posts are not equal: the one that landed this morning is news, the one from
+// March is a reference.
+//
+// Two properties are structural rather than cosmetic, and both are held in CSS:
+//   · every picture box reserves its height BEFORE the picture exists (an aspect-ratio, or
+//     a min-height for the lead's side-by-side cell), so the list cannot move while covers
+//     arrive over a slow link — which is the normal case here, since the covers come from
+//     bettercommunity.ch and the app is on someone's desktop;
+//   · a post with NO cover gets drawn art instead of a blank: the project's mark over one
+//     of three patterns, taken in turn down the page so two neighbours never repeat. The
+//     turn is the post's index in the list that is actually on screen, so it stays even
+//     after a filter or a search removes posts from the middle.
 // Project logo (like the website's coverless cards) — the white rounded-chip marks, falling
-// back to a monogram for a project with no bundled logo.
+// back to a monogram for a project with no bundled logo. `sizeCls` scales the mark to the
+// shape it sits in: the lead's picture is a page-wide panel, the archive's is a thumbnail.
 const PROJ_LOGO = { community: 'assets/BC_white.webp', bmm: 'assets/BMm_white.webp', installer: 'assets/bi.svg' };
-function projMono(p) {
+function projMono(p, sizeCls = '') {
     const key = projOf(p);
     const logo = PROJ_LOGO[key];
     if (logo)
-        return `<img class="community-cover-logo" src="${logo}" alt="" />`;
+        return `<img class="community-cover-logo${sizeCls}" src="${logo}" alt="" />`;
     const txt = (key || 'BC').slice(0, 3).toUpperCase();
-    return `<span class="community-cover-mono community-badge--${escAttr(key)}">${escHtml(txt)}</span>`;
+    return `<span class="community-cover-mono${sizeCls} community-badge--${escAttr(key)}">${escHtml(txt)}</span>`;
 }
-function card(p) {
+// One picture box, for every shape on the page. The box's height comes from `cls` (a CSS
+// aspect-ratio or min-height), never from its content, so it is the same before and after
+// the cover loads. `art` is the post's position in the visible list; `% 3` turns it into
+// one of the three patterns, which is what stops neighbours from matching.
+function coverBox(p, cls, art, sizeCls) {
+    if (p.cover)
+        return `<div class="${cls} community-cover-img" style="background-image:url('${escAttr(absUrl(p.cover))}')"></div>`;
+    return `<div class="${cls} community-art community-art-${art % 3}" aria-hidden="true">${projMono(p, sizeCls)}</div>`;
+}
+// The line under every post: its date, plus the two facts a reader needs before clicking —
+// that this one is a draft, and that this one is not in the language they picked.
+function metaLine(p) {
+    const draft = p.status && p.status !== 'PUBLISHED'
+        ? `<span class="community-draft">${escHtml(t('community.draft'))}</span>` : '';
+    // The feed carries titleFr/excerptFr, not the body — so this says exactly what the reader
+    // can see from the list (an English title in a French listing), and the article view keeps
+    // its own, fuller banner about the body.
+    const untr = (_blogLang === 'fr' && !p.titleFr)
+        ? `<span class="community-untr">${escHtml(t('community.notTranslated'))}</span>` : '';
+    return `<span class="community-meta-line"><time datetime="${escAttr(p.publishedAt || '')}">${escHtml(fmtDate(p.publishedAt))}</time>${draft}${untr}</span>`;
+}
+function card(p, art) {
     const { title, excerpt } = pick(p);
-    // No cover → show the project logo (like the website's coverless cards).
-    const cover = p.cover
-        ? `<div class="community-card-cover" style="background-image:url('${escAttr(absUrl(p.cover))}')"></div>`
-        : `<div class="community-card-cover community-card-cover--none">${projMono(p)}</div>`;
     return `
     <button class="community-card" data-slug="${escAttr(p.slug)}">
-      ${cover}
+      ${coverBox(p, 'community-card-cover', art, ' community-mark--md')}
       <div class="community-card-body">
         <span class="community-badge community-badge--${escAttr(projOf(p))}">${escHtml(projName(p))}</span>
         <h3 class="community-card-title">${escHtml(title)}</h3>
-        <p class="community-card-excerpt">${escHtml(excerpt)}</p>
+        ${excerpt ? `<p class="community-card-excerpt">${escHtml(excerpt)}</p>` : ''}
         <div class="community-card-meta">
           ${authorsRow(p)}
-          <span>${escHtml(fmtDate(p.publishedAt))}</span>
+          ${metaLine(p)}
         </div>
       </div>
     </button>`;
 }
-// Wide "featured" card for the latest post — cover on one side, title/excerpt on
-// the other (like the website's blog hero). Falls back to the project logo cover.
-function heroCard(p) {
+// The lead: picture beside the text on a wide window, stacked below on a narrow one.
+// `latest` is false once a filter or a search is on, because then the first post is the
+// newest of what matched, not the newest there is — the shape stays, the claim does not.
+function leadPost(p, latest) {
     const { title, excerpt } = pick(p);
-    const cover = p.cover
-        ? `<div class="community-hero-cover" style="background-image:url('${escAttr(absUrl(p.cover))}')"></div>`
-        : `<div class="community-hero-cover community-card-cover--none">${projMono(p)}</div>`;
     return `
-    <button class="community-hero" data-slug="${escAttr(p.slug)}">
-      ${cover}
-      <div class="community-hero-body">
-        <div class="community-hero-tags">
-          <span class="community-hero-latest">${escHtml(t('community.latest') || 'Latest')}</span>
+    <button class="community-lead" data-slug="${escAttr(p.slug)}">
+      ${coverBox(p, 'community-lead-cover', 0, ' community-mark--lg')}
+      <div class="community-lead-body">
+        <div class="community-lead-tags">
+          ${latest ? `<span class="community-lead-latest">${escHtml(t('community.latest'))}</span>` : ''}
           <span class="community-badge community-badge--${escAttr(projOf(p))}">${escHtml(projName(p))}</span>
         </div>
-        <h2 class="community-hero-title">${escHtml(title)}</h2>
-        <p class="community-hero-excerpt">${escHtml(excerpt)}</p>
+        <h2 class="community-lead-title">${escHtml(title)}</h2>
+        ${excerpt ? `<p class="community-lead-excerpt">${escHtml(excerpt)}</p>` : ''}
         <div class="community-card-meta">
           ${authorsRow(p)}
-          <span>${escHtml(fmtDate(p.publishedAt))}</span>
+          ${metaLine(p)}
         </div>
       </div>
     </button>`;
+}
+// One archive line: the day set like a dateline (hidden when the row is too narrow to
+// carry it — the meta line already has the full date), then the text, then a thumbnail.
+function archiveRow(p, art) {
+    const { title, excerpt } = pick(p);
+    let day = '', weekday = '';
+    try {
+        const d = p.publishedAt ? new Date(p.publishedAt) : null;
+        if (d && !isNaN(d.getTime())) {
+            day = String(d.getDate());
+            weekday = d.toLocaleDateString(locale(), { weekday: 'short' });
+        }
+    }
+    catch { /* an unparseable date leaves the dateline empty rather than printing NaN */ }
+    return `
+    <button class="community-arch" data-slug="${escAttr(p.slug)}">
+      <span class="community-arch-date" aria-hidden="true"><b>${escHtml(day)}</b><i>${escHtml(weekday)}</i></span>
+      <span class="community-arch-body">
+        <span class="community-badge community-badge--${escAttr(projOf(p))}">${escHtml(projName(p))}</span>
+        <span class="community-arch-title">${escHtml(title)}</span>
+        ${excerpt ? `<span class="community-arch-excerpt">${escHtml(excerpt)}</span>` : ''}
+        <span class="community-card-meta community-arch-meta">
+          ${authorsRow(p)}
+          ${metaLine(p)}
+        </span>
+      </span>
+      ${coverBox(p, 'community-arch-cover', art, ' community-mark--sm')}
+    </button>`;
+}
+// Month headings for the archive, in the reader's language. A post with no date files under
+// a heading that says so rather than under an invented month.
+function byMonth(list) {
+    const groups = [];
+    for (const p of list) {
+        let d = null;
+        try {
+            const x = p.publishedAt ? new Date(p.publishedAt) : null;
+            if (x && !isNaN(x.getTime()))
+                d = x;
+        }
+        catch { /* undated */ }
+        const key = d ? `${d.getFullYear()}-${d.getMonth()}` : 'none';
+        let g = groups[groups.length - 1];
+        if (!g || g.key !== key) {
+            let label = t('community.undated');
+            if (d) {
+                try {
+                    label = d.toLocaleDateString(locale(), { month: 'long', year: 'numeric' });
+                }
+                catch {
+                    label = String(d.getFullYear());
+                }
+            }
+            g = { key, label, posts: [] };
+            groups.push(g);
+        }
+        g.posts.push(p);
+    }
+    return groups;
+}
+function edition(list) {
+    // The eyebrow only claims "Latest" when the first post really is the newest there is.
+    const latest = _filter === 'all' && !_search.trim();
+    const art = new Map(list.map((p, i) => [p, i]));
+    const pair = list.slice(1, 3);
+    const archive = byMonth(list.slice(3));
+    return `<div class="community-edition">
+    ${leadPost(list[0], latest)}
+    ${pair.length ? `<div class="community-pair${pair.length > 1 ? '' : ' community-pair--one'}">${pair.map((p) => card(p, art.get(p) || 0)).join('')}</div>` : ''}
+    ${archive.length ? `<div class="community-archive">
+      <h2 class="community-archive-head">${escHtml(t('community.archive'))}</h2>
+      ${archive.map((g) => `<section class="community-month" aria-label="${escAttr(g.label)}">
+        <h3 class="community-month-label">${escHtml(g.label)}</h3>
+        <div class="community-month-list">${g.posts.map((p) => archiveRow(p, art.get(p) || 0)).join('')}</div>
+      </section>`).join('')}
+    </div>` : ''}
+  </div>`;
 }
 function wire() {
     if (!_view)

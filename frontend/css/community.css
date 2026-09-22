@@ -89,8 +89,25 @@
   color: var(--text-on-accent);
 }
 
-/* Featured (hero) post — the newest, shown wide above the grid like the website. */
-.community-hero {
+/* ── The blog edition (community.ts `edition`) ─────────────────────────────────
+   Lead / pair / archive-by-month, the same rhythm as the website's public blog.
+
+   These used to be called `.community-hero*` and `.community-grid`, and that was a real
+   defect, not a naming preference: the B.MD block styles further down this same file define
+   `.community-hero`, `.community-hero-body`, `.community-hero-title` and `.community-grid`
+   for the blocks a post BODY can contain. Same specificity, later in the file, so the block
+   rules won — the featured post's title was silently taking `display:flex; font-size:1.7em;
+   font-weight:900` from a rule about markdown hero blocks, and the listing grid was taking
+   `repeat(3, minmax(0,1fr)); gap:12px` instead of its own `auto-fill minmax(280px,1fr)`.
+   The listing now owns names nothing else uses.
+
+   Every picture box below sets its own height (aspect-ratio, or min-height for the lead's
+   side cell) and NOT from its content, so the box is the same size empty, loading and
+   loaded, and a cover arriving late cannot move the posts under it. */
+.community-edition { display: block; }
+
+/* The lead — picture beside the text, stacked under it when the window is narrow. */
+.community-lead {
   display: grid;
   grid-template-columns: 1.35fr 1fr;
   width: 100%;
@@ -101,55 +118,124 @@
   background: var(--bmm-bg-elevated);
   cursor: pointer;
   padding: 0;
-  margin-bottom: 22px;
   transition: transform .15s, border-color .15s, box-shadow .15s;
 }
-.community-hero:hover {
+.community-lead:hover {
   transform: translateY(-3px);
   border-color: var(--bmm-border-accent);
   box-shadow: 0 16px 44px rgba(0, 0, 0, .3);
 }
-.community-hero-cover {
-  min-height: 250px;
-  background-size: cover;
-  background-position: center;
-  background-color: var(--bmm-bg-hover);
-}
-.community-hero-body {
+/* Side by side, the picture is a grid cell that stretches to the text's height — a ratio
+   would fight the text — so the floor is a min-height. Stacked, it is a 16/9 box. */
+.community-lead-cover { min-height: 300px; border-inline-end: 1px solid var(--bmm-border); }
+.community-lead-body {
   padding: 28px 30px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   justify-content: center;
+  min-width: 0;
 }
-.community-hero-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.community-hero-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: var(--radius-badge, 5px); color: var(--bmm-text-on-accent); background: var(--bmm-accent); }
-.community-hero-title { font-size: 27px; font-weight: 800; line-height: 1.18; margin: 0; color: var(--bmm-text-primary); }
-.community-hero-excerpt {
+.community-lead-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.community-lead-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: var(--radius-badge, 5px); color: var(--bmm-text-on-accent); background: var(--bmm-accent); }
+.community-lead-title { font-size: 27px; font-weight: 800; line-height: 1.18; margin: 0; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.community-lead-excerpt {
   font-size: 14px; line-height: 1.6; color: var(--bmm-text-muted); margin: 0;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
 @media (max-width: 720px) {
-  .community-hero { grid-template-columns: 1fr; }
-  .community-hero-cover { min-height: 170px; }
-  .community-hero-body { padding: 20px 20px 22px; }
-  .community-hero-title { font-size: 22px; }
+  .community-lead { grid-template-columns: 1fr; }
+  .community-lead-cover { min-height: 0; aspect-ratio: 16 / 9; border-inline-end: 0; border-bottom: 1px solid var(--bmm-border); }
+  .community-lead-body { padding: 20px 20px 22px; }
+  .community-lead-title { font-size: 22px; }
 }
 
-.community-grid {
+/* The pair under the lead: two, side by side. One on its own keeps the card shape rather
+   than stretching to the full width, which would read as a second lead. */
+.community-pair {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+  margin-top: 18px;
 }
-/* Loading skeleton — a card-shaped placeholder that sits in the same grid as the real cards
-   (cover block + title + excerpt lines). Uses the shared .skeleton primitive from main.css. */
+.community-pair--one { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 720px) { .community-pair { grid-template-columns: minmax(0, 1fr); } }
+
+/* Everything older: a dateline, a title, two lines, a thumbnail. */
+.community-archive { margin-top: 44px; }
+/* --bmm-text-secondary, not --bmm-text-muted: muted is the token for a summary line the eye
+   skims, and it measures 2.55:1 on the default dark page. That is survivable for four lines
+   of prose next to a title; it is not survivable for a lone 11px uppercase label that is the
+   only thing naming this section. Measured on the built-in dark and the "BMM White" light
+   theme: 7.53:1 and 13.03:1, against 2.55:1 and 8.95:1 for muted. */
+.community-archive-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--bmm-text-secondary); margin: 0 0 8px;
+}
+.community-month { margin-top: 24px; }
+.community-month:first-of-type { margin-top: 0; }
+.community-month-label {
+  font-size: 18px; font-weight: 800; letter-spacing: -.01em; margin: 0;
+  padding-bottom: 8px; border-bottom: 2px solid var(--bmm-text-primary);
+  color: var(--bmm-text-primary);
+}
+.community-month-label::first-letter { text-transform: uppercase; }
+.community-month-list { display: block; }
+.community-arch {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+  text-align: left;
+  padding: 18px 4px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--bmm-border);
+  cursor: pointer;
+  transition: background .15s;
+}
+.community-arch:hover { background: var(--bmm-bg-hover); }
+.community-arch:last-child { border-bottom: 0; }
+.community-arch-date { flex: 0 0 48px; text-align: center; padding-top: 2px; }
+.community-arch-date b { display: block; font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
+.community-arch-date i { display: block; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--bmm-text-muted); margin-top: 4px; }
+.community-arch-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.community-arch-title { font-size: 16px; font-weight: 700; line-height: 1.3; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.community-arch-excerpt {
+  font-size: 13px; line-height: 1.5; color: var(--bmm-text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.community-arch-meta { width: 100%; margin-top: 2px; }
+.community-arch-cover { flex: 0 0 152px; aspect-ratio: 4 / 3; border-radius: 12px; border: 1px solid var(--bmm-border); }
+@media (max-width: 720px) {
+  .community-arch { gap: 12px; padding: 14px 2px; }
+  .community-arch-date { display: none; }
+  .community-arch-cover { flex-basis: 96px; }
+}
+
+/* Loading skeleton — the shape of the edition, not a generic grid, and with the SAME
+   aspect ratios as the real picture boxes so the swap moves nothing either.
+   Uses the shared .skeleton primitive from main.css. */
+.community-sk-lead {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  border: 1px solid var(--bmm-border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--bmm-s02);
+}
+.community-sk-lead-cover { min-height: 300px; border-radius: 0; }
+@media (max-width: 720px) {
+  .community-sk-lead { grid-template-columns: 1fr; }
+  .community-sk-lead-cover { min-height: 0; aspect-ratio: 16 / 9; }
+}
 .community-sk-card {
   border: 1px solid var(--bmm-border);
   border-radius: 14px;
   overflow: hidden;
   background: var(--bmm-s02);
 }
-.community-sk-cover { height: 128px; border-radius: 0; }
+.community-sk-cover { aspect-ratio: 2 / 1; height: auto; border-radius: 0; }
 .community-sk-body { padding: 14px 14px 16px; }
 .community-card {
   display: flex;
@@ -168,18 +254,45 @@
   border-color: var(--bmm-border-accent);
   box-shadow: 0 12px 30px rgba(0, 0, 0, .25);
 }
+/* The pair card's picture: a 2:1 box whose height is set by the ratio, not by the image. */
 .community-card-cover {
-  height: 148px;
+  aspect-ratio: 2 / 1;
+  border-bottom: 1px solid var(--bmm-border);
+}
+/* A box that HAS a cover. The colour under it is what shows while the image is in flight
+   and if it never arrives — the box does not resize either way. */
+.community-cover-img {
   background-size: cover;
   background-position: center;
   background-color: var(--bmm-bg-hover);
 }
-.community-card-cover--none {
+/* ── Drawn art for a post with no cover ───────────────────────────────────────
+   Ported from the website's `.blog-art` (BCWEB index.css) onto BMM's tokens: an accent wash
+   for the light, --bmm-border for the drawn lines, --bmm-bg-hover for the paper. Three
+   patterns, taken in turn down the page by `community-art-N` so two neighbours never match.
+   A coverless post then reads as chosen rather than as a picture that failed. */
+.community-art {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg,
-    rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .28),
-    rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .06));
+  background-color: var(--bmm-bg-hover);
+}
+.community-art-0 {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--bmm-accent) 22%, transparent) 0%, transparent 60%),
+    repeating-linear-gradient(135deg, var(--bmm-border) 0 1px, transparent 1px 14px);
+}
+.community-art-1 {
+  background-image:
+    radial-gradient(120% 90% at 0% 100%, color-mix(in srgb, var(--bmm-accent) 22%, transparent) 0%, transparent 60%),
+    radial-gradient(var(--bmm-border-hover) 1px, transparent 1.5px);
+  background-size: auto, 16px 16px;
+}
+.community-art-2 {
+  background-image:
+    radial-gradient(90% 90% at 50% 50%, color-mix(in srgb, var(--bmm-accent) 20%, transparent) 0%, transparent 65%),
+    linear-gradient(var(--bmm-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bmm-border) 1px, transparent 1px);
+  background-size: auto, 24px 24px, 24px 24px;
 }
 .community-cover-mono {
   display: grid; place-items: center;
@@ -193,6 +306,10 @@
   background: rgba(255, 255, 255, .9); padding: 7px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
 }
+/* The mark scales with the shape it sits in — a page-wide lead panel, a card, a thumbnail. */
+.community-mark--lg { width: 78px; height: 78px; border-radius: 18px; padding: 10px; font-size: 25px; }
+.community-mark--md { width: 56px; height: 56px; }
+.community-mark--sm { width: 34px; height: 34px; border-radius: 9px; padding: 4px; font-size: 12px; }
 /* Inline blocks rendered from the site's markdown (badges/cards) */
 .community-inline-badge {
   --bc: var(--bmm-accent);
@@ -237,11 +354,30 @@
 .community-card-meta {
   margin-top: auto;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   font-size: 12px;
   color: var(--bmm-text-muted);
   padding-top: 4px;
+}
+.community-arch-meta { margin-top: 2px; justify-content: flex-start; gap: 4px 12px; }
+/* Date, and the two facts worth knowing before the click: it is a draft; it is not in the
+   language you asked for. Both are words, not a colour — a colour alone says nothing. */
+.community-meta-line { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.community-draft {
+  font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: var(--radius-badge, 5px);
+  color: var(--bmm-warning);
+  background: rgba(var(--bmm-warning-r, 245), var(--bmm-warning-g, 158), var(--bmm-warning-b, 11), .14);
+  border: 1px solid rgba(var(--bmm-warning-r, 245), var(--bmm-warning-g, 158), var(--bmm-warning-b, 11), .38);
+}
+.community-untr { font-size: 11px; color: var(--bmm-text-muted); font-style: italic; }
+/* Reduced motion: the lift and the tint change are decoration, and the border/shadow on
+   hover still says "this is the one under the pointer" without any of them moving. */
+@media (prefers-reduced-motion: reduce) {
+  .community-lead, .community-card, .community-arch { transition: none; }
+  .community-lead:hover, .community-card:hover { transform: none; }
 }
 
 .community-badge {
