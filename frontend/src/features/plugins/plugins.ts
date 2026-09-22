@@ -5107,7 +5107,7 @@ function renderScripts(container: HTMLElement) {
         if (dlOpenBtn) {
             e.stopPropagation();
             const url = dlOpenBtn.dataset.url || '';
-            if (url) { (window as any).__bmmDeeplink?.(url); toast(t('plugins.deepLinkOpened') || 'Deep link triggered', 'info'); }
+            if (url) { (window as any).__bmmDeeplink?.(url, 'panel'); toast(t('plugins.deepLinkOpened') || 'Deep link triggered', 'info'); }
             return;
         }
         // Copy URL button (handled by its own listener below)
@@ -6045,6 +6045,7 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             params: [{ name: 'url', required: false, desc: t('plugins.dl.mod_update.p.url') },
                 { name: 'name', required: false, desc: t('plugins.dl.modUpdName') },
                 { name: 'type', required: false, desc: t('plugins.dl.modUpdType') },
+                { name: 'sha256', required: false, desc: t('plugins.dl.modUpdSha') },
             ],
             desc: t('plugins.dl.mod_update.d'),
             about: t('plugins.dl.mod_update.a'),
@@ -6070,20 +6071,20 @@ function getDeepLinkDefs(): DeepLinkDef[] {
                 { name: 'title', required: false, desc: t('plugins.dl.app_install.p.title') },
                 { name: 'type',  required: false, desc: t('plugins.dl.app_install.p.type') },
                 { name: 'path',  required: false, desc: t('plugins.dl.app_install.p.path') },
+                { name: 'sha256', required: true, desc: t('plugins.dl.app_install.p.sha256') },
             ],
             desc: t('plugins.dl.app_install.d'),
             about: t('plugins.dl.app_install.a'),
-            example: 'bmm://app/install?id=my-app&url=https://example.com/app.exe&title=My+App',
+            example: 'bmm://app/install?id=my-app&url=https://example.com/app.exe&title=My+App&sha256=<64 hex>',
         },
         {
             scheme: 'app/launch',
             params: [
                 { name: 'id',  required: true, desc: t('plugins.dl.app_launch.p.id') },
-                { name: 'exe', required: true, desc: t('plugins.dl.app_launch.p.exe') },
             ],
             desc: t('plugins.dl.app_launch.d'),
             about: t('plugins.dl.app_launch.a'),
-            example: 'bmm://app/launch?id=my-app&exe=C:/Apps/MyApp/app.exe',
+            example: 'bmm://app/launch?id=my-app',
         },
         // ── Langue / interface ───────────────────────────────────────────────
         {

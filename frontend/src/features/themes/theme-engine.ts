@@ -684,7 +684,9 @@ function bindCustomElementDeeplinks(): void {
         const url = el.getAttribute('data-bmm-deeplink') || '';
         if (!/^bmm:\/\//i.test(url)) return;   // only ever our own scheme
         e.preventDefault();
-        try { (window as any).__bmmDeeplink?.(url); } catch { /* ignore */ }
+        // 'theme': a theme is somebody else's file, so its buttons are asked about like any
+        // outside link (deeplink-guard.ts).
+        try { (window as any).__bmmDeeplink?.(url, 'theme'); } catch { /* ignore */ }
     });
 }
 

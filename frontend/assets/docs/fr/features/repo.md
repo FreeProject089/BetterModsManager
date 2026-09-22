@@ -462,6 +462,10 @@ une autre clé ni un mot de passe** — l'appel dit « publie (ou récupère) ce
 configuré », et rien de plus. La règle compte surtout pour la récupération, qui écrit sur ton
 propre disque.
 
+Un lien profond cliqué sur une page web demande d'abord et, pour publier, ouvre le sélecteur de
+dossier sur `dir` : c'est **toi** qui choisis ce qui est envoyé ; un chemin réseau dans `dir` est
+refusé. Une tâche planifiée et l'API locale ne sont pas interrogées.
+
 Une exécution sans surveillance exige une clé **sans phrase secrète**, et ne peut pas utiliser
 de mot de passe : rien n'est conservé et personne n'est là à 4 h du matin, donc elle échoue
 avec un message plutôt que d'attendre indéfiniment devant une invite que personne ne verra.

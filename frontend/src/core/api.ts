@@ -261,6 +261,16 @@ async function withNativeWait<T>(run: () => Promise<T>): Promise<T> {
     }
 }
 
+/** A folder picker that STARTS at a suggested place — the user still chooses. Used where a
+ *  link suggests a folder: the link may propose, only the person picks. */
+export async function pickFolderAt(defaultPath?: string): Promise<string | null> {
+    try {
+        return await withNativeWait(() => _dialog.open({ directory: true, multiple: false, ...(defaultPath ? { defaultPath } : {}) })) as string | null;
+    } catch {
+        return null;
+    }
+}
+
 export async function pickFolder(): Promise<string | null> {
     try {
         return await withNativeWait(() => _dialog.open({ directory: true, multiple: false })) as string | null;

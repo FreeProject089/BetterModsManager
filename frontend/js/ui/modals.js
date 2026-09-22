@@ -106,6 +106,21 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
         noBtn.onclick = () => cleanup(false);
         modal.onclick = (e) => { if (e.target === modal)
             cleanup(false); };
+        if (options.defaultCancel) {
+            const onKey = (e) => {
+                if (!modal.classList.contains('open')) {
+                    document.removeEventListener('keydown', onKey, true);
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.removeEventListener('keydown', onKey, true);
+                    cleanup(false);
+                }
+            };
+            document.addEventListener('keydown', onKey, true);
+            setTimeout(() => noBtn?.focus(), 0);
+        }
     });
 };
 // --- Global Dropdown System ---

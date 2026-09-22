@@ -1805,7 +1805,9 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
         const url = `bmm://${path}${qs ? '?' + qs : ''}`;
         const fn = (window as any).__bmmDeeplink;
-        return fn ? fn(url) : runDeepLink(url);
+        // 'scheduler': a task the user saved. Trusted by the deep-link gate (no dialog at 3am),
+        // but the hard limits in deeplink-guard.ts still apply.
+        return fn ? fn(url, 'scheduler') : runDeepLink(url);
     };
     const b = (v: any) => (v ? 1 : 0);
     switch (action.type) {

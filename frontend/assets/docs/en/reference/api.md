@@ -119,21 +119,37 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 `*` marks a required parameter. Each one shows a toast on receipt, and a global kill switch
 (`bmm_deeplink_allow_global = blocked`) refuses all of them.
 
-!!! warning "Three of them stop and ask — which matters most if you are scripting"
+!!! warning "A link from outside asks before it changes anything"
 
-    The action deeplinks below (`mod/enable`, `profile/activate`, …) act immediately. Three do
-    not, and open a confirmation dialog first:
+    Any web page can fire a `bmm://` link, and the browser does not tell BMM which page. So a
+    link arriving from outside (the OS, a theme's button, the deep-link tester) that would
+    change state, download, write or run something opens **one in-app dialog first**: what
+    will happen in plain words, the exact target (path, URL and its server on its own line,
+    plugin or app name) and who asked. **Cancel is the default** (it has focus, Escape
+    answers no), and nothing is applied, fetched, written or run before you confirm.
 
-    | Deeplink | Why |
+    Some things are refused outright, whatever you would answer:
+
+    | Refused from a link | Why |
     |---|---|
-    | `bmm://api` with any method other than `GET` | It is a generic passthrough to the local API. In the code's own words: *"any website or app can trigger a `bmm://` link, so a bare click must not be able to silently mutate app state via a generic API passthrough."* |
-    | `bmm://repo/connect` | Adding a source is a trust decision |
-    | `bmm://language/import` | It writes a file into `Lang/` |
+    | `app/launch` with `exe=` | A link can only start an app BMM registered, by `id` — never a path it names. Scripts (`.ps1`, `.bat`, `.cmd`, …) are never started from a link, so `-ExecutionPolicy Bypass` never is either |
+    | Downloads that are not `https` (`app/install`, `catalog/*/install`, `theme/import`, `catalog/follow`, `catalog/import`, `install`) | The file would be swappable on the way |
+    | `app/install` / `catalog/app/install` without a `sha256`, or whose file does not match it; any script payload | An installer runs on your machine |
+    | A network, UNC, relative or `..` path in `dir=` / `path=` | Just asking Windows whether `\\host\share` exists sends your credentials to that host. A local suggestion only opens the folder picker there: **you** choose the folder |
+    | `key` / `passphrase` on `repo/connect`, `repo/sync`, `catalog/follow`, `catalog/import` | A link cannot bind or unlock a signing key; that happens in Settings → Identity & API |
+    | `full=1` on `recorder/set` (and on `telemetry/*`) | Unmasked recording is switched on in Settings → Privacy or not at all |
 
-    Read it both ways. It is the reason a web page cannot quietly reconfigure BMM — and it is
-    also why an **unattended** script must not route a write through `bmm://api`: it will sit
-    on a dialog nobody is there to answer. For automation, use the direct action deeplinks
-    above, or the HTTP API with a token, which does not prompt.
+    The app's own callers — a **scheduled task** you saved and the **local API** (which needs
+    the token) — go through the same handler without the dialog, so an unattended task is not
+    left waiting. The hard limits above still apply to them, except that a scheduled
+    `data/export-auto` writes the full backup to the folder its task names, and a scheduled
+    `replay/export` keeps its `path`.
+
+    Left without a dialog on purpose, because they only open a screen or read: `plugin/compare`,
+    `view/open`, `docs/open`, `theme/editor`, `repo/gen`, `repo/update`, `repo/host`,
+    `repo/sync`, `mod/update`, `mod/check-updates`, `benchmark/open`, and `catalog/*/install`
+    without a `url`. `telemetry/*`, `schedule/*`, `hook`, `catalog/*/add-source`,
+    `catalog/delete`, `repo/fetch-ssh` and `install` keep their own dialog.
 
 ### Mods, profiles, modpacks
 
@@ -153,13 +169,13 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 |---|---|---|
 | `bmm://plugin/activate` | `id`* | Applies the plugin's modlist (and disables the rest if `strict`) |
 | `bmm://plugin/compare` | `id`* | Opens the modlist-vs-active comparison |
-| `bmm://plugin/delete` | `id`* | Uninstalls it — registry, permissions and files |
+| `bmm://plugin/delete` | `id`* | Uninstalls it — registry, permissions and files. Asks first, naming the plugin |
 
 ### Server repo & updates
 
 | Deeplink | Params | Does |
 |---|---|---|
-| `bmm://repo/connect` | `url`*, `name`, `password` | Registers a remote repo (the parent folder is enough). `password` is a protected repo's download password, sent as `X-Repo-Password` when the name is read from `repo.json` — without it a protected repo connected under a name that was just its URL. |
+| `bmm://repo/connect` | `url`*, `name`, `password` | Asks first, and applies nothing — password included — before the answer. Registers a remote repo (the parent folder is enough). `password` is a protected repo's download password, sent as `X-Repo-Password` when the name is read from `repo.json` — without it a protected repo connected under a name that was just its URL. |
 | `bmm://repo/sync` | `url`*, `profile`*, `game_dir`, `mods_dir`, `backup_dir`, `local_profile`, `password` | Opens sync pre-filled and starts the fetch. `password` is sent as `X-Repo-Password` |
 | `bmm://repo/gen` | — | Opens the Generation section |
 | `bmm://repo/update` | `dir` | Opens Update, pre-filled |
@@ -171,8 +187,8 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 
 | Deeplink | Params | Does |
 |---|---|---|
-| `bmm://app/install` | `id`*, `url`*, `title`, `type`, `path` | Downloads and installs an app |
-| `bmm://app/launch` | `id`*, `exe`* | Launches an installed app |
+| `bmm://app/install` | `id`*, `url`*, `sha256`*, `title`, `type`, `path` | Asks, then downloads and installs an app. `https` only, `sha256` required and checked, `type` is `exe` · `msi` · `zip` (never a script). `path` only suggests where the folder picker opens |
+| `bmm://app/launch` | `id`* | Asks, then launches the app BMM registered under that id. **`exe` is no longer accepted** — a link carrying it is refused — and a registered script is not started from a link |
 | `bmm://theme/apply` | `id`* | Activates an installed theme |
 | `bmm://theme/import` | `url`* | Downloads and installs a `.bmmtheme.json` |
 | `bmm://theme/editor` | — | Opens the theme editor |
@@ -189,17 +205,17 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 | `bmm://catalog/import` | `url`*, `type`, `password` | Reads the document at that address and follows it **without being told what kind it is**. Whoever has a link usually does not know which of the eight it is; the document does. `type` narrows an index to one kind |
 | `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Writes one entry of the catalogue **you author on this machine**. Invalid JSON in `fields` is refused rather than stored as the string it is |
 | `bmm://catalog/delete` | `type` | Throws away the authored catalogue of that kind. **Asks first** — and does not touch what you FOLLOW |
-| `bmm://repo/publish-ssh` | `dir`* | **Uploads now**, to the SSH server already saved in the app — it does not open a screen. Carries no host and no key path: a link able to name those could point a publish at a server the user never chose |
+| `bmm://repo/publish-ssh` | `dir`* | Asks, then opens the folder picker at `dir`; the folder **you** pick is uploaded to the SSH server already saved in the app. Carries no host and no key path: a link able to name those could point a publish at a server the user never chose |
 | `bmm://repo/fetch-ssh` | `dir` | The same, for fetching |
 | `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |
-| `bmm://launchpack/run` | `id`* | Runs a Launch Pack |
+| `bmm://launchpack/run` | `id`* | Runs a Launch Pack. Asks first, naming the pack and its programs |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Opens the benchmark pre-configured. **Auto-runs unless `mode=manual`** |
 | `bmm://telemetry/consent` | `enabled`* | Global telemetry consent; declining also purges the local queue. From a link it only asks: BMM's consent screen opens and nothing changes unless you accept |
 | `bmm://telemetry/set` | `replay`, `full`, `bench` | Sub-options, confirmed in-app before they apply. `full` means **unmasked**; `full=1` is refused from a link (Settings → Privacy only) |
-| `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configures the local session recorder |
-| `bmm://replay/export` | — | Exports the session as `.bmmreplay` |
+| `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configures the local session recorder, after asking. `full=1` (unmasked) is dropped from every link |
+| `bmm://replay/export` | `path` | Exports the session as `.bmmreplay`. From outside it asks and the save dialog always opens; `path` is honoured for a scheduled task or the local API only |
 | `bmm://replay/import` | `path`, `url` | Imports and plays a `.bmmreplay` |
-| `bmm://discord/rpc` | `enabled`* | Discord Rich Presence |
+| `bmm://discord/rpc` | `enabled`* | Discord Rich Presence. Asks first — turning it on shows your profile name and Creator ID to anyone who sees your status |
 
 !!! warning "Why three of these ask, and one of them sometimes does not"
 
@@ -215,7 +231,7 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
     deliberately **not** the API token, since resetting that one is an ordinary thing to do and
     would quietly turn every registered task into a prompt.
 
-| `bmm://data/export-auto` | `dir`*, `name`, `increment` | Unattended `data.json` backup. `name` takes `{date}` `{time}` `{datetime}`; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
+| `bmm://data/export-auto` | `dir`*, `name`, `increment` | `data.json` backup. **From a link it asks, you pick the folder (the picker opens at `dir`), and tokens, keys and passwords are redacted from the copy**; the full unattended backup is written only for a scheduled task or `POST /api/data/export-auto`. `name` takes `{date}` `{time}` `{datetime}`; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
 | `bmm://settings/layout` | `code`* | Applies a shared card layout |
 | `bmm://docs/open` | `article` | Opens Help & Other, optionally at an article id |
 | `bmm://restart` | — | Restarts the app |
@@ -227,8 +243,8 @@ what the BetterCommunity website generates.
 
 | Deeplink | Params | Does |
 |---|---|---|
-| `bmm://catalog/app/install` | `url`, `name`, `type` | One-click install from a catalog feed (no `url` → opens Apps) |
-| `bmm://catalog/plugin/install` | `url`, `name` | Same, for a plugin |
+| `bmm://catalog/app/install` | `url`, `name`, `type`, `sha256` | Install from a catalog feed (no `url` → opens Apps). Same rules as `app/install`: asks, `https`, `sha256` required |
+| `bmm://catalog/plugin/install` | `url`, `name`, `sha256` | Same, for a plugin: asks, `https` only, `sha256` checked when given. The plugin is installed **disabled, with no permissions** |
 | `bmm://catalog/theme/install` | `url`, `name` | Same, for a theme (validated as JSON first) |
 | `bmm://catalog/app/add-source` | `url`* | Subscribes to a community app catalog (asks first) |
 | `bmm://catalog/plugin/add-source` | `url`* | Subscribes to a plugin catalog |
@@ -245,10 +261,9 @@ splits lists on `;` **or** `|`.
 
 ### Which ones ask first
 
-Safe to hand to a user, because they confirm before acting: `repo/connect`, `language/import` with
-a bare `path`, every `catalog/*/add-source`, `bmm://api` for any non-GET method, and the
-`install` / `import` / `download` flow. URL parameters on `repo/connect`, `repo/sync` and
-`catalog/*/add-source` are rejected unless they are `http(s)`.
+From outside, every link that changes something asks — see the box at the top of this section
+for the full rule, what is refused outright and the routes deliberately left without a dialog.
+`repo/connect` and `bmm://api` (any method, `GET` included) now ask through that same dialog.
 
 ---
 

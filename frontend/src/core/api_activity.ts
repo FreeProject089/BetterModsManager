@@ -274,7 +274,7 @@ export async function initApiActivity(): Promise<void> {
                     if (params[k] !== undefined && params[k] !== '') qs.set(k, String(params[k]));
                 }
                 const go = (window as any).__bmmDeeplink;
-                if (go) await go('bmm://catalog/publish?' + qs.toString());
+                if (go) await go('bmm://catalog/publish?' + qs.toString(), 'api');
                 else console.warn('[api-exec] no deeplink handler yet:', action);
                 break;
             }
@@ -290,7 +290,7 @@ export async function initApiActivity(): Promise<void> {
                 // it names one that is not on the ring.
                 if (params.key) qs.set('key', String(params.key));
                 const go = (window as any).__bmmDeeplink;
-                if (go) await go(`bmm://${action}?${qs.toString()}`);
+                if (go) await go(`bmm://${action}?${qs.toString()}`, 'api');
                 else console.warn('[api-exec] no deeplink handler yet:', action);
                 break;
             }

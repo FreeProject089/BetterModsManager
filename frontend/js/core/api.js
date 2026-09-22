@@ -251,6 +251,16 @@ async function withNativeWait(run) {
         nativeWaitOff();
     }
 }
+/** A folder picker that STARTS at a suggested place — the user still chooses. Used where a
+ *  link suggests a folder: the link may propose, only the person picks. */
+export async function pickFolderAt(defaultPath) {
+    try {
+        return await withNativeWait(() => _dialog.open({ directory: true, multiple: false, ...(defaultPath ? { defaultPath } : {}) }));
+    }
+    catch {
+        return null;
+    }
+}
 export async function pickFolder() {
     try {
         return await withNativeWait(() => _dialog.open({ directory: true, multiple: false }));

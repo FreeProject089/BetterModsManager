@@ -9,6 +9,9 @@ import { askConfirm } from '../core/api.js';
 interface ConfirmOptions {
     yesLabel?: string;
     noLabel?: string;
+    /** Cancel is the default: it takes focus (so Enter cancels) and Escape answers no.
+     *  Used by the deep-link gate, where the question comes from a page nobody vetted. */
+    defaultCancel?: boolean;
 }
 
 declare global {
@@ -133,6 +136,14 @@ window.confirmCustom = (title: string, message: string, type: string = 'danger',
         yesBtn.onclick = () => cleanup(true);
         noBtn!.onclick = () => cleanup(false);
         modal.onclick = (e: MouseEvent) => { if (e.target === modal) cleanup(false); };
+        if (options.defaultCancel) {
+            const onKey = (e: KeyboardEvent): void => {
+                if (!modal.classList.contains('open')) { document.removeEventListener('keydown', onKey, true); return; }
+                if (e.key === 'Escape') { e.preventDefault(); document.removeEventListener('keydown', onKey, true); cleanup(false); }
+            };
+            document.addEventListener('keydown', onKey, true);
+            setTimeout(() => noBtn?.focus(), 0);
+        }
     });
 };
 

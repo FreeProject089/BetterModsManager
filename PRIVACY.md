@@ -175,7 +175,8 @@ see your profile**, under Discord's own privacy policy. Each update also re‑re
 from GitHub.
 
 **Default:** off in BMM; **on if you install with BetterInstaller and leave its pre‑ticked box**.
-Turn it off in Settings.
+Turn it off in Settings. A `bmm://discord/rpc` link (which any web page can open) only asks: BMM
+says what will become visible, and nothing changes unless you confirm in BMM.
 
 ---
 
@@ -222,7 +223,8 @@ every 45 seconds, so a crash report can show what happened just before. The BMM 
 output recorded with it are not masked. Turning on the **Session recorder** (Settings → Debug &
 trouble) additionally keeps each session in a local replay list. **None of this is uploaded** unless
 you send a crash report containing it (§5.1), or unless telemetry's replay (§3.2) is on, which is a
-separate recording.
+separate recording. A `bmm://recorder/set` link asks in BMM before changing the recorder, and can
+never switch it to unmasked.
 
 ---
 

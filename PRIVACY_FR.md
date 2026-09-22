@@ -191,7 +191,9 @@ informations à **toute personne qui peut voir votre profil**, selon sa propre p
 confidentialité. Chaque mise à jour relit aussi la liste de liens de BMM sur GitHub.
 
 **Par défaut :** désactivé dans BMM ; **activé si vous installez avec BetterInstaller en laissant sa
-case pré‑cochée**. Désactivez‑le dans les Paramètres.
+case pré‑cochée**. Désactivez‑le dans les Paramètres. Un lien `bmm://discord/rpc` (que n'importe
+quelle page web peut ouvrir) ne fait que demander : BMM indique ce qui deviendra visible, et rien ne
+change sans votre confirmation dans BMM.
 
 ---
 
@@ -246,7 +248,8 @@ montre ce qui s'est passé juste avant. Le journal de BMM et la sortie de la con
 lui ne sont pas masqués. Activer l'**Enregistreur de session** (Paramètres → Débogage & dépannage)
 conserve en plus chaque session dans une liste de replays locale. **Rien de tout cela n'est envoyé**,
 sauf si vous envoyez un rapport de plantage qui le contient (§5.1), ou si le replay de la télémétrie
-(§3.2) est actif, qui est un enregistrement distinct.
+(§3.2) est actif, qui est un enregistrement distinct. Un lien `bmm://recorder/set` demande dans BMM
+avant de modifier l'enregistreur, et ne peut jamais le passer en mode non masqué.
 
 ---
 

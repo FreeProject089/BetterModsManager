@@ -1757,6 +1757,8 @@ There is no \`mods.read\` / \`profiles.read\`. Routes marked *no token* below ar
 
 Fired at the running window — **no token**. \`*\` marks a required parameter. Each one shows a toast on receipt, and a global kill switch refuses all of them.
 
+**Any web page can fire one**, so a link from outside that would change something, download, write or run asks first in BMM's own dialog — what will happen, the exact target (path, URL and its server, plugin or app name) and who asked — with **Cancel as the default**. Some things are refused outright: a program path (\`exe=\`), scripts, downloads that are not \`https\`, an app with no matching \`sha256\`, network or relative paths in \`dir=\`/\`path=\`, and a signing \`key\`/\`passphrase\`. A folder named by a link only sets where the folder picker opens. Your scheduled tasks and the local API are not asked.
+
 \`\`\`bat
 start "" "bmm://mod/enable?id=my-mod-folder"
 \`\`\`
@@ -1779,8 +1781,8 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 |---|---|---|
 | \`bmm://plugin/activate\` | \`id\`* | Applies the plugin's modlist (and disables the rest if strict) |
 | \`bmm://plugin/compare\` | \`id\`* | Opens the modlist-vs-active comparison |
-| \`bmm://plugin/delete\` | \`id\`* | Uninstalls it — registry, permissions and files |
-| \`bmm://repo/connect\` | \`url\`*, \`name\` | Registers a remote repo (the parent folder is enough) |
+| \`bmm://plugin/delete\` | \`id\`* | Uninstalls it — registry, permissions and files — after asking |
+| \`bmm://repo/connect\` | \`url\`*, \`name\`, \`password\` | Asks, then registers a remote repo (the parent folder is enough). Nothing is applied before the answer |
 | \`bmm://repo/sync\` | \`url\`*, \`profile\`*, \`game_dir\`, \`mods_dir\`, \`backup_dir\`, \`local_profile\`, \`password\` | Opens sync pre-filled and starts the fetch |
 | \`bmm://repo/gen\` | — | Opens the Generation section |
 | \`bmm://repo/update\` | \`dir\` | Opens Update, pre-filled |
@@ -1792,8 +1794,8 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 
 | Deeplink | Params | Does |
 |---|---|---|
-| \`bmm://app/install\` | \`id\`*, \`url\`*, \`title\`, \`type\`, \`path\` | Downloads and installs an app |
-| \`bmm://app/launch\` | \`id\`*, \`exe\`* | Launches an installed app |
+| \`bmm://app/install\` | \`id\`*, \`url\`*, \`sha256\`*, \`title\`, \`type\`, \`path\` | Asks, then downloads and installs an app: \`https\` only, \`sha256\` required and checked, never a script. \`path\` only sets where the folder picker opens |
+| \`bmm://app/launch\` | \`id\`* | Asks, then launches the app BMM registered under that id. \`exe\` is refused, and scripts are never started from a link |
 | \`bmm://theme/apply\` | \`id\`* | Activates an installed theme |
 | \`bmm://theme/import\` | \`url\`* | Downloads and installs a \`.bmmtheme.json\` |
 | \`bmm://theme/editor\` | — | Opens the theme editor |
@@ -1806,15 +1808,15 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 | \`bmm://schedule/run\` | \`id\`* | Runs a scheduled task — the hook the Windows Scheduler uses |
 | \`bmm://schedule/enable\` | \`id\`*, \`on\` (\`0\` disarms) | Arms or disarms one task. **Asks first**, and names the task's steps in the question |
 | \`bmm://hook\` | \`name\`*, \`data\` | Rings a named hook a task may be waiting on. **Asks first** — a task waiting on a hook runs when the hook rings, so ringing one is running that task at one remove |
-| \`bmm://launchpack/run\` | \`id\`* | Runs a Launch Pack |
+| \`bmm://launchpack/run\` | \`id\`* | Runs a Launch Pack, after asking |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Opens the benchmark pre-configured. **Auto-runs unless \`mode=manual\`** |
 | \`bmm://telemetry/consent\` | \`enabled\`* | Global telemetry consent; declining also purges the local queue. From a link it only asks: BMM's consent screen opens and nothing changes unless you accept |
 | \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sub-options, confirmed in-app before they apply. \`full\` means **unmasked**; \`full=1\` is refused from a link (Settings → Privacy only) |
-| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configures the local session recorder |
-| \`bmm://replay/export\` | — | Exports the session as \`.bmmreplay\` |
+| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configures the local session recorder, after asking. \`full=1\` is dropped from every link |
+| \`bmm://replay/export\` | \`path\` | Exports the session as \`.bmmreplay\`. From outside the save dialog always opens |
 | \`bmm://replay/import\` | \`path\`, \`url\` | Imports and plays a \`.bmmreplay\` |
-| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence |
-| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Unattended backup. \`name\` takes \`{date}\` \`{time}\` \`{datetime}\`; \`increment\` is \`paren\`, \`underscore\`, \`timestamp\` or \`overwrite\` |
+| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence. Asks first: turning it on shows your profile name and Creator ID |
+| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Backup. From a link: asks, you pick the folder, tokens and passwords are redacted. Unattended and complete only for a scheduled task or the API. \`name\` takes \`{date}\` \`{time}\` \`{datetime}\`; \`increment\` is \`paren\`, \`underscore\`, \`timestamp\` or \`overwrite\` |
 | \`bmm://settings/layout\` | \`code\`* | Applies a shared card layout |
 | \`bmm://docs/open\` | \`article\` | Opens Help & other, optionally at an article id |
 | \`bmm://restart\` | — | Restarts the app |
@@ -2114,6 +2116,8 @@ Il n’existe pas de \`mods.read\` / \`profiles.read\`. Les routes marquées *sa
 
 Envoyés à la fenêtre en cours — **sans token**. \`*\` marque un paramètre obligatoire. Chacun affiche un toast à la réception, et un coupe-circuit global les refuse tous.
 
+**N’importe quelle page web peut en déclencher un** : un lien venu de l’extérieur qui changerait quelque chose, téléchargerait, écrirait ou lancerait un programme demande donc d’abord dans la boîte de dialogue de BMM — ce qui va se passer, la cible exacte (chemin, URL et son serveur, nom du plugin ou de l’app) et qui l’a demandé — avec **Annuler par défaut**. Certaines choses sont refusées d’office : un chemin de programme (\`exe=\`), les scripts, les téléchargements hors \`https\`, une app sans \`sha256\` correspondant, les chemins réseau ou relatifs dans \`dir=\`/\`path=\`, et une \`key\`/\`passphrase\` de signature. Un dossier nommé par un lien ne fait que choisir où s’ouvre le sélecteur. Vos tâches planifiées et l’API locale ne sont pas interrogées.
+
 \`\`\`bat
 start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 \`\`\`
@@ -2136,8 +2140,8 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 |---|---|---|
 | \`bmm://plugin/activate\` | \`id\`* | Applique la modlist du plugin (et désactive le reste si strict) |
 | \`bmm://plugin/compare\` | \`id\`* | Ouvre la comparaison modlist / mods actifs |
-| \`bmm://plugin/delete\` | \`id\`* | Le désinstalle — registre, permissions et fichiers |
-| \`bmm://repo/connect\` | \`url\`*, \`name\` | Enregistre un dépôt distant (le dossier parent suffit) |
+| \`bmm://plugin/delete\` | \`id\`* | Le désinstalle — registre, permissions et fichiers — après avoir demandé |
+| \`bmm://repo/connect\` | \`url\`*, \`name\`, \`password\` | Demande, puis enregistre un dépôt distant (le dossier parent suffit). Rien n’est appliqué avant la réponse |
 | \`bmm://repo/sync\` | \`url\`*, \`profile\`*, \`game_dir\`, \`mods_dir\`, \`backup_dir\`, \`local_profile\`, \`password\` | Ouvre la synchro pré-remplie et lance la récupération |
 | \`bmm://repo/gen\` | — | Ouvre la section Génération |
 | \`bmm://repo/update\` | \`dir\` | Ouvre Mise à jour, pré-rempli |
@@ -2149,8 +2153,8 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| \`bmm://app/install\` | \`id\`*, \`url\`*, \`title\`, \`type\`, \`path\` | Télécharge et installe une app |
-| \`bmm://app/launch\` | \`id\`*, \`exe\`* | Lance une app installée |
+| \`bmm://app/install\` | \`id\`*, \`url\`*, \`sha256\`*, \`title\`, \`type\`, \`path\` | Demande, puis télécharge et installe une app : \`https\` uniquement, \`sha256\` obligatoire et vérifié, jamais un script. \`path\` ne fait que choisir où s’ouvre le sélecteur |
+| \`bmm://app/launch\` | \`id\`* | Demande, puis lance l’app enregistrée dans BMM sous cet id. \`exe\` est refusé, et un script n’est jamais lancé depuis un lien |
 | \`bmm://theme/apply\` | \`id\`* | Active un thème installé |
 | \`bmm://theme/import\` | \`url\`* | Télécharge et installe un \`.bmmtheme.json\` |
 | \`bmm://theme/editor\` | — | Ouvre l’éditeur de thème |
@@ -2163,15 +2167,15 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 | \`bmm://schedule/run\` | \`id\`* | Exécute une tâche planifiée — le hook utilisé par le Planificateur Windows |
 | \`bmm://schedule/enable\` | \`id\`*, \`on\` (\`0\` désarme) | Arme ou désarme une tâche. **Demande confirmation**, et nomme les étapes de la tâche dans la question |
 | \`bmm://hook\` | \`name\`*, \`data\` | Sonne un hook nommé qu'une tâche attend peut-être. **Demande confirmation** — une tâche qui attend un hook s'exécute quand il sonne : le faire sonner, c'est exécuter cette tâche à un niveau de distance |
-| \`bmm://launchpack/run\` | \`id\`* | Exécute un Launch Pack |
+| \`bmm://launchpack/run\` | \`id\`* | Exécute un Launch Pack, après avoir demandé |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si \`mode=manual\`** |
 | \`bmm://telemetry/consent\` | \`enabled\`* | Consentement télémétrie global ; refuser purge aussi la file locale. Depuis un lien, il ne fait que demander : l'écran de consentement de BMM s'ouvre et rien ne change sans votre accord |
 | \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sous-options, confirmées dans l'app avant d'être appliquées. \`full\` veut dire **non masqué** ; \`full=1\` est refusé depuis un lien (Paramètres → Confidentialité seulement) |
-| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configure l’enregistreur de session local |
-| \`bmm://replay/export\` | — | Exporte la session en \`.bmmreplay\` |
+| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configure l’enregistreur de session local, après avoir demandé. \`full=1\` est ignoré depuis tout lien |
+| \`bmm://replay/export\` | \`path\` | Exporte la session en \`.bmmreplay\`. Depuis l’extérieur, la boîte d’enregistrement s’ouvre toujours |
 | \`bmm://replay/import\` | \`path\`, \`url\` | Importe et joue un \`.bmmreplay\` |
-| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence |
-| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Sauvegarde sans intervention. \`name\` accepte \`{date}\` \`{time}\` \`{datetime}\` ; \`increment\` vaut \`paren\`, \`underscore\`, \`timestamp\` ou \`overwrite\` |
+| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence. Demande d’abord : l’activer montre le nom de votre profil et votre Creator ID |
+| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Sauvegarde. Depuis un lien : il demande, vous choisissez le dossier, jetons et mots de passe sont retirés. Complète et sans intervention seulement pour une tâche planifiée ou l’API. \`name\` accepte \`{date}\` \`{time}\` \`{datetime}\` ; \`increment\` vaut \`paren\`, \`underscore\`, \`timestamp\` ou \`overwrite\` |
 | \`bmm://settings/layout\` | \`code\`* | Applique une disposition de cartes partagée |
 | \`bmm://docs/open\` | \`article\` | Ouvre Aide & autres, éventuellement sur un id d’article |
 | \`bmm://restart\` | — | Redémarre l’app |
@@ -2537,8 +2541,8 @@ Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, a
                 summary: { en: 'Three tools that answer what the compiler cannot: the module graph, the Rust API surface, and what a change actually touches.', fr: 'Trois outils qui répondent à ce que le compilateur ignore : le graphe de modules, la surface d’API Rust, et ce qu’un changement touche vraiment.' },
                 keywords: 'dependency graph cycles orphan invoke api surface test impact coverage carte graphe cycle couverture',
                 body: {
-                    en: '<p>Two boundaries in BMM have <b>no type checking behind them</b>, and the test suite is far smaller than the codebase. Three developer tools answer what the compiler cannot. None of them ships in the app; they read the source and print a structure.</p><p><b>The module graph</b> (<code>npm run map:deps</code>) reads every import. It names the hub &mdash; <code>core/i18n.ts</code> is imported by 100 modules, so a change there is never small &mdash; the modules nothing reachable ever imports, and the import cycles. A cycle is legal in ES modules and harmless until one member reads a binding at evaluation time; then it is <code>undefined</code> at runtime with a stack pointing at the wrong file. The CI gate is a <b>ratchet against a committed baseline</b>, not a demand for zero: there are 95 cycles today, and a gate insisting on zero on day one is a gate somebody switches off in week two.</p><p><b>The API map</b> (<code>npm run map:api</code>) covers the boundary with the Rust core. <code>invoke</code> is non-generic and returns <code>Promise&lt;any&gt;</code>, so TypeScript checks nothing about those calls &mdash; a typo compiles and fails at runtime as a rejected promise. 484 commands are registered, 426 are called from the frontend. The 57 with no frontend caller are reported as exactly that and <b>never as unused</b>: the MCP server, the CLI and <code>bmm://</code> deeplinks reach commands the interface never touches.</p><p><b>The impact analyser</b> (<code>npm run impact</code>) says which tests reach your change, and &mdash; the useful half &mdash; which changed files no test reaches. It follows the dependency graph, so a test importing one module counts as reaching what that module imports. It therefore <b>over-reports coverage and under-reports gaps</b>, which is what makes the gap list worth trusting: <code>ui/app.ts</code> and <code>features/mods/mods.ts</code>, the two largest modules here, are reached by no test at all.</p>',
-                    fr: '<p>Deux frontières de BMM n\'ont <b>aucun typage derrière elles</b>, et la suite de tests est bien plus petite que le code. Trois outils de développement répondent à ce que le compilateur ignore. Aucun n\'est embarqué dans l\'app : ils lisent les sources et impriment une structure.</p><p><b>Le graphe de modules</b> (<code>npm run map:deps</code>) lit chaque import. Il nomme le pivot &mdash; <code>core/i18n.ts</code> est importé par 100 modules, un changement là n\'est jamais petit &mdash; les modules que rien d\'atteignable n\'importe, et les cycles d\'import. Un cycle est légal en modules ES et inoffensif jusqu\'à ce qu\'un membre lise une liaison à l\'évaluation ; c\'est alors <code>undefined</code> à l\'exécution, avec une pile qui pointe le mauvais fichier. La barrière CI est un <b>cliquet contre une référence versionnée</b>, pas une exigence de zéro : il y a 95 cycles aujourd\'hui, et une barrière qui exige zéro dès le premier jour est une barrière que quelqu\'un désactive la deuxième semaine.</p><p><b>La carte d\'API</b> (<code>npm run map:api</code>) couvre la frontière avec le cœur Rust. <code>invoke</code> n\'est pas générique et renvoie <code>Promise&lt;any&gt;</code> : TypeScript ne vérifie rien de ces appels &mdash; une faute de frappe compile et échoue à l\'exécution en promesse rejetée. 484 commandes enregistrées, 426 appelées depuis le frontend. Les 57 sans appelant sont signalées exactement ainsi et <b>jamais comme inutilisées</b> : le serveur MCP, la CLI et les deeplinks <code>bmm://</code> atteignent des commandes que l\'interface ne touche jamais.</p><p><b>L\'analyseur d\'impact</b> (<code>npm run impact</code>) dit quels tests atteignent votre changement et &mdash; la moitié utile &mdash; quels fichiers modifiés aucun test n\'atteint. Il suit le graphe de dépendances : un test qui importe un module atteint donc ce que ce module importe. Il <b>sur-estime la couverture et sous-estime les trous</b>, ce qui rend justement la liste des trous fiable : <code>ui/app.ts</code> et <code>features/mods/mods.ts</code>, les deux plus gros modules d\'ici, ne sont atteints par aucun test.</p>',
+                    en: '<p>Two boundaries in BMM have <b>no type checking behind them</b>, and the test suite is far smaller than the codebase. Three developer tools answer what the compiler cannot. None of them ships in the app; they read the source and print a structure.</p><p><b>The module graph</b> (<code>npm run map:deps</code>) reads every import. It names the hub &mdash; <code>core/i18n.ts</code> is imported by 100 modules, so a change there is never small &mdash; the modules nothing reachable ever imports, and the import cycles. A cycle is legal in ES modules and harmless until one member reads a binding at evaluation time; then it is <code>undefined</code> at runtime with a stack pointing at the wrong file. The CI gate is a <b>ratchet against a committed baseline</b>, not a demand for zero: there are 95 cycles today, and a gate insisting on zero on day one is a gate somebody switches off in week two.</p><p><b>The API map</b> (<code>npm run map:api</code>) covers the boundary with the Rust core. <code>invoke</code> is non-generic and returns <code>Promise&lt;any&gt;</code>, so TypeScript checks nothing about those calls &mdash; a typo compiles and fails at runtime as a rejected promise. 488 commands are registered, 426 are called from the frontend. The 57 with no frontend caller are reported as exactly that and <b>never as unused</b>: the MCP server, the CLI and <code>bmm://</code> deeplinks reach commands the interface never touches.</p><p><b>The impact analyser</b> (<code>npm run impact</code>) says which tests reach your change, and &mdash; the useful half &mdash; which changed files no test reaches. It follows the dependency graph, so a test importing one module counts as reaching what that module imports. It therefore <b>over-reports coverage and under-reports gaps</b>, which is what makes the gap list worth trusting: <code>ui/app.ts</code> and <code>features/mods/mods.ts</code>, the two largest modules here, are reached by no test at all.</p>',
+                    fr: '<p>Deux frontières de BMM n\'ont <b>aucun typage derrière elles</b>, et la suite de tests est bien plus petite que le code. Trois outils de développement répondent à ce que le compilateur ignore. Aucun n\'est embarqué dans l\'app : ils lisent les sources et impriment une structure.</p><p><b>Le graphe de modules</b> (<code>npm run map:deps</code>) lit chaque import. Il nomme le pivot &mdash; <code>core/i18n.ts</code> est importé par 100 modules, un changement là n\'est jamais petit &mdash; les modules que rien d\'atteignable n\'importe, et les cycles d\'import. Un cycle est légal en modules ES et inoffensif jusqu\'à ce qu\'un membre lise une liaison à l\'évaluation ; c\'est alors <code>undefined</code> à l\'exécution, avec une pile qui pointe le mauvais fichier. La barrière CI est un <b>cliquet contre une référence versionnée</b>, pas une exigence de zéro : il y a 95 cycles aujourd\'hui, et une barrière qui exige zéro dès le premier jour est une barrière que quelqu\'un désactive la deuxième semaine.</p><p><b>La carte d\'API</b> (<code>npm run map:api</code>) couvre la frontière avec le cœur Rust. <code>invoke</code> n\'est pas générique et renvoie <code>Promise&lt;any&gt;</code> : TypeScript ne vérifie rien de ces appels &mdash; une faute de frappe compile et échoue à l\'exécution en promesse rejetée. 488 commandes enregistrées, 426 appelées depuis le frontend. Les 57 sans appelant sont signalées exactement ainsi et <b>jamais comme inutilisées</b> : le serveur MCP, la CLI et les deeplinks <code>bmm://</code> atteignent des commandes que l\'interface ne touche jamais.</p><p><b>L\'analyseur d\'impact</b> (<code>npm run impact</code>) dit quels tests atteignent votre changement et &mdash; la moitié utile &mdash; quels fichiers modifiés aucun test n\'atteint. Il suit le graphe de dépendances : un test qui importe un module atteint donc ce que ce module importe. Il <b>sur-estime la couverture et sous-estime les trous</b>, ce qui rend justement la liste des trous fiable : <code>ui/app.ts</code> et <code>features/mods/mods.ts</code>, les deux plus gros modules d\'ici, ne sont atteints par aucun test.</p>',
                 },
             },
             devArticle('code-stack', { en: 'The stack — and why it’s lean', fr: 'La stack — et pourquoi elle est légère' }, { en: 'Tauri shell, a native Rust core and a TypeScript UI — and why that stays small.', fr: 'Coquille Tauri, cœur natif Rust et UI TypeScript — et pourquoi ça reste léger.' }, 'stack rust tauri typescript lightweight memory ram electron', {

@@ -125,22 +125,40 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 `*` marque un paramètre obligatoire. Chacun affiche un toast à la réception, et un coupe-circuit
 global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 
-!!! warning "Trois d'entre eux s'arrêtent et demandent — ce qui compte surtout si vous scriptez"
+!!! warning "Un lien venu de l'extérieur demande avant de changer quoi que ce soit"
 
-    Les deeplinks d'action ci-dessous (`mod/enable`, `profile/activate`, …) agissent
-    immédiatement. Trois font exception et ouvrent d'abord une confirmation :
+    N'importe quelle page web peut déclencher un lien `bmm://`, et le navigateur ne dit pas à
+    BMM quelle page. Un lien venu de l'extérieur (le système, un bouton de thème, le testeur de
+    liens) qui modifierait un état, téléchargerait, écrirait ou lancerait quelque chose ouvre
+    donc **d'abord une boîte de dialogue dans l'app** : ce qui va se passer en mots simples, la
+    cible exacte (chemin, URL et son serveur sur une ligne à part, nom du plugin ou de l'app) et
+    qui l'a demandé. **Annuler est le choix par défaut** (il a le focus, Échap répond non), et
+    rien n'est appliqué, récupéré, écrit ni lancé avant votre confirmation.
 
-    | Deeplink | Pourquoi |
+    Certaines choses sont refusées d'office, quelle que soit votre réponse :
+
+    | Refusé depuis un lien | Pourquoi |
     |---|---|
-    | `bmm://api` avec une méthode autre que `GET` | C'est un passe-plat générique vers l'API locale. Selon les mots du code : *« n'importe quel site ou application peut déclencher un lien `bmm://`, donc un simple clic ne doit pas pouvoir muter l'état de l'app en silence via un passe-plat générique. »* |
-    | `bmm://repo/connect` | Ajouter une source est une décision de confiance |
-    | `bmm://language/import` | Il écrit un fichier dans `Lang/` |
+    | `app/launch` avec `exe=` | Un lien ne peut démarrer qu'une app enregistrée dans BMM, par son `id` — jamais un chemin qu'il désigne. Les scripts (`.ps1`, `.bat`, `.cmd`, …) ne sont jamais lancés depuis un lien, donc `-ExecutionPolicy Bypass` non plus |
+    | Les téléchargements qui ne sont pas en `https` (`app/install`, `catalog/*/install`, `theme/import`, `catalog/follow`, `catalog/import`, `install`) | Le fichier pourrait être remplacé en chemin |
+    | `app/install` / `catalog/app/install` sans `sha256`, ou dont le fichier ne correspond pas ; tout script | Un installateur s'exécute sur votre machine |
+    | Un chemin réseau, UNC, relatif ou avec `..` dans `dir=` / `path=` | Rien que demander à Windows si `\\hôte\partage` existe envoie vos identifiants à cet hôte. Une suggestion locale ouvre seulement le sélecteur de dossier à cet endroit : c'est **vous** qui choisissez |
+    | `key` / `passphrase` sur `repo/connect`, `repo/sync`, `catalog/follow`, `catalog/import` | Un lien ne peut ni lier ni déverrouiller une clé de signature ; cela se fait dans Réglages → Identité & API |
+    | `full=1` sur `recorder/set` (et sur `telemetry/*`) | L'enregistrement non masqué s'active dans Réglages → Confidentialité, ou pas du tout |
 
-    À lire dans les deux sens. C'est ce qui empêche une page web de reconfigurer BMM en douce —
-    et c'est aussi pourquoi un script **sans surveillance** ne doit pas faire passer une écriture
-    par `bmm://api` : il restera bloqué sur une boîte de dialogue que personne n'ouvrira. Pour
-    l'automatisation, utilisez les deeplinks d'action ci-dessus, ou l'API HTTP avec un jeton, qui
-    ne demande rien.
+    Les appelants internes de l'app — une **tâche planifiée** que vous avez enregistrée et
+    l'**API locale** (qui exige le jeton) — passent par le même gestionnaire sans la boîte de
+    dialogue, pour qu'une tâche sans surveillance ne reste pas bloquée. Les limites ci-dessus
+    s'appliquent toujours à eux, sauf qu'un `data/export-auto` planifié écrit la sauvegarde
+    complète dans le dossier que nomme sa tâche, et qu'un `replay/export` planifié garde son
+    `path`.
+
+    Laissés sans boîte de dialogue exprès, parce qu'ils ne font qu'ouvrir un écran ou lire :
+    `plugin/compare`, `view/open`, `docs/open`, `theme/editor`, `repo/gen`, `repo/update`,
+    `repo/host`, `repo/sync`, `mod/update`, `mod/check-updates`, `benchmark/open`, et
+    `catalog/*/install` sans `url`. `telemetry/*`, `schedule/*`, `hook`,
+    `catalog/*/add-source`, `catalog/delete`, `repo/fetch-ssh` et `install` gardent leur propre
+    boîte de dialogue.
 
 ### Mods, profils, modpacks
 
@@ -160,13 +178,13 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 |---|---|---|
 | `bmm://plugin/activate` | `id`* | Applique la modlist du plugin (et désactive le reste si `strict`) |
 | `bmm://plugin/compare` | `id`* | Ouvre la comparaison modlist / mods actifs |
-| `bmm://plugin/delete` | `id`* | Le désinstalle — registre, permissions et fichiers |
+| `bmm://plugin/delete` | `id`* | Le désinstalle — registre, permissions et fichiers. Demande d'abord, en nommant le plugin |
 
 ### Dépôt serveur & mises à jour
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| `bmm://repo/connect` | `url`*, `name`, `password` | Enregistre un dépôt distant (le dossier parent suffit). `password` est le mot de passe de téléchargement d'un dépôt protégé, envoyé en `X-Repo-Password` au moment de lire le nom dans `repo.json` — sans lui, un dépôt protégé se connectait sous un nom qui était juste son URL. |
+| `bmm://repo/connect` | `url`*, `name`, `password` | Demande d'abord, et n'applique rien — mot de passe compris — avant la réponse. Enregistre un dépôt distant (le dossier parent suffit). `password` est le mot de passe de téléchargement d'un dépôt protégé, envoyé en `X-Repo-Password` au moment de lire le nom dans `repo.json` — sans lui, un dépôt protégé se connectait sous un nom qui était juste son URL. |
 | `bmm://repo/sync` | `url`*, `profile`*, `game_dir`, `mods_dir`, `backup_dir`, `local_profile`, `password` | Ouvre la synchro pré-remplie et lance la récupération. `password` est envoyé en `X-Repo-Password` |
 | `bmm://repo/gen` | — | Ouvre la section Génération |
 | `bmm://repo/update` | `dir` | Ouvre Mise à jour, pré-rempli |
@@ -178,8 +196,8 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| `bmm://app/install` | `id`*, `url`*, `title`, `type`, `path` | Télécharge et installe une app |
-| `bmm://app/launch` | `id`*, `exe`* | Lance une app installée |
+| `bmm://app/install` | `id`*, `url`*, `sha256`*, `title`, `type`, `path` | Demande, puis télécharge et installe une app. `https` uniquement, `sha256` obligatoire et vérifié, `type` vaut `exe` · `msi` · `zip` (jamais un script). `path` ne fait que suggérer où s'ouvre le sélecteur de dossier |
+| `bmm://app/launch` | `id`* | Demande, puis lance l'app enregistrée dans BMM sous cet id. **`exe` n'est plus accepté** — un lien qui le porte est refusé — et un script enregistré n'est pas lancé depuis un lien |
 | `bmm://theme/apply` | `id`* | Active un thème installé |
 | `bmm://theme/import` | `url`* | Télécharge et installe un `.bmmtheme.json` |
 | `bmm://theme/editor` | — | Ouvre l'éditeur de thème |
@@ -196,17 +214,17 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 | `bmm://catalog/import` | `url`*, `type`, `password` | Lit le document à cette adresse et le suit **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait. `type` restreint un index à un seul type |
 | `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Écrit une entrée du catalogue **que vous rédigez sur cette machine**. Un JSON invalide dans `fields` est refusé plutôt qu'enregistré comme la chaîne qu'il est |
 | `bmm://catalog/delete` | `type` | Jette le catalogue rédigé de ce type. **Demande confirmation** — et ne touche pas à ce que vous SUIVEZ |
-| `bmm://repo/publish-ssh` | `dir`* | **Téléverse immédiatement** vers le serveur SSH déjà enregistré dans l'app — il n'ouvre aucun écran. Ne porte ni hôte ni chemin de clé : un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
+| `bmm://repo/publish-ssh` | `dir`* | Demande, puis ouvre le sélecteur de dossier sur `dir` ; le dossier que **vous** choisissez est envoyé au serveur SSH déjà enregistré dans l'app. Ne porte ni hôte ni chemin de clé : un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
 | `bmm://repo/fetch-ssh` | `dir` | Pareil, pour récupérer |
 | `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
-| `bmm://launchpack/run` | `id`* | Exécute un Launch Pack |
+| `bmm://launchpack/run` | `id`* | Exécute un Launch Pack. Demande d'abord, en nommant le pack et ses programmes |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si `mode=manual`** |
 | `bmm://telemetry/consent` | `enabled`* | Consentement télémétrie global ; refuser purge aussi la file locale. Depuis un lien, il ne fait que demander : l'écran de consentement de BMM s'ouvre et rien ne change sans votre accord |
 | `bmm://telemetry/set` | `replay`, `full`, `bench` | Sous-options, confirmées dans l'app avant d'être appliquées. `full` veut dire **non masqué** ; `full=1` est refusé depuis un lien (Paramètres → Confidentialité seulement) |
-| `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configure l'enregistreur de session local |
-| `bmm://replay/export` | — | Exporte la session en `.bmmreplay` |
+| `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configure l'enregistreur de session local, après avoir demandé. `full=1` (non masqué) est ignoré depuis tout lien |
+| `bmm://replay/export` | `path` | Exporte la session en `.bmmreplay`. Depuis l'extérieur, il demande et la boîte d'enregistrement s'ouvre toujours ; `path` n'est respecté que pour une tâche planifiée ou l'API locale |
 | `bmm://replay/import` | `path`, `url` | Importe et joue un `.bmmreplay` |
-| `bmm://discord/rpc` | `enabled`* | Discord Rich Presence |
+| `bmm://discord/rpc` | `enabled`* | Discord Rich Presence. Demande d'abord — l'activer montre le nom de votre profil et votre Creator ID à quiconque voit votre statut |
 
 !!! warning "Pourquoi trois de ces liens demandent, et pourquoi l'un ne demande parfois pas"
 
@@ -224,7 +242,7 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
     celui-là est une chose ordinaire à faire et transformerait en silence chaque tâche
     enregistrée en une question.
 
-| `bmm://data/export-auto` | `dir`*, `name`, `increment` | Sauvegarde de `data.json` sans intervention. `name` accepte `{date}` `{time}` `{datetime}` ; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
+| `bmm://data/export-auto` | `dir`*, `name`, `increment` | Sauvegarde de `data.json`. **Depuis un lien, il demande, vous choisissez le dossier (le sélecteur s'ouvre sur `dir`), et les jetons, clés et mots de passe sont retirés de la copie** ; la sauvegarde complète sans surveillance n'est écrite que pour une tâche planifiée ou `POST /api/data/export-auto`. `name` accepte `{date}` `{time}` `{datetime}` ; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
 | `bmm://settings/layout` | `code`* | Applique une disposition de cartes partagée |
 | `bmm://docs/open` | `article` | Ouvre Aide & autres, éventuellement sur un id d'article |
 | `bmm://restart` | — | Redémarre l'app |
@@ -236,8 +254,8 @@ ceux que génère le site BetterCommunity.
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| `bmm://catalog/app/install` | `url`, `name`, `type` | Installation en un clic depuis un flux de catalogue (sans `url` → ouvre Apps) |
-| `bmm://catalog/plugin/install` | `url`, `name` | Idem, pour un plugin |
+| `bmm://catalog/app/install` | `url`, `name`, `type`, `sha256` | Installation depuis un flux de catalogue (sans `url` → ouvre Apps). Mêmes règles que `app/install` : demande, `https`, `sha256` obligatoire |
+| `bmm://catalog/plugin/install` | `url`, `name`, `sha256` | Idem, pour un plugin : demande, `https` uniquement, `sha256` vérifié s'il est fourni. Le plugin est installé **désactivé, sans aucune permission** |
 | `bmm://catalog/theme/install` | `url`, `name` | Idem, pour un thème (validé comme JSON d'abord) |
 | `bmm://catalog/app/add-source` | `url`* | S'abonne à un catalogue d'apps communautaire (demande confirmation) |
 | `bmm://catalog/plugin/add-source` | `url`* | S'abonne à un catalogue de plugins |
@@ -254,11 +272,10 @@ acceptent `consent` pour `enabled` et `replayFull` pour `full` ; `benchmark/run`
 
 ### Lesquels demandent confirmation
 
-Ceux-ci sont sûrs à donner à un utilisateur, parce qu'ils confirment avant d'agir :
-`repo/connect`, `language/import` avec un `path` nu, tous les `catalog/*/add-source`, `bmm://api`
-pour toute méthode autre que `GET`, et le flux `install` / `import` / `download`. Les paramètres URL
-de `repo/connect`, `repo/sync` et `catalog/*/add-source` sont rejetés s'ils ne sont pas en
-`http(s)`.
+Depuis l'extérieur, tout lien qui change quelque chose demande — voir l'encadré en haut de cette
+section pour la règle complète, ce qui est refusé d'office et les routes laissées sans boîte de
+dialogue exprès. `repo/connect` et `bmm://api` (toute méthode, `GET` compris) demandent désormais
+par cette même boîte de dialogue.
 
 ---
 

@@ -2,12 +2,13 @@
  * deep_link_manager.ts
  * Handles bmm:// protocol links for one-click mod installation.
  */
-import { invoke, apiBase, pickFolder, askConfirm } from './api.js';
+import { invoke, apiBase, pickFolder, pickFolderAt, askConfirm } from './api.js';
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import { handleApplyViaDeepLink } from '../features/plugins/plugins.js';
+import { admitLink } from './deeplink-guard.js';
 /** Reads the live API token from settings (for deeplinks that call the local API). */
 async function getApiToken() {
     try {
@@ -84,28 +85,79 @@ export async function initDeepLinks() {
         console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
         return;
     }
-    // Expose __bmmDeeplink so custom theme elements can trigger any bmm:// action
-    window.__bmmDeeplink = (url) => handleDeepLink(url);
+    // The app's own callers dispatch through here too, and say who they are: the scheduler
+    // ('scheduler'), the local API ('api'), a theme's button ('theme'), the deep-link tester
+    // ('panel'). No origin → 'unknown', which is treated like a link from a web page.
+    // See deeplink-guard.ts for what each origin may do.
+    window.__bmmDeeplink = (url, origin) => handleDeepLink(url, origin ?? 'unknown');
     console.log('[BMM] Initializing Deep Link Manager...');
     const { listen } = window.__TAURI__.event;
+    // From the OS: a web page or another program. The browser does not say which page.
     await listen('deep-link-received', async (event) => {
-        handleDeepLink(event.payload);
+        handleDeepLink(event.payload, 'external');
     });
     try {
         const pending = await invoke('get_pending_deep_link');
         if (pending) {
             console.log('[BMM] Found pending deep link from startup:', pending);
-            setTimeout(() => handleDeepLink(pending), 500);
+            setTimeout(() => handleDeepLink(pending, 'external'), 500);
         }
     }
     catch (e) {
         console.error('[BMM] Failed to fetch pending deep link:', e);
     }
 }
+/** A name a person recognises, for the ids the dialog would otherwise show bare. Best effort:
+ *  the id is always shown too, so a failed lookup hides nothing. */
+async function friendlyName(p) {
+    try {
+        if (p.action === 'plugin/delete' || p.action === 'plugin/activate') {
+            const list = await invoke('get_installed_plugins');
+            return list.find((x) => x?.manifest?.id === p.target)?.manifest?.name || '';
+        }
+        if (p.action === 'launchpack/run') {
+            const list = await invoke('get_launch_packs');
+            const pack = list.find((x) => x?.id === p.target);
+            return pack ? `${pack.name} — ${(pack.executable_paths || []).join(', ')}` : '';
+        }
+        if (p.action === 'app/launch') {
+            const st = await invoke('get_apps_state');
+            const a = st?.installed?.[p.target];
+            return a ? `${a.title} — ${a.exe_path || ''}` : '';
+        }
+    }
+    catch { /* the id alone is still shown */ }
+    return '';
+}
+const mono = 'font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:6px;color:var(--text-muted);white-space:pre-wrap;';
+/** How the gate talks to the person: BMM's own dialog, Cancel first. */
+const GATE_UI = {
+    async confirm(p) {
+        const name = await friendlyName(p);
+        const row = (label, value) => `<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);">${escHtml(label)}</div><div style="${mono}">${escHtml(value)}</div>`;
+        const body = `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${escHtml(t(p.descKey))}</p>`
+            + (p.targetKind !== 'none' && p.target ? row(t('dlg.target'), p.target) : '')
+            + (name ? row(t('dlg.name'), name) : '')
+            + (p.host ? row(t('dlg.host'), p.host) : '')
+            + row(t('dlg.origin'), t(`dlg.origin.${p.origin}`))
+            + p.notes.map((k) => `<p style="font-size:12px;line-height:1.45;margin:8px 0 0;color:var(--text-secondary);">${escHtml(t(k))}</p>`).join('');
+        return window.confirmCustom(t('dlg.title'), body, p.danger ? 'danger' : 'warning', { yesLabel: t('dlg.allow'), noLabel: t('common.cancel'), defaultCancel: true });
+    },
+    refuse(r) {
+        console.warn('[deeplink] refused', r.action, r.reason, r.detail);
+        toast(t('dlg.refused').replace('{action}', r.action).replace('{why}', t(`dlg.why.${r.reason}`)), 'error', 10000);
+    },
+};
+/** A folder the PERSON chose, starting from what a link suggested. Null = they cancelled. */
+async function chooseFolder(suggested, trusted) {
+    if (trusted)
+        return suggested || null;
+    return pickFolderAt(suggested || undefined);
+}
 /**
  * Common handler for deep link URLs
  */
-async function handleDeepLink(urlStr) {
+async function handleDeepLink(urlStr, originIn = 'unknown') {
     if (!urlStr || !urlStr.startsWith('bmm://'))
         return;
     // ── Permission gate ────────────────────────────────────────────────────
@@ -118,8 +170,15 @@ async function handleDeepLink(urlStr) {
     console.log('[BMM] Processing deep link:', urlStr);
     toast(`Deep Link: ${urlStr.split('?')[0]}`, 'info');
     try {
-        const parsedUrl = new URL(urlStr.replace('bmm://', 'https://bmm.local/'));
-        const action = parsedUrl.pathname.replace(/^\/|\/$/g, '');
+        // ── The gate. Every route passes here BEFORE anything is read, fetched, written or
+        // run: hard limits refuse outright, and anything that changes state asks in-app
+        // (Cancel is the default) unless the caller is the app itself. The rules, and the
+        // routes deliberately left prompt-free, are in deeplink-guard.ts.
+        const adm = await admitLink(urlStr, originIn, GATE_UI);
+        if (!adm)
+            return;
+        const { action, trusted } = adm;
+        const parsedUrl = { searchParams: adm.params };
         // ── Plugin actions ────────────────────────────────────────────────
         if (action === 'plugin/activate' || action === 'plugin/compare') {
             const pluginId = parsedUrl.searchParams.get('id');
@@ -279,14 +338,11 @@ async function handleDeepLink(urlStr) {
                 toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
                 return;
             }
-            // A protected repo needs the same three as a protected catalogue. This link
-            // took none of them, so connecting to one from a script produced an entry
-            // named after its own URL — the failure the route's own comment describes.
+            // The question was asked by the gate, BEFORE this line: the password is remembered
+            // and the connect screen pre-filled only once the user said yes. It used to be
+            // applied first and asked about after, so Cancel left the credential in place.
+            // A `key`/`passphrase` from an outside link never gets here (deeplink-guard).
             await applySourceAccess(repoUrl, parsedUrl.searchParams);
-            const confirmed = await window.confirmCustom(t('plugins.deepLinkConnectRepoTitle') || 'Connecter un repo ?', `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkConnectRepoDesc') || 'Ajouter ce repo à la liste des repos connectés dans BMM ?'}</p>
-                 <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${escHtml(repoUrl)}</div>`, 'accent', { yesLabel: t('common.yes'), noLabel: t('common.no') });
-            if (!confirmed)
-                return;
             try {
                 // Do the action IN-APP (like the quick action): navigate to the repo page
                 // and let the native UI fetch/connect the repo — no background HTTP call.
@@ -370,17 +426,9 @@ async function handleDeepLink(urlStr) {
             const params = {};
             parsedUrl.searchParams.forEach((v, k) => { if (k !== 'method' && k !== 'path')
                 params[k] = v; });
-            // State-changing calls (enable/disable a mod, restart, change settings…) get
-            // the same confirm-before-acting treatment as repo/connect below — any
-            // website or app can trigger a bmm:// link, so a bare click must not be able
-            // to silently mutate app state via a generic API passthrough.
-            if (method !== 'GET') {
-                const paramsPreview = Object.entries(params).map(([k, v]) => `${escHtml(k)}=${escHtml(v)}`).join('&');
-                const confirmed = await window.confirmCustom(t('plugins.deepLinkApiTitle') || 'Run this action?', `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkApiDesc') || 'This link wants to make a change in BMM.'}</p>
-                     <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${method} ${escHtml(apiPath)}${paramsPreview ? `<br>${paramsPreview}` : ''}</div>`, 'accent', { yesLabel: t('common.yes'), noLabel: t('common.no') });
-                if (!confirmed)
-                    return;
-            }
+            // Any website can trigger a bmm:// link, so the gate asks before EVERY call from
+            // outside — GET included, since a GET is not guaranteed to change nothing. The
+            // app's own callers (scheduler, local API) are not asked.
             try {
                 const tok = await getApiToken();
                 const opts = { method, headers: { 'Authorization': `Bearer ${tok}` } };
@@ -438,11 +486,16 @@ async function handleDeepLink(urlStr) {
         // which is the difference between choosing among your own servers and being handed
         // one. Absent still means the default target, as before.
         if (action === 'repo/publish-ssh') {
-            const dir = parsedUrl.searchParams.get('dir') || '';
-            if (!dir) {
+            const suggested = parsedUrl.searchParams.get('dir') || '';
+            if (!suggested) {
                 toast(t('repo.ssh.pickExportFirst'), 'error');
                 return;
             }
+            // A link only SUGGESTS the folder to upload; the person picks it (the picker opens
+            // there). Otherwise any page could upload any folder of theirs to their server.
+            const dir = await chooseFolder(suggested, trusted);
+            if (!dir)
+                return;
             const { publishStoredTarget } = await import('../features/repo/repo-ssh.js');
             const target = (parsedUrl.searchParams.get('target') || '').trim();
             toast(t('repo.ssh.testing'), 'info');
@@ -520,18 +573,23 @@ async function handleDeepLink(urlStr) {
                 toast(`${t('common.openInBmm') || 'Opened'}: ${name}`, 'info');
                 return;
             }
+            // The gate already refused anything but https, a script payload, and (apps) a
+            // link with no sha256; the user saw the host before this line. The link_* commands
+            // enforce the same limits in Rust.
             try {
                 if (kind === 'app') {
-                    await invoke('install_app', {
+                    await invoke('link_install_app', {
                         appId: slug, appTitle: name, downloadUrl: url,
                         fileType: parsedUrl.searchParams.get('type') || 'exe',
-                        installPath: '', version: null, category: null, thumb: null,
+                        installPath: null,
+                        sha256: parsedUrl.searchParams.get('sha256') || null,
                     });
                     toast(`${name} ${t('apps.installed') || 'installed'}`, 'success');
                 }
                 else if (kind === 'plugin') {
-                    await invoke('install_plugin', { downloadUrl: url });
-                    toast(`${name} ${t('plugins.installed') || 'installed'}`, 'success');
+                    // Installed DISABLED, with any earlier grant for that id cleared.
+                    await invoke('link_install_plugin', { downloadUrl: url, sha256: parsedUrl.searchParams.get('sha256') || null });
+                    toast(`${name} ${t('plugins.installed') || 'installed'} — ${t('dlg.note.pluginDisabled')}`, 'success', 8000);
                     window._refreshModsFn?.(true);
                 }
                 else if (kind === 'theme') {
@@ -612,14 +670,23 @@ async function handleDeepLink(urlStr) {
                 toast(t('plugins.deepLinkMissingUrl') || 'Missing id/url', 'error');
                 return;
             }
+            // https, a sha256 that must match, no scripts: refused by the gate otherwise, and
+            // again by link_install_app. A `path` is only where the folder picker starts.
+            const suggested = parsedUrl.searchParams.get('path') || '';
+            let installPath = null;
+            if (suggested) {
+                installPath = await chooseFolder(suggested, trusted);
+                if (!installPath)
+                    return;
+            }
             try {
-                await invoke('install_app', {
+                await invoke('link_install_app', {
                     appId: id,
                     appTitle: parsedUrl.searchParams.get('title') || id,
                     downloadUrl: url,
                     fileType: parsedUrl.searchParams.get('type') || 'exe',
-                    installPath: parsedUrl.searchParams.get('path') || '',
-                    version: null, category: null, thumb: null,
+                    installPath,
+                    sha256: parsedUrl.searchParams.get('sha256') || null,
                 });
                 toast(`${parsedUrl.searchParams.get('title') || id} ${t('apps.installed') || 'installed'}`, 'success');
             }
@@ -629,14 +696,17 @@ async function handleDeepLink(urlStr) {
             return;
         }
         if (action === 'app/launch') {
+            // Only an app BMM registered, by id. `exe=` is refused by the gate: a link that
+            // could name a path could run anything on the disk (a .ps1 was started with
+            // -ExecutionPolicy Bypass). link_launch_app looks the program up itself and
+            // refuses anything that is not a plain .exe.
             const id = parsedUrl.searchParams.get('id');
-            const exe = parsedUrl.searchParams.get('exe');
-            if (!id || !exe) {
-                toast(t('plugins.deepLinkMissingId') || 'Missing id/exe', 'error');
+            if (!id) {
+                toast(t('plugins.deepLinkMissingId') || 'Missing id', 'error');
                 return;
             }
             try {
-                await invoke('launch_app', { appId: id, exePath: exe });
+                await invoke('link_launch_app', { appId: id });
                 toast(`${t('apps.launched') || 'Launched'}: ${id}`, 'success');
             }
             catch (e) {
@@ -673,15 +743,9 @@ async function handleDeepLink(urlStr) {
         }
         // ── Language: import a translation file by path ───────────────────
         if (action === 'language/import') {
+            // A bare path reads whatever local file is named: the gate refused a network or
+            // relative path and asked about any other, before this line.
             const path = parsedUrl.searchParams.get('path');
-            // A bare path (no dialog) reads whatever local file is named — confirm first,
-            // same as repo/connect, since any website/app can trigger a bmm:// link.
-            if (path) {
-                const confirmed = await window.confirmCustom(t('plugins.deepLinkImportLangTitle') || 'Import this language file?', `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkImportLangDesc') || 'This link wants BMM to read a local file as a language file.'}</p>
-                     <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${escHtml(path)}</div>`, 'accent', { yesLabel: t('common.yes'), noLabel: t('common.no') });
-                if (!confirmed)
-                    return;
-            }
             try {
                 await invoke('import_language', { path: path || null });
                 toast(t('settings.langImported') || 'Language imported', 'success');
@@ -800,13 +864,17 @@ async function handleDeepLink(urlStr) {
         // means: exactly the gap that once made FOLLOWING a catalogue clickable-only.
         if (action === 'catalog/publish') {
             const kind = (parsedUrl.searchParams.get('kind') || 'tutorial').trim();
-            const dir = (parsedUrl.searchParams.get('dir') || '').trim();
+            const suggestedDir = (parsedUrl.searchParams.get('dir') || '').trim();
             const name = (parsedUrl.searchParams.get('name') || '').trim() || 'My catalogue';
             const base = (parsedUrl.searchParams.get('base') || '').trim().replace(/\/+$/, '');
-            if (!dir) {
+            if (!suggestedDir) {
                 toast(t('cat.pubNoDir'), 'warning', 8000);
                 return;
             }
+            // From outside, the link only suggests the folder; the person picks where to write.
+            const dir = await chooseFolder(suggestedDir, trusted);
+            if (!dir)
+                return;
             const { BUILDABLE_KINDS, buildCatalogueInto } = await import('../features/settings/scheduler.js');
             if (!BUILDABLE_KINDS.some((k) => k.kind === kind)) {
                 // Named rather than guessed at. Falling through to a default would write a
@@ -974,7 +1042,9 @@ async function handleDeepLink(urlStr) {
             }
             // Followed through the same path the link with a type takes, so there is one
             // implementation of "follow", with its history entry and its origin.
-            await handleDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(kind)}&url=${encodeURIComponent(url)}`);
+            // 'self': the person already answered the gate for this import; asking twice for
+            // one click would teach them to click through.
+            await handleDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(kind)}&url=${encodeURIComponent(url)}`, 'self');
             return;
         }
         // One entry of a catalogue this machine AUTHORS — not one it follows.
@@ -1262,6 +1332,12 @@ async function handleDeepLink(urlStr) {
         if (action === 'recorder/set') {
             const q = parsedUrl.searchParams;
             const b = (k) => q.has(k) ? (q.get(k) === '1' || q.get(k) === 'true') : undefined;
+            // `full=1` (unmasked recording) never reaches this line: the gate drops it for
+            // every origin, as telemetry does. Unmasking is a Settings > Privacy decision.
+            if (adm.dropped.includes('full'))
+                toast(t('dlg.note.fullDropped'), 'warning', 9000);
+            if (!['on', 'full', 'rust', 'js'].some((k) => q.has(k)))
+                return;
             try {
                 const { setWatcherOptions } = await import('../features/settings/replay-watcher.js');
                 await setWatcherOptions({ on: b('on'), full: b('full'), rust: b('rust'), js: b('js') });
@@ -1275,9 +1351,9 @@ async function handleDeepLink(urlStr) {
         // ── Session replay export / import:
         //    bmm://replay/export  ·  bmm://replay/import?path=…  |  ?url=… ──────────
         if (action === 'replay/export') {
-            // ?path= writes straight there and skips the save dialog, same as the local API.
-            // Kept identical on both routes on purpose: a deeplink and an API call that
-            // describe the same action and behave differently is a bug waiting to be filed.
+            // ?path= writes straight there and skips the save dialog, for the app's own callers
+            // (scheduler, local API) only. From outside, the gate removed `path` after refusing
+            // a network one, so the save dialog opens and the person picks where it goes.
             const dest = parsedUrl.searchParams.get('path') || undefined;
             try {
                 await (await import('../features/settings/replay-watcher.js')).exportSession(dest);
@@ -1317,7 +1393,18 @@ async function handleDeepLink(urlStr) {
             const name = parsedUrl.searchParams.get('name') || null;
             const increment = parsedUrl.searchParams.get('increment') || null;
             try {
-                const dest = await invoke('export_app_data_auto', { dir, name, increment });
+                // A scheduled backup (trusted) writes the full file to the folder its task
+                // names. From outside, the person picks the folder and the copy is REDACTED:
+                // no token, key or password ever leaves through a link (link_export_app_data).
+                let dest;
+                if (trusted)
+                    dest = await invoke('export_app_data_auto', { dir, name, increment });
+                else {
+                    const picked = await chooseFolder(dir, false);
+                    if (!picked)
+                        return;
+                    dest = await invoke('link_export_app_data', { dir: picked, name, increment });
+                }
                 toast((t('settings.exportSuccess') || 'Data exported') + ': ' + dest, 'success');
             }
             catch (e) {

@@ -1336,13 +1336,11 @@ function buildElementsTab(): string {
         </div>`;
 }
 
-// expose deeplink helper for custom element buttons
-(window as any).__bmmDeeplink = (url: string) => {
-    window.dispatchEvent(new CustomEvent('bmm-deeplink', { detail: url }));
-    // Also try direct navigation: fire the same deep link handler
-    const evt = new CustomEvent('bmm:process-deeplink', { detail: { url } });
-    document.dispatchEvent(evt);
-};
+// No `window.__bmmDeeplink` here. This module used to REPLACE the real handler (set by
+// deep_link_manager.ts) with one that dispatched two events nothing listens to — so once the
+// theme editor had loaded, every deep link the scheduler, the local API or a theme button
+// fired did nothing. Custom-element buttons go through theme-engine's delegated
+// `data-bmm-deeplink` listener, which calls the real handler with origin 'theme'.
 
 function wireElements(): void {
     // Select scope option matching current editing

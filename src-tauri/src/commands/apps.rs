@@ -36,6 +36,16 @@ pub fn installed_apps_for_paths(app: &AppHandle) -> Vec<(String, String, String)
         .collect()
 }
 
+/// (title, exe) of an app BMM itself installed or registered, by id — `None` when the id is
+/// unknown or has no executable. What `bmm://app/launch` is limited to: a link names an app
+/// BMM already knows, never a path of its own (see `link_guard`).
+pub fn registered_app_exe(app: &AppHandle, app_id: &str) -> Option<(String, String)> {
+    let state = load_state(app);
+    let info = state.installed.get(app_id)?;
+    let exe = info.exe_path.clone().filter(|e| !e.trim().is_empty())?;
+    Some((info.title.clone(), exe))
+}
+
 fn state_path(app: &AppHandle) -> std::path::PathBuf {
     app.path()
         .app_data_dir().ok()

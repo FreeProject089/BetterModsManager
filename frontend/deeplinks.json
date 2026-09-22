@@ -11,16 +11,16 @@
     "params": [
       "id",
       "url",
+      "path",
       "title",
       "type",
-      "path"
+      "sha256"
     ]
   },
   {
     "action": "app/launch",
     "params": [
-      "id",
-      "exe"
+      "id"
     ]
   },
   {
@@ -190,7 +190,8 @@
     "params": [
       "url",
       "name",
-      "type"
+      "type",
+      "sha256"
     ]
   },
   {

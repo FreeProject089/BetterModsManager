@@ -454,6 +454,10 @@ All of them use the target saved in Server Repo. **None can name a different hos
 password** — the call says "publish (or fetch) what I already configured", and that is all it
 can say. The rule matters most for fetching, which writes to your own disk.
 
+A deeplink clicked on a web page asks first, and for publishing opens the folder picker at
+`dir` so **you** choose what is uploaded; a network path in `dir` is refused. A scheduled task
+and the local API are not asked.
+
 Unattended runs need a key with **no passphrase**, and cannot use a password at all: nothing
 is stored and there is nobody to ask at 04:00, so they fail with a message rather than waiting
 forever on a prompt no one will see.
