@@ -235,6 +235,17 @@ impl Redactor {
         }
     }
 
+    /// Learn a secret kept in a file of its own (the BetterCommunity API key). Its value is
+    /// in no JSON, so without this it could be scrubbed only where a key happened to name it.
+    pub fn absorb_secret_file(&mut self, path: &Path) {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            let s = text.trim();
+            if s.chars().count() >= MIN_LITERAL_LEN {
+                self.add_literals(vec![s.to_string()]);
+            }
+        }
+    }
+
     /// Free text: every known secret, then URL credentials, auth headers and token shapes.
     pub fn scrub_text(&self, text: &str) -> String {
         let mut s = text.to_string();

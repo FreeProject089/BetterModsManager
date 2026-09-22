@@ -372,9 +372,18 @@ struct ReportParts {
     replay: Option<Vec<u8>>,
 }
 
-fn redactor_for_report(parts: &ReportParts, data_file: &Path) -> crate::commands::report_redact::Redactor {
+/// A redactor that knows every secret BMM stores on disk: the data file, and the
+/// BetterCommunity API key beside it in a file of its own. New reports and the rewrite of
+/// old ones both start here, so a secret stored somewhere new is added once.
+fn stored_secrets_redactor(data_file: &Path) -> crate::commands::report_redact::Redactor {
     let mut r = crate::commands::report_redact::Redactor::new();
     r.absorb_data_file(data_file);
+    r.absorb_secret_file(&data_file.with_file_name(crate::commands::security::BC_API_KEY_FILE));
+    r
+}
+
+fn redactor_for_report(parts: &ReportParts, data_file: &Path) -> crate::commands::report_redact::Redactor {
+    let mut r = stored_secrets_redactor(data_file);
     if let Some(s) = &parts.app_state { r.absorb_json_text(s); }
     if let Some(s) = &parts.frontend_dump { r.absorb_json_text(s); }
     r
@@ -485,8 +494,7 @@ fn rewrite_report_zip_bytes(
 /// zips are the ones people attach or export, and they carried the data file in clear.
 /// Idempotent — a rewritten zip carries the note and is skipped next time.
 pub fn redact_existing_reports() {
-    let mut r = crate::commands::report_redact::Redactor::new();
-    r.absorb_data_file(&data_file_path());
+    let r = stored_secrets_redactor(&data_file_path());
     let base = get_crash_dir(None);
     for sub in ["Reports/Crash", "Reports/Session", "Archive/Crash", "Archive/Session"] {
         let Ok(entries) = fs::read_dir(base.join(sub)) else { continue };
@@ -1089,7 +1097,9 @@ mod tests {
     const FAKE_PLUGIN_TOKEN: &str = "plg-tok-7f3a9c2e1b5d4f6a";
     const FAKE_REPO_PW: &str = "repo-pw-Zq8xLm2v";
     const FAKE_USERINFO_PW: &str = "userinfo-Kp4Nw9x";
-    const ALL_FAKES: &[&str] = &[FAKE_GITHUB, FAKE_API, FAKE_SCHED, FAKE_PLUGIN_TOKEN, FAKE_REPO_PW, FAKE_USERINFO_PW];
+    /// Kept in its own file, not data.json: only reading that file tells the redactor about it.
+    const FAKE_BC_KEY: &str = "bck_live_Qw7eRt9yUi3oPa5s";
+    const ALL_FAKES: &[&str] = &[FAKE_GITHUB, FAKE_API, FAKE_SCHED, FAKE_PLUGIN_TOKEN, FAKE_REPO_PW, FAKE_USERINFO_PW, FAKE_BC_KEY];
 
     fn seeded_data_file(dir: &Path) -> (PathBuf, String) {
         let mut d = crate::state::AppData::default();
@@ -1110,6 +1120,7 @@ mod tests {
         let text = serde_json::to_string_pretty(&d).unwrap();
         let path = dir.join("data.json");
         fs::write(&path, &text).unwrap();
+        fs::write(dir.join(crate::commands::security::BC_API_KEY_FILE), format!("{FAKE_BC_KEY}\n")).unwrap();
         (path, text)
     }
 
@@ -1124,16 +1135,17 @@ mod tests {
                  [API] request with Authorization: Bearer {FAKE_API}\n\
                  [API] plain {FAKE_API} and {FAKE_SCHED}\n\
                  [API] plugin call from {FAKE_PLUGIN_TOKEN}\n\
-                 [REPO] GET https://repo.example/r.json?password={FAKE_REPO_PW}\n"
+                 [REPO] GET https://repo.example/r.json?password={FAKE_REPO_PW}\n\
+                 [BC] notifications with {FAKE_BC_KEY}\n"
             ),
             app_state,
             frontend_dump: Some(serde_json::json!({
                 "reason": "CRASH",
                 "ipcCalls": [{ "cmd": "save_settings", "args": { "githubToken": FAKE_GITHUB, "apiToken": FAKE_API } }],
-                "appState": { "osScheduleKey": FAKE_SCHED, "note": format!("typed {FAKE_PLUGIN_TOKEN}") },
+                "appState": { "osScheduleKey": FAKE_SCHED, "note": format!("typed {FAKE_PLUGIN_TOKEN}"), "lastInput": FAKE_BC_KEY },
             }).to_string()),
             replay: Some(format!(
-                r#"{{"events":[{{"type":3,"data":{{"source":5,"text":"{FAKE_API}"}}}},{{"type":3,"data":{{"text":"{FAKE_GITHUB} {FAKE_SCHED}"}}}}]}}"#
+                r#"{{"events":[{{"type":3,"data":{{"source":5,"text":"{FAKE_API}"}}}},{{"type":3,"data":{{"text":"{FAKE_GITHUB} {FAKE_SCHED}"}}}},{{"type":3,"data":{{"text":"{FAKE_BC_KEY}"}}}}]}}"#
             ).into_bytes()),
         }
     }
@@ -1212,13 +1224,12 @@ mod tests {
         let (data_path, text) = seeded_data_file(dir.path());
         let legacy = make_zip(&[
             ("metadata.txt", b"BMM VERSION: old\n"),
-            ("app_logs.txt", format!("token {FAKE_GITHUB} api {FAKE_API}").as_bytes()),
+            ("app_logs.txt", format!("token {FAKE_GITHUB} api {FAKE_API} bc {FAKE_BC_KEY}").as_bytes()),
             ("state_snapshot.json", text.as_bytes()),
             ("dxdiag.txt", b"Machine name: DESKTOP-SECRET"),
             ("session_replay.bmmreplay", format!(r#"{{"t":"{FAKE_PLUGIN_TOKEN}"}}"#).as_bytes()),
         ]);
-        let mut r = crate::commands::report_redact::Redactor::new();
-        r.absorb_data_file(&data_path);
+        let r = stored_secrets_redactor(&data_path);
         let rewritten = rewrite_report_zip_bytes(&legacy, &r).expect("rewritten");
         assert_no_secret(&rewritten);
         let names: Vec<String> = entries(&rewritten).into_iter().map(|(n, _)| n).collect();

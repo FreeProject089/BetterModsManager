@@ -504,13 +504,17 @@ fn bc_http_client() -> &'static reqwest::Client {
 // is the OS credential store, which costs an FFI dependency and works on one
 // platform.
 
+/// The BetterCommunity API key's file, beside data.json. Named once: the report redactor
+/// reads it too, since the key lives outside data.json and no snapshot would reveal it.
+pub const BC_API_KEY_FILE: &str = "bcweb-api-key";
+
 fn bc_key_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("No app-data directory: {}", e))?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("bcweb-api-key"))
+    Ok(dir.join(BC_API_KEY_FILE))
 }
 
 /// Store the user's BetterCommunity API key. An empty value clears it, so the UI
