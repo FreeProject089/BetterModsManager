@@ -46,8 +46,10 @@ native de BMM envoie à une adresse bettercommunity.ch portent votre Creator ID*
 **Ce qu'est le Creator ID.** C'est la moitié publique d'une paire de clés Ed25519 que BMM crée au
 premier lancement. La clé est **dérivée d'identifiants de ce PC** (MachineGuid, identifiant de
 produit et date d'installation de Windows ; numéros de série de la carte mère, du BIOS, du processeur
-et du disque ; numéro de série du volume C:) par une dérivation à sens unique, puis stockée dans
-votre registre utilisateur et dans le dossier de données de BMM. Conséquences :
+et du disque ; numéro de série du volume C:) par une dérivation à sens unique. Depuis la **clé créateur v5**, elle est conservée, avec le reste du
+matériel de clé, dans un magasin chiffré par Windows (DPAPI, lié à votre compte Windows) dans le
+dossier de données de BMM et dans votre registre utilisateur ; les anciennes copies non chiffrées sont
+supprimées une fois la copie chiffrée vérifiée. Conséquences :
 
 - il ne contient ni nom ni e‑mail, et les identifiants dont il est dérivé ne peuvent pas en être
   extraits ;
@@ -55,6 +57,11 @@ votre registre utilisateur et dans le dossier de données de BMM. Conséquences 
   tout ce qui est envoyé sous cet identifiant est donc **rattachable à cette machine dans le temps** ;
 - il signe ce que vous publiez (dépôts, modpacks, tutoriels) : il est donc aussi visible par toute
   personne qui les reçoit (§6.3).
+
+Le passage à la v5 **ne change pas** votre Creator ID. Il ajoute une seconde clé, aléatoire, qui signe
+les preuves que BMM donne à BetterCommunity, et ces preuves peuvent porter une empreinte hachée de
+l'appareil (§2.4). Les requêtes de démarrage ci‑dessus ne portent toujours que le Creator ID : ni
+preuve ni empreinte.
 
 ### 2.2 Vérification des mises à jour
 Environ trois secondes après le lancement, BMM interroge l'API des versions de GitHub
@@ -77,6 +84,40 @@ réparer, mettre à jour ou désinstaller, il consulte les mêmes manifestes de 
 
 Ces services voient votre adresse IP et les en‑têtes ordinaires d'une requête, selon leurs propres
 politiques de confidentialité.
+
+### 2.4 Clé créateur v5 : la preuve et l'empreinte de l'appareil
+Quand BMM doit **prouver** son Creator ID à BetterCommunity, il signe une preuve courte et à usage
+unique (valable deux minutes, liée à ce site, avec un nombre aléatoire pour qu'elle ne puisse pas
+être rejouée). Cela n'arrive que quand vous **envoyez un rapport de bug, de plantage ou un retour**
+(§5.1), quand vous **liez un compte BetterCommunity** (§6.6), et **une fois par clé tant que cette
+installation est liée à un compte**. Rien n'est envoyé pour une installation non liée qui n'envoie
+aucun rapport.
+
+Cette preuve porte une **empreinte de l'appareil** : quatre hachages à sens unique calculés sur votre
+PC, à partir
+
+1. des identifiants de la carte mère, du BIOS et du processeur,
+2. des identifiants de l'installation Windows (MachineGuid, identifiant de produit, date d'installation),
+3. des identifiants du disque,
+4. d'un **hachage canvas** : la façon dont votre carte graphique et ses pilotes dessinent une image de
+   test fixe dans la fenêtre de BMM.
+
+- **Seuls les hachages sont envoyés.** Aucun numéro de série, GUID ni image ne quitte votre PC.
+  Chaque hachage est salé avec l'adresse du site qui le reçoit : les valeurs de BetterCommunity ne
+  peuvent pas être recoupées avec celles d'un autre serveur, et chacun est itéré pour rendre coûteuse
+  toute tentative de retrouver les valeurs d'origine.
+- **L'empreinte canvas est une technique de pistage**, et nous le disons clairement. Elle ne sert
+  qu'à la finalité ci‑dessous et change quand vous mettez à jour votre pilote graphique.
+- **Finalité :** permettre aux modérateurs de BetterCommunity de voir si un nouveau Creator ID vient
+  du même ordinateur qu'un identifiant banni ou ayant déjà utilisé une offre gratuite. Une personne
+  examine la correspondance et décide ; aucune règle n'agit automatiquement. Elle ne sert ni aux
+  statistiques, ni à la publicité, ni au profilage, et n'est pas partagée.
+- **Base légale :** intérêt légitime à empêcher l'abus des offres gratuites et le contournement des
+  bannissements (art. 6, par. 1, let. f RGPD ; art. 31 nLPD). Ces hachages identifient un appareil :
+  ce sont des données personnelles, et vos droits (accès, effacement, opposition ; §8) s'y appliquent.
+- **Conservation :** BetterCommunity supprime chaque hachage **180 jours après sa dernière
+  apparition**. L'association entre une clé et un Creator ID est conservée tant que l'identifiant est
+  utilisé.
 
 ---
 
@@ -213,8 +254,8 @@ avant que vous cliquiez sur Envoyer.** BMM transmet alors :
 - en option un **rapport DxDiag**, pré‑coché pour les plantages : un inventaire complet du matériel
   et des pilotes qui contient aussi des identifiants de la machine et du système et votre **nom de
   compte Windows** ;
-- votre **Creator ID** (avec une preuve signée), la version de l'application, le système, la langue
-  et le user‑agent ;
+- votre **Creator ID** (avec une preuve signée, qui porte l'empreinte hachée de l'appareil du §2.4),
+  la version de l'application, le système, la langue et le user‑agent ;
 - l'e‑mail ou le pseudo Discord que vous saisissez, le cas échéant, pour qu'on puisse vous
   répondre. Avec un compte BetterCommunity lié, le rapport ouvre plutôt un fil dans votre tableau
   de bord.
@@ -289,8 +330,11 @@ Des pages de la documentation intégrée peuvent inclure des vidéos YouTube, ch
 adresse IP et stocker des données selon la politique de confidentialité de **Google**.
 
 ### 6.6 Lier un compte BetterCommunity
-Lier un compte envoie votre **Creator ID** à `bettercommunity.ch` pour demander un code à usage
-unique, puis vérifie si le code a été saisi. BMM n'envoie ni mot de passe ni e‑mail dans cet échange.
+Lier un compte envoie votre **Creator ID** à `bettercommunity.ch`, avec une preuve signée et
+l'empreinte hachée de l'appareil (§2.4), pour demander un code à usage unique, puis vérifie si le code
+a été saisi. Tant que l'installation reste liée, BMM envoie une preuve de plus à chaque changement de
+clé, pour que le site sache quelle clé parle pour votre Creator ID. BMM n'envoie ni mot de passe ni
+e‑mail dans cet échange.
 
 ### 6.7 Notifications BetterCommunity (seulement avec une clé d'API)
 Si, et seulement si, vous enregistrez une **clé d'API** BetterCommunity dans Paramètres → Identité &
@@ -332,8 +376,8 @@ service, selon ses propres conditions.
 | **Discord Rich Presence** (activé si vous avez gardé la case de l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
 | Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
 | Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |
-| Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID, détails de l'application et du système | Centre de retours BetterCommunity |
-| Lier un compte BetterCommunity | Oui | Creator ID | bettercommunity.ch |
+| Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID avec preuve signée et empreinte hachée de l'appareil (§2.4), détails de l'application et du système | Centre de retours BetterCommunity |
+| Lier un compte BetterCommunity (et une fois par clé tant qu'il est lié) | Oui | Creator ID, preuve signée, empreinte hachée de l'appareil (§2.4) | bettercommunity.ch |
 | Notifications BetterCommunity (seulement avec une clé d'API enregistrée) | Oui, toutes les 10 min | La clé d'API, limitée à `notifications:read` | bettercommunity.ch |
 
 ---

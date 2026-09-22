@@ -20,6 +20,7 @@
 import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { bcRoot } from './links-config.js';
+import { creatorProofFor } from './canvas-fingerprint.js';
 
 /**
  * Three states, not two.
@@ -78,7 +79,37 @@ export async function bcLinkState(force = false): Promise<BcLinkState> {
     } catch { /* offline, tunnelled elsewhere, or down */ }
     if (!data) return remember({ state: 'unknown' });
     if (!data.linked) return remember({ state: 'anonymous' });
+    void registerKeyV5();
     return remember({ state: 'linked', displayName: data.displayName, discord: data.discord });
+}
+
+/** The origin a proof for BetterCommunity must name. */
+function bcAudience(): string {
+    try { return new URL(bcRoot()).origin; } catch { return ''; }
+}
+
+/**
+ * Tell BetterCommunity which v5 key now speaks for this Creator ID.
+ *
+ * Only for an install whose id is LINKED to an account, and once per active key: the proof
+ * carries the rotation chain (the v4 key signing the v5 one) and the hashed fingerprint, and
+ * the server pins the chain so a bare v4 proof — which anyone who knows this PC's serials
+ * could forge — is refused for this id from then on. Nothing is sent for an unlinked install;
+ * see PRIVACY.md §2.1.
+ */
+async function registerKeyV5(): Promise<void> {
+    let kid = '';
+    try { kid = String(((await invoke('creator_key_info', {}, { quiet: true })) as { kid?: string })?.kid || ''); } catch { return; }
+    if (!kid) return;
+    try { if (localStorage.getItem('bc_key_v5') === kid) return; } catch { /* private mode: register again */ }
+    const aud = bcAudience();
+    if (!aud) return;
+    const proof = await creatorProofFor(aud);
+    if (!proof.startsWith('bmmc5.')) return;
+    try {
+        await invoke('bc_api_post', { url: `${bcRoot()}/api/link/upgrade`, body: JSON.stringify({ proof }) }, { quiet: true });
+        try { localStorage.setItem('bc_key_v5', kid); } catch { /* private mode */ }
+    } catch { /* offline, or an older server without the route — try again next time */ }
 }
 
 function remember(value: BcLinkState): BcLinkState {
@@ -109,7 +140,7 @@ export async function openAccountLinkFlow(onLinked?: (st: BcLinkState) => void):
     let data: { linked?: boolean; code?: string } | undefined;
     try {
         const raw = await invoke('bc_api_post',
-            { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId: cid }) },
+            { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId: cid, proof: (await creatorProofFor(bcAudience())) || undefined }) },
             { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch {

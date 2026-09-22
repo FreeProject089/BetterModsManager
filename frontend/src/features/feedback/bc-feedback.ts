@@ -8,6 +8,7 @@
 // in links.json can point at another BetterCommunity, at a tunnel, or be emptied to fall back
 // to the BetaHub client that this module replaces.
 import { invoke } from '../../core/api.js';
+import { creatorProofFor } from '../../core/canvas-fingerprint.js';
 import { getLinks, bcApi } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -114,7 +115,8 @@ async function creatorHeader(): Promise<Record<string, string>> {
         // endpoint we are about to post to, not from a constant, so a tunnelled or
         // self-hosted BetterCommunity gets a proof addressed to itself.
         const aud = new URL(feedbackEndpoint()).origin;
-        const proof = await invoke('creator_proof', { aud }, { quiet: true }) as string;
+        // v5 (nonce, rotation chain, hashed fingerprint) when this build has it, v1 otherwise.
+        const proof = await creatorProofFor(aud);
         if (proof) out['X-Creator-Proof'] = proof;
     } catch { /* older build, or no endpoint — the report goes anonymously */ }
     return out;

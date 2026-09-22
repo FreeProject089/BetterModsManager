@@ -43,13 +43,19 @@ telemetry consent**.
 **What the Creator ID is.** It is the public half of an Ed25519 key pair BMM creates on first launch.
 The key is **derived from identifiers of this PC** (Windows MachineGuid, product ID and install date;
 motherboard, BIOS, CPU and disk serial numbers; the C: volume serial) through a one‑way key
-derivation, then stored in your user registry and BMM's data folder. Consequences:
+derivation. Since **Creator key v5** it is kept, with the rest of the key material, in a store
+encrypted by Windows (DPAPI, tied to your Windows account) in BMM's data folder and your user
+registry; the older unencrypted copies are deleted once the encrypted one is verified. Consequences:
 
 - it contains no name or e‑mail, and the identifiers it was derived from cannot be read back out of it;
 - it is **stable**: the same PC gets the same Creator ID, even after BMM is reinstalled, so
   everything sent under it is **linkable to this machine over time**;
 - it signs what you publish (repos, modpacks, tutorials), so it is also visible to anyone who
   receives those (§6.3).
+
+Upgrading to v5 does **not** change your Creator ID. It adds a second, random key that signs the
+proofs BMM gives BetterCommunity, and those proofs can carry a hashed device fingerprint (§2.4).
+The startup requests above carry the Creator ID only, as before: no proof and no fingerprint.
 
 ### 2.2 Update checks
 About three seconds after launch BMM asks GitHub's releases API
@@ -71,6 +77,35 @@ uninstall, it checks the same update manifests.
   plugin catalogue if you installed plugins from it.
 
 These services see your IP address and ordinary request headers, under their own privacy policies.
+
+### 2.4 Creator key v5: the proof and the device fingerprint
+When BMM has to **prove** its Creator ID to BetterCommunity, it signs a short, single‑use proof
+(valid two minutes, bound to that site, with a random number so it cannot be reused). This happens
+only when you **send a bug, crash or feedback report** (§5.1), when you **link a BetterCommunity
+account** (§6.6), and **once per key while this install is linked to an account**. Nothing is sent
+for an install that is not linked and sends no report.
+
+That proof carries a **device fingerprint**: four one‑way hashes computed on your PC, of
+
+1. the motherboard, BIOS and processor identifiers,
+2. the Windows installation identifiers (MachineGuid, product ID, install date),
+3. the disk identifiers,
+4. a **canvas hash**: how your graphics card and drivers draw a fixed test image in BMM's window.
+
+- **What is sent is only the hashes.** No serial number, GUID or picture leaves your PC. Each hash
+  is salted with the address of the site that receives it, so BetterCommunity's values cannot be
+  matched with those of any other server, and each is iterated to make guessing the inputs costly.
+- **Canvas fingerprinting is a tracking technique**, and we say so plainly. It is used for the one
+  purpose below and changes when you update your graphics driver.
+- **Purpose:** to let BetterCommunity moderators see whether a new Creator ID comes from the same
+  computer as one that was banned or that already used a free offer. A person looks at the match
+  and decides; no rule acts on it automatically. It is not used for analytics, advertising or
+  profiling, and it is not shared.
+- **Legal basis:** legitimate interest in preventing abuse of free offers and evasion of bans
+  (art. 6(1)(f) GDPR; art. 31 of the Swiss nLPD). The hashes identify a device, so they are
+  personal data, and your rights (access, erasure, objection; §8) apply to them.
+- **Retention:** each hash is deleted by BetterCommunity **180 days after it was last seen**. The
+  record of which key speaks for a Creator ID is kept while the ID is in use.
 
 ---
 
@@ -193,7 +228,8 @@ uploads:
 - optionally the app log (`bmm_frontend.log`), pre‑ticked for bug and crash reports;
 - optionally a **DxDiag report**, pre‑ticked for crash reports: a full hardware and driver inventory
   that also contains machine and OS identifiers and your **Windows account name**;
-- your **Creator ID** (with a signed proof of it), the app version, OS, language and user‑agent;
+- your **Creator ID** (with a signed proof of it, which carries the hashed device fingerprint of
+  §2.4), the app version, OS, language and user‑agent;
 - the e‑mail or Discord name you type, if any, so staff can reply. With a linked BetterCommunity
   account the report opens a thread in your dashboard instead.
 
@@ -260,8 +296,10 @@ Pages of the in‑app documentation can embed YouTube videos, loaded through the
 address and may store data under **Google's** privacy policy.
 
 ### 6.6 Linking a BetterCommunity account
-Linking sends your **Creator ID** to `bettercommunity.ch` to request a one‑time code, then checks
-whether the code has been entered. BMM sends no password or e‑mail in this exchange.
+Linking sends your **Creator ID** to `bettercommunity.ch`, with a signed proof of it and the
+hashed device fingerprint (§2.4), to request a one‑time code, then checks whether the code has been
+entered. While the install stays linked, BMM sends one more proof each time its key changes, so the
+site knows which key speaks for your Creator ID. BMM sends no password or e‑mail in this exchange.
 
 ### 6.7 BetterCommunity notifications (only with an API key)
 If, and only if, you store a BetterCommunity **API key** in Settings → Identity & API, BMM asks
@@ -301,8 +339,8 @@ under its own terms.
 | **Discord Rich Presence** (on if you kept the installer's box) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
 | Connect or sync a Server Repo | Yes | IP address, Creator ID | That repo's owner |
 | Host a Server Repo | Yes (incoming) | Visitors' IP and Creator ID, stored on your PC | You |
-| Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs and, for a normal-close report, a snapshot of your settings with tokens and passwords redacted; DxDiag, with your Windows account name, only if you tick it), Creator ID, app and OS details | BetterCommunity feedback centre |
-| Link a BetterCommunity account | Yes | Creator ID | bettercommunity.ch |
+| Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs and, for a normal-close report, a snapshot of your settings with tokens and passwords redacted; DxDiag, with your Windows account name, only if you tick it), Creator ID with signed proof and hashed device fingerprint (§2.4), app and OS details | BetterCommunity feedback centre |
+| Link a BetterCommunity account (and once per key while linked) | Yes | Creator ID, signed proof, hashed device fingerprint (§2.4) | bettercommunity.ch |
 | BetterCommunity notifications (only with a stored API key) | Yes, every 10 min | The API key, scoped to `notifications:read` | bettercommunity.ch |
 
 ---

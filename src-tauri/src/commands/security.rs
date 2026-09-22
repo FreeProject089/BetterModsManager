@@ -164,13 +164,15 @@ Write-Output \"VolumeSn=$($vol.VolumeSerialNumber)\"";
     out
 }
 
+/// The raw v4 markers as a map. v4 folds them into one string (below); v5 hashes them per
+/// group into its fingerprint (`creator_v5::fingerprint_for`). Never sent anywhere raw.
 #[cfg(target_os = "windows")]
-fn get_hwid_v4() -> String {
+pub(crate) fn hwid_v4_fields() -> std::collections::BTreeMap<&'static str, String> {
     use winreg::enums::*;
     use winreg::RegKey;
     use std::collections::BTreeMap;
 
-    let mut m: BTreeMap<&str, String> = BTreeMap::new();
+    let mut m: BTreeMap<&'static str, String> = BTreeMap::new();
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(crypto) = hklm.open_subkey("SOFTWARE\\Microsoft\\Cryptography") {
         if let Ok(v) = crypto.get_value::<String, _>("MachineGuid") { m.insert("MachineGuid", v); }
@@ -198,15 +200,28 @@ fn get_hwid_v4() -> String {
         let dsn = get_wmic_value("diskdrive", "serialnumber");
         if !dsn.is_empty() { m.insert("DiskSn", dsn); }
     }
+    m
+}
 
-    if m.is_empty() { return "fallback_v4_emergency_identity".to_string(); }
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn hwid_v4_fields() -> std::collections::BTreeMap<&'static str, String> { std::collections::BTreeMap::new() }
+
+/// The constants v4 fell back to when it could read nothing. Every install that hit one of
+/// them derived the SAME private key — see `legacy_root_seed`.
+const HWID_V4_FALLBACK_WINDOWS: &str = "fallback_v4_emergency_identity";
+const HWID_V4_FALLBACK_OTHER: &str = "non_windows_v4_identity";
+
+/// Byte-for-byte the string v4 derived its seed from, so an install that reaches the fresh
+/// derivation path gets the same Creator ID it always had.
+fn get_hwid_v4() -> String {
+    let m = hwid_v4_fields();
+    if m.is_empty() {
+        return if cfg!(target_os = "windows") { HWID_V4_FALLBACK_WINDOWS } else { HWID_V4_FALLBACK_OTHER }.to_string();
+    }
     let mut raw = String::from("BMM-HWID-V4|");
     for (k, v) in &m { raw.push_str(k); raw.push(':'); raw.push_str(v); raw.push('|'); }
     raw
 }
-
-#[cfg(not(target_os = "windows"))]
-fn get_hwid_v4() -> String { "non_windows_v4_identity".to_string() }
 
 /// v4 seed derivation: domain-separated, then iterated SHA-256 as a work factor so
 /// a known Creator ID can't be cheaply brute-forced back to a forged HWID. Cheap
@@ -268,29 +283,6 @@ fn compute_seal_v4(seed_hex: &str, machine_guid: &str) -> String {
     hex::encode(h.finalize())
 }
 
-/// Writes the signing key seed + seal to registry.
-/// Silently ignores errors — registry is best-effort hardening,
-/// the app works fine without it.
-#[cfg(target_os = "windows")]
-fn write_key_to_registry(seed: &[u8; 32]) {
-    use winreg::enums::*;
-    use winreg::RegKey;
-    let seed_hex = hex::encode(seed);
-    let machine_guid = get_machine_guid();
-    let seal = compute_seal_v4(&seed_hex, &machine_guid);
-
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    if let Ok((key, _)) = hkcu.create_subkey("SOFTWARE\\BetterModsManager\\Identity") {
-        let version: u32 = 4;
-        let _ = key.set_value("V", &version);
-        let _ = key.set_value("K", &seed_hex);
-        let _ = key.set_value("S", &seal);
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn write_key_to_registry(_seed: &[u8; 32]) {}
-
 /// Returns the cached signing key seed from registry if the seal is valid.
 /// Returns `(seed, version)` from the registry if the seal is valid.
 #[cfg(target_os = "windows")]
@@ -343,70 +335,71 @@ pub fn get_salted_creator_id(salt: String) -> Result<String, String> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Key path helper
+// The v4 root, for the v5 store (commands/creator_v5.rs)
+//
+// v5 keeps the Creator ID v4 would have produced — that is what makes it the same identity
+// for every repo owner, ban list and account link that already knows it. These helpers find
+// that seed (registry, then the v4/v3/v2 files, then a fresh derivation) and, once the v5
+// store holds a verified DPAPI-protected copy, delete the plaintext ones.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn get_keys_path(handle: &AppHandle) -> Result<PathBuf, String> {
-    let app_dir = handle
-        .path()
-        .app_data_dir().ok()
-        .ok_or("Impossible de trouver le dossier AppData")?;
-    if !app_dir.exists() {
-        fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
-    }
-    Ok(app_dir.join("creator_v4.key"))
+const LEGACY_KEY_FILES: [&str; 3] = ["creator_v4.key", "creator_v3.key", "creator_v2.key"];
+
+/// Is this seed the one every fallback install shares? Costs two v4 derivations, and runs
+/// once, at migration.
+fn is_shared_fallback_seed(seed: &[u8; 32]) -> bool {
+    [HWID_V4_FALLBACK_WINDOWS, HWID_V4_FALLBACK_OTHER]
+        .iter()
+        .any(|c| &derive_seed_v4(c, "") == seed)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Load or generate signing key
-//
-// Priority (highest → lowest):
-//   1. Registry  — sealed, machine-bound, survives hardware swaps
-//   2. File      — AppData cache, migrated to registry
-//   3. Hardware  — fresh derivation from HWID v3
-//
-// Once locked in registry, hardware changes do NOT change the Creator ID.
-// This is intentional: a user who upgrades their GPU/RAM/etc. stays the same
-// identity on any server they were already connected to.
-// ─────────────────────────────────────────────────────────────────────────────
-pub fn load_or_generate_keys(handle: &AppHandle) -> Result<SigningKey, String> {
-    let path = get_keys_path(handle)?;
-
-    let app_dir = handle.path().app_data_dir().ok();
-    let v3_path = app_dir.as_ref().map(|d| d.join("creator_v3.key"));
-    let v2_path = app_dir.as_ref().map(|d| d.join("creator_v2.key"));
-
-    // ── 1. Registry (fastest, most tamper-resistant; v4 or migratable v3) ─
-    if let Some((seed, version)) = read_key_from_registry() {
-        // Promote to v4 storage only when needed (migrating a v3 entry, or the
-        // file cache is missing) — keeps the same seed, so the Creator ID is
-        // unchanged, and avoids a registry write on every call.
-        if version != 4 { write_key_to_registry(&seed); }
-        if !path.exists() { let _ = fs::write(&path, &seed); }
-        return Ok(SigningKey::from_bytes(&seed));
+/// The seed v4 would use here, and whether it is a shared fallback seed (which must not be
+/// carried forward as anybody's identity).
+pub(crate) fn legacy_root_seed(handle: &AppHandle) -> ([u8; 32], bool) {
+    // 1. Registry (sealed to this machine's MachineGuid).
+    if let Some((seed, _version)) = read_key_from_registry() {
+        return (seed, is_shared_fallback_seed(&seed));
     }
-
-    // ── 2. File cache — v4, then legacy v3, then legacy v2 (32-byte raw seed)
-    //    Any existing key is reused as-is (same seed → same Creator ID) and
-    //    promoted to v4 storage. Only a brand-new machine reaches step 3.
-    for candidate in [Some(path.clone()), v3_path.clone(), v2_path.clone()].into_iter().flatten() {
-        if candidate.exists() {
-            if let Ok(raw) = fs::read(&candidate) {
+    // 2. The plaintext files, newest format first.
+    if let Ok(dir) = handle.path().app_data_dir() {
+        for name in LEGACY_KEY_FILES {
+            if let Ok(raw) = fs::read(dir.join(name)) {
                 if let Ok(arr) = <[u8; 32]>::try_from(raw) {
-                    let _ = fs::write(&path, &arr);
-                    write_key_to_registry(&arr);
-                    return Ok(SigningKey::from_bytes(&arr));
+                    return (arr, is_shared_fallback_seed(&arr));
                 }
             }
         }
     }
+    // 3. First launch: the v4 derivation, so a returning machine gets its old id back.
+    let hwid = get_hwid_v4();
+    let shared = hwid == HWID_V4_FALLBACK_WINDOWS || hwid == HWID_V4_FALLBACK_OTHER;
+    (derive_seed_v4(&hwid, &get_machine_guid()), shared)
+}
 
-    // ── 3. Fresh v4 derivation — first launch on a new machine ───────────
-    //    WMIC-free HWID + iterated-SHA256 KDF.
-    let seed = derive_seed_v4(&get_hwid_v4(), &get_machine_guid());
-    let _ = fs::write(&path, &seed);
-    write_key_to_registry(&seed);
+/// Remove the plaintext v2/v3/v4 key copies. Called only after the v5 store was written and
+/// read back. An older BMM started afterwards re-derives the same seed from hardware, so a
+/// downgrade keeps its Creator ID.
+pub(crate) fn scrub_legacy_plaintext(handle: &AppHandle) {
+    if let Ok(dir) = handle.path().app_data_dir() {
+        for name in LEGACY_KEY_FILES { let _ = fs::remove_file(dir.join(name)); }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        if let Ok(k) = winreg::RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey_with_flags("SOFTWARE\\BetterModsManager\\Identity", KEY_ALL_ACCESS)
+        {
+            for v in ["V", "K", "S"] { let _ = k.delete_value(v); }
+        }
+    }
+}
 
-    Ok(SigningKey::from_bytes(&seed))
+/// The ROOT signing key — the private half of the Creator ID.
+///
+/// Since v5 this comes from the DPAPI-protected store. The root signs repos and v1 proofs,
+/// exactly as before, so every existing verifier keeps working; v5 proofs are signed by the
+/// separate active key (`creator_v5::creator_proof_v5`).
+pub fn load_or_generate_keys(handle: &AppHandle) -> Result<SigningKey, String> {
+    crate::commands::creator_v5::load_store(handle)?.root_key()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

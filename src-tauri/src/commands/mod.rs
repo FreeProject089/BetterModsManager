@@ -39,6 +39,7 @@ pub mod tutorial_custom;
 pub mod repo_keyauth;
 pub mod ban_manager;
 pub mod security;
+pub mod creator_v5;
 pub mod omm;
 pub mod debug;
 pub mod window;
