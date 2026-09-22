@@ -85,6 +85,29 @@ export function namesScript(url: string): boolean {
     return /\.(ps1|bat|cmd|vbs|vbe|js|jse|wsf|hta|sh|py|lnk|scr)$/.test(file);
 }
 
+/**
+ * `catalog/<kind>/<verb>` — EXACTLY three segments, and a kind this app knows.
+ *
+ * The handler dispatched the two catalogue families on a prefix and a suffix
+ * (`action.startsWith('catalog/') && action.endsWith('/install')`) while the switch below
+ * matches the action WHOLE. So `bmm://catalog/app/anything/install` was an action the gate
+ * did not recognise — admitted with no dialog and no hard limit — and an app install to the
+ * handler, which downloaded the link's payload and RAN it (`install_app` launches anything
+ * whose name says "setup"/"install", and every `.msi`). The two sides read one link
+ * differently, which is the only thing a gate cannot survive.
+ *
+ * One parser, used on both sides, so they cannot disagree again. An action that is
+ * catalogue-shaped and does not parse is refused by `decideLink` rather than let through
+ * undecided, and the handler, reading the same parse, dispatches nothing for it either.
+ */
+export const CATALOG_KINDS: readonly string[] = ['app', 'plugin', 'theme'];
+
+export function catalogRoute(action: string): { kind: string; verb: string } | null {
+    const p = action.split('/');
+    if (p.length !== 3 || p[0] !== 'catalog' || !CATALOG_KINDS.includes(p[1])) return null;
+    return { kind: p[1], verb: p[2] };
+}
+
 /** The app-id → folder rule of `link_install_app`. */
 export function appIdOk(id: string): boolean {
     return /^[A-Za-z0-9._-]{1,128}$/.test(id) && id !== '.' && id !== '..';
@@ -168,6 +191,13 @@ export function decideLink(action: string, input: URLSearchParams, originIn: Lin
     }
     // A link never carries a program path. The route launches what BMM registered, by id.
     if (action === 'app/launch' && params.has('exe')) return refuse('exe-param', params.get('exe') || '');
+    // A catalogue-shaped action the handler would still dispatch on its prefix, but that the
+    // switch below does not know whole. Refused rather than admitted undecided: an action
+    // nobody here recognised must not reach a route that recognises it. (`catalog/follow`,
+    // `catalog/entry`, `catalog/delete`, `catalog/publish` are two segments and unaffected.)
+    if (action.startsWith('catalog/') && action.split('/').length > 2 && !catalogRoute(action)) {
+        return refuse('unknown-action', action);
+    }
 
     // ── Limits for untrusted origins ───────────────────────────────────────────────
     if (!trusted && SOURCE_ACCESS_ROUTES.has(action) && (params.has('key') || params.has('passphrase'))) {

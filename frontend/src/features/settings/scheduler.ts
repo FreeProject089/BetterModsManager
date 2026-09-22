@@ -1800,6 +1800,25 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
     // Fire a bmm:// deeplink through the app's canonical handler (covers every
     // script-generator action that maps to a deeplink). Falls back to runDeepLink.
     const dl = (path: string, qp: Record<string, any> = {}) => {
+        // Asked HERE, once, for every action that fires a link — not at the twenty call
+        // sites, where `catalog.follow` remembered and `data.exportAuto` did not.
+        //
+        // The permission box says "may open a bmm:// link", and these open one. They also
+        // open it as `scheduler`, which the deep-link gate TRUSTS: no dialog, and the
+        // path limits that refuse a network location from a web page do not apply. So
+        // `data.exportAuto` with `dir=\\host\share` wrote the UNREDACTED data file —
+        // API token, repo passwords, GitHub token — to somebody else's machine.
+        //
+        // That is what made it a hole rather than an inconsistency: `sanitiseImportedTask`
+        // clears `perms` precisely so a .bmmpa from a stranger arrives with nothing
+        // granted, and tells the person what it asked for. An action that never checked
+        // the grant was never in that list, so the import toast said it asked for
+        // nothing and the task kept the capability anyway.
+        //
+        // A task that predates `perms` still has `deeplink` (taskPerms derives it), so
+        // nothing anybody already relies on stops working: only a box somebody ticked off
+        // now means what it says.
+        requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
         const qs = Object.entries(qp)
             .filter(([, v]) => v !== undefined && v !== null && v !== '')
             .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');

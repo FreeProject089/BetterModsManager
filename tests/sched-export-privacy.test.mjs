@@ -50,3 +50,48 @@ describe('a shared .bmmpa carries no local history', () => {
         );
     });
 });
+
+// Stripping `perms` on import only means something if every capability actually asks for its
+// grant. Twenty actions fired a bmm:// link through the `dl()` helper and none of them did —
+// so an imported task arrived with the `deeplink` box cleared, said it had asked for nothing,
+// and could still fire `data/export-auto`. That link runs as origin `scheduler`, which the
+// deep-link gate trusts: no dialog, and no refusal of a network path. `dir=\\host\share`
+// copied the UNREDACTED data file — API token, repo passwords, GitHub token — off the machine.
+describe('a task fires no deeplink it was not permitted to fire', () => {
+    // Comments stripped first, and only WHOLE-LINE ones. Two probes were wrong before this
+    // one read right: the first looked for the `bmm://` that ends the helper's preamble and
+    // found the one in the comment above the gate; the second stripped `//…` anywhere, which
+    // ate `bmm://` itself and every line that built the URL. Both reported a correct gate as
+    // missing. A probe that finds something is the first suspect.
+    const bare = src
+        .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+        .replace(/^[ \t]*\/\/[^\n]*$/gm, (m) => m.replace(/[^\n]/g, ' '));
+    const run = bare.slice(bare.indexOf('async function runAction'));
+
+    test('the dl() helper asks for the deeplink permission before building the URL', () => {
+        const dl = run.slice(run.indexOf('const dl = ('));
+        const body = dl.slice(0, dl.indexOf('bmm://') + 8);
+        assert.ok(body.includes('requirePerm('), 'dl() fires a bmm:// link with no permission check');
+        assert.ok(/requirePerm\([^)]*'deeplink'/.test(body), body.slice(0, 400));
+    });
+
+    test('the actions that used dl() directly are covered by it', () => {
+        // Named, so that moving one of them off dl() to a bare runDeepLink() is a failure
+        // here rather than a silent return of the same hole.
+        for (const a of ['data.exportAuto', 'replay.export', 'replay.import', 'recorder.set',
+            'discord.rpc', 'telemetry.set', 'app.install', 'repo.connect', 'restart']) {
+            const i = run.indexOf(`case '${a}':`);
+            assert.ok(i > 0, `${a} is no longer a case in runAction`);
+            const seg = run.slice(i, i + 260);
+            assert.ok(/\bdl\(/.test(seg) || /requirePerm\([^)]*'deeplink'/.test(seg),
+                `${a} fires a link without going through dl() or asking for 'deeplink'`);
+        }
+    });
+
+    test('an old task keeps the capability it was consented to', () => {
+        // taskPerms derives deeplink:true for a task written before `perms` existed, so this
+        // is a box somebody ticked OFF taking effect — not a retroactive revocation.
+        const tp = src.slice(src.indexOf('function taskPerms('), src.indexOf('function requirePerm('));
+        assert.match(tp, /deeplink:\s*true/, 'a legacy task must keep its deeplinks');
+    });
+});

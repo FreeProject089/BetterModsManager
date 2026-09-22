@@ -10541,6 +10541,7 @@
   "dlg.why.no-checksum": "une app installée depuis un lien doit porter une somme sha256, et elle doit correspondre.",
   "dlg.why.bad-checksum": "la somme du lien n’est pas un sha256.",
   "dlg.why.bad-id": "l’id d’app ne peut contenir que lettres, chiffres, point, tiret et tiret bas.",
+  "dlg.why.unknown-action": "BMM ne connaît pas l’action de ce lien, donc rien ici n’a décidé ce qu’il a le droit de faire.",
   "dlg.why.key-from-link": "un lien ne peut ni choisir ni déverrouiller une clé de signature. Les clés se lient uniquement dans Paramètres > Identité & API.",
   "dlg.do.appLaunch": "Démarrer cette app. Seule une app enregistrée dans BMM peut être démarrée depuis un lien.",
   "dlg.do.appInstall": "Télécharger ce fichier et l’installer comme app. Un installateur (.exe, .msi) VA S’EXÉCUTER sur cet ordinateur.",

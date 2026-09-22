@@ -81,6 +81,35 @@ pub fn https_refusal(url: &str) -> Option<&'static str> {
     None
 }
 
+/// The host a URL names, lowercased — what the gate's dialog puts on its own line.
+pub fn host_of(url: &str) -> String {
+    reqwest::Url::parse(url.trim())
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()))
+        .unwrap_or_default()
+}
+
+/// Why the address the bytes actually came from is refused, or `None`.
+///
+/// The gate shows the host on its own line precisely so a look-alike cannot hide in a long
+/// URL. A redirect moves the download somewhere else AFTER the person has read that line, so
+/// the host they approved and the host that served them are not the same fact.
+///
+/// A checksum settles it: the content is pinned whatever serves it, and catalogues do
+/// legitimately point at a release that redirects to a CDN. Without one — and a plugin
+/// catalogue carries no checksum — the server is the only thing vouching for the bytes, so it
+/// must be the server that was shown.
+pub fn redirect_refusal(requested: &str, final_url: &str, has_checksum: bool) -> Option<&'static str> {
+    if has_checksum {
+        return None;
+    }
+    let shown = host_of(requested);
+    if shown.is_empty() {
+        return Some("no-host");
+    }
+    (shown != host_of(final_url)).then_some("redirected-host")
+}
+
 /// A sha256 as a catalogue writes it: 64 hex digits, optionally prefixed `sha256:`.
 pub fn normalize_sha256(s: &str) -> Option<String> {
     let t = s.trim();
@@ -199,8 +228,12 @@ pub async fn link_install_plugin(
         .send()
         .await
         .map_err(|e| format!("Download error: {}", e))?;
-    // The final address after redirects must still be https.
+    // The final address after redirects must still be https — and, with no checksum to pin
+    // the bytes, must still be the server the dialog showed.
     if let Some(why) = https_refusal(resp.url().as_str()) {
+        return Err(refused(resp.url().as_str(), why));
+    }
+    if let Some(why) = redirect_refusal(&download_url, resp.url().as_str(), expected.is_some()) {
         return Err(refused(resp.url().as_str(), why));
     }
     let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
@@ -228,7 +261,7 @@ pub fn link_export_app_data(
     }
     let _ = state.save();
     let text = std::fs::read_to_string(&*state.data_path).map_err(|e| e.to_string())?;
-    let out = redacted_export(&text);
+    let out = redacted_export_beside(&text, std::path::Path::new(&*state.data_path));
     let dest = crate::commands::settings::backup_dest_path(dir, name, increment, None)?;
     std::fs::write(&dest, out).map_err(|e| e.to_string())?;
     Ok(dest)
@@ -238,6 +271,20 @@ pub fn link_export_app_data(
 pub fn redacted_export(data_json: &str) -> String {
     let mut r = crate::commands::report_redact::Redactor::new();
     r.absorb_json_text(data_json);
+    r.redact_json_text(data_json)
+}
+
+/// The same, plus the secrets that live in a file of their OWN beside the data file.
+///
+/// Redaction by key name only removes what a key names. The BetterCommunity API key is in no
+/// JSON at all, so the value layer never learns it unless something reads that file — which
+/// `crash.rs` does before writing a report, and this did not. A key echoed into the data file
+/// under a name `is_secret_key` does not read as one (`bc`, `account`, `licence`) would have
+/// survived the one export a web page can still ask for. Both paths learn the same secrets now.
+pub fn redacted_export_beside(data_json: &str, data_path: &std::path::Path) -> String {
+    let mut r = crate::commands::report_redact::Redactor::new();
+    r.absorb_json_text(data_json);
+    r.absorb_secret_file(&data_path.with_file_name(crate::commands::security::BC_API_KEY_FILE));
     r.redact_json_text(data_json)
 }
 
@@ -317,6 +364,31 @@ mod tests {
     }
 
     #[test]
+    fn an_unchecksummed_download_must_come_from_the_host_that_was_shown() {
+        // The dialog showed `good.example`; the bytes arrived from somewhere else.
+        assert_eq!(
+            redirect_refusal("https://good.example/p.zip", "https://evil.example/p.zip", false),
+            Some("redirected-host")
+        );
+        assert_eq!(
+            redirect_refusal("https://good.example/p.zip", "https://cdn.good.example/p.zip", false),
+            Some("redirected-host"),
+            "a subdomain is a different server"
+        );
+        // Same host, any path, any case: nothing moved.
+        assert_eq!(redirect_refusal("https://good.example/a", "https://GOOD.example/b/c", false), None);
+        assert_eq!(redirect_refusal("https://good.example/a", "https://good.example/a", false), None);
+        // A checksum pins the content, so the release → CDN redirect catalogues really use
+        // stays allowed.
+        assert_eq!(
+            redirect_refusal("https://github.com/o/r/releases/x.zip", "https://objects.githubusercontent.com/x", true),
+            None
+        );
+        assert_eq!(redirect_refusal("https://", "https://evil.example/x", false), Some("no-host"));
+        assert_eq!(host_of("https://Good.Example:443/x"), "good.example");
+    }
+
+    #[test]
     fn script_payload_names() {
         assert!(url_names_script("https://x/y/run.ps1"));
         assert!(url_names_script("https://x/y/run.BAT?dl=1"));
@@ -330,6 +402,27 @@ mod tests {
         assert!(!out.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "{out}");
         assert!(!out.contains("s3cr3t-api-token-value"), "{out}");
         assert!(out.contains("Me"), "non-secret fields survive: {out}");
+    }
+
+    #[test]
+    fn a_secret_kept_in_its_own_file_is_scrubbed_from_the_export_too() {
+        // The BetterCommunity API key is in no JSON, so nothing NAMES it. Here the data file
+        // echoes it under `bc_account`, a key `is_secret_key` reads as harmless — the one
+        // shape the name layer cannot catch and only reading the file can.
+        let dir = std::env::temp_dir().join(format!("bmm-link-guard-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let data_path = dir.join("data.json");
+        let secret = "bc_live_9f2c41e8a7d64b0e";
+        std::fs::write(dir.join(crate::commands::security::BC_API_KEY_FILE), secret).unwrap();
+        let data = format!(r#"{{"settings":{{"bc_account":"{secret}","author":"Me"}}}}"#);
+
+        let out = redacted_export_beside(&data, &data_path);
+        assert!(!out.contains(secret), "{out}");
+        assert!(out.contains("Me"), "non-secret fields survive: {out}");
+        // And the name-only path is what it was, so the difference is the file, not luck.
+        assert!(redacted_export(&data).contains(secret));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // Refused whatever the user answered: the limits are checked before any I/O, so these

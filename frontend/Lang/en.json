@@ -10543,6 +10543,7 @@
   "dlg.why.no-checksum": "an app installed from a link must carry a sha256 checksum, and it must match.",
   "dlg.why.bad-checksum": "the checksum in the link is not a sha256.",
   "dlg.why.bad-id": "the app id can only use letters, digits, dot, dash and underscore.",
+  "dlg.why.unknown-action": "BMM does not know that link's action, so nothing here decided what it is allowed to do.",
   "dlg.why.key-from-link": "a link cannot choose or unlock a signing key. Keys are bound in Settings > Identity & API only.",
   "dlg.do.appLaunch": "Start this app. Only an app BMM has registered can be started from a link.",
   "dlg.do.appInstall": "Download this file and install it as an app. An installer (.exe, .msi) will RUN on this computer.",

@@ -10,7 +10,7 @@ import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import type { Profile } from '../types/models.js';
 import { refreshPlugins, handleApplyViaDeepLink } from '../features/plugins/plugins.js';
-import { admitLink, type LinkOrigin, type LinkPrompt } from './deeplink-guard.js';
+import { admitLink, catalogRoute, type LinkOrigin, type LinkPrompt } from './deeplink-guard.js';
 
 declare global {
     interface Window {
@@ -531,8 +531,13 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
         // ── BetterCommunity catalog install: bmm://catalog/<kind>/install ──
         // The web (bettercommunity) generates these for its catalog items. Kind is
         // app | plugin | theme; `url` is the download (payload) and `name` the label.
-        if (action.startsWith('catalog/') && action.endsWith('/install')) {
-            const kind = action.split('/')[1];
+        // `catalogRoute` and not `startsWith('catalog/') && endsWith('/install')`: the gate
+        // matches the action whole, so a prefix match here meant `catalog/app/x/install`
+        // was an unknown action to the gate — admitted with no dialog and no hard limit —
+        // and an app install to this line, which downloads and runs the payload. One parser
+        // for both sides (deeplink-guard.ts) is what stops them reading a link differently.
+        if (catalogRoute(action)?.verb === 'install') {
+            const kind = catalogRoute(action)!.kind;
             const url = parsedUrl.searchParams.get('url') || '';
             const name = parsedUrl.searchParams.get('name') || kind;
             const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || kind;
@@ -577,8 +582,8 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
         // ── Add a whole catalog as a SOURCE: bmm://catalog/<kind>/add-source?url=… ──
         // The web (bettercommunity) generates these for its catalog.json feeds so a
         // user can subscribe to a community app/plugin/theme catalog in one click.
-        if (action.startsWith('catalog/') && action.endsWith('/add-source')) {
-            const kind = action.split('/')[1]; // app | plugin | theme
+        if (catalogRoute(action)?.verb === 'add-source') {
+            const kind = catalogRoute(action)!.kind; // app | plugin | theme
             const url = parsedUrl.searchParams.get('url') || '';
             if (!url || !/^https?:\/\//i.test(url)) {
                 toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
