@@ -25,6 +25,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege for GITHUB_TOKEN. Without a block the token gets the repository's default,
+# which on an older repository is write-all — handed to every step, including third-party
+# actions pinned to moving refs (`dtolnay/rust-toolchain@stable` is a BRANCH). Nothing here
+# writes: it checks out, installs and runs the gate chain and cargo test.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend (tsc · guard · i18n)

@@ -67,10 +67,20 @@ jobs:
 
       - name: Restore signing key
         shell: pwsh
+        # Through `env:`, NOT `${{ secrets.… }}` inline. An expression is substituted into the
+        # script TEXT before PowerShell parses it, so the key's own characters become script:
+        # a value containing a quote or `$(…)` changes what runs, and the substituted line can
+        # surface in a trace or an error message. `$env:` hands PowerShell a value instead of
+        # rewriting the program. This is the key that signs every BMM update — an installed
+        # copy accepts an update BECAUSE it verifies against the public half baked into
+        # installer.toml — so it is the one secret in this repository whose theft is not a
+        # leak but a supply-chain compromise of every user.
+        env:
+          BMM_PRIVATE_KEY: ${{ secrets.BMM_PRIVATE_KEY }}
         run: |
           $keyDir = "betterinstaller-src/examples/bmm/keys"
           New-Item -ItemType Directory -Force $keyDir | Out-Null
-          Set-Content -Path "$keyDir/private.key" -Value "${{ secrets.BMM_PRIVATE_KEY }}" -NoNewline
+          Set-Content -Path "$keyDir/private.key" -Value $env:BMM_PRIVATE_KEY -NoNewline
 
       - name: Resolve version
         id: ver

@@ -109,16 +109,32 @@ fn tar_entries(path: &Path, gz: bool) -> std::io::Result<Vec<(String, u64)>> {
 
 /// Lists a .7z WITHOUT extracting (reads the header/index only).
 fn sevenz_entries(path: &Path) -> std::io::Result<Vec<(String, u64)>> {
+    Ok(sevenz_all_entries(path)?
+        .into_iter()
+        .filter(|(_, _, dir)| !dir)
+        .map(|(name, size, _)| (name, size))
+        .collect())
+}
+
+/// Every entry name in a .7z, DIRECTORIES INCLUDED, as (name, size, is_dir).
+///
+/// `sevenz_entries` above drops directories on purpose — a file listing should show files.
+/// The zip-slip pre-scan in `extract_to` must not, and for a while it did, because it was
+/// built on that function. `sevenz_rust`'s `default_entry_extract_fn` calls
+/// `create_dir_all(dest.join(entry.name()))` for a directory entry with no path check of
+/// its own (verified in the vendored 0.6.1 source), so a directory entry named
+/// `../../../x` created a directory tree OUTSIDE the destination while every file entry
+/// was being validated. Content could not be written there — file entries are still
+/// checked — but an archive should not be able to reach outside `dest` at all.
+fn sevenz_all_entries(path: &Path) -> std::io::Result<Vec<(String, u64, bool)>> {
     let mut file = std::fs::File::open(path)?;
     let len = file.metadata()?.len();
     let archive = sevenz_rust::Archive::read(&mut file, len, &[]).map_err(io_err)?;
-    let mut out = Vec::new();
-    for e in &archive.files {
-        if !e.is_directory() {
-            out.push((e.name().replace('\\', "/"), e.size()));
-        }
-    }
-    Ok(out)
+    Ok(archive
+        .files
+        .iter()
+        .map(|e| (e.name().replace('\\', "/"), e.size(), e.is_directory()))
+        .collect())
 }
 
 /// Lists a .rar WITHOUT extracting (reads the headers only).
@@ -171,7 +187,10 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
             // Independent zip-slip guard: refuse the whole archive if ANY entry path
             // would escape `dest` (sevenz_rust::decompress_file writes everything at
             // once, so validate the index up front rather than trusting the crate).
-            for (name, _) in sevenz_entries(path)? {
+            // `sevenz_all_entries`, NOT `sevenz_entries`: the latter hides directory
+            // entries, and a directory entry is a `create_dir_all(dest.join(name))` with
+            // no check of its own. See the comment on sevenz_all_entries.
+            for (name, _, _) in sevenz_all_entries(path)? {
                 if is_unsafe_rel_path(&name) {
                     return Err(io_err(format!("unsafe path in 7z archive: {name}")));
                 }
@@ -344,6 +363,58 @@ mod path_safety_tests {
         ] {
             assert!(!is_unsafe_rel_path(ok), "{ok:?} must be allowed");
         }
+    }
+
+    /// The guard above is only worth what `extract_to` actually FEEDS it.
+    ///
+    /// It was fed `sevenz_entries`, which drops directory entries — and a directory entry is
+    /// not inert: `sevenz_rust::default_entry_extract_fn` answers one with
+    /// `create_dir_all(dest.join(entry.name()))` and no path check of its own. So a `.7z`
+    /// carrying a single directory entry named `../../bmm-escape-probe` reached outside the
+    /// destination while every file in the same archive was being validated, and no test
+    /// above this one could see it: `is_unsafe_rel_path` answers that name correctly, it was
+    /// simply never asked.
+    ///
+    /// This builds that archive for real and asserts both halves: `extract_to` refuses it,
+    /// and the directory is not on disk afterwards. Against the previous code it fails on the
+    /// first assertion (extract_to returned Ok) and on the second (the directory existed).
+    #[test]
+    fn a_directory_entry_cannot_reach_outside_the_destination() {
+        use sevenz_rust::{SevenZArchiveEntry, SevenZWriter};
+
+        let tmp = std::env::temp_dir().join(format!("bmm-7z-dirslip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let dest = tmp.join("dest");
+        // What the archive aims at: a sibling of `dest`, i.e. outside it.
+        let escaped = tmp.join("bmm-escape-probe");
+
+        let archive_path = tmp.join("hostile.7z");
+        {
+            let mut w = SevenZWriter::create(&archive_path).unwrap();
+            let mut dir = SevenZArchiveEntry::new();
+            dir.name = "../bmm-escape-probe".to_string();
+            dir.is_directory = true;
+            dir.has_stream = false;
+            w.push_archive_entry::<&[u8]>(dir, None).unwrap();
+            // A perfectly ordinary file beside it, so the archive is not refused for some
+            // other reason and the directory entry is the only thing under test.
+            let mut f = SevenZArchiveEntry::new();
+            f.name = "readme.txt".to_string();
+            f.has_stream = true;
+            w.push_archive_entry(f, Some(&b"hello"[..])).unwrap();
+            w.finish().unwrap();
+        }
+
+        let err = super::extract_to(&archive_path, &dest);
+        assert!(err.is_err(), "a 7z whose directory entry escapes `dest` must be refused");
+        assert!(
+            !escaped.exists(),
+            "the directory outside `dest` must not have been created: {}",
+            escaped.display()
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
 
