@@ -82,6 +82,15 @@ pub struct HandoffResult {
     /// localStorage flag (that setting lives on the JS side, not in AppSettings).
     /// `None`/`Some(true)` → leave BMM's default (on).
     pub session_recorder: Option<bool>,
+    /// The installer's telemetry checkbox was TICKED. Not consent — the frontend uses it
+    /// to pre-select the answer in BMM's own consent dialog, which still has to be
+    /// accepted before anything is collected. An unticked box records a refusal in
+    /// `analytics_consent` instead and never sets this.
+    pub telemetry_preselect: Option<bool>,
+    /// Weekly benchmark + extra hardware report (serials, machine UUID, MACs). Like the
+    /// session recorder it lives in localStorage (`bmm_telemetry_bench`), so it is
+    /// surfaced for the frontend to mirror. `None` = not asked → BMM's default (off).
+    pub telemetry_bench: Option<bool>,
     /// Tasky and the in-app tip callouts. All four live in localStorage on the JS side,
     /// exactly like `session_recorder`, so they are surfaced rather than applied here.
     /// `None` means the installer said nothing and BMM's own default (all on) stands —
@@ -218,10 +227,23 @@ fn apply_settings(
     if s.get("skip_tutorial").and_then(|v| v.as_bool()) == Some(true) {
         settings.onboarding_shown = true;
     }
-    // Telemetry consent (explicit opt-in/out).
-    if let Some(tel) = s.get("telemetry").and_then(|v| v.as_bool()) {
-        settings.analytics_consent = Some(tel);
+    // Telemetry. A ticked installer box is NOT consent: it used to write
+    // analytics_consent = Some(true), which started collection on first launch and made
+    // BMM's own consent dialog — the only screen that lists what is collected — never
+    // appear. It is now surfaced as a pre-selection the dialog starts from.
+    //
+    // A REFUSAL is still recorded, because it needs no further screen: nothing is
+    // collected and no dialog has to ask again. (The consent dialog is what turns
+    // `None` into a decision; `Some(false)` means the user already said no.)
+    match s.get("telemetry").and_then(|v| v.as_bool()) {
+        Some(true) => res.telemetry_preselect = Some(true),
+        Some(false) => settings.analytics_consent = Some(false),
+        None => {}
     }
+    // Weekly benchmark + extra hardware report (serials, machine UUID, MAC addresses).
+    // A JS-side setting (localStorage bmm_telemetry_bench), so it is surfaced, not applied.
+    // It only ever matters once telemetry consent has actually been given.
+    res.telemetry_bench = s.get("telemetry_bench").and_then(|v| v.as_bool());
     // Optional preferences the installer can pre-set (each a plain bool the user picked on
     // the Configuration page; absent key → BMM's own default is left untouched). Keys are
     // the flat form of the installer.toml `maps_to` (the `settings.` prefix is stripped).
@@ -308,6 +330,7 @@ mod tests {
             "tos_accepted": true,
             "skip_tutorial": true,
             "telemetry": false,
+            "telemetry_bench": false,
             "discord_rpc": true,
             "smart_io": false,
             "sound_effects": false
@@ -327,7 +350,10 @@ mod tests {
         assert!(res.language_set);
         assert_eq!(settings.language, "fr");
         assert!(settings.onboarding_shown); // tutorial skipped
+        // Unticked box = a refusal, recorded; nothing to ask again.
         assert_eq!(settings.analytics_consent, Some(false));
+        assert_eq!(res.telemetry_preselect, None);
+        assert_eq!(res.telemetry_bench, Some(false));
         // Optional preferences applied (each overrides BMM's default when present).
         assert!(settings.discord_rpc_enabled); // default false → set true
         assert!(!settings.smart_io_enabled); // default true → set false
@@ -345,6 +371,33 @@ mod tests {
         assert_eq!(settings.discord_rpc_enabled, defaults.discord_rpc_enabled);
         assert_eq!(settings.smart_io_enabled, defaults.smart_io_enabled);
         assert_eq!(settings.sound_effects_enabled, defaults.sound_effects_enabled);
+    }
+
+    /// A TICKED telemetry box must not enable collection: it only pre-selects the answer
+    /// in BMM's consent dialog, which still has to be accepted.
+    #[test]
+    fn ticked_telemetry_box_is_a_preselection_not_consent() {
+        let json = r#"{ "source":"betterinstaller", "settings": { "telemetry": true, "telemetry_bench": true } }"#;
+        let file: HandoffFile = serde_json::from_str(json).unwrap();
+        let mut settings = crate::state::AppSettings::default();
+        let res = apply_settings(&file.settings, &mut settings);
+        assert_eq!(settings.analytics_consent, None); // still undecided → the dialog runs
+        assert_eq!(res.telemetry_preselect, Some(true));
+        assert_eq!(res.telemetry_bench, Some(true));
+    }
+
+    /// Defaults for an install that never mentioned these: everything that sends data off
+    /// the machine stays off, and telemetry stays undecided.
+    #[test]
+    fn unmentioned_privacy_options_stay_off() {
+        let json = r#"{ "source":"betterinstaller", "settings": { "language":"en" } }"#;
+        let file: HandoffFile = serde_json::from_str(json).unwrap();
+        let mut settings = crate::state::AppSettings::default();
+        let res = apply_settings(&file.settings, &mut settings);
+        assert_eq!(settings.analytics_consent, None);
+        assert!(!settings.discord_rpc_enabled);
+        assert_eq!(res.telemetry_preselect, None);
+        assert_eq!(res.telemetry_bench, None);
     }
 
     #[test]

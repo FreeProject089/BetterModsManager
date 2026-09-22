@@ -6211,6 +6211,7 @@
   "analytics.linkTitle": "Modifier les réglages de télémétrie ?",
   "analytics.linkDesc": "Un lien demande à BMM de modifier vos réglages de télémétrie. Rien ne change sans votre confirmation.",
   "analytics.linkRequest": "Un lien demande à BMM d'activer la télémétrie. Rien ne change si vous n'acceptez pas ici. Le replay non masqué ne s'active que dans Paramètres → Confidentialité.",
+  "analytics.installerPreselect": "Vous avez coché la télémétrie pendant l'installation : la réponse est donc pré-sélectionnée ci-dessous. Rien n'a encore été collecté — la collecte ne démarre que si vous acceptez ici.",
   "analytics.linkNoUnmask": "Le replay non masqué ne peut pas être activé par un lien. Passez par Paramètres → Confidentialité.",
   "analytics.linkNotApplied": "Réglages de télémétrie inchangés",
   "analytics.linkApplied": "Réglages de télémétrie mis à jour",

@@ -16,18 +16,21 @@ do not repeat any of this: on questions about data, this document is the referen
 
 | What | Default when you install with BetterInstaller | Default when BMM runs without the installer |
 |---|---|---|
-| Startup requests to BetterCommunity (carry your Creator ID, §2.1) | On, always | On, always |
+| Startup requests to BetterCommunity (§2.1) | On, always — **without your Creator ID** | On, always — **without your Creator ID** |
 | Update check (§2.2) | On | On |
 | Connectivity checks and web fonts (§2.3) | On, always | On, always |
-| **Telemetry** (§3) | **On**: the installer's box is pre‑ticked | Off until you answer the first‑run consent screen |
-| Session replay sent with telemetry (§3.2) | **On** while telemetry is on: pre‑ticked in the installer | Pre‑ticked in the consent screen's "Customize" section |
-| Weekly benchmark + detailed hardware report (§3.3) | **On** while telemetry is on: the installer does not ask | Pre‑ticked in the consent screen's "Customize" section |
-| **Discord Rich Presence** (§4) | **On**: the installer's box is pre‑ticked | Off |
+| **Telemetry** (§3) | Off. The installer's box is **unticked**; ticking it only pre‑selects the answer in BMM's own consent screen, which still has to be accepted | Off until you answer the first‑run consent screen |
+| Session replay sent with telemetry (§3.2) | Off until telemetry is accepted; then on unless you untick it | Pre‑ticked in the consent screen's "Customize" section |
+| Weekly benchmark + detailed hardware report (§3.3) | **Off**, and the installer now asks about it as its own option | **Off** — unticked in the consent screen's "Customize" section |
+| **Discord Rich Presence** (§4) | **Off**: the installer's box is unticked | Off |
 | Bug, crash and feedback reports (§5) | Only when you press Send | Only when you press Send |
 
 Every one of these can be turned off in BMM's settings (Settings → Privacy for telemetry and its
-options, the Discord and update toggles in Settings). The BetterInstaller Configuration page shows
-each pre‑ticked box with a description and a "Sends data" mark before anything is installed.
+options, the Discord and update toggles in Settings). Everything that sends data off this PC is
+**opt‑in**: the BetterInstaller Configuration page shows each box unticked, with a description and a
+"Sends data" mark, before anything is installed, and ticking the telemetry box there is a
+pre‑selection — BMM still asks on its own consent screen, and collection starts only if you accept
+it there.
 
 ---
 
@@ -35,10 +38,15 @@ each pre‑ticked box with a description and a "Sends data" mark before anything
 
 ### 2.1 Startup configuration, with your Creator ID
 Each time BMM starts it downloads its list of links (`links.json`) and the contributors list from
-`bettercommunity.ch`, falling back to the copies on GitHub. **Requests BMM's native side makes to a
-bettercommunity.ch address carry your Creator ID** in an `X-Creator-ID` header, so BetterCommunity
-receives your Creator ID and IP address at every launch, **before and independently of the
-telemetry consent**.
+`bettercommunity.ch`, falling back to the copies on GitHub. **These two startup downloads no longer
+carry your Creator ID.** They are fetched anonymously — no `X-Creator-ID` header, no key proof — so
+what BetterCommunity receives at launch is an ordinary web request for two public files: its server
+sees your IP address, as any web server does, and nothing that identifies this installation.
+
+Other requests BMM's native side makes to a bettercommunity.ch address **do** carry your Creator ID
+in an `X-Creator-ID` header — fetching a catalogue or a repository, where the id is what gates access
+to private content, and the feedback, report and account features you start yourself. Those happen
+when you use the feature, not at every launch.
 
 **What the Creator ID is.** It is the public half of an Ed25519 key pair BMM creates on first launch.
 The key is **derived from identifiers of this PC** (Windows MachineGuid, product ID and install date;
@@ -116,10 +124,16 @@ Telemetry sends usage and diagnostic data to **BetterCommunity's telemetry serve
 compressed and sent over **HTTPS** every 90 seconds while the window is visible, when it is hidden
 and when BMM closes. Each batch carries a random **packet id** so you can have it erased (§3.5).
 
-**Default:** off in BMM until you answer the first‑run consent screen. **On if you install with
-BetterInstaller and leave its pre‑ticked box**: the installer passes your choice to BMM, and the
-consent screen is then not shown. Settings → Privacy turns it off at any time; when off, none of
-§3 is collected or sent.
+**Default: off.** Telemetry is **opt‑in**, and it is asked for in BMM, not in the installer:
+
+- **If you install with BetterInstaller**, its telemetry box is **unticked**. Leaving it alone means
+  nothing is ever collected and BMM does not ask again. **Ticking it is not consent** — it only
+  **pre‑selects the answer** on BMM's own first‑run consent screen, which lists what is collected;
+  nothing is collected unless you accept there. (Explicitly *unticking* it is recorded as a refusal,
+  so the consent screen does not ask you a second time.)
+- **If you install without the installer**, telemetry is off until you answer that same screen.
+
+Settings → Privacy turns it off at any time; when off, none of §3 is collected or sent.
 
 A `bmm://telemetry/…` link (which any web page can open) cannot change these settings by itself: it
 opens BMM's consent screen, or a confirmation when it only turns something off, and nothing changes
@@ -132,7 +146,9 @@ unless you accept there.
   they are mounted), your monitors (maker, model, year) and screen resolutions, your **local network
   IP address** and your **public IP address** (which BMM obtains by asking `api.ipify.org`), BMM's
   version and interface language, and for each of your profiles the **game name**, its number of
-  mods and how its folders are spread across disks.
+  mods and how its folders are spread across disks. (What the server *keeps* of those two addresses
+  is less than what BMM sends: the local one is discarded on arrival and the public one is truncated
+  to its network before it is stored — see §3.5.)
 - **Preferences and counts:** active theme (id, name, built‑in or custom), language, Tasky
   settings, the filesystem security mode, and how many mods, profiles, plugins, modpacks, tags,
   launch packs and apps you have (counts, not their names).
@@ -153,25 +169,29 @@ While telemetry is on, BMM also sends a **recording of the BMM window**: its lay
 scrolling and navigation. **Text typed into input fields is masked**, and so are elements marked
 as names or paths. Other windows and the rest of your screen are never recorded.
 
-- **Default:** on while telemetry is on. In BetterInstaller it is the "Session replay in
-  telemetry" box, pre‑ticked; in BMM it is an option of Settings → Privacy.
+- **Default:** on **while telemetry is on** — and telemetry is off unless you accepted it (§3), so
+  by itself this box sends nothing. In BetterInstaller it is the "Session replay in telemetry" box,
+  pre‑ticked; in BMM it is an option of Settings → Privacy and of the consent screen's "Customize"
+  section.
 - A separate **"full (unmasked)"** mode exists for your own debugging. It is off unless you turn it
   on; when on, typed text is not masked and local images shown in the window are embedded in the
   recording. It can only be turned on by hand in Settings → Privacy (or the consent screen you open
   yourself), never by a `bmm://` link.
 
 ### 3.3 Weekly benchmark and detailed hardware report
-While telemetry is on, BMM runs a short internal benchmark once a week (and when telemetry is first
-turned on) and sends its timings. With it, BMM sends a **detailed hardware report** made of
+**Off by default, and asked about separately.** When you turn it on *and* telemetry is on, BMM runs
+a short internal benchmark once a week (and when telemetry is first turned on) and sends its
+timings. With it, BMM sends a **detailed hardware report** made of
 **stable hardware identifiers**: motherboard model and serial number, BIOS version, date and
 vendor, the machine UUID, CPU cache and thread details, each disk's model, serial number, size and
 interface, the **MAC address of each physical network adapter**, OS build, UEFI or legacy boot,
 Secure Boot and TPM state.
 
-- **Default:** on as soon as telemetry is on. BetterInstaller does not ask about it; in BMM it is
-  the "Automatic Benchmark (every 7 days) + extra hardware report" toggle in Settings → Privacy
-  (and in the consent screen's "Customize" section), pre‑ticked. Untick it to keep telemetry
-  without this report.
+- **Default: off**, everywhere and on its own. BetterInstaller now asks about it as a separate
+  "Weekly hardware report & benchmark" box, unticked; in BMM it is the "Automatic Benchmark (every
+  7 days) + extra hardware report" toggle in Settings → Privacy and in the consent screen's
+  "Customize" section, also unticked. **Accepting telemetry does not turn it on** — the hardware
+  identifiers above are collected only if you tick this one yourself.
 
 ### 3.4 What is never sent by telemetry
 The contents of your mods, game files or other files; the values you type into fields (unless you
@@ -183,20 +203,31 @@ turn on the unmasked replay mode in §3.2); your name or e‑mail.
 - **A copy of your data:** the Privacy panel can file a request for everything tied to your
   Creator ID. You give an e‑mail address, which is sent with the request; an administrator reviews
   it and sends the export back by e‑mail.
-- **Your IP address and location:** the server records the IP address a batch comes from and the
-  public IP address BMM reports (§3.1). It looks the address up with the third‑party service
-  **ipwho.is** and stores the country, region, city and the coordinates that service returns. IP
-  geolocation finds the network you connect through, not your home, but it is often accurate to
-  the city. The dashboard map shows these coordinates rounded.
-- **Retention:** usage events, benchmarks and session replays are deleted automatically after the
-  retention period, **180 days** unless the administrator sets another value. **The records of IP
-  addresses, their locations and the "live instance" list are not deleted automatically** by the
-  current server.
+- **Your IP address and location — truncated, never stored whole:** the server sees the address a
+  batch comes from, and BMM also reports its own public address (§3.1). **Neither is written down in
+  full.** Before anything is stored, an address is cut down to the network it belongs to: the first
+  three numbers for IPv4 (`203.0.113.45` → `203.0.113.0`) and the first three groups for IPv6. That
+  is what goes into the database, into the location lookup, into the live list and into the
+  administrator activity log. The exact address exists only in the server's memory for the length of
+  one request, as the key of the anti‑flood counter, and is never stored, logged or exported. **The
+  local network address BMM used to report about itself is no longer stored at all** — it is dropped
+  on arrival.
+- **Location:** the truncated address is looked up with the third‑party service **ipwho.is**, and
+  the country, region and city are stored. The coordinates are **rounded to one decimal degree
+  (about 11 km)** before being stored, so what is kept is a city, not a place. IP geolocation finds
+  the network you connect through, not your home.
+- **Retention:** everything is deleted automatically after the retention period, **180 days** unless
+  the administrator sets another value: usage events, benchmarks and session replays, **and also the
+  stored networks, their locations and the "live instance" list** — those three used to be kept
+  indefinitely and are now purged in the same pass.
 - **Erasure per packet:** the Privacy panel lists every packet BMM has sent (id, time, which event
   types and how many). "Request deletion" erases that packet's events, benchmarks and replays after
   a review delay of at most 72 hours, or at once if an administrator approves it; a declined
-  request can be made again. **It does not remove the IP and location records**; ask for that
-  through the contact in §8.
+  request can be made again. If that packet was the last data held about your installation, the
+  erasure **also removes the stored network, its location and the live entry** for it.
+- **Erasure per person:** a deletion request tied to your Creator ID removes your events,
+  benchmarks and replays and, in the same pass, the network, the live entry and the cached location
+  (the location only once no other installation is still seen on that same network).
 - You can export or clear BMM's local buffer at any time in the Privacy panel.
 - The server limits how many batches one address may send per minute.
 
@@ -209,8 +240,9 @@ a "Website" button whose link contains your Creator ID. Discord displays this to
 see your profile**, under Discord's own privacy policy. Each update also re‑reads BMM's link list
 from GitHub.
 
-**Default:** off in BMM; **on if you install with BetterInstaller and leave its pre‑ticked box**.
-Turn it off in Settings. A `bmm://discord/rpc` link (which any web page can open) only asks: BMM
+**Default: off**, both in BMM and in BetterInstaller, whose box is now **unticked** — installing
+with it changes nothing here unless you tick it yourself.
+Turn it on or off in Settings. A `bmm://discord/rpc` link (which any web page can open) only asks: BMM
 says what will become visible, and nothing changes unless you confirm in BMM.
 
 ---
@@ -330,13 +362,13 @@ under its own terms.
 | Action | Leaves your PC? | What is sent | To whom |
 |---|---|---|---|
 | Browsing and managing mods, profiles, modpacks | No | — | — |
-| Every launch (links, contributors) | Yes, always | IP address, **Creator ID** | bettercommunity.ch (GitHub as fallback) |
+| Every launch (links, contributors) | Yes, always | IP address only — **no Creator ID** (§2.1) | bettercommunity.ch (GitHub as fallback) |
 | Update check | Yes, by default | IP address, program user‑agent | GitHub, bettercommunity.ch |
 | Connectivity checks, fonts, apps catalogue | Yes, always | IP address | Google, Cloudflare, GitHub |
-| **Telemetry** (on if you kept the installer's box) | Yes | Creator ID, system profile with public and local IP, usage, clicked button text, external link addresses, logs, performance, game names, repo addresses | BetterCommunity telemetry server; your IP to ipify.org and ipwho.is |
-| Session replay (with telemetry, on by default) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
-| Weekly benchmark + hardware report (with telemetry, on by default) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |
-| **Discord Rich Presence** (on if you kept the installer's box) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
+| **Telemetry** (**off** unless you accept it in BMM) | Yes | Creator ID, system profile with public and local IP, usage, clicked button text, external link addresses, logs, performance, game names, repo addresses — the server keeps the public address truncated to its network and discards the local one | BetterCommunity telemetry server; your IP to ipify.org, your truncated network to ipwho.is |
+| Session replay (with telemetry, on unless unticked) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
+| Weekly benchmark + hardware report (**off**, its own question) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |
+| **Discord Rich Presence** (**off** by default, in BMM and in the installer) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
 | Connect or sync a Server Repo | Yes | IP address, Creator ID | That repo's owner |
 | Host a Server Repo | Yes (incoming) | Visitors' IP and Creator ID, stored on your PC | You |
 | Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs and, for a normal-close report, a snapshot of your settings with tokens and passwords redacted; DxDiag, with your Windows account name, only if you tick it), Creator ID with signed proof and hashed device fingerprint (§2.4), app and OS details | BetterCommunity feedback centre |
@@ -347,16 +379,17 @@ under its own terms.
 
 ## 8. Your choices and contact
 
-- Uncheck telemetry, session replay and Discord Rich Presence in the installer, or turn them off
-  later in Settings; turn off the weekly benchmark and hardware report in Settings → Privacy; turn
-  off automatic update checks in Settings.
+- Telemetry, the weekly hardware report and Discord Rich Presence are **off unless you turn them
+  on**: the installer's boxes start unticked, and ticking the telemetry one only pre‑selects the
+  answer on BMM's consent screen. Untick session replay in the installer or in Settings → Privacy;
+  turn any of them on or off later in Settings; turn off automatic update checks in Settings.
 - Export or clear the local telemetry buffer, request erasure per packet, or request a copy of
   your data (§3.5).
 - The startup requests of §2.1 and §2.3 cannot currently be turned off in BMM; staying offline
   prevents them.
 - We never sell your data, and it is not used for advertising.
 
-For any other request about your data (access, erasure of IP and location records, a question),
+For any other request about your data (access, erasure, a question),
 open an issue on the GitHub repository:
 [BetterModsManager](https://github.com/FreeProject089/BetterModsManager)
 

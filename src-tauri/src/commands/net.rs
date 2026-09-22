@@ -71,15 +71,32 @@ pub fn catalog_get(handle: &tauri::AppHandle, url: &str) -> reqwest::RequestBuil
 /// `X-Repo-Password` — BMM's existing contract with a password-protected repo, reused for
 /// catalogs rather than inventing a second header, so a server implements one check and a
 /// client speaks one language.
+///
+/// `anonymous` fetches WITHOUT any identity: no `X-Creator-ID`, no key proof. It is for the
+/// public, CORS-open, cacheable JSON BMM reads at every launch before the user has done
+/// anything (`links.json`, `contributors.json`). Those two are served to anyone by
+/// `/api/assets/:key` and the id bought nothing there — the only thing on the BCWEB side
+/// that reads the header on that route is the site-ban hook, which would refuse a banned
+/// creator a file any browser hands out unauthenticated. Sending it turned a launch into a
+/// "this installation started, and from this address" ping before consent existed.
+/// Catalogs and repos keep their identity: there it gates PRIVATE content.
 pub async fn fetch_remote_json(
     handle: tauri::AppHandle,
     url: String,
     password: Option<String>,
+    anonymous: Option<bool>,
 ) -> Result<String, String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("only http(s) URLs are supported".into());
     }
-    let mut req = catalog_get(&handle, &url).timeout(std::time::Duration::from_secs(10));
+    let mut req = if anonymous == Some(true) {
+        client()
+            .get(&url)
+            .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+    } else {
+        catalog_get(&handle, &url)
+    }
+    .timeout(std::time::Duration::from_secs(10));
     if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
         if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
             req = req.header("X-Repo-Password", hv);

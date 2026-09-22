@@ -126,7 +126,10 @@ async function tryFetch(url: string): Promise<BmmLinks | null> {
         // so it stays a plain webview fetch (works offline, before the backend bridge is ready).
         if (/^https?:\/\//i.test(url)) {
             const { invoke } = await import('./api.js');
-            const text = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
+            // `anonymous`: no X-Creator-ID, no key proof. links.json is public, CORS-open
+            // and cached; identifying this PC to fetch it made every launch a ping carrying
+            // a stable identifier, before the user had consented to anything.
+            const text = await invoke('fetch_remote_json', { url, anonymous: true }, { quiet: true }) as string;
             if (text) return { ...DEFAULTS, ...JSON.parse(text) };
             return null;
         }

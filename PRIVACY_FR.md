@@ -18,19 +18,22 @@ relative aux données, c'est ce document qui fait référence.
 
 | Quoi | Par défaut si vous installez avec BetterInstaller | Par défaut si BMM tourne sans l'installateur |
 |---|---|---|
-| Requêtes de démarrage vers BetterCommunity (portent votre Creator ID, §2.1) | Actif, toujours | Actif, toujours |
+| Requêtes de démarrage vers BetterCommunity (§2.1) | Actif, toujours — **sans votre Creator ID** | Actif, toujours — **sans votre Creator ID** |
 | Vérification des mises à jour (§2.2) | Actif | Actif |
 | Tests de connectivité et polices web (§2.3) | Actif, toujours | Actif, toujours |
-| **Télémétrie** (§3) | **Activée** : la case de l'installateur est pré‑cochée | Désactivée jusqu'à votre réponse à l'écran de consentement du premier lancement |
-| Replay de session envoyé avec la télémétrie (§3.2) | **Actif** tant que la télémétrie l'est : pré‑coché dans l'installateur | Pré‑coché dans la section « Personnaliser » de l'écran de consentement |
-| Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Actif** tant que la télémétrie l'est : l'installateur ne pose pas la question | Pré‑coché dans la section « Personnaliser » de l'écran de consentement |
-| **Discord Rich Presence** (§4) | **Activé** : la case de l'installateur est pré‑cochée | Désactivé |
+| **Télémétrie** (§3) | Désactivée. La case de l'installateur est **décochée** ; la cocher ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM, qui doit encore être accepté | Désactivée jusqu'à votre réponse à l'écran de consentement du premier lancement |
+| Replay de session envoyé avec la télémétrie (§3.2) | Désactivé tant que la télémétrie n'est pas acceptée ; actif ensuite, sauf si vous le décochez | Pré‑coché dans la section « Personnaliser » de l'écran de consentement |
+| Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, et l'installateur pose désormais la question comme une option distincte | **Désactivé** — décoché dans la section « Personnaliser » de l'écran de consentement |
+| **Discord Rich Presence** (§4) | **Désactivé** : la case de l'installateur est décochée | Désactivé |
 | Rapports de bug, de plantage et retours (§5) | Seulement quand vous cliquez sur Envoyer | Seulement quand vous cliquez sur Envoyer |
 
 Chacun de ces éléments peut être désactivé dans les paramètres de BMM (Paramètres → Confidentialité
-pour la télémétrie et ses options, les interrupteurs Discord et mises à jour dans les Paramètres). La
-page Configuration de BetterInstaller affiche chaque case pré‑cochée avec une description et une
-marque « Envoie des données » avant toute installation.
+pour la télémétrie et ses options, les interrupteurs Discord et mises à jour dans les Paramètres).
+Tout ce qui envoie des données hors de ce PC est **opt‑in** : la page Configuration de
+BetterInstaller affiche chaque case décochée, avec une description et une marque « Envoie des
+données », avant toute installation, et cocher la case de télémétrie y est une pré‑sélection — BMM
+pose quand même la question sur son propre écran de consentement, et la collecte ne démarre que si
+vous acceptez là.
 
 ---
 
@@ -38,10 +41,17 @@ marque « Envoie des données » avant toute installation.
 
 ### 2.1 Configuration au démarrage, avec votre Creator ID
 À chaque démarrage, BMM télécharge sa liste de liens (`links.json`) et la liste des contributeurs
-depuis `bettercommunity.ch`, avec les copies sur GitHub en secours. **Les requêtes que la partie
-native de BMM envoie à une adresse bettercommunity.ch portent votre Creator ID** dans un en‑tête
-`X-Creator-ID` : BetterCommunity reçoit donc votre Creator ID et votre adresse IP à chaque lancement,
-**avant le consentement à la télémétrie et indépendamment de celui‑ci**.
+depuis `bettercommunity.ch`, avec les copies sur GitHub en secours. **Ces deux téléchargements de
+démarrage ne portent plus votre Creator ID.** Ils sont récupérés anonymement — pas d'en‑tête
+`X-Creator-ID`, pas de preuve de clé — donc ce que BetterCommunity reçoit au lancement est une
+requête web ordinaire pour deux fichiers publics : son serveur voit votre adresse IP, comme tout
+serveur web, et rien qui identifie cette installation.
+
+Les autres requêtes que la partie native de BMM envoie à une adresse bettercommunity.ch portent
+**bien** votre Creator ID dans un en‑tête `X-Creator-ID` — récupérer un catalogue ou un dépôt, où
+l'identifiant est ce qui donne accès au contenu privé, ainsi que les fonctions de retour, de rapport
+et de compte que vous déclenchez vous‑même. Elles ont lieu quand vous utilisez la fonction, pas à
+chaque lancement.
 
 **Ce qu'est le Creator ID.** C'est la moitié publique d'une paire de clés Ed25519 que BMM crée au
 premier lancement. La clé est **dérivée d'identifiants de ce PC** (MachineGuid, identifiant de
@@ -129,9 +139,18 @@ tampon sur votre disque (10 Mo au plus), compressées et envoyées en **HTTPS** 
 tant que la fenêtre est visible, quand elle est masquée et à la fermeture de BMM. Chaque lot porte
 un **identifiant de paquet** aléatoire pour que vous puissiez le faire effacer (§3.5).
 
-**Par défaut :** désactivée dans BMM jusqu'à votre réponse à l'écran de consentement du premier
-lancement. **Activée si vous installez avec BetterInstaller en laissant sa case pré‑cochée** :
-l'installateur transmet votre choix à BMM, et l'écran de consentement n'est alors pas affiché.
+**Par défaut : désactivée.** La télémétrie est **opt‑in**, et elle se demande dans BMM, pas dans
+l'installateur :
+
+- **Si vous installez avec BetterInstaller**, sa case de télémétrie est **décochée**. La laisser
+  telle quelle signifie que rien n'est jamais collecté et que BMM ne repose pas la question.
+  **La cocher n'est pas un consentement** — cela ne fait que **pré‑sélectionner la réponse** sur
+  l'écran de consentement du premier lancement de BMM, qui énumère ce qui est collecté ; rien n'est
+  collecté si vous n'acceptez pas là. (La *décocher* explicitement est enregistré comme un refus,
+  et l'écran de consentement ne vous repose alors pas la question.)
+- **Si vous installez sans l'installateur**, la télémétrie est désactivée jusqu'à votre réponse à ce
+  même écran.
+
 Paramètres → Confidentialité la désactive à tout moment ; désactivée, rien du §3 n'est collecté ni
 envoyé.
 
@@ -147,7 +166,9 @@ désactiver quelque chose, et rien ne change si vous n'acceptez pas à cet endro
   année) et leurs résolutions, votre **adresse IP sur le réseau local** et votre **adresse IP
   publique** (que BMM obtient en interrogeant `api.ipify.org`), la version et la langue d'interface
   de BMM, et pour chacun de vos profils le **nom du jeu**, son nombre de mods et la répartition de
-  ses dossiers sur les disques.
+  ses dossiers sur les disques. (Ce que le serveur *conserve* de ces deux adresses est moindre que
+  ce que BMM envoie : l'adresse locale est supprimée à l'arrivée et l'adresse publique est tronquée
+  à son réseau avant d'être stockée — voir §3.5.)
 - **Préférences et décomptes :** thème actif (identifiant, nom, intégré ou personnalisé), langue,
   réglages de Tasky, mode de sécurité du système de fichiers, et combien de mods, profils, plugins,
   modpacks, tags, packs de lancement et applications vous avez (des nombres, pas leurs noms).
@@ -171,9 +192,10 @@ mise en page, les clics, le défilement et la navigation. **Le texte saisi dans 
 masqué**, de même que les éléments marqués comme noms ou chemins. Les autres fenêtres et le reste de
 votre écran ne sont jamais enregistrés.
 
-- **Par défaut :** actif tant que la télémétrie l'est. Dans BetterInstaller, c'est la case « Replay
-  de session dans la télémétrie », pré‑cochée ; dans BMM, c'est une option de Paramètres →
-  Confidentialité.
+- **Par défaut :** actif **tant que la télémétrie l'est** — et la télémétrie est désactivée si vous
+  ne l'avez pas acceptée (§3), donc cette case seule n'envoie rien. Dans BetterInstaller, c'est la
+  case « Replay de session dans la télémétrie », pré‑cochée ; dans BMM, c'est une option de
+  Paramètres → Confidentialité et de la section « Personnaliser » de l'écran de consentement.
 - Un mode distinct **« complet (non masqué) »** existe pour votre propre débogage. Il reste
   désactivé sauf si vous l'activez ; activé, le texte saisi n'est pas masqué et les images locales
   affichées dans la fenêtre sont intégrées à l'enregistrement. Il ne s'active qu'à la main, dans
@@ -181,17 +203,20 @@ votre écran ne sont jamais enregistrés.
   lien `bmm://`.
 
 ### 3.3 Benchmark hebdomadaire et rapport matériel détaillé
-Tant que la télémétrie est activée, BMM lance un court benchmark interne une fois par semaine (et
-lors de la première activation) et en envoie les temps. Avec lui, BMM envoie un **rapport matériel
+**Désactivé par défaut, et posé comme une question distincte.** Quand vous l'activez *et* que la
+télémétrie est activée, BMM lance un court benchmark interne une fois par semaine (et
+lors de la première activation de la télémétrie) et en envoie les temps. Avec lui, BMM envoie un **rapport matériel
 détaillé** composé d'**identifiants matériels stables** : modèle et numéro de série de la carte mère,
 version, date et fabricant du BIOS, UUID de la machine, détails du cache et des threads du
 processeur, modèle, numéro de série, taille et interface de chaque disque, **adresse MAC de chaque
 carte réseau physique**, build du système, démarrage UEFI ou legacy, état de Secure Boot et du TPM.
 
-- **Par défaut :** actif dès que la télémétrie l'est. BetterInstaller ne pose pas la question ; dans
-  BMM, c'est l'interrupteur « Benchmark automatique (tous les 7 jours) + rapport matériel
-  supplémentaire » de Paramètres → Confidentialité (et de la section « Personnaliser » de l'écran de
-  consentement), pré‑coché. Décochez‑le pour garder la télémétrie sans ce rapport.
+- **Par défaut : désactivé**, partout et à part. BetterInstaller pose désormais la question comme
+  une case distincte « Rapport matériel hebdomadaire et benchmark », décochée ; dans BMM, c'est
+  l'interrupteur « Benchmark automatique (tous les 7 jours) + rapport matériel supplémentaire » de
+  Paramètres → Confidentialité et de la section « Personnaliser » de l'écran de consentement,
+  décoché lui aussi. **Accepter la télémétrie ne l'active pas** — les identifiants matériels
+  ci‑dessus ne sont collectés que si vous cochez cette case vous‑même.
 
 ### 3.4 Ce que la télémétrie n'envoie jamais
 Le contenu de vos mods, de vos fichiers de jeu ou d'autres fichiers ; les valeurs que vous saisissez
@@ -204,20 +229,35 @@ dans les champs (sauf si vous activez le mode non masqué du §3.2) ; votre nom 
 - **Une copie de vos données :** le panneau Confidentialité peut déposer une demande portant sur tout
   ce qui est lié à votre Creator ID. Vous indiquez une adresse e‑mail, envoyée avec la demande ; un
   administrateur l'examine et vous renvoie l'export par e‑mail.
-- **Votre adresse IP et votre localisation :** le serveur enregistre l'adresse IP d'où vient un lot
-  et l'adresse IP publique que BMM signale (§3.1). Il localise l'adresse au moyen du service tiers
-  **ipwho.is** et stocke le pays, la région, la ville et les coordonnées que ce service renvoie. La
-  géolocalisation par IP situe le réseau par lequel vous vous connectez, pas votre domicile, mais elle
-  est souvent précise à la ville. La carte du tableau de bord affiche ces coordonnées arrondies.
-- **Conservation :** les événements d'utilisation, les benchmarks et les replays de session sont
-  supprimés automatiquement après la durée de conservation, **180 jours** sauf autre valeur choisie
-  par l'administrateur. **Les enregistrements d'adresses IP, leurs localisations et la liste des
-  « instances en ligne » ne sont pas supprimés automatiquement** par le serveur actuel.
+- **Votre adresse IP et votre localisation — tronquées, jamais stockées entières :** le serveur voit
+  l'adresse d'où vient un lot, et BMM signale aussi sa propre adresse publique (§3.1). **Aucune des
+  deux n'est écrite en entier.** Avant tout stockage, une adresse est réduite au réseau auquel elle
+  appartient : les trois premiers nombres pour IPv4 (`203.0.113.45` → `203.0.113.0`) et les trois
+  premiers groupes pour IPv6. C'est cela qui entre dans la base de données, dans la recherche de
+  localisation, dans la liste des instances en ligne et dans le journal d'activité des
+  administrateurs. L'adresse exacte n'existe que dans la mémoire du serveur, le temps d'une requête,
+  comme clé du compteur anti‑inondation ; elle n'est jamais stockée, journalisée ni exportée.
+  **L'adresse du réseau local que BMM signalait sur lui‑même n'est plus stockée du tout** — elle est
+  supprimée à l'arrivée.
+- **Localisation :** l'adresse tronquée est localisée au moyen du service tiers **ipwho.is**, et le
+  pays, la région et la ville sont stockés. Les coordonnées sont **arrondies à un dixième de degré
+  (environ 11 km)** avant d'être stockées : ce qui est conservé est une ville, pas un lieu. La
+  géolocalisation par IP situe le réseau par lequel vous vous connectez, pas votre domicile.
+- **Conservation :** tout est supprimé automatiquement après la durée de conservation, **180 jours**
+  sauf autre valeur choisie par l'administrateur : les événements d'utilisation, les benchmarks et
+  les replays de session, **ainsi que les réseaux stockés, leurs localisations et la liste des
+  « instances en ligne »** — ces trois‑là étaient auparavant conservés indéfiniment et sont
+  désormais purgés dans la même passe.
 - **Effacement par paquet :** le panneau Confidentialité liste chaque paquet envoyé par BMM
   (identifiant, heure, types d'événements et leur nombre). « Demander la suppression » efface les
   événements, benchmarks et replays de ce paquet après un délai d'examen de 72 heures au plus, ou
-  immédiatement si un administrateur l'approuve ; une demande refusée peut être refaite. **Cela ne
-  retire pas les enregistrements d'IP et de localisation** ; demandez‑le par le contact du §8.
+  immédiatement si un administrateur l'approuve ; une demande refusée peut être refaite. Si ce
+  paquet était la dernière donnée détenue sur votre installation, l'effacement **retire aussi le
+  réseau stocké, sa localisation et l'entrée « en ligne »** correspondante.
+- **Effacement par personne :** une demande de suppression liée à votre Creator ID retire vos
+  événements, benchmarks et replays et, dans la même passe, le réseau, l'entrée « en ligne » et la
+  localisation en cache (cette dernière seulement quand plus aucune autre installation n'est vue sur
+  ce même réseau).
 - Vous pouvez exporter ou vider le tampon local de BMM à tout moment dans le panneau
   Confidentialité.
 - Le serveur limite le nombre de lots qu'une même adresse peut envoyer par minute.
@@ -231,8 +271,9 @@ profil : le nom de votre profil BMM actif, le nombre de mods activés, la versio
 informations à **toute personne qui peut voir votre profil**, selon sa propre politique de
 confidentialité. Chaque mise à jour relit aussi la liste de liens de BMM sur GitHub.
 
-**Par défaut :** désactivé dans BMM ; **activé si vous installez avec BetterInstaller en laissant sa
-case pré‑cochée**. Désactivez‑le dans les Paramètres. Un lien `bmm://discord/rpc` (que n'importe
+**Par défaut : désactivé**, dans BMM comme dans BetterInstaller, dont la case est désormais
+**décochée** — installer avec lui ne change rien ici si vous ne la cochez pas vous‑même.
+Activez‑le ou désactivez‑le dans les Paramètres. Un lien `bmm://discord/rpc` (que n'importe
 quelle page web peut ouvrir) ne fait que demander : BMM indique ce qui deviendra visible, et rien ne
 change sans votre confirmation dans BMM.
 
@@ -367,13 +408,13 @@ service, selon ses propres conditions.
 | Action | Quitte votre PC ? | Ce qui est envoyé | À qui |
 |---|---|---|---|
 | Parcourir et gérer mods, profils, modpacks | Non | — | — |
-| Chaque lancement (liens, contributeurs) | Oui, toujours | Adresse IP, **Creator ID** | bettercommunity.ch (GitHub en secours) |
+| Chaque lancement (liens, contributeurs) | Oui, toujours | Adresse IP seulement — **pas de Creator ID** (§2.1) | bettercommunity.ch (GitHub en secours) |
 | Vérification des mises à jour | Oui, par défaut | Adresse IP, user‑agent du programme | GitHub, bettercommunity.ch |
 | Tests de connectivité, polices, catalogue d'applications | Oui, toujours | Adresse IP | Google, Cloudflare, GitHub |
-| **Télémétrie** (activée si vous avez gardé la case de l'installateur) | Oui | Creator ID, profil système avec IP publique et locale, utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts | Serveur de télémétrie BetterCommunity ; votre IP à ipify.org et ipwho.is |
-| Replay de session (avec la télémétrie, actif par défaut) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
-| Benchmark hebdomadaire + rapport matériel (avec la télémétrie, actif par défaut) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
-| **Discord Rich Presence** (activé si vous avez gardé la case de l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
+| **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système avec IP publique et locale, utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts — le serveur ne conserve l'adresse publique que tronquée à son réseau et supprime l'adresse locale | Serveur de télémétrie BetterCommunity ; votre IP à ipify.org, votre réseau tronqué à ipwho.is |
+| Replay de session (avec la télémétrie, actif sauf si décoché) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
+| Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
+| **Discord Rich Presence** (**désactivé** par défaut, dans BMM comme dans l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
 | Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
 | Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |
 | Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID avec preuve signée et empreinte hachée de l'appareil (§2.4), détails de l'application et du système | Centre de retours BetterCommunity |
@@ -384,18 +425,20 @@ service, selon ses propres conditions.
 
 ## 8. Vos choix et contact
 
-- Décochez la télémétrie, le replay de session et Discord Rich Presence dans l'installateur, ou
-  désactivez‑les plus tard dans les Paramètres ; désactivez le benchmark hebdomadaire et le rapport
-  matériel dans Paramètres → Confidentialité ; désactivez la vérification automatique des mises à
-  jour dans les Paramètres.
+- La télémétrie, le rapport matériel hebdomadaire et Discord Rich Presence sont **désactivés sauf si
+  vous les activez** : les cases de l'installateur sont décochées, et cocher celle de la télémétrie
+  ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM. Décochez le replay de
+  session dans l'installateur ou dans Paramètres → Confidentialité ; activez ou désactivez chacun
+  plus tard dans les Paramètres ; désactivez la vérification automatique des mises à jour dans les
+  Paramètres.
 - Exportez ou videz le tampon local de télémétrie, demandez l'effacement par paquet, ou demandez une
   copie de vos données (§3.5).
 - Les requêtes de démarrage des §2.1 et §2.3 ne peuvent pas être désactivées dans BMM à ce jour ;
   rester hors ligne les empêche.
 - Nous ne vendons jamais vos données, et elles ne servent pas à la publicité.
 
-Pour toute autre demande concernant vos données (accès, effacement des enregistrements d'IP et de
-localisation, question), ouvrez une issue sur le dépôt GitHub :
+Pour toute autre demande concernant vos données (accès, effacement, question), ouvrez une issue sur
+le dépôt GitHub :
 [BetterModsManager](https://github.com/FreeProject089/BetterModsManager)
 
 > Cette politique évolue avec l'application. Les changements importants sont signalés dans les notes

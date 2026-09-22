@@ -945,6 +945,18 @@ async function main() {
             // Local session recorder is a JS-side setting (localStorage bmm_replay_enabled,
             // default on). The installer only needs to act when the user turned it OFF.
             if (ho.session_recorder === false) localStorage.setItem('bmm_replay_enabled', '0');
+            // Telemetry: the installer's ticked box is a PRE-SELECTION, never consent. It
+            // makes the consent dialog (further down this same startup sequence) appear
+            // with the installer's answers filled in; collection starts only if the user
+            // accepts there. An unticked box was recorded Rust-side as a refusal.
+            if (ho.telemetry_preselect === true) {
+                const { setInstallerTelemetryPreselect } = await import('../core/analytics.js');
+                setInstallerTelemetryPreselect(true);
+            }
+            // Weekly benchmark + extra hardware report — a JS-side setting, default OFF.
+            if (typeof ho.telemetry_bench === 'boolean') {
+                localStorage.setItem('bmm_telemetry_bench', ho.telemetry_bench ? '1' : '0');
+            }
             // Theme chosen on the installer's swatch page. Also a JS-side setting, and it
             // must land BEFORE restoreThemeAtBoot() below reads bmm_active_theme — the
             // installer wrote this all along and nobody consumed it, so the pick never
@@ -1727,7 +1739,9 @@ async function fetchContributors() {
         // deployed) out of the console; we just fall back to the bundled copy below.
         const remoteUrl = getLinks().contributors;
         if (/^https?:\/\//i.test(remoteUrl)) {
-            const text = await invoke('fetch_remote_json', { url: remoteUrl }, { quiet: true }) as string;
+            // `anonymous`: the credits list is public and identical for everyone — it is
+            // fetched without X-Creator-ID so a launch is not an identified request.
+            const text = await invoke('fetch_remote_json', { url: remoteUrl, anonymous: true }, { quiet: true }) as string;
             if (text) { applyData(JSON.parse(text)); return; }
         }
     } catch (e) {

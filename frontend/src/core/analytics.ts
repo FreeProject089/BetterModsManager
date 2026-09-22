@@ -166,7 +166,7 @@ async function startCollection(): Promise<void> {
     try {
         // Extra precise hardware identity is only collected when the user opted into
         // the weekly-benchmark / extra mode (same toggle).
-        const extra = (() => { try { return localStorage.getItem('bmm_telemetry_bench') !== '0'; } catch { return false; } })();
+        const extra = (() => { try { return localStorage.getItem('bmm_telemetry_bench') === '1'; } catch { return false; } })();
         const profile: any = await invoke('analytics_system_profile', { extra });
         // Stable anonymous identity: Creator ID if available, else a persistent uuid.
         _distinctId = profile?.distinct_id || anonId();
@@ -651,10 +651,28 @@ function startPerfSampling(): void {
 }
 
 // ── Weekly telemetry benchmark ─────────────────────────────────────────────────
-const BENCH_ALLOW_KEY = 'bmm_telemetry_bench';   // '1' allow (default), '0' off
+// OPT-IN. '1' allows the weekly benchmark AND the extra hardware report that rides with
+// it (motherboard/disk serials, machine UUID, MAC addresses). Anything else — including
+// an absent key — means off: those identifiers are never collected unless the user asked
+// for it in the consent dialog, in Settings → Privacy, or in the installer.
+const BENCH_ALLOW_KEY = 'bmm_telemetry_bench';   // '1' allow, anything else = off (default)
 const BENCH_LAST_KEY  = 'bmm_telemetry_bench_last';
-export function telemetryBenchAllowed(): boolean { return localStorage.getItem(BENCH_ALLOW_KEY) !== '0'; }
+export function telemetryBenchAllowed(): boolean { return localStorage.getItem(BENCH_ALLOW_KEY) === '1'; }
 export function setTelemetryBenchAllowed(on: boolean): void { localStorage.setItem(BENCH_ALLOW_KEY, on ? '1' : '0'); }
+
+// ── Installer pre-selection ───────────────────────────────────────────────────
+// BetterInstaller has a telemetry checkbox. Ticking it used to WRITE the consent
+// (settings.analytics_consent = true), so collection started on first launch and the
+// consent dialog — the only screen that says what is actually collected — never ran.
+// It now only PRE-SELECTS the choice: this flag makes the dialog appear with the
+// installer's answers filled in, and nothing is collected until Accept is clicked here.
+const PRESELECT_KEY = 'bmm_telemetry_installer_optin';   // '1' = ticked in the installer
+export function setInstallerTelemetryPreselect(on: boolean): void {
+    try { localStorage.setItem(PRESELECT_KEY, on ? '1' : '0'); } catch { }
+}
+function installerPreselect(): boolean {
+    try { return localStorage.getItem(PRESELECT_KEY) === '1'; } catch { return false; }
+}
 
 // ── Session replay (rrweb) preferences ────────────────────────────────────────
 const REPLAY_KEY      = 'bmm_replay_enabled';   // '1'/absent = on (default), '0' off
@@ -1007,6 +1025,8 @@ export async function confirmTelemetryFromLink(plan: TelemetryLinkPlan): Promise
 export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: boolean } } = {}): Promise<boolean | null> {
     if (document.getElementById('analytics-consent-overlay')) return Promise.resolve(null);
     const link = opts.fromLink;
+    // Ticked in the installer → the answer is pre-selected here, not applied behind the user's back.
+    const preselected = !link && installerPreselect();
     const overlay = document.createElement('div');
     overlay.id = 'analytics-consent-overlay';
     overlay.className = 'modal-overlay open';
@@ -1022,6 +1042,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
         </div>
         <div class="modal-body" style="padding:18px 22px;display:block">
             ${link ? `<p style="font-size:12px;line-height:1.6;margin:0 0 12px;padding:9px 11px;border:1px solid var(--warning, var(--border));border-radius:9px">${t('analytics.linkRequest') || 'A link asked BMM to turn on telemetry. Nothing changes unless you accept here. Unmasked replay can only be turned on in Settings → Privacy.'}</p>` : ''}
+            ${preselected ? `<p style="font-size:12px;line-height:1.6;margin:0 0 12px;padding:9px 11px;border:1px solid var(--border);border-radius:9px">${t('analytics.installerPreselect') || 'You ticked telemetry during installation, so it is pre-selected below. Nothing has been collected yet — collection starts only if you accept here.'}</p>` : ''}
             <p style="font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0 0 12px">
                 ${t('analytics.consentIntro') || 'BMM is built by a tiny team. Anonymous usage data helps us see which features matter, fix what\'s slow on real hardware, and decide what to build next. It is 100% optional and you can turn it off anytime.'}
             </p>
@@ -1046,7 +1067,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                     <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                         <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days) + extra hardware report'}</span>
                         <div class="plug-toggle">
-                            <input type="checkbox" id="modal-bench-toggle"${(link ? (link.bench ?? telemetryBenchAllowed()) : true) ? ' checked' : ''}>
+                            <input type="checkbox" id="modal-bench-toggle"${(link ? (link.bench ?? telemetryBenchAllowed()) : telemetryBenchAllowed()) ? ' checked' : ''}>
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
@@ -1097,7 +1118,15 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
 
     return new Promise<boolean | null>((resolve) => {
         let answer = false;
-        const close = () => { overlay.remove(); resolve(answer); };
+        const close = () => {
+            // The pre-selection is spent the moment the user answers, either way: it must
+            // never survive to re-tick a box on a later dialog.
+            if (preselected) { try { localStorage.removeItem(PRESELECT_KEY); } catch { } }
+            overlay.remove();
+            resolve(answer);
+        };
+        // Pre-selected = the Accept button is the focused, ready-to-confirm choice.
+        if (preselected) setTimeout(() => (overlay.querySelector('#analytics-accept') as HTMLElement | null)?.focus(), 40);
         
         const benchToggle = overlay.querySelector('#modal-bench-toggle') as HTMLInputElement | null;
         const replayToggle = overlay.querySelector('#modal-replay-toggle') as HTMLInputElement | null;

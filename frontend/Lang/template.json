@@ -6059,6 +6059,7 @@
   "analytics.linkTitle": "Change telemetry settings?",
   "analytics.linkDesc": "A link asked BMM to change your telemetry settings. Nothing changes unless you confirm.",
   "analytics.linkRequest": "A link asked BMM to turn on telemetry. Nothing changes unless you accept here. Unmasked replay can only be turned on in Settings → Privacy.",
+  "analytics.installerPreselect": "You ticked telemetry during installation, so it is pre-selected below. Nothing has been collected yet — collection starts only if you accept here.",
   "analytics.linkNoUnmask": "Unmasked replay cannot be turned on from a link. Use Settings → Privacy.",
   "analytics.linkNotApplied": "Telemetry settings unchanged",
   "analytics.linkApplied": "Telemetry settings updated",
