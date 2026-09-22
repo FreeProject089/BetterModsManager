@@ -1808,8 +1808,8 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 | \`bmm://hook\` | \`name\`*, \`data\` | Rings a named hook a task may be waiting on. **Asks first** — a task waiting on a hook runs when the hook rings, so ringing one is running that task at one remove |
 | \`bmm://launchpack/run\` | \`id\`* | Runs a Launch Pack |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Opens the benchmark pre-configured. **Auto-runs unless \`mode=manual\`** |
-| \`bmm://telemetry/consent\` | \`enabled\`* | Global telemetry consent; declining also purges the local queue |
-| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sub-options. \`full\` means **unmasked** |
+| \`bmm://telemetry/consent\` | \`enabled\`* | Global telemetry consent; declining also purges the local queue. From a link it only asks: BMM's consent screen opens and nothing changes unless you accept |
+| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sub-options, confirmed in-app before they apply. \`full\` means **unmasked**; \`full=1\` is refused from a link (Settings → Privacy only) |
 | \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configures the local session recorder |
 | \`bmm://replay/export\` | — | Exports the session as \`.bmmreplay\` |
 | \`bmm://replay/import\` | \`path\`, \`url\` | Imports and plays a \`.bmmreplay\` |
@@ -2165,8 +2165,8 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 | \`bmm://hook\` | \`name\`*, \`data\` | Sonne un hook nommé qu'une tâche attend peut-être. **Demande confirmation** — une tâche qui attend un hook s'exécute quand il sonne : le faire sonner, c'est exécuter cette tâche à un niveau de distance |
 | \`bmm://launchpack/run\` | \`id\`* | Exécute un Launch Pack |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si \`mode=manual\`** |
-| \`bmm://telemetry/consent\` | \`enabled\`* | Consentement télémétrie global ; refuser purge aussi la file locale |
-| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sous-options. \`full\` veut dire **non masqué** |
+| \`bmm://telemetry/consent\` | \`enabled\`* | Consentement télémétrie global ; refuser purge aussi la file locale. Depuis un lien, il ne fait que demander : l'écran de consentement de BMM s'ouvre et rien ne change sans votre accord |
+| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sous-options, confirmées dans l'app avant d'être appliquées. \`full\` veut dire **non masqué** ; \`full=1\` est refusé depuis un lien (Paramètres → Confidentialité seulement) |
 | \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configure l’enregistreur de session local |
 | \`bmm://replay/export\` | — | Exporte la session en \`.bmmreplay\` |
 | \`bmm://replay/import\` | \`path\`, \`url\` | Importe et joue un \`.bmmreplay\` |

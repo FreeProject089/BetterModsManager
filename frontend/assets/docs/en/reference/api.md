@@ -194,8 +194,8 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 | `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |
 | `bmm://launchpack/run` | `id`* | Runs a Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Opens the benchmark pre-configured. **Auto-runs unless `mode=manual`** |
-| `bmm://telemetry/consent` | `enabled`* | Global telemetry consent; declining also purges the local queue |
-| `bmm://telemetry/set` | `replay`, `full`, `bench` | Sub-options. `full` means **unmasked** |
+| `bmm://telemetry/consent` | `enabled`* | Global telemetry consent; declining also purges the local queue. From a link it only asks: BMM's consent screen opens and nothing changes unless you accept |
+| `bmm://telemetry/set` | `replay`, `full`, `bench` | Sub-options, confirmed in-app before they apply. `full` means **unmasked**; `full=1` is refused from a link (Settings → Privacy only) |
 | `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configures the local session recorder |
 | `bmm://replay/export` | — | Exports the session as `.bmmreplay` |
 | `bmm://replay/import` | `path`, `url` | Imports and plays a `.bmmreplay` |

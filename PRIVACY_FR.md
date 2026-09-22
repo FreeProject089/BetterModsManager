@@ -94,6 +94,10 @@ l'installateur transmet votre choix à BMM, et l'écran de consentement n'est al
 Paramètres → Confidentialité la désactive à tout moment ; désactivée, rien du §3 n'est collecté ni
 envoyé.
 
+Un lien `bmm://telemetry/…` (que n'importe quelle page web peut ouvrir) ne peut pas modifier ces
+réglages à lui seul : il ouvre l'écran de consentement de BMM, ou une confirmation s'il ne fait que
+désactiver quelque chose, et rien ne change si vous n'acceptez pas à cet endroit.
+
 ### 3.1 Ce qui est envoyé
 - **Identité :** votre Creator ID (§2.1) et un identifiant aléatoire propre à l'installation.
 - **Profil système :** système d'exploitation et version, processeur et nombre de cœurs, mémoire,
@@ -131,7 +135,9 @@ votre écran ne sont jamais enregistrés.
   Confidentialité.
 - Un mode distinct **« complet (non masqué) »** existe pour votre propre débogage. Il reste
   désactivé sauf si vous l'activez ; activé, le texte saisi n'est pas masqué et les images locales
-  affichées dans la fenêtre sont intégrées à l'enregistrement.
+  affichées dans la fenêtre sont intégrées à l'enregistrement. Il ne s'active qu'à la main, dans
+  Paramètres → Confidentialité (ou l'écran de consentement que vous ouvrez vous‑même), jamais par un
+  lien `bmm://`.
 
 ### 3.3 Benchmark hebdomadaire et rapport matériel détaillé
 Tant que la télémétrie est activée, BMM lance un court benchmark interne une fois par semaine (et
@@ -218,13 +224,19 @@ envois. Une fois reçu, un rapport est conservé selon les conditions de la plat
 
 ### 5.2 Contenu d'un zip de rapport de plantage
 Quand BMM plante, il écrit un `.zip` de rapport **sur votre disque**. Il contient les journaux de
-BMM, un instantané des informations système, un **rapport DxDiag** (toujours, lors d'un plantage,
-indépendamment de la case du §5.1), un **instantané du fichier de données de BMM** (vos profils et
-réglages, **y compris des valeurs gardées dans les réglages comme un jeton d'accès GitHub ou le jeton
-de l'API locale**), et l'enregistrement de session masqué du §5.3 avec la sortie de la console et du
-journal. Un rapport semblable est aussi écrit localement à chaque fermeture normale de BMM. Ces
-fichiers restent sur votre ordinateur tant que vous n'en envoyez ou n'en partagez pas un vous‑même ;
-ouvrez le zip au préalable pour voir exactement ce qu'il contient.
+BMM, un instantané des informations système, et l'enregistrement de session masqué du §5.3 avec la
+sortie de la console et du journal ; un rapport écrit à la fermeture normale de BMM contient aussi un
+**instantané du fichier de données de BMM** (vos profils et réglages, y compris les adresses de vos
+mods et dépôts et vos chemins de dossiers, qui peuvent contenir votre nom d'utilisateur Windows).
+**Les secrets sont masqués avant l'écriture du zip** : le jeton d'accès GitHub, le jeton de l'API
+locale, les jetons des plugins, la clé du planificateur, et toute autre valeur rangée sous un champ
+token, password, key, secret, auth, cookie ou webhook, ainsi que les mots de passe contenus dans des
+adresses, apparaissent sous la forme `[REDACTED: N chars]` (la longueur seulement, aucune partie de
+la valeur). Les rapports écrits par des versions antérieures sont nettoyés de la même façon au
+prochain démarrage de BMM. Un zip de plantage **ne contient pas de DxDiag** : celui‑ci n'est joint à
+un rapport que si vous cochez sa case (§5.1). Ces fichiers restent sur votre ordinateur tant que vous
+n'en envoyez ou n'en partagez pas un vous‑même ; ouvrez le zip au préalable pour voir exactement ce
+qu'il contient.
 
 ### 5.3 Enregistrement local de la session
 BMM garde toujours un enregistrement de la session en cours (masqué comme au §3.2) **sur votre
@@ -317,7 +329,7 @@ service, selon ses propres conditions.
 | **Discord Rich Presence** (activé si vous avez gardé la case de l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
 | Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
 | Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |
-| Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient journaux, DxDiag avec votre nom de compte Windows, un instantané de vos réglages), Creator ID, détails de l'application et du système | Centre de retours BetterCommunity |
+| Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID, détails de l'application et du système | Centre de retours BetterCommunity |
 | Lier un compte BetterCommunity | Oui | Creator ID | bettercommunity.ch |
 | Notifications BetterCommunity (seulement avec une clé d'API enregistrée) | Oui, toutes les 10 min | La clé d'API, limitée à `notifications:read` | bettercommunity.ch |
 

@@ -201,8 +201,8 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 | `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
 | `bmm://launchpack/run` | `id`* | Exécute un Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si `mode=manual`** |
-| `bmm://telemetry/consent` | `enabled`* | Consentement télémétrie global ; refuser purge aussi la file locale |
-| `bmm://telemetry/set` | `replay`, `full`, `bench` | Sous-options. `full` veut dire **non masqué** |
+| `bmm://telemetry/consent` | `enabled`* | Consentement télémétrie global ; refuser purge aussi la file locale. Depuis un lien, il ne fait que demander : l'écran de consentement de BMM s'ouvre et rien ne change sans votre accord |
+| `bmm://telemetry/set` | `replay`, `full`, `bench` | Sous-options, confirmées dans l'app avant d'être appliquées. `full` veut dire **non masqué** ; `full=1` est refusé depuis un lien (Paramètres → Confidentialité seulement) |
 | `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configure l'enregistreur de session local |
 | `bmm://replay/export` | — | Exporte la session en `.bmmreplay` |
 | `bmm://replay/import` | `path`, `url` | Importe et joue un `.bmmreplay` |

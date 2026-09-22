@@ -1235,16 +1235,23 @@ async function handleDeepLink(urlStr) {
         }
         // ── Privacy & telemetry: bmm://telemetry/consent?enabled=1
         //    bmm://telemetry/set?replay=1&full=0&bench=1 ──────────────────────────
+        //
+        // Any web page can open this link. It used to apply what it said with no question —
+        // `?enabled=1&full=1` switched telemetry on with UNMASKED replay. Now a link only
+        // REQUESTS a change: BMM's own consent dialog (or, for turning things off, a plain
+        // confirmation) decides, and `full=1` is dropped outright — unmasked replay is turned
+        // on in Settings → Privacy or not at all. The rule is in telemetry-link.ts.
         if (action === 'telemetry/consent' || action === 'telemetry/set') {
-            const q = parsedUrl.searchParams;
-            const b = (k) => q.has(k) ? (q.get(k) === '1' || q.get(k) === 'true') : undefined;
             try {
-                const { applyTelemetrySettings } = await import('./analytics.js');
-                await applyTelemetrySettings({
-                    consent: q.has('enabled') ? b('enabled') : b('consent'),
-                    replay: b('replay'), replayFull: b('full') ?? b('replayFull'), bench: b('bench'),
-                });
-                toast(t('analytics.settingsTitle') || 'Telemetry updated', 'success');
+                const { parseTelemetryLink, planTelemetryLink } = await import('./telemetry-link.js');
+                const plan = planTelemetryLink(parseTelemetryLink(parsedUrl.searchParams));
+                if (plan.refusedUnmasked)
+                    toast(t('analytics.linkNoUnmask') || 'Unmasked replay cannot be turned on from a link. Use Settings → Privacy.', 'warning', 9000);
+                if (plan.empty)
+                    return;
+                const { confirmTelemetryFromLink } = await import('./analytics.js');
+                const applied = await confirmTelemetryFromLink(plan);
+                toast(applied ? (t('analytics.linkApplied') || 'Telemetry settings updated') : (t('analytics.linkNotApplied') || 'Telemetry settings unchanged'), applied ? 'success' : 'info');
             }
             catch (e) {
                 toast(`${t('common.error') || 'Error'}: ${e}`, 'error');

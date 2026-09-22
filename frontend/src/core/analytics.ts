@@ -10,6 +10,7 @@ import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { getLinks } from './links-config.js';
 import { escHtml } from './utils.js';
+import type { TelemetryLinkPlan } from './telemetry-link.js';
 
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
@@ -237,12 +238,18 @@ function startSessionReplay(): void {
  *  replay recorder so changes take effect immediately. */
 export async function applyTelemetrySettings(opts: { consent?: boolean; replay?: boolean; replayFull?: boolean; bench?: boolean }): Promise<void> {
     const reflect = (id: string, v?: boolean) => { if (v === undefined) return; const el = document.getElementById(id) as HTMLInputElement | null; if (el) el.checked = v; };
-    if (opts.consent !== undefined) await setConsent(opts.consent);
+    // Sub-options FIRST: turning consent on starts collection at once, and startCollection
+    // reads the bench flag to decide whether to send the extra hardware report. Applied the
+    // other way round, a "bench off" arriving with "consent on" was read too late.
+    const wasOn = _consent === true;
     let restartReplay = false;
     if (opts.replay !== undefined) { try { localStorage.setItem('bmm_replay_enabled', opts.replay ? '1' : '0'); } catch {} reflect('analytics-replay-toggle', opts.replay); restartReplay = true; }
     if (opts.replayFull !== undefined) { try { localStorage.setItem('bmm_replay_full', opts.replayFull ? '1' : '0'); } catch {} reflect('analytics-replay-full-toggle', opts.replayFull); restartReplay = true; }
     if (opts.bench !== undefined) { setTelemetryBenchAllowed(opts.bench); reflect('analytics-bench-toggle', opts.bench); }
-    if (restartReplay && _consent === true) {
+    // Only on a real change: setConsent(true) while already on would start a second
+    // collection (listeners, timers, replay) on top of the first.
+    if (opts.consent !== undefined && opts.consent !== _consent) await setConsent(opts.consent);
+    if (restartReplay && wasOn && _consent === true) {
         try { _telemetryReplay?.stop?.(); } catch {}
         _telemetryReplay = null;
         startSessionReplay();   // respects bmm_replay_enabled + the new masking
@@ -963,9 +970,43 @@ async function renderSentPackets(): Promise<void> {
     });
 }
 
+/** A telemetry change that arrived by a bmm:// link, applied ONLY if the user confirms it
+ *  in BMM's own dialog. Anything that turns collection on shows the consent modal (with the
+ *  unmask toggle removed — see telemetry-link.ts); a link that only turns things off gets a
+ *  plain confirmation. Resolves true when the change was applied. */
+export async function confirmTelemetryFromLink(plan: TelemetryLinkPlan): Promise<boolean> {
+    if (plan.empty) return false;
+    if (plan.widens) {
+        const accepted = await showConsentModal({ fromLink: { replay: plan.apply.replay, bench: plan.apply.bench } });
+        return accepted === true;
+    }
+    const rows: string[] = [];
+    if (plan.apply.consent === false) rows.push(t('analytics.linkOffConsent') || 'Stop sharing anonymous usage data');
+    if (plan.apply.replay === false) rows.push(t('analytics.linkOffReplay') || 'Turn off visual session replay');
+    if (plan.apply.replayFull === false) rows.push(t('analytics.linkOffFull') || 'Mask session replay again');
+    if (plan.apply.bench === false) rows.push(t('analytics.linkOffBench') || 'Turn off the automatic benchmark');
+    const confirm = (window as any).confirmCustom as undefined | ((title: string, html: string, tone: string, o: any) => Promise<boolean>);
+    if (!confirm) return false;   // no in-app dialog available → nothing changes
+    const ok = await confirm(
+        t('analytics.linkTitle') || 'Change telemetry settings?',
+        `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('analytics.linkDesc') || 'A link asked BMM to change your telemetry settings. Nothing changes unless you confirm.'}</p>
+         <ul style="font-size:12px;margin:8px 0 0;padding-left:18px;line-height:1.7">${rows.map((r) => `<li>${r}</li>`).join('')}</ul>`,
+        'accent',
+        { yesLabel: t('common.yes'), noLabel: t('common.no') },
+    );
+    if (!ok) return false;
+    await applyTelemetrySettings(plan.apply);
+    return true;
+}
+
 // ── Consent modal ──────────────────────────────────────────────────────────────
-export function showConsentModal(): Promise<void> {
-    if (document.getElementById('analytics-consent-overlay')) return Promise.resolve();
+/** `fromLink`: the modal was opened by a bmm:// link. Its toggles start from what the link
+ *  asked for, the unmask toggle is not offered at all, and Decline leaves every setting as it
+ *  was (it does not record a refusal the user never made). Resolves true on Accept, false on
+ *  Decline, null when another consent modal was already open. */
+export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: boolean } } = {}): Promise<boolean | null> {
+    if (document.getElementById('analytics-consent-overlay')) return Promise.resolve(null);
+    const link = opts.fromLink;
     const overlay = document.createElement('div');
     overlay.id = 'analytics-consent-overlay';
     overlay.className = 'modal-overlay open';
@@ -980,6 +1021,7 @@ export function showConsentModal(): Promise<void> {
             </h2>
         </div>
         <div class="modal-body" style="padding:18px 22px;display:block">
+            ${link ? `<p style="font-size:12px;line-height:1.6;margin:0 0 12px;padding:9px 11px;border:1px solid var(--warning, var(--border));border-radius:9px">${t('analytics.linkRequest') || 'A link asked BMM to turn on telemetry. Nothing changes unless you accept here. Unmasked replay can only be turned on in Settings → Privacy.'}</p>` : ''}
             <p style="font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0 0 12px">
                 ${t('analytics.consentIntro') || 'BMM is built by a tiny team. Anonymous usage data helps us see which features matter, fix what\'s slow on real hardware, and decide what to build next. It is 100% optional and you can turn it off anytime.'}
             </p>
@@ -998,13 +1040,13 @@ export function showConsentModal(): Promise<void> {
                 </ul>
             </div>
             
-            <details style="margin-bottom:12px; font-size:12px; color:var(--text-secondary);">
+            <details style="margin-bottom:12px; font-size:12px; color:var(--text-secondary);"${link ? ' open' : ''}>
                 <summary style="cursor:pointer; font-weight:600; outline:none; user-select:none;">${t('analytics.customize') || 'Customize data collection...'}</summary>
                 <div style="padding: 12px; margin-top: 8px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
                     <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                         <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days) + extra hardware report'}</span>
                         <div class="plug-toggle">
-                            <input type="checkbox" id="modal-bench-toggle" checked>
+                            <input type="checkbox" id="modal-bench-toggle"${(link ? (link.bench ?? telemetryBenchAllowed()) : true) ? ' checked' : ''}>
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
@@ -1025,17 +1067,17 @@ export function showConsentModal(): Promise<void> {
                     <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                         <span>${t('analytics.replayToggle') || 'Visual Session Replay (masked)'}</span>
                         <div class="plug-toggle">
-                            <input type="checkbox" id="modal-replay-toggle" checked>
+                            <input type="checkbox" id="modal-replay-toggle"${(link ? (link.replay ?? replayEnabled()) : true) ? ' checked' : ''}>
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
-                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="modal-replay-full-container">
+                    ${link ? '' : `<label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="modal-replay-full-container">
                         <span>${t('analytics.replayFullToggle') || 'Unmask Replay (capture text & images)'}</span>
                         <div class="plug-toggle">
                             <input type="checkbox" id="modal-replay-full-toggle">
                             <span class="plug-toggle-slider"></span>
                         </div>
-                    </label>
+                    </label>`}
                 </div>
             </details>
 
@@ -1053,8 +1095,9 @@ export function showConsentModal(): Promise<void> {
     // Block backdrop clicks from closing it (belt-and-suspenders alongside data-prevent-close).
     overlay.addEventListener('click', (e) => { if (e.target === overlay) e.stopPropagation(); }, true);
 
-    return new Promise<void>((resolve) => {
-        const close = () => { overlay.remove(); resolve(); };
+    return new Promise<boolean | null>((resolve) => {
+        let answer = false;
+        const close = () => { overlay.remove(); resolve(answer); };
         
         const benchToggle = overlay.querySelector('#modal-bench-toggle') as HTMLInputElement | null;
         const replayToggle = overlay.querySelector('#modal-replay-toggle') as HTMLInputElement | null;
@@ -1075,6 +1118,21 @@ export function showConsentModal(): Promise<void> {
         const decide = (enabled: boolean) => {
             if (decided) return;      // a second click must not re-run anything
             decided = true;
+            answer = enabled;
+            if (link) {
+                // Opened by a link: Decline means "do not do what the link asked", not "I
+                // refuse telemetry" — nothing is recorded. Accept applies the toggles as the
+                // user left them; unmasked replay is not among them, so it stays as it was.
+                close();
+                if (enabled) {
+                    void applyTelemetrySettings({
+                        consent: true,
+                        replay: replayToggle ? replayToggle.checked : undefined,
+                        bench: benchToggle ? benchToggle.checked : undefined,
+                    }).then(() => refreshPrivacyUI()).catch(() => {});
+                }
+                return;
+            }
             if (enabled) {
                 if (benchToggle) localStorage.setItem(BENCH_ALLOW_KEY, benchToggle.checked ? '1' : '0');
                 if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');

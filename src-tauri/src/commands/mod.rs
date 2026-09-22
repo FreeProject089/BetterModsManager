@@ -21,6 +21,7 @@ pub mod tag;
 pub mod history;
 pub mod settings;
 pub mod crash;
+pub mod report_redact;
 pub mod tutorial_demo;
 pub mod autoupdate;
 pub mod benchmark;

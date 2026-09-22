@@ -201,6 +201,10 @@ pub fn init_session() {
         let _ = writeln!(file, "--- NEW SESSION STARTED AT {} (PID: {}) ---", chrono::Local::now().to_rfc3339(), my_pid);
         let _ = file.sync_all();
     }
+
+    // 3. Reports written by older versions carried secrets in clear; clean them once, off
+    //    the startup path.
+    std::thread::spawn(redact_existing_reports);
 }
 
 // function removed as consolidate into generate_report
@@ -273,107 +277,36 @@ fn generate_report_internal(
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let zip_path = report_dir.join(format!("{}_{}.zip", prefix, timestamp));
 
-    let file = fs::File::create(&zip_path).ok()?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-
-    // 1. metadata.txt
-    let mut meta = format!("BMM VERSION: {}\n", env!("CARGO_PKG_VERSION"));
-    meta.push_str(&format!("TIMESTAMP:   {}\n", chrono::Local::now().to_rfc3339()));
-    meta.push_str(&format!("REASON:      {}\n", reason));
-    let _ = zip.start_file("metadata.txt", opts);
-    let _ = zip.write_all(meta.as_bytes());
-
-    // 2. stacktrace.txt (si crash)
-    if is_crash {
-        let bt = Backtrace::new();
-        let _ = zip.start_file("stacktrace.txt", opts);
-        let _ = zip.write_all(format!("{:?}", bt).as_bytes());
-    }
-
-    // 3. system_info.txt — full enumeration only for crashes; clean exits use the light path.
-    let _ = zip.start_file("system_info.txt", opts);
-    let _ = zip.write_all(get_system_snapshot_impl(is_crash).as_bytes());
-
-    // 4. app_logs.txt
-    let logs_text = if let Some(content) = override_log {
+    let logs = if let Some(content) = override_log {
         content
     } else {
         LOG_BUFFER.lock().map(|buf| {
             buf.iter().cloned().collect::<Vec<String>>().join("\n")
         }).unwrap_or_default()
     };
-    let _ = zip.start_file("app_logs.txt", opts);
-    let _ = zip.write_all(logs_text.as_bytes());
 
-    // 5. state_snapshot.json
-    if let Some(state) = app_state {
-        let _ = zip.start_file("state_snapshot.json", opts);
-        let _ = zip.write_all(state.as_bytes());
+    let parts = ReportParts {
+        is_crash,
+        reason: reason.to_string(),
+        backtrace: if is_crash { Some(format!("{:?}", Backtrace::new())) } else { None },
+        // Full enumeration only for crashes; clean exits use the light path.
+        system_info: get_system_snapshot_impl(is_crash),
+        logs,
+        app_state,
+        frontend_dump,
+        replay: if is_crash { read_crash_replay() } else { None },
+    };
+
+    // Every secret the live data file holds, whether or not a snapshot is attached: the
+    // panic hook and the frontend dump carry no snapshot, but a token can still sit in a log
+    // line, an IPC argument or a recorded input.
+    let redactor = redactor_for_report(&parts, &data_file_path());
+
+    let file = fs::File::create(&zip_path).ok()?;
+    if write_report_zip(file, &parts, &redactor).is_err() {
+        let _ = fs::remove_file(&zip_path);
+        return None;
     }
-
-    // 5b. frontend_dump.json
-    if let Some(dump) = frontend_dump {
-        let _ = zip.start_file("frontend_dump.json", opts);
-        let _ = zip.write_all(dump.as_bytes());
-    }
-
-    // 6. dxdiag.txt (Windows Only, only if crash to speed up normal closure)
-    #[cfg(target_os = "windows")]
-    if is_crash {
-        let tmp_file = std::env::temp_dir().join("bmm_dxdiag_tmp.txt");
-        let _ = crate::commands::proc::hidden_command("dxdiag")
-            .args(["/t", &tmp_file.to_string_lossy().to_string()])
-            .spawn();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while !tmp_file.exists() && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-        }
-        if let Ok(content) = fs::read(&tmp_file) {
-            let _ = zip.start_file("dxdiag.txt", opts);
-            let _ = zip.write_all(&content);
-            let _ = fs::remove_file(&tmp_file);
-        }
-    }
-
-    // 7. The session recording (rrweb) just before the crash. BMM always records
-    //    the current session in memory and flushes a single rolling buffer to
-    //    <app_data>/last_crash_session.bmmreplay (NOT a saved replay — that only
-    //    happens if the user enables the Session recorder). Attach that buffer so a
-    //    report shows what happened. Local-only data; never leaves unless you share.
-    // Attach only for CRASHES — the recording is what makes a crash debuggable, but reading and
-    // Deflate-compressing a multi-MB replay on every CLEAN close was a large, pointless part of
-    // the shutdown time. A clean session log doesn't need it.
-    if is_crash {
-    if let Some(app_data) = get_crash_dir(None).parent().map(|p| p.to_path_buf()) {
-        let buffer = app_data.join("last_crash_session.bmmreplay");
-        let chosen = if buffer.exists() {
-            Some(buffer)
-        } else {
-            // Back-compat: fall back to the freshest saved replay if no buffer yet.
-            fs::read_dir(app_data.join("Replays")).ok().and_then(|entries| {
-                let mut files: Vec<PathBuf> = entries
-                    .filter_map(Result::ok)
-                    .map(|e| e.path())
-                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bmmreplay"))
-                    .collect();
-                files.sort_by_key(|p| {
-                    fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                });
-                files.pop()
-            })
-        };
-        if let Some(path) = chosen {
-            if let Ok(content) = fs::read(&path) {
-                let _ = zip.start_file("session_replay.bmmreplay", opts);
-                let _ = zip.write_all(&content);
-            }
-        }
-    }
-    } // end: crash-only session-replay attachment
-
-    let _ = zip.finish();
 
     // Archivage et nettoyage
     archive_old_reports(&report_dir, &get_archive_dir(is_crash));
@@ -384,6 +317,202 @@ fn generate_report_internal(
     }
 
     Some(zip_path)
+}
+
+/// `<app data>/data.json` — the file whose secrets must never reach a report.
+fn data_file_path() -> PathBuf {
+    get_crash_dir(None)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("data.json")
+}
+
+/// The session recording just before the crash. BMM records the current session in memory
+/// and flushes a single rolling buffer to <app_data>/last_crash_session.bmmreplay (NOT a saved
+/// replay — that only happens if the user enables the Session recorder). Crash-only: reading
+/// and compressing a multi-MB replay on every CLEAN close was a large, pointless part of the
+/// shutdown time.
+fn read_crash_replay() -> Option<Vec<u8>> {
+    let app_data = get_crash_dir(None).parent().map(|p| p.to_path_buf())?;
+    let buffer = app_data.join("last_crash_session.bmmreplay");
+    let chosen = if buffer.exists() {
+        Some(buffer)
+    } else {
+        // Back-compat: fall back to the freshest saved replay if no buffer yet.
+        fs::read_dir(app_data.join("Replays")).ok().and_then(|entries| {
+            let mut files: Vec<PathBuf> = entries
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bmmreplay"))
+                .collect();
+            files.sort_by_key(|p| {
+                fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            });
+            files.pop()
+        })
+    };
+    chosen.and_then(|p| fs::read(p).ok())
+}
+
+/// Everything a report holds, gathered before a byte is written.
+///
+/// There is deliberately no DxDiag here. It used to be generated into every crash zip, so a
+/// crash zip attached to a report carried the full hardware inventory even with the
+/// "Include DxDiag" box unticked. The report screens attach a fresh DxDiag themselves when,
+/// and only when, that box is ticked (`get_dxdiag_report`).
+struct ReportParts {
+    is_crash: bool,
+    reason: String,
+    backtrace: Option<String>,
+    system_info: String,
+    logs: String,
+    app_state: Option<String>,
+    frontend_dump: Option<String>,
+    replay: Option<Vec<u8>>,
+}
+
+fn redactor_for_report(parts: &ReportParts, data_file: &Path) -> crate::commands::report_redact::Redactor {
+    let mut r = crate::commands::report_redact::Redactor::new();
+    r.absorb_data_file(data_file);
+    if let Some(s) = &parts.app_state { r.absorb_json_text(s); }
+    if let Some(s) = &parts.frontend_dump { r.absorb_json_text(s); }
+    r
+}
+
+/// Write a report archive. Split from the file handling so what goes INTO a report — and
+/// that no secret does — is testable against an in-memory buffer.
+fn write_report_zip<W: Write + std::io::Seek>(
+    w: W,
+    parts: &ReportParts,
+    redactor: &crate::commands::report_redact::Redactor,
+) -> zip::result::ZipResult<W> {
+    let mut zip = zip::ZipWriter::new(w);
+    let opts = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    // 0. The note that says this report was redacted — and marks it as done for the
+    //    one-time pass over reports from older versions.
+    zip.start_file(crate::commands::report_redact::REDACTION_ENTRY, opts)?;
+    zip.write_all(crate::commands::report_redact::redaction_note().as_bytes())?;
+
+    // 1. metadata.txt (a panic message can quote anything, a URL with a password included)
+    let mut meta = format!("BMM VERSION: {}\n", env!("CARGO_PKG_VERSION"));
+    meta.push_str(&format!("TIMESTAMP:   {}\n", chrono::Local::now().to_rfc3339()));
+    meta.push_str(&format!("REASON:      {}\n", parts.reason));
+    zip.start_file("metadata.txt", opts)?;
+    zip.write_all(redactor.scrub_text(&meta).as_bytes())?;
+
+    // 2. stacktrace.txt (crash only)
+    if let Some(bt) = &parts.backtrace {
+        zip.start_file("stacktrace.txt", opts)?;
+        zip.write_all(redactor.scrub_text(bt).as_bytes())?;
+    }
+
+    // 3. system_info.txt
+    zip.start_file("system_info.txt", opts)?;
+    zip.write_all(redactor.scrub_text(&parts.system_info).as_bytes())?;
+
+    // 4. app_logs.txt
+    zip.start_file("app_logs.txt", opts)?;
+    zip.write_all(redactor.scrub_text(&parts.logs).as_bytes())?;
+
+    // 5. state_snapshot.json — the data file, secret fields replaced by markers.
+    if let Some(state) = &parts.app_state {
+        zip.start_file("state_snapshot.json", opts)?;
+        zip.write_all(redactor.redact_json_text(state).as_bytes())?;
+    }
+
+    // 5b. frontend_dump.json — carries IPC arguments, so tokens typed into Settings too.
+    if let Some(dump) = &parts.frontend_dump {
+        zip.start_file("frontend_dump.json", opts)?;
+        zip.write_all(redactor.redact_json_text(dump).as_bytes())?;
+    }
+
+    // 6. session_replay.bmmreplay (crash only). A recorded input can hold a pasted token.
+    if parts.is_crash {
+        if let Some(replay) = &parts.replay {
+            zip.start_file("session_replay.bmmreplay", opts)?;
+            zip.write_all(&redactor.scrub_bytes(replay))?;
+        }
+    }
+
+    zip.finish()
+}
+
+/// Rewrite one report written by an older BMM: every entry through the redactor, DxDiag
+/// dropped. Returns None when the archive is already redacted (it carries the note) or
+/// cannot be read.
+fn rewrite_report_zip_bytes(
+    bytes: &[u8],
+    redactor: &crate::commands::report_redact::Redactor,
+) -> Option<Vec<u8>> {
+    use crate::commands::report_redact::{redaction_note, REDACTION_ENTRY};
+    let mut src = zip::ZipArchive::new(std::io::Cursor::new(bytes)).ok()?;
+    if src.by_name(REDACTION_ENTRY).is_ok() {
+        return None; // already clean
+    }
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let opts = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    out.start_file(REDACTION_ENTRY, opts).ok()?;
+    out.write_all(redaction_note().as_bytes()).ok()?;
+    for i in 0..src.len() {
+        let mut f = src.by_index(i).ok()?;
+        let name = f.name().to_string();
+        if name.to_ascii_lowercase().contains("dxdiag") {
+            continue;
+        }
+        let mut buf = Vec::new();
+        use std::io::Read;
+        f.read_to_end(&mut buf).ok()?;
+        let clean = if name.to_ascii_lowercase().ends_with(".json") {
+            match std::str::from_utf8(&buf) {
+                Ok(s) => redactor.redact_json_text(s).into_bytes(),
+                Err(_) => redactor.scrub_bytes(&buf),
+            }
+        } else {
+            redactor.scrub_bytes(&buf)
+        };
+        out.start_file(name, opts).ok()?;
+        out.write_all(&clean).ok()?;
+    }
+    Some(out.finish().ok()?.into_inner())
+}
+
+/// One-time pass over every report an older BMM left on disk (Reports/ and Archive/): each
+/// zip without the redaction note is rewritten through the redactor, DxDiag dropped. Those
+/// zips are the ones people attach or export, and they carried the data file in clear.
+/// Idempotent — a rewritten zip carries the note and is skipped next time.
+pub fn redact_existing_reports() {
+    let mut r = crate::commands::report_redact::Redactor::new();
+    r.absorb_data_file(&data_file_path());
+    let base = get_crash_dir(None);
+    for sub in ["Reports/Crash", "Reports/Session", "Archive/Crash", "Archive/Session"] {
+        let Ok(entries) = fs::read_dir(base.join(sub)) else { continue };
+        for e in entries.flatten() {
+            let path = e.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("zip") {
+                continue;
+            }
+            let Ok(bytes) = fs::read(&path) else { continue };
+            let Some(clean) = rewrite_report_zip_bytes(&bytes, &r) else { continue };
+            // Temp + rename: an interrupted rewrite must never leave a half zip behind.
+            let tmp = path.with_extension("zip.redacting");
+            if fs::write(&tmp, &clean).is_ok() {
+                let mtime = fs::metadata(&path).and_then(|m| m.modified()).ok();
+                if fs::rename(&tmp, &path).is_ok() {
+                    // Keep the date: the report lists and the archive rotation sort by it.
+                    if let (Some(t), Ok(f)) = (mtime, fs::OpenOptions::new().write(true).open(&path)) {
+                        let _ = f.set_modified(t);
+                    }
+                    log_line(format!("[CRASH_LOGGER] Redacted secrets in older report {:?}", path.file_name().unwrap_or_default()));
+                } else {
+                    let _ = fs::remove_file(&tmp);
+                }
+            }
+        }
+    }
 }
 
 // ─── PANIC HOOK ─────────────────────────────────────────────────────────────
@@ -946,6 +1075,157 @@ mod tests {
         let mut z = open(make_zip(&[("bad.txt", &[0xff, 0xfe, b'h', b'i'])]));
         let v = read_zip_text_entry(&mut z, "bad.txt").unwrap();
         assert!(v["content"].as_str().unwrap().contains("hi"));
+    }
+
+    // ─── No secret leaves in a report ────────────────────────────────────────
+    //
+    // A report zip is made to be attached to a bug report. These build one from a data file
+    // seeded with fake secrets — written by the real AppData serializer, so a field that is
+    // renamed or moved is still what gets tested — and look for every secret in every byte.
+
+    const FAKE_GITHUB: &str = "ghp_FAKEfakeFAKEfakeFAKEfakeFAKEfake1234";
+    const FAKE_API: &str = "11111111-2222-4333-8444-555555555555";
+    const FAKE_SCHED: &str = "99999999-8888-4777-8666-555555555555";
+    const FAKE_PLUGIN_TOKEN: &str = "plg-tok-7f3a9c2e1b5d4f6a";
+    const FAKE_REPO_PW: &str = "repo-pw-Zq8xLm2v";
+    const FAKE_USERINFO_PW: &str = "userinfo-Kp4Nw9x";
+    const ALL_FAKES: &[&str] = &[FAKE_GITHUB, FAKE_API, FAKE_SCHED, FAKE_PLUGIN_TOKEN, FAKE_REPO_PW, FAKE_USERINFO_PW];
+
+    fn seeded_data_file(dir: &Path) -> (PathBuf, String) {
+        let mut d = crate::state::AppData::default();
+        d.settings.github_token = FAKE_GITHUB.into();
+        d.settings.api_token = FAKE_API.into();
+        d.settings.os_schedule_key = FAKE_SCHED.into();
+        d.settings.plugin_tokens.insert(FAKE_PLUGIN_TOKEN.into(), "com.example.plugin".into());
+        d.settings.connected_server_repos.push(crate::state::ConnectedServerRepo {
+            url: format!("https://repo.example/r.json?password={FAKE_REPO_PW}"),
+            name: "protected".into(),
+            ..Default::default()
+        });
+        d.settings.connected_server_repos.push(crate::state::ConnectedServerRepo {
+            url: format!("https://alice:{FAKE_USERINFO_PW}@repo.example/other.json"),
+            name: "userinfo".into(),
+            ..Default::default()
+        });
+        let text = serde_json::to_string_pretty(&d).unwrap();
+        let path = dir.join("data.json");
+        fs::write(&path, &text).unwrap();
+        (path, text)
+    }
+
+    fn secret_laden_parts(app_state: Option<String>) -> ReportParts {
+        ReportParts {
+            is_crash: true,
+            reason: "test".into(),
+            backtrace: Some("bt".into()),
+            system_info: "sys".into(),
+            logs: format!(
+                "[UI] saved github token {FAKE_GITHUB}\n\
+                 [API] request with Authorization: Bearer {FAKE_API}\n\
+                 [API] plain {FAKE_API} and {FAKE_SCHED}\n\
+                 [API] plugin call from {FAKE_PLUGIN_TOKEN}\n\
+                 [REPO] GET https://repo.example/r.json?password={FAKE_REPO_PW}\n"
+            ),
+            app_state,
+            frontend_dump: Some(serde_json::json!({
+                "reason": "CRASH",
+                "ipcCalls": [{ "cmd": "save_settings", "args": { "githubToken": FAKE_GITHUB, "apiToken": FAKE_API } }],
+                "appState": { "osScheduleKey": FAKE_SCHED, "note": format!("typed {FAKE_PLUGIN_TOKEN}") },
+            }).to_string()),
+            replay: Some(format!(
+                r#"{{"events":[{{"type":3,"data":{{"source":5,"text":"{FAKE_API}"}}}},{{"type":3,"data":{{"text":"{FAKE_GITHUB} {FAKE_SCHED}"}}}}]}}"#
+            ).into_bytes()),
+        }
+    }
+
+    /// Every entry of an archive, decompressed.
+    fn entries(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
+        use std::io::Read;
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        (0..z.len()).map(|i| {
+            let mut f = z.by_index(i).unwrap();
+            let mut b = Vec::new();
+            f.read_to_end(&mut b).unwrap();
+            (f.name().to_string(), b)
+        }).collect()
+    }
+
+    fn assert_no_secret(archive: &[u8]) {
+        let contains = |hay: &[u8], needle: &str| hay.windows(needle.len()).any(|w| w == needle.as_bytes());
+        for s in ALL_FAKES {
+            assert!(!contains(archive, s), "secret {s} found in the raw archive bytes");
+            for (name, body) in entries(archive) {
+                assert!(!contains(&body, s), "secret {s} found in entry {name}:\n{}", String::from_utf8_lossy(&body));
+            }
+        }
+        // A marker, never a partial value.
+        for (name, body) in entries(archive) {
+            let text = String::from_utf8_lossy(&body);
+            assert!(!text.contains("ghp_FAKE"), "a github-token prefix survived in {name}");
+        }
+    }
+
+    #[test]
+    fn clean_exit_style_report_carries_no_secret() {
+        let dir = tempfile::tempdir().unwrap();
+        let (data_path, text) = seeded_data_file(dir.path());
+        let parts = secret_laden_parts(Some(text));
+        let r = redactor_for_report(&parts, &data_path);
+        let bytes = write_report_zip(std::io::Cursor::new(Vec::new()), &parts, &r).unwrap().into_inner();
+        assert_no_secret(&bytes);
+
+        let all = entries(&bytes);
+        let state = all.iter().find(|(n, _)| n == "state_snapshot.json").expect("snapshot kept");
+        let state = String::from_utf8_lossy(&state.1);
+        assert!(state.contains(&crate::commands::report_redact::marker(FAKE_API.len())),
+            "the snapshot says a value was redacted and how long it was:\n{state}");
+        assert!(all.iter().any(|(n, _)| n == crate::commands::report_redact::REDACTION_ENTRY));
+    }
+
+    #[test]
+    fn panic_style_report_without_snapshot_still_scrubs_by_the_data_file() {
+        // The panic hook passes no snapshot and no dump: only the data file on disk knows
+        // that the bare UUID in a log line is the API token.
+        let dir = tempfile::tempdir().unwrap();
+        let (data_path, _) = seeded_data_file(dir.path());
+        let mut parts = secret_laden_parts(None);
+        parts.frontend_dump = None;
+        let r = redactor_for_report(&parts, &data_path);
+        let bytes = write_report_zip(std::io::Cursor::new(Vec::new()), &parts, &r).unwrap().into_inner();
+        assert_no_secret(&bytes);
+    }
+
+    #[test]
+    fn crash_report_never_embeds_dxdiag() {
+        let dir = tempfile::tempdir().unwrap();
+        let (data_path, text) = seeded_data_file(dir.path());
+        let parts = secret_laden_parts(Some(text));
+        let r = redactor_for_report(&parts, &data_path);
+        let bytes = write_report_zip(std::io::Cursor::new(Vec::new()), &parts, &r).unwrap().into_inner();
+        assert!(entries(&bytes).iter().all(|(n, _)| !n.to_ascii_lowercase().contains("dxdiag")));
+    }
+
+    #[test]
+    fn a_report_from_an_older_bmm_is_rewritten_clean() {
+        // What an older BMM wrote: the snapshot in clear, and a DxDiag nobody asked for.
+        let dir = tempfile::tempdir().unwrap();
+        let (data_path, text) = seeded_data_file(dir.path());
+        let legacy = make_zip(&[
+            ("metadata.txt", b"BMM VERSION: old\n"),
+            ("app_logs.txt", format!("token {FAKE_GITHUB} api {FAKE_API}").as_bytes()),
+            ("state_snapshot.json", text.as_bytes()),
+            ("dxdiag.txt", b"Machine name: DESKTOP-SECRET"),
+            ("session_replay.bmmreplay", format!(r#"{{"t":"{FAKE_PLUGIN_TOKEN}"}}"#).as_bytes()),
+        ]);
+        let mut r = crate::commands::report_redact::Redactor::new();
+        r.absorb_data_file(&data_path);
+        let rewritten = rewrite_report_zip_bytes(&legacy, &r).expect("rewritten");
+        assert_no_secret(&rewritten);
+        let names: Vec<String> = entries(&rewritten).into_iter().map(|(n, _)| n).collect();
+        assert!(!names.iter().any(|n| n == "dxdiag.txt"), "{names:?}");
+        assert!(names.iter().any(|n| n == crate::commands::report_redact::REDACTION_ENTRY));
+        // Idempotent: a clean report is left alone.
+        assert!(rewrite_report_zip_bytes(&rewritten, &r).is_none());
     }
 
     #[test]

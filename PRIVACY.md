@@ -86,6 +86,10 @@ BetterInstaller and leave its pre‑ticked box**: the installer passes your choi
 consent screen is then not shown. Settings → Privacy turns it off at any time; when off, none of
 §3 is collected or sent.
 
+A `bmm://telemetry/…` link (which any web page can open) cannot change these settings by itself: it
+opens BMM's consent screen, or a confirmation when it only turns something off, and nothing changes
+unless you accept there.
+
 ### 3.1 What is sent
 - **Identity:** your Creator ID (§2.1) and a random per‑install id.
 - **System profile:** operating system and version, CPU and core count, RAM, every GPU, motherboard,
@@ -118,7 +122,8 @@ as names or paths. Other windows and the rest of your screen are never recorded.
   telemetry" box, pre‑ticked; in BMM it is an option of Settings → Privacy.
 - A separate **"full (unmasked)"** mode exists for your own debugging. It is off unless you turn it
   on; when on, typed text is not masked and local images shown in the window are embedded in the
-  recording.
+  recording. It can only be turned on by hand in Settings → Privacy (or the consent screen you open
+  yourself), never by a `bmm://` link.
 
 ### 3.3 Weekly benchmark and detailed hardware report
 While telemetry is on, BMM runs a short internal benchmark once a week (and when telemetry is first
@@ -198,12 +203,17 @@ BetterCommunity platform's terms.
 
 ### 5.2 What a crash report zip contains
 When BMM crashes it writes a report `.zip` **on your disk**. It contains BMM's logs, a system‑info
-snapshot, a **DxDiag report** (always, on a crash, independently of the checkbox in §5.1), a
-**snapshot of BMM's data file** (your profiles and settings, **including values kept in settings
-such as a GitHub access token or the local API token**), and the masked session recording of §5.3
-together with the console and log output. A similar report is also written locally each time BMM
-closes normally. These files stay on your computer unless you send or share one yourself; open the
-zip first if you want to see exactly what it holds.
+snapshot, and the masked session recording of §5.3 together with the console and log output; a
+report written when BMM closes normally also holds a **snapshot of BMM's data file** (your profiles
+and settings, including your mods' and repositories' addresses and your folder paths, which may
+include your Windows user name). **Secrets are redacted before the zip is written**: the GitHub
+access token, the local API token, plugin tokens, the scheduler key, and any other value kept under
+a token, password, key, secret, auth, cookie or webhook field, as well as passwords inside
+addresses, appear as `[REDACTED: N chars]` (the length only, no part of the value). Reports written
+by older versions are cleaned the same way the next time BMM starts. A crash zip **does not contain
+DxDiag**: it is attached to a report only when you tick its box (§5.1). These files stay on your
+computer unless you send or share one yourself; open the zip first if you want to see exactly what
+it holds.
 
 ### 5.3 Local session recording
 BMM always keeps a recording of the current session (masked like §3.2) **on your disk**: working
@@ -289,7 +299,7 @@ under its own terms.
 | **Discord Rich Presence** (on if you kept the installer's box) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
 | Connect or sync a Server Repo | Yes | IP address, Creator ID | That repo's owner |
 | Host a Server Repo | Yes (incoming) | Visitors' IP and Creator ID, stored on your PC | You |
-| Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs, DxDiag with your Windows account name, a snapshot of your settings), Creator ID, app and OS details | BetterCommunity feedback centre |
+| Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs and, for a normal-close report, a snapshot of your settings with tokens and passwords redacted; DxDiag, with your Windows account name, only if you tick it), Creator ID, app and OS details | BetterCommunity feedback centre |
 | Link a BetterCommunity account | Yes | Creator ID | bettercommunity.ch |
 | BetterCommunity notifications (only with a stored API key) | Yes, every 10 min | The API key, scoped to `notifications:read` | bettercommunity.ch |
 
