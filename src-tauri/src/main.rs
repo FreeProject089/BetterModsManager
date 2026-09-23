@@ -14,6 +14,7 @@ mod fs_utils;
 mod models;
 mod state;
 mod boot_flags;
+mod hw_detect;
 // Phase G0 of the resource governor: configuration only, not called yet.
 #[allow(dead_code)]
 mod governor;
@@ -714,6 +715,7 @@ fn main() {
             commands::benchmark::cancel_app_benchmark,
             commands::benchmark::read_file_text,
             commands::disk::get_system_disks,
+            commands::hardware::get_hardware_info,
             commands::disk::set_disk_limit,
             commands::disk::benchmark_disk,
             commands::disk::check_disk_space,

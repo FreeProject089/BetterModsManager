@@ -81,6 +81,12 @@
       "why": "TODO(G3b)"
     }
   },
+  "src/commands/hardware.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "exempt: one-shot hardware detection (driver queries, no bulk I/O), kept off the main thread"
+    }
+  },
   "src/commands/image.rs": {
     "fs::copy": {
       "count": 1,
@@ -189,6 +195,12 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
+  "src/commands/repo_keyauth.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
   "src/commands/repo.rs": {
     "par_iter": {
       "count": 2,
@@ -205,12 +217,6 @@
     "io::copy": {
       "count": 1,
       "why": "TODO(G3c): repo export and sync"
-    }
-  },
-  "src/commands/repo_keyauth.rs": {
-    "spawn_blocking": {
-      "count": 1,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
   "src/commands/restore_bundle.rs": {
@@ -263,6 +269,12 @@
     "update_mmap": {
       "count": 1,
       "why": "TODO(G2/G3b): the copy engine and the hash pool"
+    }
+  },
+  "src/hw_detect.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "exempt: the DXGI enumeration runs on its own thread so a hung driver cannot block the caller past its 3 s budget"
     }
   },
   "src/main.rs": {

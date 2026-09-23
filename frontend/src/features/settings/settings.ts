@@ -499,6 +499,14 @@ const _renderStorageModal = async () => {
                 </label>
             </div>
 
+            <!-- What hw_detect.rs sees (get_hardware_info). Filled after the modal opens: the
+                 first call can take the GPU driver's 3-second budget. -->
+            <div id="hw-card" style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; display:none">
+                <div style="font-size:14px; font-weight:800; color:var(--text-bright); margin-bottom:8px">${t('storage.hwTitle')}</div>
+                <div id="hw-body" style="font-size:12px; color:var(--text-muted); line-height:1.6"></div>
+                <div style="font-size:11px; color:var(--text-muted); line-height:1.4; margin-top:8px">${t('storage.hwNote')}</div>
+            </div>
+
             ${thresholdsBlock}
 
             <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
@@ -539,6 +547,26 @@ const _renderStorageModal = async () => {
             if (gpuNote) { gpuNote.textContent = note; gpuNote.style.display = note ? '' : 'none'; }
         };
         invoke('get_webview_gpu').then(showGpu).catch(() => {});
+
+        // Detected hardware. Text only, built with textContent: names come from drivers.
+        invoke('get_hardware_info').then((hw: any) => {
+            const card = document.getElementById('hw-card');
+            const body = document.getElementById('hw-body');
+            if (!card || !body || !hw) return;
+            const line = (text: string) => { const d = document.createElement('div'); d.textContent = text; body.appendChild(d); };
+            body.textContent = '';
+            const feats = [hw.cpu?.avx512f && 'AVX-512', hw.cpu?.avx2 && 'AVX2', hw.cpu?.sse41 && 'SSE4.1', hw.cpu?.sha_ni && 'SHA-NI', hw.cpu?.aes_ni && 'AES-NI'].filter(Boolean);
+            line(`CPU: ${t('storage.hwCpu', { n: String(hw.cpu?.logical_cores ?? '?') })}${feats.length ? ' · ' + feats.join(' · ') : ''}`);
+            const gpus = (hw.gpus || []) as any[];
+            if (hw.gpu_timed_out) line(`GPU: ${t('storage.hwGpuSlow')}`);
+            else if (!gpus.length) line(`GPU: ${t('storage.hwNoGpu')}`);
+            for (const g of gpus) line(`GPU: ${g.name}${g.software ? ` (${t('storage.hwSoftware')})` : g.dedicated_mb ? ` · ${Math.round(g.dedicated_mb / 1024)} GB` : ''}`);
+            for (const d of (hw.disks || []) as any[]) {
+                const kind = d.seek_penalty === true ? t('storage.hwSpinning') : d.seek_penalty === false ? t('storage.hwFlash') : '';
+                line(`${d.mount} ${String(d.bus || 'unknown').toUpperCase()}${kind ? ' · ' + kind : ''}`);
+            }
+            card.style.display = '';
+        }).catch(() => {});
         gpuBox?.addEventListener('change', async (e: any) => {
             try {
                 showGpu(await invoke('set_webview_gpu', { enabled: e.target.checked }));

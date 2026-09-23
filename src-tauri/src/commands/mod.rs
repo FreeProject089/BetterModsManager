@@ -26,6 +26,7 @@ pub mod link_guard;
 pub mod tutorial_demo;
 pub mod autoupdate;
 pub mod benchmark;
+pub mod hardware;
 pub mod sandbox_gen;
 pub mod disk;
 pub mod image;
