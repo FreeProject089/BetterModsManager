@@ -297,13 +297,6 @@ export async function openAdvancedPerfModal() {
             <div id="perf-advanced-section" style="display: none; flex-direction: column; gap: 20px;">
                 <div style="height: 1px; background: var(--border); margin: 8px 0;"></div>
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
-                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; position: relative;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.network') || 'Net Latency'}</span>
-                            <span class="tasky-info" data-help="latency" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
-                        </div>
-                        <span id="perf-net-val" style="font-size: 20px; font-weight: 900; color: var(--accent); font-family: var(--font-mono);">-- ms</span>
-                    </div>
                     <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.globalCpu') || 'Global CPU Load'}</span>
@@ -1008,12 +1001,10 @@ function updateStatsView(container: HTMLElement, point: BenchmarkPoint) {
     }
 
     if (isAdvancedMode) {
-        const netVal = container.querySelector('#perf-net-val');
         const gCpuVal = container.querySelector('#perf-global-cpu-val');
         const vramVal = container.querySelector('#perf-vram-val');
         const swapVal = container.querySelector('#perf-swap-val');
 
-        if (netVal) netVal.textContent = point.network_latency ? point.network_latency + ' ms' : '-- ms';
         if (gCpuVal) gCpuVal.textContent = point.global_cpu ? point.global_cpu.toFixed(1) + ' %' : '-- %';
         if (vramVal) vramVal.textContent = point.ram_virtual ? formatUnit(point.ram_virtual, 'MB') : '--';
         if (swapVal) swapVal.textContent = point.ram_swap ? formatUnit(point.ram_swap, 'MB') : '--';

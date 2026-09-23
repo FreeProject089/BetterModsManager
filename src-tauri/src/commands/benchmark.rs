@@ -48,10 +48,6 @@ pub async fn start_benchmark(window: WebviewWindow, state: State<'_, AppState>) 
         let mut sys = System::new_all();
         let pid = sysinfo::get_current_pid().ok();
         let core_count = sys.cpus().len() as f32;
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_millis(500))
-            .build()
-            .ok();
 
         while running.load(Ordering::SeqCst) {
             let advanced = is_advanced.load(Ordering::SeqCst);
@@ -97,16 +93,11 @@ pub async fn start_benchmark(window: WebviewWindow, state: State<'_, AppState>) 
                 global_cpu = Some(sys.global_cpu_info().cpu_usage());
             }
 
-            // Network Latency Check (Advanced only)
-            let mut latency = None;
-            if advanced {
-                if let Some(ref c) = client {
-                    let start = std::time::Instant::now();
-                    if let Ok(_) = c.head("https://www.google.com").send().await {
-                        latency = Some(start.elapsed().as_millis() as u64);
-                    }
-                }
-            }
+            // No network probe. This used to send a HEAD to https://www.google.com every 500 ms while
+            // the advanced view was open: a request to a third party that the user never asked for,
+            // and a latency to Google says nothing about BMM. `network_latency` stays in the point
+            // so recordings made before still load.
+            let latency: Option<u64> = None;
 
             let point = BenchmarkPoint {
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs(),
