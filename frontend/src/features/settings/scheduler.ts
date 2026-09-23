@@ -28,6 +28,7 @@ import { reasonNotRunning } from './sched-why.js';
 import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
 import { planOf, previewAgainst } from './sched-preview.js';
 import { debugging, gate, startDebug, endDebug, failDebug, DebugStopped } from './sched-debug.js';
+import { newRun, startStep, endStep, finishRun, type RunRecord } from './sched-runlog.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -1033,8 +1034,45 @@ async function syncOsSchedule(task: Task): Promise<void> {
     } catch (e) { toast(`${t('sched.osFail') || 'OS schedule error'}: ${e}`, 'error'); }
 }
 
+/** The detailed run log of a task, newest first (sched_runs_list). Text only, escaped. */
+async function openRunLog(taskId: string): Promise<void> {
+    let runs: any[] = [];
+    try { runs = await invoke('sched_runs_list', { taskId }) as any[]; } catch (e) { toast(String(e), 'error'); return; }
+    const ms = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 's' : n + 'ms';
+    const body = runs.length ? runs.map((r) => `<details class="sched-runlog-run"${r === runs[0] ? ' open' : ''}>
+        <summary><span class="sched-hist-dot ${r.ok ? 'ok' : 'err'}"></span> ${escHtml(new Date(r.at).toLocaleString())} · ${escHtml(ms(r.ms || 0))} · ${escHtml(r.ok ? (t('sched.runlog.ok') || 'finished') : String(r.result || ''))}</summary>
+        <ol class="sched-runlog-steps">${(r.steps || []).map((st: any) => `<li class="${st.status === 'ok' ? 'ok' : 'err'}" style="margin-inline-start:${Math.min(8, st.depth || 0) * 14}px">
+            <b>${escHtml(st.label || '')}</b> <span>${escHtml(ms(st.ms || 0))}</span>${st.status !== 'ok' ? ` <em>${escHtml(st.status)}</em>` : ''}${st.error ? `<div class="sched-runlog-err">${escHtml(st.error)}</div>` : ''}</li>`).join('') || `<li>${escHtml(t('sched.runlog.noSteps') || 'No action ran.')}</li>`}</ol>
+    </details>`).join('') : `<p>${escHtml(t('sched.runlog.empty') || 'No run recorded yet.')}</p>`;
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal" style="max-width:720px;width:calc(100% - 32px)">
+        <div class="modal-header"><h3>${escHtml(t('sched.runlog.title') || 'Run log')}</h3>
+            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+        <div class="modal-body" style="max-height:65vh;overflow:auto"><p style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.runlog.lede') || 'The last 50 runs, each action with its duration and, when it failed, why. Secrets are removed before anything is written.')}</p>${body}</div>
+        <div class="modal-footer"><button class="btn btn-sm btn-ghost" data-clear>${escHtml(t('sched.runlog.clear') || 'Clear the log')}</button><button class="btn btn-sm" data-x>${escHtml(t('common.close'))}</button></div>
+    </div>`;
+    ov.querySelectorAll('[data-x]').forEach((b) => b.addEventListener('click', () => ov.remove()));
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    ov.querySelector('[data-clear]')?.addEventListener('click', async () => {
+        if (!(await showConfirm(t('sched.runlog.clear') || 'Clear the log', t('sched.runlog.clearQ') || 'Clear this task\u2019s run log?'))) return;
+        try { await invoke('sched_runs_clear', { taskId }); ov.remove(); } catch (e) { toast(String(e), 'error'); }
+    });
+    document.body.appendChild(ov);
+    raiseAboveAll(ov);
+}
+document.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement)?.closest?.('[data-sched-runlog]') as HTMLElement | null;
+    if (b?.dataset.schedRunlog) openRunLog(b.dataset.schedRunlog);
+});
+
+/** The run record being written for each task that is running (sched-runlog.ts, A1). */
+const _runLogs = new Map<string, RunRecord>();
+
 async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
+    // One record per run, with a step per action, sent to the task's log when it ends.
+    _runLogs.set(task.id, newRun(task.id, String((task as any).trigger?.type || 'manual'), t0));
     noteTaskRunning(1);
     // Registered BEFORE the first step, so a task that fails immediately still appears in
     // the panel long enough to be seen, and a task started twice is visible as such.
@@ -1102,6 +1140,11 @@ async function runTask(task: Task): Promise<void> {
     // Run history (last 20): timestamp, outcome, duration — shown in the editor.
     const ok = task.lastResult === 'ok';
     (task.history = task.history || []).push({ at: t0, ok, ms: Date.now() - t0, err: ok ? undefined : task.lastResult });
+    // The detailed record (every action, its duration, its redacted error) goes to the log;
+    // a failure to write it must never fail the task.
+    const runLog = _runLogs.get(task.id);
+    _runLogs.delete(task.id);
+    if (runLog) invoke('sched_run_append', { taskId: task.id, record: finishRun(runLog, String(task.lastResult || '')) }).catch(() => {});
     // Rung after the history entry, so whatever reacts to it sees a finished record rather
     // than a run that is still being written down. The same ring `wait.hook` and `onEvent`
     // use: a task finishing is an event like any other, which is what lets "after task X" be
@@ -1782,7 +1825,20 @@ export async function importTasksFromPath(path: string): Promise<number> {
     return added;
 }
 
+/** Records the action in the run log around the real work (runActionInner). */
 async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+    const log = _runLogs.get(task.id);
+    const step = log ? startStep(log, stepLabel({ kind: 'action', action } as Step), depth) : null;
+    try {
+        await runActionInner(action, task, ctx, depth);
+        endStep(step, 'ok');
+    } catch (e) {
+        endStep(step, e instanceof _StopTask ? 'stopped' : e instanceof _CancelledTask ? 'cancelled' : 'error', e);
+        throw e;
+    }
+}
+
+async function runActionInner(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
     // task, and rewriting it would bake one run's values into the stored definition.
@@ -5511,7 +5567,8 @@ function renderModal(modal: HTMLElement): void {
                             <span class="sched-hist-when">${new Date(h.at).toLocaleString()}</span>
                             <span class="sched-hist-ms">${h.ms >= 1000 ? (h.ms / 1000).toFixed(1) + 's' : h.ms + 'ms'}</span>
                         </div>`).join('')}
-                </div>` : ''}
+                </div>
+                <button type="button" class="btn btn-sm btn-ghost" data-sched-runlog="${escAttr(_draft.id || '')}" style="margin-top:6px">${escHtml(t('sched.runlog.open') || 'Detailed log')}</button>` : ''}
             </aside>
             <main class="modal-body sched-body sched-flow">
                 <div class="sched-flow-head">
