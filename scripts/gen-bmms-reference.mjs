@@ -482,7 +482,7 @@ const vocabulary = JSON.stringify({
   keywords,
   // The capabilities a task can grant itself. Hard-coded because they are the runner's
   // permission model rather than a registry — the same set the review screen names.
-  permissions: ['command', 'script', 'deeplink', 'stopProcess', 'delete'],
+  permissions: ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources'],
   scriptEngines: ['powershell', 'cmd', 'bash', 'python', 'node', 'rust'],
 }, null, 2) + '\n';
 

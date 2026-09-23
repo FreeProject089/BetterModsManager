@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    104 actions · 37 conditions · 35 valeurs · 8 sources de boucle
+    107 actions · 40 conditions · 36 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -92,6 +92,9 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `storage.calibration` | Active la calibration auto | `enabled` |
 | `storage.smartIo` | Active/désactive Smart I/O | `enabled` |
 | `storage.flag` | Bascule un réglage avancé | `key` · `enabled` |
+| `resources.preset` | Silencieux, Équilibré ou Max, pour cette tâche ou pour de bon | `name` · `scope` · `overridesGame` |
+| `resources.gameMode` | Forcer le mode jeu, l’arrêter, ou laisser la détection décider | `mode` |
+| `resources.queue` | Retenir ou relâcher toutes les opérations BMM en attente | `action` |
 | `perf.diskSpace` | Lit l’espace libre et l’enregistre, pour qu’une condition puisse s’en servir. | `mountPoint` |
 
 ### Confidentialité & enregistreur
@@ -197,6 +200,9 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `dayOfWeek` | Jour de la semaine |
 | `timeRange` | Heure comprise dans |
 | `commandSucceeds` | La commande réussit |
+| `gameRunning` | Un jeu tourne (mode jeu) |
+| `resourcesPresetIs` | Le preset de ressources est |
+| `queueIdle` | BMM est au repos (file vide) |
 
 `all` et `any` sont les conditions de groupe ; en script on écrit normalement `and` et `or` à la place, pour le même résultat. `value` est la ligne de comparaison — c'est ce que `count >= 3` produit.
 
@@ -204,7 +210,56 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 
 Écrites dans la tâche par une action, puis lisibles dans une comparaison ou une expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `last.ok` · `last.ms` · `retry.task_attempt` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `s queue (A3), read live.
+    ` · `,
+    // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.
+    ` · `, ` · `,
+    // Which attempt of a task-level retry this run is (1 on the first run).
+    ` · `,
+    // How big the backup came out. A task can then warn when a nightly bundle suddenly
+    // triples — which is what a replays section left ticked by accident looks like.
+    ` · `,
+    // How many files changed hands when the deployment order last moved. Zero is the
+    // ordinary answer and a useful one: it means the order changed and nothing on disk
+    // did, so the mods that moved share no file.
+    ` · `,
+    // How many attempts the last retry took. 1 means it worked first time, which is
+    // worth being able to branch on: a step that needed three tries is working and worth
+    // knowing about.
+    ` · `,
+    // What the last check found. `valid.ok` and `valid.matched` are 1/0 so a plain `value`
+    // condition can read them; the format itself is text, as {valid.format}.
+    ` · `,
+    ` · `,
+    ` · `,
+    // Written by the two waits and by a script run with "keep going": what happened,
+    // as something a condition can select. Without these a task could wait and could not
+    // branch on the outcome of waiting, which is most of the reason to wait.
+    ` · `, ` · `, ` · `, ` · `,
+    // How much an import brought in — mods in a list, tasks in a .bmmpa, sections in a
+    // backup. The number is what a task branches on: "if the nightly backup came out
+    // with fewer sections than usual, say so".
+    ` · `,
+    // How many entries a publish wrote. Zero is the interesting number: a catalogue with
+    // no entries looks published and installs nothing.
+    ` · `,
+    // How many files a publish or fetch moved. Zero from a publish means the folder was
+    // empty, which is what a failed export upstream looks like from here.
+    ` · `,
+    // What a manifest rebuild found. `removed` is the one worth a condition: a mistyped
+    // path and a deliberate removal both write a valid manifest, and only one of them
+    // describes an empty server.
+    ` · `, ` · `, ` · `, ` · `,
+    // Written by http.request on every call, including a failed one. Listed here because
+    // check-scheduler-vars caught that it was not: a value an action writes and no
+    // condition can select is half a feature, and the half that is missing is the point —
+    // "call the API, and if it answered 404 do something else".
+    ` · `,
+    // The last map touched: how many keys it holds, and whether the last `map.get` found its
+    // key. `map.hit` is the one that matters — without it, a missing key and a key whose value
+    // is genuinely empty are the same empty string, and a task cannot tell "not there" from
+    // "there and blank".
+    ` · `, `
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 

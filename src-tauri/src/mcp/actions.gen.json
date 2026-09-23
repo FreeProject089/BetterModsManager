@@ -295,6 +295,24 @@
       "group": "perf"
     },
     {
+      "type": "resources.preset",
+      "label": "Resources: set the preset",
+      "needs": "resPreset",
+      "group": "perf"
+    },
+    {
+      "type": "resources.gameMode",
+      "label": "Resources: game mode",
+      "needs": "resGame",
+      "group": "perf"
+    },
+    {
+      "type": "resources.queue",
+      "label": "Resources: pause or resume the queue",
+      "needs": "resQueue",
+      "group": "perf"
+    },
+    {
       "type": "perf.diskSpace",
       "label": "Check free disk space",
       "needs": "disk",

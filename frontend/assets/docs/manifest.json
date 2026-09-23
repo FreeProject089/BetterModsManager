@@ -251,10 +251,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "104 actions · 37 conditions · 35 values · 8 loop sources",
-        "fr": "104 actions · 37 conditions · 35 valeurs · 8 sources de boucle"
+        "en": "107 actions · 40 conditions · 36 values · 8 loop sources",
+        "fr": "107 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
       },
-      "words": 454,
+      "words": 845,
       "diagrams": 0,
       "fr": true
     },

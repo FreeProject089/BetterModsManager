@@ -152,6 +152,11 @@ interface TaskPerms {
      *  every existing task — the capability did not exist when their consent was
      *  given, which is the same reason `script` is not inherited either. */
     stopProcess?: boolean;
+    /** Change how hard BMM works: the resource preset (for the task or for good), manual game
+     *  mode, pausing the queue (A3). Not destructive, but a task that sets "Max" at 3 am and
+     *  forgets is a task that made the whole PC slow, so it is granted like the others and
+     *  taken away on import. */
+    resources?: boolean;
     /** Delete a profile, a modpack, or a mod's files.
      *
      *  Not covered by any of the four above: every one of those is about reaching OUTSIDE
@@ -944,7 +949,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -958,7 +963,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -1072,6 +1077,13 @@ document.addEventListener('click', (e) => {
 /** The run record being written for each task that is running (sched-runlog.ts, A1). */
 const _runLogs = new Map<string, RunRecord>();
 
+/** Task id → the token of the resource preset it set for its own duration (A3). */
+const _taskPresetTokens = new Map<string, number>();
+
+/** The only settings `storage.flag` may touch. It used to toggle ANY boolean setting by name,
+ *  which made one step a way to switch off whatever safety a setting stood for. */
+export const STORAGE_FLAGS = ['auto_io_calibration', 'smart_io_enabled', 'storage_alert_enabled', 'enable_lazy_sha_calculation'] as const;
+
 async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
     // One record per run, with a step per action, sent to the task's log when it ends.
@@ -1156,6 +1168,13 @@ async function runTask(task: Task): Promise<void> {
         // is: a task that threw must not leave the app thinking it is still running, or every
         // error toast after it would be swallowed as "that task's failure" forever.
         noteTaskRunning(-1);
+        // A preset this task set "for the task" ends with the task, whatever happened to it
+        // (A3). The Rust side also expires it after at most 2 h, for a task that never gets here.
+        const presetToken = _taskPresetTokens.get(task.id);
+        if (presetToken != null) {
+            _taskPresetTokens.delete(task.id);
+            invoke('resources_clear_task_preset', { token: presetToken }).catch(() => {});
+        }
         // In a finally: a task that threw must not stay in the panel as "running" forever,
         // which is the state that makes a Stop button appear broken.
         _running.delete(task.id);
@@ -2243,8 +2262,39 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             await setSettingFlag('auto_io_calibration', !!p.enabled); break;
         case 'storage.smartIo':
             await setSettingFlag('smart_io_enabled', !!p.enabled); break;
-        case 'storage.flag':                       // generic: toggle ANY boolean setting (e.g. a future "dcp")
-            if (p.key) await setSettingFlag(String(p.key), !!p.enabled);
+        case 'storage.flag': {                     // one of STORAGE_FLAGS, nothing else
+            const key = String(p.key || '').trim();
+            if (!key) break;
+            if (!(STORAGE_FLAGS as readonly string[]).includes(key)) {
+                throw new Error((t('sched.flag.denied') || '“{k}” is not a storage setting a task may change. Allowed: {list}.')
+                    .replace('{k}', key).replace('{list}', STORAGE_FLAGS.join(', ')));
+            }
+            await setSettingFlag(key, !!p.enabled);
+            break;
+        }
+
+        // ── Resources (A3): how hard BMM works ─────────────────────────────────
+        case 'resources.preset': {
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            const name = String(p.name || 'balanced');
+            if (p.scope === 'persistent') {
+                await invoke('resources_set_preset', { name, scope: 'persistent', ttlSecs: null, overridesGame: null });
+            } else {
+                // A second preset step in the same task replaces the first: clear ours before.
+                const old = _taskPresetTokens.get(task.id);
+                if (old != null) await invoke('resources_clear_task_preset', { token: old }).catch(() => {});
+                const token = await invoke('resources_set_preset', { name, scope: 'task', ttlSecs: null, overridesGame: !!p.overridesGame });
+                if (token != null) _taskPresetTokens.set(task.id, Number(token));
+            }
+            break;
+        }
+        case 'resources.gameMode':
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            await invoke('resources_game_mode', { mode: ['on', 'off'].includes(p.mode) ? p.mode : 'auto' });
+            break;
+        case 'resources.queue':
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            await invoke('resources_queue', { action: p.action === 'resume_all' ? 'resume_all' : 'pause_all', id: null });
             break;
         case 'storage.diskBenchmark': {
             const mount = p.mountPoint || (await firstDiskMount());
@@ -3391,6 +3441,10 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         }
         case 'value': {
             // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
+            // Live sources, read when asked rather than left stale in the run's variables.
+            if (p.source === 'queue.length') {
+                ctx.nums['queue.length'] = ((await (invoke('resources_status') as Promise<any>).catch(() => null))?.tickets || []).length;
+            }
             const left = readNum(ctx, String(p.source)) ?? NaN;
             const right = Number(p.value);
             if (Number.isNaN(left)) return false;
@@ -3465,6 +3519,13 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             const active = await invoke('get_active_theme').catch(() => null);
             return String(active || '') === want;
         }
+        // Resources (A3): read from the governor's status, never from a cached copy.
+        case 'gameRunning':
+            return !!(await (invoke('resources_status') as Promise<any>).catch(() => null))?.game_active;
+        case 'resourcesPresetIs':
+            return String((await (invoke('resources_status') as Promise<any>).catch(() => null))?.effective || '') === String(p.id || '');
+        case 'queueIdle':
+            return ((await (invoke('resources_status') as Promise<any>).catch(() => null))?.tickets || [1]).length === 0;
         case 'appRunning':
             return await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false);
         case 'appNotRunning':
@@ -5568,7 +5629,7 @@ function renderModal(modal: HTMLElement): void {
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
-                    const granted = ['command', 'script', 'deeplink', 'stopProcess', 'delete']
+                    const granted = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources']
                         .filter((k) => (pm as any)[k]).length;
                     return `<div class="sched-perm-group">
                         <div class="sched-perm-head">
@@ -5586,6 +5647,9 @@ function renderModal(modal: HTMLElement): void {
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
                         ${row('delete', !!pm.delete, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsPerf') || 'Changes how hard BMM works')}</div>
+                        ${row('resources', !!pm.resources, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, game mode and the queue. A preset set for the task ends with it.')}
                     </div>`;
                 })()}
                 <label class="sched-opt">
@@ -7308,6 +7372,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle', group: 'perf' },
     { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle', group: 'perf' },
     { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag', group: 'perf' },
+    { v: 'resources.preset', label: 'Resources: set the preset', needs: 'resPreset', group: 'perf' },
+    { v: 'resources.gameMode', label: 'Resources: game mode', needs: 'resGame', group: 'perf' },
+    { v: 'resources.queue', label: 'Resources: pause or resume the queue', needs: 'resQueue', group: 'perf' },
     { v: 'perf.diskSpace', label: 'Check free disk space', needs: 'disk', group: 'perf' },
     // ── Privacy & recorder ──
     { v: 'telemetry.consent', label: 'Telemetry consent', needs: 'toggle', group: 'privacy' },
@@ -7571,7 +7638,7 @@ const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
     { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
     { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
     { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
-    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive'] },
+    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive', 'gameRunning', 'resourcesPresetIs', 'queueIdle'] },
     { g: 'time', label: 'Time', kinds: ['timeReached', 'dayOfWeek', 'timeRange'] },
 ];
 const condPickGroups = (): PickGroup[] => COND_GROUPS.map((g) => ({ g: g.g, label: t('sched.cgrp.' + g.g) || g.label, icon: GROUP_ICON[g.g === 'files' ? 'repo' : g.g === 'time' ? 'system' : g.g] || '' }));
@@ -8819,7 +8886,27 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         ap?.addEventListener('change', () => { if (ap.value && !params.sources.includes(ap.value)) { params.sources.push(ap.value); renderChips(); } ap.value = ''; });
     }
     else if (needs === 'toggle') host.innerHTML = `<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.enableOn') || 'Enable (uncheck = disable)'}</label>`;
-    else if (needs === 'flag') host.innerHTML = `<input class="input sched-f-key" placeholder="${escAttr(t('sched.settingKey') || 'setting key (e.g. dcp)')}" value="${escAttr(params.key || '')}" style="max-width:180px"><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
+    else if (needs === 'resPreset') {
+        host.innerHTML = `<select class="input sched-r-name" style="max-width:160px">${RES_PRESETS.map((v) => `<option value="${v}"${(params.name || 'balanced') === v ? ' selected' : ''}>${escHtml(resPresetLabel(v))}</option>`).join('')}</select>
+            <select class="input sched-r-scope" style="max-width:200px">
+                <option value="task"${params.scope !== 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeTask') || 'for this task only')}</option>
+                <option value="persistent"${params.scope === 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeKeep') || 'for good')}</option>
+            </select>
+            <label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-r-og" ${params.overridesGame ? 'checked' : ''}> ${escHtml(t('sched.res.overGame') || 'even while a game runs')}</label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.res.hint') || 'For this task only: back to your preset when the task ends, and after 2 hours at most.')}</span>`;
+        host.querySelector('.sched-r-name')?.addEventListener('change', (e) => { params.name = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-r-scope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-r-og')?.addEventListener('change', (e) => { params.overridesGame = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'resGame') {
+        host.innerHTML = `<select class="input sched-r-mode" style="max-width:220px">${['auto', 'on', 'off'].map((v) => `<option value="${v}"${(params.mode || 'auto') === v ? ' selected' : ''}>${escHtml(t('sched.res.game.' + v) || v)}</option>`).join('')}</select>`;
+        host.querySelector('.sched-r-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    }
+    else if (needs === 'resQueue') {
+        host.innerHTML = `<select class="input sched-r-q" style="max-width:220px">${['pause_all', 'resume_all'].map((v) => `<option value="${v}"${(params.action || 'pause_all') === v ? ' selected' : ''}>${escHtml(t('sched.res.q.' + v) || v)}</option>`).join('')}</select>`;
+        host.querySelector('.sched-r-q')?.addEventListener('change', (e) => { params.action = (e.target as HTMLSelectElement).value; });
+    }
+    else if (needs === 'flag') host.innerHTML = `<select class="input sched-f-key" style="max-width:240px"><option value="">${escHtml(t('sched.settingKey') || 'setting…')}</option>${STORAGE_FLAGS.map((k) => `<option value="${k}"${params.key === k ? ' selected' : ''}>${escHtml(t('sched.flag.' + k) || k)}</option>`).join('')}</select><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
     else if (needs === 'disk') host.innerHTML = _field('disk', `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`);
     else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="${escAttr(t('sched.phName') || 'name')}" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
@@ -9257,7 +9344,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     });
     host.querySelector('.sched-b-mb')?.addEventListener('input', (e) => { params.customMb = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-en')?.addEventListener('change', (e) => { params.enabled = (e.target as HTMLInputElement).checked; });
-    host.querySelector('.sched-f-key')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-f-key')?.addEventListener('change', (e) => { params.key = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-disk')?.addEventListener('change', (e) => { params.mountPoint = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-limit')?.addEventListener('input', (e) => { params.limitMbS = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-v-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
@@ -9341,7 +9428,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -9386,11 +9473,17 @@ const REGEX_LIBRARY: { label: string; re: string }[] = [
     { label: 'sched.rx.error', re: '(?:ERROR|FATAL)\s*:?\s*(.+?)\s*$' },
 ];
 
+/** The presets a task can pick (Custom is the user's own rules, not something to switch to). */
+const RES_PRESETS = ['silent', 'balanced', 'max'] as const;
+const resPresetLabel = (v: string) => t('sched.res.p.' + v) || v;
+
 const VALUE_SOURCES = [
     'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
     'update.available', 'lasttask.ok', 'lasttask.spawned', 'list.length',
+    // Operations waiting or running in the resource governor's queue (A3), read live.
+    'queue.length',
     // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.
     'last.ok', 'last.ms',
     // Which attempt of a task-level retry this run is (1 on the first run).
@@ -9573,6 +9666,9 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
                     ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.cond.gonePlugin').replace('{n}', chosen))}</option>` : '');
         })();
     }
+    else if (cond.type === 'resourcesPresetIs') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">
+        ${RES_PRESETS.map((v) => `<option value="${v}"${(p.id || 'balanced') === v ? ' selected' : ''}>${escHtml(resPresetLabel(v))}</option>`).join('')}
+    </select>`;
     else if (cond.type === 'taskArmed') host.innerHTML = `<select class="input sched-cp" style="max-width:240px">
         <option value="">${escHtml(t('sched.cond.pickTask'))}</option>
         ${_tasks.filter((tk) => tk.id !== _draft.id).map((tk) =>
@@ -10744,6 +10840,7 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
         deeplink: t('bmi.p.deeplink') || 'Fires bmm:// deeplinks',
         stopProcess: t('bmi.p.stop') || 'Stops running programs',
         delete: t('bmi.p.delete') || 'Deletes profiles, modpacks or mod folders',
+        resources: t('bmi.p.resources') || 'Changes the resource preset, game mode or the queue',
     };
     const REACH: Record<string, string> = {
         'custom.command': t('bmi.r.command') || 'Runs an external program',

@@ -2,6 +2,7 @@ pub mod content_ids;
 pub mod format_check;
 pub mod task_output;
 pub mod sched_runs;
+pub mod resources;
 pub mod mod_order;
 pub mod bmm_paths;
 pub mod bmm_paths_core;

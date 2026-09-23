@@ -58,7 +58,7 @@ frappe compile parfaitement et échoue à l'exécution en promesse rejetée.
 `check-invoke-names.mjs` garde déjà un sens — tout nom passé à `invoke()` doit atteindre une
 commande enregistrée. Voici le reste de la forme :
 
-- **498** commandes enregistrées, **426** appelées depuis le frontend, **87** modules qui en
+- **503** commandes enregistrées, **426** appelées depuis le frontend, **87** modules qui en
   appellent au moins une. `features/settings/scheduler.ts` en touche 101 à lui seul.
 - Par module Rust, la part réellement utilisée par l'interface.
 - **57 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme

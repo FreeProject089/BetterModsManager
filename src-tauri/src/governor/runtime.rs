@@ -16,18 +16,42 @@
 //! `(cores / 2).clamp(1, 4)`, no rate limit unless a disk rule (migrated from `disk_limits`)
 //! sets one. So wiring a site changes nothing until somebody picks another preset.
 use super::config::{pool_threads, DiskKind, IoPolicy, OpKind, Preset, ResourcesConfig, Target};
+use super::game_mode::{GameMode, Manual, Treatment};
 use super::io::{copy_file_governed, limiter_for, CopyError};
 use super::queue::{Queue, Ticket};
 use std::collections::HashMap;
 use std::path::{Component, Path, Prefix};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::time::{Duration, Instant};
 
 pub struct Governor {
     config: RwLock<ResourcesConfig>,
     queue: Queue,
     pools: Mutex<HashMap<OpKind, Arc<rayon::ThreadPool>>>,
     disks: Mutex<HashMap<String, DiskKind>>,
+    /// A preset a scheduled task set for its own duration (A3). Never persisted.
+    task: Mutex<Option<TaskPreset>>,
+    game: Mutex<GameMode>,
+    /// Background tickets this governor paused for game mode, so leaving it resumes exactly
+    /// those and not one the user paused by hand.
+    paused_for_game: Mutex<HashSet<u64>>,
+    /// The preset the pools were last built for.
+    built_for: Mutex<Option<Preset>>,
 }
+
+/// A task-scoped preset. `token` lets only the task that set it clear it; `until` is the
+/// safety net: a task that dies without its `finally` cannot leave BMM in Max for ever.
+#[derive(Debug, Clone, Copy)]
+pub struct TaskPreset {
+    pub preset: Preset,
+    pub overrides_game: bool,
+    pub token: u64,
+    pub until: Instant,
+}
+
+/// The longest a task-scoped preset may last, whatever the task asked (plan §5.1: TTL 2 h).
+pub const TASK_PRESET_MAX: Duration = Duration::from_secs(2 * 60 * 60);
 
 static GOV: OnceLock<Governor> = OnceLock::new();
 
@@ -68,17 +92,97 @@ pub fn volume_key(path: &Path) -> Option<String> {
 impl Governor {
     fn new(cfg: ResourcesConfig) -> Governor {
         let queue = Queue::new(slots_for(&cfg));
-        Governor { config: RwLock::new(cfg), queue, pools: Mutex::new(HashMap::new()), disks: Mutex::new(HashMap::new()) }
+        Governor {
+            config: RwLock::new(cfg), queue, pools: Mutex::new(HashMap::new()), disks: Mutex::new(HashMap::new()),
+            task: Mutex::new(None), game: Mutex::new(GameMode::new(&[], &[])),
+            paused_for_game: Mutex::new(HashSet::new()), built_for: Mutex::new(None),
+        }
+    }
+
+    /// The preset in force: the user's, unless game mode or a task-scoped preset says
+    /// otherwise (game_mode.rs `effective_preset`). An expired task preset no longer counts.
+    pub fn effective_preset(&self) -> Preset {
+        let chosen = self.config.read().map(|c| c.preset).unwrap_or_default();
+        let task = self.task.lock().unwrap_or_else(|p| p.into_inner())
+            .filter(|t| Instant::now() < t.until)
+            .map(|t| (t.preset, t.overrides_game));
+        self.game.lock().unwrap_or_else(|p| p.into_inner()).effective_preset(chosen, task)
+    }
+
+    /// Re-derive slots, pools and the game-mode pauses from the effective preset. Called after
+    /// anything that can change it.
+    fn refresh(&self) {
+        let eff = self.effective_preset();
+        let cfg = ResourcesConfig { preset: eff, ..self.config() };
+        let slots = slots_for(&cfg);
+        for k in OpKind::ALL { self.queue.set_slots(k, *slots.get(&k).unwrap_or(&2)); }
+        let mut built = self.built_for.lock().unwrap_or_else(|p| p.into_inner());
+        if *built != Some(eff) {
+            self.pools.lock().unwrap_or_else(|p| p.into_inner()).clear();
+            *built = Some(eff);
+        }
+        drop(built);
+        self.apply_game_pauses();
+    }
+
+    /// Background work (hash, maintenance) is held at its checkpoints while a game runs, and
+    /// released when it stops (game_mode.rs `treatment`).
+    fn apply_game_pauses(&self) {
+        let game = self.game.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let mut mine = self.paused_for_game.lock().unwrap_or_else(|p| p.into_inner());
+        for t in self.queue.snapshot() {
+            match game.treatment(t.kind) {
+                Treatment::Paused => { if !mine.contains(&t.id) && self.queue.pause(t.id) { mine.insert(t.id); } }
+                _ => { if mine.remove(&t.id) { self.queue.resume(t.id); } }
+            }
+        }
+        if !game.is_active() {
+            for id in mine.drain() { self.queue.resume(id); }
+        }
+    }
+
+    /// Set a preset for a task's duration. Returns the token that clears it. `ttl` is capped
+    /// at TASK_PRESET_MAX; a later call replaces an earlier one (the last task wins).
+    pub fn set_task_preset(&self, preset: Preset, overrides_game: bool, ttl: Duration) -> u64 {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let token = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let until = Instant::now() + ttl.min(TASK_PRESET_MAX);
+        *self.task.lock().unwrap_or_else(|p| p.into_inner()) = Some(TaskPreset { preset, overrides_game, token, until });
+        self.refresh();
+        token
+    }
+
+    /// Clear the task preset if `token` is still the one in force (a newer task's is kept).
+    /// Returns whether it cleared anything.
+    pub fn clear_task_preset(&self, token: u64) -> bool {
+        let mut t = self.task.lock().unwrap_or_else(|p| p.into_inner());
+        if t.map(|x| x.token == token).unwrap_or(false) { *t = None; drop(t); self.refresh(); true } else { false }
+    }
+
+    /// Drop an expired task preset (the TTL safety net). Cheap; called from status reads and
+    /// a timer.
+    pub fn expire_task_preset(&self) -> bool {
+        let mut t = self.task.lock().unwrap_or_else(|p| p.into_inner());
+        if t.map(|x| Instant::now() >= x.until).unwrap_or(false) { *t = None; drop(t); self.refresh(); true } else { false }
+    }
+
+    pub fn task_preset(&self) -> Option<TaskPreset> { *self.task.lock().unwrap_or_else(|p| p.into_inner()) }
+
+    pub fn set_game_manual(&self, m: Manual) {
+        self.game.lock().unwrap_or_else(|p| p.into_inner()).manual = m;
+        self.refresh();
+    }
+
+    pub fn game_mode(&self) -> (bool, Manual) {
+        let g = self.game.lock().unwrap_or_else(|p| p.into_inner());
+        (g.is_active(), g.manual)
     }
 
     /// Apply a new resources document. Slots change at once; pools are rebuilt on next use
     /// (a pool already running work keeps it: the old `Arc` lives until its jobs finish).
     pub fn configure(&self, cfg: ResourcesConfig) {
-        let preset_changed = self.config.read().map(|c| c.preset != cfg.preset).unwrap_or(true);
-        let slots = slots_for(&cfg);
-        for k in OpKind::ALL { self.queue.set_slots(k, *slots.get(&k).unwrap_or(&2)); }
         if let Ok(mut c) = self.config.write() { *c = cfg; }
-        if preset_changed { self.pools.lock().unwrap_or_else(|p| p.into_inner()).clear(); }
+        self.refresh();
     }
 
     pub fn config(&self) -> ResourcesConfig {
@@ -89,7 +193,14 @@ impl Governor {
 
     /// A ticket for one operation: waits for a free slot of its kind, and background kinds
     /// (hash, maintenance) step aside while foreground work runs (queue.rs).
-    pub fn begin(&self, kind: OpKind, subject: &str) -> Ticket { self.queue.begin(kind, subject) }
+    pub fn begin(&self, kind: OpKind, subject: &str) -> Ticket {
+        let t = self.queue.begin(kind, subject);
+        let paused = self.game.lock().unwrap_or_else(|p| p.into_inner()).treatment(kind) == Treatment::Paused;
+        if paused && self.queue.pause(t.id()) {
+            self.paused_for_game.lock().unwrap_or_else(|p| p.into_inner()).insert(t.id());
+        }
+        t
+    }
 
     /// What the disk under `path` is, detected once per volume (IOCTL on Windows).
     fn disk_kind(&self, volume: &str) -> DiskKind {
@@ -117,12 +228,13 @@ impl Governor {
             on_system_drive: volume.is_some() && volume == system,
             cores: cores(),
         };
-        self.config.read().map(|c| c.resolve(kind, &target)).unwrap_or_else(|_| ResourcesConfig::default().resolve(kind, &target))
+        let cfg = ResourcesConfig { preset: self.effective_preset(), ..self.config() };
+        cfg.resolve(kind, &target)
     }
 
     /// The rayon pool for `kind`, sized by the preset (hash: today's `(cores/2).clamp(1,4)`).
     pub fn pool(&self, kind: OpKind) -> Arc<rayon::ThreadPool> {
-        let preset = self.config.read().map(|c| c.preset).unwrap_or_default();
+        let preset = self.effective_preset();
         let mut m = self.pools.lock().unwrap_or_else(|p| p.into_inner());
         m.entry(kind).or_insert_with(|| {
             let n = pool_threads(preset, kind, cores());
@@ -177,6 +289,55 @@ mod tests {
         let after = g.pool(OpKind::Deploy);
         assert!(!Arc::ptr_eq(&before, &after), "a preset change must rebuild the pool");
         assert_eq!(after.current_num_threads(), 1);
+    }
+
+    #[test]
+    fn task_scoped_preset_applies_and_only_its_token_clears_it() {
+        let g = Governor::new(ResourcesConfig::default());
+        let a = g.set_task_preset(Preset::Max, false, Duration::from_secs(60));
+        assert_eq!(g.effective_preset(), Preset::Max);
+        let b = g.set_task_preset(Preset::Silent, false, Duration::from_secs(60));
+        assert!(!g.clear_task_preset(a), "an older task must not clear a newer task's preset");
+        assert_eq!(g.effective_preset(), Preset::Silent);
+        assert!(g.clear_task_preset(b));
+        assert_eq!(g.effective_preset(), Preset::Balanced);
+        assert_eq!(g.config().preset, Preset::Balanced, "a task preset is never written to the document");
+    }
+
+    #[test]
+    fn task_preset_expires_and_is_capped_at_two_hours() {
+        let g = Governor::new(ResourcesConfig::default());
+        g.set_task_preset(Preset::Max, false, Duration::from_millis(1));
+        std::thread::sleep(Duration::from_millis(5));
+        assert_eq!(g.effective_preset(), Preset::Balanced, "an expired task preset no longer counts");
+        assert!(g.expire_task_preset());
+        g.set_task_preset(Preset::Max, false, Duration::from_secs(10 * 60 * 60));
+        let left = g.task_preset().unwrap().until.duration_since(Instant::now());
+        assert!(left <= TASK_PRESET_MAX);
+    }
+
+    #[test]
+    fn manual_game_mode_beats_a_task_preset_that_does_not_override_it() {
+        let g = Governor::new(ResourcesConfig::default());
+        g.set_task_preset(Preset::Max, false, Duration::from_secs(60));
+        g.set_game_manual(Manual::On);
+        assert_eq!(g.effective_preset(), Preset::Silent);
+        g.set_game_manual(Manual::Off);
+        assert_eq!(g.effective_preset(), Preset::Max);
+    }
+
+    #[test]
+    fn game_mode_pauses_background_tickets_and_releases_them_after() {
+        let g = Governor::new(ResourcesConfig::default());
+        g.set_game_manual(Manual::On);
+        let t = g.begin(OpKind::Hash, "bg");
+        let view = |g: &Governor| g.queue().snapshot().into_iter().find(|v| v.subject == "bg").unwrap().state;
+        assert_eq!(view(&g), crate::governor::queue::TicketState::Paused);
+        let d = g.begin(OpKind::Deploy, "fg");
+        assert_ne!(g.queue().snapshot().into_iter().find(|v| v.subject == "fg").unwrap().state, crate::governor::queue::TicketState::Paused, "deploy is throttled, not paused");
+        g.set_game_manual(Manual::Off);
+        assert_ne!(view(&g), crate::governor::queue::TicketState::Paused);
+        drop((t, d));
     }
 
     #[test]

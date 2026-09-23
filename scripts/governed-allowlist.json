@@ -207,6 +207,12 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
+  "src/commands/resources.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "the task-preset TTL timer: sleeps, then clears a preset; no I/O, not work to govern"
+    }
+  },
   "src/commands/repo.rs": {
     "par_iter": {
       "count": 2,
