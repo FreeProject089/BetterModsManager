@@ -1,6 +1,6 @@
 # Politique de confidentialité — Better Mods Manager (BMM)
 
-_Dernière mise à jour : 2026-09-22_
+_Dernière mise à jour : 2026-09-23_
 
 Better Mods Manager est une application de bureau open‑source (GPL‑3.0) qui fonctionne sur votre
 ordinateur. Vos profils, mods, modpacks, plugins et réglages sont stockés **localement**, dans le
@@ -59,7 +59,15 @@ produit et date d'installation de Windows ; numéros de série de la carte mère
 et du disque ; numéro de série du volume C:) par une dérivation à sens unique. Depuis la **clé créateur v5**, elle est conservée, avec le reste du
 matériel de clé, dans un magasin chiffré par Windows (DPAPI, lié à votre compte Windows) dans le
 dossier de données de BMM et dans votre registre utilisateur ; les anciennes copies non chiffrées sont
-supprimées une fois la copie chiffrée vérifiée. Conséquences :
+supprimées une fois la copie chiffrée vérifiée. Sous macOS et Linux, le magasin est chiffré avec une
+clé conservée dans le trousseau du système (Trousseau, Secret Service) ; sans trousseau disponible,
+c'est un fichier lisible par votre seul compte, et les Réglages indiquent lequel s'applique. Depuis la
+**v5.1**, le Creator ID est aussi **épinglé** (un petit fichier `creator_v5.pin` et une entrée du
+registre / du trousseau, qui ne contiennent que des valeurs publiques) : un magasin copié depuis une
+autre machine, une sauvegarde plus ancienne ou un magasin modifié est refusé au lieu de remplacer
+votre identité en silence. Une réinitialisation, que vous lancez vous‑même dans les Réglages, met
+l'ancien magasin de côté et est notée dans un fichier local `creator_v5.log` (date et Creator ID
+seulement ; il ne quitte jamais votre ordinateur). Conséquences :
 
 - il ne contient ni nom ni e‑mail, et les identifiants dont il est dérivé ne peuvent pas en être
   extraits ;

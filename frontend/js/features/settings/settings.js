@@ -2,7 +2,7 @@
 /**
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
-import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
+import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } from '../../core/api.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
@@ -1544,6 +1544,76 @@ async function openDiscordLinkFlow() {
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter')
         submit(); });
 }
+// ── Creator key v5.1: how the key is protected, and the one way out of a refusal ──
+// `protection` values come from creator_v5.rs (`Seal::protection`). A static map, not
+// t('…' + value): check-i18n-keys can only see literal keys.
+const CREATOR_KEY_PROTECTION = {
+    'dpapi': () => t('settings.creatorKey.prot.dpapi'),
+    'keychain': () => t('settings.creatorKey.prot.keychain'),
+    'secret-service': () => t('settings.creatorKey.prot.secretService'),
+    'file-0600': () => t('settings.creatorKey.prot.file'),
+};
+const CREATOR_KEY_REFUSED = 'bmm.creator.refused|';
+const CREATOR_KEY_RESET_CONFIRM = 'RESET-CREATOR-IDENTITY';
+async function renderCreatorKeyState(elCreatorId) {
+    const card = elCreatorId?.parentElement?.parentElement || elCreatorId?.parentElement;
+    if (!card)
+        return;
+    let box = document.getElementById('sic-creator-key');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'sic-creator-key';
+        box.style.cssText = 'margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:6px';
+        card.appendChild(box);
+    }
+    box.textContent = '';
+    try {
+        const info = await invoke('creator_key_info', {}, { quiet: true });
+        const what = (CREATOR_KEY_PROTECTION[info.protection || ''] || (() => info.protection || '?'))();
+        const line = document.createElement('div');
+        line.textContent = t('settings.creatorKey.protection', { what });
+        if (info.protection === 'file-0600')
+            line.style.color = 'var(--warning)';
+        box.appendChild(line);
+        if (info.pinned) {
+            const pin = document.createElement('div');
+            pin.textContent = t('settings.creatorKey.state', { seq: String(info.seq ?? 0) });
+            box.appendChild(pin);
+        }
+    }
+    catch (e) {
+        const msg = String(e);
+        // Only a refusal gets the reset: any other failure (no app-data folder, a lock error)
+        // is not fixed by replacing the identity.
+        if (!msg.startsWith(CREATOR_KEY_REFUSED))
+            return;
+        const why = document.createElement('div');
+        why.style.color = 'var(--error)';
+        why.textContent = t('settings.creatorKey.refused', { why: msg.slice(CREATOR_KEY_REFUSED.length) });
+        box.appendChild(why);
+        const btn = document.createElement('button');
+        btn.id = 'btn-creator-key-reset';
+        btn.className = 'btn btn-sm btn-danger';
+        btn.style.alignSelf = 'flex-start';
+        btn.textContent = t('settings.creatorKey.resetBtn');
+        btn.addEventListener('click', async () => {
+            const ok = await askConfirm(t('settings.creatorKey.resetBody'), { title: t('settings.creatorKey.resetTitle'), type: 'warning' });
+            if (!ok)
+                return;
+            try {
+                const info = await invoke('creator_identity_reset', { confirm: CREATOR_KEY_RESET_CONFIRM });
+                toast(t('settings.creatorKey.resetDone', { cid: String(info.cid || '').slice(0, 16) + '…' }), 'success');
+                if (elCreatorId)
+                    elCreatorId.textContent = String(info.cid || '—');
+                await renderCreatorKeyState(elCreatorId);
+            }
+            catch (err) {
+                toast(t('settings.creatorKey.resetFailed', { why: String(err) }), 'error');
+            }
+        });
+        box.appendChild(btn);
+    }
+}
 // ── Identity & API card ────────────────────────────────────
 async function initSecurityInfoCard() {
     const elCreatorId = document.getElementById('sic-creator-id');
@@ -1603,6 +1673,7 @@ async function initSecurityInfoCard() {
             elApiToken.textContent = apiToken;
     }
     catch (_) { }
+    await renderCreatorKeyState(elCreatorId);
     // BetterCommunity account: live link status (detects unlink), link, link Discord.
     if (elCreatorId && !document.getElementById('btn-bc-link')) {
         // The `.settings-card` branch that used to lead this chain never matched anything —

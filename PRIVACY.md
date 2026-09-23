@@ -1,6 +1,6 @@
 # Privacy Policy — Better Mods Manager (BMM)
 
-_Last updated: 2026-09-22_
+_Last updated: 2026-09-23_
 
 Better Mods Manager is an open-source desktop application (GPL‑3.0) that runs on your computer.
 Your profiles, mods, modpacks, plugins and settings are stored **locally**, in BMM's data folder,
@@ -53,7 +53,14 @@ The key is **derived from identifiers of this PC** (Windows MachineGuid, product
 motherboard, BIOS, CPU and disk serial numbers; the C: volume serial) through a one‑way key
 derivation. Since **Creator key v5** it is kept, with the rest of the key material, in a store
 encrypted by Windows (DPAPI, tied to your Windows account) in BMM's data folder and your user
-registry; the older unencrypted copies are deleted once the encrypted one is verified. Consequences:
+registry; the older unencrypted copies are deleted once the encrypted one is verified. On macOS and
+Linux the store is encrypted under a key kept in the system keyring (Keychain, Secret Service); with
+no keyring available it is a file only your account can read, and Settings says which one applies.
+Since **v5.1** the Creator ID is also **pinned** (a small `creator_v5.pin` file and a registry /
+keyring entry, holding only public values): a store copied from another machine, an older backup or
+an edited store is refused instead of silently replacing your identity. A reset, which you start
+yourself in Settings, sets the old store aside and is noted in a local `creator_v5.log` (date and
+Creator IDs only; it never leaves your computer). Consequences:
 
 - it contains no name or e‑mail, and the identifiers it was derived from cannot be read back out of it;
 - it is **stable**: the same PC gets the same Creator ID, even after BMM is reinstalled, so

@@ -85,6 +85,10 @@ sha2 = "0.10.9"
 # envelope must fail to open rather than decrypt to something plausible.
 aes-gcm = "0.11.1"
 argon2 = "0.6.0-rc.8"
+# Creator key v5.1: the seeds live in `Zeroizing` buffers, wiped on drop (and ed25519-dalek's
+# SigningKey already wipes itself). Already in the lock through ed25519-dalek; `serde` lets
+# the store (de)serialise straight into the wiped type.
+zeroize = { version = "1.8", features = ["serde"] }
 # BLAKE3 for fast local content hashing: a tree hash that parallelises WITHIN a
 # single large file (mmap + rayon), unlike SHA-256. Used for file_hashes and the
 # modpack hash-match index. Repo delta-sync keeps its own SHA-256 (wire format).
@@ -124,6 +128,13 @@ comfy-table = "7"
 # fragmentation when many small allocs (string paths, hash entries) are
 # allocated and freed during normal BMM use.
 mimalloc = { version = "0.1", default-features = false }
+
+# Creator key v5.1 off Windows: the key that seals the store lives in the OS keyring
+# (macOS Keychain, Linux Secret Service over D-Bus, pure-Rust crypto). Without these
+# features keyring 3 silently falls back to an in-memory MOCK store — i.e. a key that is
+# gone at the next launch — so they are not optional. Not compiled on Windows (DPAPI there).
+[target.'cfg(not(windows))'.dependencies]
+keyring = { version = "3.6", features = ["apple-native", "sync-secret-service", "crypto-rust"] }
 
 # NB: Tauri v2 dropped the `custom-protocol` cargo feature — the production asset
 # protocol is handled by the bundler/config, so the old `[features]` block is gone.

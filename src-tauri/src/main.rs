@@ -430,6 +430,9 @@ fn main() {
             let _ = commands::ban_manager::load_bans(&app.handle().clone());
             let _ = commands::whitelist_manager::load_whitelist(&app.handle().clone());
             let _ = commands::discord::init_discord_rpc(app.state::<AppState>(), app.handle().clone());
+            // The CIM hardware query behind the first creator proof takes seconds: start it now,
+            // on its own thread, instead of when the user first links or reports something.
+            commands::creator_v5::warm_up(app.handle().clone());
 
             // Start local HTTP Plugin API on port 51274
             {
@@ -818,6 +821,7 @@ fn main() {
             commands::creator_v5::creator_proof_v5,
             commands::creator_v5::creator_key_info,
             commands::creator_v5::rotate_creator_key,
+            commands::creator_v5::creator_identity_reset,
             commands::security::bc_api_get,
             commands::security::set_bcweb_api_key,
             commands::security::has_bcweb_api_key,

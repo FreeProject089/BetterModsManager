@@ -53,6 +53,15 @@ serde_json = "1"
 # ── fixtures ──
 tempfile = "3"
 rand = "0.8"
+# ── deps required to compile the REAL creator_v5/keystore.rs verbatim ──
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hex = "0.4"
+base64 = "0.21"
+zeroize = { version = "1.8", features = ["serde"] }
+aes-gcm = "0.11.1"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -68,6 +77,10 @@ harness = false
 
 [[bench]]
 name = "repo_json"
+harness = false
+
+[[bench]]
+name = "creator_key"
 harness = false
 
 # Optimised benches — measuring debug builds would be meaningless.

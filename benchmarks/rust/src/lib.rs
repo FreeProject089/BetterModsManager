@@ -13,6 +13,11 @@
 #[path = "../../../src-tauri/src/archive.rs"]
 pub mod archive;
 
+/// The real creator key v5 core (store, seal, pin, proof). Same rule as `archive`: it has no
+/// `crate::` or `tauri` dependencies, so it compiles here verbatim.
+#[path = "../../../src-tauri/src/commands/creator_v5/keystore.rs"]
+pub mod creator_keystore;
+
 pub mod fixtures;
 pub mod fs_mirror;
 pub mod repo_schema;
