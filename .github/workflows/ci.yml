@@ -37,12 +37,22 @@ jobs:
     name: Frontend (tsc · guard · i18n)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
+      # BMM Docs is a gitlink with no .gitmodules entry, so checkout leaves the folder empty and
+      # every gate that reads the docs refused ("BMM Docs/docs/reference/mcp.md is missing"):
+      # the frontend job had been red on every push since. The docs repo is public; fetch it at
+      # exactly the commit this tree pins, so the gates compare against the docs that ship.
+      - name: BMM Docs at the pinned commit
+        run: |
+          sha=$(git ls-files -s "BMM Docs" | awk '{print $2}')
+          rm -rf "BMM Docs"
+          git clone --quiet --filter=blob:none https://github.com/FreeProject089/BMM-Docs.git "BMM Docs"
+          git -C "BMM Docs" checkout --quiet "$sha"
       - name: BetaHub local config (CI stub from example)
         # betahub-config.local.ts is gitignored; the example provides the same
         # exports so tsc can resolve the module (values are irrelevant for CI).
@@ -58,7 +68,7 @@ jobs:
     name: Rust (compile check)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
