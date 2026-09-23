@@ -160,6 +160,9 @@ fn disk_blocking(mount: &str) -> DiskInfo {
 #[cfg(not(windows))]
 fn disk_blocking(mount: &str) -> DiskInfo { DiskInfo { mount: mount.to_string(), bus: "unknown".into(), seek_penalty: None } }
 
+/// One volume's bus and seek penalty (the governor's disk kind). Blocking: an IOCTL.
+pub fn disk(mount: &str) -> DiskInfo { disk_blocking(mount) }
+
 /// Everything, once per process (the GPU part costs up to its budget the first time).
 pub fn detect(mounts: &[String]) -> HardwareInfo {
     static GPU: OnceLock<(Vec<GpuInfo>, bool)> = OnceLock::new();

@@ -424,6 +424,11 @@ fn main() {
                 if moved > 0 {
                     println!("plugin scopes: read access carried over for {moved} plugin(s)");
                 }
+                // The resource governor: carry the old per-disk MB/s limits into its rules once,
+                // then give the one instance its document before any operation asks for it.
+                let limits = data.disk_limits.clone();
+                data.resources.migrate_disk_limits(&limits);
+                crate::governor::runtime::global().configure(data.resources.clone());
             }
             let _ = app_state.save();
 

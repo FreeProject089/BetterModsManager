@@ -10,9 +10,12 @@
 //!   · `game_mode` (G4): "a game is running" as a pure state machine (enter at once, leave after
 //!     30 s of absence, manual beats auto, deploy slowed and background work paused).
 //!
-//! Nothing calls it yet: the pools, the copy engine and the dashboard come in the later
-//! phases, and scripts/check-governed.mjs lists every site still to be migrated.
+//!   · `runtime` (G3 wiring): the one instance, `runtime::global()`: tickets, the resolved
+//!     policy per volume, the per-kind rayon pools and the governed copy.
+//!
+//! scripts/check-governed.mjs lists every site still to be migrated onto `runtime`.
 pub mod config;
 pub mod queue;
 pub mod io;
 pub mod game_mode;
+pub mod runtime;

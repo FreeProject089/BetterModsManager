@@ -243,11 +243,17 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
 pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), AppError> {
     {
         let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        // The governor reads its rules, not this table (migrated once at startup), so the
+        // disk's `*` rule follows every edit or the limit set here would stop doing anything.
+        let key = mount_point.to_lowercase();
+        let rule = data.resources.rules.entry(key).or_default().entry("*".to_string()).or_default();
+        rule.rate_mb_s = limit_mb_s.filter(|n| *n > 0);
         if let Some(limit) = limit_mb_s {
             data.disk_limits.insert(mount_point, limit);
         } else {
             data.disk_limits.remove(&mount_point);
         }
+        crate::governor::runtime::global().configure(data.resources.clone());
     }
     let _ = state.save();
     Ok(())
