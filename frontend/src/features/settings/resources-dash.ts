@@ -7,6 +7,7 @@
 import { invoke, listen } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { pushHistory, sparkPoints } from './resources-spark.js';
+import { renderResourcesMatrix } from './resources-matrix.js';
 
 interface Ticket { id: number; kind: string; subject: string; state: 'waiting' | 'running' | 'paused'; bytes_read: number; bytes_written: number; age_ms: number; }
 interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; tickets: Ticket[]; }
@@ -68,6 +69,7 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
                 </div>
             </div>
             <div class="res-queue" style="display:flex;flex-direction:column;gap:4px"></div>
+            <div class="res-matrix-host"></div>
         </div>`;
 
     const $ = <T extends Element>(sel: string) => host.querySelector(sel) as T | null;
@@ -116,6 +118,12 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
 
     paintHead(st.effective, st.game_active, st.task);
     paintQueue(st.tickets);
+    // S1: the per disk × operation rules, collapsed under the card.
+    const mh = $('.res-matrix-host') as HTMLElement | null;
+    if (mh) {
+        const disks = await (invoke('get_system_disks') as Promise<{ mount_point: string }[]>).catch(() => []);
+        renderResourcesMatrix(mh, (disks || []).map((d) => String(d.mount_point || '')).filter(Boolean)).catch(() => {});
+    }
 
     host.querySelectorAll<HTMLButtonElement>('.res-preset').forEach((b) => b.addEventListener('click', async () => {
         await invoke('resources_set_preset', { name: b.dataset.p, scope: 'persistent', ttlSecs: null, overridesGame: null }).catch(() => {});

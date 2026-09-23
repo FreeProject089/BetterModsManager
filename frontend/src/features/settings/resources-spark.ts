@@ -15,3 +15,17 @@ export function sparkPoints(values: number[], w: number, h: number, ceil: number
     return values.map((v, i) => `${(i * step).toFixed(1)},${(h - (Math.max(0, v) / top) * h).toFixed(1)}`).join(' ');
 }
 
+
+/** One matrix row's inputs → the rule to store (S1). An empty input is "inherit", so it is
+ *  left out; a row with nothing set is `null`, which removes the rule. Numbers are floored
+ *  and anything non-numeric or below 1 is dropped rather than stored. */
+export function ruleFromInputs(v: { rate?: string; parallel?: string; buffer?: string; io?: string }): Record<string, unknown> | null {
+    const num = (s?: string) => { const n = Math.floor(Number(String(s ?? '').trim())); return String(s ?? '').trim() !== '' && Number.isFinite(n) && n >= 1 ? n : undefined; };
+    const out: Record<string, unknown> = {};
+    const rate = num(v.rate), parallel = num(v.parallel), buffer = num(v.buffer);
+    if (rate !== undefined) out.rate_mb_s = rate;
+    if (parallel !== undefined) out.parallel = parallel;
+    if (buffer !== undefined) out.buffer_kib = buffer;
+    if (v.io === 'low' || v.io === 'normal') out.io_priority = v.io;
+    return Object.keys(out).length ? out : null;
+}

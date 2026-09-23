@@ -28,3 +28,11 @@ test('a value above the ceiling rescales instead of leaving the box', () => {
   const pts = sparkPoints([0, 4], 100, 20, 1).split(' ').map((p) => p.split(',').map(Number));
   assert.equal(Math.min(...pts.map(([, y]) => y)), 0);
 });
+
+test('a matrix row becomes the rule to store: empty = inherit, garbage dropped, nothing = remove', async () => {
+  const { ruleFromInputs } = await import(pathToFileURL(join(ROOT, 'frontend/js/features/settings/resources-spark.js')).href);
+  assert.equal(ruleFromInputs({ rate: '', parallel: '', buffer: '', io: '' }), null);
+  assert.deepEqual(ruleFromInputs({ rate: '40', parallel: ' 3 ', buffer: 'abc', io: '' }), { rate_mb_s: 40, parallel: 3 });
+  assert.deepEqual(ruleFromInputs({ rate: '0', io: 'low' }), { io_priority: 'low' }, 'a 0 rate is not stored (it would block for ever)');
+  assert.deepEqual(ruleFromInputs({ buffer: '512.9', io: 'high' }), { buffer_kib: 512 }, 'only low / normal priorities exist');
+});

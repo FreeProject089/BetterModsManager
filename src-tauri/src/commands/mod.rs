@@ -4,6 +4,7 @@ pub mod task_output;
 pub mod sched_runs;
 pub mod resources;
 pub mod resources_live;
+pub mod resources_rules;
 pub mod mod_order;
 pub mod bmm_paths;
 pub mod bmm_paths_core;
