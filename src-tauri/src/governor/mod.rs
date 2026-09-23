@@ -5,8 +5,11 @@
 //!     from `disk_limits`.
 //!   · `queue` (G1): tickets, per-category slots, pause / resume / cancel, background work
 //!     stepping aside while foreground work runs.
+//!   · `io` (G2): the governed copy and its per-VOLUME rate limiter (the limit is shared by every
+//!     copy to a disk, instead of each copy pacing itself).
 //!
 //! Nothing calls it yet: the pools, the copy engine and the dashboard come in the later
 //! phases, and scripts/check-governed.mjs lists every site still to be migrated.
 pub mod config;
 pub mod queue;
+pub mod io;
