@@ -274,6 +274,9 @@ interface Task {
      *  at 03:00 is worse than one that runs late. At most ONE run is owed, however long
      *  BMM was away. */
     catchUp?: boolean;
+    /** Run the whole task again after a failure: `times` more attempts (0-5), `backoffSec`
+     *  seconds apart (5-3600). A stop or a cancel is never retried; each attempt is logged. */
+    retry?: { times: number; backoffSec: number };
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
     history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
@@ -1108,7 +1111,29 @@ async function runTask(task: Task): Promise<void> {
             }
             _eventData.delete(task.id);
         }
-        await runSteps(task.steps, task, ctx);
+        // Task-level retry (A2): a failed run is run again from the start, `times` more times,
+        // `backoffSec` apart, with fresh variables each time (a half-finished run's values are
+        // not a starting point). A stop or a cancel is a decision, never retried.
+        const times = Math.max(0, Math.min(5, Math.floor(Number(task.retry?.times) || 0)));
+        const backoffMs = Math.max(5, Math.min(3600, Math.floor(Number(task.retry?.backoffSec) || 30))) * 1000;
+        for (let attempt = 0; ; attempt++) {
+            try {
+                if (attempt > 0) {
+                    // What the triggering event carried ({event.*}) is kept: it is the same event.
+                    const keep = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('event.'))) as Record<string, T>;
+                    ctx.nums = keep(ctx.nums); ctx.text = keep(ctx.text); ctx.shared = readSharedVars();
+                    ctx.nums['retry.task_attempt'] = attempt + 1;
+                }
+                await runSteps(task.steps, task, ctx);
+                break;
+            } catch (e) {
+                if (e instanceof _StopTask || e instanceof _CancelledTask || attempt >= times) throw e;
+                const log = _runLogs.get(task.id);
+                if (log) endStep(startStep(log, `${t('sched.retry.attempt') || 'Attempt'} ${attempt + 1} / ${times + 1}`, 0), 'error', e);
+                toast(`${task.name}: ${t('sched.retry.again') || 'failed, trying again in'} ${Math.round(backoffMs / 1000)}s`, 'warning');
+                await interruptibleSleep(backoffMs, _running.get(task.id));
+            }
+        }
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
     } catch (e) {
@@ -1755,6 +1780,9 @@ function scriptLimit(p: Record<string, any>): number | null {
 }
 
 function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
+    // {last.out}: whatever the action produced, named or not (A2). Capped: a script that
+    // prints megabytes must not turn every later substitution into megabytes.
+    ctx.text['last.out'] = String(out ?? '').trim().slice(0, 64 * 1024);
     const name = String(p.into || '').trim();
     if (!name) return;
     const whole = String(out ?? '').trim();
@@ -1832,11 +1860,19 @@ export async function importTasksFromPath(path: string): Promise<number> {
 async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     const log = _runLogs.get(task.id);
     const step = log ? startStep(log, stepLabel({ kind: 'action', action } as Step), depth) : null;
+    const t0 = Date.now();
     try {
         await runAction(action, task, ctx, depth);
         endStep(step, 'ok');
+        // What the previous action did, for the next step (A2): {last.ok}, {last.ms} and, for
+        // actions that produce output, {last.out} (set in _captureOutput).
+        ctx.nums['last.ok'] = 1;
+        ctx.nums['last.ms'] = Date.now() - t0;
     } catch (e) {
         endStep(step, e instanceof _StopTask ? 'stopped' : e instanceof _CancelledTask ? 'cancelled' : 'error', e);
+        // Also on failure: a Try / On error around it can read that it failed and how long it took.
+        ctx.nums['last.ok'] = 0;
+        ctx.nums['last.ms'] = Date.now() - t0;
         throw e;
     }
 }
@@ -5561,6 +5597,16 @@ function renderModal(modal: HTMLElement): void {
                     <input type="checkbox" id="sched-catchup" ${_draft.catchUp !== false ? 'checked' : ''}>
                     <div><b>${t('sched.catchUpTitle') || 'Catch up a missed run'}</b><span>${t('sched.catchUp') || 'If BMM was closed at the scheduled time, run once at the next launch. At most one run is owed, however long BMM was away.'}</span></div>
                 </label>` : ''}
+                <label class="sched-opt">
+                    <div style="flex:1"><b>${t('sched.retry.title') || 'Try again after a failure'}</b><span>${t('sched.retry.desc') || 'Runs the whole task again, from the start. A stop or a cancel is never retried.'}</span>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <input type="number" class="input" id="sched-retry-times" min="0" max="5" step="1" value="${Number(_draft.retry?.times) || 0}" style="width:70px" aria-label="${escAttr(t('sched.retry.times') || 'Extra attempts')}">
+                            <span style="font-size:12px">${t('sched.retry.times') || 'Extra attempts'}</span>
+                            <input type="number" class="input" id="sched-retry-backoff" min="5" max="3600" step="5" value="${Number(_draft.retry?.backoffSec) || 30}" style="width:80px" aria-label="${escAttr(t('sched.retry.backoff') || 'Seconds between attempts')}">
+                            <span style="font-size:12px">${t('sched.retry.backoff') || 'Seconds between attempts'}</span>
+                        </div>
+                    </div>
+                </label>
                 ${_editing && _draft.history?.length ? `
                 <label class="sched-label" style="margin-top:16px">${t('sched.history') || 'Recent runs'}</label>
                 <div class="sched-history">
@@ -5684,6 +5730,13 @@ function renderModal(modal: HTMLElement): void {
     });
     modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
     modal.querySelector('#sched-catchup')?.addEventListener('change', (e) => { _draft.catchUp = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    const readRetry = () => {
+        const times = Math.max(0, Math.min(5, Math.floor(Number((modal.querySelector('#sched-retry-times') as HTMLInputElement)?.value) || 0)));
+        const backoffSec = Math.max(5, Math.min(3600, Math.floor(Number((modal.querySelector('#sched-retry-backoff') as HTMLInputElement)?.value) || 30)));
+        _draft.retry = times ? { times, backoffSec } : undefined;
+    };
+    modal.querySelector('#sched-retry-times')?.addEventListener('change', readRetry);
+    modal.querySelector('#sched-retry-backoff')?.addEventListener('change', readRetry);
     // Test run: execute the CURRENT draft's steps once, without saving the task —
     // instant feedback while building an automation instead of save→run→edit loops.
     // Debug: the SAME run as a test, one step at a time. Not a second runner — a debugger
@@ -9338,6 +9391,10 @@ const VALUE_SOURCES = [
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
     'update.available', 'lasttask.ok', 'lasttask.spawned', 'list.length',
+    // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.
+    'last.ok', 'last.ms',
+    // Which attempt of a task-level retry this run is (1 on the first run).
+    'retry.task_attempt',
     // How big the backup came out. A task can then warn when a nightly bundle suddenly
     // triples — which is what a replays section left ticked by accident looks like.
     'backup.bytes',
