@@ -197,3 +197,16 @@ body.bmm-tips-hidden .bmm-tip { display: none; }
 .bmm-tip-close:focus-visible { outline: 2px solid var(--bmm-accent, var(--accent)); outline-offset: 1px; opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) { .bmm-tip-close { transition: none; } }
+
+/* ── Custom select (ui/custom-select.ts): keyboard highlight + trigger icon ──────────────
+   The rest of the custom select's rules live in main.css (.bmm-csel*). These two belong to
+   behaviour added with the keyboard support:
+   · .kb-active is the row ↑/↓ points at (announced via aria-activedescendant — the rows are
+     never focused, so :focus-visible cannot draw it);
+   · .bmm-csel-trigger-icon is the chosen option's icon on the closed control, for a select
+     that opts in with data-csel-trigger-icon="on". */
+.bmm-csel-opt.kb-active { background: var(--bmm-bg-hover); box-shadow: inset 0 0 0 1px var(--bmm-border-accent); }
+.bmm-csel-opt.selected.kb-active { background: var(--bmm-accent-dim); }
+.bmm-csel-trigger-icon { display: inline-flex; align-items: center; flex: none; }
+.bmm-csel-trigger-icon[hidden] { display: none; }
+.bmm-csel-trigger-icon + .bmm-csel-label { flex: 1; }

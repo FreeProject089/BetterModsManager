@@ -10,10 +10,15 @@
 //  • The menu is portaled to <body> with position:fixed so it is never clipped
 //    by overflow ancestors nor mis-placed by a transformed ancestor.
 //  • The native <select> stays the source of truth (.value / change events).
+//  • Keyboard: the trigger keeps the focus while the menu is open and points at the
+//    highlighted row with aria-activedescendant (the WAI-ARIA select-only combobox).
+//    ↑/↓ move, Home/End jump, Enter/Space choose, Esc/Tab close. The rows are never
+//    focused themselves, so the focus never lands in a menu that is about to be detached.
 
 import { t } from '../core/i18n.js';
 
 let _openCsel: any = null;
+let _cselSeq = 0; // unique ids for aria-controls / aria-activedescendant
 
 export function initCustomSelects(): void {
     enhanceAll();
@@ -33,7 +38,14 @@ export function initCustomSelects(): void {
     document.addEventListener('mousedown', e => {
         if (_openCsel && !_openCsel.hitTest(e.target as Node)) closeOpen();
     }, true);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOpen(); }, true);
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape' || !_openCsel) return;
+        // Esc from inside the menu (its search box) would otherwise leave the focus on a
+        // detached node — i.e. nowhere. Hand it back to the control it came from.
+        const back = _openCsel.hasFocus() ? _openCsel.trigger : null;
+        closeOpen();
+        back?.focus({ preventScroll: true });
+    }, true);
 }
 
 function enhanceAll(): void {
@@ -76,14 +88,31 @@ function enhance(sel: HTMLSelectElement): void {
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'bmm-csel-trigger ' + (sel.className.replace('bmm-csel-native-hidden', '').trim());
-    trigger.innerHTML = `<span class="bmm-csel-label"></span><svg class="bmm-csel-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+    const uid = `bmm-csel-${++_cselSeq}`;
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', `${uid}-menu`);
+    // The hidden <select>'s accessible name travels with it: a screen reader otherwise
+    // announces the trigger by its current value alone ("BMM, combobox") with no subject.
+    const ariaLabel = sel.getAttribute('aria-label');
+    if (ariaLabel) trigger.setAttribute('aria-label', ariaLabel);
+    // `data-csel-trigger-icon="on"`: the closed control shows the chosen option's icon
+    // beside its label (the blog's tag dropdown shows the tag's logo, as BCWEB does).
+    const triggerIcon = sel.dataset.cselTriggerIcon === 'on';
+    trigger.innerHTML = (triggerIcon ? '<span class="bmm-csel-trigger-icon" hidden></span>' : '')
+        + `<span class="bmm-csel-label"></span><svg class="bmm-csel-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
     ui.appendChild(trigger);
 
     // Menu lives in <body> while open; parked (detached) while closed.
     const menu = document.createElement('div');
     menu.className = 'bmm-csel-menu';
+    menu.id = `${uid}-menu`;
+    menu.setAttribute('role', 'listbox');
+    if (ariaLabel) menu.setAttribute('aria-label', ariaLabel);
 
     const labelEl = trigger.querySelector('.bmm-csel-label') as HTMLElement;
+    const iconEl = trigger.querySelector('.bmm-csel-trigger-icon') as HTMLElement | null;
 
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     /**
@@ -114,6 +143,10 @@ function enhance(sel: HTMLSelectElement): void {
             item.className = 'bmm-csel-opt'
                 + (opt.disabled ? ' disabled' : '')
                 + (idx === sel.selectedIndex ? ' selected' : '');
+            item.id = `${uid}-opt-${idx}`;
+            item.setAttribute('role', 'option');
+            item.setAttribute('aria-selected', idx === sel.selectedIndex ? 'true' : 'false');
+            if (opt.disabled) item.setAttribute('aria-disabled', 'true');
             // Rich option: optional inline-SVG icon (data-icon) + sub description
             // (data-desc) so menus can look like the script generator's catalogue.
             const icon = opt.dataset ? opt.dataset.icon : '';
@@ -132,11 +165,15 @@ function enhance(sel: HTMLSelectElement): void {
             item.title = desc ? `${label} — ${desc}` : label;
             if (!opt.disabled) item.addEventListener('click', e => {
                 e.stopPropagation();
+                // Where the focus was BEFORE the change handler runs: a handler may re-render
+                // and drop this trigger, and then the focus is its business, not ours.
+                const hadFocus = api.hasFocus();
                 sel.selectedIndex = idx;
                 sel.dispatchEvent(new Event('input', { bubbles: true }));
                 sel.dispatchEvent(new Event('change', { bubbles: true }));
                 syncTrigger();
                 closeOpen();
+                if (hadFocus && trigger.isConnected) trigger.focus({ preventScroll: true });
             });
             menu.appendChild(item);
         };
@@ -180,12 +217,22 @@ function enhance(sel: HTMLSelectElement): void {
         // without this, typing a space or Enter reaches whatever form is behind it.
         input.addEventListener('keydown', (e) => {
             e.stopPropagation();
+            // ↑/↓ walk the rows still showing without leaving the box, so a reader can type,
+            // look, and pick without the mouse.
+            if (navKey(e)) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
-                // Enter takes the first thing still showing, which is what somebody who
-                // typed three letters and stopped is asking for.
-                const first = menu.querySelector('.bmm-csel-opt:not([hidden]):not(.disabled)') as HTMLElement | null;
-                first?.click();
+                // Enter takes the highlighted row, else the first thing still showing, which is
+                // what somebody who typed three letters and stopped is asking for.
+                const pickRow = activeRow() || menu.querySelector('.bmm-csel-opt:not([hidden]):not(.disabled)') as HTMLElement | null;
+                pickRow?.click();
+            } else if (e.key === 'Tab') {
+                // Esc is the document-level handler's (it runs first, in the capture phase).
+                // Tab from here would start from a box that closing is about to detach, and
+                // land nowhere — so it closes and hands the focus back to the control.
+                e.preventDefault();
+                closeOpen();
+                trigger.focus({ preventScroll: true });
             }
         });
         const empty = document.createElement('div');
@@ -212,6 +259,9 @@ function enhance(sel: HTMLSelectElement): void {
             }
             closeGroup();
             empty.hidden = shown > 0;
+            // A highlight on a row the filter just hid would make Enter pick something invisible.
+            const cur = menu.querySelector('.bmm-csel-opt.kb-active') as HTMLElement | null;
+            if (cur && cur.hidden) setActive(null);
         });
 
         bar.appendChild(input);
@@ -225,6 +275,45 @@ function enhance(sel: HTMLSelectElement): void {
         const opt = sel.options[sel.selectedIndex];
         labelEl.textContent = opt ? (opt.textContent || opt.value) : '';
         trigger.disabled = sel.disabled;
+        if (iconEl) {
+            // Same trust as the menu rows, which render data-icon as markup: the value is
+            // written by app code (escaped at its source), never by a user.
+            const icon = opt && opt.dataset ? opt.dataset.icon : '';
+            iconEl.innerHTML = icon || '';
+            iconEl.hidden = !icon;
+        }
+    };
+
+    // ── Keyboard highlight ────────────────────────────────────────────────────────
+    // One highlighted row at a time (`.kb-active`), announced through the trigger's
+    // aria-activedescendant. Only rows that can be chosen take part: hidden by the search
+    // box or disabled rows are stepped over.
+    const rows = () => Array.from(menu.querySelectorAll('.bmm-csel-opt:not([hidden]):not(.disabled)')) as HTMLElement[];
+    const activeRow = () => menu.querySelector('.bmm-csel-opt.kb-active:not([hidden])') as HTMLElement | null;
+    const setActive = (row: HTMLElement | null) => {
+        menu.querySelectorAll('.bmm-csel-opt.kb-active').forEach(r => r.classList.remove('kb-active'));
+        if (row) {
+            row.classList.add('kb-active');
+            trigger.setAttribute('aria-activedescendant', row.id);
+            row.scrollIntoView({ block: 'nearest' });
+        } else {
+            trigger.removeAttribute('aria-activedescendant');
+        }
+    };
+    // Moves the highlight for an arrow / Home / End key. Returns true when it handled the key.
+    const navKey = (e: KeyboardEvent): boolean => {
+        const list = rows();
+        if (!list.length) return false;
+        const at = list.indexOf(activeRow() as HTMLElement);
+        let next = -1;
+        if (e.key === 'ArrowDown') next = at < 0 ? 0 : Math.min(list.length - 1, at + 1);
+        else if (e.key === 'ArrowUp') next = at < 0 ? list.length - 1 : Math.max(0, at - 1);
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = list.length - 1;
+        else return false;
+        e.preventDefault();
+        setActive(list[next]);
+        return true;
     };
 
     const position = () => {
@@ -249,10 +338,14 @@ function enhance(sel: HTMLSelectElement): void {
     };
 
     const api = {
+        trigger,
         rebuild() { buildMenu(); syncTrigger(); },
         hitTest(t: Node) { return ui.contains(t) || menu.contains(t); },
+        hasFocus() { const a = document.activeElement; return !!a && (a === trigger || menu.contains(a)); },
         close() {
             ui.classList.remove('open');
+            trigger.setAttribute('aria-expanded', 'false');
+            trigger.removeAttribute('aria-activedescendant');
             menu.classList.remove('bmm-csel-menu-open');
             if (menu.parentNode) menu.parentNode.removeChild(menu);
             window.removeEventListener('scroll', position, true);
@@ -261,24 +354,52 @@ function enhance(sel: HTMLSelectElement): void {
     };
     (sel as any)._bmmCsel = api;
 
-    trigger.addEventListener('click', e => {
-        e.stopPropagation();
-        if (ui.classList.contains('open')) { closeOpen(); return; }
+    const open = () => {
         closeOpen();
         buildMenu(); syncTrigger();
         document.body.appendChild(menu);
         menu.classList.add('bmm-csel-menu-open');
         ui.classList.add('open');
+        trigger.setAttribute('aria-expanded', 'true');
         _openCsel = api;
         position();
         window.addEventListener('scroll', position, true);
         window.addEventListener('resize', position);
         const selItem = menu.querySelector('.bmm-csel-opt.selected') as HTMLElement | null;
         if (selItem) selItem.scrollIntoView({ block: 'nearest' });
+        // The highlight starts on the current value, so ↓ means "the next one after this".
+        setActive(selItem && !selItem.classList.contains('disabled') ? selItem : null);
         // Focused only once the menu is in the document and positioned. Focusing a detached
         // input does nothing, and focusing before positioning makes the page jump.
         const search = (menu as any)._cselSearchInput as HTMLInputElement | undefined;
         if (search) { search.value = ''; search.focus({ preventScroll: true }); }
+    };
+
+    trigger.addEventListener('click', e => {
+        e.stopPropagation();
+        if (ui.classList.contains('open')) { closeOpen(); return; }
+        open();
+    });
+
+    // The trigger is a <button>, so Enter and Space already click it (open / close). What a
+    // button does not do is the listbox part: arrows to open and move, Enter/Space to choose
+    // the highlighted row instead of toggling, Tab to close on the way out.
+    trigger.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (trigger.disabled) return;
+        const isOpen = ui.classList.contains('open');
+        if (!isOpen) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(); }
+            return;
+        }
+        if (navKey(e)) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+            const row = activeRow();
+            if (!row) return; // nothing highlighted: let the button toggle closed as before
+            e.preventDefault();
+            row.click();
+        } else if (e.key === 'Tab') {
+            closeOpen();
+        }
     });
 
     sel.addEventListener('change', syncTrigger);

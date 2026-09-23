@@ -1,9 +1,9 @@
 // @ts-nocheck
 // ── BetterCommunity blog (in-app) ─────────────────────────────────────────────
-// Reads the BCWEB blog feed (GET <base>/api/blog) and shows it inside BMM with
-// project filters. Default filter is BMM-only; the user can switch to "All" or any
-// other project. Reading a post pulls the full body (GET /api/blog/:slug) and
-// renders it with BMM's shared markdown renderer.
+// Reads the BCWEB blog feed (GET <base>/api/blog) and shows it inside BMM with a
+// tag dropdown built from the tags the loaded posts actually carry (blog-tags.ts).
+// Default is "All"; the choice is remembered for the session. Reading a post pulls
+// the full body (GET /api/blog/:slug) and renders it with BMM's shared markdown renderer.
 import { invoke } from '../../core/api.js';
 import { t, getLang } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -11,6 +11,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { renderMarkdown } from '../../ui/update-notes.js';
 import { bcRoot, bcApi } from '../../core/links-config.js';
 import { openBetterCommunity } from '../../ui/bettercommunity-modal.js';
+import { ALL_TAGS, PROJ_LOGO, blogTags, effectiveTag, tagOf } from './blog-tags.js';
 // BetterCommunity base resolution is centralized in links-config.ts and driven by
 // app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
 // `bettercommunity` link. Loaded once at startup (loadBcConfig), so bcRoot() is sync.
@@ -82,17 +83,13 @@ function diffHtml(a, b, vsLabel) {
     }).join('');
     return `<div class="cdiff-stat"><span class="cdiff-added">+${st.added}</span> <span class="cdiff-removed">−${st.removed}</span> <span class="cdiff-vs">${escHtml(vsLabel)}</span></div><div class="cdiff">${body}</div>`;
 }
-// The four fixed BMM blog "spaces" + an All pill. Default is BMM.
-const FILTERS = [
-    { key: 'bmm', label: 'BMM' },
-    { key: 'all', label: 'community.filter.all' },
-    { key: 'bsm', label: 'BSM' },
-    { key: 'installer', label: 'community.filter.installer' },
-    { key: 'community', label: 'community.filter.community' },
-];
+// The tag filter. It used to be five fixed pills (BMM, All, BSM, Installer, Community);
+// it is now a dropdown whose options are read off the loaded feed — see blog-tags.ts for
+// why the fixed list was wrong. `_filter` is a tag key from blogTags() or ALL_TAGS, kept
+// at module level so it survives leaving the page and coming back.
 let _posts = null;
 let _loading = false;
-let _filter = 'all'; // show every blog by default (no need to click "show all")
+let _filter = ALL_TAGS; // show every blog by default (no need to click "show all")
 let _search = '';
 // Display language for blog content. Follows BMM's language when it's one the blog
 // has (en/fr); any other BMM language falls back to English. User-switchable below.
@@ -213,7 +210,7 @@ async function loadPosts() {
 function filtered() {
     if (!_posts)
         return [];
-    let list = _filter === 'all' ? _posts : _posts.filter((p) => projOf(p) === _filter);
+    let list = _filter === ALL_TAGS ? _posts : _posts.filter((p) => tagOf(p).key === _filter);
     const q = _search.trim().toLowerCase();
     if (q)
         list = list.filter((p) => { const { title, excerpt } = pick(p); return (title + ' ' + excerpt).toLowerCase().includes(q) || (p.authors || []).some((a) => (a.displayName || '').toLowerCase().includes(q)); });
@@ -224,11 +221,11 @@ function render() {
         return;
     if (_openSlug)
         return; // detail view manages its own DOM
-    const chips = FILTERS.map((f) => {
-        const active = _filter === f.key ? ' active' : '';
-        const label = f.label.includes('.') ? (t(f.label) || f.label) : f.label;
-        return `<button class="community-chip${active}" data-filter="${escAttr(f.key)}">${escHtml(label)}</button>`;
-    }).join('');
+    // Before anything reads _filter: a remembered tag the refreshed feed no longer carries
+    // falls back to All (effectiveTag says why). No feed yet → the remembered one is kept.
+    const tags = Array.isArray(_posts) ? blogTags(_posts) : null;
+    _filter = effectiveTag(_filter, tags);
+    const tagPicker = tagSelect(tags);
     let bodyHtml;
     if (_loading) {
         // A skeleton in the shape of the real edition (lead + the pair below it), not a generic
@@ -275,7 +272,7 @@ function render() {
         if (list.length) {
             bodyHtml = edition(list);
         }
-        else if (_filter !== 'all' && _posts.length) {
+        else if (_filter !== ALL_TAGS && _posts.length) {
             // Nothing in this project yet, but other posts exist — nudge to "All".
             bodyHtml = `<div class="community-empty"><p>${escHtml(t('community.noneHere') || 'No posts in this section yet.')}</p>
         <button class="btn btn-secondary" id="community-show-all">${escHtml(t('community.showAll') || 'Show all posts')}</button></div>`;
@@ -308,7 +305,7 @@ function render() {
       </div>
     </div>
     <div class="community-toolbar">
-      <div class="community-filters">${chips}</div>
+      <div class="community-filters">${tagPicker}</div>
       <div class="community-toolbar-right">
         <div class="community-search-wrap">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -349,7 +346,7 @@ const REACTION_EMOJI = {
 // Project logo (like the website's coverless cards) — the white rounded-chip marks, falling
 // back to a monogram for a project with no bundled logo. `sizeCls` scales the mark to the
 // shape it sits in: the lead's picture is a page-wide panel, the archive's is a thumbnail.
-const PROJ_LOGO = { community: 'assets/BC_white.webp', bmm: 'assets/BMm_white.webp', installer: 'assets/bi.svg' };
+// PROJ_LOGO lives in blog-tags.ts: the tag dropdown draws the same marks.
 function projMono(p, sizeCls = '') {
     const key = projOf(p);
     const logo = PROJ_LOGO[key];
@@ -478,7 +475,7 @@ function byMonth(list) {
 }
 function edition(list) {
     // The eyebrow only claims "Latest" when the first post really is the newest there is.
-    const latest = _filter === 'all' && !_search.trim();
+    const latest = _filter === ALL_TAGS && !_search.trim();
     const art = new Map(list.map((p, i) => [p, i]));
     const pair = list.slice(1, 3);
     const archive = byMonth(list.slice(3));
@@ -494,18 +491,60 @@ function edition(list) {
     </div>` : ''}
   </div>`;
 }
+// ── The tag dropdown ──────────────────────────────────────────────────────────────
+// A plain <select>, which BMM's custom-select (ui/custom-select.ts) turns into its themeable,
+// keyboard-driven listbox: `data-icon` becomes the logo beside each option, `data-desc` the
+// post count under it, and `data-csel-trigger-icon` puts the chosen tag's logo on the
+// closed control too — BCWEB's TypeTag, logo then name.
+//
+// `tags` is null while there is no feed (loading, offline, server down): the control is then
+// shown disabled on "All" rather than removed, so the toolbar does not change shape when the
+// posts arrive.
+const ALL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>';
+function tagLabel(label) { return label ?? t('community.filter.community'); }
+function tagCount(n) { return n === 1 ? t('community.filter.countOne') : t('community.filter.count', { n: String(n) }); }
+// The tag's mark, at dropdown size. A bundled logo or the page's own icon when there is one;
+// otherwise the same coloured monogram the coverless cards fall back to.
+function tagMark(tag) {
+    if (tag.logo)
+        return `<img class="community-cover-logo community-mark--xs" src="${escAttr(absUrl(tag.logo))}" alt="" />`;
+    // BSM stays BSM; a longer single word keeps its first two letters; several words give
+    // their initials ("Cool Page" → CP).
+    const words = (tagLabel(tag.label) || 'BC').trim().split(/\s+/).filter(Boolean);
+    if (!words.length)
+        words.push('BC');
+    const txt = (words.length > 1 ? words.map((w) => w[0]).join('').slice(0, 2)
+        : words[0].length <= 3 ? words[0] : words[0].slice(0, 2)).toUpperCase();
+    return `<span class="community-cover-mono community-mark--xs community-badge--${escAttr(tag.projectKey)}">${escHtml(txt)}</span>`;
+}
+function tagSelect(tags) {
+    const total = (tags || []).reduce((n, tg) => n + tg.count, 0);
+    const opt = (value, label, icon, count) => `<option value="${escAttr(value)}"${value === _filter ? ' selected' : ''} data-icon="${escAttr(icon)}"${count == null ? '' : ` data-desc="${escAttr(tagCount(count))}"`}>${escHtml(label)}</option>`;
+    const options = [opt(ALL_TAGS, t('community.filter.all'), ALL_ICON, tags ? total : null)]
+        .concat((tags || []).map((tg) => opt(tg.key, tagLabel(tg.label), tagMark(tg), tg.count)))
+        .join('');
+    const name = t('community.filter.label');
+    return `<select class="community-tag-select" id="community-tag" aria-label="${escAttr(name)}" data-tooltip="${escAttr(name)}" data-csel-trigger-icon="on"${tags && tags.length ? '' : ' disabled'}>${options}</select>`;
+}
 function wire() {
     if (!_view)
         return;
-    _view.querySelectorAll('.community-chip').forEach((el) => el.addEventListener('click', () => {
-        _filter = el.dataset.filter || 'all';
-        render();
-    }));
+    const tagSel = _view.querySelector('#community-tag');
+    if (tagSel)
+        tagSel.addEventListener('change', () => {
+            _filter = tagSel.value || ALL_TAGS;
+            render();
+            // render() replaced the toolbar, and with it the dropdown the keyboard was on. The new
+            // <select> is enhanced by custom-select's MutationObserver, which runs after this
+            // handler returns — so the focus goes back in the next task, onto the new trigger. A
+            // timer rather than requestAnimationFrame: rAF does not run while the window is hidden.
+            setTimeout(() => _view?.querySelector('.bmm-csel-trigger.community-tag-select')?.focus({ preventScroll: true }), 0);
+        });
     // Cards AND the featured hero both carry data-slug → open the post.
     _view.querySelectorAll('[data-slug]').forEach((el) => el.addEventListener('click', () => {
         openPost(el.dataset.slug);
     }));
-    _view.querySelector('#community-show-all')?.addEventListener('click', () => { _filter = 'all'; render(); });
+    _view.querySelector('#community-show-all')?.addEventListener('click', () => { _filter = ALL_TAGS; render(); });
     _view.querySelector('#community-refresh')?.addEventListener('click', async () => { _posts = null; await loadPosts(); render(); });
     _view.querySelector('#community-retry')?.addEventListener('click', async () => { await loadPosts(); render(); });
     _view.querySelector('#community-about')?.addEventListener('click', () => openBetterCommunity());

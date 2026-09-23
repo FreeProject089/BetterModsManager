@@ -1,5 +1,5 @@
 /* ── BetterCommunity blog view (community.ts) ──────────────────────────────────
-   Reuses BMM's design tokens. Card grid + filter pills for the post list, and a
+   Reuses BMM's design tokens. Edition layout + a tag dropdown for the post list, and a
    readable article layout for a single post (body rendered via renderMarkdown, so
    the shared .md-body / .md-badge styles apply). */
 
@@ -71,23 +71,16 @@
 /* Real pfp layered over the initials fallback (initials show if the image errors). */
 .community-avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .community-author-name { color: var(--bmm-text-muted); font-size: 12px; margin-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.community-chip {
-  padding: 6px 14px;
-  border-radius: var(--radius-badge, 5px);
-  border: 1px solid var(--bmm-border);
-  background: var(--bmm-bg-elevated);
-  color: var(--bmm-text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s, color .15s, border-color .15s;
+/* The tag dropdown (community.ts tagSelect). It is a custom-select: these rules only give its
+   trigger the toolbar's look (the same box as the language picker beside it) and size the
+   project marks it carries. The menu is portaled to <body>, which is why the mark rules are
+   not scoped to the view. */
+.bmm-csel-trigger.community-tag-select {
+  min-width: 190px;
+  border: 1px solid var(--bmm-border); border-radius: var(--radius-badge, 5px); background-color: var(--bmm-bg-elevated);
+  color: var(--bmm-text-primary); font-size: 13px; font-weight: 600; padding: 6px 10px;
 }
-.community-chip:hover { color: var(--bmm-text-primary); border-color: var(--bmm-border-hover); }
-.community-chip.active {
-  background: var(--bmm-accent);
-  border-color: var(--bmm-accent);
-  color: var(--text-on-accent);
-}
+.bmm-csel-trigger.community-tag-select:disabled { opacity: .6; cursor: default; }
 
 /* ── The blog edition (community.ts `edition`) ─────────────────────────────────
    Lead / pair / archive-by-month, the same rhythm as the website's public blog.
@@ -310,6 +303,13 @@
 .community-mark--lg { width: 78px; height: 78px; border-radius: 18px; padding: 10px; font-size: 25px; }
 .community-mark--md { width: 56px; height: 56px; }
 .community-mark--sm { width: 34px; height: 34px; border-radius: 9px; padding: 4px; font-size: 12px; }
+/* …and the tag dropdown's option (community.ts tagMark): the same plate and monogram colours
+   at 20px, so a tag looks like the posts it filters. After the base rules on purpose — same
+   specificity, so the later rule is the one that sizes it. */
+.community-mark--xs { box-sizing: border-box; width: 20px; height: 20px; border-radius: 5px; padding: 2px; font-size: 8px; letter-spacing: 0; box-shadow: 0 0 0 1px var(--bmm-border); }
+.community-cover-mono.community-mark--xs { border: 1px solid; }
+/* The mark brings its own plate; the menu's accent-tinted icon plate behind it would double it. */
+.bmm-csel-opt-icon:has(.community-mark--xs) { background: transparent; }
 /* Inline blocks rendered from the site's markdown (badges/cards) */
 .community-inline-badge {
   --bc: var(--bmm-accent);
