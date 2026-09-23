@@ -13,6 +13,9 @@ mod commands;
 mod fs_utils;
 mod models;
 mod state;
+// Phase G0 of the resource governor: configuration only, not called yet.
+#[allow(dead_code)]
+mod governor;
 mod api;
 
 use tauri::Emitter;

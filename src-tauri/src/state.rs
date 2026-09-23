@@ -253,6 +253,11 @@ pub struct AppData {
     pub custom_tags: Vec<crate::models::tag::TagDef>,
     #[serde(default)]
     pub disk_limits: std::collections::HashMap<String, u64>,
+    /// The resource governor's presets and per-disk × per-operation rules (governor/config.rs).
+    /// Here and not in `settings`: update_settings replaces the whole settings object with
+    /// the frontend's copy, which would overwrite a change made by the API meanwhile.
+    #[serde(default)]
+    pub resources: crate::governor::config::ResourcesConfig,
     #[serde(default)]
     pub settings: AppSettings,
     #[serde(default)]
