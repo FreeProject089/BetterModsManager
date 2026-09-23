@@ -7,9 +7,12 @@
 //!     stepping aside while foreground work runs.
 //!   · `io` (G2): the governed copy and its per-VOLUME rate limiter (the limit is shared by every
 //!     copy to a disk, instead of each copy pacing itself).
+//!   · `game_mode` (G4): "a game is running" as a pure state machine (enter at once, leave after
+//!     30 s of absence, manual beats auto, deploy slowed and background work paused).
 //!
 //! Nothing calls it yet: the pools, the copy engine and the dashboard come in the later
 //! phases, and scripts/check-governed.mjs lists every site still to be migrated.
 pub mod config;
 pub mod queue;
 pub mod io;
+pub mod game_mode;
