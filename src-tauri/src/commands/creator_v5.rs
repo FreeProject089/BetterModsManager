@@ -277,14 +277,56 @@ pub struct FingerprintV5 {
     pub canvas: Option<String>,
 }
 
-/// Which raw markers make up each group. A CPU swap changes `board`, a new disk changes
-/// `disk`, a Windows reinstall changes `os`, a driver update may change `canvas` — the
-/// server's stability score reads exactly that.
-const GROUPS: &[(&str, &[&str])] = &[
-    ("board", &["SystemUUID", "BaseboardSerial", "BiosSerial", "CpuId"]),
-    ("os", &["MachineGuid", "ProductId", "InstallDate"]),
-    ("disk", &["DiskSn", "VolumeSn", "DiskModel"]),
+/// Which raw markers make up each group, and whether each one DISTINGUISHES a machine.
+///
+/// The `bool` is the part that was missing, and it is the whole difference between a
+/// fingerprint and a coincidence. Three of these markers name a MODEL, not a unit:
+///
+///   · `CpuId` is `Win32_Processor.ProcessorId` — the CPUID signature plus the feature
+///     flags. Intel removed the per-unit serial in 2000; every processor of the same model
+///     and stepping reports the same string, so a few million PCs share each value;
+///   · `DiskModel` is the drive's marketing name;
+///   · `ProductId` / `InstallDate` come from the Windows image: every machine imaged from
+///     one corporate WIM shares them to the second.
+///
+/// A group is emitted only when at least one STRONG member survived. Without that rule a
+/// board whose firmware reports placeholders (see `is_placeholder`) falls back to CpuId
+/// alone, and two unrelated people with the same CPU get the SAME `board` hash — which the
+/// admin analyser weights as the strongest possible evidence that they are one person.
+/// A group that identifies nobody must be ABSENT, not a constant shared by thousands.
+const GROUPS: &[(&str, &[(&str, bool)])] = &[
+    ("board", &[("SystemUUID", true), ("BaseboardSerial", true), ("BiosSerial", true), ("CpuId", false)]),
+    ("os", &[("MachineGuid", true), ("ProductId", false), ("InstallDate", false)]),
+    ("disk", &[("DiskSn", true), ("VolumeSn", true), ("DiskModel", false)]),
 ];
+
+/// Firmware values that are not serial numbers: the strings OEMs ship when the field was
+/// never filled in, plus anything that is one character repeated.
+///
+/// These are common — "Default string" is the AMI factory value on a large share of
+/// self-built and budget desktops, and `03000200-0400-0500-0006-000700080009` is the
+/// board UUID those same boards report. Hashing them produces a perfectly stable hash of
+/// a constant: identical on every such machine on earth. `hwid_v4_fields` only ever
+/// dropped the all-F UUID, and it must not start dropping more — the v4 Creator ID is
+/// derived from that exact map and every existing install's identity depends on its
+/// bytes. So the filtering lives HERE, where it changes only the fingerprint.
+pub fn is_placeholder(v: &str) -> bool {
+    let u = v.trim().to_uppercase();
+    if u.is_empty() { return true; }
+    // One character repeated: "0000…", "XXXX…", "……", "--------".
+    if u.len() >= 4 && u.bytes().all(|b| b == u.as_bytes()[0]) { return true; }
+    // A UUID whose hex digits are all the same nibble (all-zero, all-F).
+    let hex: String = u.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    if u.len() == 36 && hex.len() == 32 && hex.bytes().all(|b| b == hex.as_bytes()[0]) { return true; }
+    matches!(u.as_str(),
+        "NONE" | "N/A" | "NA" | "NOT APPLICABLE" | "NOT SPECIFIED" | "NOT AVAILABLE" | "UNKNOWN"
+        | "DEFAULT STRING" | "DEFAULT" | "TO BE FILLED BY O.E.M." | "TO BE FILLED BY OEM"
+        | "FILLED BY O.E.M." | "FILLED BY OEM" | "OEM" | "O.E.M."
+        | "SYSTEM SERIAL NUMBER" | "BASE BOARD SERIAL NUMBER" | "BASEBOARD SERIAL NUMBER"
+        | "CHASSIS SERIAL NUMBER" | "SERIAL NUMBER" | "SERIAL" | "PRODUCT SERIAL NUMBER"
+        | "0123456789" | "123456789" | "1234567890" | "INVALID" | "EMPTY" | "NULL"
+        | "03000200-0400-0500-0006-000700080009")
+}
 
 fn fp_key(aud: &str) -> [u8; 32] {
     let mut h = Sha256::new();
@@ -316,18 +358,24 @@ pub fn is_digest(s: &str) -> bool { s.len() == 64 && s.bytes().all(|b| b.is_asci
 /// Hash the raw markers into per-group components for one audience.
 pub fn fingerprint_for(fields: &BTreeMap<&str, String>, canvas_digest: Option<&str>, aud: &str) -> FingerprintV5 {
     let key = fp_key(aud);
-    let group = |name: &str, members: &[&str]| -> Option<String> {
+    let group = |name: &str, members: &[(&str, bool)]| -> Option<String> {
         let mut material = String::new();
-        let mut any = false;
-        for m in members {
-            let v = fields.get(m).map(|s| s.trim().to_uppercase()).unwrap_or_default();
-            if !v.is_empty() { any = true; }
+        let mut strong = false;
+        for (m, is_strong) in members {
+            let raw = fields.get(m).map(|s| s.trim().to_uppercase()).unwrap_or_default();
+            // A placeholder is treated exactly as a missing value: it goes into the material
+            // as empty, so a machine that starts reporting a real serial changes its hash
+            // once and then stays put, and it never counts towards `strong`.
+            let v = if is_placeholder(&raw) { String::new() } else { raw };
+            if !v.is_empty() && *is_strong { strong = true; }
             material.push_str(m);
             material.push('=');
             material.push_str(&v);
             material.push('|');
         }
-        if any { Some(fp_hash(&key, name, &material)) } else { None }
+        // No strong member: whatever is left names a CPU model or a Windows image, which is
+        // shared by millions. Report nothing rather than a hash that means nothing.
+        if strong { Some(fp_hash(&key, name, &material)) } else { None }
     };
     let mut fp = FingerprintV5::default();
     for (name, members) in GROUPS {
@@ -747,6 +795,65 @@ mod tests {
         assert_eq!(a.board, c.board);
         assert_eq!(a.os, c.os);
         assert_ne!(a.disk, c.disk);
+    }
+
+    /// Two unrelated PCs whose firmware never had its serials filled in must NOT look like
+    /// one machine. Before placeholder filtering they did: `board` fell back to CpuId (a
+    /// model number) plus "Default string" twice, and the AMI default UUID — a constant.
+    /// The analyser weights a shared `board` above everything else, so the collision read
+    /// as the strongest possible evidence that two people were one person.
+    #[test]
+    fn oem_placeholder_firmware_does_not_make_two_machines_look_like_one() {
+        let mk = |guid: &str, vol: &str| {
+            let mut m = BTreeMap::new();
+            // Identical on both: the board never had its serials programmed, and they are
+            // the same CPU model and the same drive model.
+            m.insert("SystemUUID", "03000200-0400-0500-0006-000700080009".to_string());
+            m.insert("BaseboardSerial", "Default string".to_string());
+            m.insert("BiosSerial", "To Be Filled By O.E.M.".to_string());
+            m.insert("CpuId", "178BFBFF00A50F00".to_string());
+            m.insert("DiskModel", "Samsung SSD 980 1TB".to_string());
+            // Genuinely per-machine:
+            m.insert("MachineGuid", guid.to_string());
+            m.insert("VolumeSn", vol.to_string());
+            m
+        };
+        let a = fingerprint_for(&mk("11111111-1111-4111-8111-111111111111", "A1B2C3D4"), None, AUD);
+        let b = fingerprint_for(&mk("22222222-2222-4222-8222-222222222222", "99887766"), None, AUD);
+        assert!(a.board.is_none(), "a board with no real serial identifies nobody and must be absent");
+        assert_eq!(a.board, b.board);
+        assert_ne!(a.os, b.os, "the OS group still separates them");
+        assert_ne!(a.disk, b.disk, "and so does the volume serial");
+
+        // A CPU model on its own is never a machine, whatever else is missing.
+        let mut cpu_only = BTreeMap::new();
+        cpu_only.insert("CpuId", "178BFBFF00A50F00".to_string());
+        assert_eq!(fingerprint_for(&cpu_only, None, AUD), FingerprintV5::default());
+        // …and the same Windows image on two PCs is not one PC either.
+        let mut imaged = BTreeMap::new();
+        imaged.insert("ProductId", "00330-80000-00000-AA123".to_string());
+        imaged.insert("InstallDate", "1712345678".to_string());
+        assert!(fingerprint_for(&imaged, None, AUD).os.is_none());
+
+        // A real serial still produces a board hash — the filter drops noise, not signal.
+        let mut real = mk("11111111-1111-4111-8111-111111111111", "A1B2C3D4");
+        real.insert("BaseboardSerial", "PSN20D4W0KL".to_string());
+        assert!(fingerprint_for(&real, None, AUD).board.is_some());
+    }
+
+    #[test]
+    fn placeholders_are_recognised_in_every_spelling() {
+        for v in ["", "  ", "Default string", "DEFAULT STRING", "To be filled by O.E.M.",
+                  "None", "n/a", "System Serial Number", "0123456789", "00000000",
+                  "xxxxxxxxxx", "..........", "--------",
+                  "00000000-0000-0000-0000-000000000000",
+                  "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+                  "03000200-0400-0500-0006-000700080009"] {
+            assert!(is_placeholder(v), "{:?} should be a placeholder", v);
+        }
+        for v in ["PSN20D4W0KL", "4C4C4544-0042-3010-8057-B7C04F4E4E32", "S4EWNX0R123456", "A1B2", "0A0B"] {
+            assert!(!is_placeholder(v), "{:?} is a real value", v);
+        }
     }
 
     #[test]
