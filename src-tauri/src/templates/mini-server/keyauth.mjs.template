@@ -312,7 +312,8 @@ export function keyAudience() {
   } catch {
     // No SITE_URL is a misconfiguration, and returning something guessable would quietly
     // accept proofs meant for anywhere. An audience nothing can match fails closed.
-    return ' invalid-site-url';
+    // A value nothing can match, so a missing site URL fails closed. Spelled, not pasted.
+    return '\0invalid-site-url';
   }
 }
 
