@@ -1,0 +1,302 @@
+{
+  "src/api/mod.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/archive.rs": {
+    "par_iter": {
+      "count": 1,
+      "why": "TODO(G3c): extraction"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G3c): extraction"
+    }
+  },
+  "src/commands/apps.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/autoupdate.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/benchmark.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/catalog_bundle.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3c)"
+    }
+  },
+  "src/commands/crash.rs": {
+    "thread::spawn": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/custom_pages.rs": {
+    "fs::copy": {
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/format_check.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3b)"
+    }
+  },
+  "src/commands/image.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G3c): image decoding"
+    }
+  },
+  "src/commands/installer_handoff.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/mapper.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3b)"
+    }
+  },
+  "src/commands/mod_archive.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "TODO(G3c): (re)archiving"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G3c): (re)archiving"
+    }
+  },
+  "src/commands/mod_order.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3b)"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G3b)"
+    }
+  },
+  "src/commands/modlist.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "TODO(G3c)"
+    }
+  },
+  "src/commands/modpack.rs": {
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G3a)"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G3a)"
+    }
+  },
+  "src/commands/mods.rs": {
+    "thread::spawn": {
+      "count": 2,
+      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+    },
+    "spawn_blocking": {
+      "count": 10,
+      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+    },
+    "fs_extra::": {
+      "count": 4,
+      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+    },
+    "io::copy": {
+      "count": 3,
+      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+    }
+  },
+  "src/commands/net.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/plugin_assets.rs": {
+    "fs::copy": {
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/plugins.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 5,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/proc.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/repo.rs": {
+    "par_iter": {
+      "count": 2,
+      "why": "TODO(G3c): repo export and sync"
+    },
+    "spawn_blocking": {
+      "count": 3,
+      "why": "TODO(G3c): repo export and sync"
+    },
+    "fs::copy": {
+      "count": 6,
+      "why": "TODO(G3c): repo export and sync"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G3c): repo export and sync"
+    }
+  },
+  "src/commands/repo_keyauth.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/restore_bundle.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/settings.rs": {
+    "fs::copy": {
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs_extra::": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/task_output.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/themes.rs": {
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/verify.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3b): hashing"
+    }
+  },
+  "src/fs_utils.rs": {
+    "par_iter": {
+      "count": 3,
+      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+    },
+    "ThreadPoolBuilder": {
+      "count": 3,
+      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+    },
+    "update_mmap": {
+      "count": 1,
+      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+    }
+  },
+  "src/main.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    },
+    "ThreadPoolBuilder": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    }
+  },
+  "src/mcp/state_bridge.rs": {
+    "fs::copy": {
+      "count": 6,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "update_mmap": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/state.rs": {
+    "fs::copy": {
+      "count": 4,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  }
+}
