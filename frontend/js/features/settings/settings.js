@@ -4,6 +4,7 @@
  */
 import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } from '../../core/api.js';
 import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
+import { renderResourcesCard } from './resources-dash.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
@@ -459,8 +460,9 @@ const _renderStorageModal = async () => {
                 </div>`}
             </div>
         `;
-        // Global auto/dynamic control
+        // Global auto/dynamic control. The resources card (G6) sits above it, filled below.
         container.innerHTML = `
+            <div id="storage-resources-card"></div>
             <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
                 <div style="width:40px; height:40px; background:rgba(59,130,246,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" style="${isAuto ? 'animation:pulse 2s infinite' : ''}"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
@@ -799,6 +801,10 @@ const _renderStorageModal = async () => {
                 btn.innerHTML = original;
             });
         });
+        // Live only while the modal shows it: the card unsubscribes itself once it is hidden.
+        const resHost = document.getElementById('storage-resources-card');
+        if (resHost)
+            renderResourcesCard(resHost).catch((e) => console.warn('[resources] card:', e));
     }
     catch (err) {
         console.error(err);

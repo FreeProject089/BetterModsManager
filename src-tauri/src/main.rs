@@ -949,6 +949,8 @@ fn main() {
             commands::resources::resources_clear_task_preset,
             commands::resources::resources_game_mode,
             commands::resources::resources_queue,
+            commands::resources_live::resources_subscribe,
+            commands::resources_live::resources_unsubscribe,
             commands::format_check::bmm_validate,
             commands::content_ids::content_id_of,
             commands::content_ids::content_id_from,

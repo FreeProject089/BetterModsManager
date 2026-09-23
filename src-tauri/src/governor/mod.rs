@@ -19,3 +19,4 @@ pub mod queue;
 pub mod io;
 pub mod game_mode;
 pub mod runtime;
+pub mod telemetry;
