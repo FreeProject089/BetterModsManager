@@ -17,7 +17,8 @@
 //     only ever goes up hides the next addition);
 //   · --strict (phase G7): any entry whose reason still says TODO fails.
 //
-// Comments are stripped before counting, so a doc comment naming `par_iter` is not a site.
+// Comments and `#[cfg(test)] mod` blocks are stripped before counting, so a doc comment naming
+// `par_iter` or a test spawning a thread is not a site.
 //
 // Usage: node scripts/check-governed.mjs [--strict] [--init]
 //   --init writes the allowlist from the current code with a TODO label per file (only when
@@ -38,6 +39,28 @@ const init = process.argv.includes('--init');
 /** Line comments and block comments out; string contents are left alone (good enough here). */
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:"'])\/\/.*$/gm, '$1');
 
+/** Remove every `#[cfg(test)] mod name { ... }` block (braces matched; `mod x;` declarations have
+ *  no body and are left alone). Braces inside strings could confuse it; none of the counted
+ *  constructs hide in one, and an unbalanced block leaves the rest of the file in, never out. */
+function stripTestModules(src) {
+  const head = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s+)?mod\s+\w+\s*\{/g;
+  let out = '', last = 0, m;
+  while ((m = head.exec(src))) {
+    let i = m.index + m[0].length, depth = 1;
+    while (i < src.length && depth) {
+      const c = src[i++];
+      if (c === '"') { while (i < src.length && src[i] !== '"') i += src[i] === '\\' ? 2 : 1; i++; continue; } // a string: skip it
+      if (c === "'" && src[i + 1] === "'") { i += 2; continue; }                                            // a char literal like '{'
+      if (c === '{') depth++; else if (c === '}') depth--;
+    }
+    if (depth) break; // unbalanced: keep the rest counted
+    out += src.slice(last, m.index);
+    last = i;
+    head.lastIndex = i;
+  }
+  return out + src.slice(last);
+}
+
 function walk(dir, out = []) {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
@@ -49,7 +72,11 @@ function walk(dir, out = []) {
 
 const counts = {};
 for (const f of walk(SRC)) {
-  const code = stripComments(readFileSync(f, 'utf8'));
+  // Test modules are not the app: a test that spawns a thread to race two appends is not a
+  // heavy-work site. Each `#[cfg(test)] mod x { ... }` is removed by matching its braces; NOT by
+  // cutting the file at the first one, because in this codebase test modules sit in the middle
+  // of files and a cut would silently hide every real site after them.
+  const code = stripTestModules(stripComments(readFileSync(f, 'utf8')));
   const rel = relative(join(ROOT, 'src-tauri'), f).replace(/\\/g, '/');
   for (const pat of PATTERNS) {
     const n = code.split(pat).length - 1;
