@@ -1039,10 +1039,10 @@ async function openRunLog(taskId: string): Promise<void> {
     let runs: any[] = [];
     try { runs = await invoke('sched_runs_list', { taskId }) as any[]; } catch (e) { toast(String(e), 'error'); return; }
     const ms = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 's' : n + 'ms';
-    const body = runs.length ? runs.map((r) => `<details class="sched-runlog-run"${r === runs[0] ? ' open' : ''}>
+    const body = runs.length ? runs.map((r) => `<details style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px"${r === runs[0] ? ' open' : ''}>
         <summary><span class="sched-hist-dot ${r.ok ? 'ok' : 'err'}"></span> ${escHtml(new Date(r.at).toLocaleString())} · ${escHtml(ms(r.ms || 0))} · ${escHtml(r.ok ? (t('sched.runlog.ok') || 'finished') : String(r.result || ''))}</summary>
-        <ol class="sched-runlog-steps">${(r.steps || []).map((st: any) => `<li class="${st.status === 'ok' ? 'ok' : 'err'}" style="margin-inline-start:${Math.min(8, st.depth || 0) * 14}px">
-            <b>${escHtml(st.label || '')}</b> <span>${escHtml(ms(st.ms || 0))}</span>${st.status !== 'ok' ? ` <em>${escHtml(st.status)}</em>` : ''}${st.error ? `<div class="sched-runlog-err">${escHtml(st.error)}</div>` : ''}</li>`).join('') || `<li>${escHtml(t('sched.runlog.noSteps') || 'No action ran.')}</li>`}</ol>
+        <ol style="margin:8px 0 0;padding-inline-start:20px;font-size:12px;line-height:1.6">${(r.steps || []).map((st: any) => `<li class="${st.status === 'ok' ? 'ok' : 'err'}" style="margin-inline-start:${Math.min(8, st.depth || 0) * 14}px">
+            <b>${escHtml(st.label || '')}</b> <span>${escHtml(ms(st.ms || 0))}</span>${st.status !== 'ok' ? ` <em>${escHtml(st.status)}</em>` : ''}${st.error ? `<div style="color:var(--danger);font-size:11px;word-break:break-word">${escHtml(st.error)}</div>` : ''}</li>`).join('') || `<li>${escHtml(t('sched.runlog.noSteps') || 'No action ran.')}</li>`}</ol>
     </details>`).join('') : `<p>${escHtml(t('sched.runlog.empty') || 'No run recorded yet.')}</p>`;
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
@@ -1058,7 +1058,7 @@ async function openRunLog(taskId: string): Promise<void> {
         if (!(await showConfirm(t('sched.runlog.clear') || 'Clear the log', t('sched.runlog.clearQ') || 'Clear this task\u2019s run log?'))) return;
         try { await invoke('sched_runs_clear', { taskId }); ov.remove(); } catch (e) { toast(String(e), 'error'); }
     });
-    document.body.appendChild(ov);
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     raiseAboveAll(ov);
 }
 document.addEventListener('click', (e) => {
@@ -1225,7 +1225,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
         // one leaves the world in a state nothing here can describe.
         if (debugging(task.id)) await gate(task.id, stepLabel(step), ctx);
         if (step.kind === 'action') {
-            await runAction(step.action, task, ctx, depth);
+            await recordedAction(step.action, task, ctx, depth);
         } else if (step.kind === 'delay') {
             await interruptibleSleep(Math.max(0, step.seconds) * 1000, state);
         } else if (step.kind === 'waitFor') {
@@ -1825,12 +1825,15 @@ export async function importTasksFromPath(path: string): Promise<number> {
     return added;
 }
 
-/** Records the action in the run log around the real work (runActionInner). */
-async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+/** Records the action in the run log around the real work (runAction). Not called runActionX:
+ * gen-bmms-reference, check-action-registry and sched-export-privacy read the switch inside
+ * the runner's switch by its exact function name, and a longer name that starts the same way
+ * (or this comment, if it spelled the declaration out) would be found first. */
+async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     const log = _runLogs.get(task.id);
     const step = log ? startStep(log, stepLabel({ kind: 'action', action } as Step), depth) : null;
     try {
-        await runActionInner(action, task, ctx, depth);
+        await runAction(action, task, ctx, depth);
         endStep(step, 'ok');
     } catch (e) {
         endStep(step, e instanceof _StopTask ? 'stopped' : e instanceof _CancelledTask ? 'cancelled' : 'error', e);
@@ -1838,7 +1841,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
     }
 }
 
-async function runActionInner(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
     // task, and rewriting it would bake one run's values into the stored definition.
