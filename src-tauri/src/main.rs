@@ -13,6 +13,7 @@ mod commands;
 mod fs_utils;
 mod models;
 mod state;
+mod boot_flags;
 // Phase G0 of the resource governor: configuration only, not called yet.
 #[allow(dead_code)]
 mod governor;
@@ -294,19 +295,22 @@ fn main() {
     //   - Translate / sync / default apps: useless browser-only features
     //   - background-networking: no telemetry pings
     //   - renderer-process-limit=2: cap renderer/subframe processes
-    if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
-        std::env::set_var(
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-            "--disable-features=AudioServiceOutOfProcess,Translate,BackgroundNetworking,InterestFeedContentSuggestions \
-             --disable-extensions \
-             --disable-component-extensions-with-background-pages \
-             --disable-default-apps \
-             --disable-background-networking \
-             --disable-sync \
-             --no-pings \
-             --renderer-process-limit=2 \
-             --disable-component-update",
-        );
+    //
+    // Plus, when the user turned it off in Settings, the two fixed flags that stop WebView2
+    // from using the GPU (boot_flags.rs: read here because it must be decided before the
+    // webview exists). A variable the user set themselves still wins, untouched.
+    if let Some(args) = boot_flags::apply_at_boot(
+        "--disable-features=AudioServiceOutOfProcess,Translate,BackgroundNetworking,InterestFeedContentSuggestions \
+         --disable-extensions \
+         --disable-component-extensions-with-background-pages \
+         --disable-default-apps \
+         --disable-background-networking \
+         --disable-sync \
+         --no-pings \
+         --renderer-process-limit=2 \
+         --disable-component-update",
+    ) {
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
     }
 
     // Prevent Rayon from hogging 100% CPU and lagging the OS.  Cap thread
@@ -825,6 +829,8 @@ fn main() {
             commands::creator_v5::creator_key_info,
             commands::creator_v5::rotate_creator_key,
             commands::creator_v5::creator_identity_reset,
+            boot_flags::get_webview_gpu,
+            boot_flags::set_webview_gpu,
             commands::security::bc_api_get,
             commands::security::set_bcweb_api_key,
             commands::security::has_bcweb_api_key,

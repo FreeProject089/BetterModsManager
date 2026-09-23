@@ -482,6 +482,23 @@ const _renderStorageModal = async () => {
                 </label>
             </div>
 
+            <!-- The window's own GPU use (boot_flags.rs). Read before the webview starts, so it
+                 applies on the next start; greyed when the user's environment variable rules. -->
+            <div style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
+                <div style="width:40px; height:40px; background:color-mix(in srgb, var(--accent) 12%, transparent); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                </div>
+                <div style="flex:1">
+                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.gpuTitle')}</div>
+                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.gpuDesc')}</div>
+                    <div id="gpu-note" style="font-size:11px; color:var(--text-muted); margin-top:4px; display:none"></div>
+                </div>
+                <label class="bmm-switch">
+                    <input type="checkbox" id="chk-webview-gpu" checked>
+                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                </label>
+            </div>
+
             ${thresholdsBlock}
 
             <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
@@ -508,6 +525,28 @@ const _renderStorageModal = async () => {
             settings.smart_io_enabled = e.target.checked;
             await updateSettings(settings);
             toast(t(e.target.checked ? 'storage.smartIoOnToast' : 'storage.smartIoOffToast'), 'info');
+        });
+
+        // Interface GPU (boot_flags.rs): what is saved, what this session started with, and
+        // whether the user's own environment variable is in charge.
+        const gpuBox = document.getElementById('chk-webview-gpu') as HTMLInputElement | null;
+        const gpuNote = document.getElementById('gpu-note');
+        const showGpu = (st: any) => {
+            if (!gpuBox || !st) return;
+            gpuBox.checked = !!st.enabled;
+            gpuBox.disabled = !!st.overridden;
+            const note = st.overridden ? t('storage.gpuEnv') : (st.enabled !== st.active ? t('storage.gpuPending') : '');
+            if (gpuNote) { gpuNote.textContent = note; gpuNote.style.display = note ? '' : 'none'; }
+        };
+        invoke('get_webview_gpu').then(showGpu).catch(() => {});
+        gpuBox?.addEventListener('change', async (e: any) => {
+            try {
+                showGpu(await invoke('set_webview_gpu', { enabled: e.target.checked }));
+                toast(t('storage.gpuRestart'), 'info');
+            } catch (err) {
+                e.target.checked = !e.target.checked;
+                toast(String(err), 'error');
+            }
         });
 
         // Alert enabled toggle
