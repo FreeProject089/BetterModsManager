@@ -75,6 +75,12 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
+  "src/commands/disk.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G3b): the disk benchmark (50 MB written and read) moves off the main thread here; it becomes a Maintenance ticket when the migration lands"
+    }
+  },
   "src/commands/format_check.rs": {
     "spawn_blocking": {
       "count": 1,

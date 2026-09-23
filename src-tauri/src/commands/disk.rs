@@ -253,8 +253,41 @@ pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: O
     Ok(())
 }
 
+/// The disk benchmark, off the main thread.
+///
+/// It was a plain (sync) command, and in Tauri v2 a sync command runs on the main thread: 50 MB
+/// written and fsynced per disk, at every start with auto-calibration on, with the window
+/// frozen for the duration (PLAN-BMM-RESOURCES-2026.md §0.2, points 2 to 4).
 #[tauri::command]
-pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
+pub async fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
+    tauri::async_runtime::spawn_blocking(move || benchmark_disk_blocking(mount_point))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Open for reading WITHOUT the OS cache, so a read benchmark reads the disk. The file was just
+/// written: an ordinary open reads it back from RAM, which is how the old read figure measured
+/// memory and reported several GB/s for a spinning disk.
+fn open_uncached(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut o = std::fs::OpenOptions::new();
+    o.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
+        o.custom_flags(FILE_FLAG_NO_BUFFERING);
+    }
+    o.open(path)
+}
+
+/// A buffer whose start is aligned to `align` bytes (unbuffered I/O needs sector alignment).
+pub(crate) fn aligned_buffer(len: usize, align: usize) -> (Vec<u8>, usize) {
+    let v = vec![0u8; len + align];
+    let off = (align - (v.as_ptr() as usize % align)) % align;
+    (v, off)
+}
+
+fn benchmark_disk_blocking(mount_point: String) -> Result<BenchmarkResult, String> {
     use std::io::{Write, Read};
     use std::time::Instant;
 
@@ -323,14 +356,16 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
         0.0
     };
 
-    // ── Read benchmark ──
+    // ── Read benchmark ── (uncached: see open_uncached; 1 MiB chunks and a 4 KiB-aligned buffer
+    // satisfy the sector alignment unbuffered reads require)
     let read_start = Instant::now();
     {
-        let mut file = std::fs::File::open(&test_file)
+        let mut file = open_uncached(&test_file)
             .map_err(|e| format!("Failed to open test file: {}", e))?;
-        let mut buf = vec![0u8; chunk_size];
+        let (mut raw, off) = aligned_buffer(chunk_size, 4096);
+        let buf = &mut raw[off..off + chunk_size];
         for _ in 0..iterations {
-            file.read_exact(&mut buf)
+            file.read_exact(buf)
                 .map_err(|e| format!("Read error: {}", e))?;
         }
     }
@@ -473,5 +508,42 @@ mod tests {
         let info = check_disk_space(local.to_string_lossy().to_string())
             .expect("a local path must still resolve");
         assert!(info.total_bytes > 0);
+    }
+}
+
+#[cfg(test)]
+mod bench_tests {
+    use super::*;
+
+    #[test]
+    fn the_read_buffer_is_sector_aligned_whatever_the_allocator_gives() {
+        for len in [4096usize, 1 << 20, 3 * 4096] {
+            let (v, off) = aligned_buffer(len, 4096);
+            assert_eq!((v.as_ptr() as usize + off) % 4096, 0);
+            assert!(off + len <= v.len());
+        }
+    }
+
+    #[test]
+    fn an_uncached_read_returns_the_bytes_written() {
+        use std::io::{Read, Write};
+        let p = std::env::temp_dir().join(format!("bmm-uncached-{}.bin", std::process::id()));
+        let data: Vec<u8> = (0..(2usize << 20)).map(|i| (i % 253) as u8).collect();
+        { let mut f = std::fs::File::create(&p).unwrap(); f.write_all(&data).unwrap(); f.sync_all().unwrap(); }
+        let mut f = open_uncached(&p).expect("an unbuffered open of a local file works");
+        let (mut raw, off) = aligned_buffer(1 << 20, 4096);
+        let mut got = Vec::new();
+        for _ in 0..2 { let b = &mut raw[off..off + (1 << 20)]; f.read_exact(b).unwrap(); got.extend_from_slice(b); }
+        assert_eq!(got, data, "what the benchmark reads is what it wrote");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn the_benchmark_measures_and_cleans_up() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.components().next().map(|c| c.as_os_str().to_string_lossy().to_string() + "\\").unwrap_or_default();
+        let r = benchmark_disk_blocking(root).expect("the temp drive can be benchmarked");
+        assert!(r.write_mb_s > 0.0 && r.read_mb_s > 0.0);
+        assert!(r.suggested_limit >= 10);
     }
 }

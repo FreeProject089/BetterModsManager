@@ -3,6 +3,7 @@
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
 import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } from '../../core/api.js';
+import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
@@ -372,7 +373,11 @@ export async function resetStorageLimits() {
 }
 /** Run benchmarks for all disks currently in use by profiles */
 export async function runAutoBenchmarks(disksList, isBoot = false) {
-    const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0);
+    // At start-up, only the disks never measured or measured more than 30 days ago
+    // (disk-calib.ts); the button measures every disk whenever it is pressed.
+    const calib = readCalibMap();
+    const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0)
+        .filter(d => !isBoot || calibrationDue(calib, d.mount_point));
     if (inUseDisks.length === 0)
         return;
     if (!isBoot)
@@ -382,6 +387,7 @@ export async function runAutoBenchmarks(disksList, isBoot = false) {
         try {
             const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
             await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
+            writeCalibMap(withCalibrated(readCalibMap(), disk.mount_point));
             successCount++;
         }
         catch (e) {
