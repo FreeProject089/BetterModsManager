@@ -21,7 +21,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // `tmp` is scratch space — and it already holds a fix_encoding script from a previous round of
 // this same problem, which is the best argument for having this gate at all.
-const SKIP = new Set(['node_modules', '.git', 'target', 'dist', '.Assets', 'BCW', 'BetterInstaller', 'BMM Docs', 'tmp']);
+// `.claude`: agent worktrees live in .claude/worktrees/<name>, a full second checkout; its copy
+// of THIS script carries the mojibake examples on purpose and failed `npm run build` (the SELF
+// exemption below only matches the path at the root).
+const SKIP = new Set(['node_modules', '.git', 'target', 'dist', '.Assets', 'BCW', 'BetterInstaller', 'BMM Docs', 'tmp', '.claude']);
 // This file necessarily quotes the mangled sequences it looks for.
 const SELF = 'scripts\\check-encoding.mjs';
 const EXT = /\.(ts|mjs|cjs|js|json|md|css|html|rs|yml|yaml)$/i;
