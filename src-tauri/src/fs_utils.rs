@@ -511,6 +511,42 @@ pub(crate) fn scan_parallelism() -> jwalk::Parallelism {
     }
 }
 
+/// Every entry under `root` (the root itself included, at depth 0), walked with the preset's
+/// fan-out (`scan_parallelism`). Never a walk cut short by a busy pool.
+///
+/// jwalk on a rayon pool waits `busy_timeout` for the pool to pick its walk up, and when it
+/// does not (the global pool held by a Smart-I/O-off deploy's `par_iter`, or the caller itself
+/// a worker of that pool) it gives up: the root, then `ThreadpoolBusy` in place of the whole
+/// tree. Callers used to `.filter_map(ok)` that away, so a saturated pool answered "this mod
+/// has no files", and `disable_mod` deletes `installed_files ∪ list_mod_files`.
+///
+/// So a busy walk is thrown away whole and done again `Serial`, on the calling thread, which
+/// needs no pool and cannot be busy. A pool that answers (the usual case) walks exactly as
+/// before, so Balanced's results and speed are unchanged; a saturated one costs the timeout
+/// plus a one-thread walk, and returns the same list.
+///
+/// An entry that cannot be read (a permission, a file gone mid-walk) is still skipped, as it
+/// always was: that is a fact about the disk, not about how busy the pool is.
+pub(crate) fn walk_entries(root: &Path, sort: bool) -> Vec<jwalk::DirEntry<((), ())>> {
+    walk_entries_with(root, sort, scan_parallelism())
+}
+
+fn walk_entries_with(root: &Path, sort: bool, parallelism: jwalk::Parallelism) -> Vec<jwalk::DirEntry<((), ())>> {
+    let serial = matches!(parallelism, jwalk::Parallelism::Serial);
+    let mut out = Vec::new();
+    for entry in WalkDir::new(root).sort(sort).parallelism(parallelism) {
+        match entry {
+            Ok(e) => out.push(e),
+            Err(e) if e.is_busy() && !serial => {
+                tracing::warn!("rayon pool busy, walking {:?} on the calling thread instead", root);
+                return walk_entries_with(root, sort, jwalk::Parallelism::Serial);
+            }
+            Err(_) => {}
+        }
+    }
+    out
+}
+
 /// Get all file paths (relative) inside a mod, recursively.
 ///
 /// A mod is a FOLDER or an ARCHIVE, and this answers for both. It used to answer only for
@@ -534,12 +570,7 @@ pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
             .collect());
     }
     let mut files = Vec::new();
-    for entry in WalkDir::new(mod_folder)
-        .parallelism(scan_parallelism())
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
+    for entry in walk_entries(mod_folder, false).into_iter().filter(|e| e.file_type().is_file()) {
         let path = entry.path();
         let rel = path
             .strip_prefix(mod_folder)
@@ -1048,6 +1079,130 @@ mod list_mod_files_tests {
             s
         };
         assert_eq!(norm(list_mod_files(&folder).unwrap()), norm(list_mod_files(&zip).unwrap()));
+    }
+
+    /// Every thread of the GLOBAL rayon pool held until the guard drops (a panic drops it too).
+    /// What a Smart-I/O-off deploy's `par_iter` does to the pool for as long as it copies.
+    struct Held(std::sync::Arc<std::sync::atomic::AtomicBool>);
+    impl Drop for Held {
+        fn drop(&mut self) { self.0.store(true, std::sync::atomic::Ordering::SeqCst); }
+    }
+
+    /// The tests here that hold the global pool, and the one that needs it free, take turns:
+    /// run side by side, one test's hold is the other's busy pool.
+    static POOL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    fn pool_turn() -> std::sync::MutexGuard<'static, ()> {
+        POOL_TURN.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    fn hold_the_global_pool() -> Held {
+        use std::sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc};
+        let n = rayon::current_num_threads();
+        let release = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        for _ in 0..n {
+            let (r, tx) = (release.clone(), tx.clone());
+            rayon::spawn(move || {
+                let _ = tx.send(());
+                while !r.load(Ordering::SeqCst) { std::thread::sleep(std::time::Duration::from_millis(5)); }
+            });
+        }
+        let held = Held(release);
+        for _ in 0..n {
+            rx.recv_timeout(std::time::Duration::from_secs(60)).expect("every global thread is holding");
+        }
+        held
+    }
+
+    /// Three levels, a dozen files: enough that a walk cut short cannot pass for a whole one.
+    fn nested_mod(name: &str) -> (std::path::PathBuf, Vec<String>) {
+        let dir = std::env::temp_dir().join(name).join("CoolMod");
+        let _ = fs::remove_dir_all(std::env::temp_dir().join(name));
+        let mut want = Vec::new();
+        for a in ["Data", "Textures", "Scripts"] {
+            for b in ["x", "y"] {
+                fs::create_dir_all(dir.join(a).join(b)).unwrap();
+                fs::write(dir.join(a).join(b).join("f.bin"), b"1").unwrap();
+                want.push(format!("{a}/{b}/f.bin"));
+            }
+            fs::write(dir.join(a).join("top.txt"), b"2").unwrap();
+            want.push(format!("{a}/top.txt"));
+        }
+        want.sort();
+        (dir, want)
+    }
+
+    fn norm(v: Vec<std::path::PathBuf>) -> Vec<String> {
+        let mut s: Vec<String> = v.into_iter().map(|p| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        s.sort();
+        s
+    }
+
+    /// THE ONE for the busy pool. jwalk gives up on a pool that does not answer within its
+    /// 1 s busy timeout and yields `ThreadpoolBusy` in place of the tree; `.filter_map(ok)`
+    /// dropped it, so a saturated pool answered "this mod has no files". `disable_mod` deletes
+    /// `installed_files ∪ this`: a short list here is files left behind in the game folder.
+    /// The full list, or an error that says so. Never a short list.
+    #[test]
+    fn a_saturated_global_pool_still_gets_the_whole_list() {
+        let (dir, want) = nested_mod("bmm_lmf_busy");
+        let _turn = pool_turn();
+        assert_eq!(norm(list_mod_files(&dir).unwrap()), want, "baseline, pool free");
+        let held = hold_the_global_pool();
+        let got = list_mod_files(&dir);
+        drop(held);
+        match got {
+            Ok(v) => assert_eq!(norm(v), want, "a busy pool must not shorten the list"),
+            Err(e) => assert!(e.to_string().contains("busy"), "an error must say why: {e}"),
+        }
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_busy"));
+    }
+
+    /// The balanced walk, as it was written before `walk_entries`: jwalk's default pool,
+    /// errors dropped.
+    fn old_walk(root: &std::path::Path, sort: bool) -> Vec<(usize, std::path::PathBuf)> {
+        jwalk::WalkDir::new(root).sort(sort)
+            .parallelism(jwalk::Parallelism::RayonDefaultPool { busy_timeout: std::time::Duration::from_secs(1) })
+            .into_iter().filter_map(|e| e.ok()).map(|e| (e.depth, e.path())).collect()
+    }
+    fn balanced(root: &std::path::Path, sort: bool) -> Vec<(usize, std::path::PathBuf)> {
+        super::walk_entries_with(root, sort, jwalk::Parallelism::RayonDefaultPool { busy_timeout: std::time::Duration::from_secs(1) })
+            .into_iter().map(|e| (e.depth, e.path())).collect()
+    }
+
+    /// Balanced, pool free: entry for entry and in the same order, what the old walk gave.
+    #[test]
+    fn a_free_pool_walks_exactly_as_before() {
+        let (dir, _) = nested_mod("bmm_lmf_same");
+        let _turn = pool_turn();
+        for sort in [false, true] {
+            let (old, new) = (old_walk(&dir, sort), balanced(&dir, sort));
+            if sort {
+                assert_eq!(new, old, "sorted: same entries, same order");
+            } else {
+                let (mut o, mut n) = (old, new);
+                o.sort();
+                n.sort();
+                assert_eq!(n, o, "unsorted: same entries");
+            }
+        }
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_same"));
+    }
+
+    /// The mapper's walk (sorted, every depth), the balanced parallelism named explicitly so
+    /// the preset of the test process cannot make it Serial: under a held pool it comes back
+    /// whole and in the order a free pool gives, so the tree it builds is the same tree.
+    #[test]
+    fn the_mapper_walk_under_a_held_pool_is_the_free_pool_walk() {
+        let (dir, _) = nested_mod("bmm_lmf_mapper");
+        let _turn = pool_turn();
+        let free = balanced(&dir, true);
+        assert!(free.len() > 12, "the fixture is not trivial: {}", free.len());
+        let held = hold_the_global_pool();
+        let busy = balanced(&dir, true);
+        drop(held);
+        assert_eq!(busy, free);
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_mapper"));
     }
 }
 

@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use crate::state::AppState;
 use tauri::State;
 use std::fs;
-use jwalk::WalkDir;
 use std::collections::HashMap;
 use crate::error::AppError;
 use tracing::{info, error};
@@ -68,12 +67,10 @@ pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppEr
             return Err(AppError::NotFound("Le dossier n'existe pas ou n'est pas un répertoire".to_string()));
         }
         
-        // 1. Multi-threaded walk to collect all items
-        let mut entries: Vec<_> = WalkDir::new(root)
-            .sort(true)
-            .parallelism(crate::fs_utils::scan_parallelism())
+        // 1. Multi-threaded walk to collect all items (whole even when the pool is busy, see
+        //    fs_utils::walk_entries: a busy pool used to show the mod as an empty tree)
+        let mut entries: Vec<_> = crate::fs_utils::walk_entries(root, true)
             .into_iter()
-            .filter_map(|e| e.ok())
             .filter(|e| e.depth > 0)
             .collect();
         ticket.checkpoint().map_err(|_| cancelled())?;

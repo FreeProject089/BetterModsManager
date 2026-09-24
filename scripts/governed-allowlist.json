@@ -143,12 +143,6 @@
       "why": "G3a governed 7 (enable_mod / disable_mod hold a Deploy ticket around the worker, disable_mods_for_profiles a Deploy ticket in unapply_mod_stacked, add_mod an Install ticket, download_mod a Download ticket, install_from_modlist Install + Download): they only move blocking work off the async runtime. G3b governed 4: scan_mods_folder (Scan ticket, checkpoint per entry), verify_integrity, get_mod_integrity and update_mod_hashes (Hash ticket, checkpoint per file; the last two hashed on the async runtime's worker before). Exempt 1: remove_mod's delete, a user click the UI awaits; Maintenance is background and would wait behind every deploy and a whole game session (one remove_dir_all, no copy loop)"
     }
   },
-  "src/commands/net.rs": {
-    "thread::spawn": {
-      "count": 1,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
-    }
-  },
   "src/commands/plugin_assets.rs": {
     "fs::copy": {
       "count": 2,
