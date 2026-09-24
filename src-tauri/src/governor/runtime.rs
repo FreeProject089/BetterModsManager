@@ -483,7 +483,8 @@ mod tests {
         assert!(!g.apply_thread_priority, "unit tests keep every other pool at normal priority");
         g.apply_thread_priority = true; // this instance only: what the app does
         assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Deploy), ThreadPriority::Normal);
-        assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Hash), ThreadPriority::Background);
+        assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Hash), ThreadPriority::BelowNormal);
+        assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Maintenance), ThreadPriority::Background);
         assert_eq!(g.pool_priority(Preset::Silent, OpKind::Deploy), ThreadPriority::Background);
         assert_eq!(g.pool_priority(Preset::Max, OpKind::Hash), ThreadPriority::Normal);
         #[cfg(windows)]
@@ -492,7 +493,7 @@ mod tests {
             // SAFETY: pseudo-handle of the calling (pool) thread.
             let prio_on = |g: &Governor, k: OpKind| g.pool(k).install(|| unsafe { GetThreadPriority(GetCurrentThread()) });
             assert_eq!(prio_on(&g, OpKind::Deploy), 0, "Balanced deploy threads run at normal");
-            assert!(prio_on(&g, OpKind::Hash) < 0, "Balanced hash threads run in background mode");
+            assert!(prio_on(&g, OpKind::Hash) < 0, "Balanced hash threads run below normal");
             g.configure(ResourcesConfig { preset: Preset::Silent, ..Default::default() });
             assert!(prio_on(&g, OpKind::Deploy) < 0, "Quiet: the rebuilt pool runs in background mode");
         }

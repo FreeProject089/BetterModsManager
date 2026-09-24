@@ -251,7 +251,15 @@ fn preset_policy(preset: Preset, op: OpKind, t: &Target) -> IoPolicy {
             parallel: if t.on_system_drive { 1 } else { 2 },
             buffer_kib: 1024, io_priority: IoPriority::Normal,
             pause_every_mib: Some(16), pause_us: 150,
-            thread_priority: if op == OpKind::Hash || op == OpKind::Maintenance { ThreadPriority::Background } else { ThreadPriority::Normal },
+            // Hashing below normal, not background mode: background mode also drops the thread's
+            // I/O priority to very low, and a verification the user started by hand waited behind
+            // every other read on a busy disk (owner decision, Sept 24). Maintenance is never
+            // waited on, so it keeps background mode.
+            thread_priority: match op {
+                OpKind::Hash => ThreadPriority::BelowNormal,
+                OpKind::Maintenance => ThreadPriority::Background,
+                _ => ThreadPriority::Normal,
+            },
         },
     }
 }
