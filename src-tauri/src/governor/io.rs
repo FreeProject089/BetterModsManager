@@ -41,27 +41,34 @@ impl RateLimiter {
         *self.rate.lock().unwrap_or_else(|p| p.into_inner()) = rate_bytes_s;
     }
 
+    /// Take `n` bytes' worth of tokens if they are there (None: go ahead), or say how long to
+    /// wait before asking again. Unlimited always answers None.
+    pub fn try_take(&self, n: u64) -> Option<Duration> {
+        let rate = *self.rate.lock().unwrap_or_else(|p| p.into_inner());
+        let rate = rate.filter(|r| *r > 0)?;
+        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let now = Instant::now();
+        let refill = now.duration_since(st.1).as_secs_f64() * rate as f64;
+        st.0 = (st.0 + refill).min(rate as f64); // at most one second of burst
+        st.1 = now;
+        if st.0 >= n as f64 || (st.0 >= rate as f64 * 0.999 && n as f64 > rate as f64) {
+            // Enough tokens, or a chunk bigger than a whole second's budget: let it go and
+            // go into debt, so a huge buffer on a slow limit still makes progress.
+            st.0 -= n as f64;
+            return None;
+        }
+        Some(Duration::from_secs_f64(((n as f64 - st.0) / rate as f64).max(0.0005)).min(Duration::from_millis(250)))
+    }
+
     /// Block until `n` bytes may pass. Unlimited returns at once.
     pub fn acquire(&self, n: u64) {
-        loop {
-            let rate = *self.rate.lock().unwrap_or_else(|p| p.into_inner());
-            let Some(rate) = rate.filter(|r| *r > 0) else { return };
-            let wait = {
-                let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-                let now = Instant::now();
-                let refill = now.duration_since(st.1).as_secs_f64() * rate as f64;
-                st.0 = (st.0 + refill).min(rate as f64); // at most one second of burst
-                st.1 = now;
-                if st.0 >= n as f64 || (st.0 >= rate as f64 * 0.999 && n as f64 > rate as f64) {
-                    // Enough tokens, or a chunk bigger than a whole second's budget: let it go and
-                    // go into debt, so a huge buffer on a slow limit still makes progress.
-                    st.0 -= n as f64;
-                    return;
-                }
-                Duration::from_secs_f64(((n as f64 - st.0) / rate as f64).max(0.0005))
-            };
-            std::thread::sleep(wait.min(Duration::from_millis(250)));
-        }
+        while let Some(wait) = self.try_take(n) { std::thread::sleep(wait); }
+    }
+
+    /// `acquire` for async code: waits on a timer, never parks the runtime's thread (the
+    /// repository sync runs on the async runtime, next to the local API).
+    pub async fn acquire_async(&self, n: u64) {
+        while let Some(wait) = self.try_take(n) { tokio::time::sleep(wait).await; }
     }
 }
 
@@ -95,6 +102,11 @@ pub fn copy_file_governed(src: &Path, dst: &Path, policy: &IoPolicy, limiter: &R
     let result = (|| -> Result<u64, CopyError> {
         let mut input = std::fs::File::open(src)?;
         let mut output = std::fs::File::create(dst)?;
+        // Low I/O priority: the per-handle hint on both ends (advisory; ignored by SMB shares).
+        if policy.io_priority == super::config::IoPriority::Low {
+            super::win::set_low_io_priority(&input);
+            super::win::set_low_io_priority(&output);
+        }
         let mut buf = vec![0u8; (policy.buffer_kib as usize) * 1024];
         let every = policy.pause_every_mib.map(|m| (m as u64) << 20);
         let mut since_pause = 0u64;
@@ -223,6 +235,35 @@ mod tests {
         let n = h.join().unwrap();
         assert_eq!(n, 6 << 20);
         assert_eq!(std::fs::read(&src).unwrap(), std::fs::read(&dst).unwrap());
+    }
+
+    #[test]
+    fn a_low_priority_copy_writes_the_same_bytes() {
+        let d = scratch("lowio");
+        let src = file_of(&d, "s", 2 << 20);
+        let dst = d.join("d");
+        let p = IoPolicy { io_priority: IoPriority::Low, ..policy(256) };
+        copy_file_governed(&src, &dst, &p, &RateLimiter::new(None), None).unwrap();
+        assert_eq!(std::fs::read(&src).unwrap(), std::fs::read(&dst).unwrap());
+    }
+
+    #[test]
+    fn the_async_budget_holds_the_same_rate_without_parking_the_thread() {
+        let lim = RateLimiter::new(Some(1 << 20)); // 1 MiB/s, one second of burst
+        assert!(lim.try_take(1 << 20).is_none(), "the burst passes at once");
+        assert!(lim.try_take(512 << 10).is_some(), "then the bucket is empty and says how long to wait");
+        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        let start = Instant::now();
+        // A second future on the same thread keeps running while the first waits for tokens.
+        let ticks = rt.block_on(async {
+            let mut ticks = 0u32;
+            let other = async { for _ in 0..5 { tokio::time::sleep(Duration::from_millis(20)).await; ticks += 1; } };
+            tokio::join!(lim.acquire_async(256 << 10), other);
+            ticks
+        });
+        assert_eq!(ticks, 5);
+        assert!(start.elapsed() >= Duration::from_millis(150), "a quarter MiB at 1 MiB/s waits about 250 ms");
+        assert!(RateLimiter::new(None).try_take(u64::MAX).is_none(), "unlimited never waits");
     }
 
     #[test]

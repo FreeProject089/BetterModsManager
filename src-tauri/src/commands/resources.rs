@@ -33,6 +33,8 @@ pub struct ResourcesStatus {
     pub task: Option<TaskPresetView>,
     pub game_active: bool,
     pub game_manual: Manual,
+    /// The manual list of executables that count as a game (beside the profiles' folders).
+    pub game_exes: Vec<String>,
     pub tickets: Vec<TicketView>,
 }
 
@@ -54,6 +56,7 @@ pub fn status() -> ResourcesStatus {
         }),
         game_active,
         game_manual,
+        game_exes: g.config().game_exes,
         tickets: g.queue().snapshot(),
     }
 }
@@ -105,6 +108,22 @@ pub fn resources_game_mode(mode: String) -> Result<(), String> {
     let m: Manual = parse("game mode", &mode)?;
     global().set_game_manual(m);
     Ok(())
+}
+
+/// Replace the manual game list (executable names or full paths), validated and bounded by
+/// `ResourcesConfig::set_game_exes`. Detection (governor/procs.rs) reads it at its next poll.
+/// Returns the list as stored.
+#[tauri::command]
+pub fn resources_set_game_exes(state: State<AppState>, exes: Vec<String>) -> Result<Vec<String>, String> {
+    let cfg = {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        data.resources.set_game_exes(&exes)?;
+        data.resources.clone()
+    };
+    let stored = cfg.game_exes.clone();
+    global().configure(cfg);
+    state.save().map_err(|e| e.to_string())?;
+    Ok(stored)
 }
 
 /// "pause_all" | "resume_all" | "pause" | "resume" | "cancel" (the last three need `id`).

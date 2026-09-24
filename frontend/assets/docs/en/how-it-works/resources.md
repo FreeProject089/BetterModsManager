@@ -37,8 +37,8 @@ Three ideas carry the whole design:
   slots, and what pause and cancel reach.
 - **A policy per kind and per disk.** How fast, with what buffer, how many at once: resolved from
   the preset and your per-disk rules, then clamped into hard bounds nothing can cross.
-- **A speed budget per disk.** A MB/s limit is a token bucket shared by every copy writing to that
-  disk, so two parallel copies share the limit instead of doubling it.
+- **A speed budget per disk.** A MB/s limit is a token bucket shared by everything writing to
+  that disk, so two parallel copies share the limit instead of doubling it.
 
 The ten kinds are `deploy`, `install`, `backup`, `extract`, `compress`, `scan`, `hash`,
 `download`, `image` and `maintenance`. They are the names the dashboard shows and the keys the
@@ -58,6 +58,8 @@ a choice so much as a state:
 | Deploy: one file at a time, or in parallel | one at a time | parallel, but one at a time when the game or backup folder is on the system drive | parallel, but one at a time on a hard disk |
 | Copy buffer | 256 KiB | 1 MiB | 4 MiB |
 | Short pause while copying | 150 µs every 16 MiB | 150 µs every 16 MiB | none |
+| Priority of the kind's threads | background mode | normal · hashing and maintenance: background mode | normal |
+| I/O priority of the files a copy opens | low | normal | normal |
 | Folder walks (scans) | on one thread | as before | as before |
 
 On a disk with a MB/s limit, Quiet and Balanced copy in 128 KiB chunks and let the limit do the
@@ -153,18 +155,30 @@ disks. At most 64 disks can carry rules.
 
 | Column | Acts on |
 |---|---|
-| **MB/s** | Copies BMM makes itself, for the disk being **written to**: deploying and restoring files, backing up originals, copying a mod folder in on install, and image copies |
-| **Buffer KiB** | The same copies: the chunk size they read and write |
+| **MB/s** | What that kind writes to the disk, paced on the disk being **written to**. BMM's own copies: deploying and restoring files, backing up originals, copying a mod folder in on install, image copies, a repository export's file copies. **Extraction**, every format, on what it writes: zip, tar and 7z as the bytes stream out, rar once each file is out (its library writes a file in one call). The **zips BMM writes** (a repository's zips, re-archiving a mod, a catalogue bundle), paid after each file on what it packed. **Repository sync and modpack downloads**, as the chunks arrive |
+| **Buffer KiB** | The chunk size BMM's own copies read and write, and the write buffer of each file a zip extraction creates (never larger than the file itself) |
 | **At once** | Deploys: when the value for the game folder's disk (Deploy) or for the backup folder's disk (Backup) is 1, a deploy copies one file at a time; above 1 it uses the Deploy thread pool, whose size the preset sets |
-| **Priority** | Stored and resolved like the others, and shown in the table |
+| **Priority** | *Low* sets the Windows I/O priority hint on the files BMM's own copies open (the file read and the file written) and on each file a zip extraction creates. NTFS on a local disk honours it; network shares and most cloud drives ignore it |
 
-!!! warning "Two limits worth knowing before you fill the table in"
-    Extracting, compressing, scanning, hashing and downloading do not copy through the governed
-    copy. For those rows, a MB/s or buffer value is stored and displayed but slows nothing: what
-    the governor controls for them is their slots, their thread pool and their checkpoints.
+A MB/s set for **the whole disk** (*this disk, all operations*, the number on the disk's card) is
+one budget, shared by every kind that inherits it. A MB/s set for **one operation** (*this disk,
+this operation* or *all disks, this operation*) is a budget of its own on that disk: a 5 MB/s
+limit on downloads does not slow a deploy to the same disk, and the deploy does not eat the
+download's 5 MB/s.
 
-    The **Priority** column is not yet passed to Windows when BMM opens a file, in this version.
-    Setting it to *low* changes the table, not the disk.
+A cell whose column acts on nothing for that operation is **greyed out**, and hovering it says so,
+rather than taking a value that would change nothing.
+
+!!! warning "What the table does not reach yet"
+    - **Scan** and **Hash** are greyed out whole. A scan walks folders and moves no bytes; hashing
+      reads files from a dozen places in BMM that do not go through one loop yet. What the
+      governor controls for them is their slots, their thread pool, its priority and their
+      checkpoints.
+    - **Download**: a mod downloaded from a link (the Library's download, a modlist install) and
+      a plugin install are not paced by the MB/s yet; repository sync and modpack downloads are.
+      The buffer and the priority are greyed out: a download is written as the network delivers it.
+    - **Compress**: the MB/s acts on the zip writing; the buffer and the priority act only on a
+      repository export's file copies, not on the zip writer itself.
 
 ### The hard bounds
 
@@ -209,8 +223,9 @@ sequenceDiagram
     Note over K,D: the two copies together stay at 40 MB/s
 ```
 
-Every copy to a disk draws from that disk's bucket. It refills at the MB/s you set and holds at
-most one second's worth, so a burst cannot run ahead of the limit for long. A chunk bigger than a
+Every copy to a disk draws from that disk's bucket (and so do extraction, the zips BMM writes and
+repository and modpack downloads, see [the table](#what-each-column-acts-on)). It refills at the
+MB/s you set and holds at most one second's worth, so a burst cannot run ahead of the limit for long. A chunk bigger than a
 whole second's budget is let through and paid back afterwards, so a large buffer on a slow limit
 still moves.
 
@@ -243,15 +258,32 @@ You set it in the dashboard, with the same three choices a scheduled task has:
 | **Force on** (`on`) | on, whatever is running |
 | **Force off** (`off`) | off, whatever is running |
 
-!!! warning "Automatic detection is not connected yet"
-    The rules for detection are written and tested: a game is an executable under one of your
-    profiles' game folders, or one you list, compared without regard to case; game mode starts at
-    once and ends after **30 seconds** without the game, so a launcher that restarts it or a
-    loading screen that swaps processes does not flip BMM back and forth.
+### How detection works
 
-    What this version does not have yet is the part that lists running programs and feeds them to
-    those rules. Until it does, **Detect it** never turns game mode on by itself. Use **Force on**
-    before you play, or have a scheduled task do it (below).
+With **Detect it**, BMM looks every **5 seconds**. It lists the programs running (one process
+list, kept and refreshed, reading each program's path only the first time it sees it) and counts a
+game when a program's executable is:
+
+- anywhere under **one of your profiles' game folders** (`D:\Games\Skyrim\SkyrimSE.exe` for a
+  profile whose game folder is `D:\Games\Skyrim`; `D:\Games\SkyrimTools\x.exe` is not under it);
+- in the list **Games BMM watches for**, folded under the game mode choice on the card: an
+  executable name (`eldenring.exe`, wherever it runs) or a full path, one per line, 64 at most.
+
+BMM itself never counts, even kept inside a game folder, and a game folder that is a whole drive
+(`C:\`) counts for nothing: every program on it would be a game.
+
+It also asks Windows whether a program is running **in exclusive full screen with Direct3D**,
+which counts as a game even in no list. Games in a borderless window do not show up that way; the
+two lists are what catch them.
+
+The comparison ignores case. Game mode starts at the first sighting and ends after
+**30 seconds** without the game, so a launcher that restarts it or a loading screen that swaps
+processes does not flip BMM back and forth. A profile you save or a list you edit counts at the
+next look. When it starts or ends, the preset in force, the thread pools and the paused background
+work follow at once.
+
+With **Force on** or **Force off**, and when no profile has a game folder and the list is empty,
+BMM does not list programs at all.
 
 ### Who wins
 
@@ -323,7 +355,7 @@ PC is about one busy core.
 
 | From | May change |
 |---|---|
-| The Storage Manager | everything: the preset, game mode, the queue, every rule |
+| The Storage Manager | everything: the preset, game mode and the games it watches for, the queue, every rule |
 | A scheduled task | with the task permission **Resources**: the preset (for good or for the task), game mode, pausing or resuming the whole queue. Imported tasks arrive without it |
 | A plugin or script with an API token | `resources.write`: a named preset, game mode, pause and resume; **cancelling** an operation also needs `mods.write`, because it throws work away |
 | The admin token (API, MCP, CLI) | the above, plus fine-grained rules through `POST /api/resources/io-rule`, which no plugin token can call whatever its scopes |
@@ -338,8 +370,15 @@ The routes, tools and commands are listed in the [API reference](doc-page:refere
 
 The governor lives in `src-tauri/src/governor/`: `config.rs` (presets, rules, bounds, pure),
 `queue.rs` (tickets and slots), `io.rs` (the governed copy and the per-disk bucket),
-`game_mode.rs` (the detection rules, pure), `runtime.rs` (the one instance every call site asks)
-and `telemetry.rs` (the sampler).
+`game_mode.rs` (the detection rules, pure), `procs.rs` (the process sampler that feeds them, every
+5 s), `win.rs` (thread priority, the I/O priority hint, the full-screen signal), `runtime.rs` (the
+one instance every call site asks) and `telemetry.rs` (the dashboard's sampler).
+
+Extraction reaches the governor through a hook: `archive.rs` is compiled as is by the benchmarks,
+so it cannot name the governor, and the app lends it an `ExtractControl` at startup
+(`commands/mod_archive.rs`), which holds the ticket and the destination disk's budget, buffer and
+priority. A byte loop outside the governed copy asks `runtime::global().limiter(kind, path)` for
+its budget.
 
 A new place that starts heavy work (`par_iter`, `thread::spawn`, `spawn_blocking`, `fs::copy`,
 `fs_extra::`, `ThreadPoolBuilder`, `update_mmap`, `io::copy`) must go through `runtime::global()` or be listed with a reason in

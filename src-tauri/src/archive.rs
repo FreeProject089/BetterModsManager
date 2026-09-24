@@ -186,15 +186,53 @@ pub trait ExtractControl: Sync {
     fn add_bytes(&self, _read: u64, _written: u64) {}
     /// Run the parallel pass. The default runs it on the current rayon pool.
     fn run_parallel(&self, f: &(dyn Fn() -> std::io::Result<()> + Sync)) -> std::io::Result<()> { f() }
+    /// `bytes` are being written into the destination (zip, tar, 7z: as they stream; rar: once
+    /// an entry is out, its crate writes it in one call). The control may block here to hold
+    /// a MB/s limit on the destination disk. Default: never waits.
+    fn pace(&self, _bytes: u64) {}
+    /// The write buffer for a zip entry, bytes. Default: `BufWriter::new`'s 8 KiB, as before.
+    fn write_buffer(&self) -> usize { 8 * 1024 }
+    /// A destination file was just created (zip entries): the control may set a per-handle
+    /// hint on it, such as a low I/O priority. Default: nothing.
+    fn on_file(&self, _file: &std::fs::File) {}
+}
+
+/// A writer that tells the control about every write before it happens (`pace`).
+struct PacedWrite<'a, W> {
+    inner: W,
+    control: &'a dyn ExtractControl,
+}
+
+impl<W: std::io::Write> std::io::Write for PacedWrite<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.control.pace(buf.len() as u64);
+        self.inner.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> { self.inner.flush() }
+}
+
+/// A reader whose output is what lands in the destination (a tar stream after
+/// decompression, a 7z entry): tells the control about every block it hands over (`pace`).
+struct PacedRead<'a, R> {
+    inner: R,
+    control: &'a dyn ExtractControl,
+}
+
+impl<R: Read> Read for PacedRead<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.control.pace(n as u64);
+        Ok(n)
+    }
 }
 
 /// No governor: today's behaviour.
 pub struct Ungoverned;
 impl ExtractControl for Ungoverned {}
 
-/// Builds the control for one extraction of `archive` (it holds the ticket; dropping it ends
-/// the operation).
-pub type ExtractGovernor = fn(archive: &Path) -> Box<dyn ExtractControl + Send>;
+/// Builds the control for one extraction of `archive` into `dest` (it holds the ticket;
+/// dropping it ends the operation). `dest` is the disk whose MB/s, buffer and priority apply.
+pub type ExtractGovernor = fn(archive: &Path, dest: &Path) -> Box<dyn ExtractControl + Send>;
 
 static EXTRACT_GOVERNOR: std::sync::OnceLock<ExtractGovernor> = std::sync::OnceLock::new();
 
@@ -253,7 +291,7 @@ impl<R: Read> Read for CheckedReader<'_, R> {
 pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
     match EXTRACT_GOVERNOR.get() {
         Some(g) => {
-            let control = g(path);
+            let control = g(path, dest);
             extract_to_with(path, dest, &*control)
         }
         None => extract_to_with(path, dest, &Ungoverned),
@@ -306,12 +344,13 @@ fn extract_inner(
         Some(Kind::Tar) => {
             let file = std::fs::File::open(path)?;
             let r = CheckedReader { inner: file, control, since: 0, stopped };
-            tar::Archive::new(r).unpack(dest)?;
+            tar::Archive::new(PacedRead { inner: r, control }).unpack(dest)?;
         }
         Some(Kind::TarGz) => {
             let file = std::fs::File::open(path)?;
             let r = CheckedReader { inner: file, control, since: 0, stopped };
-            tar::Archive::new(flate2::read::GzDecoder::new(r)).unpack(dest)?;
+            // Paced AFTER decompression: the limit is on what is written, not on the archive.
+            tar::Archive::new(PacedRead { inner: flate2::read::GzDecoder::new(r), control }).unpack(dest)?;
         }
         Some(Kind::SevenZ) => {
             // Independent zip-slip guard: refuse the whole archive if ANY entry path
@@ -332,7 +371,8 @@ fn extract_inner(
                 if !entry.is_directory() {
                     written.lock().unwrap_or_else(|p| p.into_inner()).push(out.clone());
                 }
-                let r = sevenz_rust::default_entry_extract_fn(entry, reader, out);
+                let mut paced = PacedRead { inner: reader, control };
+                let r = sevenz_rust::default_entry_extract_fn(entry, &mut paced, out);
                 if r.is_ok() && !entry.is_directory() { control.add_bytes(0, entry.size()); }
                 r
             })
@@ -353,6 +393,8 @@ fn extract_inner(
                     let size = header.entry().unpacked_size as u64;
                     let next = header.extract_with_base(dest).map_err(io_err)?;
                     control.add_bytes(0, size);
+                    // unrar writes the entry in one call: the limit is paid once it is out.
+                    control.pace(size);
                     next
                 } else {
                     header.skip().map_err(io_err)?
@@ -417,8 +459,13 @@ fn extract_zip_parallel(
                 let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
                 let out = dest.join(&safe);
                 written.lock().unwrap_or_else(|p| p.into_inner()).push(out.clone());
-                let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
+                let f = std::fs::File::create(&out)?;
+                control.on_file(&f);
+                // No bigger than the entry: a 1 MiB buffer for a 2 KiB file is memory for nothing.
+                let cap = control.write_buffer().min((e.size() as usize).max(8 * 1024));
+                let mut w = std::io::BufWriter::with_capacity(cap, PacedWrite { inner: f, control });
                 let n = std::io::copy(&mut e, &mut w)?;
+                std::io::Write::flush(&mut w)?;
                 control.add_bytes(e.compressed_size(), n);
                 Ok(())
             },
@@ -457,7 +504,9 @@ fn extract_zip_serial<R: Read + std::io::Seek>(
                 }
             }
             written.lock().unwrap_or_else(|p| p.into_inner()).push(outpath.clone());
-            let mut outfile = std::fs::File::create(&outpath).map_err(zio)?;
+            let outfile = std::fs::File::create(&outpath).map_err(zio)?;
+            control.on_file(&outfile);
+            let mut outfile = PacedWrite { inner: outfile, control };
             let n = std::io::copy(&mut file, &mut outfile).map_err(zio)?;
             control.add_bytes(file.compressed_size(), n);
         }

@@ -86,10 +86,12 @@ tes disques et cadence les copies. Si ça saccade encore, pose un **plafond Mo/s
 disque.
 
 Si c'est le jeu qui saccade pendant que BMM travaille, choisis **Silencieux** en haut du Gestionnaire
-de Stockage, ou mets le **Mode jeu** sur **Forcer** pendant que tu joues : BMM fait alors une chose à
-la fois, doucement, et retient le calcul des empreintes de fond jusqu'à ce que tu le remettes. Le
-mode jeu ne s'active pas encore tout seul au lancement d'un jeu. Voir
-[Le gouverneur de ressources](doc-page:how-it-works/resources).
+de Stockage, ou laisse le **Mode jeu** sur **Le détecter** : BMM fait alors une chose à la fois,
+doucement, et retient le calcul des empreintes de fond tant que le jeu tourne. La détection voit un
+jeu lancé depuis le dossier de jeu d'un de tes profils, un jeu listé sous **Jeux surveillés par
+BMM**, ou un jeu en plein écran exclusif ; pour un autre, ajoute son exécutable à cette liste ou
+utilise **Forcer**. Voir
+[Le gouverneur de ressources](doc-page:how-it-works/resources#comment-marche-la-detection).
 
 À savoir : si le dossier de destination ou de sauvegarde est sur ton **disque système**, BMM réduit déjà les
 copies à un seul thread sous les presets Silencieux et Équilibré, parce que Windows lui-même a besoin
@@ -115,14 +117,14 @@ probable au moins probable :
 Un preset choisi par une tâche planifiée « pour cette tâche seulement » se termine avec la tâche, et
 au bout de 2 heures au plus même si la tâche a planté.
 
-### J'ai mis une limite en Mo/s pour les empreintes ou l'extraction et rien n'a changé
+### J'ai mis une limite en Mo/s pour les empreintes et rien n'a changé
 
-C'est normal. Dans le tableau avancé par disque, les Mo/s et le tampon agissent sur les copies que BMM
-fait lui-même : déploiement, sauvegarde des originaux, installation du dossier d'un mod, copies
-d'images. L'extraction, la compression, les analyses, les empreintes et les téléchargements gardent
-la valeur mais sont gouvernés par leurs créneaux et leur pool de threads, et la colonne **Priorité**
-n'est pas encore transmise à Windows. Voir
-[Sur quoi agit chaque colonne](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
+C'est normal : les lignes **Empreintes** et **Analyse** du tableau avancé sont grisées. Une analyse
+ne déplace aucun octet, et les empreintes lisent des fichiers depuis des endroits qui ne passent pas
+encore par une seule boucle ; les deux sont gouvernées par leurs créneaux, leur pool de threads et
+sa priorité. Les Mo/s agissent bien sur les copies de BMM, l'extraction, les zip que BMM écrit et
+les téléchargements de dépôt et de modpack, mais pas encore sur un mod téléchargé depuis un lien.
+Voir [Sur quoi agit chaque colonne](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
 ### L'activation est plus lente qu'une simple copie de fichiers
 

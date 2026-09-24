@@ -35,16 +35,17 @@ operations run at once, on how many threads, and how fast they may write.
 | **Quiet · Balanced · Everything for BMM** | The preset. **Balanced** is the default and is exactly how BMM always worked. **Quiet** does one thing at a time, gently, for while you play. **Everything for BMM** goes as fast as the disks allow |
 | **In force** | The preset actually applied right now, which game mode or a scheduled task can change for a while |
 | **BMM CPU · PC CPU · Read · Write** | Live curves, once a second, only while the card is on screen |
-| **Game mode** | **Detect it**, **Force on**, **Force off**. While it is on, BMM works as if on Quiet, and background hashing and maintenance wait until it ends. Automatic detection is not connected yet in this version: use **Force on** ([why](doc-page:how-it-works/resources#game-mode)) |
+| **Game mode** | **Detect it**, **Force on**, **Force off**. While it is on, BMM works as if on Quiet, and background hashing and maintenance wait until it ends. **Detect it** looks every 5 seconds for a game running from one of your profiles' game folders, one you list under **Games BMM watches for**, or any game in exclusive full screen, and ends game mode 30 seconds after it closes ([how](doc-page:how-it-works/resources#how-detection-works)) |
 | **What BMM is doing** | Every operation running, paused or waiting, with **Pause**, **Resume** and **Cancel**, plus **Pause all** and **Resume all** |
 | **Advanced: per disk and operation** | Rules for one disk and one kind of work (MB/s, how many at once, buffer, priority). An empty cell inherits, and its grey text says the value in force and where it comes from |
 
 !!! warning "Read what each advanced column acts on"
 
-    MB/s and the buffer act on the copies BMM makes itself (deploying, backing up originals,
-    installing a mod folder, image copies). For extraction, compression, scans, hashing and
-    downloads they are stored but slow nothing, and the **Priority** column is not passed to
-    Windows yet. Details in [the governor page](doc-page:how-it-works/resources#what-each-column-acts-on).
+    MB/s acts on BMM's own copies, on extraction, on the zips BMM writes and on repository and
+    modpack downloads; the buffer and a *low* priority act on BMM's own copies and on zip
+    extraction. A cell that acts on nothing for its operation is greyed out: the whole **Scan**
+    and **Hash** rows, for instance. A mod downloaded from a link is not paced yet. Details in
+    [the governor page](doc-page:how-it-works/resources#what-each-column-acts-on).
 
 ## Per-disk cards
 

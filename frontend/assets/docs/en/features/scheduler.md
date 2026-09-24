@@ -360,11 +360,11 @@ A night-time task that works flat out and puts everything back:
        (the task ends: the preset goes back to yours)
 ```
 
-!!! note "Game mode does not switch itself on yet"
-    **Detect it** is there, and its rules are written, but in this version nothing feeds it the
-    list of running programs, so game mode only comes on when something forces it. A task can do
-    that: `resources.gameMode` **Force on** before a launch pack starts the game, **Detect it**
-    again afterwards. See [Game mode](doc-page:how-it-works/resources#game-mode).
+!!! note "Detection or a task"
+    **Detect it** turns game mode on by itself for a game started from a profile's game folder,
+    one listed in the Storage Manager, or one in exclusive full screen. For a game it cannot see,
+    a task can force it: `resources.gameMode` **Force on** before a launch pack starts the game,
+    **Detect it** again afterwards. See [How detection works](doc-page:how-it-works/resources#how-detection-works).
 
 ## Loops & waiting
 

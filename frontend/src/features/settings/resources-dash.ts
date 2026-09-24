@@ -10,8 +10,8 @@ import { pushHistory, sparkPoints } from './resources-spark.js';
 import { renderResourcesMatrix } from './resources-matrix.js';
 
 interface Ticket { id: number; kind: string; subject: string; state: 'waiting' | 'running' | 'paused'; bytes_read: number; bytes_written: number; age_ms: number; }
-interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; tickets: Ticket[]; }
-interface Status { preset: string; effective: string; task: { preset: string; remaining_ms: number } | null; game_active: boolean; game_manual: string; tickets: Ticket[]; }
+interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; task: { preset: string; remaining_ms: number } | null; tickets: Ticket[]; }
+interface Status { preset: string; effective: string; task: { preset: string; remaining_ms: number } | null; game_active: boolean; game_manual: string; game_exes?: string[]; tickets: Ticket[]; }
 
 const PRESETS = ['silent', 'balanced', 'max'] as const;
 
@@ -61,6 +61,15 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
                 </label>
                 <span class="res-game-state" style="font-size:12px"></span>
             </div>
+            <details class="res-games" style="margin:-4px 0 12px">
+                <summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">${esc(t('res.gameExes') || 'Games BMM watches for')}</summary>
+                <div style="font-size:12px;color:var(--text-muted);margin:6px 0">${esc(t('res.gameExesHint') || "Every profile's game folder already counts, and so does any game running in exclusive full screen. Add other games here, one per line: an executable name (eldenring.exe) or a full path.")}</div>
+                <textarea class="input res-games-list" rows="3" spellcheck="false" style="width:100%;font-family:var(--font-mono, monospace);font-size:12px" placeholder="eldenring.exe">${esc((st.game_exes || []).join('\n'))}</textarea>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+                    <button type="button" class="btn btn-sm res-games-save">${esc(t('res.gameExesSave') || 'Save the list')}</button>
+                    <span class="res-games-msg" style="font-size:12px"></span>
+                </div>
+            </details>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
                 <div style="font-weight:600;font-size:13px">${esc(t('res.queue') || 'What BMM is doing')}</div>
                 <div style="display:flex;gap:6px">
@@ -112,7 +121,7 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
         set('sys', `${s.cpu_system.toFixed(0)} %`, sys, 100);
         set('rd', `${s.read_mbps.toFixed(1)} MB/s`, rd, 1);
         set('wr', `${s.write_mbps.toFixed(1)} MB/s`, wr, 1);
-        paintHead(s.effective, s.game_active, null);
+        paintHead(s.effective, s.game_active, s.task ?? null);
         paintQueue(s.tickets);
     };
 
@@ -130,6 +139,19 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
         host.querySelectorAll('.res-preset').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
     }));
     $('.res-game')?.addEventListener('change', (e) => { invoke('resources_game_mode', { mode: (e.target as HTMLSelectElement).value }).catch(() => {}); });
+    // The manual game list: detection (every 5 s) reads it at its next look.
+    $('.res-games-save')?.addEventListener('click', async () => {
+        const ta = $('.res-games-list') as HTMLTextAreaElement | null;
+        const msg = $('.res-games-msg') as HTMLElement | null;
+        const exes = (ta?.value || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+        try {
+            const stored = await (invoke('resources_set_game_exes', { exes }) as Promise<string[]>);
+            if (ta) ta.value = (stored || []).join('\n');
+            if (msg) { msg.textContent = t('res.saved') || 'Saved.'; msg.style.color = 'var(--success)'; }
+        } catch (err) {
+            if (msg) { msg.textContent = String(err); msg.style.color = 'var(--danger)'; }
+        }
+    });
     host.addEventListener('click', (e) => {
         const b = (e.target as HTMLElement).closest('.res-q, .res-q-all') as HTMLElement | null;
         if (!b) return;

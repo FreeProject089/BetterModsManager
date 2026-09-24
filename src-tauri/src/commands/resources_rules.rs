@@ -30,6 +30,38 @@ pub struct Cell {
     pub src_io: Source,
     /// The rule stored for exactly (disk, op), for the editor.
     pub own: IoRule,
+    /// Which columns act on this operation at all. A column that does not is shown disabled,
+    /// with the reason, instead of taking a value that would change nothing.
+    pub applies: Applies,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Applies {
+    pub rate: bool,
+    pub parallel: bool,
+    pub buffer: bool,
+    pub io: bool,
+}
+
+/// What each column really acts on, per operation (the doc's "What each column acts on" says
+/// the same thing in prose; keep the two together):
+///   · MB/s: every loop that moves this kind's bytes draws on the disk's budget: governed
+///     copies (install, backup, the export's copies), extraction (every format, on what it
+///     writes), zips BMM writes (repository, re-archive, catalogue bundle), repository sync and
+///     modpack downloads. Scanning moves no bytes; hashing reads from a dozen places that do
+///     not go through one loop yet.
+///   · At once: consulted by deploys only, for the game folder's disk (Deploy) and the backup
+///     folder's disk (Backup); Deploy is not a row, so Backup is the one cell that acts.
+///   · Buffer / Priority: the governed copy and zip extraction open the files themselves; a
+///     download's chunks come from the network and its file is written as they arrive.
+pub fn applies(op: OpKind) -> Applies {
+    match op {
+        OpKind::Backup => Applies { rate: true, parallel: true, buffer: true, io: true },
+        OpKind::Install | OpKind::Extract | OpKind::Compress => Applies { rate: true, parallel: false, buffer: true, io: true },
+        OpKind::Download => Applies { rate: true, parallel: false, buffer: false, io: false },
+        OpKind::Scan | OpKind::Hash => Applies { rate: false, parallel: false, buffer: false, io: false },
+        OpKind::Deploy | OpKind::Image | OpKind::Maintenance => Applies { rate: true, parallel: op == OpKind::Deploy, buffer: true, io: true },
+    }
 }
 
 /// The ops the matrix shows (plan §3). Deploy and Image are left to the preset on purpose:
@@ -51,6 +83,7 @@ pub fn resolve_disk(rules: &BTreeMap<String, BTreeMap<String, IoRule>>, disk: &s
             src_buffer: pick(&|r| r.buffer_kib.is_some()),
             src_io: pick(&|r| r.io_priority.is_some()),
             own: get(disk, op.key()),
+            applies: applies(op),
         }
     }).collect()
 }
@@ -113,6 +146,18 @@ mod tests {
         assert_eq!(hash.own.rate_mb_s, Some(40));
         let scan = cells.iter().find(|c| c.op == "scan").unwrap();
         assert_eq!(scan.src_rate, Source::Disk);
+    }
+
+    #[test]
+    fn a_column_that_acts_on_nothing_is_marked_so() {
+        let cells = resolve_disk(&BTreeMap::new(), "*");
+        let a = |op: &str| cells.iter().find(|c| c.op == op).unwrap().applies;
+        assert_eq!(a("scan"), Applies { rate: false, parallel: false, buffer: false, io: false }, "a scan moves no bytes");
+        assert!(!a("hash").rate, "hashing has no single byte loop to pace yet");
+        assert!(a("extract").rate && a("extract").buffer && a("extract").io, "the extraction hook applies all three");
+        assert!(a("download").rate && !a("download").buffer);
+        assert!(a("backup").parallel, "the one matrix row whose 'at once' a deploy reads");
+        assert!(!a("install").parallel);
     }
 
 }

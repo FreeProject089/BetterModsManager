@@ -138,13 +138,18 @@ pub struct ResourcesConfig {
     /// Set once `disk_limits` has been carried into `rules`, so it is not done twice.
     #[serde(default)]
     pub migrated_disk_limits: bool,
+    /// Executables that count as a game for game-mode detection, beside every profile's game
+    /// folder: a bare name (`eldenring.exe`, matched wherever it runs) or a full path.
+    /// Edited in the dashboard; bounded by `set_game_exes`.
+    #[serde(default)]
+    pub game_exes: Vec<String>,
 }
 
 fn one() -> u32 { 1 }
 
 impl Default for ResourcesConfig {
     fn default() -> Self {
-        ResourcesConfig { version: 1, preset: Preset::Balanced, rules: BTreeMap::new(), migrated_disk_limits: false }
+        ResourcesConfig { version: 1, preset: Preset::Balanced, rules: BTreeMap::new(), migrated_disk_limits: false, game_exes: Vec::new() }
     }
 }
 
@@ -288,6 +293,17 @@ impl ResourcesConfig {
         clamp(p)
     }
 
+    /// Does the MB/s in force for (disk, op) come from a rule for THIS operation ((disk, op)
+    /// or (*, op)) rather than from a disk-wide one? runtime.rs gives such a rate a bucket of
+    /// its own on that disk, so a download limit does not slow the deploys writing to the
+    /// same disk, while a disk-wide limit stays ONE budget shared by every operation.
+    pub fn rate_is_op_specific(&self, disk: Option<&str>, op: OpKind) -> bool {
+        let get = |d: &str, o: &str| self.rules.get(d).and_then(|m| m.get(o)).and_then(|r| r.rate_mb_s);
+        let k = op.key();
+        [(disk.and_then(|d| get(d, k)), true), (disk.and_then(|d| get(d, "*")), false), (get("*", k), true), (get("*", "*"), false)]
+            .iter().find(|(r, _)| r.is_some()).map(|(_, own)| *own).unwrap_or(false)
+    }
+
     /// Carry `disk_limits[mount] = n` into `rules[mount]["*"].rate_mb_s = n`, once. A limit
     /// of 0 meant "no limit" in the old table and is skipped. Returns true when it changed
     /// anything, so the caller knows to save.
@@ -339,6 +355,30 @@ impl ResourcesConfig {
 
 /// How many disks may carry rules: a bound on a document the API can write.
 pub const MAX_RULE_DISKS: usize = 64;
+/// How many executables the manual game list may hold, and how long one may be.
+pub const MAX_GAME_EXES: usize = 64;
+pub const MAX_GAME_EXE_LEN: usize = 260;
+
+impl ResourcesConfig {
+    /// Replace the manual game list. Entries are trimmed, blank ones dropped, duplicates
+    /// (case-insensitive, `/` = `\`) removed; one with a control character, one longer than
+    /// MAX_GAME_EXE_LEN, or more than MAX_GAME_EXES entries is refused with the reason (and
+    /// the list is left as it was).
+    pub fn set_game_exes(&mut self, exes: &[String]) -> Result<(), String> {
+        let key = |e: &str| e.replace('/', "\\").to_lowercase();
+        let mut out: Vec<String> = Vec::new();
+        for e in exes {
+            let e = e.trim();
+            if e.is_empty() { continue; }
+            if e.chars().any(char::is_control) { return Err("a game executable cannot contain control characters".into()); }
+            if e.chars().count() > MAX_GAME_EXE_LEN { return Err(format!("a game executable is at most {MAX_GAME_EXE_LEN} characters")); }
+            if !out.iter().any(|o| key(o) == key(e)) { out.push(e.to_string()); }
+        }
+        if out.len() > MAX_GAME_EXES { return Err(format!("at most {MAX_GAME_EXES} game executables")); }
+        self.game_exes = out;
+        Ok(())
+    }
+}
 
 /// A stored rule, inside the hard bounds (rate ≥ 1, parallel 1..=16, buffer 64 KiB..=16 MiB).
 /// What the hard bounds would otherwise rewrite, refused with the reason (a rate of 0 would
@@ -502,6 +542,21 @@ mod tests {
         c.preset = Preset::Max;
         let hdd = c.resolve(OpKind::Deploy, &Target { kind: DiskKind::Hdd, ..t });
         assert_eq!(hdd.parallel, 1, "a spinning disk is not helped by parallel seeks");
+    }
+
+    #[test]
+    fn the_manual_game_list_is_trimmed_deduplicated_and_bounded() {
+        let mut c = ResourcesConfig::default();
+        c.set_game_exes(&[" EldenRing.exe ".into(), "".into(), "eldenring.exe".into(), "D:/Games/x.exe".into(), r"d:\games\X.EXE".into()]).unwrap();
+        assert_eq!(c.game_exes, vec!["EldenRing.exe".to_string(), "D:/Games/x.exe".to_string()]);
+        assert!(c.set_game_exes(&["a\u{0}.exe".into()]).is_err());
+        assert!(c.set_game_exes(&["x".repeat(MAX_GAME_EXE_LEN + 1)]).is_err());
+        let many: Vec<String> = (0..=MAX_GAME_EXES).map(|i| format!("g{i}.exe")).collect();
+        assert!(c.set_game_exes(&many).is_err());
+        assert_eq!(c.game_exes.len(), 2, "a refused list changes nothing");
+        // A document written before the list existed still loads, with no list.
+        let old: ResourcesConfig = serde_json::from_str(r#"{"preset":"balanced"}"#).unwrap();
+        assert!(old.game_exes.is_empty());
     }
 
     /// A4: the rule the API writes is validated by key and clamped before it is stored.

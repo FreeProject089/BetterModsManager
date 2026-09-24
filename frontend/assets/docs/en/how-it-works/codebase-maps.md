@@ -55,7 +55,7 @@ A typo compiles perfectly and fails at runtime as a rejected promise.
 `check-invoke-names.mjs` already gates one direction — every `invoke()` name must reach a
 registered command. This is the rest of the shape:
 
-- **508** commands registered, **426** called from the frontend, **87** modules calling at
+- **509** commands registered, **426** called from the frontend, **87** modules calling at
   least one. `features/settings/scheduler.ts` alone touches 101.
 - Per Rust module, how much of it the UI actually uses.
 - **57 commands with no frontend caller.** Reported as exactly that and *never* as "unused":

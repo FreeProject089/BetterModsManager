@@ -70,15 +70,30 @@ lazy_static::lazy_static! {
 use crate::governor::config::OpKind;
 use crate::governor::queue::Ticket;
 
-/// A repo zip's gate: the operation's ticket, checked before every entry.
-struct TicketGate<'a>(&'a Ticket);
+/// A repo zip's gate: the operation's ticket, checked before every entry, and the Compress
+/// MB/s of the disk the zip is written to, paid after every file on the bytes it packed.
+struct TicketGate<'a> {
+    ticket: &'a Ticket,
+    pace: Option<std::sync::Arc<crate::governor::io::RateLimiter>>,
+}
+
+impl<'a> TicketGate<'a> {
+    /// The ticket alone: no MB/s.
+    #[cfg(test)]
+    fn new(ticket: &'a Ticket) -> TicketGate<'a> { TicketGate { ticket, pace: None } }
+    /// A zip written to `out`, paced by the Compress rate of that disk (if one is set).
+    fn writing(ticket: &'a Ticket, out: &Path) -> TicketGate<'a> {
+        TicketGate { ticket, pace: crate::governor::runtime::global().limiter(OpKind::Compress, out) }
+    }
+}
 
 impl super::zipping::ZipGate for TicketGate<'_> {
     fn checkpoint(&self) -> Result<(), String> {
-        self.0.checkpoint().map_err(|_| "repo.cancelled".to_string())
+        self.ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())
     }
     fn wrote(&self, bytes: u64) {
-        self.0.add_bytes(bytes, 0);
+        self.ticket.add_bytes(bytes, 0);
+        if let Some(l) = &self.pace { l.acquire(bytes); }
     }
 }
 
@@ -568,7 +583,7 @@ pub async fn export_server_repo(
             // ── "Zip mods" mode: pack the whole mod into a single mods/<id>.zip ──
             if zip_mods {
                 let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
-                super::zipping::zip_dir_gated(&read_root, &zip_path, cancel_flag.clone(), zip_method, &TicketGate(&ticket))
+                super::zipping::zip_dir_gated(&read_root, &zip_path, cancel_flag.clone(), zip_method, &TicketGate::writing(&ticket, &zip_path))
                     .map_err(|e| format!("repo.errZipMod:{}", e))?;
                 let size = fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, _) = compute_file_hash_and_chunks(&zip_path, false)?;
@@ -803,7 +818,7 @@ pub async fn export_server_repo(
         let zip_path = final_dest.join(&zip_file_name);
         
         let cancel_flag_zip = cancel_flag.clone();
-        match super::zipping::zip_dir_gated(&output_path, &zip_path, cancel_flag_zip, zip_method, &TicketGate(&ticket)) {
+        match super::zipping::zip_dir_gated(&output_path, &zip_path, cancel_flag_zip, zip_method, &TicketGate::writing(&ticket, &zip_path)) {
             Ok(_) => {
                 println!("[REPO] Zip created at: {:?}", zip_path);
             },
@@ -2525,6 +2540,23 @@ fn default_true() -> bool {
     true
 }
 
+/// A sync's pause point: its own Pause button (`sync_paused`), then the governor's (a
+/// dashboard pause, `pause_all`, a cancel). True = stop and roll back. Async all the way down:
+/// see the note where `sync_server_repo` takes its ticket.
+async fn sync_wait(
+    pause: &std::sync::atomic::AtomicBool,
+    cancel: &std::sync::atomic::AtomicBool,
+    ticket: &crate::governor::queue::Ticket,
+) -> bool {
+    while pause.load(std::sync::atomic::Ordering::SeqCst) {
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    ticket.checkpoint_async().await.is_err()
+}
+
 #[tauri::command]
 pub async fn sync_server_repo(
     window: Window,
@@ -2578,16 +2610,13 @@ pub async fn sync_server_repo(
     // cancel below: paused or cancelled from the resources dashboard, the sync stops at the
     // same places, with the same rollback. (Extraction of a zipped mod takes its own Extract
     // ticket inside archive::extract_to.)
-    let ticket = crate::governor::runtime::global().begin(OpKind::Download, &src_repo);
-    let check_pause = || {
-        while pause_flag.load(std::sync::atomic::Ordering::SeqCst) {
-            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        ticket.checkpoint().is_err()
-    };
+    //
+    // This is an `async fn`: the ticket is taken with `begin_async` and waited on with
+    // `sync_wait` (timers, not a parked thread). The blocking forms parked one of the async
+    // runtime's workers — the local API's and the repo server's — for every sync waiting for a
+    // slot or sitting paused, and let a second sync on the same worker skip the slot (R13).
+    let ticket = crate::governor::runtime::global().begin_async(OpKind::Download, src_repo.clone()).await;
+    let check_pause = || sync_wait(&pause_flag, &cancel_flag, &ticket);
 
     // 1. Fetch remote repo info
     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
@@ -2623,7 +2652,7 @@ pub async fn sync_server_repo(
     let mut folders_to_rollback: Vec<PathBuf> = Vec::new();
 
     for (c_idx, choice) in choices.into_iter().enumerate() {
-        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
             for path in &folders_to_rollback {
                 if path.exists() { let _ = fs::remove_dir_all(path); }
             }
@@ -2691,7 +2720,7 @@ pub async fn sync_server_repo(
         let mut server_mod_subfolders = std::collections::HashSet::new();
 
         for (idx, repo_mod) in repo_profile.mods.into_iter().enumerate() {
-            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
                 for path in &folders_to_rollback {
                     if path.exists() { let _ = fs::remove_dir_all(path); }
                 }
@@ -2768,9 +2797,13 @@ pub async fn sync_server_repo(
                 {
                     let mut res = res;
                     let mut out = fs::File::create(&staged_zip).map_err(|e| e.to_string())?;
+                    // The Download row's MB/s for the disk this lands on (the governor's budget for
+                    // that disk), waited on a timer: this is async code.
+                    let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &staged_zip);
                     while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
                         std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
                         ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                        if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                     }
                     std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
                 }
@@ -2795,7 +2828,7 @@ pub async fn sync_server_repo(
             let mut local_valid_files = std::collections::HashSet::new();
 
             for (f_idx, file) in repo_mod.files.iter().enumerate() {
-                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
                     for path in &folders_to_rollback {
                         if path.exists() { let _ = fs::remove_dir_all(path); }
                     }
@@ -2892,11 +2925,13 @@ pub async fn sync_server_repo(
                                     if res.status() == 206 || res.status() == 200 {
                                         let mut stream = res.bytes_stream();
                                         file_to_patch.seek(SeekFrom::Start(current_offset)).map_err(|e| e.to_string())?;
+                                        let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
 
                                         while let Some(item) = stream.next().await {
                                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
                                             file_to_patch.write_all(&chunk).map_err(|e| e.to_string())?;
                                             ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                                            if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                                             
                                             // Throttling
                                             if args.download_limit > 0 {
@@ -2938,6 +2973,9 @@ pub async fn sync_server_repo(
                         fs::write(&local_path, &bytes)
                             .map_err(|e| format!("repo.errWriteFile: {}", e))?;
                         ticket.add_bytes(bytes.len() as u64, bytes.len() as u64);
+                        if let Some(l) = crate::governor::runtime::global().limiter(OpKind::Download, &local_path) {
+                            l.acquire_async(bytes.len() as u64).await;
+                        }
                         if args.download_limit > 0 {
                             // Same throttle as the HTTP path, applied once for the whole file
                             // because SFTP handed it over in one read.
@@ -2957,11 +2995,13 @@ pub async fn sync_server_repo(
                         
                         let mut stream = res.bytes_stream();
                         let mut file_out = fs::File::create(&local_path).map_err(|e| format!("Création échouée: {}", e))?;
+                        let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
                         
                         while let Some(item) = stream.next().await {
                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
                             file_out.write_all(&chunk).map_err(|e| e.to_string())?;
                             ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                            if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                             
                             // Throttling
                             if args.download_limit > 0 {
@@ -3272,7 +3312,7 @@ mod governed_repo_tests {
                 let governed = td.path().join(format!("governed-{}-{attempt}.zip", m.name()));
                 zip_dir(&src, &plain, Arc::new(AtomicBool::new(false)), m).unwrap();
                 let ticket = gov.begin(OpKind::Compress, "test: balanced zip");
-                zip_dir_gated(&src, &governed, Arc::new(AtomicBool::new(false)), m, &TicketGate(&ticket)).unwrap();
+                zip_dir_gated(&src, &governed, Arc::new(AtomicBool::new(false)), m, &TicketGate::new(&ticket)).unwrap();
                 drop(ticket);
                 assert_eq!(entries(&plain), entries(&governed), "{m:?}: an entry differs");
                 if std::fs::read(&plain).unwrap() == std::fs::read(&governed).unwrap() {
@@ -3294,7 +3334,7 @@ mod governed_repo_tests {
         let t = q.begin(OpKind::Compress, "test: cancel zip");
         q.cancel(t.id());
         let out = td.path().join("x.zip");
-        let err = zip_dir_gated(&src, &out, Arc::new(AtomicBool::new(false)), ZipMethod::Deflate, &TicketGate(&t)).unwrap_err();
+        let err = zip_dir_gated(&src, &out, Arc::new(AtomicBool::new(false)), ZipMethod::Deflate, &TicketGate::new(&t)).unwrap_err();
         assert_eq!(err, "repo.cancelled");
     }
 

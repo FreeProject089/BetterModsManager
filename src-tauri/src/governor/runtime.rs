@@ -15,9 +15,9 @@
 //! Balanced (the default) reproduces today's behaviour: 2 slots per kind, the hash pool at
 //! `(cores / 2).clamp(1, 4)`, no rate limit unless a disk rule (migrated from `disk_limits`)
 //! sets one. So wiring a site changes nothing until somebody picks another preset.
-use super::config::{pool_threads, DiskKind, IoPolicy, OpKind, Preset, ResourcesConfig, Target};
+use super::config::{pool_threads, DiskKind, IoPolicy, OpKind, Preset, ResourcesConfig, Target, ThreadPriority};
 use super::game_mode::{GameMode, Manual, Treatment};
-use super::io::{copy_file_governed, limiter_for, CopyError};
+use super::io::{copy_file_governed, limiter_for, CopyError, RateLimiter};
 use super::queue::{Queue, Ticket};
 use std::collections::HashMap;
 use std::path::{Component, Path, Prefix};
@@ -38,6 +38,11 @@ pub struct Governor {
     paused_for_game: Mutex<HashSet<u64>>,
     /// The preset the pools were last built for.
     built_for: Mutex<Option<Preset>>,
+    /// Whether pool threads set the priority the preset resolves (win.rs). Always in the app;
+    /// off in unit tests, where hundreds of tests share the machine and a hash pool in
+    /// background mode starved under that load hit the governed-hash tests' 5 s timeouts.
+    /// The test that checks priorities turns it on for its own instance.
+    apply_thread_priority: bool,
 }
 
 /// A task-scoped preset. `token` lets only the task that set it clear it; `until` is the
@@ -96,6 +101,7 @@ impl Governor {
             config: RwLock::new(cfg), queue, pools: Mutex::new(HashMap::new()), disks: Mutex::new(HashMap::new()),
             task: Mutex::new(None), game: Mutex::new(GameMode::new(&[], &[])),
             paused_for_game: Mutex::new(HashSet::new()), built_for: Mutex::new(None),
+            apply_thread_priority: !cfg!(test),
         }
     }
 
@@ -178,6 +184,33 @@ impl Governor {
         (g.is_active(), g.manual)
     }
 
+    /// Game detection (procs.rs), step 1: the lists. `game_dirs` = every profile's game folder
+    /// (None: the profiles could not be read this time, keep the previous folders); the manual
+    /// list comes from the document. Returns (detection is on, listing processes is worth it).
+    pub fn set_game_lists(&self, game_dirs: Option<&[String]>) -> (bool, bool) {
+        let extra = self.config.read().map(|c| c.game_exes.clone()).unwrap_or_default();
+        let mut g = self.game.lock().unwrap_or_else(|p| p.into_inner());
+        match game_dirs {
+            Some(d) => g.set_lists(d, &extra),
+            None => g.set_extra(&extra),
+        }
+        let auto = g.manual == Manual::Auto;
+        (auto, auto && g.has_targets())
+    }
+
+    /// Game detection, step 2: one sample of running executables (full paths) and the
+    /// full-screen signal. When game mode turns on or off, the preset in force, the slots, the
+    /// pools and the background pauses follow at once. Returns whether it changed.
+    pub fn observe_games(&self, running: &[String], fullscreen: bool, now: Instant) -> bool {
+        let changed = {
+            let mut g = self.game.lock().unwrap_or_else(|p| p.into_inner());
+            let before = g.is_active();
+            before != g.observe_with(running.iter().map(|s| s.as_str()), fullscreen, now)
+        };
+        if changed { self.refresh(); }
+        changed
+    }
+
     /// Apply a new resources document. Slots change at once; pools are rebuilt on next use
     /// (a pool already running work keeps it: the old `Arc` lives until its jobs finish).
     pub fn configure(&self, cfg: ResourcesConfig) {
@@ -198,6 +231,31 @@ impl Governor {
         // that installs): waiting for a slot would wait for our own outer ticket, for ever
         // under Silent's single slot. The nested one takes no slot and stays visible.
         let t = if self.queue.held_here(kind) { self.queue.begin_unslotted(kind, subject) } else { self.queue.begin(kind, subject) };
+        let paused = self.game.lock().unwrap_or_else(|p| p.into_inner()).treatment(kind) == Treatment::Paused;
+        if paused && self.queue.pause(t.id()) {
+            self.paused_for_game.lock().unwrap_or_else(|p| p.into_inner()).insert(t.id());
+        }
+        t
+    }
+
+    /// `begin` for ASYNC code (a Tauri `async fn`, anything on the runtime).
+    ///
+    /// `begin` blocks until a slot frees, which on the runtime parks one of its few worker
+    /// threads — the ones the local API and the built-in repo server answer on — for as long
+    /// as the operation ahead of it runs (under Silent, i.e. whenever game mode is on, one
+    /// Download at a time). And it records the calling thread for the nested-ticket rule, which
+    /// means nothing for a future: a second sync polled on the same worker looked "nested" in
+    /// the first and took no slot at all, so game mode's one-at-a-time did not hold (pentest
+    /// R13). Here the wait runs on a blocking thread and the ticket is tied to no thread.
+    /// Game mode still pauses a background kind at once, as in `begin`.
+    pub async fn begin_async(&self, kind: OpKind, subject: String) -> Ticket {
+        let q = self.queue.clone();
+        let t = match tokio::task::spawn_blocking(move || q.begin_detached(kind, &subject)).await {
+            Ok(t) => t,
+            // The blocking pool refused or the closure panicked (it cannot short of a poisoned
+            // lock, which the queue recovers from): wait here rather than run ungoverned.
+            Err(_) => self.queue.begin_detached(kind, "ticket"),
+        };
         let paused = self.game.lock().unwrap_or_else(|p| p.into_inner()).treatment(kind) == Treatment::Paused;
         if paused && self.queue.pause(t.id()) {
             self.paused_for_game.lock().unwrap_or_else(|p| p.into_inner()).insert(t.id());
@@ -235,27 +293,59 @@ impl Governor {
         cfg.resolve(kind, &target)
     }
 
+    /// The thread priority `kind`'s pool runs at under `preset` (rules do not set it; the
+    /// preset does: Quiet = background, Balanced = background for hash and maintenance,
+    /// Everything for BMM = normal). Capped at MAX_THREAD_PRIORITY by `resolve`.
+    pub fn pool_priority(&self, preset: Preset, kind: OpKind) -> ThreadPriority {
+        let cfg = ResourcesConfig { preset, ..self.config() };
+        cfg.resolve(kind, &Target { disk: None, kind: DiskKind::Unknown, on_system_drive: false, cores: cores() }).thread_priority
+    }
+
     /// The rayon pool for `kind`, sized by the preset (hash: today's `(cores/2).clamp(1,4)`).
+    /// Each of its threads sets its own priority as it starts (win.rs); a preset change
+    /// rebuilds the pool, so the priority follows game mode and task presets too.
     pub fn pool(&self, kind: OpKind) -> Arc<rayon::ThreadPool> {
         let preset = self.effective_preset();
+        let prio = self.pool_priority(preset, kind);
         let mut m = self.pools.lock().unwrap_or_else(|p| p.into_inner());
         m.entry(kind).or_insert_with(|| {
             let n = pool_threads(preset, kind, cores());
+            let apply = self.apply_thread_priority;
+            let start = move |_: usize| if apply { super::win::set_current_thread_priority(prio) };
             Arc::new(rayon::ThreadPoolBuilder::new()
                 .num_threads(n)
                 .thread_name(move |i| format!("bmm-{}-{i}", kind.key()))
+                .start_handler(start)
                 .build()
-                .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().num_threads(1).build().expect("a one-thread pool")))
+                .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().num_threads(1).start_handler(start).build().expect("a one-thread pool")))
         }).clone()
     }
 
+    /// The MB/s budget `kind` draws on when it writes to (or, for a read-only kind, reads
+    /// from) the disk under `path`; None = no limit. A disk-wide rate is ONE bucket per volume,
+    /// shared by every kind that inherits it; a rate set for this operation ((disk, op) or
+    /// (*, op)) is a bucket of its own on that volume, so a download limit does not slow a
+    /// deploy to the same disk. For the byte loops outside the governed copy (extraction,
+    /// repository sync, modpack downloads).
+    pub fn limiter(&self, kind: OpKind, path: &Path) -> Option<Arc<RateLimiter>> {
+        let policy = self.policy_for(kind, path);
+        self.limiter_with(kind, path, &policy)
+    }
+
+    fn limiter_with(&self, kind: OpKind, path: &Path, policy: &IoPolicy) -> Option<Arc<RateLimiter>> {
+        let rate = policy.rate_mb_s?;
+        let volume = volume_key(path).unwrap_or_default();
+        let own = self.config.read().map(|c| c.rate_is_op_specific(Some(&volume), kind)).unwrap_or(false);
+        let key = if own { format!("{volume}|{}", kind.key()) } else { volume };
+        Some(limiter_for(&key, Some(rate.saturating_mul(1024 * 1024))))
+    }
+
     /// Copy one file under `kind`'s policy for the DESTINATION disk, through that volume's
-    /// shared rate limiter (two copies to one disk share one budget), checking the ticket for
-    /// pause / cancel between chunks.
+    /// rate limiter (two copies to one disk share one budget), checking the ticket for
+    /// pause / cancel between chunks. No limit: no bucket is touched at all.
     pub fn copy(&self, kind: OpKind, src: &Path, dst: &Path, ticket: Option<&Ticket>) -> Result<u64, CopyError> {
         let policy = self.policy_for(kind, dst);
-        let volume = volume_key(dst).unwrap_or_default();
-        let limiter = limiter_for(&volume, policy.rate_mb_s.map(|m| m * 1024 * 1024));
+        let limiter = self.limiter_with(kind, dst, &policy).unwrap_or_else(|| Arc::new(RateLimiter::new(None)));
         copy_file_governed(src, dst, &policy, &limiter, ticket)
     }
 }
@@ -367,6 +457,64 @@ mod tests {
         let inner = g.begin(OpKind::Compress, "nested, same thread");  // would hang before
         assert_eq!(g.queue().snapshot().iter().filter(|v| v.kind == OpKind::Compress).count(), 2);
         drop((inner, outer));
+    }
+
+    /// Pentest R13: two async operations of one kind under Silent (one slot) — game mode's
+    /// setting. Polled on the SAME runtime thread, the second used to ride on the first as a
+    /// "nested" ticket and take no slot.
+    #[test]
+    fn async_operations_share_the_slots_whatever_thread_polls_them() {
+        let g = Governor::new(ResourcesConfig { preset: Preset::Silent, ..Default::default() });
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async {
+            let a = g.begin_async(OpKind::Download, "sync a".into()).await;
+            let second = tokio::time::timeout(Duration::from_millis(200), g.begin_async(OpKind::Download, "sync b".into())).await;
+            assert!(second.is_err(), "a second download started while the only slot was taken");
+            drop(a);
+            let b = tokio::time::timeout(Duration::from_secs(5), g.begin_async(OpKind::Download, "sync c".into())).await
+                .expect("the slot frees when the first ticket drops");
+            drop(b);
+        });
+    }
+
+    #[test]
+    fn pool_threads_run_at_the_priority_the_preset_resolves() {
+        let mut g = Governor::new(ResourcesConfig::default());
+        assert!(!g.apply_thread_priority, "unit tests keep every other pool at normal priority");
+        g.apply_thread_priority = true; // this instance only: what the app does
+        assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Deploy), ThreadPriority::Normal);
+        assert_eq!(g.pool_priority(Preset::Balanced, OpKind::Hash), ThreadPriority::Background);
+        assert_eq!(g.pool_priority(Preset::Silent, OpKind::Deploy), ThreadPriority::Background);
+        assert_eq!(g.pool_priority(Preset::Max, OpKind::Hash), ThreadPriority::Normal);
+        #[cfg(windows)]
+        {
+            use windows::Win32::System::Threading::{GetCurrentThread, GetThreadPriority};
+            // SAFETY: pseudo-handle of the calling (pool) thread.
+            let prio_on = |g: &Governor, k: OpKind| g.pool(k).install(|| unsafe { GetThreadPriority(GetCurrentThread()) });
+            assert_eq!(prio_on(&g, OpKind::Deploy), 0, "Balanced deploy threads run at normal");
+            assert!(prio_on(&g, OpKind::Hash) < 0, "Balanced hash threads run in background mode");
+            g.configure(ResourcesConfig { preset: Preset::Silent, ..Default::default() });
+            assert!(prio_on(&g, OpKind::Deploy) < 0, "Quiet: the rebuilt pool runs in background mode");
+        }
+    }
+
+    #[test]
+    fn a_disk_rate_is_one_shared_bucket_and_an_operation_rate_its_own() {
+        use crate::governor::config::IoRule;
+        let mut cfg = ResourcesConfig::default();
+        cfg.set_rule("q:", "*", Some(IoRule { rate_mb_s: Some(40), ..Default::default() })).unwrap();
+        cfg.set_rule("q:", "download", Some(IoRule { rate_mb_s: Some(5), ..Default::default() })).unwrap();
+        let g = Governor::new(cfg);
+        let p = Path::new(r"Q:\Games\mod.bin");
+        #[cfg(windows)]
+        {
+            let deploy = g.limiter(OpKind::Deploy, p).expect("the disk-wide rate");
+            let backup = g.limiter(OpKind::Backup, p).expect("the disk-wide rate");
+            assert!(Arc::ptr_eq(&deploy, &backup), "every kind that inherits the disk rate shares one budget");
+            let dl = g.limiter(OpKind::Download, p).expect("the download rate");
+            assert!(!Arc::ptr_eq(&dl, &deploy), "a download limit is a budget of its own");
+        }
+        assert!(g.limiter(OpKind::Deploy, Path::new(r"Z:\no\rule")).is_none(), "no rate, no bucket");
     }
 
     #[test]

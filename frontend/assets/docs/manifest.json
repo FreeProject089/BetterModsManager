@@ -225,7 +225,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8649,
+      "words": 8650,
       "diagrams": 0,
       "fr": true
     },
@@ -375,7 +375,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 910,
+      "words": 930,
       "diagrams": 0,
       "fr": true
     },
@@ -585,7 +585,7 @@
         "en": "Every heavy thing BMM does (enabling mods, installing, backing up originals, extracting and compressing archives, scanning, hashing, downloading, cropping…",
         "fr": "Tout ce que BMM fait de lourd (activer des mods, installer, sauvegarder les originaux, extraire et compresser des archives, analyser, calculer des empreintes,…"
       },
-      "words": 1932,
+      "words": 2363,
       "diagrams": 7,
       "fr": true
     },
@@ -840,7 +840,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1662,
+      "words": 1699,
       "diagrams": 0,
       "fr": true
     },

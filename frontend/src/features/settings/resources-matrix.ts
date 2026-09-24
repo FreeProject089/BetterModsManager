@@ -13,6 +13,8 @@ interface Cell {
     op: string; rate_mb_s: number | null; parallel: number; buffer_kib: number; io_priority: 'low' | 'normal';
     src_rate: string; src_parallel: string; src_buffer: string; src_io: string;
     own: { rate_mb_s?: number; parallel?: number; buffer_kib?: number; io_priority?: 'low' | 'normal' };
+    /** Which columns act on this operation at all (resources_rules.rs `applies`). */
+    applies?: { rate: boolean; parallel: boolean; buffer: boolean; io: boolean };
 }
 
 const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
@@ -39,8 +41,11 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
         const cells = await (invoke('resources_matrix', { disk }) as Promise<Cell[]>).catch(() => [] as Cell[]);
         const table = q<HTMLElement>('.res-m-table');
         if (!table) return;
-        const input = (op: string, key: string, val: unknown, ph: string, w = 70) =>
-            `<input class="input res-m-in" data-op="${op}" data-k="${key}" type="number" min="1" value="${val == null ? '' : esc(String(val))}" placeholder="${esc(ph)}" title="${esc(ph)}" style="max-width:${w}px;width:100%">`;
+        // A column that acts on nothing for this operation is disabled, with the reason, rather
+        // than taking a value that would change nothing.
+        const na = t('res.na') || 'Does not apply to this operation: the value would change nothing.';
+        const input = (op: string, key: string, val: unknown, ph: string, w = 70, on = true) =>
+            `<input class="input res-m-in" data-op="${op}" data-k="${key}" type="number" min="1" value="${val == null ? '' : esc(String(val))}" placeholder="${esc(ph)}" title="${esc(on ? ph : `${ph} · ${na}`)}"${on ? '' : ' disabled aria-disabled="true"'} style="max-width:${w}px;width:100%">`;
         table.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="text-align:left;color:var(--text-muted)">
                 <th style="padding:4px">${esc(t('res.col.op') || 'Operation')}</th>
@@ -51,12 +56,13 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
             </tr></thead>
             <tbody>${cells.map((c) => {
                 const mine = c.own;
+                const on = c.applies || { rate: true, parallel: true, buffer: true, io: true };
                 return `<tr>
                     <td style="padding:4px;white-space:nowrap">${esc(t('res.k.' + c.op) || c.op)}</td>
-                    <td style="padding:4px">${input(c.op, 'rate', mine.rate_mb_s, `${c.rate_mb_s ?? '∞'} · ${src(c.src_rate)}`)}</td>
-                    <td style="padding:4px">${input(c.op, 'parallel', mine.parallel, `${c.parallel} · ${src(c.src_parallel)}`, 60)}</td>
-                    <td style="padding:4px">${input(c.op, 'buffer', mine.buffer_kib, `${c.buffer_kib} · ${src(c.src_buffer)}`, 90)}</td>
-                    <td style="padding:4px"><select class="input res-m-in" data-op="${c.op}" data-k="io" style="max-width:130px" title="${esc(`${c.io_priority} · ${src(c.src_io)}`)}">
+                    <td style="padding:4px">${input(c.op, 'rate', mine.rate_mb_s, `${c.rate_mb_s ?? '∞'} · ${src(c.src_rate)}`, 70, on.rate)}</td>
+                    <td style="padding:4px">${input(c.op, 'parallel', mine.parallel, `${c.parallel} · ${src(c.src_parallel)}`, 60, on.parallel)}</td>
+                    <td style="padding:4px">${input(c.op, 'buffer', mine.buffer_kib, `${c.buffer_kib} · ${src(c.src_buffer)}`, 90, on.buffer)}</td>
+                    <td style="padding:4px"><select class="input res-m-in" data-op="${c.op}" data-k="io" style="max-width:130px" title="${esc(on.io ? `${c.io_priority} · ${src(c.src_io)}` : `${c.io_priority} · ${src(c.src_io)} · ${na}`)}"${on.io ? '' : ' disabled aria-disabled="true"'}>
                         <option value="">${esc((t('res.inherit') || 'inherit') + ` (${t('res.io.' + c.io_priority) || c.io_priority})`)}</option>
                         <option value="low"${mine.io_priority === 'low' ? ' selected' : ''}>${esc(t('res.io.low') || 'low')}</option>
                         <option value="normal"${mine.io_priority === 'normal' ? ' selected' : ''}>${esc(t('res.io.normal') || 'normal')}</option>

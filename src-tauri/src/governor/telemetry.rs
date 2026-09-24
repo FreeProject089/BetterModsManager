@@ -27,7 +27,16 @@ pub struct Sample {
     pub write_mbps: f32,
     pub effective: Preset,
     pub game_active: bool,
+    /// A preset a scheduled task set for its own duration, still in force: the dashboard's
+    /// "set by a task, N min left" line. None when there is none (or it has expired).
+    pub task: Option<TaskTick>,
     pub tickets: Vec<TicketView>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct TaskTick {
+    pub preset: Preset,
+    pub remaining_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -76,7 +85,10 @@ impl Sampler {
     pub fn subscribers(&self) -> usize { self.subs.load(Ordering::SeqCst) }
 
     /// One sample, or None when nobody is listening (and then nothing is read at all).
-    pub fn tick(&self) -> Option<Sample> {
+    pub fn tick(&self) -> Option<Sample> { self.tick_with(super::runtime::global()) }
+
+    /// `tick` against a given governor (a test's own, which must not move the global one).
+    pub fn tick_with(&self, gov: &super::runtime::Governor) -> Option<Sample> {
         if self.subscribers() == 0 {
             *self.prev.lock().unwrap_or_else(|p| p.into_inner()) = None;
             return None;
@@ -102,12 +114,14 @@ impl Sampler {
         };
         *prev = Some((c, now));
         drop(prev);
-        let gov = super::runtime::global();
+        gov.expire_task_preset();
+        let task = gov.task_preset().map(|t| TaskTick { preset: t.preset, remaining_ms: t.until.saturating_duration_since(now).as_millis() as u64 });
         Some(Sample {
             t_ms: SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
             cpu_bmm, cpu_system, read_mbps, write_mbps,
             effective: gov.effective_preset(),
             game_active: gov.game_mode().0,
+            task,
             tickets: gov.queue().snapshot(),
         })
     }
@@ -171,6 +185,24 @@ mod tests {
         assert!(s.tick().is_some());
         s.unsubscribe();
         assert!(s.tick().is_none(), "the last one leaving stops the samples");
+    }
+
+    #[test]
+    fn a_task_preset_rides_every_sample_until_it_ends() {
+        // The dashboard used to lose "set by a task, N min left" on the first live tick,
+        // because a sample did not carry the task preset.
+        let gov = super::super::runtime::Governor::for_tests(Default::default());
+        let token = gov.set_task_preset(Preset::Max, false, Duration::from_secs(600));
+        let s = Sampler::new();
+        s.subscribe();
+        let t = s.tick_with(&gov).unwrap().task.expect("the sample carries the task preset");
+        assert_eq!(t.preset, Preset::Max);
+        assert!(t.remaining_ms > 590_000 && t.remaining_ms <= 600_000, "{}", t.remaining_ms);
+        assert!(gov.clear_task_preset(token));
+        let smp = s.tick_with(&gov).unwrap();
+        assert_eq!(smp.task, None, "gone once the task clears it");
+        let v = serde_json::to_value(smp).unwrap();
+        assert!(v.get("task").is_some(), "the field is always sent, null when no task preset is in force");
     }
 
     #[test]

@@ -15,7 +15,8 @@ mod models;
 mod state;
 mod boot_flags;
 mod hw_detect;
-// Phase G0 of the resource governor: configuration only, not called yet.
+// The resource governor (governor/): presets, tickets, pools, the per-disk budget, game-mode
+// detection. Some of its API serves only tests and the dashboard today.
 #[allow(dead_code)]
 mod governor;
 mod api;
@@ -442,7 +443,17 @@ fn main() {
             commands::mods::start_sha_calculation_background(app.handle().clone());
             commands::mods::populate_sha_queue(state_handle);
             commands::mods::start_content_id_background(app.handle().clone());
-            
+            // Game mode's automatic detection (governor/procs.rs): every 5 s, the running
+            // executables against every profile's game folder and the manual list. The
+            // profiles are re-read each poll, without waiting for a busy state lock.
+            {
+                let data = app.state::<AppState>().data.clone();
+                crate::governor::procs::start(move || {
+                    let d = data.try_lock().ok()?;
+                    Some(d.profiles.iter().map(|p| p.game_path.to_string_lossy().into_owned()).collect())
+                });
+            }
+
             let _ = commands::ban_manager::load_bans(&app.handle().clone());
             let _ = commands::whitelist_manager::load_whitelist(&app.handle().clone());
             let _ = commands::discord::init_discord_rpc(app.state::<AppState>(), app.handle().clone());
@@ -951,6 +962,7 @@ fn main() {
             commands::resources::resources_set_preset,
             commands::resources::resources_clear_task_preset,
             commands::resources::resources_game_mode,
+            commands::resources::resources_set_game_exes,
             commands::resources::resources_queue,
             commands::resources_live::resources_subscribe,
             commands::resources_live::resources_unsubscribe,

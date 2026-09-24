@@ -40,9 +40,8 @@ Trois idées portent tout le reste :
 - **Une politique par sorte et par disque.** Quelle vitesse, quel tampon, combien en même temps :
   résolu à partir du preset et de tes règles par disque, puis ramené dans des bornes dures que rien
   ne franchit.
-- **Un budget de vitesse par disque.** Une limite en Mo/s est un seau de jetons partagé par toutes
-  les copies qui écrivent sur ce disque : deux copies en parallèle se partagent la limite au lieu
-  de la doubler.
+- **Un budget de vitesse par disque.** Une limite en Mo/s est un seau de jetons partagé par tout ce
+  qui écrit sur ce disque : deux copies en parallèle se partagent la limite au lieu de la doubler.
 
 Les dix sortes sont `deploy`, `install`, `backup`, `extract`, `compress`, `scan`, `hash`,
 `download`, `image` et `maintenance`. Ce sont les noms que montre le tableau de bord et les clés
@@ -62,6 +61,8 @@ moins un choix qu'un état :
 | Déploiement : un fichier à la fois, ou en parallèle | un à la fois | en parallèle, mais un à la fois quand le dossier du jeu ou de sauvegarde est sur le disque système | en parallèle, mais un à la fois sur un disque dur |
 | Tampon de copie | 256 Kio | 1 Mio | 4 Mio |
 | Courte pause pendant la copie | 150 µs tous les 16 Mio | 150 µs tous les 16 Mio | aucune |
+| Priorité des threads de la sorte | mode arrière-plan | normale · empreintes et maintenance : mode arrière-plan | normale |
+| Priorité d'E/S des fichiers qu'une copie ouvre | basse | normale | normale |
 | Parcours de dossiers (analyses) | sur un seul thread | comme avant | comme avant |
 
 Sur un disque qui a une limite en Mo/s, Silencieux et Équilibré copient par blocs de 128 Kio et
@@ -161,19 +162,31 @@ Un disque, c'est son point de montage en minuscules (`d:\`), un partage réseau 
 
 | Colonne | Agit sur |
 |---|---|
-| **Mo/s** | Les copies que BMM fait lui-même, pour le disque **sur lequel on écrit** : déployer et restaurer des fichiers, sauvegarder les originaux, copier le dossier d'un mod à l'installation, et les copies d'images |
-| **Tampon Kio** | Ces mêmes copies : la taille des blocs lus et écrits |
+| **Mo/s** | Ce que cette sorte écrit sur le disque, cadencé pour le disque **sur lequel on écrit**. Les copies que BMM fait lui-même : déployer et restaurer des fichiers, sauvegarder les originaux, copier le dossier d'un mod à l'installation, les copies d'images, les copies de fichiers d'un export de dépôt. L'**extraction**, tous formats, sur ce qu'elle écrit : zip, tar et 7z au fil des octets, rar une fois chaque fichier sorti (sa bibliothèque écrit un fichier d'un seul appel). Les **zip que BMM écrit** (les zip d'un dépôt, le réarchivage d'un mod, un paquet de catalogue), payés après chaque fichier sur ce qu'il a empaqueté. Les **téléchargements de synchronisation de dépôt et de modpack**, au fil des morceaux reçus |
+| **Tampon Kio** | La taille des blocs que lisent et écrivent les copies de BMM, et le tampon d'écriture de chaque fichier que crée une extraction zip (jamais plus grand que le fichier lui-même) |
 | **En même temps** | Les déploiements : quand la valeur pour le disque du dossier du jeu (Déploiement) ou pour celui du dossier de sauvegarde (Sauvegarde) vaut 1, un déploiement copie un fichier à la fois ; au-dessus de 1, il utilise le pool de threads Déploiement, dont le preset fixe la taille |
-| **Priorité** | Enregistrée et résolue comme les autres, et affichée dans le tableau |
+| **Priorité** | *Basse* pose l'indication de priorité d'E/S de Windows sur les fichiers qu'ouvrent les copies de BMM (le fichier lu et le fichier écrit) et sur chaque fichier que crée une extraction zip. NTFS sur un disque local la respecte ; les partages réseau et la plupart des disques cloud l'ignorent |
 
-!!! warning "Deux limites à connaître avant de remplir le tableau"
-    L'extraction, la compression, l'analyse, les empreintes et les téléchargements ne passent pas
-    par la copie gouvernée. Pour ces lignes, une valeur en Mo/s ou un tampon est enregistré et
-    affiché, mais ne ralentit rien : ce que le gouverneur contrôle pour elles, ce sont leurs
-    créneaux, leur pool de threads et leurs points de contrôle.
+Un débit fixé pour **tout le disque** (*ce disque, toutes les opérations*, le nombre de la carte du
+disque) est un seul budget, partagé par toutes les sortes qui en héritent. Un débit fixé pour
+**une opération** (*ce disque, cette opération* ou *tous les disques, cette opération*) est un
+budget à part sur ce disque : une limite de 5 Mo/s sur les téléchargements ne ralentit pas un
+déploiement vers le même disque, et le déploiement ne mange pas les 5 Mo/s du téléchargement.
 
-    La colonne **Priorité** n'est pas encore transmise à Windows quand BMM ouvre un fichier, dans
-    cette version. La mettre sur *basse* change le tableau, pas le disque.
+Une case dont la colonne n'agit sur rien pour cette opération est **grisée**, et le survol le dit,
+plutôt que d'accepter une valeur qui ne changerait rien.
+
+!!! warning "Ce que le tableau n'atteint pas encore"
+    - **Analyse** et **Empreintes** sont grisées en entier. Une analyse parcourt des dossiers et ne
+      déplace aucun octet ; les empreintes lisent des fichiers depuis une dizaine d'endroits de BMM
+      qui ne passent pas encore par une seule boucle. Ce que le gouverneur contrôle pour elles, ce
+      sont leurs créneaux, leur pool de threads, sa priorité et leurs points de contrôle.
+    - **Téléchargement** : un mod téléchargé depuis un lien (le téléchargement de la Bibliothèque,
+      l'installation d'une modlist) et l'installation d'un plugin ne sont pas encore cadencés par le
+      débit ; la synchronisation de dépôt et les modpacks le sont. Le tampon et la priorité sont
+      grisés : un téléchargement s'écrit au rythme où le réseau le livre.
+    - **Compression** : le débit agit sur l'écriture du zip ; le tampon et la priorité n'agissent
+      que sur les copies de fichiers d'un export de dépôt, pas sur l'écriture du zip elle-même.
 
 ### Les bornes dures
 
@@ -220,8 +233,9 @@ sequenceDiagram
     Note over K,D: les deux copies ensemble restent à 40 Mo/s
 ```
 
-Chaque copie vers un disque puise dans le seau de ce disque. Il se remplit au débit en Mo/s que tu
-as fixé et contient au plus une seconde de débit, donc une rafale ne peut pas devancer la limite
+Chaque copie vers un disque puise dans le seau de ce disque (tout comme l'extraction, les zip que
+BMM écrit et les téléchargements de dépôt et de modpack, voir [le tableau](#sur-quoi-agit-chaque-colonne)).
+Il se remplit au débit en Mo/s que tu as fixé et contient au plus une seconde de débit, donc une rafale ne peut pas devancer la limite
 longtemps. Un bloc plus gros qu'une seconde entière de budget passe quand même et se rembourse
 après, pour qu'un gros tampon sur une petite limite avance malgré tout.
 
@@ -254,16 +268,34 @@ Tu le règles dans le tableau de bord, avec les trois mêmes choix qu'une tâche
 | **Forcer** (`on`) | actif, quoi qu'il tourne |
 | **Arrêter** (`off`) | inactif, quoi qu'il tourne |
 
-!!! warning "La détection automatique n'est pas encore branchée"
-    Les règles de la détection sont écrites et testées : un jeu, c'est un exécutable sous le dossier
-    de jeu d'un de tes profils, ou un exécutable que tu listes, comparé sans tenir compte de la
-    casse ; le mode jeu démarre tout de suite et se termine après **30 secondes** sans le jeu, pour
-    qu'un lanceur qui le redémarre ou un écran de chargement qui change de processus ne fasse pas
-    basculer BMM dans un sens puis dans l'autre.
+### Comment marche la détection
 
-    Ce qui manque encore dans cette version, c'est la partie qui liste les programmes lancés et les
-    donne à ces règles. D'ici là, **Le détecter** n'active jamais le mode jeu tout seul. Choisis
-    **Forcer** avant de jouer, ou fais-le faire par une tâche planifiée (plus bas).
+Avec **Le détecter**, BMM regarde toutes les **5 secondes**. Il liste les programmes lancés (une
+seule liste de processus, gardée et rafraîchie, qui ne lit le chemin d'un programme que la première
+fois qu'elle le voit) et compte un jeu quand l'exécutable d'un programme est :
+
+- n'importe où sous **le dossier de jeu d'un de tes profils** (`D:\Games\Skyrim\SkyrimSE.exe` pour
+  un profil dont le dossier de jeu est `D:\Games\Skyrim` ; `D:\Games\SkyrimTools\x.exe` n'est pas
+  dessous) ;
+- dans la liste **Jeux surveillés par BMM**, repliée sous le choix du mode jeu sur la carte : un nom
+  d'exécutable (`eldenring.exe`, où qu'il tourne) ou un chemin complet, un par ligne, 64 au plus.
+
+BMM lui-même ne compte jamais, même rangé dans un dossier de jeu, et un dossier de jeu qui est un
+disque entier (`C:\`) ne compte pour rien : tous les programmes dessus seraient des jeux.
+
+Il demande aussi à Windows si un programme tourne **en plein écran exclusif avec Direct3D**, ce qui
+compte comme un jeu même hors de toute liste. Les jeux en fenêtre sans bordure ne se voient pas
+ainsi ; ce sont les deux listes qui les attrapent.
+
+La comparaison ne tient pas compte de la casse. Le mode jeu démarre dès que le jeu est vu et se
+termine après **30 secondes** sans lui, pour qu'un lanceur qui le redémarre ou un écran de
+chargement qui change de processus ne fasse pas basculer BMM dans un sens puis dans l'autre. Un
+profil que tu enregistres ou une liste que tu modifies compte au regard suivant. Quand il démarre ou
+se termine, le preset en vigueur, les pools de threads et le travail de fond suspendu suivent
+aussitôt.
+
+Avec **Forcer** ou **Arrêter**, et quand aucun profil n'a de dossier de jeu et que la liste est
+vide, BMM ne liste pas les programmes du tout.
 
 ### Qui l'emporte
 
@@ -337,7 +369,7 @@ huit cœurs, c'est à peu près un cœur occupé.
 
 | Depuis | Peut changer |
 |---|---|
-| Le Gestionnaire de Stockage | tout : le preset, le mode jeu, la file, chaque règle |
+| Le Gestionnaire de Stockage | tout : le preset, le mode jeu et les jeux qu'il surveille, la file, chaque règle |
 | Une tâche planifiée | avec la permission de tâche **Ressources** : le preset (pour de bon ou pour la tâche), le mode jeu, suspendre ou reprendre toute la file. Les tâches importées arrivent sans elle |
 | Un plugin ou un script avec un jeton d'API | `resources.write` : un preset nommé, le mode jeu, suspendre et reprendre ; **annuler** une opération demande aussi `mods.write`, parce que ça jette du travail |
 | Le jeton admin (API, MCP, CLI) | tout ce qui précède, plus les règles fines par `POST /api/resources/io-rule`, qu'aucun jeton de plugin ne peut appeler, quels que soient ses scopes |
@@ -352,8 +384,16 @@ Les routes, outils et commandes sont listés dans la [Référence API](doc-page:
 
 Le gouverneur vit dans `src-tauri/src/governor/` : `config.rs` (presets, règles, bornes, pur),
 `queue.rs` (tickets et créneaux), `io.rs` (la copie gouvernée et le seau par disque),
-`game_mode.rs` (les règles de détection, pur), `runtime.rs` (l'instance unique que chaque site
-d'appel interroge) et `telemetry.rs` (l'échantillonneur).
+`game_mode.rs` (les règles de détection, pur), `procs.rs` (l'échantillonneur de processus qui les
+alimente, toutes les 5 s), `win.rs` (priorité des threads, indication de priorité d'E/S, signal
+plein écran), `runtime.rs` (l'instance unique que chaque site d'appel interroge) et
+`telemetry.rs` (l'échantillonneur du tableau de bord).
+
+L'extraction atteint le gouverneur par un crochet : `archive.rs` est compilé tel quel par les
+benchmarks, il ne peut donc pas nommer le gouverneur, et l'app lui prête un `ExtractControl` au
+démarrage (`commands/mod_archive.rs`), qui tient le ticket ainsi que le budget, le tampon et la
+priorité du disque de destination. Une boucle d'octets hors de la copie gouvernée demande son
+budget à `runtime::global().limiter(kind, path)`.
 
 Un nouvel endroit qui lance du travail lourd (`par_iter`, `thread::spawn`, `spawn_blocking`,
 `fs::copy`, `fs_extra::`, `ThreadPoolBuilder`, `update_mmap`, `io::copy`) doit passer par

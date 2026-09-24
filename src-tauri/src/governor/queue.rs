@@ -62,8 +62,10 @@ struct Entry {
     bytes_written: u64,
     since: Instant,
     /// The thread that took it: runtime.rs lets a nested ticket of the same kind on the same
-    /// thread skip the slot wait (see `begin_unslotted`).
-    thread: std::thread::ThreadId,
+    /// thread skip the slot wait (see `begin_unslotted`). `None` for a ticket held by ASYNC
+    /// code (`begin_detached`): a future moves between the runtime's threads and a thread runs
+    /// many futures, so "the same thread" says nothing about "the same operation" there.
+    thread: Option<std::thread::ThreadId>,
 }
 
 struct State {
@@ -114,18 +116,29 @@ impl Queue {
         self.inner.state.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    fn register(&self, kind: OpKind, subject: &str) -> u64 {
+    fn register(&self, kind: OpKind, subject: &str, thread: Option<std::thread::ThreadId>) -> u64 {
         let mut st = self.lock();
         let id = st.next_id;
         st.next_id += 1;
-        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: false, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread: std::thread::current().id() });
+        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: false, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread });
         id
     }
 
     /// Take a ticket, waiting for a free slot of its kind. A ticket cancelled while it waits is
     /// returned anyway and its first checkpoint answers `Cancelled`.
     pub fn begin(&self, kind: OpKind, subject: &str) -> Ticket {
-        let id = self.register(kind, subject);
+        self.begin_as(kind, subject, Some(std::thread::current().id()))
+    }
+
+    /// `begin` for a ticket that ASYNC code will hold (runtime.rs `begin_async` calls it on a
+    /// blocking thread). Tied to no thread, so it never makes a later ticket on whatever thread
+    /// took it look "nested" — see `Entry::thread`.
+    pub fn begin_detached(&self, kind: OpKind, subject: &str) -> Ticket {
+        self.begin_as(kind, subject, None)
+    }
+
+    fn begin_as(&self, kind: OpKind, subject: &str, thread: Option<std::thread::ThreadId>) -> Ticket {
+        let id = self.register(kind, subject, thread);
         let mut st = self.lock();
         while st.running(kind) >= st.slots_for(kind) && !st.entries.get(&id).map(|e| e.cancelled).unwrap_or(true) {
             st = self.inner.cv.wait(st).unwrap_or_else(|p| p.into_inner());
@@ -141,7 +154,7 @@ impl Queue {
         if st.running(kind) >= st.slots_for(kind) { return None; }
         let id = st.next_id;
         st.next_id += 1;
-        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: true, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread: std::thread::current().id() });
+        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: true, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread: Some(std::thread::current().id()) });
         Some(Ticket { queue: self.clone(), id, kind })
     }
 
@@ -150,7 +163,7 @@ impl Queue {
     /// one slot (Silent) the outer ticket holds it and never releases it. Still registered, so
     /// it is visible, pausable and cancellable like any other.
     pub fn begin_unslotted(&self, kind: OpKind, subject: &str) -> Ticket {
-        let id = self.register(kind, subject);
+        let id = self.register(kind, subject, Some(std::thread::current().id()));
         if let Some(e) = self.lock().entries.get_mut(&id) { e.running = true; }
         Ticket { queue: self.clone(), id, kind }
     }
@@ -158,7 +171,7 @@ impl Queue {
     /// Does the CURRENT thread already hold a running ticket of this kind?
     pub fn held_here(&self, kind: OpKind) -> bool {
         let me = std::thread::current().id();
-        self.lock().entries.values().any(|e| e.running && e.kind == kind && e.thread == me)
+        self.lock().entries.values().any(|e| e.running && e.kind == kind && e.thread == Some(me))
     }
 
     /// Change a category's slots (clamped). Waiters are woken to re-check.
@@ -208,6 +221,20 @@ impl Ticket {
             let yield_to_foreground = is_background(self.kind) && st.foreground_running();
             if !paused && !yield_to_foreground { return Ok(()); }
             st = q.inner.cv.wait(st).unwrap_or_else(|p| p.into_inner());
+        }
+    }
+
+    /// `checkpoint()` for ASYNC code: the same answer, waited for with a timer instead of the
+    /// condition variable. `checkpoint()` parks the thread it runs on, and in an `async fn`
+    /// that thread is one of the runtime's few workers — the ones the local API and the
+    /// built-in repo server answer on. A sync paused from the dashboard, or held by
+    /// `pause_all` (which a plugin with `resources.write` may send), parked one worker each
+    /// for as long as the pause lasted (pentest R13).
+    pub async fn checkpoint_async(&self) -> Result<(), Cancelled> {
+        loop {
+            if self.is_cancelled() { return Err(Cancelled); }
+            if !self.must_yield() { return Ok(()); }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 
@@ -362,5 +389,46 @@ mod tests {
         h.join().unwrap();
         drop(paused);
         assert!(q.snapshot().is_empty(), "every dropped ticket leaves the list");
+    }
+
+    /// Pentest R13: a paused ticket held by async code must not park the runtime's thread.
+    /// One thread, two futures: the paused checkpoint, and the one that resumes it. With a
+    /// checkpoint that blocks the thread, the second never runs and the pair never ends.
+    #[test]
+    fn an_async_checkpoint_waits_without_parking_the_runtime_thread() {
+        let q = Queue::default();
+        let t = q.begin_detached(OpKind::Download, "sync");
+        q.pause_all();
+        let (tx, rx) = mpsc::channel();
+        let q2 = q.clone();
+        let h = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+            let r = rt.block_on(async {
+                let resume = async {
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                    q2.resume_all();
+                };
+                let (r, ()) = tokio::join!(t.checkpoint_async(), resume);
+                r
+            });
+            let _ = tx.send(r);
+        });
+        assert_eq!(rx.recv_timeout(WAIT).expect("the runtime thread was parked by the checkpoint"), Ok(()));
+        h.join().unwrap();
+        // And a cancel ends it the same way the blocking one does.
+        let t = q.begin_detached(OpKind::Download, "sync 2");
+        q.cancel(t.id());
+        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        assert_eq!(rt.block_on(t.checkpoint_async()), Err(Cancelled));
+    }
+
+    #[test]
+    fn a_detached_ticket_makes_nothing_on_its_thread_look_nested() {
+        let q = Queue::default();
+        let t = q.begin_detached(OpKind::Download, "async sync");
+        assert!(!q.held_here(OpKind::Download), "a ticket held by a future is not this thread's");
+        let n = q.begin(OpKind::Download, "real");
+        assert!(q.held_here(OpKind::Download));
+        drop((t, n));
     }
 }

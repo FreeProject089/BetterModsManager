@@ -1,6 +1,6 @@
 //! "A game is running" (PLAN-BMM-RESOURCES-2026.md §2.3, phase G4), as a pure state machine.
 //!
-//! The sampler (a later phase) lists the running executables every few seconds and feeds them
+//! The sampler (`procs.rs`) lists the running executables every 5 seconds and feeds them
 //! here; this file decides, from that list and the user's choices, whether BMM is in game mode
 //! and which preset applies. Pure so every rule is a test, with the process list injected.
 //!
@@ -57,10 +57,20 @@ fn norm_dir(d: &str) -> String {
     s
 }
 
+/// `c:\`, `\`, `\\server\share\`: a normalised folder that is a whole volume.
+fn is_drive_root(d: &str) -> bool {
+    let b = d.as_bytes();
+    d == "\\" || (b.len() == 3 && b[0].is_ascii_alphabetic() && b[1] == b':')
+        || d.strip_prefix("\\\\").map(|r| r.trim_end_matches('\\').split('\\').count() <= 2).unwrap_or(false)
+}
+
 impl GameMode {
     pub fn new(game_dirs: &[String], extra: &[String]) -> GameMode {
         GameMode {
-            game_dirs: game_dirs.iter().filter(|d| !d.trim().is_empty()).map(|d| norm_dir(d)).collect(),
+            // A blank folder, or one that is a whole drive (`C:\`, `\`), would make every program
+            // on it "a game" and keep BMM in game mode for good: such a folder counts for nothing.
+            game_dirs: game_dirs.iter().filter(|d| !d.trim().is_empty()).map(|d| norm_dir(d.trim()))
+                .filter(|d| !is_drive_root(d)).collect(),
             extra: extra.iter().map(|e| e.replace('/', "\\").to_lowercase()).collect(),
             manual: Manual::Auto,
             game_preset: Preset::Silent,
@@ -77,9 +87,33 @@ impl GameMode {
             || self.extra.iter().any(|x| x == &e || x == name)
     }
 
+    /// Replace the game folders and the manual list (profiles saved, the list edited) without
+    /// touching the detection state: a game already seen stays seen until it is absent for
+    /// LEAVE_AFTER under the new lists too.
+    pub fn set_lists(&mut self, game_dirs: &[String], extra: &[String]) {
+        let fresh = GameMode::new(game_dirs, extra);
+        self.game_dirs = fresh.game_dirs;
+        self.extra = fresh.extra;
+    }
+
+    /// Replace the manual list only (the profiles could not be read this time).
+    pub fn set_extra(&mut self, extra: &[String]) {
+        self.extra = GameMode::new(&[], extra).extra;
+    }
+
+    /// Is there anything to look for? With no game folder and no listed executable, the
+    /// sampler need not list processes at all.
+    pub fn has_targets(&self) -> bool { !self.game_dirs.is_empty() || !self.extra.is_empty() }
+
     /// Feed one sample of running executables. Returns whether game mode is active afterwards.
     pub fn observe<'a>(&mut self, running: impl IntoIterator<Item = &'a str>, now: Instant) -> bool {
-        let seen = running.into_iter().any(|p| self.is_game(p));
+        self.observe_with(running, false, now)
+    }
+
+    /// `observe` with a second signal: Windows says a full-screen Direct3D program is running
+    /// (`QUNS_RUNNING_D3D_FULL_SCREEN`), which counts as a game even when it is in no list.
+    pub fn observe_with<'a>(&mut self, running: impl IntoIterator<Item = &'a str>, fullscreen: bool, now: Instant) -> bool {
+        let seen = fullscreen || running.into_iter().any(|p| self.is_game(p));
         if seen {
             self.last_seen = Some(now);
             self.active = true;
@@ -179,6 +213,36 @@ mod tests {
         assert_eq!(g.treatment(OpKind::Install), Treatment::Throttled);
         assert_eq!(g.treatment(OpKind::Hash), Treatment::Paused);
         assert_eq!(g.treatment(OpKind::Maintenance), Treatment::Paused);
+    }
+
+    #[test]
+    fn new_lists_keep_a_game_already_seen() {
+        let mut g = gm();
+        let t0 = Instant::now();
+        g.observe(["D:\\Games\\Skyrim\\SkyrimSE.exe"], t0);
+        g.set_lists(&["E:/Other".into()], &[]);
+        assert!(g.is_active(), "saving a profile does not end a game in progress");
+        assert!(!g.observe([], t0 + LEAVE_AFTER), "it ends after the usual absence");
+        assert!(g.observe(["e:\\other\\game.exe"], t0 + LEAVE_AFTER), "the new folder counts");
+        assert!(g.has_targets());
+        g.set_lists(&[" ".into()], &[]);
+        assert!(!g.has_targets(), "nothing to look for: the sampler can skip listing processes");
+    }
+
+    #[test]
+    fn a_full_screen_direct3d_program_counts_as_a_game() {
+        let mut g = GameMode::new(&[], &[]);
+        let t0 = Instant::now();
+        assert!(g.observe_with(["C:\\x\\notlisted.exe"], true, t0));
+        assert!(g.observe_with([], false, t0 + Duration::from_secs(29)));
+        assert!(!g.observe_with([], false, t0 + LEAVE_AFTER));
+    }
+
+    #[test]
+    fn a_whole_drive_is_never_a_game_folder() {
+        let mut g = GameMode::new(&["C:\\".into(), "d:".into(), "/".into(), "\\\\nas\\games".into(), "E:\\Games\\X".into()], &[]);
+        assert!(!g.observe(["C:\\Windows\\explorer.exe", "D:\\tool.exe", "\\\\nas\\games\\a.exe"], Instant::now()), "a drive root would make every program a game");
+        assert!(g.observe(["E:\\Games\\X\\x.exe"], Instant::now()), "a real folder still counts");
     }
 
     #[test]

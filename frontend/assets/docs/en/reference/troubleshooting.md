@@ -84,9 +84,11 @@ BMM will re-identify it by content, so it keeps its identity.
 drives and paces the copies. If it still stutters, set an explicit **MB/s cap** for that disk.
 
 If it is the game that stutters while BMM works, pick **Quiet** at the top of the Storage Manager, or
-set **Game mode** to **Force on** while you play: BMM then does one thing at a time, gently, and
-holds background hashing until you switch it back. Game mode does not yet switch itself on when a
-game starts. See [The resource governor](doc-page:how-it-works/resources).
+leave **Game mode** on **Detect it**: BMM then does one thing at a time, gently, and holds
+background hashing while the game runs. Detection sees a game started from one of your profiles'
+game folders, one listed under **Games BMM watches for**, or one in exclusive full screen; for any
+other, add its executable to that list or use **Force on**. See
+[The resource governor](doc-page:how-it-works/resources#how-detection-works).
 
 Worth knowing: if the game or backup folder is on your **OS drive**, BMM already forces copies down to
 a single thread under the Quiet and Balanced presets, because Windows itself needs the headroom
@@ -109,12 +111,13 @@ likelihood:
 A preset set by a scheduled task "for this task only" ends with the task, and after 2 hours at the
 latest even if the task crashed.
 
-### I set a MB/s limit for hashing or extraction and nothing changed
+### I set a MB/s limit for hashing and nothing changed
 
-Expected. In the advanced per-disk table, MB/s and the buffer act on the copies BMM makes itself:
-deploying, backing up originals, installing a mod folder, image copies. Extraction, compression,
-scans, hashing and downloads keep the value but are governed by their slots and thread pool
-instead, and the **Priority** column is not passed to Windows yet. See
+Expected: the **Hash** and **Scan** rows of the advanced table are greyed out. A scan moves no
+bytes, and hashing reads files from places that do not go through one loop yet; both are governed
+by their slots, their thread pool and its priority instead. MB/s does act on BMM's own copies,
+extraction, the zips BMM writes and repository and modpack downloads, but not yet on a mod
+downloaded from a link. See
 [What each column acts on](doc-page:how-it-works/resources#what-each-column-acts-on).
 
 ### Activation is slower than a plain file copy

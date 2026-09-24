@@ -530,6 +530,8 @@ pub async fn repair_modpack_mod(
                     let total_size = resp.content_length().unwrap_or(file_ref.size);
                     let mut downloaded: u64 = 0;
                     let mut file_out = std::fs::File::create(&local_path).map_err(|e| e.to_string())?;
+                    // The Download row's MB/s for the disk this lands on, waited on a timer.
+                    let dl_pace = crate::governor::runtime::global().limiter(crate::governor::config::OpKind::Download, &local_path);
                     
                     while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
                         if ticket.is_cancelled() {
@@ -540,6 +542,7 @@ pub async fn repair_modpack_mod(
                         file_out.write_all(&chunk).map_err(|e| e.to_string())?;
                         downloaded += chunk.len() as u64;
                         ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                        if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                         
                         let progress = if total_size > 0 {
                             (downloaded as f32 / total_size as f32) * 100.0
@@ -613,6 +616,7 @@ pub async fn repair_modpack_mod(
             {
                 let mut res = res;
                 let mut out = std::fs::File::create(&temp_zip).map_err(|e| e.to_string())?;
+                let dl_pace = crate::governor::runtime::global().limiter(crate::governor::config::OpKind::Download, &temp_zip);
                 while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
                     if ticket.is_cancelled() {
                         drop(out);
@@ -621,6 +625,7 @@ pub async fn repair_modpack_mod(
                     }
                     std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
                     ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                    if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                 }
                 std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
             }

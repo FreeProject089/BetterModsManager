@@ -39,17 +39,18 @@ peuvent écrire.
 | **Silencieux · Équilibré · Tout pour BMM** | Le preset. **Équilibré** est celui par défaut, et c'est exactement le fonctionnement de toujours. **Silencieux** fait une chose à la fois, doucement, pour quand tu joues. **Tout pour BMM** va aussi vite que les disques le permettent |
 | **En vigueur** | Le preset réellement appliqué en ce moment, que le mode jeu ou une tâche planifiée peuvent changer un temps |
 | **CPU de BMM · CPU du PC · Lecture · Écriture** | Des courbes en direct, une fois par seconde, seulement tant que la carte est à l'écran |
-| **Mode jeu** | **Le détecter**, **Forcer**, **Arrêter**. Tant qu'il est actif, BMM travaille comme en Silencieux, et les empreintes et la maintenance de fond attendent qu'il se termine. La détection automatique n'est pas encore branchée dans cette version : utilise **Forcer** ([pourquoi](doc-page:how-it-works/resources#le-mode-jeu)) |
+| **Mode jeu** | **Le détecter**, **Forcer**, **Arrêter**. Tant qu'il est actif, BMM travaille comme en Silencieux, et les empreintes et la maintenance de fond attendent qu'il se termine. **Le détecter** cherche toutes les 5 secondes un jeu lancé depuis le dossier de jeu d'un de tes profils, un jeu que tu listes sous **Jeux surveillés par BMM**, ou tout jeu en plein écran exclusif, et termine le mode jeu 30 secondes après sa fermeture ([comment](doc-page:how-it-works/resources#comment-marche-la-detection)) |
 | **Ce que fait BMM** | Chaque opération en cours, suspendue ou en attente, avec **Suspendre**, **Reprendre** et **Annuler**, plus **Tout suspendre** et **Tout reprendre** |
 | **Avancé : par disque et par opération** | Des règles pour un disque et une sorte de travail (Mo/s, en même temps, tampon, priorité). Une case vide hérite, et son texte gris dit la valeur en vigueur et d'où elle vient |
 
 !!! warning "Lis sur quoi agit chaque colonne avancée"
 
-    Les Mo/s et le tampon agissent sur les copies que BMM fait lui-même (déploiement, sauvegarde des
-    originaux, installation du dossier d'un mod, copies d'images). Pour l'extraction, la
-    compression, les analyses, les empreintes et les téléchargements, ils sont enregistrés mais ne
-    ralentissent rien, et la colonne **Priorité** n'est pas encore transmise à Windows. Les détails
-    sont sur [la page du gouverneur](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
+    Les Mo/s agissent sur les copies de BMM, sur l'extraction, sur les zip que BMM écrit et sur les
+    téléchargements de dépôt et de modpack ; le tampon et une priorité *basse* agissent sur les
+    copies de BMM et sur l'extraction zip. Une case qui n'agit sur rien pour son opération est
+    grisée : les lignes **Analyse** et **Empreintes** en entier, par exemple. Un mod téléchargé
+    depuis un lien n'est pas encore cadencé. Les détails sont sur
+    [la page du gouverneur](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
 ## Cartes par disque
 

@@ -10,6 +10,10 @@
 //!   · `game_mode` (G4): "a game is running" as a pure state machine (enter at once, leave after
 //!     30 s of absence, manual beats auto, deploy slowed and background work paused).
 //!
+//!   · `procs`: the one process sampler (5 s) that feeds game mode's detection.
+//!   · `win`: thread priority for the pools, the per-handle I/O priority hint, the
+//!     full-screen Direct3D signal (no-ops off Windows).
+//!
 //!   · `runtime` (G3 wiring): the one instance, `runtime::global()`: tickets, the resolved
 //!     policy per volume, the per-kind rayon pools and the governed copy.
 //!
@@ -20,3 +24,5 @@ pub mod io;
 pub mod game_mode;
 pub mod runtime;
 pub mod telemetry;
+pub mod procs;
+pub mod win;

@@ -28,9 +28,34 @@ use tauri::State;
 // governor's Extract pool for the parallel pass. Under Balanced that pool is the size of the
 // global rayon pool the pass ran on before (governor::config::balanced_global_threads).
 
-/// An extraction governed by `ticket`.
+/// An extraction governed by `ticket`, under the Extract policy of the DESTINATION disk: its
+/// MB/s budget (paced as the bytes are written), its buffer (zip entries) and its I/O
+/// priority (the hint on every zip entry it creates).
 pub(crate) struct TicketExtract {
     pub(crate) ticket: Ticket,
+    pub(crate) limiter: Option<std::sync::Arc<crate::governor::io::RateLimiter>>,
+    pub(crate) buffer: usize,
+    pub(crate) low_io: bool,
+}
+
+impl TicketExtract {
+    /// An extraction into `dest`, with that disk's resolved Extract policy.
+    pub(crate) fn new(ticket: Ticket, dest: &Path) -> TicketExtract {
+        let gov = crate::governor::runtime::global();
+        let policy = gov.policy_for(OpKind::Extract, dest);
+        TicketExtract {
+            ticket,
+            limiter: gov.limiter(OpKind::Extract, dest),
+            buffer: policy.buffer_kib as usize * 1024,
+            low_io: policy.io_priority == crate::governor::config::IoPriority::Low,
+        }
+    }
+
+    /// No limit, std's buffer, normal priority: only the ticket (tests).
+    #[cfg(test)]
+    pub(crate) fn plain(ticket: Ticket) -> TicketExtract {
+        TicketExtract { ticket, limiter: None, buffer: 8 * 1024, low_io: false }
+    }
 }
 
 impl crate::archive::ExtractControl for TicketExtract {
@@ -43,6 +68,13 @@ impl crate::archive::ExtractControl for TicketExtract {
     fn run_parallel(&self, f: &(dyn Fn() -> std::io::Result<()> + Sync)) -> std::io::Result<()> {
         crate::governor::runtime::global().pool(OpKind::Extract).install(|| f())
     }
+    fn pace(&self, bytes: u64) {
+        if let Some(l) = &self.limiter { l.acquire(bytes); }
+    }
+    fn write_buffer(&self) -> usize { self.buffer }
+    fn on_file(&self, file: &std::fs::File) {
+        if self.low_io { crate::governor::win::set_low_io_priority(file); }
+    }
 }
 
 /// What the dashboard calls an extraction: the archive's file name.
@@ -52,9 +84,9 @@ fn extract_subject(archive: &Path) -> String {
 
 /// Route every `archive::extract_to` (and so every `materialize`) through the governor.
 pub fn install_extract_governor() {
-    crate::archive::set_extract_governor(|archive| {
+    crate::archive::set_extract_governor(|archive, dest| {
         let ticket = crate::governor::runtime::global().begin(OpKind::Extract, &extract_subject(archive));
-        Box::new(TicketExtract { ticket })
+        Box::new(TicketExtract::new(ticket, dest))
     });
 }
 
@@ -258,6 +290,9 @@ fn zip_dir(dir: &Path, out: &Path, ticket: Option<&Ticket>) -> std::io::Result<(
         }
     };
     let file = std::fs::File::create(out)?;
+    // The Compress MB/s of the disk the zip goes to, paid after every file on what it packed
+    // (only under a ticket: the ungoverned path stays as it was).
+    let pace = ticket.and_then(|_| crate::governor::runtime::global().limiter(OpKind::Compress, out));
     let mut zip = zip::ZipWriter::new(file);
     let opts = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     let zerr = |e: zip::result::ZipError| std::io::Error::new(std::io::ErrorKind::Other, e.to_string());
@@ -282,6 +317,7 @@ fn zip_dir(dir: &Path, out: &Path, ticket: Option<&Ticket>) -> std::io::Result<(
                 let n = std::io::copy(&mut src, &mut zip)?;
                 zip.flush()?;
                 if let Some(t) = ticket { t.add_bytes(n, 0); }
+                if let Some(l) = &pace { l.acquire(n); }
             }
         }
     }
@@ -368,7 +404,7 @@ mod governed_extract_tests {
             let plain = td.path().join(format!("plain-{i}"));
             extract_to_with(archive, &plain, &Ungoverned).unwrap();
             let governed = td.path().join(format!("governed-{i}"));
-            let control = TicketExtract { ticket: gov.begin(OpKind::Extract, "test: balanced extract") };
+            let control = TicketExtract::new(gov.begin(OpKind::Extract, "test: balanced extract"), &governed);
             extract_to_with(archive, &governed, &control).unwrap();
             let (a, b) = (read_tree(&plain), read_tree(&governed));
             assert_eq!(a, b, "{}: governed and ungoverned extraction differ", archive.display());
@@ -376,7 +412,7 @@ mod governed_extract_tests {
         }
 
         // The pool: Balanced's Extract pool is the size of main.rs's global pool.
-        let control = TicketExtract { ticket: gov.begin(OpKind::Extract, "test: pool probe") };
+        let control = TicketExtract::plain(gov.begin(OpKind::Extract, "test: pool probe"));
         let seen = std::sync::Mutex::new((0usize, String::new()));
         control.run_parallel(&|| {
             let name = std::thread::current().name().unwrap_or("").to_string();
@@ -419,7 +455,7 @@ mod governed_extract_tests {
     fn cancel_after(after: usize) -> CancelAfter {
         let queue = Queue::default();
         let ticket = queue.begin(OpKind::Extract, "test: cancel");
-        CancelAfter { inner: TicketExtract { ticket }, queue, after, seen: AtomicUsize::new(0), entries_written: AtomicUsize::new(0) }
+        CancelAfter { inner: TicketExtract::plain(ticket), queue, after, seen: AtomicUsize::new(0), entries_written: AtomicUsize::new(0) }
     }
 
     /// A cancel from the dashboard stops the extraction at the next entry boundary (not at
@@ -466,5 +502,35 @@ mod governed_extract_tests {
         assert_eq!(c.seen.load(Ordering::SeqCst), 2, "stopped at the reader's checkpoint");
         assert!(is_cancelled(&err));
         assert!(!dest.exists());
+    }
+
+    /// The Extract row's MB/s acts: every format is paced on what it WRITES, through the
+    /// destination disk's budget, and still writes the same files. 1.5 MiB at 1 MiB/s with one
+    /// second of burst takes about half a second more than unpaced.
+    #[test]
+    fn an_extract_rate_limit_paces_every_format_and_changes_no_byte() {
+        use crate::governor::io::RateLimiter;
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src, 4);
+        let want = read_tree(&src);
+        let archives: [(std::path::PathBuf, fn(&Path, &Path)); 3] = [
+            (td.path().join("m.zip"), zip_of),
+            (td.path().join("m.tar.gz"), tar_gz_of),
+            (td.path().join("m.7z"), sevenz_of),
+        ];
+        for (i, (archive, make)) in archives.iter().enumerate() {
+            make(&src, archive);
+            let out = td.path().join(format!("paced-{i}"));
+            let mut control = TicketExtract::plain(Queue::default().begin(OpKind::Extract, "test: paced"));
+            control.limiter = Some(std::sync::Arc::new(RateLimiter::new(Some(1 << 20))));
+            control.buffer = 256 * 1024;
+            control.low_io = true;
+            let start = std::time::Instant::now();
+            extract_to_with(archive, &out, &control).unwrap();
+            let took = start.elapsed();
+            assert!(took >= std::time::Duration::from_millis(300), "{}: not paced ({took:?})", archive.display());
+            assert_eq!(read_tree(&out), want, "{}: pacing changed the files", archive.display());
+        }
     }
 }

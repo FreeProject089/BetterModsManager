@@ -205,6 +205,8 @@ fn write_bundle(
     ticket: &crate::governor::queue::Ticket,
 ) -> Result<(u32, u64), String> {
     let file = std::fs::File::create(out_path).map_err(|e| e.to_string())?;
+    // The Compress MB/s of the disk the bundle goes to, paid after every file it packs.
+    let pace = crate::governor::runtime::global().limiter(crate::governor::config::OpKind::Compress, out_path);
     let mut zip = zip::ZipWriter::new(file);
     let opts =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -225,6 +227,7 @@ fn write_bundle(
         zip.start_file(name.to_string(), opts).map_err(|e| e.to_string())?;
         zip.write_all(&data).map_err(|e| e.to_string())?;
         ticket.add_bytes(data.len() as u64, 0);
+        if let Some(l) = &pace { l.acquire(data.len() as u64); }
         count += 1;
         bytes += data.len() as u64;
         Ok(())
