@@ -274,8 +274,8 @@ function _refreshModSelectorInEditor() {
     const sortedMods = [..._allMods].sort((a, b) => (b.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0) - (a.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0));
     availableContainer.innerHTML = sortedMods.length
         ? sortedMods.map(m => `
-            <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${m.id}" data-name="${m.name || m.id}">
-                <span class="mp-mod-name">${m.name || m.id}</span>
+            <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${escAttr(m.id)}" data-name="${escAttr(m.name || m.id)}">
+                <span class="mp-mod-name">${escHtml(m.name || m.id)}</span>
                 <button class="btn btn-xs mp-mod-add-btn" ${existingIds.has(m.id) ? 'disabled' : ''}>+</button>
             </div>`).join('')
         : `<div class="plug-mod-empty">Aucun mod disponible</div>`;
@@ -462,9 +462,12 @@ async function _openEditor(container, pack) {
     `;
     const metaForm = document.createElement('div');
     metaForm.style.cssText = 'display:flex; flex-direction:column; gap:16px;';
-    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${t('modpack.namePlaceholder')}" value="${_editingPack.name || ''}" style="width:100%;">`));
-    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${_editingPack.description || ''}</textarea>`));
-    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${t('modpack.gamePlaceholder') || 'e.g. DCS World'}" value="${_editingPack.game_name || ''}" style="width:100%;">`));
+    // Escaped: a modpack can be imported from a file or a deeplink, so its name/description are
+    // not always the user's own typing. A raw `"` closes the value attribute and a raw
+    // `</textarea>` closes the field — both let markup in (CWE-79).
+    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${escAttr(t('modpack.namePlaceholder'))}" value="${escAttr(_editingPack.name || '')}" style="width:100%;">`));
+    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${escHtml(_editingPack.description || '')}</textarea>`));
+    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${escAttr(t('modpack.gamePlaceholder') || 'e.g. DCS World')}" value="${escAttr(_editingPack.game_name || '')}" style="width:100%;">`));
     // Multi-profile toggle (re-styled)
     const multiRow = document.createElement('label');
     multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:all 0.2s;';

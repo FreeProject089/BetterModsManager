@@ -44,6 +44,7 @@ import { writeSources } from '../catalogs/catalog-sources.js';
 import { getLinks } from '../../core/links-config.js';
 import { askConfirm } from '../../core/api.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { trustedLinkDispatcher } from '../../core/link-dispatch.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -1937,9 +1938,10 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             .filter(([, v]) => v !== undefined && v !== null && v !== '')
             .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
         const url = `bmm://${path}${qs ? '?' + qs : ''}`;
-        const fn = (window as any).__bmmDeeplink;
         // 'scheduler': a task the user saved. Trusted by the deep-link gate (no dialog at 3am),
-        // but the hard limits in deeplink-guard.ts still apply.
+        // but the hard limits in deeplink-guard.ts still apply. Through link-dispatch.ts and not
+        // `window.__bmmDeeplink`, which refuses to carry a trusted origin (anything can call it).
+        const fn = trustedLinkDispatcher();
         return fn ? fn(url, 'scheduler') : runDeepLink(url);
     };
     const b = (v: any) => (v ? 1 : 0);

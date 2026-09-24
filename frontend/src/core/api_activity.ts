@@ -16,6 +16,9 @@
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { invoke } from './api.js';
+// The local API is a trusted caller of the deep-link handler (it holds the token). It reaches
+// it through this module; `window.__bmmDeeplink` refuses to carry a trusted origin.
+import { trustedLinkDispatcher } from './link-dispatch.js';
 
 interface ApiActionPayload { method: string; path: string; status: number; }
 interface ApiLogEntry { time: number; method: string; path: string; status: number; ok: boolean; label: string; icon: string; }
@@ -281,7 +284,7 @@ export async function initApiActivity(): Promise<void> {
                 for (const k of ['kind', 'dir', 'name', 'base']) {
                     if (params[k] !== undefined && params[k] !== '') qs.set(k, String(params[k]));
                 }
-                const go = (window as any).__bmmDeeplink;
+                const go = trustedLinkDispatcher();
                 if (go) await go('bmm://catalog/publish?' + qs.toString(), 'api');
                 else console.warn('[api-exec] no deeplink handler yet:', action);
                 break;
@@ -297,7 +300,7 @@ export async function initApiActivity(): Promise<void> {
                 // deeplink handler owns what a key reference means, including saying so when
                 // it names one that is not on the ring.
                 if (params.key) qs.set('key', String(params.key));
-                const go = (window as any).__bmmDeeplink;
+                const go = trustedLinkDispatcher();
                 if (go) await go(`bmm://${action}?${qs.toString()}`, 'api');
                 else console.warn('[api-exec] no deeplink handler yet:', action);
                 break;

@@ -41,6 +41,22 @@ export function normalizeOrigin(o: unknown): LinkOrigin {
 }
 export function isTrustedOrigin(o: LinkOrigin): boolean { return TRUSTED.has(o); }
 
+/**
+ * The origin a call through `window.__bmmDeeplink` is allowed to claim.
+ *
+ * Anything that can name a function on `window` can reach that one, and a lot can: the
+ * `data-act` dispatcher (inline-actions.ts) calls `window[name](...args)` for any element
+ * that carries the attribute, and three sanitisers used to let the attribute through from
+ * other people's markdown, plugin READMEs and themes. So the second argument is a claim
+ * made by whoever called, and a claim of `scheduler` or `api` is exactly what turns off
+ * the dialog. The app's own trusted callers use `dispatchTrustedLink` (link-dispatch.ts),
+ * which is a module export and not reachable by name.
+ */
+export function windowOrigin(o: unknown): LinkOrigin {
+    const n = normalizeOrigin(o);
+    return isTrustedOrigin(n) ? 'unknown' : n;
+}
+
 // ── Hard-limit predicates (mirrored in commands/link_guard.rs) ────────────────────────
 
 /** Why a link-supplied filesystem path is refused, or null. Checked before anything
@@ -436,6 +452,31 @@ export interface GateUi {
     confirm(p: LinkPrompt): Promise<boolean>;
     /** A hard limit refused the link. */
     refuse(r: { action: string; reason: string; detail: string; origin: LinkOrigin }): void;
+}
+
+/**
+ * A link as it may be written to a log. `console.log` here is not private: api.ts bridges every
+ * line into the session log on disk (`log_frontend_line`), which bug reports attach, and
+ * analytics.ts sends warn/error lines to telemetry when the user consented. `repo/connect`,
+ * `repo/sync` and `catalog/follow|import` carry a `password` (and once carried `key` /
+ * `passphrase`) in the query, so the raw URL put a repository password in both (CWE-532).
+ * Secret-named values become `***`; everything else is kept, because the log is for debugging.
+ */
+const SECRET_PARAM = /pass|secret|token|key|auth|sig|pwd|^pw$/i;
+export function linkForLog(urlStr: string): string {
+    const s = String(urlStr ?? '');
+    const q = s.indexOf('?');
+    if (q < 0) return s;
+    const hash = s.indexOf('#', q);
+    const query = s.slice(q + 1, hash < 0 ? undefined : hash);
+    const kept = query.split('&').map((pair) => {
+        const eq = pair.indexOf('=');
+        if (eq < 0) return pair;
+        let name = pair.slice(0, eq);
+        try { name = decodeURIComponent(name.replace(/\+/g, ' ')); } catch { /* keep as written */ }
+        return SECRET_PARAM.test(name) ? `${pair.slice(0, eq)}=***` : pair;
+    });
+    return `${s.slice(0, q)}?${kept.join('&')}`;
 }
 
 /** Parse a `bmm://` URL into its action. */

@@ -15,6 +15,37 @@
 // the whole app rather than one per node.
 //
 // Attach once, at startup, before anything renders.
+//
+// THE OTHER SIDE OF THAT TRADE
+//
+// Delegation means an attribute is enough: any element carrying `data-act="fn"` calls
+// `window.fn(...)` when clicked, wherever it came from. Markup from other people — a
+// Community post or comment, release notes, a plugin's README, a theme's custom elements —
+// is sanitised before it is inserted, and every sanitiser here keeps `data-*` (the renderers
+// need their own). So those attributes arrived intact and the listeners below acted on them.
+// `UNTRUSTED_DROP_ATTRS` is the list of attributes a document-level listener acts on; every
+// sanitiser of foreign markup removes them (md-safe.ts for DOMPurify, theme-engine.ts for
+// themes). tests/behaviour-attrs.test.mjs fails when a new document-level listener reads an
+// attribute that is neither on this list nor explicitly classified as harmless there.
+
+/** Exact `data-*` names a document-level listener acts on. */
+export const UNTRUSTED_DROP_ATTRS: readonly string[] = [
+    'data-act', 'data-click-proxy', 'data-close-modal', 'data-remove-closest', 'data-copy',
+    'data-toggle-password', 'data-backdrop-close', 'data-toggle-parent', 'data-open-url',
+    'data-url', 'data-no-submit', 'data-hover', 'data-focus', 'data-blur', 'data-press',
+    'data-onerror', 'data-tasky', 'data-bcweb-url', 'data-sched-act', 'data-sched-runlog',
+    'data-plug-act', 'data-prevent-close', 'data-open-theme-editor', 'data-nav',
+];
+/** Families: every attribute starting with one of these (`data-act-args`, `data-press-out`…). */
+const UNTRUSTED_DROP_PREFIXES: readonly string[] = [
+    'data-act-', 'data-copy-', 'data-hover-', 'data-press-', 'data-onerror-', 'data-tasky-',
+];
+
+/** True for an attribute that foreign markup must not carry into this document. */
+export function isBehaviourAttr(name: string): boolean {
+    const n = String(name || '').toLowerCase();
+    return UNTRUSTED_DROP_ATTRS.includes(n) || UNTRUSTED_DROP_PREFIXES.some((p) => n.startsWith(p));
+}
 
 /** Tooltip help, replacing 126 `onmouseenter="window.showTaskyHelp(…)"` /
  *  `onmouseleave="window.hideTaskyHelp()"` pairs.

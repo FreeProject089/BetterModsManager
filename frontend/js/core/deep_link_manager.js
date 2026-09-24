@@ -8,7 +8,8 @@ import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import { handleApplyViaDeepLink } from '../features/plugins/plugins.js';
-import { admitLink, catalogRoute } from './deeplink-guard.js';
+import { admitLink, catalogRoute, windowOrigin, linkForLog } from './deeplink-guard.js';
+import { setTrustedLinkDispatcher } from './link-dispatch.js';
 /** Reads the live API token from settings (for deeplinks that call the local API). */
 async function getApiToken() {
     try {
@@ -85,11 +86,16 @@ export async function initDeepLinks() {
         console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
         return;
     }
-    // The app's own callers dispatch through here too, and say who they are: the scheduler
-    // ('scheduler'), the local API ('api'), a theme's button ('theme'), the deep-link tester
-    // ('panel'). No origin → 'unknown', which is treated like a link from a web page.
-    // See deeplink-guard.ts for what each origin may do.
-    window.__bmmDeeplink = (url, origin) => handleDeepLink(url, origin ?? 'unknown');
+    // The app's own callers dispatch through here too, and say who they are: a theme's
+    // button ('theme'), the deep-link tester ('panel'). No origin → 'unknown', which is
+    // treated like a link from a web page. See deeplink-guard.ts for what each origin may do.
+    //
+    // This function is on `window`, so whoever calls it chooses the second argument — and a
+    // `data-act` attribute in rendered markdown could call it. It therefore cannot claim a
+    // trusted origin (windowOrigin downgrades 'scheduler'/'api'/'self' to 'unknown'). The
+    // scheduler and the local API, which ARE trusted, come in through link-dispatch.ts.
+    window.__bmmDeeplink = (url, origin) => handleDeepLink(url, windowOrigin(origin));
+    setTrustedLinkDispatcher((url, origin) => handleDeepLink(url, origin));
     console.log('[BMM] Initializing Deep Link Manager...');
     const { listen } = window.__TAURI__.event;
     // From the OS: a web page or another program. The browser does not say which page.
@@ -99,7 +105,7 @@ export async function initDeepLinks() {
     try {
         const pending = await invoke('get_pending_deep_link');
         if (pending) {
-            console.log('[BMM] Found pending deep link from startup:', pending);
+            console.log('[BMM] Found pending deep link from startup:', linkForLog(pending));
             setTimeout(() => handleDeepLink(pending, 'external'), 500);
         }
     }
@@ -163,11 +169,12 @@ async function handleDeepLink(urlStr, originIn = 'unknown') {
     // ── Permission gate ────────────────────────────────────────────────────
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
     if (!deepLinkAllowed) {
-        console.warn('[BMM] Deep link blocked by permission settings:', urlStr);
+        console.warn('[BMM] Deep link blocked by permission settings:', linkForLog(urlStr));
         toast(t('plugins.deepLinkBlocked') || 'Deep links désactivés dans les paramètres.', 'error');
         return;
     }
-    console.log('[BMM] Processing deep link:', urlStr);
+    // Through linkForLog: this line lands in the session log and a link can carry a password.
+    console.log('[BMM] Processing deep link:', linkForLog(urlStr));
     toast(`Deep Link: ${urlStr.split('?')[0]}`, 'info');
     try {
         // ── The gate. Every route passes here BEFORE anything is read, fetched, written or
@@ -1474,7 +1481,7 @@ async function handleDeepLink(urlStr, originIn = 'unknown') {
             const modUrl = parsedUrl.searchParams.get('url');
             const modNameFromUrl = parsedUrl.searchParams.get('name') || t('mod.unknownName') || 'Mod Inconnu';
             if (!modUrl) {
-                console.warn('[BMM] Deep link missing "url" parameter:', urlStr);
+                console.warn('[BMM] Deep link missing "url" parameter:', linkForLog(urlStr));
                 return;
             }
             let profiles = [];

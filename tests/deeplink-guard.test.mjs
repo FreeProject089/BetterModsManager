@@ -375,3 +375,26 @@ describe('resource links', () => {
         }
     });
 });
+
+// CWE-532. Every console line is bridged into the session log on disk (api.ts) and warn/error
+// lines go to telemetry with consent (analytics.ts). A repo/catalog link carries `password=`.
+describe('a link is logged without its secrets', () => {
+    test('secret-named values are masked, the rest kept', () => {
+        assert.equal(typeof G.linkForLog, 'function', 'deeplink-guard has no linkForLog');
+        const out = G.linkForLog('bmm://repo/connect?url=https://r.example/repo.json&password=hunter2&name=R');
+        assert.ok(!out.includes('hunter2'), out);
+        assert.ok(out.includes('url=https://r.example/repo.json') && out.includes('name=R'), out);
+        for (const k of ['passphrase', 'key', 'token', 'Pass%77ord', 'pw']) {
+            assert.ok(!G.linkForLog(`bmm://x?${k}=s3cr3t`).includes('s3cr3t'), k);
+        }
+        assert.equal(G.linkForLog('bmm://view/open?view=mods'), 'bmm://view/open?view=mods', 'control: nothing to mask');
+    });
+
+    test('no deep_link_manager log line prints the raw link', () => {
+        const src = readFileSync(join(ROOT, 'frontend/src/core/deep_link_manager.ts'), 'utf8');
+        // The variable as an ARGUMENT (`, urlStr)`), not the word in a message.
+        const raw = [...src.matchAll(/console\.(?:log|warn|error|info)\([^\n]*,\s*(?:urlStr|pending)\s*\)[^\n]*/g)]
+            .map((m) => m[0]).filter((l) => !l.includes('linkForLog('));
+        assert.deepEqual(raw, []);
+    });
+});

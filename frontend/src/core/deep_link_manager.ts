@@ -10,7 +10,8 @@ import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import type { Profile } from '../types/models.js';
 import { refreshPlugins, handleApplyViaDeepLink } from '../features/plugins/plugins.js';
-import { admitLink, catalogRoute, type LinkOrigin, type LinkPrompt } from './deeplink-guard.js';
+import { admitLink, catalogRoute, windowOrigin, linkForLog, type LinkOrigin, type LinkPrompt } from './deeplink-guard.js';
+import { setTrustedLinkDispatcher } from './link-dispatch.js';
 
 declare global {
     interface Window {
@@ -84,11 +85,16 @@ export async function initDeepLinks(): Promise<void> {
         return;
     }
 
-    // The app's own callers dispatch through here too, and say who they are: the scheduler
-    // ('scheduler'), the local API ('api'), a theme's button ('theme'), the deep-link tester
-    // ('panel'). No origin → 'unknown', which is treated like a link from a web page.
-    // See deeplink-guard.ts for what each origin may do.
-    (window as any).__bmmDeeplink = (url: string, origin?: LinkOrigin) => handleDeepLink(url, origin ?? 'unknown');
+    // The app's own callers dispatch through here too, and say who they are: a theme's
+    // button ('theme'), the deep-link tester ('panel'). No origin → 'unknown', which is
+    // treated like a link from a web page. See deeplink-guard.ts for what each origin may do.
+    //
+    // This function is on `window`, so whoever calls it chooses the second argument — and a
+    // `data-act` attribute in rendered markdown could call it. It therefore cannot claim a
+    // trusted origin (windowOrigin downgrades 'scheduler'/'api'/'self' to 'unknown'). The
+    // scheduler and the local API, which ARE trusted, come in through link-dispatch.ts.
+    (window as any).__bmmDeeplink = (url: string, origin?: LinkOrigin) => handleDeepLink(url, windowOrigin(origin));
+    setTrustedLinkDispatcher((url, origin) => handleDeepLink(url, origin));
 
     console.log('[BMM] Initializing Deep Link Manager...');
 
@@ -102,7 +108,7 @@ export async function initDeepLinks(): Promise<void> {
     try {
         const pending = await invoke('get_pending_deep_link') as string | null;
         if (pending) {
-            console.log('[BMM] Found pending deep link from startup:', pending);
+            console.log('[BMM] Found pending deep link from startup:', linkForLog(pending));
             setTimeout(() => handleDeepLink(pending, 'external'), 500);
         }
     } catch (e) {
@@ -171,12 +177,13 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
     // ── Permission gate ────────────────────────────────────────────────────
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
     if (!deepLinkAllowed) {
-        console.warn('[BMM] Deep link blocked by permission settings:', urlStr);
+        console.warn('[BMM] Deep link blocked by permission settings:', linkForLog(urlStr));
         toast(t('plugins.deepLinkBlocked') || 'Deep links désactivés dans les paramètres.', 'error');
         return;
     }
 
-    console.log('[BMM] Processing deep link:', urlStr);
+    // Through linkForLog: this line lands in the session log and a link can carry a password.
+    console.log('[BMM] Processing deep link:', linkForLog(urlStr));
     toast(`Deep Link: ${urlStr.split('?')[0]}`, 'info');
     
     try {
@@ -1323,7 +1330,7 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
             const modNameFromUrl = parsedUrl.searchParams.get('name') || t('mod.unknownName') || 'Mod Inconnu';
             
             if (!modUrl) {
-                console.warn('[BMM] Deep link missing "url" parameter:', urlStr);
+                console.warn('[BMM] Deep link missing "url" parameter:', linkForLog(urlStr));
                 return;
             }
 

@@ -5,7 +5,7 @@
 // Works on static AND dynamically-generated content via CSS variable cascading.
 
 import { invoke } from '../../core/api.js';
-import { actAttrs } from '../../core/inline-actions.js';
+import { isBehaviourAttr } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 
@@ -623,6 +623,11 @@ function sanitizeHtml(html: string): string {
             for (const attr of Array.from(el.attributes)) {
                 const name = attr.name.toLowerCase();
                 if (name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
+                // The delegated listeners' vocabulary (`data-act`, `data-click-proxy`,
+                // `data-hover`…): an attribute is enough to make them call a window function or
+                // click an app button, so a theme may not carry one (inline-actions.ts). Its own
+                // `data-bmm-deeplink` is not on that list — it asks, with origin 'theme'.
+                if (isBehaviourAttr(name)) { el.removeAttribute(attr.name); continue; }
                 if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction')
                     && /^\s*(javascript|data:text\/html|vbscript):/i.test(attr.value)) {
                     el.removeAttribute(attr.name);
