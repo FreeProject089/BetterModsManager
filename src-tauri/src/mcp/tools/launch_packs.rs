@@ -38,9 +38,14 @@ pub fn delete_launch_pack(id: &str) -> Result<String> {
     
     state_bridge::write_app_data(&data)?;
 
+    // One plain folder name or no folder deleted: the id is whatever data.json says, and
+    // `remove_dir_all(LaunchPacks/..)` is the whole data folder. The app's rule is
+    // fs_utils::safe_folder_name, which this binary does not compile; this is its core.
+    let plain = !pack_id.trim_end_matches(['.', ' ']).is_empty()
+        && !pack_id.contains(['/', '\\', ':', '\0']);
     let app_data_dir = state_bridge::get_bmm_data_dir();
     let pack_dir = app_data_dir.join("LaunchPacks").join(&pack_id);
-    if pack_dir.exists() {
+    if plain && pack_dir.exists() {
         let _ = std::fs::remove_dir_all(pack_dir);
     }
 
@@ -91,24 +96,9 @@ pub fn create_launch_pack(
     std::fs::write(&vbs_path, vbs_content)?;
 
     // Create the .lnk Shortcut via PowerShell
-    let lnk_path = pack_dir.join(format!("{}.lnk", name));
-    let powershell_script = format!(
-        "$WshShell = New-Object -ComObject WScript.Shell; \
-         $Shortcut = $WshShell.CreateShortcut('{}'); \
-         $Shortcut.TargetPath = 'wscript.exe'; \
-         $Shortcut.Arguments = '\"{}\"'; \
-         $Shortcut.WorkingDirectory = '{}'; \
-         $Shortcut.IconLocation = '{}'; \
-         $Shortcut.Save()",
-        lnk_path.to_string_lossy().replace("'", "''"),
-        vbs_path.to_string_lossy().replace("'", "''"),
-        pack_dir.to_string_lossy().replace("'", "''"),
-        icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| String::new()).replace("'", "''")
-    );
-
-    let _ = crate::commands::proc::hidden_command("powershell")
-        .args(&["-NoProfile", "-Command", &powershell_script])
-        .output();
+    // The app's rule for the file name: the raw name placed the shortcut wherever it said.
+    let lnk_path = pack_dir.join(format!("{}.lnk", crate::commands::proc::safe_lnk_stem(&name)));
+    let _ = crate::commands::proc::create_wscript_shortcut(&lnk_path, &vbs_path, &pack_dir, icon_path.as_deref());
 
     let pack = state_bridge::LaunchPack {
         id,

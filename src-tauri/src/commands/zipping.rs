@@ -68,9 +68,14 @@ pub trait ZipGate {
 }
 
 /// No gate: the writer as it was.
+///
+/// The app itself always passes a gate; this and `zip_dir` are for the MCP server example
+/// (state_bridge), which compiles this file and has no governor, and for the tests.
+#[allow(dead_code)]
 pub struct NoGate;
 impl ZipGate for NoGate {}
 
+#[allow(dead_code)]
 pub fn zip_dir(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>, method: ZipMethod) -> Result<(), String> {
     zip_dir_gated(src_dir, dst_file, cancel_flag, method, &NoGate)
 }

@@ -9,7 +9,7 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     },
     "fs::copy": {
-      "count": 2,
+      "count": 1,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },

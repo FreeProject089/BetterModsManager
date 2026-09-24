@@ -270,6 +270,114 @@ pub struct AppData {
     pub modpacks: Vec<crate::models::modpack::LocalModpack>,
 }
 
+/// The settings that belong to THIS installation and never to a file: the three credentials
+/// the local API and the OS scheduler check, and the list of web origins allowed to call that
+/// API.
+///
+/// A backup import and a `.DATABMM` restore both replaced the whole document with the file's,
+/// these included. So a backup somebody was handed ("my setup, just import it") set the API
+/// token to a value its author knew and `api_cors_origins` to `["*"]`, and from the next start
+/// any web page open in a browser could drive the whole local API with that token — install and
+/// launch apps, run scheduled tasks, write files through repo sync (CWE-15 / CWE-942). Nothing
+/// is lost by keeping the local ones even for your OWN backup: a token is a key to this
+/// machine's API, and the CLI, MCP and plugins read the current one from here.
+pub const LOCAL_ONLY_SETTINGS: [&str; 4] = ["api_token", "os_schedule_key", "plugin_tokens", "api_cors_origins"];
+
+impl AppData {
+    /// Carry this installation's `LOCAL_ONLY_SETTINGS` over a document about to replace it.
+    pub fn keep_local_only_settings(&mut self, current: &AppData) {
+        self.settings.api_token = current.settings.api_token.clone();
+        self.settings.os_schedule_key = current.settings.os_schedule_key.clone();
+        self.settings.plugin_tokens = current.settings.plugin_tokens.clone();
+        self.settings.api_cors_origins = current.settings.api_cors_origins.clone();
+    }
+
+    /// An empty credential is not a credential: a constant-time compare of "" against "" is
+    /// true, so a data.json holding `"api_token": ""` — hand-edited, or written by a tool
+    /// whose mirror of these settings defaults to empty — opened the API to any request with
+    /// no Authorization header at all. Regenerated on load rather than refused per request,
+    /// so the app's own screens keep working.
+    fn heal_empty_credentials(&mut self) {
+        if self.settings.api_token.trim().is_empty() {
+            self.settings.api_token = default_api_token();
+        }
+        if self.settings.os_schedule_key.trim().is_empty() {
+            self.settings.os_schedule_key = default_api_token();
+        }
+    }
+}
+
+/// Remove `LOCAL_ONLY_SETTINGS` from an exported document.
+///
+/// Removed, not blanked: an older BMM importing this file would take `""` as the token (see
+/// `heal_empty_credentials`), while a missing key falls back to a fresh random one.
+pub fn strip_local_only_settings(app_data: &mut serde_json::Value) {
+    if let Some(settings) = app_data.get_mut("settings").and_then(|s| s.as_object_mut()) {
+        for key in LOCAL_ONLY_SETTINGS {
+            settings.remove(key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod local_only_settings_tests {
+    use super::*;
+
+    fn with(token: &str, cors: &[&str]) -> AppData {
+        let mut d = AppData::default();
+        d.settings.api_token = token.into();
+        d.settings.os_schedule_key = format!("{token}-sched");
+        d.settings.plugin_tokens.insert(format!("{token}-plugin"), "p".into());
+        d.settings.api_cors_origins = cors.iter().map(|s| s.to_string()).collect();
+        d.settings.language = format!("{token}-lang");
+        d
+    }
+
+    /// The trigger: an imported document naming a token its author knows and `*` for CORS.
+    #[test]
+    fn an_imported_document_cannot_choose_the_api_token_or_open_cors() {
+        let mine = with("mine", &[]);
+        let mut theirs = with("known-to-the-author", &["*"]);
+        theirs.keep_local_only_settings(&mine);
+        assert_eq!(theirs.settings.api_token, "mine");
+        assert_eq!(theirs.settings.os_schedule_key, "mine-sched");
+        assert!(theirs.settings.plugin_tokens.contains_key("mine-plugin"));
+        assert!(!theirs.settings.plugin_tokens.contains_key("known-to-the-author-plugin"));
+        assert!(theirs.settings.api_cors_origins.is_empty());
+        // Everything else is still the file's — this is a restore, not a merge.
+        assert_eq!(theirs.settings.language, "known-to-the-author-lang");
+    }
+
+    #[test]
+    fn an_export_carries_none_of_them_and_an_old_reader_gets_fresh_ones() {
+        let mut v = serde_json::to_value(with("mine", &["https://dash.example"])).unwrap();
+        strip_local_only_settings(&mut v);
+        let s = v["settings"].as_object().unwrap();
+        for k in LOCAL_ONLY_SETTINGS {
+            assert!(!s.contains_key(k), "{k} was exported");
+        }
+        assert_eq!(s["language"], "mine-lang");
+        // A reader that only knows the struct gets random credentials, never empty ones.
+        let back: AppData = serde_json::from_value(v).unwrap();
+        assert!(!back.settings.api_token.is_empty() && back.settings.api_token != "mine");
+        assert!(!back.settings.os_schedule_key.is_empty());
+    }
+
+    #[test]
+    fn an_empty_token_on_disk_is_replaced_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut v = serde_json::to_value(AppData::default()).unwrap();
+        v["settings"]["api_token"] = serde_json::json!("");
+        v["settings"]["os_schedule_key"] = serde_json::json!("  ");
+        std::fs::write(&path, v.to_string()).unwrap();
+        let st = AppState::load(path);
+        let d = st.data.lock().unwrap();
+        assert_eq!(d.settings.api_token.len(), 36, "{:?}", d.settings.api_token);
+        assert_eq!(d.settings.os_schedule_key.len(), 36);
+    }
+}
+
 pub struct AppState {
     pub data: std::sync::Arc<Mutex<AppData>>,
     pub data_path: std::sync::Arc<PathBuf>,
@@ -375,7 +483,8 @@ pub fn atomic_write_json<T: serde::Serialize>(path: impl AsRef<std::path::Path>,
 
 impl AppState {
     pub fn load(data_path: PathBuf) -> Self {
-        let data = load_with_recovery(&data_path);
+        let mut data = load_with_recovery(&data_path);
+        data.heal_empty_credentials();
         Self {
             data: std::sync::Arc::new(Mutex::new(data)),
             data_path: std::sync::Arc::new(data_path),

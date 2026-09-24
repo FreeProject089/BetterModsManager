@@ -1031,10 +1031,41 @@ pub fn page_set_grant<R: Runtime>(
 // forwarded; the response is size-capped and returned as text.
 
 fn read_net_origins<R: Runtime>(app: &AppHandle<R>, id: &str) -> Vec<String> {
+    // Cleaned on READ as well as on write: the file can arrive by a `.DATABMM` restore
+    // (navigation/pages-data) without ever passing page_set_net_origins.
     page_data_dir(app, id)
         .and_then(|d| std::fs::read_to_string(d.join("net_origins.json")).ok())
         .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
         .unwrap_or_default()
+        .iter()
+        .filter_map(|o| clean_origin(o))
+        .collect()
+}
+
+/// `scheme://host[:port]` rebuilt from a parse, or `None`.
+///
+/// These strings are spliced into the page's Content-Security-Policy, and the old filter
+/// (starts with http(s)://, no `/` after it) let `https://a.example; worker-src *` or
+/// `https://a.example *` through — a new directive, or a wildcard beside the one origin the
+/// user approved. Rebuilt from the parsed URL, an origin can hold nothing but an origin.
+fn clean_origin(raw: &str) -> Option<String> {
+    let raw = raw.trim().trim_end_matches('/');
+    if raw.is_empty() || raw.len() >= 256 || raw.chars().any(|c| c.is_whitespace() || c == ';' || c == ',') {
+        return None;
+    }
+    let u = reqwest::Url::parse(raw).ok()?;
+    if !matches!(u.scheme(), "http" | "https")
+        || !u.username().is_empty() || u.password().is_some()
+        || u.query().is_some() || u.fragment().is_some()
+        || !(u.path().is_empty() || u.path() == "/")
+    {
+        return None;
+    }
+    let host = u.host_str()?;
+    Some(match u.port() {
+        Some(port) => format!("{}://{}:{}", u.scheme(), host, port),
+        None => format!("{}://{}", u.scheme(), host),
+    })
 }
 
 #[tauri::command]
@@ -1049,16 +1080,8 @@ pub fn page_set_net_origins<R: Runtime>(
     origins: Vec<String>,
 ) -> Result<Vec<String>, String> {
     let dir = page_data_dir(&app, &id).ok_or("invalid id")?;
-    // Keep only well-formed http(s) origins (scheme://host[:port], no path).
-    let clean: Vec<String> = origins
-        .into_iter()
-        .map(|o| o.trim().trim_end_matches('/').to_string())
-        .filter(|o| {
-            (o.starts_with("https://") || o.starts_with("http://"))
-                && o.len() < 256
-                && !o[8..].contains('/')
-        })
-        .collect();
+    // Keep only well-formed http(s) origins (scheme://host[:port], no path). See clean_origin.
+    let clean: Vec<String> = origins.iter().filter_map(|o| clean_origin(o)).collect();
     std::fs::write(
         dir.join("net_origins.json"),
         serde_json::to_string(&clean).map_err(|e| e.to_string())?,
@@ -1085,6 +1108,82 @@ fn url_origin(url: &str) -> Option<String> {
     Some(format!("{}{}", scheme, host))
 }
 
+/// Is this origin (as `url_origin` returns it) on the list? Case-insensitively: a host is.
+fn origin_allowed(origin: &str, allowed: &[String]) -> bool {
+    allowed.iter().any(|o| o.eq_ignore_ascii_case(origin))
+}
+
+/// The broker's client: a redirect is followed only while it stays on the page's allow-list,
+/// and at most five times. Built per call — the list is per page, and a page fetch is rare.
+fn page_fetch_client(allowed: Vec<String>) -> reqwest::Client {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error("too many redirects");
+            }
+            let ok = url_origin(attempt.url().as_str())
+                .map(|o| origin_allowed(&o, &allowed))
+                .unwrap_or(false);
+            if ok { attempt.follow() } else { attempt.stop() }
+        }))
+        .build()
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod page_network_tests {
+    use super::*;
+
+    #[test]
+    fn an_origin_can_only_be_an_origin() {
+        assert_eq!(clean_origin("https://api.example.com/").as_deref(), Some("https://api.example.com"));
+        assert_eq!(clean_origin("http://LOCALHOST:8080").as_deref(), Some("http://localhost:8080"));
+        for bad in [
+            "https://a.example; worker-src *", "https://a.example;worker-src", "https://a.example *",
+            "https://a.example 'unsafe-eval'",
+            "https://a.example/path", "https://u:p@a.example", "https://a.example?x=1",
+            "ftp://a.example", "javascript:alert(1)", "*", "https://", "",
+        ] {
+            assert_eq!(clean_origin(bad), None, "accepted {bad:?}");
+        }
+    }
+
+    /// The trigger: an allowed site redirecting into the LAN. Served by a local listener that
+    /// answers one request with a 302 to a second address that is NOT on the list, and would
+    /// answer "INTERNAL" if it were ever reached.
+    #[tokio::test]
+    async fn a_redirect_off_the_allow_list_is_not_followed() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let inner = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let inner_addr = inner.local_addr().unwrap();
+        let outer = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let outer_addr = outer.local_addr().unwrap();
+        let reached_inner = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = reached_inner.clone();
+        tokio::spawn(async move {
+            if let Ok((mut s, _)) = inner.accept().await {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf).await;
+                let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nINTERNAL").await;
+            }
+        });
+        tokio::spawn(async move {
+            if let Ok((mut s, _)) = outer.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf).await;
+                let resp = format!("HTTP/1.1 302 Found\r\nLocation: http://{inner_addr}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                let _ = s.write_all(resp.as_bytes()).await;
+            }
+        });
+        // Different ports are different origins: only the outer one is allowed.
+        let allowed = vec![format!("http://{outer_addr}")];
+        let resp = page_fetch_client(allowed).get(format!("http://{outer_addr}/")).send().await.unwrap();
+        assert_eq!(resp.status().as_u16(), 302, "the redirect was followed");
+        assert!(!reached_inner.load(std::sync::atomic::Ordering::SeqCst), "the LAN address was fetched");
+    }
+}
+
 #[tauri::command]
 pub async fn page_fetch<R: Runtime>(
     app: AppHandle<R>,
@@ -1099,17 +1198,25 @@ pub async fn page_fetch<R: Runtime>(
     // 2) The URL's origin must be on this page's explicit allow-list.
     let origin = url_origin(&url).ok_or("invalid url")?;
     let allowed = read_net_origins(&app, &id);
-    if !allowed.iter().any(|o| o == &origin) {
+    if !origin_allowed(&origin, &allowed) {
         return Err("origin_not_allowed".into());
     }
-    // 3) Plain GET, no BMM credentials, size-capped.
-    let resp = crate::commands::net::client().get(&url)
+    // 3) Plain GET, no BMM credentials, size-capped — and a redirect is followed only to
+    //    an origin on the same list. The shared client follows up to ten anywhere, so one
+    //    allowed site answering `302 Location: http://192.168.1.1/` (or 127.0.0.1:<the BMM
+    //    API>) had BMM fetch the LAN for a sandboxed page and hand it the body (CWE-918).
+    let resp = page_fetch_client(allowed).get(&url)
         .timeout(std::time::Duration::from_secs(20))
         .send().await.map_err(|e| e.to_string())?;
     let status = resp.status().as_u16();
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    if bytes.len() > MAX_FETCH_BYTES {
-        return Err("response too large".into());
+    // Streamed against the cap rather than buffered whole and measured afterwards.
+    let mut resp = resp;
+    let mut bytes: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        if bytes.len() + chunk.len() > MAX_FETCH_BYTES {
+            return Err("response too large".into());
+        }
+        bytes.extend_from_slice(&chunk);
     }
     let body = String::from_utf8_lossy(&bytes).to_string();
     Ok(FetchResult { status, body })

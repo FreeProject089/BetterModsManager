@@ -368,6 +368,14 @@ pub async fn start_repo_server(
                     println!("[Server] Security Block: path traversal attempt '{}' from {}", rel_path, ip);
                     return Err(warp::reject::not_found());
                 }
+                // 0-bis. The repo folder is also where the STANDALONE server's own files live —
+                // server.js with the admin password written into it, access.json with the
+                // download password, whitelist.json and bans.json (IPs and ids) — and this
+                // server used to hand out any file under the folder. See `builtin_may_serve`.
+                if !builtin_may_serve(&rel_path) {
+                    println!("[Server] Security Block: '{}' is not repo content, from {}", rel_path, ip);
+                    return Err(warp::reject::not_found());
+                }
 
                 // 0a. Download password, checked before ANY file is considered — including
                 // repo.json. Gating only /mods/ would leak the whole manifest (every mod
@@ -999,11 +1007,65 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
 /// length costs the same as a wrong byte.
 fn ct_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
-    let mut diff = (a.len() ^ b.len()) as u8;
+    // `usize`, not `as u8`: truncated to a byte, two lengths 256 apart folded to 0, and the
+    // zero padding below then accepted the password followed by 256 NUL bytes.
+    let mut diff = a.len() ^ b.len();
     for i in 0..a.len().max(b.len()) {
-        diff |= a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0);
+        diff |= (a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0)) as usize;
     }
     diff == 0
+}
+
+/// Whether the built-in server may hand out this path (already percent-decoded).
+///
+/// At the root: the manifest, its stats and the synthesised monitoring feed — nothing else.
+/// Every other file the exporter writes at the root belongs to the STANDALONE server and some
+/// of them are secrets: `server.js` carries the admin password verbatim, `access.json` the
+/// download password, `whitelist.json` / `bans.json` IP addresses and ids, `downloads.json`
+/// the statistics. A client never asks for any of them: mods, archives and extras all live in
+/// sub-folders (`mods/…`, `extras/…`, or a `files_layout` of the owner's), and those stay open
+/// exactly as before, except `node_modules`.
+fn builtin_may_serve(rel: &str) -> bool {
+    let norm = rel.replace('\\', "/");
+    let segs: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
+    match segs.as_slice() {
+        [] => false,
+        [one] => {
+            let n = one.to_ascii_lowercase();
+            n == "repo.json" || n == "info.json" || n == "monitoring.json"
+        }
+        [first, ..] => !first.eq_ignore_ascii_case("node_modules"),
+    }
+}
+
+#[cfg(test)]
+mod servable_tests {
+    use super::builtin_may_serve;
+
+    /// Everything a syncing client requests still answers.
+    #[test]
+    fn repo_content_is_served() {
+        for ok in [
+            "repo.json", "repo.json/", "Info.json", "monitoring.json",
+            "mods/3f2a9c1e/Data/a.dds", "mods/3f2a9c1e.zip", "mods\\x\\y.lua",
+            "extras/plugin/p-1.bmmplugin", "addons/cool/readme.txt", "public/dashboard.html",
+        ] {
+            assert!(builtin_may_serve(ok), "{ok} refused");
+        }
+    }
+
+    /// The standalone server's files, which the exporter writes into the same folder.
+    #[test]
+    fn the_standalone_servers_secrets_are_not() {
+        for bad in [
+            "server.js", "SERVER.JS", "access.json", "whitelist.json", "bans.json",
+            "downloads.json", "package.json", "BMM-Standalone-Server.bat", "Dockerfile",
+            "docker-compose.yml", "keyauth.mjs", "access-gate.js", "hub-server.js",
+            "repo.json::$DATA", "node_modules/express/index.js", "", "/",
+        ] {
+            assert!(!builtin_may_serve(bad), "{bad} served");
+        }
+    }
 }
 
 async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std::convert::Infallible> {
@@ -1115,6 +1177,16 @@ mod password_tests {
         assert!(!ct_eq("", "hunter2"));          // absent
         assert!(!ct_eq("hunter2", ""));          // an empty expectation never matches here;
                                                  // "no password" is handled before the call
+    }
+
+    /// The length used to be folded in as `u8`: 256 extra NUL bytes (an `?password=` value
+    /// can carry them as %00) made the lengths "equal" and the padding matched.
+    #[test]
+    fn a_length_difference_of_256_is_still_a_difference() {
+        let padded = format!("hunter2{}", "\0".repeat(256));
+        assert!(!ct_eq(&padded, "hunter2"));
+        assert!(!ct_eq("hunter2", &padded));
+        assert!(!ct_eq(&"\0".repeat(256), ""));
     }
 
     /// A prefix must not be treated as a match. This is the shape of the attack the

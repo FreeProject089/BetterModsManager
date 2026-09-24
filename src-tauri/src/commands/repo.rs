@@ -174,6 +174,89 @@ pub(crate) fn mod_file_tail(files_layout: Option<&str>, mod_id: &str, relative_p
         .replace("{path}", &path)
 }
 
+/// The folder a synced repo mod is installed under: the first eight BYTES of its id, an
+/// underscore, then its name reduced to letters, digits, space, `-` and `_`.
+///
+/// Written three times before this (the file loop, the loop that records the mods, and the
+/// API's own sync), two of them as `&id[..8]`: a panic on any id shorter than eight bytes or
+/// with a multi-byte character across byte 8 — and the id is whatever the manifest says. The
+/// prefix is also where a manifest could put a separator (`../../ab`), so separators, `:`
+/// and control characters become `_`. For every id BMM or BCWEB writes (a uuid, a folder
+/// name) the result is byte-for-byte what it was, so already-synced mods keep their folder.
+pub(crate) fn repo_mod_folder_name(id: &str, name: &str) -> String {
+    let mut end = id.len().min(8);
+    while !id.is_char_boundary(end) {
+        end -= 1;
+    }
+    let prefix: String = id[..end]
+        .chars()
+        .map(|c| if c == '/' || c == '\\' || c == ':' || c.is_control() { '_' } else { c })
+        .collect();
+    let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
+    format!("{}_{}", prefix, safe_name)
+}
+
+/// The first file path in a manifest that could land outside its mod folder, if any.
+///
+/// Checked BEFORE a sync writes anything, so a hostile manifest is refused whole rather than
+/// half-installed. The write sites join through `safe_relative_path` as well: this is the
+/// early, all-or-nothing answer, that is the one no future caller can forget.
+pub(crate) fn first_unsafe_manifest_path(repo: &ServerRepo) -> Option<String> {
+    repo.profiles
+        .iter()
+        .flat_map(|p| p.mods.iter())
+        .flat_map(|m| m.files.iter())
+        .map(|f| &f.relative_path)
+        .find(|rel| crate::fs_utils::safe_relative_path(rel).is_none())
+        .cloned()
+}
+
+#[cfg(test)]
+mod manifest_path_tests {
+    use super::*;
+
+    fn manifest(mod_id: &str, rel: &str) -> ServerRepo {
+        serde_json::from_value(serde_json::json!({
+            "profiles": [{ "id": "p", "name": "P", "game_name": "G", "mods": [{
+                "id": mod_id, "name": "Cool Mod", "version": "1", "tags": [],
+                "download_links": [],
+                "files": [{ "relative_path": rel, "size": 1, "sha256_hash": "" }]
+            }]}]
+        }))
+        .unwrap()
+    }
+
+    /// The trigger: a repo someone is invited to sync, whose manifest names a file in the
+    /// Startup folder. Before this, the sync created it there.
+    #[test]
+    fn a_manifest_that_writes_outside_the_mod_folder_is_named() {
+        for bad in [
+            "../../../../AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/a.bat",
+            "C:\\Users\\Public\\a.bat",
+            "/etc/profile.d/a.sh",
+        ] {
+            assert_eq!(first_unsafe_manifest_path(&manifest("0123456789", bad)).as_deref(), Some(bad));
+        }
+        assert_eq!(first_unsafe_manifest_path(&manifest("0123456789", "Data/ok.dds")), None);
+    }
+
+    /// Same bytes as before for the ids that exist, no panic and no separator for the rest.
+    #[test]
+    fn the_folder_name_is_unchanged_for_real_ids_and_safe_for_hostile_ones() {
+        assert_eq!(repo_mod_folder_name("3f2a9c1e-77aa-4b00-9d1e-000000000000", "Cool Mod!"), "3f2a9c1e_Cool Mod_");
+        assert_eq!(repo_mod_folder_name("cool-mod", "x"), "cool-mod_x");
+        // Shorter than eight bytes: `&id[..8]` panicked here.
+        assert_eq!(repo_mod_folder_name("ab", "x"), "ab_x");
+        // A multi-byte character across byte 8: `&id[..8]` panicked here too.
+        assert_eq!(repo_mod_folder_name("abcdefgé", "x"), "abcdefg_x");
+        // A separator in the id no longer reaches the path.
+        let hostile = repo_mod_folder_name("../../ab", "x");
+        assert!(!hostile.contains('/') && !hostile.contains('\\'), "{hostile}");
+        let base = std::path::Path::new("mods");
+        assert!(base.join(&hostile).components().count() == 2);
+    }
+}
+
 pub(crate) fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut reader = std::io::BufReader::with_capacity(128 * 1024, file);
@@ -1728,8 +1811,11 @@ pub async fn apply_direct_update(
         } else {
             // Non-archive payload: save it as a single file under the mod folder.
             let raw = url_c.split(|c| c == '?' || c == '#').next().unwrap_or(&url_c);
+            // Through the same guard as a manifest path: the last URL segment can still be
+            // `C:x.bat` (a drive-relative path that REPLACES the folder when joined) or `..`.
             let name = raw.rsplit(|c| c == '/' || c == '\\').next()
-                .filter(|s| !s.is_empty()).unwrap_or("mod_file");
+                .and_then(crate::fs_utils::safe_relative_path)
+                .unwrap_or_else(|| PathBuf::from("mod_file"));
             std::fs::write(folder_c.join(name), &bytes).map_err(|e| e.to_string())?;
         }
         Ok(())
@@ -1896,7 +1982,7 @@ pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
     serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))
 }
 
-pub use super::zipping::{ZipMethod, zip_dir as zip_directory};
+pub use super::zipping::ZipMethod;
 
 #[tauri::command]
 pub async fn cancel_repo_export(state: State<'_, AppState>) -> Result<(), String> {
@@ -2511,6 +2597,11 @@ pub async fn sync_server_repo(
     });
     
     let repo = fetch_repo_info(url.clone(), args.creator_id.clone(), args.password.clone()).await?;
+    // Before anything is written: a manifest naming a file outside its mod folder is refused
+    // whole (CWE-22). See first_unsafe_manifest_path.
+    if let Some(bad) = first_unsafe_manifest_path(&repo) {
+        return Err(format!("repo.errUnsafePath: {}", bad));
+    }
 
     // Determine the base URL for downloading files
     let base_url = if url.ends_with("repo.json") {
@@ -2615,9 +2706,8 @@ pub async fn sync_server_repo(
                 }
             }
 
-            let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
             // Add ID prefix to original folder name to avoid collisions if multiple mods sanitize to same name
-            let mod_subfolder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
+            let mod_subfolder_name = repo_mod_folder_name(&repo_mod.id, &repo_mod.name);
             let target_mod_dir = mods_path.join(&mod_subfolder_name);
             server_mod_subfolders.insert(mod_subfolder_name.clone());
             
@@ -2712,7 +2802,12 @@ pub async fn sync_server_repo(
                     return Err("Synchronisation annulée".to_string());
                 }
 
-                let local_path = target_mod_dir.join(&file.relative_path);
+                // Checked up front already; joined through the guard again so this write can
+                // never be the one that forgot.
+                let Some(rel) = crate::fs_utils::safe_relative_path(&file.relative_path) else {
+                    return Err(format!("repo.errUnsafePath: {}", file.relative_path));
+                };
+                let local_path = target_mod_dir.join(&rel);
                 let mut needs_download = true;
 
                 if local_path.exists() && !args.overwrite_all {
@@ -2897,7 +2992,10 @@ pub async fn sync_server_repo(
                     }
                 }
 
-                local_valid_files.insert(file.relative_path.replace("\\", "/"));
+                // The normalised form, which is what list_mod_files reports back below: the raw
+                // string would keep `./a` or `a//b` and the cleanup would delete the file it
+                // just downloaded.
+                local_valid_files.insert(rel.to_string_lossy().replace('\\', "/"));
             } // End of for (f_idx, file)
             if mod_unverified {
                 unverified_mod_ids.insert(repo_mod.id.clone());
@@ -2985,8 +3083,7 @@ pub async fn sync_server_repo(
             overall_summary.profiles.push(prof_summary);
             
             for repo_mod in successfully_synced_mods {
-                let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
-                let folder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
+                let folder_name = repo_mod_folder_name(&repo_mod.id, &repo_mod.name);
                 // A zipped mod kept as-is lives at "<folder>.zip" (an archived mod);
                 // extracted (or classic) mods live in the "<folder>" directory.
                 let kept_zipped = repo_mod.archive.is_some() && !args.unzip_archives;
@@ -3254,6 +3351,7 @@ mod governed_repo_tests {
 #[cfg(test)]
 mod zip_method_tests {
     use super::*;
+    use crate::commands::zipping::zip_dir as zip_directory;
 
     #[test]
     fn parse_accepts_the_four_names_their_spellings_and_the_default() {

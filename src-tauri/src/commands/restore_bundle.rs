@@ -280,8 +280,11 @@ pub fn restore_data_bundle(
     // The in-memory state goes last, after every file is on disk: a save triggered by
     // replacing AppData would otherwise race the files still being written.
     if let Some(val) = app_data_val {
-        if let Ok(new_data) = serde_json::from_value::<crate::state::AppData>(val) {
+        if let Ok(mut new_data) = serde_json::from_value::<crate::state::AppData>(val) {
             let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".into()))?;
+            // Everything the archive holds, except the keys to THIS machine's API and
+            // scheduler and its CORS list (state::LOCAL_ONLY_SETTINGS, CWE-15).
+            new_data.keep_local_only_settings(&data);
             *data = new_data;
             drop(data);
             state.save()?;

@@ -119,7 +119,12 @@ fn build_export_json(state: &State<AppState>, app_handle: &tauri::AppHandle, opt
     // Versioned wrapper so we can carry file-based data + frontend extras alongside AppData.
     let mut root = serde_json::Map::new();
     root.insert("_bmm_backup".into(), serde_json::json!(2));
-    root.insert("app_data".into(), serde_json::to_value(&export_data)?);
+    let mut app_data_json = serde_json::to_value(&export_data)?;
+    // This machine's API token, scheduler key, plugin tokens and CORS list never travel: an
+    // import ignores them anyway (state::LOCAL_ONLY_SETTINGS), so all a copy in the file
+    // could do is leak them to whoever the backup is shared with.
+    crate::state::strip_local_only_settings(&mut app_data_json);
+    root.insert("app_data".into(), app_data_json);
 
     let dir = data_dir(app_handle);
     if opts.themes {
@@ -309,8 +314,10 @@ pub fn import_app_data(state: State<AppState>, app_handle: tauri::AppHandle, src
         (parsed, None)
     };
 
-    if let Ok(new_data) = serde_json::from_value::<crate::state::AppData>(app_data_val) {
+    if let Ok(mut new_data) = serde_json::from_value::<crate::state::AppData>(app_data_val) {
         let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        // The file's settings, except the ones that are keys to THIS machine (CWE-15).
+        new_data.keep_local_only_settings(&data);
         *data = new_data;
         drop(data);
         state.save()?;

@@ -648,8 +648,14 @@ pub async fn install_app(
         }
     }
 
-    // Prepare target directory
-    let target_dir = std::path::PathBuf::from(&install_path).join(&app_id);
+    // Prepare target directory. The id is the CATALOGUE's, and it becomes a folder that is
+    // written into, run from, and `remove_dir_all`-ed after a setup and on uninstall: `..`
+    // named the folder above the apps folder, `C:\\` the drive, `..\\..\\Startup` a place
+    // Windows runs things from at logon (CWE-22). One plain component, or no install.
+    let Some(app_dir_name) = crate::fs_utils::safe_folder_name(&app_id) else {
+        return Err(format!("Refused: '{}' is not a usable app id", app_id));
+    };
+    let target_dir = std::path::PathBuf::from(&install_path).join(&app_dir_name);
     std::fs::create_dir_all(&target_dir).map_err(|e| format!("mkdir failed: {}", e))?;
 
     // Where the bytes come from. EVERYTHING after this is identical either way — the same

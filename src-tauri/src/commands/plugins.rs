@@ -2688,7 +2688,14 @@ pub fn run_plugin_scripts(
 
     let mut launched: Vec<String> = Vec::new();
     for rel in &to_run {
-        let path = base.join(rel);
+        // Inside the plugin, or not at all. The manifest lists these and the manifest is the
+        // plugin author's: an absolute `C:\…\x.ps1` or a `..\..\x.bat` made "run this plugin's
+        // scripts" run whatever script sat elsewhere on the disk.
+        let Some(safe_rel) = crate::fs_utils::safe_relative_path(rel) else {
+            log_line(format!("[PLUGINS] Skipped a script outside the plugin folder: {}", rel));
+            continue;
+        };
+        let path = base.join(safe_rel);
         let ext = path
             .extension()
             .and_then(|e| e.to_str())

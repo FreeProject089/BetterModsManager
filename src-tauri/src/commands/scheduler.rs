@@ -693,14 +693,19 @@ fn sanitize_task_id(id: &str) -> String {
 /// single quotes doubled, `id` is `sanitize_task_id`'d, and `key` is filtered to
 /// alphanumerics and dashes. This function does no escaping of its own, on purpose — two
 /// layers of escaping in two places is how one of them ends up doing it twice.
-fn build_register_script(exe: &str, id: &str, key: &str, trigger_expr: &str, task_name: &str) -> String {
+/// The executable is NOT in the text: it is read from `$env:BMM_EXE`, which the caller sets.
+/// It is the install path, and a Windows user name can hold a `’` — which PowerShell reads as
+/// the end of a single-quoted string that `''` escaping never touched (see
+/// proc::hidden_powershell). The id and key are narrowed by the caller; the trigger is built
+/// from numbers and a validated time.
+fn build_register_script(id: &str, key: &str, trigger_expr: &str, task_name: &str) -> String {
     format!(
         "$ErrorActionPreference='Stop'; \
-         $a = New-ScheduledTaskAction -Execute '{exe}' -Argument '\"bmm://schedule/run?id={id}&k={key}\"'; \
+         $a = New-ScheduledTaskAction -Execute $env:BMM_EXE -Argument '\"bmm://schedule/run?id={id}&k={key}\"'; \
          $t = {trig}; \
          $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; \
          Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t -Settings $s -Force | Out-Null",
-        exe = exe, id = id, key = key, trig = trigger_expr, name = task_name
+        id = id, key = key, trig = trigger_expr, name = task_name
     )
 }
 
@@ -711,9 +716,30 @@ mod os_schedule_tests {
 
     #[test]
     fn the_deep_link_survives_two_layers_of_quoting() {
-        let sc = build_register_script("C:\\BMM\\bmm.exe", "sched-1", "abc-123", "$TRIG", "BMM_sched-1");
+        let sc = build_register_script("sched-1", "abc-123", "$TRIG", "BMM_sched-1");
         // One argv, and the `&` inside it must not read as a command separator.
         assert!(sc.contains(r#"-Argument '"bmm://schedule/run?id=sched-1&k=abc-123"'"#), "{sc}");
+    }
+
+    /// The trigger: a shared task whose time closes the string with a `’`.
+    #[test]
+    fn a_trigger_time_is_a_time_or_nothing() {
+        let hostile = json!({ "type": "dailyAt", "time": "08:00\u{2019}; Start-Process calc; \u{2019}" });
+        assert!(build_trigger_expr(&hostile).is_err());
+        let weekly = json!({ "type": "weeklyAt", "time": "8:00'; x", "days": [1] });
+        assert!(build_trigger_expr(&weekly).is_err());
+        assert_eq!(build_trigger_expr(&json!({ "type": "dailyAt", "time": "03:00" })).unwrap(),
+            "New-ScheduledTaskTrigger -Daily -At '03:00'");
+        assert_eq!(ps_clock_time(" 7:05 ").unwrap(), "7:05");
+        assert_eq!(ps_clock_time("07:05:30").unwrap(), "07:05:30");
+        assert!(ps_clock_time("24:00").is_err() && ps_clock_time("12:60").is_err() && ps_clock_time("12").is_err());
+    }
+
+    /// The install path is not in the script at all.
+    #[test]
+    fn the_executable_is_read_from_the_environment() {
+        let sc = build_register_script("sched-1", "k", "$T", "BMM_sched-1");
+        assert!(sc.contains("-Execute $env:BMM_EXE "), "{sc}");
     }
 
     #[test]
@@ -721,7 +747,7 @@ mod os_schedule_tests {
         // The whole point of the key: an OS task carries it, a page the user clicked does
         // not. A registration that omitted it would produce tasks the app then refuses,
         // which is what the one-time re-registration exists to repair.
-        let sc = build_register_script("x", "sched-9", "K", "$T", "BMM_sched-9");
+        let sc = build_register_script("sched-9", "K", "$T", "BMM_sched-9");
         assert!(sc.contains("&k=K"), "{sc}");
     }
 
@@ -784,6 +810,26 @@ fn ps_day_name(n: i64) -> Option<&'static str> {
 }
 
 /// Builds the `New-ScheduledTaskTrigger ...` expression from the frontend trigger.
+/// A trigger's `HH:MM`, and nothing else, for a PowerShell string.
+///
+/// It was spliced in with only the ASCII `'` removed, and a task definition travels (a `.bmmpa`,
+/// a repo extra, a backup): `08:00’; <command>; ’` closed the string at the `’` and ran the
+/// rest when the OS schedule was registered. Refused rather than repaired: a time that is not a
+/// time is a task that would have fired at the wrong moment.
+fn ps_clock_time(time: &str) -> Result<String, String> {
+    let t = time.trim();
+    let ok = |s: &str, max: u32| !s.is_empty() && s.len() <= 2 && s.chars().all(|c| c.is_ascii_digit())
+        && s.parse::<u32>().map(|v| v <= max).unwrap_or(false);
+    // `HH:MM`, or `HH:MM:SS` — what a time input sends when it has a seconds step.
+    let parts: Vec<&str> = t.split(':').collect();
+    let valid = matches!(parts.len(), 2 | 3) && ok(parts[0], 23) && ok(parts[1], 59)
+        && parts.get(2).map(|s| ok(s, 59)).unwrap_or(true);
+    if !valid {
+        return Err(format!("invalid time '{}'", t));
+    }
+    Ok(parts.join(":"))
+}
+
 fn build_trigger_expr(trigger: &serde_json::Value) -> Result<String, String> {
     let ty = trigger.get("type").and_then(|v| v.as_str()).unwrap_or("");
     match ty {
@@ -817,7 +863,7 @@ fn build_trigger_expr(trigger: &serde_json::Value) -> Result<String, String> {
         "manual" => Err("manual trigger has no OS schedule".to_string()),
         "dailyAt" => {
             let time = trigger.get("time").and_then(|v| v.as_str()).unwrap_or("08:00");
-            Ok(format!("New-ScheduledTaskTrigger -Daily -At '{}'", time.replace('\'', "")))
+            Ok(format!("New-ScheduledTaskTrigger -Daily -At '{}'", ps_clock_time(time)?))
         }
         "weeklyAt" => {
             let time = trigger.get("time").and_then(|v| v.as_str()).unwrap_or("08:00");
@@ -825,7 +871,7 @@ fn build_trigger_expr(trigger: &serde_json::Value) -> Result<String, String> {
                 .map(|arr| arr.iter().filter_map(|d| d.as_i64()).filter_map(ps_day_name).collect())
                 .unwrap_or_default();
             if days.is_empty() { return Err("weekly trigger needs at least one day".into()); }
-            Ok(format!("New-ScheduledTaskTrigger -Weekly -DaysOfWeek {} -At '{}'", days.join(","), time.replace('\'', "")))
+            Ok(format!("New-ScheduledTaskTrigger -Weekly -DaysOfWeek {} -At '{}'", days.join(","), ps_clock_time(time)?))
         }
         "once" => {
             // ISO "YYYY-MM-DDTHH:MM[:SS]" → culture-independent Get-Date components.
@@ -873,13 +919,11 @@ pub fn register_os_schedule(
     };
 
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let exe_str = exe.to_string_lossy().replace('\'', "''"); // PS single-quote escape
     let trigger_expr = build_trigger_expr(&trigger)?;
 
-    let script = build_register_script(&exe_str, &safe_id, &key, &trigger_expr, &task_name);
+    let script = build_register_script(&safe_id, &key, &trigger_expr, &task_name);
 
-    let out = crate::commands::proc::hidden_command("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+    let out = crate::commands::proc::hidden_powershell(&script, &[("BMM_EXE", exe.as_os_str())])
         .output()
         .map_err(|e| format!("PowerShell spawn failed: {}", e))?;
     if out.status.success() {

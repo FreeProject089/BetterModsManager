@@ -7,7 +7,6 @@ use tokio::sync::oneshot;
 use warp::Filter;
 use warp::http::StatusCode;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tauri::Manager;
 use crate::state::AppData;
 use crate::models::profile::Profile;
@@ -791,9 +790,13 @@ fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
 
 /// Constant-time byte comparison (CWE-208): avoids the early-exit timing leak of
 /// `==`. Comparing lengths first is acceptable here — the token length is fixed.
+///
+/// An EMPTY token never matches: `ct_eq("", "")` was true, so an empty `api_token` in
+/// settings (hand-edited, a settings object sent back without it, a mirror that defaults it
+/// to "") let any request with no Authorization header through as the admin.
 fn ct_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() { return false; }
+    if a.is_empty() || a.len() != b.len() { return false; }
     let mut diff = 0u8;
     for i in 0..a.len() { diff |= a[i] ^ b[i]; }
     diff == 0
@@ -1418,6 +1421,23 @@ mod resources_route_tests {
             .reply(&routes)
             .await;
         (res.status().as_u16(), data)
+    }
+
+    /// An empty admin token in settings is not "everybody is the admin". Before, a request
+    /// with no Authorization header at all compared "" with "" and was let in.
+    #[tokio::test]
+    async fn an_empty_configured_token_admits_nobody() {
+        let data = data_with(&[]);
+        data.lock().unwrap().settings.api_token = String::new();
+        let dir = std::env::temp_dir().join(format!("bmm-a4-empty-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let routes = resources_routes(data.clone(), Arc::new(dir.join("data.json"))).recover(handle_rejection);
+        for auth in [None, Some("Bearer "), Some("")] {
+            let mut req = warp::test::request().method("GET").path("/api/resources");
+            if let Some(a) = auth { req = req.header("authorization", a); }
+            let res = req.reply(&routes).await;
+            assert_eq!(res.status().as_u16(), 401, "auth {auth:?} was admitted");
+        }
     }
 
     /// The plan's A4 test: the rule route answers to the admin token only.
@@ -3162,6 +3182,8 @@ pub async fn start_api_server(
             let choices: Vec<serde_json::Value> = body.choices.iter().map(|c| serde_json::json!({
                 "repoProfileId": c.repo_profile_id,
                 "targetLocalProfileId": c.target_local_profile_id,
+                // Documented ("null = every mod of the profile") and never forwarded.
+                "selectedModIds": c.selected_mod_ids,
             })).collect();
             let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/sync",
@@ -3350,6 +3372,15 @@ pub async fn start_api_server(
                     "zipOutput": body.zip_output,
                     "zipMods": body.zip_mods,
                     "compression": body.compression,
+                    // Accepted and documented, and read only by the headless worker that was
+                    // deleted as dead code: forwarded so the interface CAN honour them.
+                    "enableDocker": body.enable_docker,
+                    "dockerHostType": body.docker_host_type,
+                    "lang": body.lang,
+                    "serverVersion": body.server_version,
+                    "serverType": body.server_type,
+                    "lightweight": body.lightweight,
+                    "filesBaseUrl": body.files_base_url,
                 }
             }));
             warp::reply::with_status(
@@ -5174,640 +5205,6 @@ fn semver_is_newer(latest: &str, current: &str) -> bool {
         if lv < cv { return false; }
     }
     false
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Repo API — background async workers
-// ─────────────────────────────────────────────────────────────────────────────
-
-fn api_sha256_file(path: &std::path::Path) -> Result<String, String> {
-    let data = std::fs::read(path).map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
-    hasher.update(&data);
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-#[allow(dead_code)] // Retained for reference; sync is now driven through the BMM UI.
-async fn do_api_repo_sync(
-    body: RepoSyncBody,
-    data: Arc<std::sync::Mutex<AppData>>,
-    data_path: Arc<PathBuf>,
-    handle: tauri::AppHandle,
-    job_id: String,
-    cancel: Arc<AtomicBool>,
-) {
-    use futures::StreamExt;
-
-    macro_rules! emit {
-        ($event:expr, $payload:expr) => {{ let _ = handle.emit($event, $payload); }};
-    }
-    macro_rules! bail {
-        ($msg:expr) => {{
-            emit!("bmm://repo-sync-error", serde_json::json!({ "job_id": &job_id, "error": $msg }));
-            return;
-        }};
-    }
-
-    emit!("bmm://repo-sync-progress", serde_json::json!({
-        "job_id": &job_id, "step": "Connecting…", "progress": 0.0, "current_file": &body.url
-    }));
-
-    let mut cb = reqwest::Client::builder()
-        .user_agent("BetterModManager")
-        .timeout(std::time::Duration::from_secs(60));
-    // This installation's id, never one the caller chose.
-    if let Some(cid) = this_creator_id() {
-        let mut headers = reqwest::header::HeaderMap::new();
-        if let Ok(hv) = reqwest::header::HeaderValue::from_str(&cid) {
-            headers.insert("X-Creator-ID", hv);
-        }
-        cb = cb.default_headers(headers);
-    }
-    let client = match cb.build() {
-        Ok(c) => c,
-        Err(e) => bail!(format!("HTTP client: {}", e)),
-    };
-
-    let url = body.url.clone();
-    let target_url = if url.ends_with("repo.json") { url.clone() }
-                     else { format!("{}/repo.json", url.trim_end_matches('/')) };
-    let base_url = if url.ends_with("repo.json") {
-        url.trim_end_matches("repo.json").to_string()
-    } else if url.ends_with('/') { url.clone() } else { format!("{}/", url) };
-
-    let repo: crate::models::repo::ServerRepo = match client.get(&target_url).send().await {
-        Ok(r) if r.status().is_success() => match r.json().await {
-            Ok(j) => j,
-            Err(e) => bail!(format!("Invalid repo.json: {}", e)),
-        },
-        Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => bail!("Access denied (403)"),
-        Ok(r) => bail!(format!("Remote HTTP {}", r.status())),
-        Err(e) => bail!(format!("Network error: {}", e)),
-    };
-
-    let total_choices = body.choices.len().max(1);
-    let mut profiles_created = 0usize;
-
-    for (c_idx, choice) in body.choices.iter().enumerate() {
-        let repo_profile = match repo.profiles.iter().find(|p| p.id == choice.repo_profile_id) {
-            Some(p) => p.clone(),
-            None => {
-                emit!("bmm://repo-sync-warning", serde_json::json!({
-                    "job_id": &job_id,
-                    "message": format!("Profile '{}' not found in repo", choice.repo_profile_id),
-                }));
-                continue;
-            }
-        };
-
-        let existing_profile = if let Some(ref lid) = choice.target_local_profile_id {
-            let d = data.lock().unwrap_or_else(|p| p.into_inner());
-            d.profiles.iter().find(|p| &p.id == lid).cloned()
-        } else { None };
-
-        let is_new_profile = choice.target_local_profile_id.is_none();
-        let profile_id = choice.target_local_profile_id.clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-        let target_game_path = if !body.game_dir.is_empty() {
-            std::path::PathBuf::from(&body.game_dir)
-        } else if let Some(ref p) = existing_profile {
-            p.game_path.clone()
-        } else {
-            bail!("game_dir is required when creating a new profile");
-        };
-
-        let target_backup_path = if !body.backup_dir.is_empty() {
-            std::path::PathBuf::from(&body.backup_dir)
-        } else if let Some(ref p) = existing_profile {
-            p.backup_path.clone()
-        } else {
-            bail!("backup_dir is required when creating a new profile");
-        };
-
-        let mods_path = if let Some(ref p) = existing_profile {
-            p.mods_path.clone()
-        } else if !body.mods_dir.is_empty() {
-            let safe = repo_profile.name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
-            std::path::PathBuf::from(&body.mods_dir).join(&safe)
-        } else {
-            bail!("mods_dir is required when creating a new profile");
-        };
-
-        if let Err(e) = std::fs::create_dir_all(&mods_path) {
-            bail!(format!("Cannot create mods dir: {}", e));
-        }
-
-        let total_mods = repo_profile.mods.len().max(1);
-        let mut active_mod_ids: Vec<String> = Vec::new();
-
-        let mut consecutive_errors: u32 = 0;
-        const MAX_CONSECUTIVE_ERRORS: u32 = 3;
-
-        for (m_idx, repo_mod) in repo_profile.mods.iter().enumerate() {
-            // Check cancellation at each mod boundary
-            if cancel.load(Ordering::SeqCst) {
-                emit!("bmm://repo-sync-error", serde_json::json!({
-                    "job_id": &job_id, "error": "Sync cancelled by user", "cancelled": true,
-                }));
-                return;
-            }
-
-            if let Some(ref sel) = choice.selected_mod_ids {
-                if !sel.contains(&repo_mod.id) { continue; }
-            }
-
-            let safe_name = repo_mod.name.replace(
-                |c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
-            let id_prefix = &repo_mod.id[..repo_mod.id.len().min(8)];
-            let mod_subfolder = format!("{}_{}", id_prefix, safe_name);
-            let target_mod_dir = mods_path.join(&mod_subfolder);
-
-            emit!("bmm://repo-sync-progress", serde_json::json!({
-                "job_id": &job_id,
-                "step": format!("Downloading {} ({}/{})", repo_mod.name, m_idx + 1, total_mods),
-                "progress": ((c_idx as f32 + m_idx as f32 / total_mods as f32) / total_choices as f32) * 100.0,
-                "current_file": &repo_mod.name,
-            }));
-
-            if let Err(e) = std::fs::create_dir_all(&target_mod_dir) {
-                emit!("bmm://repo-sync-warning", serde_json::json!({
-                    "job_id": &job_id, "message": format!("Cannot create mod dir: {}", e),
-                }));
-                continue;
-            }
-
-            for file in &repo_mod.files {
-                let local_path = target_mod_dir.join(&file.relative_path);
-                let needs_download = if local_path.exists() && !body.overwrite_all {
-                    match api_sha256_file(&local_path) {
-                        Ok(h) => h != file.sha256_hash,
-                        Err(_) => true,
-                    }
-                } else { true };
-
-                if needs_download {
-                    if let Some(parent) = local_path.parent() { std::fs::create_dir_all(parent).ok(); }
-                    let file_url = format!("{}mods/{}/{}", base_url, repo_mod.id,
-                        file.relative_path.replace('\\', "/"));
-                    match client.get(&file_url).send().await {
-                        Ok(resp) if resp.status().is_success() => {
-                            consecutive_errors = 0;
-                            let mut stream = resp.bytes_stream();
-                            match tokio::fs::File::create(&local_path).await {
-                                Ok(mut fout) => {
-                                    use tokio::io::AsyncWriteExt;
-                                    while let Some(item) = stream.next().await {
-                                        if let Ok(chunk) = item {
-                                            fout.write_all(&chunk).await.ok();
-                                            if body.download_limit > 0 {
-                                                let ms = (chunk.len() as u64 * 1000)
-                                                    / (body.download_limit as u64 * 1024).max(1);
-                                                if ms > 0 {
-                                                    tokio::time::sleep(tokio::time::Duration::from_millis(ms)).await;
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                Err(e) => emit!("bmm://repo-sync-warning", serde_json::json!({
-                                    "job_id": &job_id,
-                                    "message": format!("Cannot write {}: {}", file.relative_path, e),
-                                })),
-                            }
-                        },
-                        Ok(resp) if resp.status() == reqwest::StatusCode::FORBIDDEN => {
-                            bail!("Access denied (403) — repo banned or creator_id invalid. Sync stopped.");
-                        },
-                        Ok(resp) if resp.status() == reqwest::StatusCode::UNAUTHORIZED => {
-                            bail!("Unauthorized (401) — sync stopped.");
-                        },
-                        Ok(resp) if resp.status().as_u16() >= 500 => {
-                            // Server-side error — likely server crashed
-                            consecutive_errors += 1;
-                            emit!("bmm://repo-sync-warning", serde_json::json!({
-                                "job_id": &job_id,
-                                "message": format!("Server error HTTP {} for {} ({}/{})",
-                                    resp.status(), file.relative_path, consecutive_errors, MAX_CONSECUTIVE_ERRORS),
-                            }));
-                            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                                bail!(format!("Too many server errors ({}×) — repo server may have crashed. Sync stopped.", consecutive_errors));
-                            }
-                        },
-                        Ok(resp) => emit!("bmm://repo-sync-warning", serde_json::json!({
-                            "job_id": &job_id,
-                            "message": format!("HTTP {} for {}", resp.status(), file.relative_path),
-                        })),
-                        Err(e) => {
-                            // Network / connection error
-                            consecutive_errors += 1;
-                            let is_fatal = e.is_connect() || e.is_timeout();
-                            emit!("bmm://repo-sync-warning", serde_json::json!({
-                                "job_id": &job_id,
-                                "message": format!("Network error ({}/{}): {}: {}",
-                                    consecutive_errors, MAX_CONSECUTIVE_ERRORS, file.relative_path, e),
-                            }));
-                            if is_fatal || consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                                bail!(format!("Connection lost ({}{}). Sync stopped.",
-                                    if is_fatal { "fatal: " } else { "" }, e));
-                            }
-                        },
-                    }
-                }
-            }
-
-            if body.delete_extra {
-                let valid: std::collections::HashSet<std::path::PathBuf> = repo_mod.files.iter()
-                    .map(|f| target_mod_dir.join(&f.relative_path)).collect();
-                if let Ok(entries) = std::fs::read_dir(&target_mod_dir) {
-                    for entry in entries.flatten() {
-                        if !valid.contains(&entry.path()) { std::fs::remove_file(entry.path()).ok(); }
-                    }
-                }
-            }
-
-            let mod_id = {
-                let mut d = data.lock().unwrap_or_else(|p| p.into_inner());
-                if let Some(existing) = d.mods.iter().find(|m| m.mod_folder_path == target_mod_dir) {
-                    existing.id.clone()
-                } else {
-                    let new_id = uuid::Uuid::new_v4().to_string();
-                    d.mods.push(crate::models::mod_entry::ModEntry {
-                        id: new_id.clone(),
-                        name: repo_mod.name.clone(),
-                        version: repo_mod.version.clone(),
-                        author: repo_mod.author.clone(),
-                        description: repo_mod.description.clone(),
-                        dependencies: Vec::new(),
-                        unverified: false,
-            enabled: true,
-                        conflicts: Vec::new(),
-                        mod_folder_path: target_mod_dir.clone(),
-                        status: crate::models::mod_entry::ModStatus::Enabled,
-                        added_at: chrono::Local::now().to_rfc3339(),
-                        installed_files: Vec::new(),
-                        download_links: repo_mod.download_links.clone(),
-                        tags: Vec::new(),
-                        install_notes: String::new(),
-                        activation_order: 0,
-                        cached_files: None,
-                        last_scan_mtime: 0,
-                        file_hashes: None,
-                        file_hashes_timestamp: None,
-                        file_hashes_invalid: None,
-                        content_id: None,
-                        source_repo: None,
-                        repo_mod_id: None,
-                        update_url: None,
-                        update_sources: Vec::new(),
-                        direct_url: None,
-                        direct_sig: None,
-                        update_source_protected: false,
-                    });
-                    new_id
-                }
-            };
-            active_mod_ids.push(mod_id);
-        }
-
-        {
-            let mut d = data.lock().unwrap_or_else(|p| p.into_inner());
-            if is_new_profile {
-                d.profiles.push(crate::models::profile::Profile {
-                    id: profile_id.clone(),
-                    name: repo_profile.name.clone(),
-                    game_name: repo.game_name.clone(),
-                    game_path: target_game_path,
-                    mods_path,
-                    backup_path: target_backup_path,
-                    active_mods: active_mod_ids,
-                    color: repo_profile.color.clone(),
-                    icon: repo_profile.icon.clone(),
-                    background_image: None,
-                    icon_image: None,
-                    created_at: chrono::Local::now().to_rfc3339(),
-                    origin_repo_profile_id: Some(repo_profile.id.clone()),
-                });
-                profiles_created += 1;
-            } else if let Some(p) = d.profiles.iter_mut().find(|p| p.id == profile_id) {
-                for id in active_mod_ids {
-                    if !p.active_mods.contains(&id) { p.active_mods.push(id); }
-                }
-            }
-        }
-        save_data(&data, &data_path);
-    }
-
-    emit!("bmm://repo-sync-done", serde_json::json!({
-        "job_id": &job_id,
-        "profiles_created": profiles_created,
-        "message": "Sync completed successfully",
-    }));
-}
-
-/// Zip a directory recursively into a .zip file.
-///
-/// The export command's writer, not a second one: this used to be a private copy with
-/// deflate hard-wired, which is exactly how a compression option added to the app would have
-/// silently not applied to the API. Streams file by file (never `fs::read` of a whole mod).
-fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path, method: crate::commands::repo::ZipMethod) -> Result<(), String> {
-    let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    crate::commands::repo::zip_directory(src_dir, dst_zip, noflag, method)
-}
-
-#[allow(dead_code)] // Retained for reference; gen is now driven through the BMM UI.
-async fn do_api_repo_gen(
-    body: RepoGenBody,
-    data: Arc<std::sync::Mutex<AppData>>,
-    handle: tauri::AppHandle,
-    job_id: String,
-    cancel: Arc<AtomicBool>,
-) {
-    // Validated by the route before this runs; here it can only be a known name.
-    let zip_method = crate::commands::repo::ZipMethod::parse(body.compression.as_deref()).unwrap_or(crate::commands::repo::ZipMethod::Deflate);
-    use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
-
-    macro_rules! emit {
-        ($event:expr, $payload:expr) => {{ let _ = handle.emit($event, $payload); }};
-    }
-    macro_rules! bail {
-        ($msg:expr) => {{
-            emit!("bmm://repo-export-error", serde_json::json!({ "job_id": &job_id, "error": $msg }));
-            return;
-        }};
-    }
-
-    if body.author_name.trim().is_empty() { bail!("authorName is required"); }
-    if body.profile_ids.is_empty()        { bail!("profileIds must not be empty"); }
-    if body.output_dir.is_empty()         { bail!("outputDir is required"); }
-
-    let output_path = std::path::PathBuf::from(&body.output_dir);
-    if let Err(e) = std::fs::create_dir_all(&output_path) {
-        bail!(format!("Cannot create outputDir: {}", e));
-    }
-
-    let (profiles_data, all_tags, game_name) = {
-        let d = data.lock().unwrap_or_else(|p| p.into_inner());
-        let first_profile = match d.profiles.iter().find(|p| body.profile_ids.contains(&p.id)) {
-            Some(p) => p.clone(),
-            None => { drop(d); bail!("None of the specified profileIds were found"); }
-        };
-        let game_name = first_profile.game_name.clone();
-        let mut profiles_data = Vec::new();
-        for pid in &body.profile_ids {
-            if let Some(profile) = d.profiles.iter().find(|p| &p.id == pid) {
-                let profile_mods: Vec<_> = d.mods.iter().filter(|m| {
-                    m.mod_folder_path.starts_with(&profile.mods_path)
-                    || m.mod_folder_path.canonicalize().ok()
-                        .zip(profile.mods_path.canonicalize().ok())
-                        .map(|(a, b)| a.starts_with(b))
-                        .unwrap_or(false)
-                }).cloned().collect();
-                profiles_data.push((profile.clone(), profile_mods));
-            }
-        }
-        (profiles_data, d.custom_tags.clone(), game_name)
-    };
-
-    let seed = body.seed.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let mut repo = ServerRepo::new(
-        format!("{} Repo", profiles_data.first().map(|(p, _)| p.name.as_str()).unwrap_or("BMM")),
-        game_name,
-    );
-    repo.author = Some(body.author_name.clone());
-    repo.seed = Some(seed);
-    // Trimmed and normalised here rather than at read time, so every client sees the same
-    // string and an accidental trailing slash cannot produce `//mods/…`.
-    repo.files_base_url = body.files_base_url.as_ref()
-        .map(|u| u.trim().trim_end_matches('/').to_string())
-        .filter(|u| !u.is_empty());
-
-    // In lightweight mode we skip copying files so no mods/ dir needed
-    let repo_mods_dir = output_path.join("mods");
-    if !body.lightweight {
-        if let Err(e) = std::fs::create_dir_all(&repo_mods_dir) {
-            bail!(format!("Cannot create mods dir: {}", e));
-        }
-    }
-
-    // Mods that are part of this export — used to keep only deps whose target is
-    // also exported (cross-profile deps to non-exported profiles are dropped).
-    let exported_mod_ids: std::collections::HashSet<String> = profiles_data.iter()
-        .flat_map(|(_p, mods)| mods.iter().map(|m| m.id.clone()))
-        .collect();
-
-    let total = profiles_data.len();
-    for (p_idx, (profile, mods)) in profiles_data.into_iter().enumerate() {
-        // Check cancellation between profiles
-        if cancel.load(Ordering::SeqCst) {
-            emit!("bmm://repo-export-error", serde_json::json!({
-                "job_id": &job_id, "error": "Gen cancelled by user", "cancelled": true,
-            }));
-            return;
-        }
-
-        let mut repo_profile = RepoProfile {
-            id: profile.id.clone(),
-            name: profile.name.clone(),
-            game_name: profile.game_name.clone(),
-            mods: Vec::new(),
-            icon: profile.icon.clone(),
-            color: profile.color.clone(),
-            icon_image: None,
-        };
-        let total_mods = mods.len().max(1);
-        for (m_idx, mod_entry) in mods.iter().enumerate() {
-            // Check cancellation between mods
-            if cancel.load(Ordering::SeqCst) {
-                emit!("bmm://repo-export-error", serde_json::json!({
-                    "job_id": &job_id, "error": "Gen cancelled by user", "cancelled": true,
-                }));
-                return;
-            }
-
-            let progress = ((p_idx as f32 + m_idx as f32 / total_mods as f32) / total as f32) * 90.0;
-            let mode_label = if body.lightweight { "Indexing" } else { "Exporting" };
-            emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id,
-                "step": format!("{} {} ({}/{})", mode_label, mod_entry.name, m_idx + 1, total_mods),
-                "progress": progress, "current_file": &mod_entry.name,
-                "lightweight": body.lightweight,
-            }));
-
-            let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
-            if !body.lightweight {
-                std::fs::create_dir_all(&target_mod_dir).ok();
-            }
-
-            let resolved_tags: Vec<crate::models::repo::RepoTag> = mod_entry.tags.iter()
-                .filter_map(|tid| all_tags.iter().find(|t| &t.id == tid))
-                .map(|t| crate::models::repo::RepoTag {
-                    id: t.id.clone(), name: t.name.clone(),
-                    color_bg: t.color.clone(), color_text: "#FFFFFF".to_string(),
-                }).collect();
-
-            let dep_ids: Vec<String> = {
-                let mut v: Vec<String> = Vec::new();
-                for d in &mod_entry.dependencies {
-                    let mid = d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone());
-                    if exported_mod_ids.contains(&mid) && !v.contains(&mid) { v.push(mid); }
-                }
-                v
-            };
-
-            let mut repo_mod = RepoMod {
-                id: mod_entry.id.clone(),
-                name: mod_entry.name.clone(),
-                version: mod_entry.version.clone(),
-                author: mod_entry.author.clone(),
-                description: mod_entry.description.clone(),
-                tags: resolved_tags,
-                files: Vec::new(),
-                archive: None,
-                download_links: mod_entry.download_links.clone(),
-                dependencies: dep_ids,
-                changelog: None,
-                update_url: mod_entry.update_url.clone(),
-                direct_url: mod_entry.direct_url.clone(),
-                update_sources: mod_entry.update_sources.iter()
-                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
-            };
-
-            // Archived mods (.zip) read from their extracted cache view.
-            let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
-
-            // "Zip mods": pack the whole mod into one mods/<id>.zip (full mode only).
-            if body.zip_mods && !body.lightweight {
-                let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
-                if zip_directory(&read_root, &zip_path, zip_method).is_ok() {
-                    let size = std::fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
-                    if let Ok(sha) = api_sha256_file(&zip_path) {
-                        repo_mod.archive = Some(RepoFile {
-                            relative_path: format!("mods/{}.zip", mod_entry.id),
-                            size, sha256_hash: sha, chunks: None,
-                            mtime: None,
-                        });
-                    }
-                    let _ = std::fs::remove_dir_all(&target_mod_dir);
-                }
-                repo_profile.mods.push(repo_mod);
-                continue;
-            }
-
-            if let Ok(files) = crate::fs_utils::list_mod_files(&read_root) {
-                for rel_path in &files {
-                    let src = read_root.join(rel_path);
-                    let size_src = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
-
-                    if body.lightweight {
-                        // Lightweight: hash the source file in place, never copy it.
-                        //
-                        // Chunk hashes are computed here exactly as the full export does.
-                        // Without them a client can only re-fetch a changed file whole, which
-                        // is what made this mode unusable for publishing rather than merely
-                        // cheaper — a manifest is only worth hosting if a small change costs
-                        // a small download.
-                        let need_chunks = size_src > crate::commands::repo::CHUNK_SIZE as u64;
-                        if let Ok((sha, chunks)) =
-                            crate::commands::repo::compute_file_hash_and_chunks(&src, need_chunks)
-                        {
-                            repo_mod.files.push(RepoFile {
-                                relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
-                                size: size_src, sha256_hash: sha, chunks,
-                                mtime: None,
-                            });
-                        }
-                    } else {
-                        // Full export: copy to output dir
-                        let dst = target_mod_dir.join(rel_path);
-                        if let Some(parent) = dst.parent() { std::fs::create_dir_all(parent).ok(); }
-                        if std::fs::copy(&src, &dst).is_err() { continue; }
-                        let size_dst = std::fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
-                        if let Ok(sha) = api_sha256_file(&dst) {
-                            repo_mod.files.push(RepoFile {
-                                relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
-                                size: size_dst, sha256_hash: sha, chunks: None,
-                    mtime: None,
-                            });
-                        }
-                    }
-                }
-            }
-            repo_profile.mods.push(repo_mod);
-        }
-        repo.profiles.push(repo_profile);
-    }
-
-    emit!("bmm://repo-export-progress", serde_json::json!({
-        "job_id": &job_id, "step": "Writing repo.json…", "progress": 92.0, "current_file": "repo.json",
-    }));
-    let repo_json_path = output_path.join("repo.json");
-    match serde_json::to_string_pretty(&repo) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write(&repo_json_path, json) {
-                bail!(format!("Cannot write repo.json: {}", e));
-            }
-        },
-        Err(e) => bail!(format!("Serialization error: {}", e)),
-    }
-
-    if body.generate_server {
-        emit!("bmm://repo-export-progress", serde_json::json!({
-            "job_id": &job_id, "step": "Generating server scripts…", "progress": 93.0, "current_file": "",
-        }));
-        let is_server = body.server_type.as_deref() == Some("server");
-        let cfg = crate::commands::repo::StandaloneServerConfig {
-            repo_path: body.output_dir.clone(),
-            port: body.port.unwrap_or(8080),
-            auto_start: if is_server { false } else { body.auto_start },
-            use_cloudflare: if is_server { false } else { body.use_cloudflare },
-            use_upnp: if is_server { false } else { body.use_upnp },
-            lang: body.lang.clone().unwrap_or_else(|| "en".to_string()),
-            upload_limit: body.upload_limit.unwrap_or(0),
-            server_version: body.server_version,
-            admin_password: body.admin_password.clone(),
-            download_password: None, // local API export doesn't set a subscriber password
-            enable_docker: body.enable_docker,
-            docker_host_type: body.docker_host_type.clone(),
-            server_type: body.server_type.clone(),
-        };
-        if let Err(e) = crate::commands::repo::generate_standalone_server(handle.clone(), cfg).await {
-            emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id,
-                "step": format!("Warning: server script generation: {}", e),
-                "progress": 94.0, "current_file": "",
-            }));
-        }
-    }
-
-    // Optional: create zip archive
-    if body.zip_output {
-        emit!("bmm://repo-export-progress", serde_json::json!({
-            "job_id": &job_id, "step": "Creating zip archive…", "progress": 95.0, "current_file": "",
-        }));
-        let zip_path = output_path.with_extension("zip");
-        match zip_directory(&output_path, &zip_path, zip_method) {
-            Ok(_) => emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id,
-                "step": format!("Zip ready: {}", zip_path.display()),
-                "progress": 96.0, "current_file": zip_path.to_string_lossy(),
-                "zip_path": zip_path.to_string_lossy(),
-            })),
-            Err(e) => emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id, "step": format!("Warning: zip failed: {}", e), "progress": 96.0, "current_file": "",
-            })),
-        }
-    }
-
-    let zip_path = if body.zip_output { Some(output_path.with_extension("zip").to_string_lossy().to_string()) } else { None };
-    emit!("bmm://repo-export-done", serde_json::json!({
-        "job_id": &job_id,
-        "output_dir": &body.output_dir,
-        "repo_json": repo_json_path.to_string_lossy(),
-        "lightweight": body.lightweight,
-        "zip_path": zip_path,
-        "message": "Gen completed successfully",
-    }));
 }
 
 async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std::convert::Infallible> {

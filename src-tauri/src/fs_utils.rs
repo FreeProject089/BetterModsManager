@@ -606,6 +606,111 @@ fn normalize_path(path: PathBuf) -> PathBuf {
     PathBuf::from(s.replace('/', "\\"))
 }
 
+/// A relative path that came from somebody else — a repo manifest, a server's directory
+/// listing — turned into one that can only name something UNDER the folder it is joined to.
+///
+/// `Path::join` is the trap this exists for: an absolute argument REPLACES the base
+/// (`mods.join("C:/Users/x/…/Startup/a.bat")` is that path, not one under `mods`), and a
+/// `..` segment walks out of it. A repo sync joined the manifest's `relative_path` straight
+/// onto the mod folder, so whoever served the manifest chose where on this disk a file landed.
+///
+/// Refused: empty; rooted (`/x`, `\x`, `\\server\x`); anything holding a `:` (a drive, `C:x`
+/// included, or an NTFS alternate data stream) or a NUL; a `..` segment, and any segment that
+/// is only dots and spaces, because Windows trims trailing dots and spaces and `.. ` would
+/// otherwise reach the filesystem as `..`. Empty and `.` segments are dropped. Both separators
+/// are accepted: a manifest written on Windows carries backslashes.
+///
+/// Returns the path with this platform's separators, never empty.
+pub fn safe_relative_path(rel: &str) -> Option<PathBuf> {
+    if rel.contains('\0') || rel.contains(':') {
+        return None;
+    }
+    let norm = rel.replace('\\', "/");
+    if norm.starts_with('/') {
+        return None;
+    }
+    let mut out = PathBuf::new();
+    for seg in norm.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
+        }
+        if seg.trim_end_matches(['.', ' ']).is_empty() {
+            return None;
+        }
+        out.push(seg);
+    }
+    if out.as_os_str().is_empty() { None } else { Some(out) }
+}
+
+/// An id that is about to become ONE folder name — an app's, a launch pack's — or `None`.
+///
+/// `safe_relative_path` with the extra rule that it is a single component: `a/b` is a safe
+/// path and not a folder name. The callers then `remove_dir_all` that folder on uninstall or
+/// delete, so an id of `..` was a request to delete the folder ABOVE, and `C:\` the drive.
+pub fn safe_folder_name(id: &str) -> Option<String> {
+    let p = safe_relative_path(id)?;
+    let mut it = p.components();
+    match (it.next(), it.next()) {
+        (Some(std::path::Component::Normal(one)), None) => Some(one.to_string_lossy().into_owned()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod safe_relative_path_tests {
+    use super::{safe_folder_name, safe_relative_path};
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_folder_name_is_one_safe_component() {
+        assert_eq!(safe_folder_name("com.example.app").as_deref(), Some("com.example.app"));
+        assert_eq!(safe_folder_name("3f2a9c1e-77aa-4b00-9d1e-000000000000").as_deref(), Some("3f2a9c1e-77aa-4b00-9d1e-000000000000"));
+        for bad in ["..", ".", "", "a/b", "a\\b", "C:\\", "C:", "/", "..\\..\\Startup", " . "] {
+            assert_eq!(safe_folder_name(bad), None, "accepted {bad:?}");
+        }
+    }
+
+    /// What every manifest BMM, BCWEB or a directory crawl writes must still pass, unchanged
+    /// apart from the separator.
+    #[test]
+    fn ordinary_mod_paths_pass() {
+        assert_eq!(safe_relative_path("Data/a.dds"), Some(PathBuf::from("Data").join("a.dds")));
+        assert_eq!(safe_relative_path("Data\\sub\\b.lua"), Some(PathBuf::from("Data").join("sub").join("b.lua")));
+        assert_eq!(safe_relative_path("readme.txt"), Some(PathBuf::from("readme.txt")));
+        // A dot-file and a name with dots inside are names, not traversal.
+        assert_eq!(safe_relative_path(".gitkeep"), Some(PathBuf::from(".gitkeep")));
+        assert_eq!(safe_relative_path("v1..2/x"), Some(PathBuf::from("v1..2").join("x")));
+        // Redundant separators and `.` segments are tidied rather than refused.
+        assert_eq!(safe_relative_path("./a//b"), Some(PathBuf::from("a").join("b")));
+    }
+
+    /// Each of these, joined onto a mod folder, names a file outside it.
+    #[test]
+    fn anything_that_leaves_the_folder_is_refused() {
+        for bad in [
+            "", ".", "/", "../x", "a/../../x", "a\\..\\..\\x", "..",
+            "/etc/passwd", "\\Windows\\x", "\\\\server\\share\\x",
+            "C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\a.bat",
+            "C:/x", "C:x", "a.txt:stream", "a\0b",
+            ".. /x", "a/.../b", "a/. /b",
+        ] {
+            assert_eq!(safe_relative_path(bad), None, "accepted {bad:?}");
+        }
+    }
+
+    /// The property the callers rely on, checked on the joined path itself: whatever passes
+    /// stays under the base.
+    #[test]
+    fn a_path_that_passes_stays_under_the_base() {
+        let base = std::env::temp_dir().join("bmm_safe_rel_base");
+        for ok in ["a", "a/b/c.txt", ".hidden/x", "x..y"] {
+            let joined = base.join(safe_relative_path(ok).unwrap());
+            assert!(joined.starts_with(&base), "{ok:?} escaped to {joined:?}");
+            assert!(joined.components().all(|c| c != std::path::Component::ParentDir));
+        }
+    }
+}
+
 /// Unapply a mod: for each file, find if another active mod provides it.
 /// If not, restore from _original.
 ///

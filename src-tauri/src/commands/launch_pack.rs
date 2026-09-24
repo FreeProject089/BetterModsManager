@@ -7,19 +7,11 @@ use uuid::Uuid;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
-/// CWE-22: a launch-pack `name` is user/shared-content controlled and is also used
-/// as the `.lnk` filename. Strip path separators / traversal / illegal chars so the
-/// shortcut can never be written outside the pack dir (e.g. the Startup auto-run
-/// folder → persistence). Returns a safe non-empty stem.
-fn safe_lnk_stem(name: &str) -> String {
-    let cleaned: String = name
-        .chars()
-        .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
-        .collect();
-    let cleaned = cleaned.replace("..", "_");
-    let cleaned = cleaned.trim_matches(|c| c == '.' || c == ' ');
-    if cleaned.is_empty() { "launchpack".to_string() } else { cleaned.to_string() }
-}
+// CWE-22: a launch-pack `name` is user/shared-content controlled and is also used
+// as the `.lnk` filename. Strip path separators / traversal / illegal chars so the
+// shortcut can never be written outside the pack dir (e.g. the Startup auto-run
+// folder → persistence). Lives in proc.rs so the MCP server applies the same rule.
+use crate::commands::proc::safe_lnk_stem;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledApp {
@@ -106,23 +98,9 @@ pub fn create_launch_pack(
 
     // 3. Create the .lnk Shortcut via PowerShell
     let lnk_path = pack_dir.join(format!("{}.lnk", safe_lnk_stem(&name)));
-    let powershell_script = format!(
-        "$WshShell = New-Object -ComObject WScript.Shell; \
-         $Shortcut = $WshShell.CreateShortcut('{}'); \
-         $Shortcut.TargetPath = 'wscript.exe'; \
-         $Shortcut.Arguments = '\"{}\"'; \
-         $Shortcut.WorkingDirectory = '{}'; \
-         $Shortcut.IconLocation = '{}'; \
-         $Shortcut.Save()",
-        lnk_path.to_string_lossy().replace("'", "''"),
-        vbs_path.to_string_lossy().replace("'", "''"),
-        pack_dir.to_string_lossy().replace("'", "''"),
-        icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| String::new()).replace("'", "''")
-    );
-
-    let output = crate::commands::proc::hidden_command("powershell")
-        .args(&["-NoProfile", "-Command", &powershell_script])
-        .output();
+    // Values as environment variables, never spliced into the script: see
+    // proc::hidden_powershell for the quote PowerShell accepts that `''` does not escape.
+    let output = crate::commands::proc::create_wscript_shortcut(&lnk_path, &vbs_path, &pack_dir, icon_path.as_deref());
 
     if let Err(e) = output {
         crate::commands::crash::log_line(format!("[LAUNCHPACK] Failed to create shortcut: {}", e));
@@ -155,7 +133,7 @@ pub fn update_launch_pack(
     icon_source_path: Option<String>,
 ) -> Result<LaunchPack, AppError> {
     let app_data_dir = state.data_path.parent().ok_or_else(|| AppError::Internal("Invalid data path".to_string()))?;
-    let pack_dir = app_data_dir.join("LaunchPacks").join(&id);
+    let pack_dir = app_data_dir.join("LaunchPacks").join(pack_folder(&id)?);
 
     // Verify the pack exists in state and capture current icon path
     let existing_icon_path = {
@@ -211,22 +189,7 @@ pub fn update_launch_pack(
         }
     }
     let lnk_path = pack_dir.join(format!("{}.lnk", safe_lnk_stem(&name)));
-    let powershell_script = format!(
-        "$WshShell = New-Object -ComObject WScript.Shell; \
-         $Shortcut = $WshShell.CreateShortcut('{}'); \
-         $Shortcut.TargetPath = 'wscript.exe'; \
-         $Shortcut.Arguments = '\"{}\"'; \
-         $Shortcut.WorkingDirectory = '{}'; \
-         $Shortcut.IconLocation = '{}'; \
-         $Shortcut.Save()",
-        lnk_path.to_string_lossy().replace("'", "''"),
-        vbs_path.to_string_lossy().replace("'", "''"),
-        pack_dir.to_string_lossy().replace("'", "''"),
-        icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(String::new).replace("'", "''")
-    );
-    let _ = crate::commands::proc::hidden_command("powershell")
-        .args(&["-NoProfile", "-Command", &powershell_script])
-        .output();
+    let _ = crate::commands::proc::create_wscript_shortcut(&lnk_path, &vbs_path, &pack_dir, icon_path.as_deref());
 
     // 4. Update state entry (preserve created_at, replace the rest)
     let updated_pack = {
@@ -243,6 +206,12 @@ pub fn update_launch_pack(
     Ok(updated_pack)
 }
 
+/// A pack's folder name, from its id. See `fs_utils::safe_folder_name`.
+fn pack_folder(id: &str) -> Result<String, AppError> {
+    crate::fs_utils::safe_folder_name(id)
+        .ok_or_else(|| AppError::Internal(format!("Refused: '{}' is not a usable launch pack id", id)))
+}
+
 #[tauri::command]
 pub fn run_launch_pack(state: State<AppState>, id: String) -> Result<(), AppError> {
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
@@ -250,7 +219,7 @@ pub fn run_launch_pack(state: State<AppState>, id: String) -> Result<(), AppErro
         .ok_or_else(|| AppError::NotFound("Launch pack not found".to_string()))?;
 
     let app_data_dir = state.data_path.parent().ok_or_else(|| AppError::Internal("Invalid data path".to_string()))?;
-    let pack_dir = app_data_dir.join("LaunchPacks").join(&pack.id);
+    let pack_dir = app_data_dir.join("LaunchPacks").join(pack_folder(&pack.id)?);
     let vbs_path = pack_dir.join("launcher.vbs");
 
     if !vbs_path.exists() {
@@ -276,11 +245,16 @@ pub fn delete_launch_pack(state: State<AppState>, id: String) -> Result<(), AppE
     drop(data);
     state.save()?;
 
-    // Cleanup files
+    // Cleanup files — only a folder that is one plain name under LaunchPacks. The id is
+    // whatever data.json says, and a restored backup can say `..`: this used to be
+    // `remove_dir_all(LaunchPacks/..)`, the whole app-data folder. The record is removed
+    // either way; a folder it cannot name is left alone.
     let app_data_dir = state.data_path.parent().unwrap();
-    let pack_dir = app_data_dir.join("LaunchPacks").join(&id);
-    if pack_dir.exists() {
-        let _ = std::fs::remove_dir_all(pack_dir);
+    if let Ok(folder) = pack_folder(&id) {
+        let pack_dir = app_data_dir.join("LaunchPacks").join(folder);
+        if pack_dir.exists() {
+            let _ = std::fs::remove_dir_all(pack_dir);
+        }
     }
 
     Ok(())
@@ -413,14 +387,17 @@ fn _scan_lnk_recursive(dir: &Path, apps: &mut Vec<InstalledApp>) {
     _collect_lnks(dir, &mut lnks, 0);
     if lnks.is_empty() { return; }
 
-    // Batch-resolve all lnks via a single PowerShell call
-    let script_parts: Vec<String> = lnks.iter().map(|p| {
-        format!("try{{$s=(New-Object -COM WScript.Shell).CreateShortcut('{}');if($s.TargetPath -like '*.exe'){{\"{}|$($s.TargetPath)\"}}}}catch{{}}", p.replace('\'', "''"), p.replace('\'', "''"))
-    }).collect();
-    let script = script_parts.join(";");
-
-    let out = crate::commands::proc::hidden_command("powershell")
-        .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+    // Batch-resolve all lnks via a single PowerShell call. The paths travel in ONE
+    // environment variable, a line each (a Windows file name cannot hold a newline), and
+    // never in the script text: they are file names somebody else chose, and the old splice
+    // put each one in a single-quoted string (ended early by a ’) AND a double-quoted one
+    // (where `$(…)` in a shortcut's name ran). See proc::hidden_powershell.
+    let script = "$sh = New-Object -COM WScript.Shell; \
+        foreach ($p in ($env:BMM_LNKS -split \"`n\")) { if ($p) { \
+            try { $s = $sh.CreateShortcut($p); if ($s.TargetPath -like '*.exe') { $p + '|' + $s.TargetPath } } catch {} \
+        } }";
+    let joined = lnks.join("\n");
+    let out = crate::commands::proc::hidden_powershell(script, &[("BMM_LNKS", std::ffi::OsStr::new(&joined))])
         .output();
 
     if let Ok(o) = out {
@@ -465,19 +442,18 @@ fn _collect_lnks(dir: &Path, out: &mut Vec<String>, depth: usize) {
 pub async fn extract_exe_icon(exe_path: String) -> Result<String, AppError> {
     #[cfg(target_os = "windows")]
     {
-        let script = format!(
-            "Add-Type -AssemblyName System.Drawing; \
-             $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('{}'); \
-             if ($icon) {{ \
+        // The path as an environment variable, not spliced: see proc::hidden_powershell.
+        let script = "Add-Type -AssemblyName System.Drawing; \
+             $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($env:BMM_EXE); \
+             if ($icon) { \
                  $bmp = $icon.ToBitmap(); \
                  $ms = New-Object System.IO.MemoryStream; \
                  $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); \
                  [Convert]::ToBase64String($ms.ToArray()) \
-             }}",
-            exe_path.replace('\'', "''")
-        );
+             }";
         let out = crate::commands::proc::hidden_tokio_command("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .env("BMM_EXE", &exe_path)
             .output()
             .await
             .map_err(|e| AppError::Internal(format!("PS icon error: {}", e)))?;
@@ -526,7 +502,7 @@ pub fn open_launch_pack_folder(state: State<AppState>, id: String) -> Result<(),
         .ok_or_else(|| AppError::NotFound("Launch pack not found".to_string()))?;
 
     let app_data_dir = state.data_path.parent().ok_or_else(|| AppError::Internal("Invalid data path".to_string()))?;
-    let pack_dir = app_data_dir.join("LaunchPacks").join(&pack.id);
+    let pack_dir = app_data_dir.join("LaunchPacks").join(pack_folder(&pack.id)?);
 
     if pack_dir.exists() {
         #[cfg(target_os = "windows")]

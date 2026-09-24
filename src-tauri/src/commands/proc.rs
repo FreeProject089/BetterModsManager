@@ -29,6 +29,93 @@ pub fn hidden_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> tokio::pro
 }
 
 
+/// A hidden PowerShell running `script`, with every VALUE handed over as an environment
+/// variable (`$env:NAME` in the script) instead of being spliced into the script text.
+///
+/// Splicing is what the launch-pack code did, escaping `'` as `''` — and PowerShell also ends a
+/// single-quoted string at `‘ ’ ‚ ‛` (U+2018–U+201B). A pack named `x’; <command>; ’` in a
+/// `.bmmlaunch` somebody shared ran `<command>` the moment it was IMPORTED (CWE-78). An
+/// environment variable is data to PowerShell whatever it contains, so there is nothing left
+/// to escape and no quote character to forget.
+pub fn hidden_powershell(script: &str, vars: &[(&str, &std::ffi::OsStr)]) -> std::process::Command {
+    let mut c = hidden_command("powershell");
+    c.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    for (k, v) in vars {
+        c.env(k, v);
+    }
+    c
+}
+
+/// Write a Windows shortcut (`.lnk`) that runs `wscript.exe "<vbs>"`: a launch pack's.
+///
+/// The one copy of a script that was written out three times (create, update, and the MCP
+/// server's create), all three splicing paths into the text — see `hidden_powershell`.
+pub fn create_wscript_shortcut(
+    lnk: &std::path::Path,
+    vbs: &std::path::Path,
+    working_dir: &std::path::Path,
+    icon: Option<&std::path::Path>,
+) -> std::io::Result<std::process::Output> {
+    let script = "$WshShell = New-Object -ComObject WScript.Shell; \
+         $Shortcut = $WshShell.CreateShortcut($env:BMM_LNK); \
+         $Shortcut.TargetPath = 'wscript.exe'; \
+         $Shortcut.Arguments = '\"' + $env:BMM_VBS + '\"'; \
+         $Shortcut.WorkingDirectory = $env:BMM_WORKDIR; \
+         $Shortcut.IconLocation = $env:BMM_ICON; \
+         $Shortcut.Save()";
+    let empty = std::ffi::OsStr::new("");
+    hidden_powershell(script, &[
+        ("BMM_LNK", lnk.as_os_str()),
+        ("BMM_VBS", vbs.as_os_str()),
+        ("BMM_WORKDIR", working_dir.as_os_str()),
+        ("BMM_ICON", icon.map(|p| p.as_os_str()).unwrap_or(empty)),
+    ])
+    .output()
+}
+
+/// A launch-pack name made safe to be a shortcut's FILE name: no separator, no drive, no
+/// wildcard, no `..`, never empty. Here rather than in launch_pack.rs so the MCP server,
+/// which compiles this file and not that one, names its shortcuts by the same rule — it
+/// joined the raw name, so `..\..\Startup\x` placed the shortcut wherever it liked.
+pub fn safe_lnk_stem(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.replace("..", "_");
+    let cleaned = cleaned.trim_matches(|c| c == '.' || c == ' ');
+    if cleaned.is_empty() { "launchpack".to_string() } else { cleaned.to_string() }
+}
+
+#[cfg(all(test, windows))]
+mod powershell_tests {
+    use super::*;
+
+    /// The trigger, run for real: a value holding PowerShell's other single quotes, which a
+    /// `''` escape does not touch. Passed as a variable it comes back as the same string and
+    /// nothing in it runs.
+    #[test]
+    fn a_value_with_unicode_quotes_is_data_not_code() {
+        let hostile = "x\u{2019}; Write-Output INJECTED; \u{2019} and ' and \u{2018}";
+        let out = hidden_powershell(
+            "[Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output ('value=' + $env:BMM_T)",
+            &[("BMM_T", std::ffi::OsStr::new(hostile))],
+        )
+        .output()
+        .expect("powershell runs");
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(!text.lines().any(|l| l.trim() == "INJECTED"), "the value ran: {text}");
+        assert!(text.contains(&format!("value={hostile}")), "the value was changed: {text}");
+    }
+
+    #[test]
+    fn a_shortcut_name_cannot_carry_a_path() {
+        assert_eq!(safe_lnk_stem(r"..\..\Startup\evil"), "____Startup_evil");
+        assert_eq!(safe_lnk_stem("C:evil"), "C_evil");
+        assert_eq!(safe_lnk_stem("   "), "launchpack");
+    }
+}
+
 /// What a finished (or killed) process left behind.
 pub struct Finished {
     pub stdout: String,
