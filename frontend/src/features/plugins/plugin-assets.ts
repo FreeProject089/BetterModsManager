@@ -17,6 +17,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { showConfirm } from '../../ui/confirm.js';
+import { RISK_KEYS } from '../settings/bmmpa-inspect.js';
 
 /** One shipped file, as the backend reports it. Mirrors `commands::plugin_assets::PluginAsset`. */
 export interface PluginAsset {
@@ -419,7 +420,9 @@ async function paintAutomation(view: HTMLElement, pluginId: string, item: Plugin
         view.innerHTML = `<p class="pa-hint pa-hint-bad">${escHtml(t('plugins.contents.autoNoTasks'))}</p>`;
         return;
     }
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'];
+    // The one vocabulary (bmmpa-inspect.ts). A private copy here predated `resources` and
+    // showed a task that asks for it as asking for nothing (pentest R13).
+    const RISKY: readonly string[] = RISK_KEYS;
     const countSteps = (steps: any[]): number => (steps || []).reduce((n, st) => {
         const inner = [st?.steps, st?.then, st?.else, st?.onError, st?.default]
             .filter(Array.isArray) as any[][];

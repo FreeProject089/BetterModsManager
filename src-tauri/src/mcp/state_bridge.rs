@@ -1400,14 +1400,65 @@ pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::
             tasks[i] = task;
         }
         None => {
-            if let Some(o) = task.as_object_mut() {
-                o.entry("enabled").or_insert(serde_json::json!(false));
-            }
+            if let Some(o) = task.as_object_mut() { creation_defaults(o); }
             tasks.push(task);
         }
     }
     std::fs::write(&path, serde_json::to_string_pretty(&tasks)?)?;
     Ok(serde_json::json!({ "id": id, "updated": updated, "count": tasks.len() }))
+}
+
+/// The permission keys a task can be granted (frontend `RISK_KEYS`, bmms.rs `allow`).
+const TASK_PERM_KEYS: [&str; 6] = ["command", "script", "deeplink", "stopProcess", "delete", "resources"];
+
+/// What a NEW task gets when the caller leaves it out: disabled, and an explicit `perms`
+/// object with every capability off.
+///
+/// The `perms` half is the one that was missing (pentest R13). The scheduler reads a task
+/// with no `perms` object as a LEGACY task, and a legacy task may fire any bmm:// deep link
+/// (`taskPerms` in scheduler.ts), so "created without perms" meant "created with `deeplink`"
+/// — the opposite of this tool's own contract, "each one false unless set". An agent that
+/// authored a task from a third party's text and granted nothing got a task that could reach
+/// everything the app exposes through a link. The keys the caller DID set are kept, and a
+/// missing key inside a given `perms` is already "off" for the runtime.
+fn creation_defaults(o: &mut serde_json::Map<String, serde_json::Value>) {
+    o.entry("enabled").or_insert(serde_json::json!(false));
+    if !o.get("perms").map(|p| p.is_object()).unwrap_or(false) {
+        let off: serde_json::Map<String, serde_json::Value> =
+            TASK_PERM_KEYS.iter().map(|k| (k.to_string(), serde_json::json!(false))).collect();
+        o.insert("perms".into(), serde_json::Value::Object(off));
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    use super::*;
+
+    fn created(task: serde_json::Value) -> serde_json::Value {
+        let mut t = task;
+        creation_defaults(t.as_object_mut().unwrap());
+        t
+    }
+
+    #[test]
+    fn a_new_task_without_perms_is_granted_nothing_not_the_legacy_deeplink() {
+        let t = created(serde_json::json!({ "name": "x", "steps": [] }));
+        let perms = t["perms"].as_object().expect("an explicit perms object, never absent");
+        for k in TASK_PERM_KEYS {
+            assert_eq!(perms.get(k), Some(&serde_json::json!(false)), "{k}");
+        }
+        assert_eq!(t["enabled"], false);
+    }
+
+    #[test]
+    fn what_the_caller_granted_is_kept() {
+        let t = created(serde_json::json!({ "name": "x", "steps": [], "enabled": true, "perms": { "resources": true } }));
+        assert_eq!(t["perms"], serde_json::json!({ "resources": true }));
+        assert_eq!(t["enabled"], true);
+        // A `perms` that is not an object grants nothing at run time: replaced, not trusted.
+        let t = created(serde_json::json!({ "name": "x", "steps": [], "perms": "all" }));
+        assert_eq!(t["perms"]["deeplink"], false);
+    }
 }
 
 /// Delete a scheduler task by id.

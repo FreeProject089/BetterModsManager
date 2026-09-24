@@ -426,22 +426,31 @@ const CREATOR_PROOF_TTL_SECONDS: u64 = 120;
 /// with anything else refused rather than trimmed. That is what stops a proof captured by one
 /// server from opening another, and it is also why this is not a signing oracle — everything
 /// else in the signed bytes is written here.
+/// The v1 payload `{"cid":…,"aud":…,"exp":…}`, signed by the ROOT key.
+///
+/// Hand-built rather than serde: three fields, and the field ORDER is part of what gets
+/// signed. A derived struct that someone later reorders would silently change the bytes.
+///
+/// The audience is an origin — `https://host[:port]`, no path, query or fragment, which would
+/// bind the proof to one endpoint instead of to the server — and it is checked by the SAME
+/// function as v5's (`creator_v5::validate_aud`). v1 had its own copy, and when v5's learned
+/// to refuse `"` and `\` this one did not (pentest R12): the audience is spliced into JSON
+/// here, so `https://x","aud":"https://bettercommunity.net` passed the "no `/`"
+/// rule and produced a payload whose SECOND `aud` — the one a JSON parser keeps — names a
+/// server the caller never asked for, under a valid root signature. And v1 is exactly what
+/// `creatorProofFor` falls back to when v5 refuses an audience.
+fn v1_payload(cid_hex: &str, aud: &str, exp: u64) -> Result<String, String> {
+    let aud = crate::commands::creator_v5::validate_aud(aud)?;
+    Ok(format!(r#"{{"cid":"{}","aud":"{}","exp":{}}}"#, cid_hex, aud, exp))
+}
+
 #[tauri::command]
 pub fn creator_proof(handle: AppHandle, aud: String) -> Result<String, String> {
     use base64::Engine;
     let b64u = base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
-    // An origin, not a URL. `https://host` or `https://host:port` — a path, a query or a
-    // fragment means the caller passed a whole URL, and signing that would bind the proof to
-    // one endpoint of a server instead of to the server.
-    let aud = aud.trim().trim_end_matches('/');
-    let rest = aud
-        .strip_prefix("https://")
-        .or_else(|| aud.strip_prefix("http://"))
-        .ok_or_else(|| "Audience must be an http(s) origin".to_string())?;
-    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
-        return Err("Audience must be an origin, not a URL".to_string());
-    }
+    // Refused before the key is even loaded (see `v1_payload`).
+    crate::commands::creator_v5::validate_aud(&aud)?;
 
     let signing_key = load_or_generate_keys(&handle)?;
     let verifying_key: VerifyingKey = (&signing_key).into();
@@ -451,14 +460,7 @@ pub fn creator_proof(handle: AppHandle, aud: String) -> Result<String, String> {
         .as_secs()
         + CREATOR_PROOF_TTL_SECONDS;
 
-    // Hand-built rather than serde: three fields, and the field ORDER is part of what gets
-    // signed. A derived struct that someone later reorders would silently change the bytes.
-    let payload = format!(
-        r#"{{"cid":"{}","aud":"{}","exp":{}}}"#,
-        hex::encode(verifying_key.to_bytes()),
-        aud,
-        exp
-    );
+    let payload = v1_payload(&hex::encode(verifying_key.to_bytes()), &aud, exp)?;
     let payload_b64 = b64u.encode(payload.as_bytes());
     let signature: Signature = signing_key.sign(payload_b64.as_bytes());
     Ok(format!(
@@ -693,4 +695,37 @@ pub fn verify_repo_signature(repo: crate::models::repo::ServerRepo) -> bool {
     let author_id_hex = match repo_to_verify.author_id.take() { Some(id) => id, None => return false };
     let json_to_verify = match serde_json::to_string(&repo_to_verify) { Ok(j) => j, Err(_) => return false };
     verify_signature(&author_id_hex, &signature_hex, json_to_verify.as_bytes())
+}
+
+#[cfg(test)]
+mod v1_proof_tests {
+    use super::v1_payload;
+
+    const CID: &str = "aa";
+
+    /// Pentest R12: v1 splices the audience into JSON that the ROOT key signs. Its own copy of
+    /// the origin check forbade `/ ? #` but not `"` or `\`, so a JSON escape smuggled a second
+    /// `aud` past it — and the parser on the other end keeps the last one.
+    #[test]
+    fn an_audience_cannot_rewrite_the_signed_payload() {
+        for hostile in [
+            r#"https://x","aud":"https://bettercommunity.net"#,
+            r#"https://x","exp":99999999999,"z":""#,
+            r#"https://x\"#,
+        ] {
+            assert!(v1_payload(CID, hostile, 1).is_err(), "{hostile}");
+        }
+    }
+
+    #[test]
+    fn an_origin_signs_exactly_three_fields() {
+        let p = v1_payload(CID, " https://bettercommunity.net:8443/ ", 42).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&p).unwrap();
+        assert_eq!(v.as_object().unwrap().len(), 3);
+        assert_eq!(v["aud"], "https://bettercommunity.net:8443");
+        assert_eq!(v["exp"], 42);
+        for url in ["https://x/path", "https://x?q", "https://x#f", "ftp://x", "https://"] {
+            assert!(v1_payload(CID, url, 1).is_err(), "{url}");
+        }
+    }
 }

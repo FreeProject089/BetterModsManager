@@ -86,12 +86,35 @@ fn random_12() -> [u8; 12] {
 /// A seed, wiped when it goes out of scope.
 pub type Seed = Zeroizing<[u8; 32]>;
 
+/// Straight into the wiped array: no heap at all. `hex::decode` collects into a `Vec` that
+/// starts at 8 bytes and grows to 16 then 32, and each grow frees the smaller buffer with the
+/// first 8 / 16 seed bytes still in it — `Zeroizing` only ever wiped the last one. This runs
+/// on every signature, every Creator ID and every store check (pentest R12).
 fn seed_from_hex(h: &str) -> Result<Seed, String> {
-    let v = Zeroizing::new(hex::decode(h).map_err(|_| "bad seed".to_string())?);
-    if v.len() != 32 { return Err("bad seed length".into()); }
+    if h.len() != 64 { return Err("bad seed length".into()); }
     let mut out = Zeroizing::new([0u8; 32]);
-    out.copy_from_slice(&v);
+    hex::decode_to_slice(h, &mut out[..]).map_err(|_| "bad seed".to_string())?;
     Ok(out)
+}
+
+/// The store as JSON in ONE allocation of exactly its size, so the only copy of the seeds in
+/// clear is the buffer the caller wipes. `serde_json::to_vec` starts at 128 bytes and doubles:
+/// a store is ~700 bytes with its first certificate, so the 128- and 256-byte buffers it
+/// outgrew — the root seed, then both seeds — went back to the allocator unwiped (mimalloc
+/// does not clear on free) on every migration, rotation and reset (pentest R12). Serialising
+/// twice (once to count) costs microseconds on a path that then calls DPAPI.
+fn store_json(store: &KeyStoreV5) -> Result<Zeroizing<Vec<u8>>, String> {
+    struct Count(usize);
+    impl std::io::Write for Count {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> { self.0 += b.len(); Ok(b.len()) }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+    }
+    let mut n = Count(0);
+    serde_json::to_writer(&mut n, store).map_err(|e| e.to_string())?;
+    let mut buf = Zeroizing::new(Vec::with_capacity(n.0));
+    serde_json::to_writer(&mut *buf, store).map_err(|e| e.to_string())?;
+    if buf.len() != n.0 { return Err("store serialised to two different lengths".into()); }
+    Ok(buf)
 }
 
 fn seed_hex(seed: &[u8; 32]) -> Zeroizing<String> { Zeroizing::new(hex::encode(seed)) }
@@ -574,7 +597,7 @@ fn wrap_key(vault: &dyn Vault, create: bool) -> Result<Zeroizing<[u8; 32]>, Stri
 }
 
 pub fn encode_store_with(store: &KeyStoreV5, seal: &Seal, vault: &dyn Vault) -> Result<Vec<u8>, String> {
-    let json = Zeroizing::new(serde_json::to_vec(store).map_err(|e| e.to_string())?);
+    let json = store_json(store)?;
     let mut out = seal.magic().to_vec();
     match seal {
         Seal::Dpapi => {
@@ -595,7 +618,8 @@ pub fn encode_store_with(store: &KeyStoreV5, seal: &Seal, vault: &dyn Vault) -> 
             out.extend_from_slice(&nonce);
             out.extend_from_slice(&ct);
         }
-        Seal::Plain => out.extend_from_slice(&json),
+        // Plain JSON by design (file-0600, no keyring): still one exact grow, not several.
+        Seal::Plain => { out.reserve_exact(json.len()); out.extend_from_slice(&json) }
     }
     Ok(out)
 }
@@ -1450,6 +1474,29 @@ mod hardening {
         assert!(!dbg.contains(s.root.as_str()) && !dbg.contains(s.active.as_str()), "seed in {:?}", dbg);
         // And the seeds sit in buffers that are wiped on drop (a compile-time check).
         let _: (&Zeroizing<String>, &Zeroizing<String>) = (&s.root, &s.active);
+    }
+
+    // Pentest R12: `Zeroizing` wipes the buffer it wraps, not the ones a growing `Vec` left
+    // behind. The sealed store's JSON was built by `serde_json::to_vec` (128 bytes, doubling),
+    // so both seeds sat in freed, unwiped heap blocks after every write.
+    #[test]
+    fn the_store_json_is_built_in_one_exact_buffer() {
+        let mut s = store_a();
+        s.rotate([10u8; 32], 2000).unwrap();
+        let j = store_json(&s).unwrap();
+        assert_eq!(j.capacity(), j.len(), "the buffer grew: every smaller copy was freed unwiped");
+        assert!(j.len() > 256, "a store this size would have grown through 128 and 256 bytes");
+        // Same bytes as before, so every store already on disk still opens.
+        assert_eq!(&j[..], &serde_json::to_vec(&s).unwrap()[..]);
+    }
+
+    #[test]
+    fn a_seed_decodes_only_from_exactly_64_hex_digits() {
+        let s = store_a();
+        assert_eq!(seed_from_hex(&s.root).unwrap()[..], [7u8; 32]);
+        for bad in ["", "ab", &"a".repeat(63), &"a".repeat(65), &"g".repeat(64), &format!("{}é", "a".repeat(62))] {
+            assert!(seed_from_hex(bad).is_err(), "{bad:?}");
+        }
     }
 
     // ── Upgrade from v5.0 ────────────────────────────────────────────────────

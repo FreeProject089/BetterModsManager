@@ -25,20 +25,23 @@ import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { grantedPermissions } from './bmmpa-inspect.js';
 
-/** The capabilities a task must be granted. Mirrors TaskPerms / RISK_KEYS.
+/** The capabilities a task must be granted are RISK_KEYS (bmmpa-inspect.ts), read through
+ *  `grantedPermissions` there. This screen kept its own list once, written before
+ *  `resources` existed: a script granted `resources` was called safe and ran on one click
+ *  (pentest R13). One list, one reader.
  *
- *  Four of them are about reaching OUTSIDE BMM; `delete` is the odd one, and the reason
- *  this comment no longer says "the four that reach outside" — it destroys the user's own
- *  data from the inside, which no external gate would ever see. */
-const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'] as const;
-
+ *  Most of them are about reaching OUTSIDE BMM; `delete` destroys the user's own data from
+ *  the inside, and `resources` decides how hard the whole PC works for BMM — neither is
+ *  something an external gate would ever see. */
 const PERM_LABEL: Record<string, () => string> = {
     command: () => t('bms.perm.command') || 'run external programs',
     script: () => t('bms.perm.script') || 'run scripts (PowerShell, Python, Bash…)',
     deeplink: () => t('bms.perm.deeplink') || 'fire bmm:// links, which reach anything the app exposes',
     stopProcess: () => t('bms.perm.stopProcess') || 'stop running programs',
     delete: () => t('bms.perm.delete') || 'delete profiles, modpacks and mod folders',
+    resources: () => t('sched.permResources') || 'change how hard BMM works',
 };
 
 interface Compiled { ok: boolean; task?: any; errors?: { line: number; col: number; message: string }[] }
@@ -115,25 +118,6 @@ function describe(steps: any[], depth = 0): string[] {
             }
         }
         if (!['action', 'parallel', 'if', 'repeat', 'forEach', 'try', 'switch'].includes(k)) out.push(`${pad}▸ ${k}`);
-    }
-    return out;
-}
-
-/**
- * What a task grants itself, from BOTH sources.
- *
- * Exported and pure because it is the security decision this whole screen exists to make,
- * and a decision buried inside a DOM builder cannot be tested. An empty list means the file
- * can be run on one click; anything in it means the person has to read first.
- *
- * `allowCustomCommands` is the legacy single flag. A file written by an older BMM carries
- * only that, and reading `perms` alone would show it as asking for nothing — the one case
- * where being wrong matters most.
- */
-export function grantedPermissions(task: any): string[] {
-    const out = RISKY.filter((k) => task?.perms?.[k] === true) as string[];
-    if (task?.allowCustomCommands === true) {
-        for (const k of ['command', 'deeplink']) if (!out.includes(k)) out.push(k);
     }
     return out;
 }

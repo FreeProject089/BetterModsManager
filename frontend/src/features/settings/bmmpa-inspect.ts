@@ -21,6 +21,30 @@
  *  today is not a reason to build the shape that breaks with two. */
 export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources'] as const;
 
+/** What a task will be ALLOWED to do if it runs as it is — the question a "Run it now" button
+ *  asks, as opposed to what a file asks for (the import strips that anyway).
+ *
+ *  Read the way the scheduler's `taskPerms` reads it at run time, never more narrowly: a
+ *  `perms` object grants every key whose value is truthy; a task with no `perms` object is a
+ *  legacy task, which the runtime grants `deeplink` always and `command` with the old
+ *  `allowCustomCommands` flag. The flag is also reported beside a `perms` object (it grants
+ *  nothing there at run time, but a reviewer should see it asked).
+ *
+ *  Shared because a private copy is how the `.bmmscript` review screen came to call a task
+ *  granted `resources` "safe" (pentest R13): its list predated the permission. */
+export function grantedPermissions(task: any): string[] {
+    if (!task || typeof task !== 'object') return [];
+    const perms = task.perms;
+    const out: string[] = [];
+    if (perms && typeof perms === 'object') {
+        for (const k of RISK_KEYS) if (perms[k]) out.push(k);
+    } else if (!perms) {
+        out.push('deeplink');
+    }
+    if (task.allowCustomCommands === true) for (const k of ['command', 'deeplink']) if (!out.includes(k)) out.push(k);
+    return out;
+}
+
 /** Action types that reach outside BMM whatever the permissions say.
  *
  *  A Set of types, not a map to prose: the type IS the stable identifier and the words
