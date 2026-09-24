@@ -57,7 +57,27 @@ impl ZipMethod {
     }
 }
 
+/// What a caller lends the writer so the resource governor can pause, cancel and count it
+/// (OpKind::Compress). A trait and not the governor's ticket: this file is also compiled by the
+/// MCP server example, which has no governor, so the app side implements it (repo.rs).
+pub trait ZipGate {
+    /// Before every entry. An error stops the zip with that error.
+    fn checkpoint(&self) -> Result<(), String> { Ok(()) }
+    /// After every file: bytes read from it (the uncompressed size).
+    fn wrote(&self, _bytes: u64) {}
+}
+
+/// No gate: the writer as it was.
+pub struct NoGate;
+impl ZipGate for NoGate {}
+
 pub fn zip_dir(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>, method: ZipMethod) -> Result<(), String> {
+    zip_dir_gated(src_dir, dst_file, cancel_flag, method, &NoGate)
+}
+
+/// `zip_dir` with a gate between entries. The bytes written do not depend on the gate: same
+/// walk, same options, same method; the gate only decides whether the next entry is written.
+pub fn zip_dir_gated(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>, method: ZipMethod, gate: &dyn ZipGate) -> Result<(), String> {
     use zip::write::FileOptions;
     use std::io::{copy, BufWriter};
     use walkdir::WalkDir;
@@ -78,13 +98,15 @@ pub fn zip_dir(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std:
         if cancel_flag.load(Ordering::SeqCst) {
             return Err("repo.cancelled".to_string());
         }
+        gate.checkpoint()?;
         let path = entry.path();
         let name = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
 
         if path.is_file() {
             zip.start_file(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
             let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
-            copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+            let n = copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+            gate.wrote(n);
         } else if !name.as_os_str().is_empty() {
             zip.add_directory(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
         }

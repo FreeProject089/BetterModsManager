@@ -176,7 +176,35 @@ fn pack_blocking(dir: String, out: String) -> Result<BundlePacked, String> {
     if let Some(parent) = out_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
+    // One Compress ticket for the packing (resource governor): a pause or a cancel from the
+    // dashboard lands between two files, and a cancelled bundle is removed, not left half
+    // written under the name the user chose.
+    let ticket = crate::governor::runtime::global()
+        .begin(crate::governor::config::OpKind::Compress, &format!("catalog bundle → {}", out_path.display()));
+    let result = write_bundle(&dir, &out_path, &wanted, &ticket);
+    if matches!(&result, Err(e) if e == CANCELLED) {
+        let _ = std::fs::remove_file(&out_path);
+    }
+    let (count, bytes) = result?;
+
+    Ok(BundlePacked {
+        path: out_path.to_string_lossy().to_string(),
+        files: count,
+        bytes,
+        missing,
+    })
+}
+
+const CANCELLED: &str = "bundle.cancelled";
+
+/// Write the bundle: catalog.json, then exactly the names the catalogue uses.
+fn write_bundle(
+    dir: &Path,
+    out_path: &Path,
+    wanted: &[String],
+    ticket: &crate::governor::queue::Ticket,
+) -> Result<(u32, u64), String> {
+    let file = std::fs::File::create(out_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let opts =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -191,27 +219,23 @@ fn pack_blocking(dir: String, out: String) -> Result<BundlePacked, String> {
         if !written.insert(name.to_string()) {
             return Ok(());
         }
+        ticket.checkpoint().map_err(|_| CANCELLED.to_string())?;
         let path = dir.join(name);
         let Ok(data) = std::fs::read(&path) else { return Ok(()) };
         zip.start_file(name.to_string(), opts).map_err(|e| e.to_string())?;
         zip.write_all(&data).map_err(|e| e.to_string())?;
+        ticket.add_bytes(data.len() as u64, 0);
         count += 1;
         bytes += data.len() as u64;
         Ok(())
     };
 
     add(&mut zip, "catalog.json")?;
-    for name in &wanted {
+    for name in wanted {
         add(&mut zip, name)?;
     }
     zip.finish().map_err(|e| e.to_string())?;
-
-    Ok(BundlePacked {
-        path: out_path.to_string_lossy().to_string(),
-        files: count,
-        bytes,
-        missing,
-    })
+    Ok((count, bytes))
 }
 
 /// Open a bundle: extract it (cached) and hand back the catalog plus what is in there.
@@ -219,7 +243,12 @@ fn pack_blocking(dir: String, out: String) -> Result<BundlePacked, String> {
 /// The catalog text is returned RAW. Parsing and sanitising it is the frontend's job and is
 /// already written there for every catalog kind — doing half of it here would be a second
 /// implementation of the same rules, in a language where the first one's tests do not run.
-#[tauri::command]
+///
+/// `command(async)`: opening a bundle the first time extracts it (an Extract ticket, taken
+/// inside `archive::materialize`), and a synchronous command runs on the main thread in
+/// Tauri v2, where a few hundred MB of unzipping froze the window. The Rust function stays
+/// synchronous for the callers that already run off the main thread (plugins.rs).
+#[tauri::command(async)]
 pub fn catalog_bundle_open(path: String) -> Result<BundleOpened, String> {
     let p = PathBuf::from(&path);
     if !p.is_file() {

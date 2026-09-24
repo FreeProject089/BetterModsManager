@@ -113,6 +113,14 @@ function describe(method: string, path: string): { label: string; icon: string }
         [/^\/api\/health$/,              tl('actionApiHealth', 'API health'),       ICN.activity],
         [/^\/api\/check-update$/,        tl('actionCheckUpdate', 'Check for update'), ICN.refresh],
         [/^\/api\/creator-id$/,          tl('actionGetCreatorId', 'Get creator ID'), ICN.id],
+        // The resource governor (A4): a change from outside the app is named in its toast.
+        [/^\/api\/resources\/preset$/,   t('api.act.resPreset'),   ICN.activity],
+        [/^\/api\/resources\/game-mode$/, t('api.act.resGame'),    ICN.activity],
+        [/^\/api\/resources\/queue$/,    t('api.act.resQueue'),    ICN.stop],
+        [/^\/api\/resources\/io-rule$/,  t('api.act.resIoRule'),   ICN.edit],
+        [/^\/api\/resources\/hardware$/, t('api.act.resHardware'), ICN.info],
+        [/^\/api\/resources$/,           t('api.act.resStatus'),   ICN.activity],
+        [/^\/api\/schedules\/[^/]+\/runs$/, t('api.act.schedRuns'), ICN.list],
     ];
     for (const [re, label, icon] of map) if (re.test(p)) return { label, icon };
     return { label: `${method} ${p}`, icon: ICN.globe };

@@ -2,7 +2,7 @@
 
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
-running it with a subcommand instead of `serve` gives you 62 commands from a terminal, a
+running it with a subcommand instead of `serve` gives you 66 commands from a terminal, a
 `.bat`, a cron job or a CI step.
 
 ```bash
@@ -23,7 +23,7 @@ bmm-mcp-server call GET /api/status
 ## With BMM open, and without
 
 Some commands read BMM's data files straight off disk and work with the app **closed** —
-`profiles`, `mods`, `schedules`, `actions`, `bmms-compile`. Others ask the running app to do
+`profiles`, `mods`, `schedules`, `schedule-runs`, `hardware`, `actions`, `bmms-compile`. Others ask the running app to do
 something, and need it **open**: anything that changes state, opens a screen, or is marked
 _(running app)_ below. A command that needs the app and cannot find it says so and exits
 non-zero, rather than reporting that nothing happened.
@@ -39,7 +39,7 @@ bmm-mcp-server api --reveal
 
 ## The commands
 
-62 of them. `*` marks a required argument; a value in brackets is the default. Positional
+66 of them. `*` marks a required argument; a value in brackets is the default. Positional
 arguments are written `<like-this>`, flags `--like-this`.
 
 ### Getting your bearings
@@ -151,8 +151,17 @@ arguments are written `<like-this>`, flags `--like-this`.
 | `schedule-set` | `<id>`\*, `--off` (`false`) | Arm or disarm one task |
 | `signal` | `<name>`\*, `<data>` | Ring a doorbell a task may be waiting on (`wait.hook`) |
 | `run-schedule` | `<id>`\* | Run a saved task now _(running app)_ |
+| `schedule-runs` | `<id>`\* | A task's run log, newest first: each run's duration, step count and, when it failed, the first error. Works with BMM closed |
 | `create-schedule` | `--file`, `--json` | Create or update a task from a JSON file (`-` for stdin) or inline JSON. The shape is what the in-app builder saves, and a new task is created **disabled** unless the JSON says `enabled: true` — so it can be read before it ever fires |
 | `delete-schedule` | `<id>`\* | Delete a task |
+
+### Resources
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `resources` | — | The resource governor as JSON: stored preset, the one in force, game mode, the queue _(running app)_ |
+| `resources-preset` | `<name>`\*, `--scope` (`persistent`), `--ttl` | Pick a **named** preset: `silent`, `balanced`, `max` or `custom`. `--scope task` ends by itself after `--ttl` seconds (7200 at most) _(running app)_ |
+| `hardware` | — | CPU features, GPUs and each disk's bus, as JSON. Works with BMM closed |
 
 ### Authoring: plugins and BMMScript
 
@@ -200,8 +209,8 @@ from — by `scripts/check-cli-reference.mjs`, which runs in CI. Every command m
 every argument must be named, and the count above must be the real one.
 
 That is the same arrangement the [MCP reference](doc-page:reference/mcp) has, and for the same reason: a list
-of sixty-two things maintained by hand goes wrong the first time somebody adds a
-sixty-third, and nothing about a wrong reference page fails to compile.
+of sixty-six things maintained by hand goes wrong the first time somebody adds a
+sixty-seventh, and nothing about a wrong reference page fails to compile.
 
 ---
 

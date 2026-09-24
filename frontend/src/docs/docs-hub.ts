@@ -2019,6 +2019,13 @@ Each opens the matching in-app flow and returns \`202\`. They are **not** headle
 | \`POST\` | \`/api/restart\` | token | — · the API is briefly unavailable | ✓ |
 | \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
 | \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arm or disarm one task. Only \`enabled\` can be changed — a route that could write a whole task could install one with a script step in it | ✓ |
+| \`GET\` | \`/api/schedules/:id/runs\` | \`schedules.read\` | — · a task’s run log, newest first: each step with its duration, status and error | ✓ |
+| \`GET\` | \`/api/resources\` | \`resources.read\` | — · the resource governor: preset, the one in force, game mode, the queue | |
+| \`GET\` | \`/api/resources/hardware\` | \`resources.read\` | — · CPU features, GPUs, each disk’s bus | |
+| \`POST\` | \`/api/resources/preset\` | \`resources.write\` | \`name\`*, \`scope\`, \`ttlSecs\` · a named preset: silent, balanced, max, custom | ✓ |
+| \`POST\` | \`/api/resources/game-mode\` | \`resources.write\` | \`mode\`* · auto, on, off | |
+| \`POST\` | \`/api/resources/queue\` | \`resources.write\` | \`action\`*, \`id\` · pause or resume heavy work; \`cancel\` also needs \`mods.write\` | |
+| \`POST\` | \`/api/resources/io-rule\` | admin token | \`disk\`*, \`op\`*, \`rule\` · a per-disk rule, clamped. A plugin is refused even with resources.write | |
 | \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · rings a named doorbell a task may be waiting on with \`wait.hook\`, or be triggered by with \`on event\` | ✓ |
 | \`GET\` | \`/api/hook\` | \`hooks.read\` | — · every name that has rung, with a count | |
 | \`GET\` | \`/api/hook/:name\` | \`hooks.read\` | \`?since=<ms>\` · the rings themselves, payloads included, without consuming them — the same view a waiting task gets | |
@@ -2376,6 +2383,13 @@ Chacun ouvre le flux in-app correspondant et renvoie \`202\`. Ils ne sont **pas*
 | \`POST\` | \`/api/restart\` | token | — · l’API est brièvement indisponible | ✓ |
 | \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
 | \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arme ou désarme une tâche. Seul \`enabled\` est modifiable — une route capable d'écrire une tâche entière pourrait en installer une contenant un script | ✓ |
+| \`GET\` | \`/api/schedules/:id/runs\` | \`schedules.read\` | — · le journal d’exécution d’une tâche, le plus récent d’abord : chaque étape avec sa durée, son statut et son erreur | ✓ |
+| \`GET\` | \`/api/resources\` | \`resources.read\` | — · le gouverneur de ressources : préréglage, celui en vigueur, mode jeu, file | |
+| \`GET\` | \`/api/resources/hardware\` | \`resources.read\` | — · jeux d’instructions, cartes graphiques, bus de chaque disque | |
+| \`POST\` | \`/api/resources/preset\` | \`resources.write\` | \`name\`*, \`scope\`, \`ttlSecs\` · un préréglage nommé : silent, balanced, max, custom | ✓ |
+| \`POST\` | \`/api/resources/game-mode\` | \`resources.write\` | \`mode\`* · auto, on, off | |
+| \`POST\` | \`/api/resources/queue\` | \`resources.write\` | \`action\`*, \`id\` · suspendre ou reprendre le travail lourd ; \`cancel\` demande aussi \`mods.write\` | |
+| \`POST\` | \`/api/resources/io-rule\` | jeton admin | \`disk\`*, \`op\`*, \`rule\` · une règle par disque, bornée. Un plugin est refusé même avec resources.write | |
 | \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · sonne une cloche nommée qu'une tâche attend peut-être avec \`wait.hook\`, ou par laquelle elle est déclenchée avec \`on event\` | ✓ |
 | \`GET\` | \`/api/hook\` | \`hooks.read\` | — · chaque nom qui a sonné, avec son compte | |
 | \`GET\` | \`/api/hook/:name\` | \`hooks.read\` | \`?since=<ms>\` · les sonneries elles-mêmes, contenu compris, sans les consommer — la même vue qu'obtient une tâche en attente | |
@@ -2629,13 +2643,13 @@ Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, a
       devArticle('mcp-server', { en: 'MCP server, CLI & local API', fr: 'Serveur MCP, CLI et API locale' }, { en: 'Drive BMM from a terminal, a script or an AI client.', fr: 'Piloter BMM depuis un terminal, un script ou un client IA.' }, 'mcp api cli terminal command plugin automation endpoint', {
         en: '<p>Everything the UI can do, it does by asking the core. That same core is exposed <b>three ways</b>, and all three reach the same place — pick whichever is closest to what is already running.</p>'
           + '<ul><li>The <b>local HTTP API</b>, bound to localhost, with tokens and per-permission scopes. This is the one plugins and generated scripts use; the <i>Plugins &amp; API</i> screen lists every route, its fields, and a quick test for each.</li>'
-          + '<li>The <b>MCP server</b>, over stdio rather than a port, so an AI client can list your mods, switch profiles or run a saved task. 69 MCP tools.</li>'
-          + '<li>The <b>CLI</b> — the same executable as the MCP server, with a subcommand instead of <code>serve</code>. 62 subcommands, for a <code>.bat</code>, a terminal or a CI step: <code>bmm-mcp-server profiles</code>, <code>enable &lt;mod&gt;</code>, <code>call GET /api/status</code>. Some read BMM\u2019s files with the app closed; the rest ask the running app, and say so when it is not there.</li></ul>'
+          + '<li>The <b>MCP server</b>, over stdio rather than a port, so an AI client can list your mods, switch profiles or run a saved task. 73 MCP tools.</li>'
+          + '<li>The <b>CLI</b> — the same executable as the MCP server, with a subcommand instead of <code>serve</code>. 66 subcommands, for a <code>.bat</code>, a terminal or a CI step: <code>bmm-mcp-server profiles</code>, <code>enable &lt;mod&gt;</code>, <code>call GET /api/status</code>. Some read BMM\u2019s files with the app closed; the rest ask the running app, and say so when it is not there.</li></ul>'
           + '<p>The full reference for all three is in the online docs.</p>',
         fr: '<p>Tout ce que l\'interface sait faire, elle le fait en demandant au cœur. Ce même cœur est exposé de <b>trois façons</b>, qui atteignent toutes le même endroit — prends la plus proche de ce qui tourne déjà.</p>'
           + '<ul><li>L\'<b>API HTTP locale</b>, sur localhost, avec jetons et portées par permission. C\'est celle qu\'utilisent les plugins et les scripts générés ; l\'écran <i>Plugins &amp; API</i> liste chaque route, ses champs, et un test rapide pour chacune.</li>'
-          + '<li>Le <b>serveur MCP</b>, via stdio plutôt qu\'un port, pour qu\'un client IA liste tes mods, change de profil ou lance une tâche enregistrée. 69 outils MCP.</li>'
-          + '<li>La <b>CLI</b> — le même exécutable que le serveur MCP, avec une sous-commande au lieu de <code>serve</code>. 62 sous-commandes, pour un <code>.bat</code>, un terminal ou une étape de CI : <code>bmm-mcp-server profiles</code>, <code>enable &lt;mod&gt;</code>, <code>call GET /api/status</code>. Certaines lisent les fichiers de BMM app fermée ; les autres demandent à l\'app en cours, et le disent quand elle n\'est pas là.</li></ul>'
+          + '<li>Le <b>serveur MCP</b>, via stdio plutôt qu\'un port, pour qu\'un client IA liste tes mods, change de profil ou lance une tâche enregistrée. 73 outils MCP.</li>'
+          + '<li>La <b>CLI</b> — le même exécutable que le serveur MCP, avec une sous-commande au lieu de <code>serve</code>. 66 sous-commandes, pour un <code>.bat</code>, un terminal ou une étape de CI : <code>bmm-mcp-server profiles</code>, <code>enable &lt;mod&gt;</code>, <code>call GET /api/status</code>. Certaines lisent les fichiers de BMM app fermée ; les autres demandent à l\'app en cours, et le disent quand elle n\'est pas là.</li></ul>'
           + '<p>La référence complète des trois est dans la documentation en ligne.</p>',
       }, 'reference/cli/'),
 

@@ -179,24 +179,33 @@ pub async fn mod_order_set(
         }
         m
     };
-    tauri::async_runtime::spawn_blocking(move || {
+    // A Deploy ticket (G3b): this writes the game folder, like enabling a mod. The copy is
+    // the deploy's own (fs_utils::copy_file_governed): with no MB/s rule on that disk under
+    // Balanced it is the same `fs::copy` as before; a disk rule or another preset now applies
+    // here too, and a cancel stops between files.
+    let outcome: Result<(), String> = tauri::async_runtime::spawn_blocking(move || {
+        use crate::governor::config::OpKind;
+        let ticket = crate::governor::runtime::global().begin(OpKind::Deploy, "load order");
         for c in moved {
+            crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
             let Some(src_dir) = folder_of.get(&c.winner) else { continue };
             let src = src_dir.join(&c.path);
             if !src.is_file() {
                 continue;
             }
             let dst = game_path.join(&c.path);
-            if let Some(parent) = dst.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
             // No backup here on purpose: the file being replaced belongs to another MOD, and
             // the original game file was backed up when the first of them was enabled.
-            let _ = std::fs::copy(&src, &dst);
+            // A failed copy is skipped as before; only a cancel stops the loop.
+            if let Err(e) = crate::fs_utils::copy_file_governed(OpKind::Deploy, &src, &dst, Some(&ticket), false) {
+                if e.to_string() == crate::fs_utils::CANCELLED { return Err(e.to_string()); }
+            }
         }
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?;
+    outcome?;
 
     Ok(count)
 }

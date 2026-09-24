@@ -1043,7 +1043,7 @@ async function syncOsSchedule(task: Task): Promise<void> {
 }
 
 /** The detailed run log of a task, newest first (sched_runs_list). Text only, escaped. */
-async function openRunLog(taskId: string): Promise<void> {
+export async function openRunLog(taskId: string): Promise<void> {
     let runs: any[] = [];
     try { runs = await invoke('sched_runs_list', { taskId }) as any[]; } catch (e) { toast(String(e), 'error'); return; }
     const ms = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 's' : n + 'ms';

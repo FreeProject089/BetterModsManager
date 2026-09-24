@@ -629,7 +629,7 @@
         "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
-      "words": 2219,
+      "words": 2223,
       "diagrams": 0,
       "fr": true
     },
@@ -779,7 +779,7 @@
         "en": "BMM ships an MCP server: the same capabilities the app has, exposed as Model Context Protocol tools so an AI assistant can drive BMM directly — list your…",
         "fr": "BMM embarque un serveur MCP : les mêmes capacités que l'application, exposées comme des outils Model Context Protocol pour qu'une IA puisse piloter BMM…"
       },
-      "words": 895,
+      "words": 896,
       "diagrams": 0,
       "fr": true
     },
@@ -794,7 +794,7 @@
         "en": "The executable that serves BMM's MCP tools is also a command-line tool. Same binary, same install folder — bmm-mcp-server.exe, next to BetterModsManager.exe —…",
         "fr": "L'exécutable qui sert les outils MCP de BMM est aussi un outil en ligne de commande."
       },
-      "words": 492,
+      "words": 495,
       "diagrams": 0,
       "fr": true
     },

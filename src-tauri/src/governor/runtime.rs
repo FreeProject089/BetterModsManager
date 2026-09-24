@@ -194,7 +194,10 @@ impl Governor {
     /// A ticket for one operation: waits for a free slot of its kind, and background kinds
     /// (hash, maintenance) step aside while foreground work runs (queue.rs).
     pub fn begin(&self, kind: OpKind, subject: &str) -> Ticket {
-        let t = self.queue.begin(kind, subject);
+        // Nested inside a ticket of the same kind on this thread (an export that zips, a sync
+        // that installs): waiting for a slot would wait for our own outer ticket, for ever
+        // under Silent's single slot. The nested one takes no slot and stays visible.
+        let t = if self.queue.held_here(kind) { self.queue.begin_unslotted(kind, subject) } else { self.queue.begin(kind, subject) };
         let paused = self.game.lock().unwrap_or_else(|p| p.into_inner()).treatment(kind) == Treatment::Paused;
         if paused && self.queue.pause(t.id()) {
             self.paused_for_game.lock().unwrap_or_else(|p| p.into_inner()).insert(t.id());
@@ -255,6 +258,13 @@ impl Governor {
         let limiter = limiter_for(&volume, policy.rate_mb_s.map(|m| m * 1024 * 1024));
         copy_file_governed(src, dst, &policy, &limiter, ticket)
     }
+}
+
+/// A private instance for a test elsewhere in the crate that must not move the global one
+/// (game mode, presets and slots are process-wide, and tests run in parallel).
+#[cfg(test)]
+impl Governor {
+    pub(crate) fn for_tests(cfg: ResourcesConfig) -> Governor { Governor::new(cfg) }
 }
 
 #[cfg(test)]
@@ -338,6 +348,25 @@ mod tests {
         g.set_game_manual(Manual::Off);
         assert_ne!(view(&g), crate::governor::queue::TicketState::Paused);
         drop((t, d));
+    }
+
+    #[test]
+    fn a_nested_ticket_of_the_same_kind_never_waits_for_its_own_outer_ticket() {
+        let g = Governor::new(ResourcesConfig::default());
+        g.configure(ResourcesConfig { preset: Preset::Silent, ..Default::default() });
+        let outer = g.begin(OpKind::Compress, "outer");
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::scope(|s| {
+            s.spawn(|| { let inner = g.begin(OpKind::Compress, "inner"); tx.send(inner.id()).unwrap(); });
+            // A DIFFERENT thread must still wait for the one slot (checked with a short timeout).
+            assert!(rx.recv_timeout(Duration::from_millis(150)).is_err(), "another thread got past a full slot");
+            drop(outer);
+            assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok());
+        });
+        let outer = g.begin(OpKind::Compress, "outer again");
+        let inner = g.begin(OpKind::Compress, "nested, same thread");  // would hang before
+        assert_eq!(g.queue().snapshot().iter().filter(|v| v.kind == OpKind::Compress).count(), 2);
+        drop((inner, outer));
     }
 
     #[test]

@@ -40,7 +40,13 @@ pub async fn hash_file(path: String, algo: Option<String>) -> Result<String, Str
     let algo = algo.unwrap_or_else(|| "blake3".into()).to_lowercase();
     let p = std::path::PathBuf::from(&path);
     if !p.is_file() { return Err(format!("Not a file: {}", path)); }
+    // A Hash ticket for the file (G3b): the scheduler's "verify" steps wait while a deploy
+    // writes, and pause / cancel between 64 KiB chunks (SHA-256) or before the file (BLAKE3,
+    // one mmap pass). Same digest as before.
     tokio::task::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Hash, &format!("hash {}", p.display()));
+        crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
         if algo == "sha256" {
             use sha2::{Sha256, Digest};
             use std::io::Read;
@@ -49,9 +55,11 @@ pub async fn hash_file(path: String, algo: Option<String>) -> Result<String, Str
             let mut hasher = Sha256::new();
             let mut buf = [0u8; 65536];
             loop {
+                crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
                 let n = reader.read(&mut buf).map_err(|e| e.to_string())?;
                 if n == 0 { break; }
                 hasher.update(&buf[..n]);
+                ticket.add_bytes(n as u64, 0);
             }
             Ok(hex::encode(hasher.finalize()))
         } else {

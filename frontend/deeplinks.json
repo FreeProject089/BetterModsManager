@@ -308,6 +308,16 @@
     ]
   },
   {
+    "action": "resources/open",
+    "params": []
+  },
+  {
+    "action": "resources/preset",
+    "params": [
+      "name"
+    ]
+  },
+  {
     "action": "restart",
     "params": []
   },
@@ -325,6 +335,12 @@
       "id",
       "k",
       "on"
+    ]
+  },
+  {
+    "action": "schedule/runs",
+    "params": [
+      "id"
     ]
   },
   {

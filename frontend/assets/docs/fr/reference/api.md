@@ -66,7 +66,7 @@ Accorde avec `PUT /api/apps/permissions/<plugin_id>` :
 `app.read` · `app.write` · `catalog.read` · `catalog.write` · `data.read` · `data.write` ·
 `hooks.read` · `hooks.write` · `keys.read` · `keys.write` · `modpacks.read` · `modpacks.write` ·
 `mods.read` · `mods.write` · `plugins.read` · `plugins.write` · `profiles.read` · `profiles.write` ·
-`repo.read` · `repo.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
+`repo.read` · `repo.write` · `resources.read` · `resources.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
 
 Cette liste vit dans le code sous le nom `api::PLUGIN_SCOPES`, et un test vérifie qu'elle
 correspond au routeur dans les deux sens : une portée exigée que rien ne peut accorder est une
@@ -209,6 +209,9 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
 | `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
+| `bmm://schedule/runs` | `id`* | Ouvre le journal d’exécution d’une tâche. En lecture seule, donc sans question |
+| `bmm://resources/open` | — | Ouvre le gestionnaire de stockage, où se trouve le tableau de bord des ressources |
+| `bmm://resources/preset` | `name`* | Choisit un préréglage **nommé** (`silent` · `balanced` · `max` · `custom`). De l’extérieur, il demande d’abord, et un second dans les 10 secondes est refusé sans question. Aucune règle par disque ne passe par un lien : toute autre action `resources/…` est refusée |
 | `bmm://catalog/follow` | `type`*, `url`*, `password`, `key` | Suivre un catalogue — un des huit : `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. **Pas `index`** — un index est un catalogue de catalogues, sans magasin à lui, et cette route répond « aucun type de catalogue nommé index » ; c'est `bmm://catalog/import` qui le lit. Un `password` est retenu pour cette session seulement, jamais écrit sur le disque ; `key` désigne QUELLE clé d’identité signe la requête — un id ou un nom. Les ids vivent dans Réglages → Identité & API, sont affichés à côté de chaque clé et survivent à un renommage ; une référence absente du trousseau est signalée plutôt qu’ignorée, parce qu’une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
 | `bmm://catalog/import` | `url`*, `type`, `password` | Lit le document à cette adresse et le suit **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait. `type` restreint un index à un seul type |
@@ -376,6 +379,7 @@ Deux formes échappent à la règle :
 | `GET` | `/api/mods/order` | `mods.read` | — · l'ordre de déploiement, plus chaque fichier disputé et qui le gagne | |
 | `GET` | `/api/schedules` | `schedules.read` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
+| `GET` | `/api/schedules/:id/runs` | `schedules.read` | — · le journal d’exécution de la tâche, le plus récent d’abord : les 50 dernières exécutions, chaque étape avec sa durée, son statut et son erreur. Les secrets sont retirés avant l’écriture. Un id qui ne nomme aucune tâche répond une liste vide | ✓ |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · sonner une clochette nommée qu'une tâche peut attendre avec `wait.hook`, ou par laquelle elle peut être déclenchée avec `on event` | |
 | `GET` | `/api/hook` | `hooks.read` | — · chaque nom qui a sonné pendant la session, avec le nombre de fois — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
 | `GET` | `/api/hook/:name` | `hooks.read` | `?since=<ms>` · les sonneries elles-mêmes, avec leur contenu et leur horodatage — la même vue qu'obtient une tâche en attente, pour que « ça n'a jamais sonné » et « ça a sonné avec le mauvais contenu » cessent de se ressembler. La lecture ne consomme pas : deux tâches peuvent attendre la même clochette | |
@@ -487,6 +491,12 @@ exception est `data/export-auto`.
 | `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
 | `POST` | `/api/restart` | `system.write` | — · l'API est brièvement indisponible | ✓ |
 | `POST` | `/api/view` | `system.write` | `id`* · affiche un écran. L'id est la valeur `data-view` de la barre latérale (`mapper`, `library`, …) ; un id inconnu ne fait rien et le dit dans la console de l'app, exactement comme le deeplink `bmm://view/open` | ✓ |
+| `GET` | `/api/resources` | `resources.read` | — · le gouverneur de ressources : le `preset` enregistré, celui en vigueur (`effective` ; le mode jeu ou une tâche peuvent différer), le préréglage de tâche et son temps restant, `game_active` / `game_manual`, et la file des opérations lourdes (`tickets`) | |
+| `GET` | `/api/resources/hardware` | `resources.read` | — · cœurs et jeux d’instructions du processeur, cartes graphiques (listées seulement — BMM n’y calcule rien), bus et pénalité de recherche de chaque disque. Le premier appel peut prendre les 3 secondes du pilote graphique | |
+| `POST` | `/api/resources/preset` | `resources.write` | `name`* (`silent` · `balanced` · `max` · `custom`), `scope` (`persistent`, par défaut, ou `task`), `ttlSecs` (task seulement, ≤ 7200) · un préréglage **nommé**. Il ne passe jamais devant le mode jeu | ✓ |
+| `POST` | `/api/resources/game-mode` | `resources.write` | `mode`* (`auto` · `on` · `off`) | |
+| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (un ticket, pour les trois derniers) · **`cancel` demande aussi `mods.write`** : il jette du travail | |
+| `POST` | `/api/resources/io-rule` | jeton admin | `disk`* (`*`, `d:\`, `\\nas\partage\` ou `/`), `op`* (`*` ou un type d’opération), `rule` (`{ rate_mb_s?, parallel?, buffer_kib?, io_priority? }` ; `null` la supprime) · une règle fine, ramenée dans les bornes dures et enregistrée. **Jeton admin seulement** : un plugin est refusé même avec `resources.write` | |
 
 ---
 
@@ -542,8 +552,8 @@ périme en silence ; un check, non.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 69 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
-- [Référence CLI](doc-page:reference/cli.fr) — les 62 sous-commandes du même binaire, pour un terminal ou un `.bat`
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 73 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
+- [Référence CLI](doc-page:reference/cli.fr) — les 66 sous-commandes du même binaire, pour un terminal ou un `.bat`
 - [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
 - [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
 - [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

@@ -167,6 +167,15 @@ export function apiBodyFor(a: any): { method: string; path: string; body: Record
         case 'list_keys':          return { method: 'GET', path: '/api/keys',                    body: {} };
         case 'read_hook':          return { method: 'GET', path: `/api/hook/${encodeURIComponent(s('name') || 'HOOK_NAME')}`, body: {} };
         case 'clear_hooks':        return { method: 'DELETE', path: '/api/hook',                 body: {} };
+        case 'schedule_runs':      return { method: 'GET', path: `/api/schedules/${encodeURIComponent(s('id') || 'TASK_ID')}/runs`, body: {} };
+
+        // The resource governor (A4). A NAMED preset, never a per-disk rule: that route takes
+        // the admin token only, which a generated script does not hold.
+        case 'resources_status':   return { method: 'GET', path: '/api/resources',              body: {} };
+        case 'hardware_info':      return { method: 'GET', path: '/api/resources/hardware',     body: {} };
+        case 'resources_preset':   return { method: 'POST', path: '/api/resources/preset',      body: _prune({ name: s('name') || 'balanced', scope: s('scope'), ttlSecs: s('ttlSecs') ? num('ttlSecs') : '' }) };
+        case 'resources_game_mode': return { method: 'POST', path: '/api/resources/game-mode', body: { mode: s('mode') || 'auto' } };
+        case 'resources_queue':    return { method: 'POST', path: '/api/resources/queue',       body: _prune({ action: s('action') || 'pause_all', id: s('id') ? num('id') : '' }) };
 
         case 'mod_config':         return { method: 'POST', path: '/api/mod/config',             body: _prune({ modId: s('modId'), updateUrl: s('updateUrl'), repoModId: s('repoModId'), directUrl: s('directUrl') }) };
         case 'update_mods':        return { method: 'POST', path: '/api/mod/update',             body: _prune({ repoUrl: s('repoUrl') }) };

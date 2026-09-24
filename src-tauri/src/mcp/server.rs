@@ -1018,6 +1018,40 @@ impl ServerHandler for BmmMcpServer {
                     "required": ["id"]
                 })).unwrap()),
             ),
+            Tool::new(
+                "bmm_schedule_runs",
+                "Read a task's run log, newest first: the last 50 runs, each with its steps (label, duration, status, captured output with secrets removed, and the error when one failed). Use it to answer \"why did my nightly task fail\" — bmm_list_schedules only says THAT it failed. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+
+            // ── Resources (the governor) ───────────────────────────────
+            Tool::new(
+                "bmm_resources_status",
+                "Read the resource governor in the running app: the stored preset, the one in force right now (game mode or a task may differ), the task-scoped preset and its time left, whether game mode is active (and its manual setting), and the queue of heavy operations. Requires the app to be running.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_resources_set_preset",
+                "Pick a NAMED resource preset in the running app: silent (quiet while playing), balanced (the default, today's behaviour), max (everything for BMM) or custom (the rules alone). A preset never overrides game mode. Fine-grained per-disk rules are not set here: they are the user's, in Settings. Requires the app to be running; the user sees a notification.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "enum": ["silent", "balanced", "max", "custom"], "description": "The preset." },
+                        "scope": { "type": "string", "enum": ["persistent", "task"], "description": "`persistent` (default) is stored and survives a restart; `task` ends by itself after ttl_secs." },
+                        "ttl_secs": { "type": "integer", "description": "For scope=task: how long it lasts, capped at 7200 (2 h). Default 7200." }
+                    },
+                    "required": ["name"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_hardware_info",
+                "What hardware BMM runs on: CPU cores and instruction sets (AVX2, AVX-512, SHA-NI…), GPUs (listed only — BMM runs no compute on them), and each disk's bus (nvme, sata, usb…) and whether it is a spinning disk. The first call can take up to 3 seconds while the GPU driver answers. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
 
             // ── Benchmark ──────────────────────────────────────────────
             Tool::new(
@@ -1467,6 +1501,28 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_run_schedule" => {
                     let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
                     self.tool_api_call("POST", "/api/schedule/run", Some(json!({ "id": id }))).await
+                }
+                "bmm_schedule_runs" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    match state_bridge::schedule_runs(id) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+
+                // Resources
+                "bmm_resources_status" => self.tool_api_call("GET", "/api/resources", None).await,
+                "bmm_resources_set_preset" => {
+                    let mut body = serde_json::Map::new();
+                    for (k, wire) in [("name", "name"), ("scope", "scope"), ("ttl_secs", "ttlSecs")] {
+                        if let Some(v) = args.get(k) { body.insert(wire.into(), v.clone()); }
+                    }
+                    self.tool_api_call("POST", "/api/resources/preset", Some(serde_json::Value::Object(body))).await
+                }
+                "bmm_hardware_info" => {
+                    // Blocking (an IOCTL per disk, up to the GPU's 3-second budget), in a separate
+                    // process with no governor to ask: tell the runtime and answer in place.
+                    ok_json(&tokio::task::block_in_place(state_bridge::hardware_info))
                 }
 
                 // Benchmark

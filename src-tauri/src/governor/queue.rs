@@ -61,6 +61,9 @@ struct Entry {
     bytes_read: u64,
     bytes_written: u64,
     since: Instant,
+    /// The thread that took it: runtime.rs lets a nested ticket of the same kind on the same
+    /// thread skip the slot wait (see `begin_unslotted`).
+    thread: std::thread::ThreadId,
 }
 
 struct State {
@@ -115,7 +118,7 @@ impl Queue {
         let mut st = self.lock();
         let id = st.next_id;
         st.next_id += 1;
-        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: false, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now() });
+        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: false, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread: std::thread::current().id() });
         id
     }
 
@@ -138,8 +141,24 @@ impl Queue {
         if st.running(kind) >= st.slots_for(kind) { return None; }
         let id = st.next_id;
         st.next_id += 1;
-        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: true, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now() });
+        st.entries.insert(id, Entry { kind, subject: subject.chars().take(200).collect(), running: true, paused: false, cancelled: false, bytes_read: 0, bytes_written: 0, since: Instant::now(), thread: std::thread::current().id() });
         Some(Ticket { queue: self.clone(), id, kind })
+    }
+
+    /// A ticket that takes no slot: for work NESTED inside a ticket of the same kind on the same
+    /// thread (runtime.rs decides that). Waiting for a slot there would wait for itself: with
+    /// one slot (Silent) the outer ticket holds it and never releases it. Still registered, so
+    /// it is visible, pausable and cancellable like any other.
+    pub fn begin_unslotted(&self, kind: OpKind, subject: &str) -> Ticket {
+        let id = self.register(kind, subject);
+        if let Some(e) = self.lock().entries.get_mut(&id) { e.running = true; }
+        Ticket { queue: self.clone(), id, kind }
+    }
+
+    /// Does the CURRENT thread already hold a running ticket of this kind?
+    pub fn held_here(&self, kind: OpKind) -> bool {
+        let me = std::thread::current().id();
+        self.lock().entries.values().any(|e| e.running && e.kind == kind && e.thread == me)
     }
 
     /// Change a category's slots (clamped). Waiters are woken to re-check.
@@ -189,6 +208,27 @@ impl Ticket {
             let yield_to_foreground = is_background(self.kind) && st.foreground_running();
             if !paused && !yield_to_foreground { return Ok(()); }
             st = q.inner.cv.wait(st).unwrap_or_else(|p| p.into_inner());
+        }
+    }
+
+    /// Non-blocking: has this ticket been cancelled? For a caller that cannot sit in
+    /// `checkpoint()` because the work runs elsewhere: the parent of a `--mod-worker` process
+    /// polls it while it waits on the child, and kills the child when it turns true.
+    pub fn is_cancelled(&self) -> bool {
+        self.queue.lock().entries.get(&self.id).map(|e| e.cancelled).unwrap_or(true)
+    }
+
+    /// Non-blocking: would `checkpoint()` wait or fail right now (cancelled, paused, or a
+    /// background ticket that must step aside for foreground work)? For work fanned out on a
+    /// SHARED rayon pool, whose threads must never sit in a checkpoint: another operation may
+    /// be waiting on that pool (a deploy that hashes, a second hash job), and a pool whose
+    /// threads all wait for that operation to end never runs it. The job stops taking items
+    /// instead, returns, and its caller calls `checkpoint()` on its own thread.
+    pub fn must_yield(&self) -> bool {
+        let st = self.queue.lock();
+        match st.entries.get(&self.id) {
+            None => true,
+            Some(e) => e.cancelled || e.paused || st.paused_all || (is_background(self.kind) && st.foreground_running()),
         }
     }
 

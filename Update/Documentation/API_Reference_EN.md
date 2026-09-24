@@ -52,6 +52,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mods/order` | yes | `{ order[], profileId? }` | Reorders the active mods and re-copies the files that change hands. `order` must be a permutation of what is active; last in the list wins a shared file. |
 | `/api/schedules` | yes | — (GET) | id, name, enabled and trigger for every saved task. **Not** its steps. |
 | `/api/schedules/enabled` | yes | `{ id, enabled }` | Arms or disarms one task. Only `enabled` is writable — a route that could write a whole task could install one with a script step in it. |
+| `/api/schedules/:id/runs` | yes | — (GET) | A task’s run log, newest first: the last 50 runs with each step’s duration, status and error. Secrets are removed before a run is written. `schedules.read`. |
 | `/api/hook` | yes | `{ name, data? }` | Rings a named doorbell a task can wait on (`wait.hook`) or be triggered by (`on event`). `GET` lists every name with a count; `DELETE` forgets them all. |
 | `/api/hook/:name` | yes | — | `GET` reads the rings for one name, payloads included, without consuming them — add `?since=<ms>` for recent ones only. `DELETE` forgets that name. |
 | `/api/content-id` | yes | `{ kind, doc }` — the id that says what a document IS rather than what this machine calls it. `kind` is one of modpack, plugin, task, profile, theme, launchpack, repo, app, modlist. It takes the DOCUMENT, so the answer discloses nothing this install holds; a by-id variant would be an oracle for "does this machine have X" and would need each kind's read scope. |
@@ -148,6 +149,12 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/data/export-auto` | yes | `{ dir, name? (template: `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — unattended backup, returns the path written |
 | `/api/launchpack/run` | yes | `{ id }` — run a saved launch pack |
 | `/api/schedule/run` | yes | `{ id }` — trigger a saved Scheduling & automation task |
+| `/api/resources` | `resources.read` | — (GET) the resource governor: stored and effective preset, task-scoped preset, game mode, the queue of heavy operations |
+| `/api/resources/hardware` | `resources.read` | — (GET) CPU features, GPUs, each disk’s bus and seek penalty |
+| `/api/resources/preset` | `resources.write` | `{ name: "silent"\|"balanced"\|"max"\|"custom", scope?: "persistent"\|"task", ttlSecs? }` — a NAMED preset; never overrides game mode |
+| `/api/resources/game-mode` | `resources.write` | `{ mode: "auto"\|"on"\|"off" }` |
+| `/api/resources/queue` | `resources.write` | `{ action: "pause_all"\|"resume_all"\|"pause"\|"resume"\|"cancel", id? }` — `cancel` also needs `mods.write` |
+| `/api/resources/io-rule` | **admin token only** | `{ disk, op, rule? }` — one per-disk, per-operation rule (`rate_mb_s`, `parallel`, `buffer_kib`, `io_priority`), clamped to the hard bounds; `rule: null` removes it. A plugin token is refused even with `resources.write` |
 
 ---
 
@@ -215,6 +222,9 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 | `bmm://data/export-auto?dir=<folder>&name=<template>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
 | `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
 | `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
+| `bmm://schedule/runs?id=<task_id>` | `GET /api/schedules/:id/runs` (opens the run log) |
+| `bmm://resources/open` | opens the Storage manager and its resources dashboard |
+| `bmm://resources/preset?name=<silent\|balanced\|max\|custom>` | `POST /api/resources/preset` — asks first from outside, one question per 10 s; no per-disk rule by link |
 | `bmm://mod/update?url=<repo_url>` | opens Repo → mod-updates (with `url`, pre-fills connect; without, runs the update check) |
 | `bmm://plugin/delete?id=<plugin_id>` | `DELETE /api/plugins/:id` (uninstall a plugin) |
 | `bmm://catalog/<app\|plugin\|theme>/install?url=<download_url>&name=<label>&type=<exe\|zip\|msi\|script>` | one-click install a BetterCommunity catalog item (`type` applies to `app`; omit `url` to just open the matching view) |
@@ -258,6 +268,8 @@ Which permissions apply is decided by the token the request carries. Granted via
 | `profiles.write` | create, edit, delete and activate profiles |
 | `repo.read` | see which repos are connected and what they hold |
 | `repo.write` | connect, sync, publish and host repos |
+| `resources.read` | read the resource governor (preset, game mode, queue) and the hardware detection |
+| `resources.write` | pick a named preset, set game mode, pause and resume heavy work (cancelling also needs `mods.write`; a per-disk I/O rule is the admin token’s only) |
 | `schedules.read` | list saved automations |
 | `schedules.write` | run an automation, arm or disarm one |
 | `system.write` | restart BMM, change the open screen, run a benchmark, import a language |

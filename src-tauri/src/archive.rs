@@ -168,20 +168,150 @@ fn is_unsafe_rel_path(name: &str) -> bool {
     n.split(['/', '\\']).any(|seg| seg == "..")
 }
 
-/// Extracts the whole archive into `dest` (created if missing).
+// ── Resource governor hook ────────────────────────────────────────────────────
+// Extraction is governed (PLAN-BMM-RESOURCES-2026.md, OpKind::Extract): it holds a ticket,
+// stops between entries when that ticket is paused or cancelled, reports its bytes, and runs
+// its parallel pass on the governor's Extract pool. This file cannot name the governor —
+// benchmarks/rust includes it verbatim through `#[path]`, where there is no `crate::governor`
+// — so the app lends it one at startup (`set_extract_governor`, registered by
+// commands::mod_archive::install_extract_governor). Without one (the benchmarks, a unit test)
+// extraction runs exactly as it did before the governor existed.
+
+/// What an extraction asks of whoever governs it.
+pub trait ExtractControl: Sync {
+    /// Called between entries. An error stops the extraction; `extract_to_with` then removes
+    /// what it wrote and returns `cancelled_error()`.
+    fn checkpoint(&self) -> std::io::Result<()> { Ok(()) }
+    /// Bytes read from the archive and written to disk, as they happen.
+    fn add_bytes(&self, _read: u64, _written: u64) {}
+    /// Run the parallel pass. The default runs it on the current rayon pool.
+    fn run_parallel(&self, f: &(dyn Fn() -> std::io::Result<()> + Sync)) -> std::io::Result<()> { f() }
+}
+
+/// No governor: today's behaviour.
+pub struct Ungoverned;
+impl ExtractControl for Ungoverned {}
+
+/// Builds the control for one extraction of `archive` (it holds the ticket; dropping it ends
+/// the operation).
+pub type ExtractGovernor = fn(archive: &Path) -> Box<dyn ExtractControl + Send>;
+
+static EXTRACT_GOVERNOR: std::sync::OnceLock<ExtractGovernor> = std::sync::OnceLock::new();
+
+/// Register the governor every `extract_to` / `materialize` goes through. Once; later calls
+/// are ignored.
+#[allow(dead_code)] // the benchmarks crate includes this file and never registers one
+pub fn set_extract_governor(g: ExtractGovernor) {
+    let _ = EXTRACT_GOVERNOR.set(g);
+}
+
+/// The error an extraction stopped by its control returns.
+///
+/// `Other`, never `Interrupted`: std's `io::copy`, `read_exact` and `BufReader` treat
+/// Interrupted as "try again", so a cancel raised inside the tar reader was retried and
+/// swallowed, and the extraction ran to the end (the test caught it).
+pub fn cancelled_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, "extract.cancelled")
+}
+
+#[allow(dead_code)]
+pub fn is_cancelled(e: &std::io::Error) -> bool {
+    e.to_string() == "extract.cancelled"
+}
+
+/// A reader that asks the control for permission every MiB and reports what it read. Used for
+/// tar, whose crate unpacks a whole stream in one call: the checkpoint cannot sit between
+/// entries there, so it sits between blocks of the archive.
+struct CheckedReader<'a, R> {
+    inner: R,
+    control: &'a dyn ExtractControl,
+    since: u64,
+    stopped: &'a std::sync::atomic::AtomicBool,
+}
+
+impl<R: Read> Read for CheckedReader<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.since >= 1 << 20 {
+            self.since = 0;
+            if let Err(e) = self.control.checkpoint() {
+                self.stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+                return Err(e);
+            }
+        }
+        let n = self.inner.read(buf)?;
+        self.since += n as u64;
+        self.control.add_bytes(n as u64, 0);
+        Ok(n)
+    }
+}
+
+/// Extracts the whole archive into `dest` (created if missing), under the registered
+/// governor if there is one (one Extract ticket for the whole archive).
+///
+/// Callers must NOT hold an Extract ticket of their own around this: the ticket is taken
+/// here, and a second one for the same operation could wait for a slot the first one holds.
 pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
+    match EXTRACT_GOVERNOR.get() {
+        Some(g) => {
+            let control = g(path);
+            extract_to_with(path, dest, &*control)
+        }
+        None => extract_to_with(path, dest, &Ungoverned),
+    }
+}
+
+/// `extract_to` with an explicit control. When the control stops it, what this extraction
+/// wrote is removed: the whole of `dest` when this call created it, otherwise the files it
+/// wrote (zip, 7z, rar; a tar into an existing folder keeps its partial files, the crate does
+/// not say which it wrote) — and `cancelled_error()` is returned.
+pub fn extract_to_with(path: &Path, dest: &Path, control: &dyn ExtractControl) -> std::io::Result<()> {
+    let fresh = std::fs::symlink_metadata(dest).is_err();
     std::fs::create_dir_all(dest)?;
+    let stopped = std::sync::atomic::AtomicBool::new(false);
+    let written = std::sync::Mutex::new(Vec::<PathBuf>::new());
+    let result = extract_inner(path, dest, control, &stopped, &written);
+    if result.is_err() && stopped.load(std::sync::atomic::Ordering::SeqCst) {
+        if fresh {
+            let _ = std::fs::remove_dir_all(dest);
+        } else {
+            for p in written.lock().unwrap_or_else(|p| p.into_inner()).iter() {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+        return Err(cancelled_error());
+    }
+    result
+}
+
+/// The control's checkpoint, remembering that it said stop.
+fn gate(control: &dyn ExtractControl, stopped: &std::sync::atomic::AtomicBool) -> std::io::Result<()> {
+    control.checkpoint().map_err(|e| {
+        stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+        e
+    })
+}
+
+fn extract_inner(
+    path: &Path,
+    dest: &Path,
+    control: &dyn ExtractControl,
+    stopped: &std::sync::atomic::AtomicBool,
+    written: &std::sync::Mutex<Vec<PathBuf>>,
+) -> std::io::Result<()> {
+    gate(control, stopped)?;
     match kind_of(path) {
         Some(Kind::Zip) => {
-            extract_zip_parallel(path, dest)?;
+            extract_zip_parallel(path, dest, control, stopped, written)?;
         }
         Some(Kind::Tar) => {
             let file = std::fs::File::open(path)?;
-            tar::Archive::new(file).unpack(dest)?;
+            let r = CheckedReader { inner: file, control, since: 0, stopped };
+            tar::Archive::new(r).unpack(dest)?;
         }
         Some(Kind::TarGz) => {
             let file = std::fs::File::open(path)?;
-            tar::Archive::new(flate2::read::GzDecoder::new(file)).unpack(dest)?;
+            let r = CheckedReader { inner: file, control, since: 0, stopped };
+            tar::Archive::new(flate2::read::GzDecoder::new(r)).unpack(dest)?;
         }
         Some(Kind::SevenZ) => {
             // Independent zip-slip guard: refuse the whole archive if ANY entry path
@@ -195,7 +325,18 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
                     return Err(io_err(format!("unsafe path in 7z archive: {name}")));
                 }
             }
-            sevenz_rust::decompress_file(path, dest).map_err(io_err)?;
+            // The crate's own per-entry writer, with the checkpoint in front of it: the same
+            // bytes and timestamps as `decompress_file`, and a place to stop between entries.
+            sevenz_rust::decompress_file_with_extract_fn(path, dest, |entry, reader, out| {
+                gate(control, stopped).map_err(sevenz_rust::Error::io)?;
+                if !entry.is_directory() {
+                    written.lock().unwrap_or_else(|p| p.into_inner()).push(out.clone());
+                }
+                let r = sevenz_rust::default_entry_extract_fn(entry, reader, out);
+                if r.is_ok() && !entry.is_directory() { control.add_bytes(0, entry.size()); }
+                r
+            })
+            .map_err(io_err)?;
         }
         Some(Kind::Rar) => {
             let mut archive = unrar::Archive::new(path).open_for_processing().map_err(io_err)?;
@@ -206,8 +347,13 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
                 if header.entry().is_file() && is_unsafe_rel_path(&name) {
                     return Err(io_err(format!("unsafe path in rar archive: {name}")));
                 }
+                gate(control, stopped)?;
                 archive = if header.entry().is_file() {
-                    header.extract_with_base(dest).map_err(io_err)?
+                    written.lock().unwrap_or_else(|p| p.into_inner()).push(dest.join(&name));
+                    let size = header.entry().unpacked_size as u64;
+                    let next = header.extract_with_base(dest).map_err(io_err)?;
+                    control.add_bytes(0, size);
+                    next
                 } else {
                     header.skip().map_err(io_err)?
                 };
@@ -225,14 +371,23 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
 /// once (via `try_for_each_init`) — not once per entry — so the central directory
 /// is parsed ~once per core instead of once per file. Zip-Slip safe
 /// (`enclosed_name`); serial fallback for pathologically large archives.
-fn extract_zip_parallel(path: &Path, dest: &Path) -> std::io::Result<()> {
+///
+/// Governed: the parallel pass runs where the control says (the Extract pool), and every
+/// entry passes the control's checkpoint first, so a cancel stops the pass between entries.
+fn extract_zip_parallel(
+    path: &Path,
+    dest: &Path,
+    control: &dyn ExtractControl,
+    stopped: &std::sync::atomic::AtomicBool,
+    written: &std::sync::Mutex<Vec<PathBuf>>,
+) -> std::io::Result<()> {
     use rayon::prelude::*;
     let file = std::fs::File::open(path)?;
     let mut zip = zip::ZipArchive::new(file).map_err(io_err)?;
     let count = zip.len();
 
     if count > 8000 {
-        return zip.extract(dest).map_err(io_err);
+        return extract_zip_serial(&mut zip, dest, control, stopped, written);
     }
 
     // Pass 1 (serial, cheap): create directories and collect the file entries.
@@ -252,18 +407,68 @@ fn extract_zip_parallel(path: &Path, dest: &Path) -> std::io::Result<()> {
 
     // Pass 2 (parallel): decompress + write each file. One archive handle per
     // worker thread, reused across the entries that thread processes.
-    file_indices.par_iter().try_for_each_init(
-        || std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()),
-        |archive, &i| -> std::io::Result<()> {
-            let z = archive.as_mut().ok_or_else(|| io_err("failed to open zip handle"))?;
-            let mut e = z.by_index(i).map_err(io_err)?;
-            let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
-            let out = dest.join(&safe);
-            let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
-            std::io::copy(&mut e, &mut w)?;
-            Ok(())
-        },
-    )?;
+    control.run_parallel(&|| {
+        file_indices.par_iter().try_for_each_init(
+            || std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()),
+            |archive, &i| -> std::io::Result<()> {
+                gate(control, stopped)?;
+                let z = archive.as_mut().ok_or_else(|| io_err("failed to open zip handle"))?;
+                let mut e = z.by_index(i).map_err(io_err)?;
+                let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
+                let out = dest.join(&safe);
+                written.lock().unwrap_or_else(|p| p.into_inner()).push(out.clone());
+                let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
+                let n = std::io::copy(&mut e, &mut w)?;
+                control.add_bytes(e.compressed_size(), n);
+                Ok(())
+            },
+        )
+    })?;
+    Ok(())
+}
+
+/// The serial path for archives past 8000 entries: `ZipArchive::extract` (zip 0.6.6) line
+/// for line — same refusal of an unsafe name, same errors, same unix permissions — with the
+/// checkpoint between entries that the crate's own loop has no room for.
+fn extract_zip_serial<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    dest: &Path,
+    control: &dyn ExtractControl,
+    stopped: &std::sync::atomic::AtomicBool,
+    written: &std::sync::Mutex<Vec<PathBuf>>,
+) -> std::io::Result<()> {
+    use zip::result::ZipError;
+    let zio = |e: std::io::Error| io_err(ZipError::Io(e));
+    for i in 0..zip.len() {
+        gate(control, stopped)?;
+        let mut file = zip.by_index(i).map_err(io_err)?;
+        let filepath = file
+            .enclosed_name()
+            .ok_or(ZipError::InvalidArchive("Invalid file path"))
+            .map_err(io_err)?
+            .to_path_buf();
+        let outpath = dest.join(filepath);
+        if file.name().ends_with('/') {
+            std::fs::create_dir_all(&outpath).map_err(zio)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    std::fs::create_dir_all(p).map_err(zio)?;
+                }
+            }
+            written.lock().unwrap_or_else(|p| p.into_inner()).push(outpath.clone());
+            let mut outfile = std::fs::File::create(&outpath).map_err(zio)?;
+            let n = std::io::copy(&mut file, &mut outfile).map_err(zio)?;
+            control.add_bytes(file.compressed_size(), n);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Some(mode) = file.unix_mode() {
+                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode)).map_err(zio)?;
+            }
+        }
+    }
     Ok(())
 }
 

@@ -197,15 +197,33 @@ pub struct GameProfile {
 /// The universal half. A game with no supported API and no entry in the table below still
 /// writes SOMETHING, and pointing this at its folder is how somebody finds it without
 /// knowing what it is called.
+///
+/// It was a sync command, so in Tauri v2 the walk ran on the main thread with the window
+/// frozen; now async (same arguments, same answer for the frontend), the walk on a blocking
+/// thread under a Scan ticket (G3b) with a checkpoint per entry.
 #[tauri::command]
-pub fn game_find_logs(dir: String, limit: Option<usize>) -> Vec<String> {
+pub async fn game_find_logs(dir: String, limit: Option<usize>) -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, &format!("find logs {}", dir));
+        find_logs(&dir, limit, Some(&ticket))
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// The walk behind `game_find_logs`. A cancelled ticket stops it with what it had found.
+pub(crate) fn find_logs(dir: &str, limit: Option<usize>, ticket: Option<&crate::governor::queue::Ticket>) -> Vec<String> {
     const LOGGY: &[&str] = &["log", "txt", "rpt", "dcs", "json"];
-    let root = std::path::PathBuf::from(&dir);
+    let root = std::path::PathBuf::from(dir);
     if !root.is_dir() {
         return Vec::new();
     }
     let mut hits: Vec<(u64, String)> = Vec::new();
     for entry in walkdir::WalkDir::new(&root).max_depth(3).into_iter().flatten() {
+        if ticket.map(|t| t.checkpoint().is_err()).unwrap_or(false) {
+            break;
+        }
         let p = entry.path();
         if !p.is_file() {
             continue;
@@ -243,7 +261,10 @@ fn first_existing(paths: Vec<std::path::PathBuf>) -> Vec<String> {
 }
 
 /// The games with a starting point, resolved against this machine.
-#[tauri::command]
+///
+/// `(async)` (G3b): it stats a dozen places and walks the Arma folder, which as a sync
+/// command ran on the main thread. The Rust function stays sync for its callers.
+#[tauri::command(async)]
 pub fn game_profiles() -> Vec<GameProfile> {
     let home = dirs_home();
     let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
@@ -286,7 +307,7 @@ pub fn game_profiles() -> Vec<GameProfile> {
         name: "Arma 3".into(),
         found: arma
             .iter()
-            .flat_map(|d| game_find_logs(d.clone(), Some(3)))
+            .flat_map(|d| find_logs(d, Some(3), None))
             .collect(),
         pattern: "[Cc]onnected to[: ]+(.+)".into(),
         has_hook: false,
@@ -465,7 +486,7 @@ mod tests {
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
         std::fs::File::options().write(true).open(&new).unwrap().set_modified(later).unwrap();
 
-        let got = game_find_logs(d.path().to_string_lossy().to_string(), None);
+        let got = find_logs(&d.path().to_string_lossy(), None, None);
         assert!(got.iter().any(|p| p.ends_with("new.log")));
         assert!(got.iter().any(|p| p.ends_with("old.log")));
         assert!(!got.iter().any(|p| p.ends_with("empty.log")), "an empty file is not a log");
@@ -474,7 +495,7 @@ mod tests {
 
     #[test]
     fn a_folder_that_is_not_there_yields_nothing_rather_than_an_error() {
-        assert!(game_find_logs("Z:/nope".into(), None).is_empty());
+        assert!(find_logs("Z:/nope", None, None).is_empty());
     }
 
     #[test]

@@ -39,8 +39,13 @@ function routerTruth() {
     if (!m) continue;
     const parts = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
     if (!parts.length || parts[0] !== 'api') continue;
-    let path = `/${parts.join('/')}`;
-    if (/\bString\b/.test(m[1])) path += '/:id';
+    // A parameter sits WHERE it is in the path: `"schedules" / String / "runs"` is
+    // /api/schedules/:id/runs. Appending it at the end made that route a key no page row could
+    // ever match, so its permission cell went unchecked in silence.
+    const path = '/' + m[1].split('/').map((t) => t.trim()).map((t) => {
+      const q = /^"([^"]+)"$/.exec(t);
+      return q ? q[1] : /^(String|u64|u32|usize)$/.test(t) ? ':id' : null;
+    }).filter(Boolean).join('/');
     const blob = lines.slice(i, i + 10).join('\n');
     const meth = /warp::(get|post|put|delete|patch)\(\)/.exec(blob);
     if (!meth) continue;
@@ -76,7 +81,8 @@ for (const page of PAGES) {
   for (let i = 0; i < lines.length; i++) {
     const m = ROW.exec(lines[i]);
     if (!m) continue;
-    const key = `${m[1]} ${m[2]}`;
+    // `:name`, `:id`, `:plugin_id` — one parameter, however a page spells it.
+    const key = `${m[1]} ${m[2].replace(/\/:[a-zA-Z_]+/g, '/:id')}`;
     const want = truth.get(key);
     // A row for something that is not a route (an example, another product's API) is not
     // this gate's business.

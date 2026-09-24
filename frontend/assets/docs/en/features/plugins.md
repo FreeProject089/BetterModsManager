@@ -59,7 +59,7 @@ everything at once.
 !!! danger "The permission list itself is not something a plugin can touch"
 
     `PUT /api/apps/permissions/<id>` writes the grants, and it takes the **admin** token. A
-    plugin that could set its own permissions could grant itself all twenty-six, which would
+    plugin that could set its own permissions could grant itself all twenty-eight, which would
     make this page a description of nothing.
 
 !!! note "The API & scripts tab draws itself in two beats"
@@ -352,7 +352,7 @@ Two verbs stay in the open: **Compare** and **Apply**. Then three buttons that o
 
 | | |
 |---|---|
-| **Permissions** | The twenty-six grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
+| **Permissions** | The twenty-eight grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
 | **Contents** | Everything the plugin holds: scripts, bundled folders, automations, assets, the lot. |
 | **Analyse** | What it would change if you applied it. |
 

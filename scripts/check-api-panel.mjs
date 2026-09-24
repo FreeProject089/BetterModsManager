@@ -82,8 +82,10 @@ if (routes.size < 40 || entries.length < 40) {
 }
 
 // `/api/mods/:id` in the panel is `path!("api" / "mods" / String)` in warp, whose literals are
-// just api/mods. Compared on the literal prefix so a parameterised path is not a phantom.
-const trim = (p) => p.replace(/\/:[^/]+$/, '');
+// just api/mods. Compared on the literals so a parameterised path is not a phantom — EVERY
+// parameter, not only a trailing one: `/api/schedules/:id/runs` is `"api" / "schedules" /
+// String / "runs"`, whose literals are api/schedules/runs.
+const trim = (p) => p.replace(/\/:[^/]+/g, '');
 const listed = new Set(entries.map((e) => `${e.method} ${trim(e.path)}`));
 
 const problems = [];

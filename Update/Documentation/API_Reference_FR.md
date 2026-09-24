@@ -52,6 +52,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mods/order` | oui · `mods.write` | `{ order[], profileId? }` — permutation obligatoire ; le dernier gagne un fichier partagé |
 | `/api/schedules` | oui | — (GET) id, nom, activée, déclencheur. **Pas** les étapes |
 | `/api/schedules/enabled` | oui | `{ id, enabled }` — seul `enabled` est modifiable |
+| `/api/schedules/:id/runs` | oui | — (GET) journal d’exécution d’une tâche, le plus récent d’abord (50 exécutions, étapes, durées, erreurs ; secrets retirés). `schedules.read` |
 | `/api/hook` | oui | `{ name, data? }` — sonne une clochette ; `GET` liste les noms et leur compte ; `DELETE` oublie tout |
 | `/api/hook/:name` | oui | `GET` lit les sonneries d'un nom, contenu compris, sans les consommer (`?since=<ms>` pour les récentes) ; `DELETE` oublie ce nom |
 | `/api/content-id` | oui | `{ kind, doc }` — l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. `kind` vaut modpack, plugin, task, profile, theme, launchpack, repo, app ou modlist. Il prend le DOCUMENT, donc la réponse ne révèle rien de ce que cette installation contient ; une variante par id serait un oracle « cette machine a-t-elle X » et exigerait la portée de lecture de chaque type. |
@@ -148,6 +149,12 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/data/export-auto` | oui | `{ dir, name? (modèle : `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — sauvegarde automatique, renvoie le chemin écrit |
 | `/api/launchpack/run` | oui | `{ id }` — lance un launch pack enregistré |
 | `/api/schedule/run` | oui | `{ id }` — déclenche une tâche Scheduling & automation |
+| `/api/resources` | `resources.read` | — (GET) le gouverneur de ressources : préréglage enregistré et en vigueur, préréglage de tâche, mode jeu, file des opérations lourdes |
+| `/api/resources/hardware` | `resources.read` | — (GET) jeux d’instructions, cartes graphiques, bus et pénalité de recherche de chaque disque |
+| `/api/resources/preset` | `resources.write` | `{ name: "silent"\|"balanced"\|"max"\|"custom", scope?: "persistent"\|"task", ttlSecs? }` — un préréglage NOMMÉ ; ne passe jamais devant le mode jeu |
+| `/api/resources/game-mode` | `resources.write` | `{ mode: "auto"\|"on"\|"off" }` |
+| `/api/resources/queue` | `resources.write` | `{ action: "pause_all"\|"resume_all"\|"pause"\|"resume"\|"cancel", id? }` — `cancel` demande aussi `mods.write` |
+| `/api/resources/io-rule` | **jeton admin seulement** | `{ disk, op, rule? }` — une règle par disque et par opération (`rate_mb_s`, `parallel`, `buffer_kib`, `io_priority`), ramenée dans les bornes dures ; `rule: null` la supprime. Un jeton de plugin est refusé même avec `resources.write` |
 
 ---
 
@@ -215,6 +222,9 @@ Les deeplinks sont des URL cliquables (pages web, Discord, scripts) qui pilotent
 | `bmm://data/export-auto?dir=<dossier>&name=<modèle>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
 | `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
 | `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
+| `bmm://schedule/runs?id=<task_id>` | `GET /api/schedules/:id/runs` (ouvre le journal) |
+| `bmm://resources/open` | ouvre le gestionnaire de stockage et son tableau de bord des ressources |
+| `bmm://resources/preset?name=<silent\|balanced\|max\|custom>` | `POST /api/resources/preset` — demande d’abord depuis l’extérieur, une question par 10 s ; aucune règle par disque par lien |
 | `bmm://mod/update?url=<repo_url>` | ouvre Dépôt → mises à jour de mods (avec `url`, pré-remplit la connexion ; sans, lance la vérification des mises à jour) |
 | `bmm://plugin/delete?id=<plugin_id>` | `DELETE /api/plugins/:id` (désinstalle un plugin) |
 | `bmm://catalog/<app\|plugin\|theme>/install?url=<download_url>&name=<label>&type=<exe\|zip\|msi\|script>` | installe en un clic un élément du catalogue BetterCommunity (`type` s'applique à `app` ; sans `url`, ouvre simplement la vue correspondante) |
@@ -258,6 +268,8 @@ Les permissions qui s'appliquent sont décidées par le jeton que porte la requ�
 | `profiles.write` | créer, modifier, supprimer et activer des profils |
 | `repo.read` | voir quels repos sont connectés et ce qu'ils contiennent |
 | `repo.write` | connecter, synchroniser, publier et héberger des repos |
+| `resources.read` | lire le gouverneur de ressources (préréglage, mode jeu, file) et la détection du matériel |
+| `resources.write` | choisir un préréglage nommé, régler le mode jeu, suspendre et reprendre le travail lourd (annuler demande aussi `mods.write` ; une règle d’E/S par disque est réservée au jeton admin) |
 | `schedules.read` | lister les automatisations enregistrées |
 | `schedules.write` | exécuter une automatisation, l'armer ou la désarmer |
 | `system.write` | redémarrer BMM, changer l'écran ouvert, lancer un benchmark, importer une langue |

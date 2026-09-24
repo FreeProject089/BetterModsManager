@@ -4,7 +4,7 @@
 //! A cell left empty inherits: (disk, op) → (disk, all ops) → (all disks, op) → the preset.
 //! The UI shows the resolved value AND its source, because a matrix of blank cells that
 //! nonetheless limits a copy to 40 MB/s is exactly the kind of setting nobody can debug.
-use crate::governor::config::{IoPriority, IoRule, OpKind, MAX_BUFFER_KIB, MAX_PARALLEL, MIN_BUFFER_KIB};
+use crate::governor::config::{normalize_disk_key, sync_disk_limit, IoPriority, IoRule, OpKind};
 use crate::governor::runtime::global;
 use crate::state::AppState;
 use serde::Serialize;
@@ -36,27 +36,6 @@ pub struct Cell {
 /// deploy speed is what game mode throttles, and images are too small to be worth a knob.
 pub const MATRIX_OPS: [OpKind; 7] = [OpKind::Install, OpKind::Backup, OpKind::Extract, OpKind::Compress, OpKind::Scan, OpKind::Hash, OpKind::Download];
 
-fn norm_disk(d: &str) -> Result<String, String> {
-    let d = d.trim().to_lowercase();
-    if d == "*" { return Ok(d); }
-    let ok_letter = d.len() >= 2 && d.as_bytes()[0].is_ascii_alphabetic() && d.as_bytes()[1] == b':';
-    if ok_letter || d.starts_with("\\\\") { Ok(if d.ends_with('\\') { d } else { format!("{d}\\") }) } else { Err(format!("not a disk: {d}")) }
-}
-
-fn norm_op(o: &str) -> Result<&'static str, String> {
-    if o == "*" { return Ok("*"); }
-    OpKind::ALL.iter().map(|k| k.key()).find(|k| *k == o).ok_or_else(|| format!("unknown operation: {o}"))
-}
-
-/// Refuse what the hard bounds would silently rewrite, so the stored document says what
-/// actually happens (a rate of 0 would mean "block forever").
-fn validate(r: &IoRule) -> Result<(), String> {
-    if r.rate_mb_s == Some(0) { return Err("a rate must be at least 1 MB/s (leave it empty for no limit)".into()); }
-    if let Some(p) = r.parallel { if p == 0 || p > MAX_PARALLEL { return Err(format!("parallel must be 1 to {MAX_PARALLEL}")); } }
-    if let Some(b) = r.buffer_kib { if !(MIN_BUFFER_KIB..=MAX_BUFFER_KIB).contains(&b) { return Err(format!("buffer must be {MIN_BUFFER_KIB} to {MAX_BUFFER_KIB} KiB")); } }
-    Ok(())
-}
-
 /// Resolve every matrix op for one disk, with sources. Pure over the rules map.
 pub fn resolve_disk(rules: &BTreeMap<String, BTreeMap<String, IoRule>>, disk: &str) -> Vec<Cell> {
     let get = |d: &str, o: &str| rules.get(d).and_then(|m| m.get(o)).cloned().unwrap_or_default();
@@ -78,31 +57,20 @@ pub fn resolve_disk(rules: &BTreeMap<String, BTreeMap<String, IoRule>>, disk: &s
 
 #[tauri::command]
 pub fn resources_matrix(disk: String) -> Result<Vec<Cell>, String> {
-    let d = norm_disk(&disk)?;
+    let d = normalize_disk_key(&disk).ok_or_else(|| format!("not a disk: {disk}"))?;
     Ok(resolve_disk(&global().config().rules, &d))
 }
 
 /// Store (or with `rule: None`, remove) the rule for (disk, op). `op` may be "*".
 #[tauri::command]
 pub fn resources_set_rule(state: State<AppState>, disk: String, op: String, rule: Option<IoRule>) -> Result<(), String> {
-    let d = norm_disk(&disk)?;
-    let o = norm_op(op.trim())?;
-    if let Some(r) = &rule { validate(r)?; }
+    // The same path as POST /api/resources/io-rule (config.rs set_rule + sync_disk_limit):
+    // keys normalised or refused, out-of-bound values refused, disk_limits kept in step.
     let cfg = {
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
-        let empty = rule.as_ref().map(|r| *r == IoRule::default()).unwrap_or(true);
-        if empty {
-            if let Some(m) = data.resources.rules.get_mut(&d) { m.remove(o); if m.is_empty() { data.resources.rules.remove(&d); } }
-        } else {
-            data.resources.rules.entry(d.clone()).or_default().insert(o.to_string(), rule.unwrap());
-        }
-        // The old per-disk table follows the disk-wide rate, which is what set_disk_limit does
-        // in the other direction, so the two never disagree.
-        if o == "*" && d != "*" {
-            let rate = data.resources.rules.get(&d).and_then(|m| m.get("*")).and_then(|r| r.rate_mb_s);
-            let key = data.disk_limits.keys().find(|k| k.to_lowercase() == d).cloned().unwrap_or_else(|| d.to_uppercase());
-            match rate { Some(n) => { data.disk_limits.insert(key, n); } None => { data.disk_limits.remove(&key); } }
-        }
+        data.resources.set_rule(&disk, &op, rule)?;
+        let rules = data.resources.rules.clone();
+        sync_disk_limit(&rules, &mut data.disk_limits, &disk, &op);
         data.resources.clone()
     };
     global().configure(cfg);
@@ -115,7 +83,7 @@ pub fn resources_reset_rules(state: State<AppState>, disk: Option<String>) -> Re
     let cfg = {
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
         match disk {
-            Some(d) => { let d = norm_disk(&d)?; data.resources.rules.remove(&d); data.disk_limits.retain(|k, _| k.to_lowercase() != d); }
+            Some(d) => { let d = normalize_disk_key(&d).ok_or_else(|| format!("not a disk: {d}"))?; data.resources.rules.remove(&d); data.disk_limits.retain(|k, _| k.to_lowercase() != d); }
             None => { data.resources.rules.clear(); data.disk_limits.clear(); }
         }
         data.resources.clone()
@@ -147,22 +115,4 @@ mod tests {
         assert_eq!(scan.src_rate, Source::Disk);
     }
 
-    #[test]
-    fn a_rule_the_bounds_would_rewrite_is_refused_not_stored() {
-        assert!(validate(&rule(Some(0), None)).is_err());
-        assert!(validate(&rule(None, Some(0))).is_err());
-        assert!(validate(&rule(None, Some(MAX_PARALLEL + 1))).is_err());
-        assert!(validate(&IoRule { buffer_kib: Some(8), ..Default::default() }).is_err());
-        assert!(validate(&rule(Some(1), Some(1))).is_ok());
-    }
-
-    #[test]
-    fn disks_and_ops_are_normalised_or_refused() {
-        assert_eq!(norm_disk("D:").unwrap(), "d:\\");
-        assert_eq!(norm_disk(" E:\\ ").unwrap(), "e:\\");
-        assert_eq!(norm_disk("*").unwrap(), "*");
-        assert!(norm_disk("../etc").is_err());
-        assert_eq!(norm_op("hash").unwrap(), "hash");
-        assert!(norm_op("rm -rf").is_err());
-    }
 }

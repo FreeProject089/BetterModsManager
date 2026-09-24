@@ -63,7 +63,7 @@ For a plugin token the caller's identity comes **from the token**, never from th
 `app.read` · `app.write` · `catalog.read` · `catalog.write` · `data.read` · `data.write` ·
 `hooks.read` · `hooks.write` · `keys.read` · `keys.write` · `modpacks.read` · `modpacks.write` ·
 `mods.read` · `mods.write` · `plugins.read` · `plugins.write` · `profiles.read` · `profiles.write` ·
-`repo.read` · `repo.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
+`repo.read` · `repo.write` · `resources.read` · `resources.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
 
 That list lives in the code as `api::PLUGIN_SCOPES`, and a test asserts it matches the router
 in both directions: a scope the router demands that nothing can grant is a route nothing can
@@ -200,6 +200,9 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Runs a scheduled task — the hook the Windows Scheduler uses. **Asks first**, unless `k` is this machine's OS-schedule key |
 | `bmm://schedule/enable` | `id`*, `on` | Arms (`on=1`, the default) or disarms (`on=0`) a saved task. Asks first |
+| `bmm://schedule/runs` | `id`* | Opens a task’s run log. Read-only, so it asks nothing |
+| `bmm://resources/open` | — | Opens the Storage manager, where the live resources dashboard is |
+| `bmm://resources/preset` | `name`* | Picks a **named** preset (`silent` · `balanced` · `max` · `custom`). From outside it asks first, and a second one within 10 seconds is refused without asking. No per-disk rule can be set by a link: any other `resources/…` action is refused |
 | `bmm://catalog/follow` | `type`*, `url`*, `password`, `key` | Follow a catalogue — one of the eight: `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. **Not `index`** — an index is a catalogue of catalogues with no store of its own, and this route answers “no catalogue type called index”; `bmm://catalog/import` is the one that reads it. A `password` is remembered for this run only, never written to disk; `key` names WHICH identity key signs the request — an id or a name. Ids live in Settings → Identity & API, are shown next to each key, and survive a rename; a reference that is not on the ring is reported rather than skipped, because a request that quietly goes out unsigned comes back as “could not read it” with nothing pointing at the key |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Stop following it |
 | `bmm://catalog/import` | `url`*, `type`, `password` | Reads the document at that address and follows it **without being told what kind it is**. Whoever has a link usually does not know which of the eight it is; the document does. `type` narrows an index to one kind |
@@ -362,6 +365,7 @@ Two shapes sit outside that rule:
 | `GET` | `/api/mods/order` | `mods.read` | — · the deployment order plus every contested file and who wins it | |
 | `GET` | `/api/schedules` | `schedules.read` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
+| `GET` | `/api/schedules/:id/runs` | `schedules.read` | — · the task’s run log, newest first: the last 50 runs, each step with its duration, status and error. Secrets are removed before a run is written. An id that names no task answers an empty list | ✓ |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
 | `GET` | `/api/hook` | `hooks.read` | — · every name that has rung this session, with how many times — for the screen that asks “is my webhook actually arriving?” | |
 | `GET` | `/api/hook/:name` | `hooks.read` | `?since=<ms>` · the rings themselves, with their payloads and timestamps — the same view a waiting task gets, so “it never fired” and “it fired the wrong body” stop looking alike. Reading does not consume: two tasks can wait on one doorbell | |
@@ -473,6 +477,12 @@ is `data/export-auto`.
 | `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
 | `POST` | `/api/restart` | `system.write` | — · the API is briefly unavailable | ✓ |
 | `POST` | `/api/view` | `system.write` | `id`* · show a screen. The id is the sidebar's own `data-view` value (`mapper`, `library`, …); an unknown one is a no-op that says so in the app console, exactly like the `bmm://view/open` deeplink | ✓ |
+| `GET` | `/api/resources` | `resources.read` | — · the resource governor: the stored `preset`, the `effective` one (game mode or a task may differ), the task-scoped preset and its time left, `game_active` / `game_manual`, and the queue of heavy operations (`tickets`) | |
+| `GET` | `/api/resources/hardware` | `resources.read` | — · CPU cores and instruction sets, GPUs (listed only — BMM runs no compute on them), each disk’s bus and seek penalty. The first call can take the GPU driver’s 3-second budget | |
+| `POST` | `/api/resources/preset` | `resources.write` | `name`* (`silent` · `balanced` · `max` · `custom`), `scope` (`persistent`, the default, or `task`), `ttlSecs` (task only, ≤ 7200) · a **named** preset. It never overrides game mode | ✓ |
+| `POST` | `/api/resources/game-mode` | `resources.write` | `mode`* (`auto` · `on` · `off`) | |
+| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (a ticket, for the last three) · **`cancel` also needs `mods.write`**: it throws work away | |
+| `POST` | `/api/resources/io-rule` | admin token | `disk`* (`*`, `d:\`, `\\nas\share\` or `/`), `op`* (`*` or an operation kind), `rule` (`{ rate_mb_s?, parallel?, buffer_kib?, io_priority? }`; `null` removes it) · a fine-grained rule, clamped to the hard bounds and stored. **The admin token only**: a plugin is refused even with `resources.write` | |
 
 ---
 
@@ -525,8 +535,8 @@ through. A note goes stale in silence; a check does not.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the 69 tools an AI client can call, and which ones need BMM open
-- [CLI reference](doc-page:reference/cli) — the same binary’s 62 subcommands, for a terminal or a `.bat`
+- [MCP server reference](doc-page:reference/mcp) — the 73 tools an AI client can call, and which ones need BMM open
+- [CLI reference](doc-page:reference/cli) — the same binary’s 66 subcommands, for a terminal or a `.bat`
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

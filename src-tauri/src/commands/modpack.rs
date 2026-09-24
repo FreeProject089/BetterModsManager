@@ -463,6 +463,13 @@ pub async fn repair_modpack_mod(
     };
 
     // 2. Téléchargement et Réparation
+    //
+    // Under an Install ticket for the whole repair (the dashboard lists it, cancel reaches
+    // it). This is an async command, so the loops below ask `is_cancelled()` rather than
+    // sitting in `checkpoint()`: a pause must not park one of the async runtime's threads.
+    use crate::governor::config::OpKind;
+    let ticket = crate::fs_utils::begin_ticket_async(OpKind::Install, mod_ref.mod_name.clone()).await;
+    let cancelled = || AppError::Internal(crate::fs_utils::CANCELLED.to_string());
     let mut client_builder = reqwest::Client::builder();
     if let Some(ref cid) = args.creator_id {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -484,6 +491,7 @@ pub async fn repair_modpack_mod(
         };
 
         for (_idx, file_ref) in mod_ref.file_manifest.iter().enumerate() {
+            if ticket.is_cancelled() { return Err(cancelled()); }
             let local_path = target_dir.join(&file_ref.relative_path);
             let mut needs_download = true;
 
@@ -498,7 +506,8 @@ pub async fn repair_modpack_mod(
                     if let Some(parent) = local_path.parent() {
                         let _ = std::fs::create_dir_all(parent);
                     }
-                    if std::fs::rename(&found_path, &local_path).is_ok() || std::fs::copy(&found_path, &local_path).is_ok() {
+                    if std::fs::rename(&found_path, &local_path).is_ok()
+                        || crate::fs_utils::copy_file_install(OpKind::Install, &found_path, &local_path, Some(&ticket)).is_ok() {
                         recovered = true;
                     }
                 }
@@ -523,8 +532,14 @@ pub async fn repair_modpack_mod(
                     let mut file_out = std::fs::File::create(&local_path).map_err(|e| e.to_string())?;
                     
                     while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+                        if ticket.is_cancelled() {
+                            drop(file_out);
+                            let _ = std::fs::remove_file(&local_path);
+                            return Err(cancelled());
+                        }
                         file_out.write_all(&chunk).map_err(|e| e.to_string())?;
                         downloaded += chunk.len() as u64;
+                        ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                         
                         let progress = if total_size > 0 {
                             (downloaded as f32 / total_size as f32) * 100.0
@@ -561,8 +576,8 @@ pub async fn repair_modpack_mod(
                         if let Some(parent) = local_path.parent() {
                             let _ = std::fs::create_dir_all(parent);
                         }
-                        let _ = std::fs::rename(&found, &local_path)
-                            .or_else(|_| std::fs::copy(&found, &local_path).map(|_| ()));
+                        let _ = std::fs::rename(&found, &local_path).map_err(anyhow::Error::from)
+                            .or_else(|_| crate::fs_utils::copy_file_install(OpKind::Install, &found, &local_path, Some(&ticket)).map(|_| ()));
                     } else {
                         all_recovered = false; // Au moins un fichier vraiment absent
                     }
@@ -599,7 +614,13 @@ pub async fn repair_modpack_mod(
                 let mut res = res;
                 let mut out = std::fs::File::create(&temp_zip).map_err(|e| e.to_string())?;
                 while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                    if ticket.is_cancelled() {
+                        drop(out);
+                        let _ = std::fs::remove_file(&temp_zip);
+                        return Err(cancelled());
+                    }
                     std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+                    ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                 }
                 std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
             }
@@ -608,6 +629,10 @@ pub async fn repair_modpack_mod(
             let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
             
             for i in 0..archive.len() {
+                if ticket.is_cancelled() {
+                    let _ = std::fs::remove_file(&temp_zip);
+                    return Err(cancelled());
+                }
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
                 // CWE-22 Zip Slip: never join the raw entry name — use enclosed_name()
                 // (None ⇒ the entry would escape target_dir via `..`/absolute → skip).

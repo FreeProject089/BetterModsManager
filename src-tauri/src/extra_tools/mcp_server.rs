@@ -57,7 +57,18 @@ mod commands {
     // same question the writer answered, or it reads back a name that was never stored.
     #[path = "../../commands/hooks.rs"]
     pub mod hooks;
+    // The run log's reader and its id filter (A4): `bmm schedule-runs` and
+    // `bmm_schedule_runs` read the same files the app writes, through the same guard.
+    #[path = "../../commands/sched_runs.rs"]
+    pub mod sched_runs;
 }
+
+// What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI
+// answers `bmm hardware` with BMM closed, with the app's own detection.
+// `disk()` is the governor's single-volume probe; the CLI only asks for everything.
+#[allow(dead_code)]
+#[path = "../hw_detect.rs"]
+mod hw_detect;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -89,6 +100,14 @@ fn pct(s: &str) -> String {
         b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
         _ => format!("%{:02X}", b),
     }).collect()
+}
+
+/// A refused request exits non-zero, so a `.bat` or a CI step does not read "unknown preset"
+/// or a 403 as success. The body was printed first: it says why.
+fn http_ok(res: &serde_json::Value) -> anyhow::Result<()> {
+    let status = res.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
+    if status >= 400 { anyhow::bail!("the app answered HTTP {status}"); }
+    Ok(())
 }
 
 #[derive(Subcommand)]
@@ -488,6 +507,34 @@ enum Commands {
         /// Task id
         id: String,
     },
+
+    /// A task's run log, newest first: each run's steps, durations and errors (works with BMM closed)
+    #[command(name = "schedule-runs")]
+    ScheduleRuns {
+        /// Task id, from `schedules`
+        id: String,
+    },
+
+    // ── Resources (the governor) ──────────────────────────────────────
+
+    /// The resource governor: stored preset, the one in force, game mode, the queue (running app)
+    Resources,
+
+    /// Pick a NAMED resource preset: silent | balanced | max | custom (running app)
+    #[command(name = "resources-preset")]
+    ResourcesPreset {
+        /// silent | balanced | max | custom
+        name: String,
+        /// `persistent` (stored) or `task` (ends by itself after --ttl seconds)
+        #[arg(long, default_value = "persistent")]
+        scope: String,
+        /// For --scope task: seconds it lasts, capped at 7200
+        #[arg(long)]
+        ttl: Option<u64>,
+    },
+
+    /// What hardware BMM runs on: CPU features, GPUs, each disk's bus (works with BMM closed)
+    Hardware,
 
     /// Create or update a scheduler task from a JSON file or inline JSON.
     /// Shape = what the in-app builder saves; created DISABLED unless the JSON
@@ -1288,6 +1335,55 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         Commands::RunSchedule { id } => {
             let res = state_bridge::api_call("POST", "/api/schedule/run", Some(serde_json::json!({ "id": id }))).await?;
             println!("  {} schedule '{}' triggered {}", "✓".green().bold(), id.cyan(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+        Commands::ScheduleRuns { id } => {
+            let v = state_bridge::schedule_runs(&id)?;
+            let runs = v.get("runs").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+            if runs.is_empty() {
+                println!("  {}", "No run recorded for this task yet.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["", "At", "Duration", "Steps", "Result"]);
+                for r in &runs {
+                    let ok = r.get("ok").and_then(|x| x.as_bool()).unwrap_or(false);
+                    let steps = r.get("steps").and_then(|x| x.as_array()).map(|a| a.len()).unwrap_or(0);
+                    // The first failed step says why, which is the question this command answers.
+                    let why = r.get("steps").and_then(|x| x.as_array())
+                        .and_then(|a| a.iter().find_map(|s| s.get("error").and_then(|e| e.as_str()).map(str::to_string)))
+                        .or_else(|| r.get("result").and_then(|x| x.as_str()).map(str::to_string))
+                        .unwrap_or_default();
+                    table.add_row(vec![
+                        (if ok { "●" } else { "✗" }).to_string(),
+                        r.get("at").map(|x| x.to_string()).unwrap_or_default(),
+                        format!("{} ms", r.get("ms").and_then(|x| x.as_u64()).unwrap_or(0)),
+                        steps.to_string(),
+                        if ok { "ok".into() } else { why },
+                    ]);
+                }
+                println!("{table}");
+                println!("  {} {}", runs.len().to_string().cyan().bold(), "run(s), newest first".dimmed());
+            }
+        }
+
+        // ── Resources ────────────────────────────────────────────────
+        Commands::Resources => {
+            let res = state_bridge::api_call("GET", "/api/resources", None).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+            http_ok(&res)?;
+        }
+        Commands::ResourcesPreset { name, scope, ttl } => {
+            let mut body = serde_json::json!({ "name": name, "scope": scope });
+            if let Some(t) = ttl { body["ttlSecs"] = t.into(); }
+            let res = state_bridge::api_call("POST", "/api/resources/preset", Some(body)).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+            http_ok(&res)?;
+        }
+        Commands::Hardware => {
+            // One-shot process, nothing else to keep responsive: detect in place.
+            let hw = state_bridge::hardware_info();
+            println!("{}", serde_json::to_string_pretty(&hw)?);
         }
 
         // ── Benchmark ────────────────────────────────────────────────

@@ -493,12 +493,22 @@ fn rewrite_report_zip_bytes(
 /// zip without the redaction note is rewritten through the redactor, DxDiag dropped. Those
 /// zips are the ones people attach or export, and they carried the data file in clear.
 /// Idempotent — a rewritten zip carries the note and is skipped next time.
+///
+/// A Maintenance ticket for the pass (G3b), a checkpoint per zip: it is background work, so
+/// it waits while a deploy or an install runs and while a game is played. A cancel stops it
+/// between zips; the pass is idempotent and the next start finishes it.
 pub fn redact_existing_reports() {
+    let ticket = crate::governor::runtime::global()
+        .begin(crate::governor::config::OpKind::Maintenance, "redact old reports");
     let r = stored_secrets_redactor(&data_file_path());
     let base = get_crash_dir(None);
     for sub in ["Reports/Crash", "Reports/Session", "Archive/Crash", "Archive/Session"] {
         let Ok(entries) = fs::read_dir(base.join(sub)) else { continue };
         for e in entries.flatten() {
+            if ticket.checkpoint().is_err() {
+                log_line("[CRASH_LOGGER] Report redaction cancelled; the next start resumes it");
+                return;
+            }
             let path = e.path();
             if path.extension().and_then(|s| s.to_str()) != Some("zip") {
                 continue;
@@ -718,6 +728,9 @@ pub fn finalize_and_close_app(window: tauri::Window, state: tauri::State<crate::
     let _ = state.save();
 
     // On fait le zip en bloquant un tout petit peu si nécessaire, ou on spawn
+    // Not a governor ticket, on purpose (G3b): this is the exit path. Maintenance is
+    // background work and would wait behind a deploy or a whole game session, and the window
+    // closes only when this thread is done: the app would refuse to quit.
     std::thread::spawn(move || {
         log_line("[SHUTDOWN] Thread: Generating session report (via command)...");
         let _ = generate_report(

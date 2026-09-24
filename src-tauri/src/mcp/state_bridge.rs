@@ -1262,6 +1262,28 @@ pub async fn api_call(method: &str, path: &str, body: Option<serde_json::Value>)
     Ok(serde_json::json!({ "status": status, "body": body }))
 }
 
+// ─── Resources + run log (A4, offline reads) ───────────────────────────────
+
+/// What hw_detect.rs sees — the same file the app mounts, so `bmm hardware` with BMM closed
+/// and the Storage screen cannot disagree. Blocking: the first call can spend the GPU
+/// driver's 3-second budget.
+pub fn hardware_info() -> crate::hw_detect::HardwareInfo {
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let mounts: Vec<String> = disks.iter().map(|d| d.mount_point().to_string_lossy().to_string()).collect();
+    crate::hw_detect::detect(&mounts)
+}
+
+/// A task's run log, newest first, read from `<data>/TaskRuns/<id>.jsonl` with the app's own
+/// reader (and its id filter, so an id cannot leave the folder). Works with BMM closed.
+pub fn schedule_runs(task_id: &str) -> anyhow::Result<serde_json::Value> {
+    if crate::commands::sched_runs::safe_id(task_id).as_deref() != Some(task_id.trim()) {
+        anyhow::bail!("invalid task id: use the id bmm_list_schedules returns");
+    }
+    let runs = crate::commands::sched_runs::list_in(&get_bmm_data_dir().join("TaskRuns"), task_id.trim())
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(serde_json::json!({ "id": task_id.trim(), "runs": runs }))
+}
+
 // ─── Scheduler / themes / sessions (offline reads + safe writes) ───────────
 
 /// List saved scheduler tasks (offline read of schedules.json).

@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-69 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+73 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -149,6 +149,7 @@ values.
 | `bmm_signal` | `name`\*, `data` | app | Ring a named doorbell a task may be waiting on (`wait.hook`), e.g. to say a build has finished |
 | `bmm_signals_seen` | `name`, `since` | app | Read what a doorbell was rung with — the payloads and their times, the same view a waiting task gets. Omit `name` for every name with a count. Use it after `bmm_signal`: a name is narrowed to something that can be a key, so `build/done` is filed as `build_done` |
 | `bmm_run_schedule` | `id`\* | app | Trigger a saved scheduler task by id in the running BMM app |
+| `bmm_schedule_runs` | `id`\* |  | A task's run log, newest first: the last 50 runs, each step with its duration, status and error (secrets removed before a run is written). Answers "why did it fail" where `bmm_list_schedules` only says that it did. Works offline |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Launch a BMM benchmark in the running app |
 
 #### Writing an automation, rather than assembling one
@@ -177,6 +178,14 @@ The same executable exposes them on the command line, for a shell rather than an
 `bmms-compile` writes diagnostics to stderr and **nothing** to stdout when the source does not
 compile, so `bmms-compile --file t.bmms | bmm-mcp-server create-schedule --file -` cannot save
 a half-parsed task.
+
+### Resources
+
+| Tool | Parameters | Needs | What it does |
+|---|---|---|---|
+| `bmm_resources_status` | — | app | The resource governor: stored preset, the one in force (game mode or a task may differ), the task-scoped preset and its time left, game mode, and the queue of heavy operations |
+| `bmm_resources_set_preset` | `name`\* (silent/balanced/max/custom), `scope` (persistent/task), `ttl_secs` | app | Pick a **named** preset. It never overrides game mode; the user sees a notification. A per-disk I/O rule is not reachable from here — it is set in Settings, or with the admin token on `POST /api/resources/io-rule` |
+| `bmm_hardware_info` | — |  | CPU cores and instruction sets, GPUs (listed only — BMM runs no compute on them), each disk's bus and whether it spins. The first call can take 3 seconds while the GPU driver answers. Works offline |
 
 ### Privacy, recorder & sessions
 
@@ -245,12 +254,12 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 69 tools with their parameters is exactly the list that rots the
+written by hand, because 73 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 69 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 73 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---

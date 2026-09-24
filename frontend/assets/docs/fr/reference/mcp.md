@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-69 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+73 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -151,6 +151,7 @@ donne les valeurs acceptées.
 | `bmm_signal` | `name`\*, `data` | app | Sonne une cloche nommée qu'une tâche attend (`wait.hook`), p. ex. pour dire qu'un build est fini |
 | `bmm_signals_seen` | `name`, `since` | app | Lit avec quoi une cloche a sonné — les contenus et leurs horodatages, la même vue qu'obtient une tâche en attente. Sans `name`, chaque nom avec son compte. À utiliser après `bmm_signal` : un nom est rétréci en quelque chose qui peut servir de clé, donc `build/done` est classé sous `build_done` |
 | `bmm_run_schedule` | `id`\* | app | Déclenche une tâche du planificateur par son id, dans l'app BMM ouverte |
+| `bmm_schedule_runs` | `id`\* |  | Le journal d'exécution d'une tâche, le plus récent d'abord : les 50 dernières exécutions, chaque étape avec sa durée, son statut et son erreur (secrets retirés avant l'écriture). Répond « pourquoi a-t-elle échoué » là où `bmm_list_schedules` dit seulement qu'elle a échoué. Fonctionne hors ligne |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Lance un benchmark BMM dans l'app ouverte |
 
 #### Écrire une automatisation, plutôt que l'assembler
@@ -180,6 +181,14 @@ Le même exécutable les expose en ligne de commande, pour un shell plutôt qu'u
 `bmms-compile` écrit ses diagnostics sur stderr et **rien** sur stdout quand la source ne
 compile pas, donc `bmms-compile --file t.bmms | bmm-mcp-server create-schedule --file -` ne
 peut pas enregistrer une tâche à moitié analysée.
+
+### Ressources
+
+| Outil | Paramètres | Requiert | Ce que ça fait |
+|---|---|---|---|
+| `bmm_resources_status` | — | app | Le gouverneur de ressources : préréglage enregistré, celui en vigueur (le mode jeu ou une tâche peuvent différer), le préréglage de tâche et son temps restant, le mode jeu, et la file des opérations lourdes |
+| `bmm_resources_set_preset` | `name`\* (silent/balanced/max/custom), `scope` (persistent/task), `ttl_secs` | app | Choisit un préréglage **nommé**. Il ne passe jamais devant le mode jeu ; l'utilisateur voit une notification. Une règle d'E/S par disque n'est pas accessible d'ici — elle se règle dans les Réglages, ou avec le jeton admin sur `POST /api/resources/io-rule` |
+| `bmm_hardware_info` | — |  | Cœurs et jeux d'instructions du processeur, cartes graphiques (listées seulement — BMM n'y calcule rien), bus de chaque disque et s'il est mécanique. Le premier appel peut prendre 3 secondes, le temps que le pilote graphique réponde. Fonctionne hors ligne |
 
 ### Confidentialité, enregistreur & sessions
 
@@ -248,12 +257,12 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 69 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 73 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 69 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 73 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---

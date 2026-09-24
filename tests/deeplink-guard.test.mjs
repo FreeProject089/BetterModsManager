@@ -325,3 +325,53 @@ describe('the handler is wired through the gate', () => {
         assert.doesNotMatch(te, /window as any\)\.__bmmDeeplink\s*=/);
     });
 });
+
+// A4: a link may name a resource preset, and nothing finer. From outside the app it asks, and
+// only once every 10 s, so a page firing the link in a loop gets one dialog, not a stack of
+// them to click through by mistake.
+describe('resource links', () => {
+    const { resetPresetBurst, LINK_PRESETS } = G;
+
+    test('a named preset from outside asks, then a second one within 10 s is refused', async () => {
+        resetPresetBurst();
+        const first = await run('bmm://resources/preset?name=max', 'external', true);
+        assert.ok(first.out, 'the answered question admits the link');
+        assert.equal(first.asked.length, 1, 'an external preset link must ask');
+        const second = await run('bmm://resources/preset?name=silent', 'external', true);
+        assert.equal(second.out, null);
+        assert.equal(second.asked.length, 0, 'the burst limit refuses before asking');
+        assert.equal(second.refused[0]?.reason, 'burst');
+        resetPresetBurst();
+    });
+
+    test('only the four presets, and the app\'s own callers are not asked or limited', async () => {
+        resetPresetBurst();
+        assert.deepEqual([...LINK_PRESETS].sort(), ['balanced', 'custom', 'max', 'silent']);
+        const bad = await run('bmm://resources/preset?name=turbo', 'external', true);
+        assert.equal(bad.refused[0]?.reason, 'bad-preset');
+        const none = await run('bmm://resources/preset', 'external', true);
+        assert.equal(none.refused[0]?.reason, 'missing');
+        for (let i = 0; i < 3; i++) {
+            const s = await run('bmm://resources/preset?name=max', 'scheduler', false);
+            assert.ok(s.out, 'the scheduler is trusted');
+            assert.equal(s.asked.length, 0);
+        }
+        resetPresetBurst();
+    });
+
+    test('no fine-grained rule by link, whoever sends it', async () => {
+        for (const origin of ['external', 'api', 'scheduler']) {
+            const r = await run('bmm://resources/io-rule?disk=d:&op=deploy&rate_mb_s=1', origin, true);
+            assert.equal(r.out, null, `${origin} set a rule by link`);
+            assert.equal(r.refused[0]?.reason, 'unknown-action');
+        }
+    });
+
+    test('opening the dashboard and a run log asks nothing and changes nothing', async () => {
+        for (const url of ['bmm://resources/open', 'bmm://schedule/runs?id=sched-1']) {
+            const r = await run(url, 'external', false);
+            assert.ok(r.out, `${url} should be admitted`);
+            assert.equal(r.asked.length, 0);
+        }
+    });
+});

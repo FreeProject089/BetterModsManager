@@ -60,7 +60,7 @@ tout lire d'un coup.
 !!! danger "La liste des permissions n'est pas quelque chose qu'un plugin peut toucher"
 
     `PUT /api/apps/permissions/<id>` écrit les autorisations, et exige le jeton **admin**. Un
-    plugin capable de définir ses propres permissions pourrait s'accorder les vingt-six, ce
+    plugin capable de définir ses propres permissions pourrait s'accorder les vingt-huit, ce
     qui ferait de cette page la description de rien.
 
 !!! note "L'onglet API & scripts se dessine en deux temps"
@@ -371,7 +371,7 @@ que demander :
 
 | | |
 |---|---|
-| **Permissions** | Les vingt-six autorisations, pour CE plugin, sur sa carte. Elles vivaient sur un écran de réglages listant tous les plugins d'un coup. Cocher ici **accorde** — plus rien n'est redemandé ensuite. |
+| **Permissions** | Les vingt-huit autorisations, pour CE plugin, sur sa carte. Elles vivaient sur un écran de réglages listant tous les plugins d'un coup. Cocher ici **accorde** — plus rien n'est redemandé ensuite. |
 | **Contenu** | Tout ce que le plugin contient : scripts, dossiers embarqués, automatisations, assets, l'ensemble. |
 | **Analyser** | Ce qu'il changerait si tu l'appliquais. |
 

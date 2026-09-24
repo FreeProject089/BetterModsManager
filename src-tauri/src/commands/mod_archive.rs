@@ -14,10 +14,49 @@
 //! was, plus a temporary directory that the next run cleans up.
 
 use crate::error::AppError;
+use crate::governor::config::OpKind;
+use crate::governor::queue::Ticket;
 use crate::state::AppState;
 use tracing::info;
 use std::path::{Path, PathBuf};
 use tauri::State;
+
+// ── The governor's side of archive.rs's extraction hook ──────────────────────────
+// archive.rs is compiled verbatim by the benchmarks crate and cannot name the governor, so it
+// takes an `ExtractControl` and the app registers this one at startup: one Extract ticket per
+// extraction (waits for a slot, answers pause / cancel between entries, counts bytes) and the
+// governor's Extract pool for the parallel pass. Under Balanced that pool is the size of the
+// global rayon pool the pass ran on before (governor::config::balanced_global_threads).
+
+/// An extraction governed by `ticket`.
+pub(crate) struct TicketExtract {
+    pub(crate) ticket: Ticket,
+}
+
+impl crate::archive::ExtractControl for TicketExtract {
+    fn checkpoint(&self) -> std::io::Result<()> {
+        self.ticket.checkpoint().map_err(|_| crate::archive::cancelled_error())
+    }
+    fn add_bytes(&self, read: u64, written: u64) {
+        self.ticket.add_bytes(read, written);
+    }
+    fn run_parallel(&self, f: &(dyn Fn() -> std::io::Result<()> + Sync)) -> std::io::Result<()> {
+        crate::governor::runtime::global().pool(OpKind::Extract).install(|| f())
+    }
+}
+
+/// What the dashboard calls an extraction: the archive's file name.
+fn extract_subject(archive: &Path) -> String {
+    archive.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| archive.display().to_string())
+}
+
+/// Route every `archive::extract_to` (and so every `materialize`) through the governor.
+pub fn install_extract_governor() {
+    crate::archive::set_extract_governor(|archive| {
+        let ticket = crate::governor::runtime::global().begin(OpKind::Extract, &extract_subject(archive));
+        Box::new(TicketExtract { ticket })
+    });
+}
 
 /// Look up a mod's on-disk path without holding the lock across any I/O.
 fn mod_path(state: &State<'_, AppState>, mod_id: &str) -> Result<(PathBuf, String), AppError> {
@@ -181,7 +220,10 @@ pub async fn rearchive_mod(state: State<'_, AppState>, mod_id: String) -> Result
     let s = staging.clone();
     let d = dest.clone();
     tauri::async_runtime::spawn_blocking(move || -> std::io::Result<()> {
-        zip_dir(&f, &s)?;
+        // One Compress ticket for the packing; the rename and the removal after it are cheap.
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, &extract_subject(&f));
+        zip_dir(&f, &s, Some(&ticket))?;
+        drop(ticket);
         std::fs::rename(&s, &d)?;
         std::fs::remove_dir_all(&f)?;
         Ok(())
@@ -203,8 +245,18 @@ pub async fn rearchive_mod(state: State<'_, AppState>, mod_id: String) -> Result
 /// Forward slashes are not cosmetic: `archive_entries()` reads entries back as
 /// `/forward-slashed/` relative paths so an archived mod fingerprints identically to its
 /// unpacked twin. A backslash here would break that equivalence on Windows only.
-fn zip_dir(dir: &Path, out: &Path) -> std::io::Result<()> {
+///
+/// Governed by `ticket` when there is one: its checkpoint before every entry (a cancel stops
+/// the packing between files, and the caller removes the partial `.zip.part`), its byte count
+/// after every file. Same entries, same order, same method with or without it.
+fn zip_dir(dir: &Path, out: &Path, ticket: Option<&Ticket>) -> std::io::Result<()> {
     use std::io::Write;
+    let gate = || -> std::io::Result<()> {
+        match ticket {
+            Some(t) => t.checkpoint().map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "compress.cancelled")),
+            None => Ok(()),
+        }
+    };
     let file = std::fs::File::create(out)?;
     let mut zip = zip::ZipWriter::new(file);
     let opts = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -220,17 +272,199 @@ fn zip_dir(dir: &Path, out: &Path) -> std::io::Result<()> {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
                 .to_string_lossy()
                 .replace('\\', "/");
+            gate()?;
             if path.is_dir() {
                 zip.add_directory(format!("{}/", rel), opts).map_err(zerr)?;
                 stack.push(path);
             } else {
                 zip.start_file(rel, opts).map_err(zerr)?;
                 let mut src = std::fs::File::open(&path)?;
-                std::io::copy(&mut src, &mut zip)?;
+                let n = std::io::copy(&mut src, &mut zip)?;
                 zip.flush()?;
+                if let Some(t) = ticket { t.add_bytes(n, 0); }
             }
         }
     }
     zip.finish().map_err(zerr)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod governed_extract_tests {
+    use super::TicketExtract;
+    use crate::archive::{extract_to_with, is_cancelled, ExtractControl, Ungoverned};
+    use crate::governor::config::{pool_threads, OpKind, Preset};
+    use crate::governor::queue::Queue;
+    use std::collections::BTreeMap;
+    use std::path::Path;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A mod folder: nested dirs, an empty file, a big pseudo-random blob and `n` small files.
+    fn write_tree(root: &Path, n: usize) {
+        let mut blob = Vec::with_capacity(1536 * 1024);
+        let mut x: u32 = 0x2545_F491;
+        for _ in 0..(1536 * 1024) {
+            x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+            blob.push((x & 0xFF) as u8);
+        }
+        std::fs::create_dir_all(root.join("Data/textures")).unwrap();
+        std::fs::create_dir_all(root.join("many")).unwrap();
+        std::fs::write(root.join("Data/textures/big.dds"), &blob).unwrap();
+        std::fs::write(root.join("empty.bin"), b"").unwrap();
+        std::fs::write(root.join("readme.txt"), b"hello\n").unwrap();
+        for i in 0..n {
+            std::fs::write(root.join("many").join(format!("{i:03}.txt")), format!("file {i}\n").repeat(40)).unwrap();
+        }
+    }
+
+    fn read_tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut out = BTreeMap::new();
+        for e in walkdir::WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+            if e.path().is_file() {
+                let rel = e.path().strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                out.insert(rel, std::fs::read(e.path()).unwrap());
+            }
+        }
+        out
+    }
+
+    fn zip_of(src: &Path, dst: &Path) {
+        let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        crate::commands::zipping::zip_dir(src, dst, noflag, crate::commands::zipping::ZipMethod::Deflate).unwrap();
+    }
+
+    fn tar_gz_of(src: &Path, dst: &Path) {
+        let f = std::fs::File::create(dst).unwrap();
+        let gz = flate2::write::GzEncoder::new(f, flate2::Compression::default());
+        let mut b = tar::Builder::new(gz);
+        b.append_dir_all(".", src).unwrap();
+        b.into_inner().unwrap().finish().unwrap();
+    }
+
+    fn sevenz_of(src: &Path, dst: &Path) {
+        let mut w = sevenz_rust::SevenZWriter::create(dst).unwrap();
+        w.push_source_path(src, |_| true).unwrap();
+        w.finish().unwrap();
+    }
+
+    /// Balanced reproduces today: the files an extraction under an Extract ticket writes are
+    /// the files the ungoverned extraction writes, byte for byte, for zip (the parallel pass on
+    /// the Extract pool), tar.gz (the checked reader) and 7z (the per-entry gate); and the
+    /// parallel pass runs on a pool the size of the global pool it ran on before.
+    #[test]
+    fn extract_under_balanced_yields_identical_files() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src, 40);
+        let want = read_tree(&src);
+        let archives: [(std::path::PathBuf, fn(&Path, &Path)); 3] = [
+            (td.path().join("m.zip"), zip_of),
+            (td.path().join("m.tar.gz"), tar_gz_of),
+            (td.path().join("m.7z"), sevenz_of),
+        ];
+        let gov = crate::governor::runtime::global();
+        for (i, (archive, make)) in archives.iter().enumerate() {
+            make(&src, archive);
+            let plain = td.path().join(format!("plain-{i}"));
+            extract_to_with(archive, &plain, &Ungoverned).unwrap();
+            let governed = td.path().join(format!("governed-{i}"));
+            let control = TicketExtract { ticket: gov.begin(OpKind::Extract, "test: balanced extract") };
+            extract_to_with(archive, &governed, &control).unwrap();
+            let (a, b) = (read_tree(&plain), read_tree(&governed));
+            assert_eq!(a, b, "{}: governed and ungoverned extraction differ", archive.display());
+            assert_eq!(b, want, "{}: extraction differs from the source", archive.display());
+        }
+
+        // The pool: Balanced's Extract pool is the size of main.rs's global pool.
+        let control = TicketExtract { ticket: gov.begin(OpKind::Extract, "test: pool probe") };
+        let seen = std::sync::Mutex::new((0usize, String::new()));
+        control.run_parallel(&|| {
+            let name = std::thread::current().name().unwrap_or("").to_string();
+            *seen.lock().unwrap() = (rayon::current_num_threads(), name);
+            Ok(())
+        }).unwrap();
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        let (threads, name) = seen.into_inner().unwrap();
+        if gov.effective_preset() == Preset::Balanced {
+            assert_eq!(threads, pool_threads(Preset::Balanced, OpKind::Extract, cores));
+        }
+        assert!(name.starts_with("bmm-extract"), "the parallel pass must run on the Extract pool, ran on {name:?}");
+    }
+
+    /// Cancels its ticket at the `after`-th checkpoint, and counts what was written.
+    struct CancelAfter {
+        inner: TicketExtract,
+        queue: Queue,
+        after: usize,
+        seen: AtomicUsize,
+        entries_written: AtomicUsize,
+    }
+
+    impl ExtractControl for CancelAfter {
+        fn checkpoint(&self) -> std::io::Result<()> {
+            if self.seen.fetch_add(1, Ordering::SeqCst) + 1 == self.after {
+                self.queue.cancel(self.inner.ticket.id());
+            }
+            self.inner.checkpoint()
+        }
+        fn add_bytes(&self, read: u64, written: u64) {
+            self.entries_written.fetch_add(1, Ordering::SeqCst);
+            self.inner.add_bytes(read, written);
+        }
+        fn run_parallel(&self, f: &(dyn Fn() -> std::io::Result<()> + Sync)) -> std::io::Result<()> {
+            self.inner.run_parallel(f)
+        }
+    }
+
+    fn cancel_after(after: usize) -> CancelAfter {
+        let queue = Queue::default();
+        let ticket = queue.begin(OpKind::Extract, "test: cancel");
+        CancelAfter { inner: TicketExtract { ticket }, queue, after, seen: AtomicUsize::new(0), entries_written: AtomicUsize::new(0) }
+    }
+
+    /// A cancel from the dashboard stops the extraction at the next entry boundary (not at
+    /// the end of the archive) and what the extraction wrote does not stay behind: a
+    /// destination it created is removed whole; in a folder that already existed, the files
+    /// it wrote are removed and what was there before is left alone.
+    #[test]
+    fn cancelling_an_extract_ticket_stops_between_entries_and_cleans_up() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src, 200);
+        let total_files = read_tree(&src).len();
+        let zip = td.path().join("m.zip");
+        zip_of(&src, &zip);
+        let threads = crate::governor::runtime::global().pool(OpKind::Extract).current_num_threads();
+
+        // 1. A destination this extraction creates: gone after the cancel.
+        let dest = td.path().join("fresh");
+        let c = cancel_after(10);
+        let err = extract_to_with(&zip, &dest, &c).expect_err("a cancelled extraction must fail");
+        assert!(is_cancelled(&err), "the error says cancelled, got {err}");
+        assert!(!dest.exists(), "the destination this extraction created must be removed");
+        let written = c.entries_written.load(Ordering::SeqCst);
+        assert!(written < total_files, "it stopped between entries ({written} of {total_files} written)");
+        assert!(written <= 10 + threads, "at most the entries already in flight finish ({written} written, {threads} threads)");
+
+        // 2. An existing folder: its own content stays, nothing extracted stays.
+        let dest = td.path().join("existing");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("keep.me"), b"mine").unwrap();
+        let c = cancel_after(25);
+        let err = extract_to_with(&zip, &dest, &c).expect_err("cancelled");
+        assert!(is_cancelled(&err));
+        let left = read_tree(&dest);
+        assert_eq!(left.keys().cloned().collect::<Vec<_>>(), vec!["keep.me".to_string()], "only what was there before remains");
+
+        // 3. tar.gz (the checked reader) stops too and removes a destination it created.
+        let tgz = td.path().join("m.tar.gz");
+        tar_gz_of(&src, &tgz);
+        let dest = td.path().join("fresh-tgz");
+        // The 2nd checkpoint is the reader's first (after 1 MiB of archive): mid-stream.
+        let c = cancel_after(2);
+        let err = extract_to_with(&tgz, &dest, &c).expect_err("cancelled");
+        assert_eq!(c.seen.load(Ordering::SeqCst), 2, "stopped at the reader's checkpoint");
+        assert!(is_cancelled(&err));
+        assert!(!dest.exists());
+    }
 }

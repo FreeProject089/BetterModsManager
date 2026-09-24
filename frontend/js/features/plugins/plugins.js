@@ -6035,6 +6035,8 @@ function buildEndpointRow(ep) {
         'DELETE /api/catalog': 'bmm://catalog/delete?type=<kind>',
         'POST /api/schedules/enabled': 'bmm://schedule/enable?id=<task_id>&on=<1|0>',
         'POST /api/hook': 'bmm://hook?name=<hook_name>&data=<json>',
+        'POST /api/resources/preset': 'bmm://resources/preset?name=<silent|balanced|max|custom>',
+        'GET /api/schedules/:id/runs': 'bmm://schedule/runs?id=<task_id>',
         // Every other endpoint is reachable via the generic passthrough:
         //   bmm://api?method=<M>&path=<path>&<field>=<value>…
     };
@@ -6214,6 +6216,31 @@ function getDeepLinkDefs() {
             desc: t('plugins.dl.schedDesc'),
             about: t('plugins.dl.schedAbout'),
             example: 'bmm://schedule/enable?id=sched-1712345678901&on=0',
+        },
+        {
+            scheme: 'schedule/runs',
+            params: [
+                { name: 'id', required: true, desc: t('api.dl.runsId') },
+            ],
+            desc: t('api.dl.runsDesc'),
+            about: t('api.dl.runsAbout'),
+            example: 'bmm://schedule/runs?id=sched-1712345678901',
+        },
+        {
+            scheme: 'resources/open',
+            params: [],
+            desc: t('api.dl.resOpenDesc'),
+            about: t('api.dl.resOpenAbout'),
+            example: 'bmm://resources/open',
+        },
+        {
+            scheme: 'resources/preset',
+            params: [
+                { name: 'name', required: true, desc: t('api.dl.resPresetName') },
+            ],
+            desc: t('api.dl.resPresetDesc'),
+            about: t('api.dl.resPresetAbout'),
+            example: 'bmm://resources/preset?name=silent',
         },
         {
             scheme: 'catalog/follow',
@@ -7920,6 +7947,79 @@ function getEndpointDefs() {
             ],
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e400, e401],
         },
+        // The run log and the resource governor (A4). The scopes are resources.read /
+        // resources.write; a fine-grained I/O rule is the admin token's alone.
+        {
+            method: 'GET', path: '/api/schedules/:id/runs', auth: true,
+            desc: t('api.ep.schedRuns'),
+            about: t('api.epAbout.schedRuns'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "id": "sched-1", "runs": [ { "at": 1790000000000, "ok": false, "ms": 5210, "steps": [ { "label": "Sync repo", "status": "error", "ms": 5200, "error": "timeout" } ] } ] }' },
+                e400, e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/resources', auth: true,
+            desc: t('api.ep.resources'),
+            about: t('api.epAbout.resources'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "preset": "balanced", "effective": "silent", "task": null, "game_active": true, "game_manual": "auto", "tickets": [] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/resources/hardware', auth: true,
+            desc: t('api.ep.resHardware'),
+            about: t('api.epAbout.resHardware'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "cpu": { "logical_cores": 16, "avx2": true, "sha_ni": true }, "gpus": [ { "name": "…", "software": false } ], "gpu_timed_out": false, "disks": [ { "mount": "C:\\\\", "bus": "nvme", "seek_penalty": false } ] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/resources/preset', auth: true,
+            desc: t('api.ep.resPreset'),
+            about: t('api.epAbout.resPreset'),
+            fields: [
+                { name: 'name', type: 'string', required: true, desc: t('api.epF.resPresetName') },
+                { name: 'scope', type: 'string', required: false, desc: t('api.epF.resPresetScope') },
+                { name: 'ttlSecs', type: 'number', required: false, desc: t('api.epF.resPresetTtl') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "preset": "max", "scope": "persistent", "token": null }' }, e400, e401],
+        },
+        {
+            method: 'POST', path: '/api/resources/game-mode', auth: true,
+            desc: t('api.ep.resGame'),
+            about: t('api.epAbout.resGame'),
+            fields: [
+                { name: 'mode', type: 'string', required: true, desc: t('api.epF.resGameMode') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "mode": "on", "active": true }' }, e400, e401],
+        },
+        {
+            method: 'POST', path: '/api/resources/queue', auth: true,
+            desc: t('api.ep.resQueue'),
+            about: t('api.epAbout.resQueue'),
+            fields: [
+                { name: 'action', type: 'string', required: true, desc: t('api.epF.resQueueAction') },
+                { name: 'id', type: 'number', required: false, desc: t('api.epF.resQueueId') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "action": "pause_all", "changed": true }' }, e400, e401],
+        },
+        {
+            method: 'POST', path: '/api/resources/io-rule', auth: true,
+            desc: t('api.ep.resIoRule'),
+            about: t('api.epAbout.resIoRule'),
+            fields: [
+                { name: 'disk', type: 'string', required: true, desc: t('api.epF.resRuleDisk') },
+                { name: 'op', type: 'string', required: true, desc: t('api.epF.resRuleOp') },
+                { name: 'rule', type: 'object', required: false, desc: t('api.epF.resRuleRule') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "disk": "d:\\\\", "op": "hash", "rule": { "rate_mb_s": 80 } }' }, e400, e401],
+        },
         {
             method: 'POST', path: '/api/repo/host-now', auth: true,
             desc: t('plugins.ep.hostNow'),
@@ -8876,6 +8976,48 @@ function _actionCatalog() {
         { id: 'clear_hooks', cat: 'system', label: d('actionClearHooks', 'Forget every hook ring'),
             desc: d('actionClearHooksDesc', 'Empties the record of what has rung. A task waiting on a hook is unaffected — it waits for the next ring.'),
             iconSvg: sv('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><line x1="2" y1="2" x2="22" y2="22"/>') },
+        { id: 'schedule_runs', cat: 'read', label: t('api.card.schedRuns'),
+            desc: t('api.card.schedRunsDesc'),
+            iconSvg: sv('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+            fields: [{ key: 'id', label: t('api.card.fldTaskId'), type: 'text', placeholder: 'sched-1712345678901' }] },
+        // ── The resource governor (A4): resources.read / resources.write ──
+        { id: 'resources_status', cat: 'read', label: t('api.card.resStatus'),
+            desc: t('api.card.resStatusDesc'),
+            iconSvg: sv('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>') },
+        { id: 'hardware_info', cat: 'read', label: t('api.card.resHardware'),
+            desc: t('api.card.resHardwareDesc'),
+            iconSvg: sv('<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>') },
+        { id: 'resources_preset', cat: 'system', label: t('api.card.resPreset'),
+            desc: t('api.card.resPresetDesc'),
+            iconSvg: sv('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),
+            fields: [
+                { key: 'name', label: t('api.card.fldPreset'), type: 'select', default: 'balanced', half: true, options: [
+                        { value: 'silent', label: 'silent' }, { value: 'balanced', label: 'balanced' },
+                        { value: 'max', label: 'max' }, { value: 'custom', label: 'custom' },
+                    ] },
+                { key: 'scope', label: t('api.card.fldScope'), type: 'select', default: 'persistent', half: true, options: [
+                        { value: 'persistent', label: 'persistent' }, { value: 'task', label: 'task' },
+                    ] },
+                { key: 'ttlSecs', label: t('api.card.fldTtl'), type: 'number', placeholder: '7200' },
+            ] },
+        { id: 'resources_game_mode', cat: 'system', label: t('api.card.resGame'),
+            desc: t('api.card.resGameDesc'),
+            iconSvg: sv('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4"/><circle cx="16" cy="12" r="1"/>'),
+            fields: [
+                { key: 'mode', label: t('api.card.fldGameMode'), type: 'select', default: 'auto', options: [
+                        { value: 'auto', label: 'auto' }, { value: 'on', label: 'on' }, { value: 'off', label: 'off' },
+                    ] },
+            ] },
+        { id: 'resources_queue', cat: 'system', label: t('api.card.resQueue'),
+            desc: t('api.card.resQueueDesc'),
+            iconSvg: sv('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'),
+            fields: [
+                { key: 'action', label: t('api.card.fldQueueAction'), type: 'select', default: 'pause_all', half: true, options: [
+                        { value: 'pause_all', label: 'pause_all' }, { value: 'resume_all', label: 'resume_all' },
+                        { value: 'pause', label: 'pause' }, { value: 'resume', label: 'resume' }, { value: 'cancel', label: 'cancel' },
+                    ] },
+                { key: 'id', label: t('api.card.fldTicket'), type: 'number', half: true },
+            ] },
         // ── The rest of what a mod carries ────────────────────────────────
         { id: 'mod_config', cat: 'mods', label: d('actionModConfig', 'Set where a mod updates from'),
             desc: d('actionModConfigDesc', 'Points one mod at the repo, or the direct URL, its updates come from. An empty value clears that field.'),

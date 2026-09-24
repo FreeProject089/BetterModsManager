@@ -56,6 +56,7 @@ const DECLARED = {
   'GET /api/apps/permissions': 'admin token only — a generated script authenticates with a plugin token and would always get 401',
   'GET /api/apps/permissions/:id': 'admin token only, same as above',
   'PUT /api/apps/permissions/:id': 'admin token only, and granting permissions from a script is the escalation this route exists to prevent',
+  'POST /api/resources/io-rule': 'admin token only — a per-disk I/O rule is the user’s call, and a generated script authenticates with a plugin token',
   'POST /api/profiles/import/ovgme': 'drives a native import wizard that asks questions; a script cannot answer them',
   'POST /api/profiles/import/omm': 'same wizard, other format',
   'GET /api/language/template': 'a file download for a translator, not an automation step',

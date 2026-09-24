@@ -302,6 +302,14 @@ fn benchmark_disk_blocking(mount_point: String) -> Result<BenchmarkResult, Strin
         return Err(format!("Mount point {} does not exist.", mount_point));
     }
 
+    // A Maintenance ticket (G3b). It is background work, so it waits while a deploy or an
+    // install writes (a benchmark racing a deploy measures neither) and while a game runs,
+    // and it can be paused or cancelled before each phase. Checkpoints sit BETWEEN the timed
+    // phases, never inside one, so a figure never includes the wait.
+    let ticket = crate::governor::runtime::global()
+        .begin(crate::governor::config::OpKind::Maintenance, &format!("disk benchmark {}", mount_point));
+    crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+
     let test_filename = format!(".bmm_bench_{}.tmp",
         // unwrap_or is safe here — UNIX_EPOCH is always valid
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
@@ -362,6 +370,12 @@ fn benchmark_disk_blocking(mount_point: String) -> Result<BenchmarkResult, Strin
         0.0
     };
 
+    if let Err(e) = crate::fs_utils::checkpoint(&ticket) {
+        let _ = std::fs::remove_file(&test_file);
+        return Err(e.to_string());
+    }
+    ticket.add_bytes(0, total_size as u64);
+
     // ── Read benchmark ── (uncached: see open_uncached; 1 MiB chunks and a 4 KiB-aligned buffer
     // satisfy the sector alignment unbuffered reads require)
     let read_start = Instant::now();
@@ -381,6 +395,8 @@ fn benchmark_disk_blocking(mount_point: String) -> Result<BenchmarkResult, Strin
     } else {
         0.0
     };
+
+    ticket.add_bytes(total_size as u64, 0);
 
     // Cleanup
     let _ = std::fs::remove_file(&test_file);
@@ -438,28 +454,45 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     }
 }
 
-/// Recursively sum all file sizes inside a directory (non-blocking, returns bytes).
+/// Recursively sum all file sizes inside a directory (returns bytes).
+///
+/// It was a plain sync command, so in Tauri v2 it walked the whole tree ON THE MAIN THREAD
+/// with the window frozen (PLAN-BMM-RESOURCES-2026.md §0.2 point 4). Now async: the walk
+/// runs on a blocking thread under a Scan ticket. Same argument, same number back.
 #[tauri::command]
-pub fn get_folder_size(path: String) -> u64 {
-    fn recurse(dir: &std::path::Path) -> u64 {
-        let mut total = 0u64;
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                if let Ok(meta) = entry.metadata() {
-                    if meta.is_dir() {
-                        total += recurse(&entry.path());
-                    } else {
-                        total += meta.len();
-                    }
+pub async fn get_folder_size(path: String) -> u64 {
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, &format!("size {}", path));
+        folder_size(std::path::Path::new(&path), &ticket)
+    })
+    .await
+    .unwrap_or(0)
+}
+
+/// The walk behind `get_folder_size`, with a checkpoint per directory. A cancelled walk stops
+/// there and answers what it had counted (the command has no error channel, and the
+/// frontend reads a number).
+pub(crate) fn folder_size(dir: &std::path::Path, ticket: &crate::governor::queue::Ticket) -> u64 {
+    if ticket.checkpoint().is_err() { return 0; }
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_dir() {
+                    total += folder_size(&entry.path(), ticket);
+                } else {
+                    total += meta.len();
                 }
             }
         }
-        total
     }
-    recurse(std::path::Path::new(&path))
+    total
 }
 
-#[tauri::command]
+/// `(async)`: a sync command runs on the main thread in Tauri v2, and this reads a whole file
+/// (an image, a replay) into memory and base64-encodes it. Same signature for the frontend.
+#[tauri::command(async)]
 pub fn read_file_base64(path: String) -> Result<String, String> {
     use base64::{Engine as _, engine::general_purpose};
     let data = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -551,5 +584,43 @@ mod bench_tests {
         let r = benchmark_disk_blocking(root).expect("the temp drive can be benchmarked");
         assert!(r.write_mb_s > 0.0 && r.read_mb_s > 0.0);
         assert!(r.suggested_limit >= 10);
+    }
+
+    /// G3b: the folder-size walk (a sync command on the main thread before) holds a Scan
+    /// ticket. With every Scan slot taken it WAITS, listed under its own name, and answers the
+    /// same number once a slot frees.
+    #[test]
+    fn a_folder_size_scan_holds_a_scan_ticket() {
+        use crate::governor::config::OpKind;
+        use crate::governor::queue::TicketState;
+        let root = std::env::temp_dir().join(format!("bmm_g3b_scan_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        std::fs::write(root.join("x.bin"), vec![1u8; 1000]).unwrap();
+        std::fs::write(root.join("a/b/y.bin"), vec![2u8; 234]).unwrap();
+        let dir = root.to_string_lossy().to_string();
+        let subject = format!("size {}", dir);
+
+        let q = crate::governor::runtime::global().queue();
+        let mut held = Vec::new();
+        while let Some(t) = q.try_begin(OpKind::Scan, "test: fill the Scan slots") { held.push(t); }
+        assert!(!held.is_empty());
+
+        let d2 = dir.clone();
+        let h = std::thread::spawn(move || tauri::async_runtime::block_on(get_folder_size(d2)));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut seen = None;
+        while std::time::Instant::now() < deadline {
+            seen = q.snapshot().into_iter().find(|v| v.subject == subject);
+            if seen.is_some() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let seen = seen.expect("the walk is listed in the governor's queue");
+        assert_eq!(seen.kind, OpKind::Scan);
+        assert_eq!(seen.state, TicketState::Waiting, "no free Scan slot: it waits");
+        drop(held);
+        assert_eq!(h.join().unwrap(), 1234);
+        assert!(!q.snapshot().iter().any(|v| v.subject == subject), "the ticket ends with the walk");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

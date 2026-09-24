@@ -36,7 +36,28 @@ pub fn get_launch_packs(state: State<AppState>) -> Result<Vec<LaunchPack>, AppEr
     Ok(data.launch_packs.clone())
 }
 
-#[tauri::command]
+/// Convert an image to a 256x256 `.ico` under an Image ticket (resource governor). Decoding
+/// and a Lanczos resize are the heavy part of making a pack; the helper refuses to run without
+/// an Image ticket (`image::image_gate`).
+fn icon_to_ico(src_path: &Path, target_ico: &Path) -> Result<(), AppError> {
+    let ticket = crate::governor::runtime::global()
+        .begin(crate::governor::config::OpKind::Image, &format!("launch pack icon <- {}", src_path.display()));
+    crate::commands::image::image_gate(&ticket)?;
+    // Use image crate to convert
+    let img = image::open(src_path)
+        .map_err(|e| AppError::Internal(format!("Failed to open icon image: {}", e)))?;
+    // Resize to 256x256 for better ico compatibility
+    let resized = img.resize(256, 256, image::imageops::FilterType::Lanczos3);
+    crate::commands::image::image_gate(&ticket)?;
+    resized.save_with_format(target_ico, image::ImageFormat::Ico)
+        .map_err(|e| AppError::Internal(format!("Failed to save .ico: {}", e)))?;
+    Ok(())
+}
+
+/// `command(async)`: it decodes and resizes an image and spawns PowerShell, and a synchronous
+/// command runs on the main thread in Tauri v2. The Rust function stays synchronous
+/// (import_launch_pack calls it).
+#[tauri::command(async)]
 pub fn create_launch_pack(
     state: State<AppState>,
     name: String,
@@ -57,16 +78,7 @@ pub fn create_launch_pack(
         if src_path.exists() {
             let ico_filename = "icon.ico";
             let target_ico = pack_dir.join(ico_filename);
-            
-            // Use image crate to convert
-            let img = image::open(src_path)
-                .map_err(|e| AppError::Internal(format!("Failed to open icon image: {}", e)))?;
-            
-            // Resize to 256x256 for better ico compatibility
-            let resized = img.resize(256, 256, image::imageops::FilterType::Lanczos3);
-            
-            resized.save_with_format(&target_ico, image::ImageFormat::Ico)
-                .map_err(|e| AppError::Internal(format!("Failed to save .ico: {}", e)))?;
+            icon_to_ico(src_path, &target_ico)?;
             
             icon_path = Some(target_ico);
         }
@@ -134,7 +146,7 @@ pub fn create_launch_pack(
     Ok(pack)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_launch_pack(
     state: State<AppState>,
     id: String,
@@ -163,11 +175,7 @@ pub fn update_launch_pack(
         let src_path = Path::new(&src);
         if src_path.exists() {
             let target_ico = pack_dir.join("icon.ico");
-            let img = image::open(src_path)
-                .map_err(|e| AppError::Internal(format!("Failed to open icon image: {}", e)))?;
-            let resized = img.resize(256, 256, image::imageops::FilterType::Lanczos3);
-            resized.save_with_format(&target_ico, image::ImageFormat::Ico)
-                .map_err(|e| AppError::Internal(format!("Failed to save .ico: {}", e)))?;
+            icon_to_ico(src_path, &target_ico)?;
             Some(target_ico)
         } else {
             existing_icon_path
@@ -618,7 +626,7 @@ pub struct ImportedLaunchPack {
 }
 
 /// Read a `.bmmlaunch` file and build the pack locally.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_launch_pack(state: State<AppState>, path: String) -> Result<ImportedLaunchPack, AppError> {
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| AppError::Internal(format!("Failed to read launch pack file: {}", e)))?;

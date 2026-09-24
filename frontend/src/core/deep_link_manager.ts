@@ -1135,6 +1135,38 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
             return;
         }
 
+        // ── A task's run log: bmm://schedule/runs?id=… ──────────────────────
+        //
+        // Read-only: the same panel as the task's History button. An id that names no task
+        // opens an empty log, which says nothing about which ids exist.
+        if (action === 'schedule/runs') {
+            const id = parsedUrl.searchParams.get('id');
+            if (!id) { toast(t('sched.dl.noId'), 'error'); return; }
+            const sched = await import('../features/settings/scheduler.js');
+            await sched.openRunLog(id);
+            return;
+        }
+
+        // ── The resource governor (A4) ───────────────────────────────────────
+        //
+        // `resources/open` shows the Storage manager, where the live dashboard is.
+        // `resources/preset?name=` picks a NAMED preset: the gate asked an external caller
+        // (one question per 10 s) and refused any name it does not know. Nothing finer — a
+        // per-disk rule — can be set by a link at all.
+        if (action === 'resources/open') {
+            (window as any).bmmOpenStorageManager?.();
+            return;
+        }
+        if (action === 'resources/preset') {
+            const name = (parsedUrl.searchParams.get('name') || '').trim().toLowerCase();
+            try {
+                await invoke('resources_set_preset', { name, scope: 'persistent', ttlSecs: null, overridesGame: null });
+                console.info(`[BMM] resources: preset ${name} set by a link (${adm.origin})`);
+                toast(t('resources.link.presetSet').replace('{name}', name), 'success', 5000);
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
         // ── Ring a hook: bmm://hook?name=…[&data=…] ─────────────────────────
         //
         // The counterpart of `POST /api/hook` for something that cannot hold an API token — a

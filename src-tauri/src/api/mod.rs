@@ -873,7 +873,7 @@ pub fn cfg_has(flag: &str) -> bool {
 /// checkbox promising protection it does not give. The four API references point at this
 /// name as the definition, so it stays public and stays here.
 #[allow(dead_code)]
-pub const PLUGIN_SCOPES: [&str; 26] = [
+pub const PLUGIN_SCOPES: [&str; 28] = [
     "app.read", "app.write",
     "catalog.read", "catalog.write",
     "data.read", "data.write",
@@ -890,6 +890,10 @@ pub const PLUGIN_SCOPES: [&str; 26] = [
     // granted that could quietly export the session without ever asking for it.
     "replay.read", "replay.write",
     "repo.read", "repo.write",
+    // The resource governor (A4). Read is the preset, the queue and the hardware; write is a
+    // NAMED preset, game mode, pause and resume. A fine-grained I/O rule is not a scope at all
+    // — it is the admin token's — and cancelling an operation needs `mods.write` as well.
+    "resources.read", "resources.write",
     "schedules.read", "schedules.write",
     "system.write",
     "telemetry.write",
@@ -1182,6 +1186,298 @@ fn require_permission(
             }
         })
         .untuple_one()
+}
+
+// ── Resource governor + run log (PLAN-BMM-RESOURCES-2026.md §5.2, phase A4) ──────────────
+
+/// `POST /api/resources/preset` — a NAMED preset, never a rule. `scope` is `persistent`
+/// (the default: stored, survives a restart) or `task` (ends by itself after `ttlSecs`,
+/// at most 2 h). A caller cannot make its preset override game mode: the game comes first.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResourcesPresetBody {
+    name: String,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    ttl_secs: Option<u64>,
+}
+
+/// `POST /api/resources/game-mode` — `auto` | `on` | `off`.
+#[derive(Deserialize)]
+struct ResourcesGameModeBody {
+    mode: String,
+}
+
+/// `POST /api/resources/queue` — `pause_all` | `resume_all` | `pause` | `resume` | `cancel`
+/// (the last three name a ticket `id`; `cancel` also needs `mods.write`).
+#[derive(Deserialize)]
+struct ResourcesQueueBody {
+    action: String,
+    #[serde(default)]
+    id: Option<u64>,
+}
+
+/// `POST /api/resources/io-rule` — one fine-grained rule, `rule: null` removes it.
+#[derive(Deserialize)]
+struct ResourcesIoRuleBody {
+    disk: String,
+    op: String,
+    #[serde(default)]
+    rule: Option<crate::governor::config::IoRule>,
+}
+
+fn reply_json(v: serde_json::Value, code: StatusCode) -> warp::reply::WithStatus<warp::reply::Json> {
+    warp::reply::with_status(warp::reply::json(&v), code)
+}
+
+fn reply_err(e: impl Into<String>, code: StatusCode) -> warp::reply::WithStatus<warp::reply::Json> {
+    warp::reply::with_status(warp::reply::json(&ApiError { error: e.into() }), code)
+}
+
+/// The governor and the run log, as routes. Built from the shared document and its path
+/// alone — no `AppHandle` — so the guards are tested against the real filters
+/// (`resources_route_tests`) rather than described.
+///
+/// Who may change what (plan §6, R13): a plugin with `resources.write` picks a NAMED preset,
+/// the game mode, and pauses or resumes; cancelling an operation is losing work, so it also
+/// needs `mods.write`; a fine-grained rule (rate, parallelism, buffer) is the admin token's
+/// alone, whatever scopes a plugin holds. Every POST here is logged (tracing) and, like every
+/// API call, raised to the user as a toast by the `bmm://api-action` listener.
+fn resources_routes(
+    data: Arc<std::sync::Mutex<AppData>>,
+    data_path: Arc<PathBuf>,
+) -> warp::filters::BoxedFilter<(warp::reply::WithStatus<warp::reply::Json>,)> {
+    use crate::governor::runtime::global;
+    let token = data.clone();
+
+    // GET /api/resources — the preset, the one in force, game mode and the queue.
+    let resources_status = warp::path!("api" / "resources")
+        .and(warp::get())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "resources.read"))
+        .map(|| match serde_json::to_value(crate::commands::resources::status()) {
+            Ok(v) => reply_json(v, StatusCode::OK),
+            Err(e) => reply_err(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+        });
+
+    // GET /api/resources/hardware — what hw_detect.rs sees. Off the async threads: the first
+    // call can spend the GPU driver's 3-second budget.
+    let resources_hardware = warp::path!("api" / "resources" / "hardware")
+        .and(warp::get())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "resources.read"))
+        .and_then(|| async {
+            Ok::<_, warp::Rejection>(match crate::commands::hardware::get_hardware_info().await {
+                Ok(hw) => reply_json(serde_json::to_value(hw).unwrap_or_default(), StatusCode::OK),
+                Err(e) => reply_err(e, StatusCode::INTERNAL_SERVER_ERROR),
+            })
+        });
+
+    let data_preset = data.clone();
+    let path_preset = data_path.clone();
+    let resources_preset = warp::path!("api" / "resources" / "preset")
+        .and(warp::post())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "resources.write"))
+        .and(warp::body::json::<ResourcesPresetBody>())
+        .map(move |body: ResourcesPresetBody| {
+            let scope = body.scope.as_deref().unwrap_or("persistent").trim().to_lowercase();
+            match crate::commands::resources::apply_preset(&data_preset, &body.name, &scope, body.ttl_secs, false) {
+                Ok(token) => {
+                    if token.is_none() { save_data(&data_preset, &path_preset); }
+                    tracing::info!("[resources] preset {} ({scope}) set through the API", body.name.trim().to_lowercase());
+                    reply_json(serde_json::json!({
+                        "ok": true, "preset": body.name.trim().to_lowercase(), "scope": scope, "token": token,
+                    }), StatusCode::OK)
+                }
+                Err(e) => reply_err(e, StatusCode::BAD_REQUEST),
+            }
+        });
+
+    let resources_game = warp::path!("api" / "resources" / "game-mode")
+        .and(warp::post())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "resources.write"))
+        .and(warp::body::json::<ResourcesGameModeBody>())
+        .map(|body: ResourcesGameModeBody| match crate::commands::resources::resources_game_mode(body.mode.clone()) {
+            Ok(()) => {
+                tracing::info!("[resources] game mode {} set through the API", body.mode.trim().to_lowercase());
+                let (active, manual) = global().game_mode();
+                reply_json(serde_json::json!({ "ok": true, "mode": manual, "active": active }), StatusCode::OK)
+            }
+            Err(e) => reply_err(e, StatusCode::BAD_REQUEST),
+        });
+
+    let data_queue = data.clone();
+    let resources_queue = warp::path!("api" / "resources" / "queue")
+        .and(warp::post())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "resources.write"))
+        .and(warp::body::json::<ResourcesQueueBody>())
+        .and(warp::header::optional::<String>("authorization"))
+        .map(move |body: ResourcesQueueBody, auth: Option<String>| {
+            let action = body.action.trim().to_lowercase();
+            // Cancelling throws work away (a Deploy half done), which is a decision about the
+            // mods, not about the machine: the second scope is checked here because a filter
+            // runs before the body says which action this is.
+            if action == "cancel" {
+                let d = data_queue.lock().unwrap_or_else(|p| p.into_inner());
+                if !token_has_permission(&d, auth.as_deref(), "mods.write") {
+                    return reply_err("Forbidden: cancelling an operation also needs 'mods.write'", StatusCode::FORBIDDEN);
+                }
+            }
+            match crate::commands::resources::resources_queue(action.clone(), body.id) {
+                Ok(changed) => {
+                    tracing::info!("[resources] queue {action} {:?} through the API (changed: {changed})", body.id);
+                    reply_json(serde_json::json!({ "ok": true, "action": action, "changed": changed }), StatusCode::OK)
+                }
+                Err(e) => reply_err(e, StatusCode::BAD_REQUEST),
+            }
+        });
+
+    // The admin token and NOTHING else, not even a plugin holding `resources.write`: a rule
+    // can pin a disk to 1 MB/s or ask for sixteen parallel copies, which is the user's call.
+    let data_rule = data.clone();
+    let path_rule = data_path.clone();
+    let resources_io_rule = warp::path!("api" / "resources" / "io-rule")
+        .and(warp::post())
+        .and(require_admin_token(token.clone()))
+        .and(warp::body::json::<ResourcesIoRuleBody>())
+        .map(move |body: ResourcesIoRuleBody| {
+            let (stored, cfg) = {
+                let mut d = data_rule.lock().unwrap_or_else(|p| p.into_inner());
+                let r = match d.resources.set_rule(&body.disk, &body.op, body.rule) {
+                    Ok(r) => r,
+                    Err(e) => return reply_err(e, StatusCode::BAD_REQUEST),
+                };
+                // The old per-disk table follows the disk-wide rate: the same helper the
+                // Settings matrix uses (resources_set_rule), so the two never disagree.
+                let rules = d.resources.rules.clone();
+                crate::governor::config::sync_disk_limit(&rules, &mut d.disk_limits, &body.disk, &body.op);
+                (r, d.resources.clone())
+            };
+            global().configure(cfg);
+            save_data(&data_rule, &path_rule);
+            tracing::info!("[resources] io rule ({}, {}) {} through the API", body.disk, body.op, if stored.is_some() { "set" } else { "removed" });
+            reply_json(serde_json::json!({ "ok": true, "disk": body.disk, "op": body.op, "rule": stored }), StatusCode::OK)
+        });
+
+    // GET /api/schedules/:id/runs — the run log (A1), newest first. Records are redacted
+    // before they are written (sched-runlog.ts), so this serves them as stored.
+    let runs_dir = data_path.parent().map(|p| p.join("TaskRuns")).unwrap_or_else(|| PathBuf::from("TaskRuns"));
+    let schedule_runs = warp::path!("api" / "schedules" / String / "runs")
+        .and(warp::get())
+        .and(require_token(token.clone()))
+        .and(require_permission(token.clone(), "schedules.read"))
+        .map(move |id: String| {
+            if crate::commands::sched_runs::safe_id(&id).as_deref() != Some(id.as_str()) {
+                return reply_err("invalid task id", StatusCode::BAD_REQUEST);
+            }
+            match crate::commands::sched_runs::list_in(&runs_dir, &id) {
+                Ok(runs) => reply_json(serde_json::json!({ "id": id, "runs": runs }), StatusCode::OK),
+                Err(e) => reply_err(e, StatusCode::BAD_REQUEST),
+            }
+        });
+
+    resources_status
+        .or(resources_hardware).unify()
+        .or(resources_preset).unify()
+        .or(resources_game).unify()
+        .or(resources_queue).unify()
+        .or(resources_io_rule).unify()
+        .or(schedule_runs).unify()
+        .boxed()
+}
+
+#[cfg(test)]
+mod resources_route_tests {
+    use super::*;
+
+    const ADMIN: &str = "admin-token-for-tests";
+    const PLUGIN: &str = "plugin-token-for-tests";
+
+    fn data_with(scopes: &[&str]) -> Arc<std::sync::Mutex<AppData>> {
+        let mut d = AppData::default();
+        d.settings.api_token = ADMIN.into();
+        d.settings.plugin_tokens.insert(PLUGIN.into(), "p1".into());
+        d.plugin_permissions.insert("p1".into(), scopes.iter().map(|s| s.to_string()).collect());
+        Arc::new(std::sync::Mutex::new(d))
+    }
+
+    async fn call(scopes: &[&str], method: &str, path: &str, token: &str, body: serde_json::Value) -> (u16, Arc<std::sync::Mutex<AppData>>) {
+        let data = data_with(scopes);
+        let dir = std::env::temp_dir().join(format!("bmm-a4-{}-{}", std::process::id(), path.replace('/', "_")));
+        let _ = std::fs::create_dir_all(&dir);
+        let routes = resources_routes(data.clone(), Arc::new(dir.join("data.json"))).recover(handle_rejection);
+        let res = warp::test::request()
+            .method(method)
+            .path(path)
+            .header("authorization", format!("Bearer {token}"))
+            .json(&body)
+            .reply(&routes)
+            .await;
+        (res.status().as_u16(), data)
+    }
+
+    /// The plan's A4 test: the rule route answers to the admin token only.
+    #[tokio::test]
+    async fn io_rule_route_refuses_a_plugin_token_even_with_resources_write() {
+        let body = serde_json::json!({ "disk": "d:\\", "op": "deploy", "rule": { "rate_mb_s": 1 } });
+        let every = ["mods.write", "resources.read", "resources.write", "schedules.write", "system.write"];
+        let (code, data) = call(&every, "POST", "/api/resources/io-rule", PLUGIN, body).await;
+        assert!(code == 401 || code == 403, "a plugin token reached the rule route ({code})");
+        assert!(data.lock().unwrap().resources.rules.is_empty(), "and nothing was stored");
+    }
+
+    #[tokio::test]
+    async fn io_rule_route_validates_before_storing_even_for_the_admin() {
+        // A bad key is refused with the admin token, before the governor or the disk is touched.
+        let (code, data) = call(&[], "POST", "/api/resources/io-rule", ADMIN,
+            serde_json::json!({ "disk": "..\\x", "op": "deploy", "rule": { "parallel": 4 } })).await;
+        assert_eq!(code, 400);
+        assert!(data.lock().unwrap().resources.rules.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_read_scope_cannot_write() {
+        let read = ["resources.read"];
+        for (path, body) in [
+            ("/api/resources/preset", serde_json::json!({ "name": "max" })),
+            ("/api/resources/game-mode", serde_json::json!({ "mode": "on" })),
+            ("/api/resources/queue", serde_json::json!({ "action": "pause_all" })),
+        ] {
+            let (code, data) = call(&read, "POST", path, PLUGIN, body).await;
+            assert_eq!(code, 403, "{path} accepted resources.read");
+            assert_eq!(data.lock().unwrap().resources.preset, crate::governor::config::Preset::Balanced);
+        }
+        // …and reading needs the read scope in the first place.
+        let (code, _) = call(&["resources.write"], "GET", "/api/resources", PLUGIN, serde_json::Value::Null).await;
+        assert_eq!(code, 403, "resources.write is not resources.read");
+        let (code, _) = call(&read, "GET", "/api/resources", PLUGIN, serde_json::Value::Null).await;
+        assert_eq!(code, 200);
+    }
+
+    #[tokio::test]
+    async fn cancel_without_mods_write_is_refused() {
+        let (code, _) = call(&["resources.write"], "POST", "/api/resources/queue", PLUGIN,
+            serde_json::json!({ "action": "cancel", "id": u64::MAX })).await;
+        assert_eq!(code, 403, "cancel went through on resources.write alone");
+        // With both it reaches the queue, which knows no such ticket and changes nothing.
+        let (code, _) = call(&["resources.write", "mods.write"], "POST", "/api/resources/queue", PLUGIN,
+            serde_json::json!({ "action": "cancel", "id": u64::MAX })).await;
+        assert_eq!(code, 200);
+    }
+
+    #[tokio::test]
+    async fn the_run_log_needs_schedules_read_and_a_clean_id() {
+        let (code, _) = call(&["resources.read"], "GET", "/api/schedules/nightly/runs", PLUGIN, serde_json::Value::Null).await;
+        assert_eq!(code, 403);
+        let (code, _) = call(&["schedules.read"], "GET", "/api/schedules/nightly/runs", PLUGIN, serde_json::Value::Null).await;
+        assert_eq!(code, 200, "an unknown task has an empty log, not an error");
+        let (code, _) = call(&["schedules.read"], "GET", "/api/schedules/..%2F..%2Fdata/runs", PLUGIN, serde_json::Value::Null).await;
+        assert!(code == 400 || code == 404, "a traversing id is refused ({code})");
+    }
 }
 
 pub async fn start_api_server(
@@ -4688,9 +4984,13 @@ pub async fn start_api_server(
         .or(schedule_run)
         .boxed();
 
+    // Resource governor + run log (A4): built by `resources_routes`, which the route tests use.
+    let group_res = resources_routes(data.clone(), data_path.clone());
+
     let routes = group_a
         .or(group_b)
         .or(group_c)
+        .or(group_res)
         .or(group_d)
         .or(group_e)
         .or(group_tel)

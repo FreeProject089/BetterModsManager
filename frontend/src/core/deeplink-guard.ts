@@ -156,14 +156,28 @@ export interface LinkDecision {
  *   benchmark/open — opens the benchmark; only runs with mode=auto (then it asks).
  *   catalog/<kind>/install with no url — opens the matching catalogue screen.
  *   telemetry/*, schedule/*, hook, catalog/<kind>/add-source, catalog/delete,
- *   repo/fetch-ssh, install|import|download — carry their OWN in-app dialog already. */
+ *   repo/fetch-ssh, install|import|download — carry their OWN in-app dialog already.
+ *   resources/open, schedule/runs — navigation only: the Storage manager, and a task's run
+ *     log (read-only; secrets are removed before a run is written). */
 export const PROMPT_FREE: ReadonlySet<string> = new Set([
-    'plugin/compare', 'view/open', 'docs/open', 'theme/editor',
+    'plugin/compare', 'view/open', 'docs/open', 'theme/editor', 'resources/open', 'schedule/runs',
     'repo/gen', 'repo/update', 'repo/host', 'mod/update', 'repo/sync', 'mod/check-updates',
     'benchmark/open',
     'telemetry/consent', 'telemetry/set', 'schedule/run', 'schedule/enable', 'hook',
     'catalog/delete', 'repo/fetch-ssh', 'install', 'import', 'download',
 ]);
+
+/** The presets a link may name (governor/config.rs `Preset`). A link names a preset and
+ *  nothing finer: a per-disk rule (rate, parallelism, buffer) is never set by a link. */
+export const LINK_PRESETS: readonly string[] = ['silent', 'balanced', 'max', 'custom'];
+/** The `resources/*` actions a link may carry. Anything else under `resources/` is refused. */
+const RESOURCES_LINKS: ReadonlySet<string> = new Set(['resources/open', 'resources/preset']);
+/** One external preset question per 10 s: a page firing the link in a loop gets one dialog,
+ *  then refusals, instead of a stack of prompts to click through by mistake. */
+export const PRESET_LINK_BURST_MS = 10_000;
+let lastLinkPresetAt = Number.NEGATIVE_INFINITY;
+/** For the tests: forget the last external preset question. */
+export function resetPresetBurst(): void { lastLinkPresetAt = Number.NEGATIVE_INFINITY; }
 
 /** Routes whose link may carry source credentials (`applySourceAccess`). */
 const SOURCE_ACCESS_ROUTES = new Set(['repo/connect', 'repo/sync', 'catalog/follow', 'catalog/import']);
@@ -198,6 +212,9 @@ export function decideLink(action: string, input: URLSearchParams, originIn: Lin
     if (action.startsWith('catalog/') && action.split('/').length > 2 && !catalogRoute(action)) {
         return refuse('unknown-action', action);
     }
+    // `resources/io-rule` and the like: a fine-grained rule is set in Settings or with the
+    // admin token, never by a link, whoever sends it.
+    if (action.startsWith('resources/') && !RESOURCES_LINKS.has(action)) return refuse('unknown-action', action);
 
     // ── Limits for untrusted origins ───────────────────────────────────────────────
     if (!trusted && SOURCE_ACCESS_ROUTES.has(action) && (params.has('key') || params.has('passphrase'))) {
@@ -373,6 +390,17 @@ export function decideLink(action: string, input: URLSearchParams, originIn: Lin
             const method = (get('method') || 'GET').toUpperCase();
             const rest = [...params.entries()].filter(([k]) => k !== 'method' && k !== 'path').map(([k, v]) => `${k}=${v}`).join('&');
             return ask('dlg.do.api', `${method} ${get('path')}${rest ? '\n' + rest : ''}`, 'data', { danger: method !== 'GET' });
+        }
+        case 'resources/preset': {
+            const name = get('name').toLowerCase();
+            if (!name) return refuse('missing', 'name');
+            if (!LINK_PRESETS.includes(name)) return refuse('bad-preset', name);
+            if (!trusted) {
+                const now = Date.now();
+                if (now - lastLinkPresetAt < PRESET_LINK_BURST_MS) return refuse('burst', name);
+                lastLinkPresetAt = now;
+            }
+            return ask('resources.link.presetDo', name, 'name');
         }
         case 'benchmark/run': {
             if ((get('mode') || '').toLowerCase() === 'manual') return { params, dropped };

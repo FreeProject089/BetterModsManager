@@ -78,6 +78,13 @@ pub async fn install_plugin(
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from: {}", download_url));
 
+    // A Download ticket for the transfer and the unpacking (the governor's queue lists it
+    // and can cancel it between archive entries).
+    let ticket = crate::fs_utils::begin_ticket_async(
+        crate::governor::config::OpKind::Download,
+        download_url.rsplit('/').next().unwrap_or("plugin").to_string(),
+    ).await;
+
     // catalog_get carries the identity header for a first-party (BetterCommunity) /dl
     // link so a PRIVATE managed-catalog payload passes the gate before redirecting to
     // storage; third-party download URLs get no header.
@@ -98,7 +105,8 @@ pub async fn install_plugin(
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
 
-    let manifest = extract_plugin_zip(&bytes, &plugins_dir)?;
+    ticket.add_bytes(bytes.len() as u64, 0);
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir, Some(&ticket))?;
 
     let installed = InstalledPlugin {
         install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
@@ -134,6 +142,10 @@ pub async fn install_plugin_from_file(
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from file: {}", file_path));
 
+    let ticket = crate::fs_utils::begin_ticket_async(
+        crate::governor::config::OpKind::Install,
+        std::path::Path::new(&file_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+    ).await;
     let bytes = std::fs::read(&file_path).map_err(|e| format!("Read error: {}", e))?;
 
     let app_dir = handle
@@ -144,7 +156,7 @@ pub async fn install_plugin_from_file(
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
 
-    let manifest = extract_plugin_zip(&bytes, &plugins_dir)?;
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir, Some(&ticket))?;
 
     let installed = InstalledPlugin {
         install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
@@ -195,7 +207,9 @@ pub fn install_plugin_bytes(
         .join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
 
-    let manifest = extract_plugin_zip(bytes, &plugins_dir)?;
+    // No ticket of its own: this runs inside a repo sync, which holds the operation's ticket;
+    // taking a second one of the same kind could wait forever on a one-slot preset.
+    let manifest = extract_plugin_zip(bytes, &plugins_dir, None)?;
     let id = manifest.id.clone();
 
     let installed = InstalledPlugin {
@@ -258,7 +272,10 @@ pub async fn read_plugin_manifest(file_path: String) -> Result<PluginManifest, S
     Ok(manifest)
 }
 
-fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManifest, String> {
+/// `ticket`: the install's governor ticket, checked between archive entries. Only asked
+/// `is_cancelled()`, never `checkpoint()`: two of the three callers are async commands, where
+/// a pause must not park a runtime thread.
+fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf, ticket: Option<&crate::governor::queue::Ticket>) -> Result<PluginManifest, String> {
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
 
@@ -304,6 +321,9 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
     let mut archive2 = zip::ZipArchive::new(cursor2).map_err(|e| format!("ZIP error: {}", e))?;
 
     for i in 0..archive2.len() {
+        if ticket.map(|t| t.is_cancelled()).unwrap_or(false) {
+            return Err(crate::fs_utils::CANCELLED.to_string());
+        }
         let mut file = archive2.by_index(i).map_err(|e| e.to_string())?;
         let name = file.name().to_string();
         if name.ends_with('/') {
@@ -336,7 +356,8 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
-        std::io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
+        let n = std::io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
+        if let Some(t) = ticket { t.add_bytes(n, n); }
     }
 
     Ok(manifest)

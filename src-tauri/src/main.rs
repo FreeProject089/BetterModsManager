@@ -324,6 +324,9 @@ fn main() {
         .num_threads(threads)
         .stack_size(512 * 1024)
         .build_global();
+    // Every archive extraction (materialize, sync, unarchive, bundles) holds an Extract ticket
+    // of the resource governor; archive.rs cannot name the governor itself (benchmarks).
+    commands::mod_archive::install_extract_governor();
 
     tracing_subscriber::fmt::init();
     info!("Starting Better Mods Manager...");

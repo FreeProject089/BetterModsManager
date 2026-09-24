@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 62
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 66
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -23,7 +23,7 @@ bmm-mcp-server call GET /api/status
 ## Avec BMM ouvert, et sans
 
 Certaines commandes lisent les fichiers de données de BMM directement sur le disque et
-fonctionnent **app fermée** — `profiles`, `mods`, `schedules`, `actions`, `bmms-compile`.
+fonctionnent **app fermée** — `profiles`, `mods`, `schedules`, `schedule-runs`, `hardware`, `actions`, `bmms-compile`.
 D'autres demandent à l'app en cours d'exécution de faire quelque chose, et exigent qu'elle
 soit **ouverte** : tout ce qui change un état, ouvre un écran, ou porte la mention
 _(app ouverte)_ ci-dessous. Une commande qui a besoin de l'app et ne la trouve pas le dit et
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-62 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+66 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -152,8 +152,17 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 | `schedule-set` | `<id>`\*, `--off` (`false`) | Arme ou désarme une tâche |
 | `signal` | `<name>`\*, `<data>` | Sonne une cloche qu'une tâche attend peut-être (`wait.hook`) |
 | `run-schedule` | `<id>`\* | Lance une tâche enregistrée maintenant _(app ouverte)_ |
+| `schedule-runs` | `<id>`\* | Le journal d'exécution d'une tâche, le plus récent d'abord : durée de chaque exécution, nombre d'étapes et, en cas d'échec, la première erreur. Fonctionne app fermée |
 | `create-schedule` | `--file`, `--json` | Crée ou met à jour une tâche depuis un fichier JSON (`-` pour stdin) ou du JSON en ligne. La forme est celle que le constructeur in-app enregistre, et une nouvelle tâche est créée **désactivée** sauf si le JSON dit `enabled: true` — pour qu'on puisse la lire avant qu'elle ne se déclenche |
 | `delete-schedule` | `<id>`\* | Supprime une tâche |
+
+### Ressources
+
+| Commande | Arguments | Ce que ça fait |
+|---|---|---|
+| `resources` | — | Le gouverneur de ressources en JSON : préréglage enregistré, celui en vigueur, mode jeu, file _(app ouverte)_ |
+| `resources-preset` | `<name>`\*, `--scope` (`persistent`), `--ttl` | Choisit un préréglage **nommé** : `silent`, `balanced`, `max` ou `custom`. `--scope task` se termine seul après `--ttl` secondes (7200 au plus) _(app ouverte)_ |
+| `hardware` | — | Jeux d'instructions, cartes graphiques et bus de chaque disque, en JSON. Fonctionne app fermée |
 
 ### Écriture : plugins et BMMScript
 
@@ -202,8 +211,8 @@ Chaque commande doit figurer ici, chaque argument doit être nommé, et le total
 être le vrai.
 
 C'est le même dispositif que pour la [référence MCP](doc-page:reference/mcp.fr), et pour la même raison : une
-liste de soixante-deux choses tenue à la main se trompe la première fois que quelqu'un en
-ajoute une soixante-troisième, et rien, dans une page de référence fausse, ne refuse de
+liste de soixante-six choses tenue à la main se trompe la première fois que quelqu'un en
+ajoute une soixante-septième, et rien, dans une page de référence fausse, ne refuse de
 compiler.
 
 ---

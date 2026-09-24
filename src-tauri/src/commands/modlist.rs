@@ -144,6 +144,12 @@ pub async fn export_modlist(
     // Reset the cancel flag before starting
     state.export_cancelled.store(false, Ordering::SeqCst);
 
+    // One governor ticket for the walk (G3b): Hash when every file is read and hashed, Scan
+    // when only names and sizes are listed. Its checkpoint runs per file; a cancel from the
+    // dashboard lands on the same flag as the export's own Cancel button.
+    let kind = if include_hashes { crate::governor::config::OpKind::Hash } else { crate::governor::config::OpKind::Scan };
+    let ticket = std::sync::Arc::new(fs_utils::begin_ticket_async(kind, "export mod list".to_string()).await);
+
     for (i, snap) in snapshots.into_iter().enumerate() {
         // Check for cancellation before each mod
         if state.export_cancelled.load(Ordering::SeqCst) {
@@ -163,7 +169,8 @@ pub async fn export_modlist(
         // spawn_blocking keeps the file walk off the async runtime thread
         let folder = snap.folder.clone();
         let cancel_flag = std::sync::Arc::clone(&state.export_cancelled);
-        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes, &cancel_flag))
+        let t = std::sync::Arc::clone(&ticket);
+        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes, &cancel_flag, &t))
             .await
             .unwrap_or_default();
 
@@ -187,6 +194,17 @@ pub async fn export_modlist(
             repo_mod_id: snap.repo_mod_id,
             update_url: snap.update_url,
         });
+    }
+
+    drop(ticket);
+    // A cancel that landed during the LAST mod's walk: the loop above only looks before each
+    // mod, so without this the list was written with that mod's file tree cut short.
+    if state.export_cancelled.load(Ordering::SeqCst) {
+        state.export_cancelled.store(false, Ordering::SeqCst);
+        let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
+            "current": total, "total": total, "cancelled": true,
+        }));
+        return Err(AppError::LockError("Export cancelled by user".to_string()));
     }
 
     let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
@@ -278,11 +296,13 @@ pub fn cancel_export_modlist(state: State<'_, AppState>) {
 }
 
 /// Walk a mod folder and record each file's relative path, size, and optional SHA-256.
-/// Checks the cancellation flag after each file when hashing is enabled.
+/// Checks the cancellation flag after each file when hashing is enabled, and the governor
+/// ticket's checkpoint before every file (a cancelled ticket sets the flag).
 fn build_file_tree(
     folder: &PathBuf,
     include_hashes: bool,
     cancel_flag: &std::sync::atomic::AtomicBool,
+    ticket: &crate::governor::queue::Ticket,
 ) -> Vec<ModFileEntry> {
     let mut entries = Vec::new();
     // An archived mod is a .zip, and a .zip has to be read as what is INSIDE it or the
@@ -294,6 +314,10 @@ fn build_file_tree(
         for rel in files {
             // Check cancellation before each file when SHA-256 is active
             if include_hashes && cancel_flag.load(Ordering::Relaxed) {
+                break;
+            }
+            if ticket.checkpoint().is_err() {
+                cancel_flag.store(true, Ordering::SeqCst);
                 break;
             }
             let full = folder.join(&rel);

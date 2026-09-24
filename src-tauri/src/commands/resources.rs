@@ -36,7 +36,7 @@ pub struct ResourcesStatus {
     pub tickets: Vec<TicketView>,
 }
 
-fn parse<T: serde::de::DeserializeOwned>(what: &str, v: &str) -> Result<T, String> {
+pub(crate) fn parse<T: serde::de::DeserializeOwned>(what: &str, v: &str) -> Result<T, String> {
     serde_json::from_value(serde_json::Value::String(v.trim().to_lowercase())).map_err(|_| format!("unknown {what}: {v}"))
 }
 
@@ -65,21 +65,29 @@ pub fn resources_status() -> ResourcesStatus { status() }
 /// the caller passes to `resources_clear_task_preset`. `ttl_secs` is capped at 2 h.
 #[tauri::command]
 pub fn resources_set_preset(state: State<AppState>, name: String, scope: String, ttl_secs: Option<u64>, overrides_game: Option<bool>) -> Result<Option<u64>, String> {
-    let preset: Preset = parse("preset", &name)?;
-    match scope.as_str() {
+    let token = apply_preset(&state.data, &name, &scope, ttl_secs, overrides_game.unwrap_or(false))?;
+    if token.is_none() { state.save().map_err(|e| e.to_string())?; }
+    Ok(token)
+}
+
+/// What `resources_set_preset` does, minus the saving: the command and `POST
+/// /api/resources/preset` (A4) share it, and each saves the document its own way. `Ok(None)`
+/// = a persistent change the caller must save; `Ok(Some(token))` = a task-scoped preset.
+pub fn apply_preset(data: &std::sync::Mutex<crate::state::AppData>, name: &str, scope: &str, ttl_secs: Option<u64>, overrides_game: bool) -> Result<Option<u64>, String> {
+    let preset: Preset = parse("preset", name)?;
+    match scope.trim() {
         "persistent" => {
             let cfg = {
-                let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+                let mut data = data.lock().map_err(|_| "state lock".to_string())?;
                 data.resources.preset = preset;
                 data.resources.clone()
             };
             global().configure(cfg);
-            state.save().map_err(|e| e.to_string())?;
             Ok(None)
         }
         "task" => {
             let ttl = Duration::from_secs(ttl_secs.unwrap_or(TASK_PRESET_MAX.as_secs())).min(TASK_PRESET_MAX);
-            let token = global().set_task_preset(preset, overrides_game.unwrap_or(false), ttl);
+            let token = global().set_task_preset(preset, overrides_game, ttl);
             // The safety net: whatever happens to the task, the preset ends.
             std::thread::spawn(move || { std::thread::sleep(ttl + Duration::from_millis(50)); global().expire_task_preset(); });
             Ok(Some(token))

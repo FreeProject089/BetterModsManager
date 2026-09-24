@@ -192,12 +192,22 @@ pub fn balanced_hash_threads(cores: usize) -> usize {
     (cores / 2).clamp(1, 4)
 }
 
+/// The size of the global rayon pool main.rs builds (`cpus - 2` above 6 cores, `cpus - 1`
+/// above 2, else 2). Kept as Balanced's value for the kinds whose `par_iter`s ran on that
+/// global pool before they had one of their own (G3c): zip extraction (`archive.rs`) and the
+/// repo export's copy + hash pass (`repo.rs`). Two threads there would have made Balanced a
+/// slower BMM than the one people upgraded from, on every machine with more than 3 cores.
+pub fn balanced_global_threads(cores: usize) -> usize {
+    if cores > 6 { cores - 2 } else if cores > 2 { cores - 1 } else { 2 }
+}
+
 /// Pool threads for `op` under `preset`.
 pub fn pool_threads(preset: Preset, op: OpKind, cores: usize) -> usize {
     let wanted = match (preset, op) {
         (Preset::Silent, _) => 1,
         (Preset::Max, _) => cores.saturating_sub(1),
         (_, OpKind::Hash) => balanced_hash_threads(cores),
+        (_, OpKind::Extract) | (_, OpKind::Compress) => balanced_global_threads(cores),
         (_, _) => 2,
     };
     clamp_pool_threads(wanted, cores)
@@ -292,6 +302,87 @@ impl ResourcesConfig {
         self.migrated_disk_limits = true;
         true
     }
+
+    /// Set (or, with `None` or an empty rule, remove) the rule for `(disk, op)`: the one door
+    /// a fine-grained rule comes in by from outside the Settings screen (`POST
+    /// /api/resources/io-rule`, admin token only). The keys are validated, the values clamped
+    /// into the hard bounds BEFORE they are stored, so the document on disk is as sane as
+    /// what `resolve` will make of it. Returns the stored rule.
+    pub fn set_rule(&mut self, disk: &str, op: &str, rule: Option<IoRule>) -> Result<Option<IoRule>, String> {
+        let disk = normalize_disk_key(disk).ok_or_else(|| format!("disk must be `*`, a drive (`d:\\`), a UNC share or `/`, not {disk:?}"))?;
+        let op = op.trim().to_lowercase();
+        if op != "*" && !OpKind::ALL.iter().any(|k| k.key() == op) {
+            return Err(format!("op must be `*` or one of {}", OpKind::ALL.iter().map(|k| k.key()).collect::<Vec<_>>().join(", ")));
+        }
+        // Refused, not clamped: a stored document that says 999 parallel copies while the
+        // governor runs 16 is a setting nobody can debug. clamp_rule stays as a second net.
+        if let Some(r) = &rule { validate_rule(r)?; }
+        let rule = rule.map(clamp_rule).filter(|r| *r != IoRule::default());
+        match rule {
+            None => {
+                if let Some(m) = self.rules.get_mut(&disk) {
+                    m.remove(&op);
+                    if m.is_empty() { self.rules.remove(&disk); }
+                }
+                Ok(None)
+            }
+            Some(r) => {
+                if !self.rules.contains_key(&disk) && self.rules.len() >= MAX_RULE_DISKS {
+                    return Err(format!("at most {MAX_RULE_DISKS} disks can carry rules"));
+                }
+                self.rules.entry(disk).or_default().insert(op, r.clone());
+                Ok(Some(r))
+            }
+        }
+    }
+}
+
+/// How many disks may carry rules: a bound on a document the API can write.
+pub const MAX_RULE_DISKS: usize = 64;
+
+/// A stored rule, inside the hard bounds (rate ≥ 1, parallel 1..=16, buffer 64 KiB..=16 MiB).
+/// What the hard bounds would otherwise rewrite, refused with the reason (a rate of 0 would
+/// block for ever; parallel 1..16; buffer 64..16384 KiB).
+pub fn validate_rule(r: &IoRule) -> Result<(), String> {
+    if r.rate_mb_s == Some(0) { return Err("a rate must be at least 1 MB/s (leave it empty for no limit)".into()); }
+    if let Some(p) = r.parallel { if p == 0 || p > MAX_PARALLEL { return Err(format!("parallel must be 1 to {MAX_PARALLEL}")); } }
+    if let Some(b) = r.buffer_kib { if !(MIN_BUFFER_KIB..=MAX_BUFFER_KIB).contains(&b) { return Err(format!("buffer must be {MIN_BUFFER_KIB} to {MAX_BUFFER_KIB} KiB")); } }
+    Ok(())
+}
+
+/// The old per-disk MB/s table follows a disk's `*` rate, whichever door changed it.
+pub fn sync_disk_limit(rules: &BTreeMap<String, BTreeMap<String, IoRule>>, disk_limits: &mut HashMap<String, u64>, disk: &str, op: &str) {
+    let Some(disk) = normalize_disk_key(disk) else { return };
+    if op.trim() != "*" || disk == "*" || disk == "/" { return; }
+    let rate = rules.get(&disk).and_then(|m| m.get("*")).and_then(|r| r.rate_mb_s);
+    let key = disk_limits.keys().find(|k| k.to_lowercase() == disk).cloned().unwrap_or_else(|| disk.to_uppercase());
+    match rate { Some(n) => { disk_limits.insert(key, n); } None => { disk_limits.remove(&key); } }
+}
+
+pub fn clamp_rule(mut r: IoRule) -> IoRule {
+    if let Some(v) = r.rate_mb_s { r.rate_mb_s = Some(v.max(1)); }
+    if let Some(v) = r.parallel { r.parallel = Some(v.clamp(1, MAX_PARALLEL)); }
+    if let Some(v) = r.buffer_kib { r.buffer_kib = Some(v.clamp(MIN_BUFFER_KIB, MAX_BUFFER_KIB)); }
+    r
+}
+
+/// The key a rule is stored under, in the shape `runtime::volume_key` produces: `*`, `d:\`,
+/// `\\server\share\` (lower-cased) or `/`. None for anything else.
+pub fn normalize_disk_key(disk: &str) -> Option<String> {
+    let s = disk.trim();
+    if s == "*" || s == "/" { return Some(s.to_string()); }
+    let b = s.as_bytes();
+    if (b.len() == 2 || b.len() == 3) && b[0].is_ascii_alphabetic() && b[1] == b':' && (b.len() == 2 || b[2] == b'\\' || b[2] == b'/') {
+        return Some(format!("{}:\\", (b[0] as char).to_ascii_lowercase()));
+    }
+    if let Some(rest) = s.strip_prefix("\\\\") {
+        let parts: Vec<&str> = rest.trim_end_matches('\\').split('\\').collect();
+        let ok = |p: &str| !p.is_empty() && p != "." && p != ".." && p.len() <= 255 && !p.contains(['/', ':', '?', '*', '"', '<', '>', '|']) && !p.chars().any(char::is_control);
+        if parts.len() == 2 && parts.iter().all(|p| ok(p)) {
+            return Some(format!("\\\\{}\\{}\\", parts[0], parts[1]).to_lowercase());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -313,6 +404,13 @@ mod tests {
         // Hash pool: (cores / 2).clamp(1, 4).
         for (cores, want) in [(1, 1), (2, 1), (4, 2), (8, 4), (16, 4), (64, 4)] {
             assert_eq!(pool_threads(Preset::Balanced, OpKind::Hash, cores), want.min(cores.saturating_sub(1).max(1)), "cores={cores}");
+        }
+        // Extraction and the repo export ran on the global rayon pool: Balanced keeps its size
+        // (the hard bound still leaves the UI a core on a 2-core machine).
+        for (cores, want) in [(1, 1), (2, 1), (4, 3), (6, 5), (8, 6), (16, 14)] {
+            for op in [OpKind::Extract, OpKind::Compress] {
+                assert_eq!(pool_threads(Preset::Balanced, op, cores), want, "{op:?} cores={cores}");
+            }
         }
         // A disk with a MB/s limit: the paced 128 KiB path, no separate yield.
         let mut limited = ResourcesConfig::default();
@@ -404,5 +502,29 @@ mod tests {
         c.preset = Preset::Max;
         let hdd = c.resolve(OpKind::Deploy, &Target { kind: DiskKind::Hdd, ..t });
         assert_eq!(hdd.parallel, 1, "a spinning disk is not helped by parallel seeks");
+    }
+
+    /// A4: the rule the API writes is validated by key and clamped before it is stored.
+    #[test]
+    fn set_rule_validates_keys_and_refuses_out_of_bound_values() {
+        let mut c = ResourcesConfig::default();
+        for wild in [IoRule { rate_mb_s: Some(0), ..Default::default() }, IoRule { parallel: Some(999), ..Default::default() }, IoRule { buffer_kib: Some(1), ..Default::default() }] {
+            assert!(c.set_rule("D:", "HASH", Some(wild)).is_err(), "an out-of-bound value must be refused, not rewritten");
+        }
+        assert!(c.rules.is_empty(), "a refused rule stored nothing");
+        let stored = c.set_rule("D:", "HASH", Some(IoRule { rate_mb_s: Some(1), parallel: Some(MAX_PARALLEL), buffer_kib: Some(MIN_BUFFER_KIB), io_priority: None })).unwrap().unwrap();
+        assert_eq!((stored.rate_mb_s, stored.parallel, stored.buffer_kib), (Some(1), Some(MAX_PARALLEL), Some(MIN_BUFFER_KIB)));
+        assert_eq!(c.rules["d:\\"]["hash"], stored, "stored under the key volume_key produces");
+        assert_eq!(normalize_disk_key("\\\\NAS\\Games\\").as_deref(), Some("\\\\nas\\games\\"));
+        for bad in ["", "d", "d:\\games", "..", "\\\\nas", "\\\\nas\\..\\x", "C:\\..\\"] {
+            assert!(c.set_rule(bad, "*", Some(IoRule { parallel: Some(2), ..Default::default() })).is_err(), "{bad:?}");
+        }
+        assert!(c.set_rule("*", "explode", Some(IoRule::default())).is_err());
+        // An empty rule, or none, removes it (and the disk once it carries nothing).
+        c.set_rule("d:\\", "hash", None).unwrap();
+        assert!(!c.rules.contains_key("d:\\"));
+        c.set_rule("*", "*", Some(IoRule { rate_mb_s: Some(50), ..Default::default() })).unwrap();
+        c.set_rule("*", "*", Some(IoRule::default())).unwrap();
+        assert!(c.rules.is_empty());
     }
 }

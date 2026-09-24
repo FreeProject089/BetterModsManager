@@ -48,6 +48,13 @@ fn write_root(mod_folder: &Path) -> Result<PathBuf, AppError> {
 pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppError> {
     let path_clone = path.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // A Scan ticket for the walk (G3b): on the dashboard, one of the kind's slots, and a
+        // checkpoint before it starts. The walk itself is one jwalk pass (its fan-out follows
+        // the preset, fs_utils::scan_parallelism), checked again once it is collected.
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, &format!("mapper {}", path_clone));
+        let cancelled = || AppError::Internal(crate::fs_utils::CANCELLED.to_string());
+        ticket.checkpoint().map_err(|_| cancelled())?;
         // An ARCHIVED mod is a .zip, not a folder, and the mapper was handed the .zip path
         // directly — so it logged "not a dir" and the whole screen came up empty. BMM already
         // solves this everywhere else: mod_read_root() extracts an archive into the shared
@@ -64,10 +71,12 @@ pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppEr
         // 1. Multi-threaded walk to collect all items
         let mut entries: Vec<_> = WalkDir::new(root)
             .sort(true)
+            .parallelism(crate::fs_utils::scan_parallelism())
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.depth > 0)
             .collect();
+        ticket.checkpoint().map_err(|_| cancelled())?;
 
         // 2. Build map of all nodes
         let mut nodes_map: HashMap<PathBuf, FileTreeNode> = HashMap::with_capacity(entries.len());

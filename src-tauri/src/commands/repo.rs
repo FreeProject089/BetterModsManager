@@ -60,6 +60,53 @@ lazy_static::lazy_static! {
     static ref LAST_EMIT: StdMutex<Option<Instant>> = StdMutex::new(None);
 }
 
+// ── Resource governor (G3c) ──────────────────────────────────────────────────────
+// Every heavy site in this file holds a ticket of its kind for the whole operation: the
+// export and the incremental update (Compress), the direct update (Install), the sync
+// (Download), the manifest (Hash). Their parallel passes run on the kind's pool and their
+// file copies go through the governed copy. Under Balanced nothing changes: the Compress pool
+// is the size of the global pool the export ran on, the Hash pool the size of the hash pool
+// the manifest ran on, and the governed copy writes the same bytes, mtime and permissions.
+use crate::governor::config::OpKind;
+use crate::governor::queue::Ticket;
+
+/// A repo zip's gate: the operation's ticket, checked before every entry.
+struct TicketGate<'a>(&'a Ticket);
+
+impl super::zipping::ZipGate for TicketGate<'_> {
+    fn checkpoint(&self) -> Result<(), String> {
+        self.0.checkpoint().map_err(|_| "repo.cancelled".to_string())
+    }
+    fn wrote(&self, bytes: u64) {
+        self.0.add_bytes(bytes, 0);
+    }
+}
+
+/// Copy one file of a repo under `kind`'s policy for the destination disk (per-volume rate,
+/// the ticket's pause / cancel between chunks), then carry the modification time and the
+/// permissions over as `fs::copy` did, so the exported tree is what it was before.
+/// A cancel answers "repo.cancelled" (the partial file is already removed); any other failure
+/// the "repo.errCopyFile" the export always reported.
+fn governed_copy(kind: OpKind, src: &Path, dst: &Path, ticket: &Ticket) -> Result<u64, String> {
+    use crate::governor::io::CopyError;
+    match crate::governor::runtime::global().copy(kind, src, dst, Some(ticket)) {
+        Ok(n) => {
+            if let Ok(meta) = fs::metadata(src) {
+                // mtime first: a read-only source makes the destination read-only after.
+                if let Ok(t) = meta.modified() {
+                    if let Ok(f) = fs::OpenOptions::new().write(true).open(dst) {
+                        let _ = f.set_modified(t);
+                    }
+                }
+                let _ = fs::set_permissions(dst, meta.permissions());
+            }
+            Ok(n)
+        }
+        Err(CopyError::Cancelled) => Err("repo.cancelled".to_string()),
+        Err(CopyError::Io(_)) => Err("repo.errCopyFile".to_string()),
+    }
+}
+
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
     let mut size = bytes as f64;
@@ -243,6 +290,11 @@ pub async fn export_server_repo(
 
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     let cancel_flag = state.install_cancelled.clone();
+
+    // One Compress ticket for the whole export: the per-file copy + hash pass, the per-mod
+    // zips and the final archive all answer to it.
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(OpKind::Compress, &format!("repo export → {}", output_dir));
 
     let repo_mods_dir = output_path.join("mods");
     if !repo_mods_dir.exists() {
@@ -433,7 +485,7 @@ pub async fn export_server_repo(
             // ── "Zip mods" mode: pack the whole mod into a single mods/<id>.zip ──
             if zip_mods {
                 let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
-                zip_directory(&read_root, &zip_path, cancel_flag.clone(), zip_method)
+                super::zipping::zip_dir_gated(&read_root, &zip_path, cancel_flag.clone(), zip_method, &TicketGate(&ticket))
                     .map_err(|e| format!("repo.errZipMod:{}", e))?;
                 let size = fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, _) = compute_file_hash_and_chunks(&zip_path, false)?;
@@ -462,7 +514,7 @@ pub async fn export_server_repo(
             use std::sync::atomic::{AtomicUsize, Ordering};
 
             let f_idx_atomic = AtomicUsize::new(0);
-            let repo_files: Result<Vec<RepoFile>, String> = files.par_iter().map(|rel_path| {
+            let repo_files: Result<Vec<RepoFile>, String> = gov.pool(OpKind::Compress).install(|| files.par_iter().map(|rel_path| {
                 let src_path = read_root.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 
@@ -476,9 +528,10 @@ pub async fn export_server_repo(
                 if f_idx % 5 == 0 && cancel_flag.load(Ordering::SeqCst) {
                     return Err("repo.cancelled".to_string());
                 }
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
 
                 // Copy file
-                fs::copy(&src_path, &dst_path).map_err(|_| "repo.errCopyFile".to_string())?;
+                governed_copy(OpKind::Compress, &src_path, &dst_path, &ticket)?;
 
                 // Compute Hash
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
@@ -511,7 +564,7 @@ pub async fn export_server_repo(
                     chunks,
                     mtime: None,
                 })
-            }).collect();
+            }).collect());
 
             let repo_files = repo_files?;
             repo_mod.files = repo_files;
@@ -667,7 +720,7 @@ pub async fn export_server_repo(
         let zip_path = final_dest.join(&zip_file_name);
         
         let cancel_flag_zip = cancel_flag.clone();
-        match zip_directory(&output_path, &zip_path, cancel_flag_zip, zip_method) {
+        match super::zipping::zip_dir_gated(&output_path, &zip_path, cancel_flag_zip, zip_method, &TicketGate(&ticket)) {
             Ok(_) => {
                 println!("[REPO] Zip created at: {:?}", zip_path);
             },
@@ -805,6 +858,9 @@ pub async fn update_server_repo(
     let handle2 = handle.clone();
     let mod_changelogs = ops.mod_changelogs.clone();
     let join = tokio::task::spawn_blocking(move || -> Result<RepoUpdateResult, String> {
+        // One Compress ticket for the update, taken here (off the async runtime) because
+        // taking it may wait for a slot.
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, &format!("repo update → {}", repo_dir));
         let total = pending.len().max(1);
         for (idx, pm) in pending.into_iter().enumerate() {
             if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
@@ -862,12 +918,13 @@ pub async fn update_server_repo(
             let mut repo_files = Vec::new();
             for rel_path in &files {
                 if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
                 let src_path = read_root.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 if let Some(parent) = dst_path.parent() {
                     fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
                 }
-                fs::copy(&src_path, &dst_path).map_err(|_| "repo.errCopyFile".to_string())?;
+                governed_copy(OpKind::Compress, &src_path, &dst_path, &ticket)?;
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
                 repo_files.push(RepoFile {
@@ -1629,12 +1686,17 @@ pub async fn apply_direct_update(
     let folder_c = folder.clone();
     let url_c = url.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // One Install ticket for the download and the write-over (foreground work: background
+        // hashing steps aside while it runs). A cancel stops between archive entries; the
+        // update is in place, so the entries already written stay, as after any failure here.
+        let ticket = crate::governor::runtime::global().begin(OpKind::Install, &format!("direct update → {}", folder_c.display()));
         let response = reqwest::blocking::get(&url_c)
             .map_err(|e| format!("Download failed: {}", e))?;
         if !response.status().is_success() {
             return Err(format!("HTTP error: {}", response.status()));
         }
         let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
+        ticket.add_bytes(bytes.len() as u64, 0);
         std::fs::create_dir_all(&folder_c).map_err(|e| e.to_string())?;
 
         let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
@@ -1644,6 +1706,7 @@ pub async fn apply_direct_update(
                 .map_err(|e| format!("Zip error: {}", e))?;
             let strip = archive_single_root(&mut archive);
             for i in 0..archive.len() {
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
                 // CWE-22 Zip Slip: enclosed_name() returns None for escaping paths.
                 let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
@@ -1658,7 +1721,8 @@ pub async fn apply_direct_update(
                 } else {
                     if let Some(parent) = outpath.parent() { std::fs::create_dir_all(parent).ok(); }
                     let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                    let n = std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                    ticket.add_bytes(0, n);
                 }
             }
         } else {
@@ -2424,6 +2488,11 @@ pub async fn sync_server_repo(
     let cancel_flag = state.install_cancelled.clone();
     let pause_flag = state.sync_paused.clone();
 
+    // One Download ticket for the whole sync. Its checkpoint joins the sync's own pause and
+    // cancel below: paused or cancelled from the resources dashboard, the sync stops at the
+    // same places, with the same rollback. (Extraction of a zipped mod takes its own Extract
+    // ticket inside archive::extract_to.)
+    let ticket = crate::governor::runtime::global().begin(OpKind::Download, &src_repo);
     let check_pause = || {
         while pause_flag.load(std::sync::atomic::Ordering::SeqCst) {
             if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2431,7 +2500,7 @@ pub async fn sync_server_repo(
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        false
+        ticket.checkpoint().is_err()
     };
 
     // 1. Fetch remote repo info
@@ -2611,6 +2680,7 @@ pub async fn sync_server_repo(
                     let mut out = fs::File::create(&staged_zip).map_err(|e| e.to_string())?;
                     while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
                         std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+                        ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                     }
                     std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
                 }
@@ -2731,6 +2801,7 @@ pub async fn sync_server_repo(
                                         while let Some(item) = stream.next().await {
                                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
                                             file_to_patch.write_all(&chunk).map_err(|e| e.to_string())?;
+                                            ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                                             
                                             // Throttling
                                             if args.download_limit > 0 {
@@ -2771,6 +2842,7 @@ pub async fn sync_server_repo(
                         let bytes = conn.read(&tail).await?;
                         fs::write(&local_path, &bytes)
                             .map_err(|e| format!("repo.errWriteFile: {}", e))?;
+                        ticket.add_bytes(bytes.len() as u64, bytes.len() as u64);
                         if args.download_limit > 0 {
                             // Same throttle as the HTTP path, applied once for the whole file
                             // because SFTP handed it over in one read.
@@ -2794,6 +2866,7 @@ pub async fn sync_server_repo(
                         while let Some(item) = stream.next().await {
                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
                             file_out.write_all(&chunk).map_err(|e| e.to_string())?;
+                            ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                             
                             // Throttling
                             if args.download_limit > 0 {
@@ -3034,6 +3107,148 @@ pub fn pause_repo_sync(state: State<'_, AppState>) {
 #[tauri::command]
 pub fn resume_repo_sync(state: State<'_, AppState>) {
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+// Placed before the later test modules on purpose: scripts/check-governed.mjs strips
+// `#[cfg(test)]` modules by matching braces and gives up at the first one it cannot
+// balance (further down this file), counting everything after it as app code.
+#[cfg(test)]
+mod governed_repo_tests {
+    use super::{governed_copy, TicketGate, ZipMethod};
+    use crate::commands::zipping::{zip_dir, zip_dir_gated};
+    use crate::governor::config::OpKind;
+    use crate::governor::queue::Queue;
+    use std::path::Path;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    fn write_tree(root: &Path) {
+        let mut blob = Vec::with_capacity(400 * 1024);
+        let mut x: u32 = 0x9E37_79B9;
+        for i in 0..(400 * 1024) {
+            x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+            blob.push(if i % 2 == 0 { (i / 64) as u8 } else { (x & 0xFF) as u8 });
+        }
+        std::fs::create_dir_all(root.join("Data/nested/deeper")).unwrap();
+        std::fs::create_dir_all(root.join("Data/empty_dir")).unwrap();
+        std::fs::write(root.join("Data/big.bin"), &blob).unwrap();
+        std::fs::write(root.join("Data/nested/deeper/a.lua"), b"print('a')\n").unwrap();
+        std::fs::write(root.join("empty.bin"), b"").unwrap();
+        for i in 0..30 {
+            std::fs::write(root.join(format!("f{i:02}.txt")), format!("line {i}\n").repeat(100)).unwrap();
+        }
+    }
+
+    /// Every entry's name, method, CRC, sizes and RAW compressed bytes: everything a zip holds
+    /// except the timestamp, which is not ours to compare (see below).
+    fn entries(zip: &Path) -> Vec<(String, String, u32, u64, u64, Vec<u8>)> {
+        use std::io::Read;
+        let mut a = zip::ZipArchive::new(std::fs::File::open(zip).unwrap()).unwrap();
+        (0..a.len()).map(|i| {
+            let mut e = a.by_index_raw(i).unwrap();
+            let mut raw = Vec::new();
+            e.read_to_end(&mut raw).unwrap();
+            (e.name().to_string(), format!("{:?}", e.compression()), e.crc32(), e.size(), e.compressed_size(), raw)
+        }).collect()
+    }
+
+    /// Balanced reproduces today: a repo zip written under a Compress ticket is the zip the
+    /// ungoverned writer produces, for every method the export offers.
+    ///
+    /// Byte identity of the WHOLE file only holds within one 2-second DOS-time window: the zip
+    /// crate is built with its `time` feature, so `FileOptions::default()` stamps every entry
+    /// with "now", and two zips of the same folder written a second apart differ in those four
+    /// bytes per entry whoever writes them. So: every entry is compared field by field and on
+    /// its raw compressed bytes on every try, and the whole files byte for byte on the first
+    /// pair that falls in the same window (three tries; a pair straddling a boundary is
+    /// retried, not excused).
+    #[test]
+    fn compress_output_is_byte_identical_under_balanced() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src);
+        let gov = crate::governor::runtime::global();
+        for m in [ZipMethod::Deflate, ZipMethod::Zstd, ZipMethod::Bzip2, ZipMethod::Stored] {
+            let mut whole_equal = false;
+            for attempt in 0..3 {
+                let plain = td.path().join(format!("plain-{}-{attempt}.zip", m.name()));
+                let governed = td.path().join(format!("governed-{}-{attempt}.zip", m.name()));
+                zip_dir(&src, &plain, Arc::new(AtomicBool::new(false)), m).unwrap();
+                let ticket = gov.begin(OpKind::Compress, "test: balanced zip");
+                zip_dir_gated(&src, &governed, Arc::new(AtomicBool::new(false)), m, &TicketGate(&ticket)).unwrap();
+                drop(ticket);
+                assert_eq!(entries(&plain), entries(&governed), "{m:?}: an entry differs");
+                if std::fs::read(&plain).unwrap() == std::fs::read(&governed).unwrap() {
+                    whole_equal = true;
+                    break;
+                }
+            }
+            assert!(whole_equal, "{m:?}: the governed zip is not byte-identical to the ungoverned one");
+        }
+    }
+
+    /// A cancelled Compress ticket stops a repo zip before the next entry.
+    #[test]
+    fn a_cancelled_compress_ticket_stops_the_zip() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src);
+        let q = Queue::default();
+        let t = q.begin(OpKind::Compress, "test: cancel zip");
+        q.cancel(t.id());
+        let out = td.path().join("x.zip");
+        let err = zip_dir_gated(&src, &out, Arc::new(AtomicBool::new(false)), ZipMethod::Deflate, &TicketGate(&t)).unwrap_err();
+        assert_eq!(err, "repo.cancelled");
+    }
+
+    /// The export's file copy: the governed copy writes the bytes `fs::copy` wrote, and keeps
+    /// what `fs::copy` kept (modification time, read-only flag).
+    #[test]
+    fn governed_copy_matches_fs_copy() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("src.bin");
+        let data: Vec<u8> = (0..3_000_000u32).map(|i| (i * 31 % 251) as u8).collect();
+        std::fs::write(&src, &data).unwrap();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        std::fs::OpenOptions::new().write(true).open(&src).unwrap().set_modified(old).unwrap();
+
+        let by_fs = td.path().join("fs.bin");
+        std::fs::copy(&src, &by_fs).unwrap();
+        let by_gov = td.path().join("gov.bin");
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, "test: copy");
+        let n = governed_copy(OpKind::Compress, &src, &by_gov, &ticket).unwrap();
+        drop(ticket);
+        assert_eq!(n, data.len() as u64);
+        assert_eq!(std::fs::read(&by_gov).unwrap(), std::fs::read(&by_fs).unwrap());
+        let m = |p: &Path| std::fs::metadata(p).unwrap().modified().unwrap();
+        assert_eq!(m(&by_gov), m(&by_fs), "the modification time is carried over like fs::copy");
+
+        // Read-only source: fs::copy makes a read-only copy, so does the governed one.
+        let mut perms = std::fs::metadata(&src).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&src, perms.clone()).unwrap();
+        let ro = td.path().join("ro.bin");
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, "test: copy ro");
+        governed_copy(OpKind::Compress, &src, &ro, &ticket).unwrap();
+        drop(ticket);
+        assert!(std::fs::metadata(&ro).unwrap().permissions().readonly());
+        assert_eq!(m(&ro), old);
+        // Let the temp dir clean up.
+        for p in [&src, &ro] {
+            let mut w = std::fs::metadata(p).unwrap().permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            w.set_readonly(false);
+            std::fs::set_permissions(p, w).unwrap();
+        }
+
+        // A cancelled ticket: "repo.cancelled", and no partial file.
+        let q = Queue::default();
+        let t = q.begin(OpKind::Compress, "test: cancelled copy");
+        q.cancel(t.id());
+        let dst = td.path().join("never.bin");
+        assert_eq!(governed_copy(OpKind::Compress, &src, &dst, &t).unwrap_err(), "repo.cancelled");
+        assert!(!dst.exists());
+    }
 }
 
 #[cfg(test)]
@@ -3487,6 +3702,12 @@ pub(crate) fn generate_repo_manifest_sync(
     // a file ends up written to the root of C:.
     let first_dir = PathBuf::from(&sources[0].dir);
 
+    // One Hash ticket for the manifest (the app command and the API route both land here).
+    // Hashing is background work: it steps aside at its checkpoints while a deploy or an
+    // install writes, and runs on the Hash pool, the size of the hash pool it used before.
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(OpKind::Hash, &format!("repo manifest ← {}", sources[0].dir));
+
     let output_path = match args.output_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(p) => PathBuf::from(p),
         None => first_dir.parent().unwrap_or(&first_dir).join("repo.json"),
@@ -3613,12 +3834,14 @@ pub(crate) fn generate_repo_manifest_sync(
             // `data.txt` is visited in the order the filesystem lists them, and '.' sorts
             // before '/'. The manifest gets signed, so the file order has to come from the
             // paths and not from how the directory happened to be enumerated.
-            let mut files: Vec<RepoFile> = crate::fs_utils::hash_pool().install(|| {
+            let mut files: Vec<RepoFile> = gov.pool(OpKind::Hash).install(|| {
                 use rayon::prelude::*;
                 todo.par_iter()
                     .map(|(rel, path, size, mtime)| {
+                        ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
                         // Chunk hashes only earn their size on files big enough to resume or patch.
                         let (hash, chunks) = compute_file_hash_and_chunks(path, *size as usize > CHUNK_SIZE)?;
+                        ticket.add_bytes(*size, 0);
                         Ok(RepoFile {
                             relative_path: rel.clone(),
                             size: *size,

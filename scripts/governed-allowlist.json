@@ -16,11 +16,11 @@
   "src/archive.rs": {
     "par_iter": {
       "count": 1,
-      "why": "TODO(G3c): extraction"
+      "why": "governed (G3c): the zip parallel pass runs inside ExtractControl::run_parallel = the Extract pool (commands/mod_archive.rs TicketExtract), each entry behind the ticket checkpoint"
     },
     "io::copy": {
-      "count": 1,
-      "why": "TODO(G3c): extraction"
+      "count": 2,
+      "why": "governed (G3c): one zip entry into its file (parallel and >8000-entry serial paths), between two checkpoints of the Extract ticket, bytes counted"
     }
   },
   "src/commands/apps.rs": {
@@ -56,13 +56,13 @@
   "src/commands/catalog_bundle.rs": {
     "spawn_blocking": {
       "count": 1,
-      "why": "TODO(G3c)"
+      "why": "governed (G3c): catalog_bundle_pack off the async runtime; pack_blocking holds a Compress ticket, checkpoint per file"
     }
   },
   "src/commands/crash.rs": {
     "thread::spawn": {
       "count": 2,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+      "why": "G3b: redact_existing_reports (startup) holds a Maintenance ticket, checkpoint per zip; exempt 1: finalize_and_close_app's shutdown report, the window closes only when it ends, and a background ticket would wait behind a deploy or a game session: the app would refuse to quit"
     },
     "fs::copy": {
       "count": 1,
@@ -77,26 +77,20 @@
   },
   "src/commands/disk.rs": {
     "spawn_blocking": {
-      "count": 1,
-      "why": "TODO(G3b): the disk benchmark (50 MB written and read) moves off the main thread here; it becomes a Maintenance ticket when the migration lands"
+      "count": 2,
+      "why": "governed (G3b): benchmark_disk holds a Maintenance ticket (background: waits for deploys and game mode; checkpoints only BETWEEN the timed phases); get_folder_size, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per directory"
     }
   },
   "src/commands/format_check.rs": {
     "spawn_blocking": {
       "count": 1,
-      "why": "TODO(G3b)"
+      "why": "exempt (G3b): bmm_validate reads ONE text document (a mod list / plugin JSON) to validate it; kept off the async runtime, no bulk I/O"
     }
   },
   "src/commands/hardware.rs": {
     "spawn_blocking": {
       "count": 1,
       "why": "exempt: one-shot hardware detection (driver queries, no bulk I/O), kept off the main thread"
-    }
-  },
-  "src/commands/image.rs": {
-    "fs::copy": {
-      "count": 1,
-      "why": "TODO(G3c): image decoding"
     }
   },
   "src/commands/installer_handoff.rs": {
@@ -108,65 +102,45 @@
   "src/commands/mapper.rs": {
     "spawn_blocking": {
       "count": 1,
-      "why": "TODO(G3b)"
+      "why": "governed (G3b): get_directory_tree walks under a Scan ticket (checkpoint before and after the jwalk pass; fan-out follows the preset, fs_utils::scan_parallelism)"
     }
   },
   "src/commands/mod_archive.rs": {
     "spawn_blocking": {
       "count": 2,
-      "why": "TODO(G3c): (re)archiving"
+      "why": "governed (G3c): unarchive (extract_to takes its Extract ticket inside) and rearchive (Compress ticket) moved off the async runtime"
     },
     "io::copy": {
       "count": 1,
-      "why": "TODO(G3c): (re)archiving"
+      "why": "governed (G3c): one file into the rearchive zip, between two checkpoints of the Compress ticket, bytes counted"
     }
   },
   "src/commands/mod_order.rs": {
     "spawn_blocking": {
       "count": 1,
-      "why": "TODO(G3b)"
-    },
-    "fs::copy": {
-      "count": 1,
-      "why": "TODO(G3b)"
+      "why": "governed (G3b): the load-order copy writes the game folder under a Deploy ticket through fs_utils::copy_file_governed (fs::copy as before under Balanced with no disk rule), checkpoint per file"
     }
   },
   "src/commands/modlist.rs": {
     "spawn_blocking": {
       "count": 2,
-      "why": "TODO(G3c)"
+      "why": "G3b: export_modlist's file walk holds a Hash ticket (Scan without hashes), checkpoint per file, a cancelled ticket cancels the export; exempt 1: the final write of the list itself, one small zip"
     }
   },
   "src/commands/modpack.rs": {
-    "fs::copy": {
-      "count": 2,
-      "why": "TODO(G3a)"
-    },
     "io::copy": {
       "count": 1,
-      "why": "TODO(G3a)"
+      "why": "governed (G3a): repair_modpack_mod archive entries, under the repair's Install ticket (is_cancelled per entry, bytes counted); inside an async command, so no blocking checkpoint"
     }
   },
   "src/commands/mods.rs": {
     "thread::spawn": {
       "count": 2,
-      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+      "why": "G3b: recalculate_mod_sha is governed (process_single_mod_hashing takes one Hash ticket per mod, checkpoints between files); populate_sha_queue is exempt: it only reads the in-memory state and fills the queue, no disk I/O. (The SHA and content-id background loops use thread::Builder: one Hash / Maintenance ticket per mod, never one for the loop's life)"
     },
     "spawn_blocking": {
-      "count": 10,
-      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
-    },
-    "fs::copy": {
-      "count": 1,
-      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
-    },
-    "fs_extra::": {
-      "count": 4,
-      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
-    },
-    "io::copy": {
-      "count": 3,
-      "why": "TODO(G3a/G3b): deploy, install, download, hashing"
+      "count": 12,
+      "why": "G3a governed 7 (enable_mod / disable_mod hold a Deploy ticket around the worker, disable_mods_for_profiles a Deploy ticket in unapply_mod_stacked, add_mod an Install ticket, download_mod a Download ticket, install_from_modlist Install + Download): they only move blocking work off the async runtime. G3b governed 4: scan_mods_folder (Scan ticket, checkpoint per entry), verify_integrity, get_mod_integrity and update_mod_hashes (Hash ticket, checkpoint per file; the last two hashed on the async runtime's worker before). Exempt 1: remove_mod's delete, a user click the UI awaits; Maintenance is background and would wait behind every deploy and a whole game session (one remove_dir_all, no copy loop)"
     }
   },
   "src/commands/net.rs": {
@@ -192,13 +166,31 @@
     },
     "io::copy": {
       "count": 1,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+      "why": "governed (G3a): extract_plugin_zip entries, under install_plugin's Download / install_plugin_from_file's Install ticket (is_cancelled per entry, bytes counted); install_plugin_bytes runs under its repo sync's ticket"
     }
   },
   "src/commands/proc.rs": {
     "thread::spawn": {
       "count": 1,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/repo.rs": {
+    "par_iter": {
+      "count": 2,
+      "why": "governed (G3c): export copy+hash pass on the Compress pool and manifest hashing on the Hash pool, both behind their ticket checkpoints"
+    },
+    "spawn_blocking": {
+      "count": 3,
+      "why": "governed (G3c): update_server_repo (Compress ticket), apply_direct_update (Install ticket), generate_repo_manifest (Hash ticket taken in generate_repo_manifest_sync), moved off the async runtime"
+    },
+    "fs::copy": {
+      "count": 4,
+      "why": "exempt: the bans.json / whitelist.json config files copied beside an exported repo or a generated mini-server; a few KB, one-shot"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "governed (G3c): apply_direct_update writes one archive entry, between two checkpoints of its Install ticket, bytes counted"
     }
   },
   "src/commands/repo_keyauth.rs": {
@@ -211,24 +203,6 @@
     "thread::spawn": {
       "count": 1,
       "why": "the task-preset TTL timer: sleeps, then clears a preset; no I/O, not work to govern"
-    }
-  },
-  "src/commands/repo.rs": {
-    "par_iter": {
-      "count": 2,
-      "why": "TODO(G3c): repo export and sync"
-    },
-    "spawn_blocking": {
-      "count": 3,
-      "why": "TODO(G3c): repo export and sync"
-    },
-    "fs::copy": {
-      "count": 6,
-      "why": "TODO(G3c): repo export and sync"
-    },
-    "io::copy": {
-      "count": 1,
-      "why": "TODO(G3c): repo export and sync"
     }
   },
   "src/commands/restore_bundle.rs": {
@@ -262,25 +236,25 @@
   "src/commands/verify.rs": {
     "spawn_blocking": {
       "count": 1,
-      "why": "TODO(G3b): hashing"
+      "why": "governed (G3b): hash_file holds a Hash ticket; checkpoint per 64 KiB chunk (SHA-256) or before the file (BLAKE3)"
     }
   },
   "src/fs_utils.rs": {
     "par_iter": {
       "count": 3,
-      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+      "why": "governed: G3a 2 (apply / unapply in the governor Deploy pool, or serially when the game or backup folder is on the system drive; the global pool only for Smart I/O off under Balanced, as before); G3b 1 (hash_bulk_in on the governor Hash pool, the old hash_pool() size under Balanced; per-file non-blocking must_yield, the caller checkpoints between passes)"
     },
     "fs::copy": {
       "count": 1,
-      "why": "TODO(G2/G3b): the copy engine and the hash pool"
-    },
-    "ThreadPoolBuilder": {
-      "count": 3,
-      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+      "why": "exempt (G3a): Smart I/O OFF under Balanced with no MB/s rule keeps today's full-speed CopyFileEx, still checkpointed on the deploy ticket; any other preset or a disk limit goes through the governed copy"
     },
     "update_mmap": {
       "count": 1,
-      "why": "TODO(G2/G3b): the copy engine and the hash pool"
+      "why": "governed (G3b): the BLAKE3 primitive itself (compute_file_hash, one file, one pass); bulk callers run it inside pool(Hash) under a Hash ticket, single-file callers (verify.rs hash_file, modpack) hold their own ticket"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3a): begin_ticket_async waits for a governor slot off the async runtime; no work of its own"
     }
   },
   "src/main.rs": {
@@ -315,6 +289,12 @@
     "fs::copy": {
       "count": 4,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/game_watch.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3b): game_find_logs, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per entry"
     }
   }
 }

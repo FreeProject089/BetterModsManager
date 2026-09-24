@@ -496,7 +496,7 @@ fn run_app_benchmark_blocking(
     for _ in 0..reps {
         let _ = std::fs::remove_dir_all(&copy_dst);
         let t = Instant::now();
-        for rel in &scanned { let _ = fs_utils::copy_file_force_smart(&mod_dir.join(rel), &copy_dst.join(rel), None, false); }
+        for rel in &scanned { let _ = fs_utils::copy_file_governed(crate::governor::config::OpKind::Deploy, &mod_dir.join(rel), &copy_dst.join(rel), None, false); }
         s.push(ms_of(t));
     }
     results.push(make("copy_full", "Copy — full speed", "io",
@@ -509,7 +509,7 @@ fn run_app_benchmark_blocking(
     for _ in 0..reps {
         let _ = std::fs::remove_dir_all(&copy_dst);
         let t = Instant::now();
-        for rel in &scanned { let _ = fs_utils::copy_file_force_smart(&mod_dir.join(rel), &copy_dst.join(rel), None, true); }
+        for rel in &scanned { let _ = fs_utils::copy_file_governed(crate::governor::config::OpKind::Deploy, &mod_dir.join(rel), &copy_dst.join(rel), None, true); }
         s.push(ms_of(t));
     }
     results.push(make("copy_smart", "Copy — Smart I/O", "io",
@@ -542,12 +542,12 @@ fn run_app_benchmark_blocking(
     for _ in 0..reps {
         fs_utils::reset_mod_op_cancel();
         let t = Instant::now();
-        let applied = fs_utils::apply_mod_stacked(&mod_dir, &game_dir, &backup_dir, &HashSet::new(), None, None, smart_io).map_err(|e| e.to_string())?;
+        let applied = fs_utils::apply_mod_stacked(&mod_dir, &game_dir, &backup_dir, &HashSet::new(), smart_io).map_err(|e| e.to_string())?;
         s.push(ms_of(t));
         applied_n = applied.len() as u64;
         // Reset for the next rep (untimed).
         let rm: Vec<String> = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
-        let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], None, smart_io);
+        let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], smart_io);
     }
     results.push(make("activate", "Activate mod (unpacked)", "activation",
         "Enabling an already-unpacked mod: backs up any original game files, then copies the mod's files into the game folder (stacked, parallel). This is what 'enable' does for a folder mod.",
@@ -568,11 +568,11 @@ fn run_app_benchmark_blocking(
         let _ = std::fs::remove_dir_all(&extract_dst);
         let t = Instant::now();
         archive::extract_to(&zip_path, &extract_dst).map_err(|e| e.to_string())?;
-        let applied = fs_utils::apply_mod_stacked(&extract_dst, &game_dir, &backup_dir, &HashSet::new(), None, None, smart_io).map_err(|e| e.to_string())?;
+        let applied = fs_utils::apply_mod_stacked(&extract_dst, &game_dir, &backup_dir, &HashSet::new(), smart_io).map_err(|e| e.to_string())?;
         s.push(ms_of(t));
         applied_zip_n = applied.len() as u64;
         let rm: Vec<String> = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
-        let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], None, smart_io);
+        let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], smart_io);
     }
     results.push(make("activate_zip", "Activate archived mod (.zip)", "activation",
         "Cold-enabling a zipped mod: decompress the .zip to cache, then apply its files. Includes the one-time extraction — the real cost the first time you enable an archived (.zip/.7z/.rar) mod. The gap vs the unpacked Activate is the decompression overhead.",
@@ -583,10 +583,10 @@ fn run_app_benchmark_blocking(
     let mut s = Vec::new();
     for _ in 0..reps {
         fs_utils::reset_mod_op_cancel();
-        let applied = fs_utils::apply_mod_stacked(&mod_dir, &game_dir, &backup_dir, &HashSet::new(), None, None, smart_io).map_err(|e| e.to_string())?;
+        let applied = fs_utils::apply_mod_stacked(&mod_dir, &game_dir, &backup_dir, &HashSet::new(), smart_io).map_err(|e| e.to_string())?;
         let rm: Vec<String> = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
         let t = Instant::now();
-        fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], None, smart_io).map_err(|e| e.to_string())?;
+        fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], smart_io).map_err(|e| e.to_string())?;
         s.push(ms_of(t));
     }
     results.push(make("deactivate", "Deactivate mod", "activation",
@@ -604,7 +604,7 @@ fn run_app_benchmark_blocking(
         fs_utils::reset_mod_op_cancel();
         let cm = cancel_mod.clone(); let cg = cancel_game.clone(); let cb = cancel_backup.clone();
         let handle = std::thread::spawn(move || {
-            let _ = fs_utils::apply_mod_stacked(&cm, &cg, &cb, &HashSet::new(), None, None, true);
+            let _ = fs_utils::apply_mod_stacked(&cm, &cg, &cb, &HashSet::new(), true);
         });
         std::thread::sleep(std::time::Duration::from_millis(40)); // let it get going
         let cancel_t = Instant::now();

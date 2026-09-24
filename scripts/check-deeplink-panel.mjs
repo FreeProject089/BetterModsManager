@@ -103,6 +103,7 @@ const actions = new Set(real.map((a) => a.action));
 const NO_ENDPOINT = new Set([
   'api',                                        // the generic passthrough — it IS every endpoint
   'benchmark/open', 'docs/open', 'view/open',   // open a screen
+  'resources/open',                             // opens the Storage manager's dashboard
   'settings/layout', 'settings/navbar',
   'theme/apply', 'theme/editor', 'theme/import', 'theme/import-inline',
   'language/import-inline',                     // the payload rides in the link, not a body
