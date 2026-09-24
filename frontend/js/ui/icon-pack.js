@@ -5,6 +5,7 @@
 // share path (profiles, tags, plugins, repos) because it is just data:
 //   "lucide:<name>"   stroke glyph from assets/icons/lucide.json
 //   "si:<slug>"       brand glyph from assets/icons/simple-icons.json
+//   "iso:<name>"      full-colour isometric drawing, assets/icons/iso/<name>.svg (G5)
 //   "data:image/..."  a user-uploaded image (small, embedded)
 // Anything else is NOT an icon-pack ref — callers keep their legacy handling.
 //
@@ -14,6 +15,7 @@
 import { t } from '../core/i18n.js';
 import { raiseAboveAll } from './layer.js';
 import { escAttr, escHtml } from '../core/utils.js';
+import { ISO_NAMES, isoIconUrl } from '../core/icon-cdn.js';
 let _lucide = null;
 let _simple = null;
 let _lucideP = null;
@@ -88,7 +90,8 @@ const OUR_ICONS = {
 /** Is this string an icon-pack ref this module can render? */
 export function isPackIcon(ref) {
     return typeof ref === 'string'
-        && (ref.startsWith('lucide:') || ref.startsWith('si:') || ref.startsWith('data:image/') || ref.startsWith('app:'));
+        && (ref.startsWith('lucide:') || ref.startsWith('si:') || ref.startsWith('data:image/') || ref.startsWith('app:')
+            || ref.startsWith('iso:'));
 }
 /** Ensure the pack a ref needs is in memory (no-op for data: URIs). */
 export async function ensurePackFor(ref) {
@@ -149,6 +152,13 @@ export function renderPackIcon(ref, size = 16, color) {
         const r = Math.max(4, Math.round(size * 0.22));
         const pad = Math.max(1, Math.round(size * 0.11));
         return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;background:#fff;border-radius:${r}px;padding:${pad}px;box-sizing:border-box;flex-shrink:0"><img src="${escAttr(our.src)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" /></span>`;
+    }
+    // Isometric (G5): a full-colour drawing, so an <img> and never a tint: a colour carried by
+    // the ref is ignored rather than flattening the drawing into one silhouette. Bundled with
+    // the app (no pack to load), and a name outside the closed list renders '' like any miss.
+    if (ref.startsWith('iso:')) {
+        const src = isoIconUrl(ref);
+        return src ? `<img src="${escAttr(src)}" alt="" style="width:${size}px;height:${size}px;object-fit:contain;flex-shrink:0" />` : '';
     }
     if (ref.startsWith('lucide:')) {
         const node = _lucide?.[ref.slice(7)];
@@ -293,6 +303,7 @@ export function openIconPicker(opts = {}) {
                         <button class="ipk-tab" data-src="ours">${t('iconpack.ours') || 'Better*'}</button>
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
+                        <button class="ipk-tab" data-src="iso">${t('iconpack.iso') || 'Isometric'}</button>
                         <button class="ipk-tab" data-src="mine">${t('iconpack.mine') || 'Yours'}</button>
                         <label class="ipk-tab ipk-tab-upload" for="ipk-upload">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
@@ -310,6 +321,7 @@ export function openIconPicker(opts = {}) {
                 <div class="ipk-grid" id="ipk-grid"></div>
                 <div class="ipk-foot">
                     <span class="ipk-count"><b id="ipk-count"></b> ${escHtml(t('iconpack.available') || 'available')}</span>
+                    <span class="ipk-credit" id="ipk-iso-credit" style="display:none;font-size:11px;opacity:.75;margin-left:8px" title="${escAttr(t('iconpack.isoLicences') || 'Licences and attributions: assets/icons/iso/LICENSES.txt')}">${escHtml(t('iconpack.isoCredit') || 'Isoflow, MI2, Jolloficons (MIT)')}</span>
                     <div class="ipk-colour">
                         <label class="ipk-auto" id="ipk-auto-wrap" title="${escAttr(t('iconpack.autoTip') || 'Use each brand’s official colour')}">
                             <input type="checkbox" id="ipk-auto"> ${escHtml(t('iconpack.auto') || 'Brand colour')}
@@ -349,7 +361,7 @@ export function openIconPicker(opts = {}) {
                 const mine = savedIcons();
                 return q ? mine.filter((x) => x.name.toLowerCase().includes(q)).map((x) => x.id) : mine.map((x) => x.id);
             }
-            const pool = src === 'lucide' ? Object.keys(_lucide || {}) : Object.keys(_simple || {});
+            const pool = src === 'lucide' ? Object.keys(_lucide || {}) : src === 'iso' ? [...ISO_NAMES] : Object.keys(_simple || {});
             const q = search.value.trim().toLowerCase();
             if (!q)
                 return pool;
@@ -372,6 +384,11 @@ export function openIconPicker(opts = {}) {
                 const our = OUR_ICONS[n];
                 return `<button type="button" class="ipk-cell ipk-cell-mine" data-ref="${escAttr(n)}" title="${escAttr(our.label)}">`
                     + `${renderPackIcon(n, 22)}<span class="ipk-name">${escHtml(our.label)}</span></button>`;
+            }
+            if (src === 'iso') {
+                // A full-colour drawing: no colour rides the ref, whatever the tint controls say.
+                return `<button type="button" class="ipk-cell ipk-cell-mine" data-ref="${escAttr(`iso:${n}`)}" title="${escAttr(`iso:${n}`)}">`
+                    + `${renderPackIcon(`iso:${n}`, 26)}<span class="ipk-name">${escHtml(n)}</span></button>`;
             }
             if (src === 'mine') {
                 // `n` IS the data URL — a saved icon has no pack prefix, because what the
@@ -407,7 +424,8 @@ export function openIconPicker(opts = {}) {
         const syncColourUi = () => {
             tint.disabled = !tintOn.checked;
             overlay.querySelector('#ipk-auto-wrap').style.display = src === 'si' ? '' : 'none';
-            overlay.querySelector('.ipk-colour').style.display = (src === 'mine' || src === 'ours') ? 'none' : '';
+            overlay.querySelector('.ipk-colour').style.display = (src === 'mine' || src === 'ours' || src === 'iso') ? 'none' : '';
+            overlay.querySelector('#ipk-iso-credit').style.display = src === 'iso' ? '' : 'none';
             if (src === 'si' && autoBox.checked) {
                 tintOn.checked = false;
                 tint.disabled = true;
@@ -433,7 +451,7 @@ export function openIconPicker(opts = {}) {
             if (!cell?.dataset.ref)
                 return;
             // A saved/our icon is already a complete answer; only tintable pack refs take a colour.
-            done((src === 'mine' || src === 'ours') ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
+            done((src === 'mine' || src === 'ours' || src === 'iso') ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
         });
         // Append the new page instead of re-rendering everything: a full rebuild
         // made each successive click slower (quadratic over 15 pages of brands).
@@ -481,7 +499,7 @@ export function openIconPicker(opts = {}) {
             };
             reader.readAsDataURL(file);
         });
-        const initSrc = opts.current?.startsWith('si:') ? 'si' : opts.current?.startsWith('app:') ? 'ours' : null;
+        const initSrc = opts.current?.startsWith('si:') ? 'si' : opts.current?.startsWith('app:') ? 'ours' : opts.current?.startsWith('iso:') ? 'iso' : null;
         if (initSrc) {
             src = initSrc;
             overlay.querySelectorAll('.ipk-tab').forEach(x => x.classList.toggle('active', x.dataset.src === initSrc));

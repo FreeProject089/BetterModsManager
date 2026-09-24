@@ -62,3 +62,41 @@ export function phosphorIconUrl(ref: string): string {
     if (!ENABLED || !r) return '';
     return `https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/${r}.svg`;
 }
+
+/**
+ * The isometric icons (`iso:server`, `iso:cube-cloud`, `iso:solid-play`), G5.
+ *
+ * Full-colour SVGs from three third-party sets whose licences allow redistribution inside
+ * software (Isoflow isopack, MI2, Jolloficons: MIT; MI2's glyphs are Material Design Icons,
+ * Apache-2.0). They ship WITH the app under assets/icons/iso/, next to LICENSES.txt, which
+ * names every file's origin and carries the licence texts. Same spelling as B.MD on the
+ * website, so an icon named once draws in both places.
+ *
+ * Bundled, not fetched: the CDN switch above does not apply, and nothing leaves the machine.
+ * The list is closed, so a name outside it resolves to '' (callers fall back to their generic
+ * glyph) and nothing a document writes can become a path. tests/iso-icons.test.mjs fails when
+ * this list and the files on disk disagree.
+ */
+export const ISO_NAMES: readonly string[] = ('block cache card-terminal cloud cronjob cube desktop diamond dns document firewall '
+    + 'function-module image laptop load-balancer lock mail mail-multiple mobile-device office package-module '
+    + 'payment-card plane printer pyramid queue router server speech sphere storage switch-module tower truck-2 '
+    + 'truck user vm cube-application cube-blockchain cube-clinic cube-cloud cube-money cube-patient cube-payer '
+    + 'cube-provider cube-query cube-researcher cube-security cube-security-2 cube-security-3 cube-storage '
+    + 'cube-storage-2 solid-app-menu solid-arrow-down solid-arrow-left solid-arrow-right solid-arrow-up '
+    + 'solid-badge solid-boxes solid-camera solid-caution solid-chart-2 solid-chart solid-dot-vertical solid-eyes '
+    + 'solid-fast-forward solid-file-add solid-file solid-flash solid-guard solid-message solid-minus solid-next '
+    + 'solid-notepad solid-pause solid-play solid-plus solid-previous solid-rewind solid-send solid-stop '
+    + 'solid-user-add solid-user-settings').split(' ');
+const ISO_SET = new Set(ISO_NAMES);
+
+/** `iso:server` / `isometric:server` → `server` when it is one of ISO_NAMES, else null. */
+export function isoRef(name: string): string | null {
+    const m = String(name || '').trim().toLowerCase().match(/^(?:iso|isometric):([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    return m && ISO_SET.has(m[1]) ? m[1] : null;
+}
+
+/** The bundled file for an `iso:` name, or '' when it is not one. */
+export function isoIconUrl(name: string): string {
+    const n = isoRef(name);
+    return n ? `assets/icons/iso/${n}.svg` : '';
+}

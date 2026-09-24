@@ -35,6 +35,7 @@ import { markMath } from '../ui/md-math.js';
 import { replaceEmoji } from '../core/emoji.js';
 // Rendering is untrusted by default — see md-safe.ts for what that costs and why.
 import { sanitizeDocHtml, safeDocUrl } from './md-safe.js';
+import { isoIconUrl } from '../core/icon-cdn.js';
 
 const CALLOUT_KIND: Record<string, string> = {
   note: 'info', info: 'info', hint: 'tip', tip: 'tip', success: 'success', check: 'success',
@@ -147,6 +148,9 @@ function inline(s: string): string {
     // Phosphor (`ph:rocket`, `ph-bold:rocket`): a mask too, hydrated from `data-ph`.
     const ph = n.match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/);
     if (ph) { const w = ph[1] || 'regular'; return keep(`<span class="doc-icon doc-icon-mask" data-ph="${w}/${ph[2]}${w === 'regular' ? '' : `-${w}`}"></span>`); }
+    // Isometric (G5): `iso:server`, bundled under assets/icons/iso, drawn in its own colours.
+    const iso = isoIconUrl(n);
+    if (iso) return keep(`<img class="doc-icon doc-icon-iso" src="${iso}" alt="" loading="lazy">`);
     const brand = n.match(/^(?:simple|si):(.+)$/);
     if (brand) return keep(`<img class="doc-icon" src="https://cdn.simpleicons.org/${brand[1]}" alt="" loading="lazy">`);
     return keep(`<span class="doc-icon doc-icon-mask" data-lucide="${n}"></span>`);

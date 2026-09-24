@@ -8004,5 +8004,8 @@
   "resources.link.presetDo": "Switch BMM’s resource preset. It stays until you change it in Settings > Storage.",
   "resources.link.presetSet": "Resource preset: {name}",
   "dlg.why.bad-preset": "a link can only name one of the presets: silent, balanced, max, custom.",
-  "dlg.why.burst": "another link asked to change the preset less than 10 seconds ago."
+  "dlg.why.burst": "another link asked to change the preset less than 10 seconds ago.",
+  "iconpack.iso": "Isometric",
+  "iconpack.isoCredit": "Isoflow, MI2, Jolloficons (MIT)",
+  "iconpack.isoLicences": "Licences and attributions: assets/icons/iso/LICENSES.txt"
 }

@@ -18,7 +18,7 @@ import { replaceEmoji } from '../core/emoji.js';
 // answers to that question is one too many, and this file had none.
 import { safeDocUrl } from '../docs/md-safe.js';
 // The two icon CDNs, in one place with a switch — see core/icon-cdn.ts.
-import { brandIconUrl, phosphorRef } from '../core/icon-cdn.js';
+import { brandIconUrl, phosphorRef, isoIconUrl } from '../core/icon-cdn.js';
 const CALLOUT_ALERT = {
     // `check` and `error` are the site's aliases for success and danger. They were absent
     // here, so a post using either rendered its body with no callout around it at all — not a
@@ -138,6 +138,10 @@ function mdInline(s) {
 // into a real mask style AFTER sanitisation (see applyMaskIcons in update-notes.ts).
 export function iconImg(name) {
     const n = String(name || '').trim().toLowerCase();
+    // Isometric (G5): a bundled full-colour drawing, so a plain <img> (a mask would flatten it).
+    const iso = isoIconUrl(n);
+    if (iso)
+        return `<img class="md-inline-icon md-inline-icon--iso" src="${escAttr(iso)}" alt="" loading="lazy">`;
     // Phosphor: the same `ph:` spelling as the website, drawn as a mask like a lucide name —
     // the hydrator (update-notes' sanitiser hook) turns `data-ph` into the mask URL.
     const ph = phosphorRef(n);
