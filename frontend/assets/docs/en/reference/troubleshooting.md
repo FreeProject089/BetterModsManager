@@ -83,16 +83,48 @@ BMM will re-identify it by content, so it keeps its identity.
 **Settings → Storage.** Turn on **Smart I/O** and run **Auto-Calibration** once — it benchmarks your
 drives and paces the copies. If it still stutters, set an explicit **MB/s cap** for that disk.
 
+If it is the game that stutters while BMM works, pick **Quiet** at the top of the Storage Manager, or
+set **Game mode** to **Force on** while you play: BMM then does one thing at a time, gently, and
+holds background hashing until you switch it back. Game mode does not yet switch itself on when a
+game starts. See [The resource governor](doc-page:how-it-works/resources).
+
 Worth knowing: if the game or backup folder is on your **OS drive**, BMM already forces copies down to
-a single thread regardless of your settings, because Windows itself needs the headroom. Moving the mods
-folder off `C:` is the biggest single win available.
+a single thread under the Quiet and Balanced presets, because Windows itself needs the headroom
+(**Everything for BMM** does not). Moving the mods folder off `C:` is the biggest single win available.
+
+### An operation stays "waiting" or "paused" in the Storage Manager
+
+The queue at the top of the Storage Manager says why BMM is not doing something yet. In order of
+likelihood:
+
+- **Its kind is full.** Each kind of work (deploy, install, hash…) runs a set number at once: one
+  under Quiet, two under Balanced. The next one starts when one ends.
+- **It is background work.** Hashing and maintenance, disk benchmarks included, step aside while
+  mods are being enabled or installed, and resume on their own afterwards.
+- **Game mode is on.** It pauses hashing and maintenance until it ends. **Force on** stays on until
+  you set it back to **Detect it** or **Force off**, including after the game has closed.
+- **Somebody pressed Pause all**, or a scheduled task with the **Resources** permission paused the
+  queue. **Resume all** releases everything.
+
+A preset set by a scheduled task "for this task only" ends with the task, and after 2 hours at the
+latest even if the task crashed.
+
+### I set a MB/s limit for hashing or extraction and nothing changed
+
+Expected. In the advanced per-disk table, MB/s and the buffer act on the copies BMM makes itself:
+deploying, backing up originals, installing a mod folder, image copies. Extraction, compression,
+scans, hashing and downloads keep the value but are governed by their slots and thread pool
+instead, and the **Priority** column is not passed to Windows yet. See
+[What each column acts on](doc-page:how-it-works/resources#what-each-column-acts-on).
 
 ### Activation is slower than a plain file copy
 
 By design. Peak throughput is traded for a responsive window: capped thread pools, a yield budget on
 the copy loop, and a worker running at background IO priority. See
 [Performance](doc-page:how-it-works/performance), and run the built-in benchmark to see the real numbers
-on your hardware.
+on your hardware. If you would rather have speed, **Everything for BMM** at the top of the Storage
+Manager lifts most of those caps; check the MB/s limit on the disk's card too, which auto-calibration
+sets at about 70% of the measured write speed.
 
 ### BMM uses a lot of memory after a while
 

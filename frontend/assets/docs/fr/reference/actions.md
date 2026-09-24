@@ -87,11 +87,16 @@ Regroupées exactement comme dans la liste déroulante des actions.
 | Appliquer la limite de vitesse disque | Fixe un plafond Mo/s par disque — laisse vide pour reprendre la valeur suggérée par un benchmark précédent, `0` = illimité | — |
 | Auto-calibration des performances | Active/désactive l'auto-calibration | — |
 | Smart I/O | Active/désactive [Smart I/O](doc-page:features/storage) | — |
-| Activer/désactiver un réglage (avancé) | Bascule **n'importe quel** réglage booléen par sa clé | — |
+| Activer/désactiver un réglage (avancé) | Active ou désactive l'un de quatre réglages de stockage : **Calibration automatique du disque**, **E/S intelligentes**, **Alerte d’espace faible**, **Calcul des empreintes en arrière-plan**. Toute autre clé est refusée, avec la liste de celles autorisées | — |
+| Ressources : choisir le preset | **Silencieux**, **Équilibré** ou **Tout pour BMM**, pour cette tâche seulement (par défaut : retour au tien à la fin de la tâche, 2 h au plus) ou pour de bon ; au choix **même pendant un jeu**. Demande la permission de tâche **Ressources** | — |
+| Ressources : mode jeu | **Le détecter**, **Forcer**, **Arrêter**. Demande **Ressources** | — |
+| Ressources : suspendre ou reprendre la file | **Suspendre tout ce qui attend**, ou **Tout reprendre**. Demande **Ressources** | — |
 | Vérifier l'espace disque libre | Lit l'espace libre | `disk.free_gb`, `disk.total_gb`, `disk.free_percent` |
 
 Ces valeurs captées sont ce que compare la condition `value` — c'est ainsi qu'on construit
-« *benchmarke le disque, et s'il est sous 50 Mo/s, préviens-moi* ».
+« *benchmarke le disque, et s'il est sous 50 Mo/s, préviens-moi* ». Les trois actions **Ressources**
+pilotent le [gouverneur de ressources](doc-page:how-it-works/resources) ; voir
+[L'intensité de travail de BMM](doc-page:features/scheduler#lintensite-de-travail-de-bmm).
 
 ### Confidentialité & enregistreur
 
@@ -210,6 +215,9 @@ Utilisées par **SI**, **ATTENDRE** et **BOUCLE**. Chaque condition a une case *
 | `dayOfWeek` | Aujourd'hui est un des jours choisis |
 | `timeRange` | L'horloge est dans une plage (**passe minuit**) |
 | `commandSucceeds` | Une commande externe sort en `0` — note que ça **exécute le programme** rien que pour évaluer la condition |
+| `gameRunning` | Le mode jeu est actif |
+| `resourcesPresetIs` | Le preset de ressources **en vigueur** (le tien, celui d'une tâche ou du mode jeu) est celui que tu as choisi |
+| `queueIdle` | BMM n'a aucune opération en cours ni en attente |
 
 !!! note "Une donnée absente est fausse, pas une erreur"
 
@@ -218,7 +226,8 @@ Utilisées par **SI**, **ATTENDRE** et **BOUCLE**. Chaque condition a une case *
 
 **Variables captables :** `disk.read_mbps`, `disk.write_mbps`, `disk.suggested_limit`,
 `benchmark.mbps`, `benchmark.total_ms`, `lasttask.ok` (dans la liste), plus `disk.free_gb`,
-`disk.total_gb`, `disk.free_percent`, `update.available` et toute variable que tu définis.
+`disk.total_gb`, `disk.free_percent`, `update.available`, `queue.length` (opérations en cours ou
+en attente, lu au moment où la condition est vérifiée) et toute variable que tu définis.
 
 ---
 

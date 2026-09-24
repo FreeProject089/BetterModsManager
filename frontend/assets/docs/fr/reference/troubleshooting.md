@@ -85,16 +85,53 @@ tel nom, renomme le dossier du mod — BMM le ré-identifiera par son contenu, i
 tes disques et cadence les copies. Si ça saccade encore, pose un **plafond Mo/s** explicite pour ce
 disque.
 
+Si c'est le jeu qui saccade pendant que BMM travaille, choisis **Silencieux** en haut du Gestionnaire
+de Stockage, ou mets le **Mode jeu** sur **Forcer** pendant que tu joues : BMM fait alors une chose à
+la fois, doucement, et retient le calcul des empreintes de fond jusqu'à ce que tu le remettes. Le
+mode jeu ne s'active pas encore tout seul au lancement d'un jeu. Voir
+[Le gouverneur de ressources](doc-page:how-it-works/resources).
+
 À savoir : si le dossier de destination ou de sauvegarde est sur ton **disque système**, BMM réduit déjà les
-copies à un seul thread quel que soit ton réglage, parce que Windows lui-même a besoin de la marge.
-Déplacer le dossier mods hors de `C:` est le plus gros gain disponible.
+copies à un seul thread sous les presets Silencieux et Équilibré, parce que Windows lui-même a besoin
+de la marge (**Tout pour BMM** ne le fait pas). Déplacer le dossier mods hors de `C:` est le plus gros
+gain disponible.
+
+### Une opération reste « en attente » ou « suspendu » dans le Gestionnaire de Stockage
+
+La file en haut du Gestionnaire de Stockage dit pourquoi BMM ne fait pas encore quelque chose. Du plus
+probable au moins probable :
+
+- **Sa sorte est pleine.** Chaque sorte de travail (déploiement, installation, empreintes…) en fait
+  tourner un nombre fixe à la fois : un en Silencieux, deux en Équilibré. La suivante démarre quand
+  une se termine.
+- **C'est du travail de fond.** Les empreintes et la maintenance, benchmarks de disque compris,
+  s'effacent pendant qu'on active ou installe des mods, et reprennent seuls ensuite.
+- **Le mode jeu est actif.** Il suspend les empreintes et la maintenance jusqu'à ce qu'il se termine.
+  **Forcer** reste actif jusqu'à ce que tu le remettes sur **Le détecter** ou **Arrêter**, y compris
+  après la fermeture du jeu.
+- **Quelqu'un a appuyé sur Tout suspendre**, ou une tâche planifiée avec la permission
+  **Ressources** a suspendu la file. **Tout reprendre** libère tout.
+
+Un preset choisi par une tâche planifiée « pour cette tâche seulement » se termine avec la tâche, et
+au bout de 2 heures au plus même si la tâche a planté.
+
+### J'ai mis une limite en Mo/s pour les empreintes ou l'extraction et rien n'a changé
+
+C'est normal. Dans le tableau avancé par disque, les Mo/s et le tampon agissent sur les copies que BMM
+fait lui-même : déploiement, sauvegarde des originaux, installation du dossier d'un mod, copies
+d'images. L'extraction, la compression, les analyses, les empreintes et les téléchargements gardent
+la valeur mais sont gouvernés par leurs créneaux et leur pool de threads, et la colonne **Priorité**
+n'est pas encore transmise à Windows. Voir
+[Sur quoi agit chaque colonne](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
 ### L'activation est plus lente qu'une simple copie de fichiers
 
 Par conception. Le débit maximal est échangé contre une fenêtre réactive : pools de threads plafonnés,
 budget de yield sur la boucle de copie, et un worker en priorité I/O de fond. Voir
 [Performances](doc-page:how-it-works/performance), et lance le benchmark intégré pour voir les vrais chiffres
-sur ton matériel.
+sur ton matériel. Si tu préfères la vitesse, **Tout pour BMM** en haut du Gestionnaire de Stockage lève
+la plupart de ces plafonds ; regarde aussi la limite en Mo/s sur la carte du disque, que
+l'auto-calibration règle à environ 70 % de la vitesse d'écriture mesurée.
 
 ### BMM consomme beaucoup de mémoire au bout d'un moment
 

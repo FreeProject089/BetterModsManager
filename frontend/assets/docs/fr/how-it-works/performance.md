@@ -10,20 +10,23 @@ gagne**. Presque tous les chiffres de cette page sont un sacrifice délibéré d
 
 ## Les trois chemins de copie
 
-Chaque copie de fichier prend exactement l'une des trois routes, choisie à chaque appel :
+Chaque copie de fichier de mod passe par le [gouverneur de ressources](doc-page:how-it-works/resources), et sous le
+preset par défaut **Équilibré** elle prend exactement l'une des trois routes, choisie à chaque appel :
 
 | Chemin | Quand | Comment |
 |---|---|---|
-| **Bridé** | une limite Mo/s par disque est réglée pour ce chemin | blocs de 128 Ko, pauses pour tenir le débit visé |
-| **Smart I/O** | Smart I/O activé, aucune limite | blocs de 1 Mio, un court yield sur un **budget d'octets** |
+| **Bridé** | le disque sur lequel on écrit a une limite en Mo/s | blocs de 128 Kio, qui puisent dans **un budget de vitesse par disque** partagé par toutes les copies vers lui |
+| **Smart I/O** | Smart I/O activé, aucune limite | blocs de 1 Mio, un yield de 150 µs sur un **budget de 16 Mio** |
 | **Pleine vitesse** | Smart I/O désactivé, aucune limite | `std::fs::copy` nu — l'OS fait tout |
 
-Les chiffres de Smart I/O ont été mesurés, pas devinés. Le code le dit :
+Les chiffres de Smart I/O ont été mesurés, pas devinés : l'ancienne boucle, des blocs de 256 Ko avec
+une pause après chacun, coûtait environ 37 % par rapport à une copie pleine vitesse, et budgétiser le
+yield en a récupéré l'essentiel tout en gardant la fenêtre réactive.
 
-> *« Blocs de 1 Mio (moins d'appels système read/write → plus proche de la copie pleine vitesse), et
-> yield sur un budget d'octets de ~16 Mio plutôt qu'à chaque bloc. L'ancien 256 Ko + sleep par bloc
-> coûtait ~37% par rapport à la pleine vitesse ; budgétiser le yield garde l'UI réactive tout en
-> récupérant l'essentiel de ce débit. »*
+Avant, chaque copie cadençait la limite de son côté, si bien que deux threads de copie écrivaient un
+disque limité à 40 Mo/s à 80 Mo/s. Le budget par disque, c'est ce qui fait que le chiffre veut dire
+ce qu'il dit. Les autres presets changent le tampon, la pause et le parallélisme : voir
+[Les presets](doc-page:how-it-works/resources#les-presets).
 
 !!! warning "BMM ne fait jamais de hard-link ni de lien symbolique"
 
@@ -39,31 +42,27 @@ Les chiffres de Smart I/O ont été mesurés, pas devinés. Le code le dit :
 
 ```mermaid
 flowchart TB
-    JOB["Tâche de déploiement / copie"] --> SYS{"cible sur le<br/>disque système ?"}
-    SYS -- oui --> ONE["1 thread — forcé,<br/>quel que soit le réglage"]
-    SYS -- non --> TWO["2 threads max<br/>(Smart I/O activé)"]
-    ONE --> LIM{"un plafond Mo/s<br/>sur ce disque ?"}
+    JOB["Tâche de déploiement / copie<br/>(preset Équilibré)"] --> SYS{"dossier du jeu ou de sauvegarde<br/>sur le disque système ?"}
+    SYS -- oui --> ONE["un fichier à la fois"]
+    SYS -- non --> TWO["le pool Déploiement<br/>2 threads (Smart I/O activé)"]
+    ONE --> LIM{"une limite Mo/s<br/>sur ce disque ?"}
     TWO --> LIM
-    LIM -- oui --> THR["chemin bridé<br/>128 Ko + pause"]
+    LIM -- oui --> THR["chemin bridé<br/>128 Kio, budget du disque partagé"]
     LIM -- non --> SM["chemin Smart I/O<br/>1 Mio + yield budgété"]
 ```
 
-Le parallélisme est plafonné à **2 threads** — *« pour que les copies de fichiers ne saturent jamais
-tous les cœurs CPU (ce qui est la cause du gel "Ne répond pas" de l'UI) »*. Et si le dossier de destination
-ou le dossier de sauvegarde vit sur le disque système, ça descend à **un seul thread, quel que soit
-ton réglage** :
+Sous Équilibré, un déploiement copie sur **2 threads**, pour que les copies de fichiers ne saturent
+jamais tous les cœurs CPU, ce qui fige une fenêtre en *Ne répond pas*. Et si le dossier de
+destination ou le dossier de sauvegarde vit sur le disque système, il copie **un fichier à la fois**,
+pour que Windows lui-même reste réactif pendant une grosse copie de mods. **Silencieux** copie un
+fichier à la fois partout ; **Tout pour BMM** lève ces deux plafonds, sauf sur un disque dur.
 
-> *« Renvoie true si `path` vit sur le même disque que l'OS (typiquement C:). Sert à réduire les I/O
-> parallèles à un seul thread pour que Windows lui-même reste réactif pendant les grosses copies de
-> mods. »*
-
-Il y a **trois pools de threads distincts**, chacun plafonné pour sa propre raison :
+Les pools de threads sont plafonnés aussi, chacun pour sa propre raison :
 
 | Pool | Taille | Pourquoi |
 |---|---|---|
 | Rayon global | plafonné, piles de 512 Ko | *« Empêcher Rayon de monopoliser 100% du CPU et de faire ramer l'OS »* — le travail parallèle de BMM ne récurse jamais profondément, ce qui économise ~7 Mo de RSS engagé par thread |
-| Hachage | ≤ 4 (environ la moitié des cœurs) | BLAKE3 est assez rapide pour manger tous les cœurs — voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) |
-| Smart I/O | 1–2 | le chemin de copie ci-dessus |
+| Un par sorte de travail (gouverneur) | sous Équilibré : empreintes ≤ 4 (environ la moitié des cœurs), déploiement 2, extraction et compression la taille du pool global | Chaque sorte a le sien, dimensionné par le preset, pour qu'un calcul d'empreintes et un déploiement ne se disputent jamais un pool. BLAKE3 seul est assez rapide pour manger tous les cœurs — voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) |
 
 L'allocateur est aussi remplacé : **mimalloc** à la place du HeapAlloc par défaut de Windows, pour un
 *« working set du processus 30 à 60% plus petit, plus beaucoup moins de fragmentation »* — BMM alloue
@@ -93,10 +92,14 @@ Les grosses applications et désapplications ne tournent pas du tout dans l'app.
   que toute écriture partielle soit revertie »*. Un déploiement annulé ne laisse pas la moitié d'un
   mod dans ton dossier de destination.
 
-Dans l'app, chaque boucle de copie interroge un drapeau d'annulation *« pour que le clic d'annulation
-de l'utilisateur puisse interrompre les grosses copies de mods presque instantanément au lieu
-d'attendre la fin du fichier entier »*, et un verrou global signifie **une seule opération de mod à la
-fois** — jamais deux applications en course sur le même dossier de destination.
+Le worker est un processus séparé qui a son propre gouverneur : l'app lui transmet donc son
+document de ressources, et il copie sous le même preset et avec les mêmes limites par disque que
+l'app.
+
+Dans l'app, une copie vérifie son ticket du gouverneur entre deux blocs : le clic d'annulation
+interrompt une grosse copie de mod presque aussitôt au lieu d'attendre la fin du fichier entier, et
+le fichier à moitié écrit est supprimé. Un verrou global signifie toujours **une seule opération de
+mod à la fois** — jamais deux applications en course sur le même dossier de destination.
 
 ---
 

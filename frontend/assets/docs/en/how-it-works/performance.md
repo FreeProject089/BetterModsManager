@@ -9,19 +9,22 @@ page is a deliberate sacrifice of peak throughput to avoid a frozen window.
 
 ## The three copy paths
 
-Every file copy takes exactly one of three routes, picked per call:
+Every mod file copy goes through the [resource governor](doc-page:how-it-works/resources), and under the default
+**Balanced** preset it takes exactly one of three routes, picked per call:
 
 | Path | When | How |
 |---|---|---|
-| **Throttled** | a per-disk MB/s limit is set for that path | 128 KB chunks, sleeping to hit the target rate |
-| **Smart I/O** | Smart I/O is on, no limit | 1 MiB chunks, a short yield on a **byte budget** |
+| **Throttled** | the disk being written to has a MB/s limit | 128 KiB chunks, drawing on **one speed budget per disk** shared by every copy to it |
+| **Smart I/O** | Smart I/O is on, no limit | 1 MiB chunks, a 150 µs yield on a **16 MiB byte budget** |
 | **Full speed** | Smart I/O off, no limit | plain `std::fs::copy` — the OS does it all |
 
-The Smart I/O numbers were measured, not guessed. The code says so:
+The Smart I/O numbers were measured, not guessed: the older loop, 256 KB chunks with a sleep after
+every one, cost about 37% against a full-speed copy, and budgeting the yield recovered most of it
+while keeping the window responsive.
 
-> *"1 MiB chunks (fewer read/write syscalls → closer to full-speed copy), and yield on a ~16 MiB
-> byte budget rather than every chunk. The old 256 KB + per-chunk sleep cost ~37% vs full speed;
-> budgeting the yield keeps the UI responsive while recovering most of that throughput."*
+The limit used to be paced by each copy on its own, so two copy threads wrote a 40 MB/s disk at
+80 MB/s. The per-disk budget is what makes the number mean what it says. The other presets change
+the buffer, the pause and the parallelism: see [Presets](doc-page:how-it-works/resources#presets).
 
 !!! warning "BMM never hard-links or symlinks"
 
@@ -37,29 +40,27 @@ The Smart I/O numbers were measured, not guessed. The code says so:
 
 ```mermaid
 flowchart TB
-    JOB["Deploy / copy job"] --> SYS{"target on the<br/>OS drive?"}
-    SYS -- yes --> ONE["1 thread — forced,<br/>whatever the setting says"]
-    SYS -- no --> TWO["2 threads max<br/>(Smart I/O on)"]
-    ONE --> LIM{"a MB/s cap<br/>on this disk?"}
+    JOB["Deploy / copy job<br/>(Balanced preset)"] --> SYS{"game or backup folder<br/>on the OS drive?"}
+    SYS -- yes --> ONE["one file at a time"]
+    SYS -- no --> TWO["the Deploy pool<br/>2 threads (Smart I/O on)"]
+    ONE --> LIM{"a MB/s limit<br/>on this disk?"}
     TWO --> LIM
-    LIM -- yes --> THR["throttled path<br/>128 KB + sleep"]
+    LIM -- yes --> THR["throttled path<br/>128 KiB, shared disk budget"]
     LIM -- no --> SM["Smart I/O path<br/>1 MiB + budget yield"]
 ```
 
-Parallelism is capped at **2 threads** — *"so file copies never saturate every CPU core (which is
-what causes the 'Ne répond pas' UI freeze)"*. And if either the destination folder or the backup folder
-lives on the OS drive, it drops to **one thread regardless of your settings**:
+Under Balanced, a deploy copies on **2 threads**, so file copies never saturate every CPU core,
+which is what freezes a window into *Not responding*. And if either the destination folder or the
+backup folder lives on the OS drive, it copies **one file at a time**, so Windows itself stays
+responsive during a big mod copy. **Quiet** copies one file at a time everywhere; **Everything for
+BMM** lifts both caps, except on a hard disk.
 
-> *"Returns true if `path` lives on the same drive as the OS (typically C:). Used to dial parallel
-> IO down to a single thread so Windows itself stays responsive during big mod copies."*
-
-There are **three separate thread pools**, each capped for its own reason:
+The thread pools are capped too, each for its own reason:
 
 | Pool | Size | Why |
 |---|---|---|
 | Global rayon | capped, 512 KB stacks | *"Prevent Rayon from hogging 100% CPU and lagging the OS"* — BMM's parallel work never recurses deep, saving ~7 MB of committed RSS per thread |
-| Hashing | ≤ 4 (about half your cores) | BLAKE3 is fast enough to eat every core — see [Integrity & hashing](doc-page:how-it-works/integrity-hashing) |
-| Smart I/O | 1–2 | the copy path above |
+| One per kind of work (governor) | under Balanced: hashing ≤ 4 (about half your cores), deploy 2, extract and compress the size of the global pool | Each kind gets its own, sized by the preset, so a hash job and a deploy never fight over one pool. BLAKE3 alone is fast enough to eat every core — see [Integrity & hashing](doc-page:how-it-works/integrity-hashing) |
 
 The allocator is swapped too: **mimalloc** instead of Windows' default HeapAlloc, for a *"30–60%
 smaller process working set, plus much less fragmentation"* — BMM allocates and frees a great many
@@ -88,9 +89,13 @@ WebView2, or anything else"*. Three things follow:
 - Cancelling a cancellable worker also spawns *"an inverse-op undo subprocess so any partial writes
   are reverted"*. A cancelled deploy does not leave half a mod in your destination folder.
 
-Inside the app, every copy loop polls a cancel flag *"so that the user's cancel click can interrupt
-big mod copies almost instantly instead of waiting for the whole file to finish"*, and one global
-lock means **one mod operation at a time** — no two applies racing on the same destination folder.
+The worker is a separate process with its own governor, so the app hands it its resources
+document: it copies under the same preset and the same per-disk limits as the app would.
+
+Inside the app, a copy checks its governor ticket between chunks, so the user's cancel click
+interrupts a big mod copy almost at once instead of waiting for the whole file to finish, and the
+half-written file is removed. One global lock still means **one mod operation at a time** — no two
+applies racing on the same destination folder.
 
 ---
 

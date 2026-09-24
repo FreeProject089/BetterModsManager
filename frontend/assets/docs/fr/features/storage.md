@@ -21,10 +21,35 @@ l'app (et le reste de la machine) peut saccader jusqu'à la fin.
 
 :::tip[Auto-calibration des performances]
 Activée par défaut. BMM benchmarke les disques que tes profils utilisent vraiment et te fixe une
-limite de vitesse par disque raisonnable — quelques secondes après le démarrage, et de nouveau
-quand vous la réactivez. Laissez-la activée sauf si
-tu veux régler les limites à la main.
+limite de vitesse par disque, à environ 70 % de la vitesse d'écriture mesurée. Il le fait une fois
+par disque, puis seulement quand la dernière mesure de ce disque a plus de 30 jours, quelques
+secondes après le démarrage. Il ne mesure plus chaque disque à chaque lancement. Laisse-la activée
+sauf si tu veux régler les limites à la main.
 :::
+
+## L'intensité de travail de BMM
+
+La carte en haut du Gestionnaire de Stockage, c'est le
+[gouverneur de ressources](doc-page:how-it-works/resources) : l'endroit unique qui décide combien
+d'opérations lourdes tournent en même temps, sur combien de threads, et à quelle vitesse elles
+peuvent écrire.
+
+| Partie de la carte | Ce qu'elle fait |
+|---|---|
+| **Silencieux · Équilibré · Tout pour BMM** | Le preset. **Équilibré** est celui par défaut, et c'est exactement le fonctionnement de toujours. **Silencieux** fait une chose à la fois, doucement, pour quand tu joues. **Tout pour BMM** va aussi vite que les disques le permettent |
+| **En vigueur** | Le preset réellement appliqué en ce moment, que le mode jeu ou une tâche planifiée peuvent changer un temps |
+| **CPU de BMM · CPU du PC · Lecture · Écriture** | Des courbes en direct, une fois par seconde, seulement tant que la carte est à l'écran |
+| **Mode jeu** | **Le détecter**, **Forcer**, **Arrêter**. Tant qu'il est actif, BMM travaille comme en Silencieux, et les empreintes et la maintenance de fond attendent qu'il se termine. La détection automatique n'est pas encore branchée dans cette version : utilise **Forcer** ([pourquoi](doc-page:how-it-works/resources#le-mode-jeu)) |
+| **Ce que fait BMM** | Chaque opération en cours, suspendue ou en attente, avec **Suspendre**, **Reprendre** et **Annuler**, plus **Tout suspendre** et **Tout reprendre** |
+| **Avancé : par disque et par opération** | Des règles pour un disque et une sorte de travail (Mo/s, en même temps, tampon, priorité). Une case vide hérite, et son texte gris dit la valeur en vigueur et d'où elle vient |
+
+!!! warning "Lis sur quoi agit chaque colonne avancée"
+
+    Les Mo/s et le tampon agissent sur les copies que BMM fait lui-même (déploiement, sauvegarde des
+    originaux, installation du dossier d'un mod, copies d'images). Pour l'extraction, la
+    compression, les analyses, les empreintes et les téléchargements, ils sont enregistrés mais ne
+    ralentissent rien, et la colonne **Priorité** n'est pas encore transmise à Windows. Les détails
+    sont sur [la page du gouverneur](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
 ## Cartes par disque
 
@@ -52,11 +77,19 @@ Chaque disque du système a une carte :
     Utile pour empêcher un HDD lent ou un disque cloud de ralentir toute la machine pendant une
     grosse copie. Enregistré après une courte pause.
 
+    La limite est partagée : chaque copie qui écrit sur ce disque puise dans le même budget, donc
+    deux copies en même temps restent ensemble sous la limite au lieu de l'avoir chacune. C'est le
+    même chiffre que la règle avancée *ce disque, toutes les opérations* : change l'un, l'autre suit.
+
 === "Benchmarker un disque"
 
     **Benchmarker ce disque** écrit et relit un fichier temporaire de 50 Mo et rapporte les Mo/s en
     lecture/écriture plus une limite suggérée (~70 % de la vitesse d'écriture). **Appliquer la
     suggestion** inscrit cette valeur comme limite.
+
+    La lecture se fait sans le cache du système, donc elle mesure le disque et pas la mémoire qui
+    garde le fichier tout juste écrit. Le benchmark tourne comme une maintenance de fond : il attend
+    pendant qu'on active ou installe des mods, et pendant le mode jeu.
 
 === "Tout réinitialiser"
 
@@ -100,8 +133,14 @@ est un système séparé avec ses propres réglages (hachage paresseux, animatio
 grosses activations sautent souvent le re-hachage exprès — voir
 [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 
+Le gouverneur a quand même son mot à dire sur le hachage : il tourne sur son propre pool de threads,
+dimensionné par le preset, compte comme travail de fond, et donc s'efface pendant qu'on active ou
+installe des mods et attend la fin du mode jeu.
+
 ## Automatise-le
 
 Le [Planificateur](doc-page:features/scheduler) peut *benchmarker un disque*, *appliquer une limite de vitesse*,
 *vérifier l'espace libre* et basculer *Smart I/O* / *Auto-calibration* comme actions de workflow — et
-brancher sur le résultat mesuré (ex. *si `disk.write_mbps` < 50, afficher un avertissement*).
+brancher sur le résultat mesuré (ex. *si `disk.write_mbps` < 50, afficher un avertissement*). Il
+peut aussi choisir un preset pour la durée d'une tâche, changer le mode jeu et suspendre la file :
+voir [L'intensité de travail de BMM](doc-page:features/scheduler#lintensite-de-travail-de-bmm).

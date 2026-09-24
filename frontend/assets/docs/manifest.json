@@ -35,6 +35,7 @@
     "how-it-works/mapper",
     "how-it-works/sync-repos",
     "how-it-works/performance",
+    "how-it-works/resources",
     "how-it-works/codebase-maps",
     "how-it-works/extending",
     "how-it-works/security",
@@ -224,7 +225,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8344,
+      "words": 8649,
       "diagrams": 0,
       "fr": true
     },
@@ -374,7 +375,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 619,
+      "words": 910,
       "diagrams": 0,
       "fr": true
     },
@@ -569,8 +570,23 @@
         "en": "Modding means moving a lot of bytes. BMM's job is to do that fast and keep your machine usable while it happens — and when those two fight, responsiveness wins.",
         "fr": "Modder, c'est déplacer beaucoup d'octets. Le rôle de BMM est de le faire vite et de garder ta machine utilisable pendant ce temps — et quand ces deux…"
       },
-      "words": 992,
+      "words": 1078,
       "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/resources",
+      "section": "how-it-works",
+      "title": {
+        "en": "The resource governor",
+        "fr": "Le gouverneur de ressources"
+      },
+      "summary": {
+        "en": "Every heavy thing BMM does (enabling mods, installing, backing up originals, extracting and compressing archives, scanning, hashing, downloading, cropping…",
+        "fr": "Tout ce que BMM fait de lourd (activer des mods, installer, sauvegarder les originaux, extraire et compresser des archives, analyser, calculer des empreintes,…"
+      },
+      "words": 1932,
+      "diagrams": 7,
       "fr": true
     },
     {
@@ -764,7 +780,7 @@
         "en": "Every action BMM can perform for you, in one place. There are two catalogues — they overlap in capability but are separate systems:",
         "fr": "Toutes les actions que BMM peut exécuter pour toi, au même endroit. Il y a deux catalogues — leurs capacités se recoupent mais ce sont deux systèmes distincts :"
       },
-      "words": 1163,
+      "words": 1195,
       "diagrams": 0,
       "fr": true
     },
@@ -824,7 +840,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1298,
+      "words": 1662,
       "diagrams": 0,
       "fr": true
     },

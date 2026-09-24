@@ -86,11 +86,16 @@ Grouped exactly as the action dropdown groups them.
 | Apply disk speed limit | Sets a per-disk MB/s cap — leave empty to use the suggested value from a preceding benchmark, `0` = unlimited | — |
 | Performance Auto-Calibration | Turns auto-calibration on/off | — |
 | Smart I/O | Turns [Smart I/O](doc-page:features/storage) on/off | — |
-| Toggle a setting (advanced) | Flips **any** boolean setting by key | — |
+| Toggle a setting (advanced) | Turns one of four storage settings on or off: **Automatic disk calibration**, **Smart I/O**, **Low-space alert**, **Background hashing**. Any other key is refused with the list of the allowed ones | — |
+| Resources: set the preset | **Quiet**, **Balanced** or **Everything for BMM**, for this task only (the default: back to yours when the task ends, 2 h at most) or for good; optionally **even while a game runs**. Needs the task permission **Resources** | — |
+| Resources: game mode | **Detect it**, **Force on**, **Force off**. Needs **Resources** | — |
+| Resources: pause or resume the queue | **Pause everything waiting**, or **Resume everything**. Needs **Resources** | — |
 | Check free disk space | Reads free space | `disk.free_gb`, `disk.total_gb`, `disk.free_percent` |
 
 Those captured values are what the `value` condition compares against — that's how you build
-"*benchmark the disk, and if it's slower than 50 MB/s, warn me*".
+"*benchmark the disk, and if it's slower than 50 MB/s, warn me*". The three **Resources** actions
+drive the [resource governor](doc-page:how-it-works/resources); see
+[How hard BMM works](doc-page:features/scheduler#how-hard-bmm-works).
 
 ### Privacy & recorder
 
@@ -206,6 +211,9 @@ Used by **IF**, **WAIT UNTIL** and **LOOP**. Every condition has a **NOT** box.
 | `dayOfWeek` | Today is one of the days you picked |
 | `timeRange` | The clock is inside a range (**wraps over midnight**) |
 | `commandSucceeds` | An external command exits `0` — note this **runs the program** just to evaluate the condition |
+| `gameRunning` | Game mode is on |
+| `resourcesPresetIs` | The resource preset **in force** (yours, a task's or game mode's) is the one you picked |
+| `queueIdle` | BMM has no operation running or waiting |
 
 !!! note "Missing data is false, not an error"
 
@@ -214,7 +222,8 @@ Used by **IF**, **WAIT UNTIL** and **LOOP**. Every condition has a **NOT** box.
 
 **Capturable variables:** `disk.read_mbps`, `disk.write_mbps`, `disk.suggested_limit`,
 `benchmark.mbps`, `benchmark.total_ms`, `lasttask.ok` (in the dropdown), plus `disk.free_gb`,
-`disk.total_gb`, `disk.free_percent`, `update.available` and any variable you set yourself.
+`disk.total_gb`, `disk.free_percent`, `update.available`, `queue.length` (operations running or
+waiting, read when the condition is checked) and any variable you set yourself.
 
 ---
 

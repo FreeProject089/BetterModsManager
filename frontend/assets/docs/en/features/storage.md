@@ -3,7 +3,7 @@
 
 > Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.
 
-Open it from **Settings → Storage → Open the Storage Manager**. It answers three questions: how
+Open it from **Settings → Storage → Open Storage Manager**. It answers three questions: how
 much room is left, how fast each disk is, and how hard BMM is allowed to push your drives.
 
 
@@ -18,10 +18,33 @@ feel choppy until it's done.
 :::
 
 :::tip[Auto Performance Calibration]
-On by default. BMM benchmarks the disks your profiles actually use and sets a sensible per-disk
-speed limit for you — a couple of seconds after startup, and again when you switch it back on.
-Leave it on unless you want to set limits by hand.
+On by default. BMM benchmarks the disks your profiles actually use and sets a per-disk speed
+limit for you, at about 70% of the measured write speed. It does this once per disk, and then again
+only when that disk's last measurement is more than 30 days old, a couple of seconds after startup.
+It no longer measures every disk at every start. Leave it on unless you want to set limits by hand.
 :::
+
+## How hard BMM works
+
+The card at the top of the Storage Manager is the
+[resource governor](doc-page:how-it-works/resources): the one place that decides how many heavy
+operations run at once, on how many threads, and how fast they may write.
+
+| Part of the card | What it does |
+|---|---|
+| **Quiet · Balanced · Everything for BMM** | The preset. **Balanced** is the default and is exactly how BMM always worked. **Quiet** does one thing at a time, gently, for while you play. **Everything for BMM** goes as fast as the disks allow |
+| **In force** | The preset actually applied right now, which game mode or a scheduled task can change for a while |
+| **BMM CPU · PC CPU · Read · Write** | Live curves, once a second, only while the card is on screen |
+| **Game mode** | **Detect it**, **Force on**, **Force off**. While it is on, BMM works as if on Quiet, and background hashing and maintenance wait until it ends. Automatic detection is not connected yet in this version: use **Force on** ([why](doc-page:how-it-works/resources#game-mode)) |
+| **What BMM is doing** | Every operation running, paused or waiting, with **Pause**, **Resume** and **Cancel**, plus **Pause all** and **Resume all** |
+| **Advanced: per disk and operation** | Rules for one disk and one kind of work (MB/s, how many at once, buffer, priority). An empty cell inherits, and its grey text says the value in force and where it comes from |
+
+!!! warning "Read what each advanced column acts on"
+
+    MB/s and the buffer act on the copies BMM makes itself (deploying, backing up originals,
+    installing a mod folder, image copies). For extraction, compression, scans, hashing and
+    downloads they are stored but slow nothing, and the **Priority** column is not passed to
+    Windows yet. Details in [the governor page](doc-page:how-it-works/resources#what-each-column-acts-on).
 
 ## Per-disk cards
 
@@ -49,10 +72,18 @@ Each disk on your system gets a card:
     stop a slow HDD or a cloud drive from lagging the whole machine during a big copy. Saved after a
     short pause.
 
+    The limit is shared: every copy writing to that disk draws from the same budget, so two
+    copies at once stay under it together instead of getting it each. It is the same number as the
+    advanced rule *this disk, all operations*: change one and the other follows.
+
 === "Benchmark a disk"
 
     **Benchmark this disk** writes and reads a 50 MB temp file and reports read/write MB/s plus a
     suggested limit (~70% of write speed). **Apply suggested** writes that value as the limit.
+
+    The read is made without the operating system's cache, so it measures the disk and not the
+    memory holding the file just written. The benchmark runs as background maintenance: it waits
+    while mods are being enabled or installed, and while game mode is on.
 
 === "Reset everything"
 
@@ -93,8 +124,14 @@ The speed limits and Smart I/O govern *copying*. Integrity **hashing** (SHA / BL
 system with its own settings (lazy hashing, the loading animation). Big activations often skip
 re-hashing on purpose — see [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
+The governor still has a say over hashing: it runs on its own thread pool, sized by the preset,
+counts as background work, and so steps aside while mods are being enabled or installed and waits
+out game mode.
+
 ## Automate it
 
 The [Scheduler](doc-page:features/scheduler) can *benchmark a disk*, *apply a disk speed limit*, *check free disk
 space*, and toggle *Smart I/O* / *Auto-Calibration* as workflow actions — and branch on the measured
-result (e.g. *if `disk.write_mbps` < 50, show a warning*).
+result (e.g. *if `disk.write_mbps` < 50, show a warning*). It can also pick a preset for the length
+of a task, switch game mode and pause the queue: see
+[How hard BMM works](doc-page:features/scheduler#how-hard-bmm-works).

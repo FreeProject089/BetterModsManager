@@ -181,7 +181,7 @@ Il y a ~107 actions réparties en huit groupes :
 | **Dépôt & partage** | Connecter · synchroniser · générer · mettre à jour · héberger un dépôt |
 | **Apps & lancement** | Lancer une app · installer une app · ouvrir un fichier/dossier · **lancer un [Launch Pack](doc-page:features/launch-packs)** |
 | **Apparence** | Appliquer un thème |
-| **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:features/storage)) |
+| **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:features/storage)) · **choisir le preset de ressources**, **le mode jeu**, **suspendre ou reprendre la file** (voir [plus bas](#lintensite-de-travail-de-bmm)) |
 | **Confidentialité & enregistreur** | Consentement télémétrie · enregistreur de session · exporter/importer un replay |
 | **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** · exécuter un deeplink `bmm://` brut |
 | **Logique & maths** | Calcul mathématique dans une variable · ternaire · table de décision · garde d'arrêt de tâche |
@@ -226,7 +226,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde cinq choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde six choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -235,16 +235,22 @@ Chaque tâche accorde cinq choses séparément, et chacune dit ce qu'elle déblo
 | **Déclencher des deeplinks** | Déclencher des liens `bmm://` |
 | **Arrêter un programme** | Terminer un processus en cours |
 | **Supprimer des choses** | Supprimer un profil, un modpack, ou le dossier d'un mod |
+| **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
 
-Les cinq sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les six sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
-**Supprimer des choses** est l'intruse. Les quatre autres concernent ce qui sort de BMM ;
+**Supprimer des choses** est l'intruse. Quatre des autres concernent ce qui sort de BMM ;
 celle-ci détruit tes propres données de l'intérieur, là où aucune barrière externe ne la
 verrait passer. Elle couvre la suppression d'un profil, celle d'un fichier de modpack, et —
 seulement si tu coches la deuxième case — celle du dossier d'un mod sur le disque. Rien ici ne
 passe par la corbeille.
+
+**Ressources** reste aussi à l'intérieur de BMM et ne détruit rien, mais une tâche qui l'a peut
+faire tourner BMM à fond pendant que tu joues, ou retenir toutes les opérations dans la file
+jusqu'à ce que quelque chose les reprenne. C'est une décision sur ta machine, donc c'est une
+permission comme les autres.
 
 Arrêter un programme est séparé de le lancer parce que le risque est d'une autre nature :
 démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré sans
@@ -258,7 +264,7 @@ rien pour revenir en arrière.
 !!! note "Migration depuis l'ancienne case unique"
 
     Une tâche construite avant la séparation garde tout ce qu'elle avait — mais aucune ne gagne
-    **Exécuter des scripts**, **Arrêter un programme** ni **Supprimer des choses**. Aucune de
+    **Exécuter des scripts**, **Arrêter un programme**, **Supprimer des choses** ni **Ressources**. Aucune de
     ces capacités n'existait quand tu as coché *Autoriser les commandes personnalisées* : te
     les accorder maintenant reviendrait à inventer ton consentement plutôt qu'à l'honorer.
 
@@ -336,6 +342,7 @@ plus bas).
 | `timeRange` · `timeReached` | L'heure est dans une plage / a dépassé une heure. |
 | `fileExists` · `fileHash` · `fileSize` · `fileType` | Vérifications de fichier — un chemin existe, ou son hash (blake3/sha256), sa taille ou son type correspond. |
 | `commandSucceeds` | Une commande externe s'exécute et sort avec `0`. |
+| `gameRunning` · `resourcesPresetIs` · `queueIdle` | Le mode jeu est actif · le preset en vigueur est celui que tu as choisi · BMM n'a aucune opération en cours ni en attente ([plus bas](#lintensite-de-travail-de-bmm)). |
 | `value` | Un nombre capturé se compare à un seuil (plus bas). |
 | `all` · `any` | Toutes / au moins une des conditions qu'elle contient sont vraies (plus bas). |
 
@@ -367,6 +374,51 @@ d'écriture mesurée d'un disque (`disk.write_mbps`) ou un résultat de benchmar
 « *si `disk.write_mbps` `<` 50, afficher un avertissement* » devient donc une vraie règle. Si la
 valeur source n'a jamais été capturée, la condition est simplement fausse — elle ne se
 déclenchera pas sur une donnée absente.
+
+## L'intensité de travail de BMM
+
+Trois actions et trois conditions pilotent le [gouverneur de ressources](doc-page:how-it-works/resources),
+la partie de BMM qui décide à quel point il sollicite ton CPU et tes disques. Chacune de ces actions
+demande la permission de tâche **Ressources** ; une étape qui ne l'a pas échoue et le dit.
+
+| Action | Ce qu'elle fait | Réglages |
+|---|---|---|
+| `resources.preset` | Choisit un preset : **Silencieux**, **Équilibré** ou **Tout pour BMM** | **pour cette tâche seulement** (par défaut) ou **pour de bon** · **même pendant un jeu** |
+| `resources.gameMode` | Mode jeu : **Le détecter**, **Forcer**, **Arrêter** | — |
+| `resources.queue` | **Suspendre tout ce qui attend**, ou **Tout reprendre** | — |
+
+**Pour cette tâche seulement**, c'est celui qu'il te faut. Le preset dure le temps de la tâche et
+revient au tien quand elle se termine, qu'elle ait réussi ou échoué, et au bout de **2 heures** au
+plus même si la tâche n'arrive jamais jusque-là. Il n'est jamais enregistré dans tes réglages.
+**Pour de bon**, c'est comme appuyer sur le bouton du preset dans le Gestionnaire de Stockage. Une
+deuxième étape de preset dans la même tâche remplace la première.
+
+D'habitude, le mode jeu l'emporte sur le preset d'une tâche : pendant qu'un jeu tourne, BMM reste
+Silencieux. Coche **même pendant un jeu** pour une tâche qui doit finir à pleine vitesse quand même.
+
+| Condition | Vraie quand |
+|---|---|
+| `gameRunning` | Le mode jeu est actif |
+| `resourcesPresetIs` | Le preset **en vigueur** est celui que tu as choisi (celui d'une tâche ou du mode jeu compte, pas seulement le tien) |
+| `queueIdle` | BMM n'a aucune opération en cours ni en attente |
+
+La condition `value` peut aussi lire `queue.length`, le nombre d'opérations en cours ou en
+attente, lu au moment où la condition est vérifiée.
+
+Une tâche de nuit qui travaille à fond puis remet tout en place :
+
+```text
+03:00  resources.preset   Tout pour BMM, pour cette tâche seulement
+       mods.checkUpdates
+       ATTENDRE queueIdle
+       (la tâche se termine : le preset revient au tien)
+```
+
+!!! note "Le mode jeu ne s'active pas encore tout seul"
+    **Le détecter** est là, et ses règles sont écrites, mais dans cette version rien ne lui donne
+    la liste des programmes lancés : le mode jeu ne s'active que si quelque chose le force. Une
+    tâche peut le faire : `resources.gameMode` **Forcer** avant qu'un launch pack lance le jeu,
+    **Le détecter** de nouveau ensuite. Voir [Le mode jeu](doc-page:how-it-works/resources#le-mode-jeu).
 
 ## Boucles & attente
 

@@ -53,6 +53,7 @@ nothing you do to the game can cost you a mod.
 | [The mapper](doc-page:how-it-works/mapper) | How is a mis-structured archive reshaped, repeatably? |
 | [Sync & server repos](doc-page:how-it-works/sync-repos) | How does a whole group stay on the exact same setup? |
 | [Performance](doc-page:how-it-works/performance) | Why does a huge deploy stay responsive? |
+| [The resource governor](doc-page:how-it-works/resources) | Who decides how hard BMM works your CPU and disks, and how do you change it? |
 | [Extending BMM](doc-page:how-it-works/extending) | How do plugins, the API and MCP drive BMM? |
 | [Security model](doc-page:how-it-works/security) | What are the trust boundaries, and what's signed? |
 

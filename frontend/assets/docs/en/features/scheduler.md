@@ -166,7 +166,7 @@ There are ~107 actions across eight groups:
 | **Repo & sharing** | Connect · sync · generate · update · host a repo |
 | **Apps & launch** | Launch an app · install an app · open a file/folder · **run a [Launch Pack](doc-page:features/launch-packs)** |
 | **Appearance** | Set a theme |
-| **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:features/storage)) |
+| **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:features/storage)) · **set the resource preset**, **game mode**, **pause or resume the queue** (see [below](#how-hard-bmm-works)) |
 | **Privacy & recorder** | Telemetry consent · session recorder · export/import a replay |
 | **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run an external program** · **run a script you wrote** · run a raw `bmm://` deeplink |
 | **Logic & math** | Compute maths into a variable · ternary · decision table · a stop-task guard |
@@ -210,7 +210,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants five things separately, and each says what it unlocks:
+Each task grants six things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -219,14 +219,19 @@ Each task grants five things separately, and each says what it unlocks:
 | **Fire deeplinks** | Trigger `bmm://` links |
 | **Stop a program** | Terminate a running process |
 | **Delete things** | Delete a profile, a modpack, or a mod's folder |
+| **Resources** | Change the resource preset, game mode and the queue ([below](#how-hard-bmm-works)) |
 
-All five are off until you turn them on, and a step whose permission is missing fails with a
+All six are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
-**Delete things** is the odd one out. The other four are about reaching *outside* BMM; this one
-is about destroying your own data from the inside, where no external gate would ever see it. It
+**Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
+one is about destroying your own data from the inside, where no external gate would ever see it. It
 covers deleting a profile, deleting a modpack file, and — only when you tick the second box —
 deleting a mod's folder from disk. Nothing here goes to the recycle bin.
+
+**Resources** stays inside BMM too and destroys nothing, but a task holding it can make BMM work
+flat out while you play, or hold every operation in the queue until something resumes it. That is
+a decision about your machine, so it is a grant like the others.
 
 Stopping a program is separate from launching one because the risk differs in kind: starting
 something is undoable, killing something can lose unsaved work with nothing to undo.
@@ -239,7 +244,7 @@ something is undoable, killing something can lose unsaved work with nothing to u
 !!! note "Upgrading from the old single checkbox"
 
     A task you built before the split keeps everything it already had — but none gains **Run
-    scripts**, **Stop a program** or **Delete things**. None of those capabilities existed when
+    scripts**, **Stop a program**, **Delete things** or **Resources**. None of those capabilities existed when
     you ticked *Allow custom commands*, so granting them now would be inventing your consent
     rather than honouring it.
 
@@ -287,6 +292,7 @@ until something becomes true (`waitFor`, below).
 | `timeRange` · `timeReached` | The clock is inside a range / has passed a time. |
 | `fileExists` · `fileHash` · `fileSize` · `fileType` | File checks — a path exists, or its hash (blake3/sha256), size or type matches. |
 | `commandSucceeds` | An external command runs and exits `0`. |
+| `gameRunning` · `resourcesPresetIs` · `queueIdle` | Game mode is on · the preset in force is the one you picked · BMM has no operation running or waiting ([below](#how-hard-bmm-works)). |
 | `value` | A captured number compares against a threshold (below). |
 | `all` · `any` | Every / at least one of the conditions inside it holds (below). |
 
@@ -315,6 +321,50 @@ you set, using one of six operators:
 
 So "*if `disk.write_mbps` `<` 50, show a warning*" becomes a real rule. If the source value was
 never captured, the condition is simply false — it won't fire on missing data.
+
+## How hard BMM works
+
+Three actions and three conditions drive the [resource governor](doc-page:how-it-works/resources),
+the part of BMM that decides how hard it works your CPU and disks. Every one of the actions needs
+the task permission **Resources**; a step without it fails and says so.
+
+| Action | What it does | Settings |
+|---|---|---|
+| `resources.preset` | Picks a preset: **Quiet**, **Balanced** or **Everything for BMM** | **for this task only** (the default) or **for good** · **even while a game runs** |
+| `resources.gameMode` | Game mode: **Detect it**, **Force on**, **Force off** | — |
+| `resources.queue` | **Pause everything waiting**, or **Resume everything** | — |
+
+**For this task only** is the one to reach for. The preset lasts while the task runs and goes back
+to yours when it ends, whether it succeeded or failed, and after **2 hours** at most even if the
+task never gets that far. It is never saved in your settings. **For good** is the same as pressing
+the preset button in the Storage Manager. A second preset step in the same task replaces the first.
+
+Game mode normally beats a task's preset: while a game runs, BMM stays Quiet. Tick **even while a
+game runs** for a task that must finish at full speed anyway.
+
+| Condition | True when |
+|---|---|
+| `gameRunning` | Game mode is on |
+| `resourcesPresetIs` | The preset **in force** is the one you picked (a task's or game mode's preset counts, not only yours) |
+| `queueIdle` | BMM has no operation running or waiting |
+
+The `value` condition can also read `queue.length`, the number of operations running or waiting,
+read at the moment the condition is checked.
+
+A night-time task that works flat out and puts everything back:
+
+```text
+03:00  resources.preset   Everything for BMM, for this task only
+       mods.checkUpdates
+       WAIT UNTIL queueIdle
+       (the task ends: the preset goes back to yours)
+```
+
+!!! note "Game mode does not switch itself on yet"
+    **Detect it** is there, and its rules are written, but in this version nothing feeds it the
+    list of running programs, so game mode only comes on when something forces it. A task can do
+    that: `resources.gameMode` **Force on** before a launch pack starts the game, **Detect it**
+    again afterwards. See [Game mode](doc-page:how-it-works/resources#game-mode).
 
 ## Loops & waiting
 
