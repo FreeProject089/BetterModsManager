@@ -56,6 +56,7 @@ nothing you do to the game can cost you a mod.
 | [The resource governor](doc-page:how-it-works/resources) | Who decides how hard BMM works your CPU and disks, and how do you change it? |
 | [Extending BMM](doc-page:how-it-works/extending) | How do plugins, the API and MCP drive BMM? |
 | [Security model](doc-page:how-it-works/security) | What are the trust boundaries, and what's signed? |
+| [CI/CD and security scans](doc-page:how-it-works/ci-cd) | What does every workflow check, and how do I run the scans myself? |
 
 !!! tip "In the app"
     Every one of these systems has an **interactive diagram** inside BMM, under

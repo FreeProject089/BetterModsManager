@@ -1,0 +1,42 @@
+# Gitleaks configuration: the default ruleset plus a few REVIEWED allowlists.
+# Read by .github/workflows/security.yml (secrets job), and by a local run
+# (see "Security CI" in the developer docs). Gitleaks finds this file on its own at the root of
+# the scanned repository.
+#
+# Rules for adding an entry here:
+#   - an allowlist covers a CLASS of false positive and says why the class can never be a secret;
+#   - a single false positive goes to .gitleaksignore by fingerprint instead, with a comment;
+#   - a real secret is NEVER allowlisted here. Rotate it first; only then, if it has to stay in
+#     history, add its fingerprint to .gitleaksignore with the rotation date.
+
+[extend]
+useDefault = true
+
+# The key-format tables in the repository docs (repo.md, docs-hub) quote PEM HEADERS inside
+# inline code: `-----BEGIN OPENSSH PRIVATE KEY-----` | … . The default private-key rule then
+# matches from one quoted header to the next across a table row. A real key file never has an
+# inline-code delimiter (a backtick or </code>) straight after its header — its base64 body
+# starts on the next line — so this cannot hide an actual key.
+[[allowlists]]
+description = "PEM header quoted in inline code (documentation tables), no key body"
+targetRules = ["private-key"]
+regexTarget = "match"
+regexes = ['''-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(`|</code>)''']
+
+# Contributors' Discord USER ids (18-20 digit snowflakes) in the credits list. A user id is a
+# public identifier shown on every profile, not a credential; the discord-client-id rule matches
+# any long number next to "discord" + "id".
+[[allowlists]]
+description = "Discord user ids in the contributors list (public identifiers)"
+targetRules = ["discord-client-id"]
+regexTarget = "line"
+regexes = ['''discord_id['"]?\s*:\s*['"][0-9]{17,20}['"]''']
+
+# The telemetry INGEST key (bmm_pk_…) is public by design: it only permits submitting opt-in
+# telemetry and ships inside every copy of the app (frontend/assets/links.json, documented in
+# frontend/src/core/links-config.ts). A secret-bearing key would not use the bmm_pk_ prefix.
+[[allowlists]]
+description = "Public telemetry ingest key (bmm_pk_ prefix)"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['''bmm_pk_[A-Za-z0-9_-]+''']

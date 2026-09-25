@@ -12,6 +12,10 @@ COPY Info.json ./
 # Copy server script (Windows batch file)
 COPY BMM-Standalone-Server.bat ./server.bat
 
+# Run as the unprivileged account. ContainerUser is already nanoserver's default; saying so
+# keeps it true if the base image or an edit above ever switches to ContainerAdministrator.
+USER ContainerUser
+
 # Expose default port (can be overridden)
 EXPOSE PORT_PLACEHOLDER
 

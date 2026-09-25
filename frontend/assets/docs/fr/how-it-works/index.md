@@ -52,6 +52,7 @@ peut l'effacer sans rien perdre. Vous réactivez un profil ; vous ne re-téléch
 | [Le gouverneur de ressources](doc-page:how-it-works/resources) | Qui décide à quel point BMM sollicite ton CPU et tes disques, et comment le changer ? |
 | [Étendre BMM](doc-page:how-it-works/extending) | Comment plugins, API et MCP pilotent-ils BMM ? |
 | [Modèle de sécurité](doc-page:how-it-works/security) | Quelles sont les frontières de confiance, et qu'est-ce qui est signé ? |
+| [CI/CD et scans de sécurité](doc-page:how-it-works/ci-cd) | Que vérifie chaque workflow, et comment lancer les scans soi-même ? |
 
 !!! tip "Dans l'application"
     Chacun de ces systèmes possède un **diagramme interactif** dans BMM, sous

@@ -39,6 +39,7 @@
     "how-it-works/codebase-maps",
     "how-it-works/extending",
     "how-it-works/security",
+    "how-it-works/ci-cd",
     "reference/api",
     "reference/content-ids",
     "reference/repo-format",
@@ -225,7 +226,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8866,
+      "words": 9360,
       "diagrams": 0,
       "fr": true
     },
@@ -345,7 +346,7 @@
         "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
         "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
       },
-      "words": 656,
+      "words": 742,
       "diagrams": 1,
       "fr": true
     },
@@ -632,6 +633,21 @@
       },
       "words": 1120,
       "diagrams": 3,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/ci-cd",
+      "section": "how-it-works",
+      "title": {
+        "en": "CI/CD and security scans",
+        "fr": "CI/CD et scans de sécurité"
+      },
+      "summary": {
+        "en": "Every GitHub Actions workflow in the BMM repository: what starts it, what it checks, what makes it fail, what it leaves behind, and how to run the same thing…",
+        "fr": "Chaque workflow GitHub Actions du dépôt BMM : ce qui le déclenche, ce qu'il vérifie, ce qui le fait échouer, ce qu'il laisse derrière lui, et comment lancer…"
+      },
+      "words": 1730,
+      "diagrams": 0,
       "fr": true
     },
     {
