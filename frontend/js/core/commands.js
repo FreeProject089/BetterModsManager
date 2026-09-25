@@ -9,6 +9,7 @@
 // - The palette does classic + semantic (synonym-expanded, Algolia-style) search over commands.
 import { getLang, t, getSynonyms } from './i18n.js';
 import { registerSearchProvider, searchAll } from './search.js';
+import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
 const tr = (s) => (getLang() === 'fr' ? s.fr : s.en);
 // ── chord helpers ──────────────────────────────────────────────────────────────
 const MOD_KEYS = new Set(['control', 'shift', 'alt', 'meta', 'os']);
@@ -111,22 +112,28 @@ function onKeydown(e) {
     if (paletteOpen)
         return;
     const typing = isTyping(e.target);
-    for (const c of _cmds.values()) {
-        if (c.contextual)
-            continue;
-        const ch = bindingOf(c.id);
-        if (!ch)
-            continue;
-        // While typing, only fire chords that use a modifier (so plain letters don't hijack typing).
-        if (typing && !ch.ctrl && !ch.alt)
-            continue;
-        if (matches(e, ch)) {
-            e.preventDefault();
-            try {
-                c.run();
+    // Two passes: the commands scoped to where the focus is first, then the global ones. A scoped
+    // command whose scope is not active is skipped entirely.
+    for (const scoped of [true, false]) {
+        for (const c of _cmds.values()) {
+            if (c.contextual || !!c.when !== scoped)
+                continue;
+            if (c.when && !c.when())
+                continue;
+            const ch = bindingOf(c.id);
+            if (!ch)
+                continue;
+            // While typing, only fire chords that use a modifier (so plain letters don't hijack typing).
+            if (typing && !ch.ctrl && !ch.alt)
+                continue;
+            if (matches(e, ch)) {
+                e.preventDefault();
+                try {
+                    c.run();
+                }
+                catch { /* ignore */ }
+                return;
             }
-            catch { /* ignore */ }
-            return;
         }
     }
 }
@@ -159,7 +166,7 @@ function expand(q) {
 registerSearchProvider('commands', (q) => {
     const expanded = expand(q);
     const extra = pMode === 'semantic' ? expanded.join(' ') : '';
-    return allCommands().map((c) => ({
+    return allCommands().filter((c) => !c.when || c.when()).map((c) => ({
         id: c.id,
         kind: 'command',
         title: tr(c.title),
@@ -184,7 +191,8 @@ const KIND_LABEL = {
 const CAT_LABEL = {
     nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
     repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
-    settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
+    settings: { en: 'Settings', fr: 'Paramètres' }, scheduler: { en: 'Scheduler', fr: 'Planificateur' },
+    help: { en: 'Help', fr: 'Aide' },
 };
 function renderPalette() {
     const list = overlay?.querySelector('.cp-list');
@@ -310,11 +318,12 @@ let recording = null;
 export function renderShortcutsManager(container) {
     ensurePaletteStyles(); // the .sk-* rules live in the same injected sheet as the palette
     refreshNavCommands(); // reflect the current navbar (custom pages, renames, reorders)
-    const groups = ['nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'help'];
+    const groups = ['nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'scheduler', 'help'];
     const catTitle = {
         nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
         repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
         settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
+        scheduler: { en: 'Scheduler — task editor (active while it is open)', fr: 'Planificateur — éditeur de tâche (actif quand il est ouvert)' },
     };
     const rowFor = (c) => {
         const ch = bindingOf(c.id);
@@ -690,6 +699,15 @@ export function refreshNavCommands() {
 }
 function registerCore() {
     refreshNavCommands();
+    // The scheduler's task editor: its three mode switches and every shortcut of the flow mode.
+    // Registered here, at boot, so they are listed (and rebindable) before the editor is first
+    // opened; each is inert until the editor binds it and scoped by `when` to where it applies.
+    for (const k of FLOW_KEYS) {
+        registerCommand({
+            id: k.id, category: 'scheduler', title: k.title, keywords: `scheduler planificateur ${k.keywords}`,
+            run: () => flowKeyRun(k.id), defaultChord: k.chord, when: () => flowKeyActive(k.scope),
+        });
+    }
     registerCommand({
         id: 'mods.graph', category: 'mods',
         title: { en: 'Dependencies & conflicts…', fr: 'Dépendances et conflits…' },

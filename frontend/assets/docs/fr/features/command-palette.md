@@ -70,6 +70,15 @@ d'**effacer**.
     seule : il ne se déclenchera pas pendant la saisie — pratique si c'est ce que tu voulais, et
     surprenant si tu l'attendais partout.
 
+## Des raccourcis qui appartiennent à un écran
+
+La plupart des commandes marchent partout. Quelques-unes appartiennent à un endroit et n'existent
+que quand il est ouvert : l'éditeur de tâches du planificateur enregistre ainsi ses trois modes et
+chaque touche de son [mode Flux](doc-page:features/scheduler#trois-facons-de-modifier-une-tache). Elles sont
+listées ici sous **Planificateur**, se relient comme les autres, et quand leur écran a le focus
+elles l'emportent sur un raccourci global sur les mêmes touches. Ailleurs elles ne font rien et la
+palette ne les propose pas.
+
 ## Arrêter quelque chose qui tourne déjà
 
 Activer ou désactiver un mod copie des fichiers, et un gros mod prend du temps. Deux commandes

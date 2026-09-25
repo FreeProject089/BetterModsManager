@@ -1068,6 +1068,7 @@ const OTHER: TutorialDef = {
                     modal_fields: [
                         { sel: 'sched-name',    key: 'tut.other.automation.f.name' },
                         { sel: 'sched-trigger', key: 'tut.other.automation.f.trigger' },
+                        { sel: 'sched-mode-switch', key: 'tut.other.automation.f.modes' },
                         { sel: 'sched-steps',   key: 'tut.other.automation.f.steps' },
                         { sel: 'sched-save',    key: 'tut.other.automation.f.save' },
                     ],

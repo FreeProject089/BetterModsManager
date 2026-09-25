@@ -2674,6 +2674,52 @@ mod tests {
     }
 
     #[test]
+    fn a_task_built_in_the_flow_compiles_through_code() {
+        // The scheduler's third mode builds tasks by inserting nodes on a canvas. It is a view of
+        // the same tree, and this is the proof from the compiler's side: the fixture is the task
+        // tests/sched-flow.test.mjs builds with the flow's own edit functions (that test fails
+        // if the flow starts building anything else), with every step kind in it. Printed and
+        // compiled back, its steps must be exactly what the flow made.
+        let flow_task: Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/sched-flow-built.json"))
+                .expect("the fixture is JSON");
+        let printed = bmms_decompile(flow_task.clone());
+        let back = compile(&printed);
+        assert_eq!(&back["name"], &flow_task["name"]);
+        assert_eq!(&back["trigger"], &flow_task["trigger"]);
+        // Two things the language does not carry, named rather than hidden. Neither is the
+        // flow's: its new steps are the brick editor's defaults, and a task built in Blocks
+        // loses exactly the same going to Code.
+        //   · a waitFor's `pollSec` / `onTimeout` left unset: the compiler writes the runtime's
+        //     own defaults (2 s, abort), so the task behaves the same;
+        //   · a loop's `maxIters` / `everySec`: BMMScript has no syntax for them and compiles
+        //     500 / 0 whatever the tree said (the bricks default to 100 / 1). A real loss.
+        fn uncarried(v: &mut Value) {
+            match v {
+                Value::Array(a) => a.iter_mut().for_each(uncarried),
+                Value::Object(o) => {
+                    let kind = o.get("kind").and_then(|k| k.as_str()).unwrap_or("").to_string();
+                    if kind == "waitFor" {
+                        o.entry("pollSec").or_insert(json!(2.0));
+                        o.entry("onTimeout").or_insert(json!("abort"));
+                        if let Some(p) = o.get_mut("pollSec") { *p = json!(p.as_f64()); }
+                    }
+                    if kind == "repeat" || kind == "forEach" {
+                        o.remove("maxIters");
+                        o.remove("everySec");
+                    }
+                    for (_, x) in o.iter_mut() { uncarried(x); }
+                }
+                _ => {}
+            }
+        }
+        let (mut want, mut got) = (flow_task["steps"].clone(), back["steps"].clone());
+        uncarried(&mut want);
+        uncarried(&mut got);
+        assert_eq!(got, want, "the steps changed going through code\n--- printed ---\n{}", printed);
+    }
+
+    #[test]
     fn every_example_in_the_documentation_compiles() {
         // Lifted verbatim from BMM Docs/docs/features/bmmscript{,.fr}.md, so prose cannot
         // drift from the language. NOTHING ELSE may be written between this function and

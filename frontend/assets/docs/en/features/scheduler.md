@@ -401,6 +401,71 @@ The bundled example is a `repeat` in `times` mode (loop 3×). Swap the mode to `
 and give it a `value` or `appRunning` condition, and you have automations like "*keep checking
 until the game process exits, then export my data*".
 
+## Three ways to edit a task
+
+The builder has a switch at the top of the steps: **Blocks**, **Code** and **Flow**. They are three
+views of the same task. There is one tree of steps; each mode reads it and writes it, so a task built
+in one opens identically in the other two, and the mode you used last is the one the builder opens in
+next time.
+
+| Mode | What it is | Good for |
+|---|---|---|
+| **Blocks** | The steps as cards, top to bottom, with their fields inline. | Filling in fields; dragging a step into a branch. |
+| **Code** | The steps as [BMMScript](doc-page:features/bmmscript) text. Leaving it compiles the text; a mistake keeps you there with the line that is wrong. | Writing fast; pasting; reviewing a whole task at once. |
+| **Flow** | The task as a graph, left to right: the trigger, one node per step, a lane for every branch, a join where the lanes meet. | Seeing the shape of a task with branches, loops and parallel work. |
+
+### The flow
+
+- **Nodes.** Each shows its icon, what it does, and one line about *which* (the file, the mod, the
+  condition). An **IF**, a **SWITCH** or an **ENSURE** opens its lanes to the right (THEN / ELSE,
+  each CASE and DEFAULT); a loop draws its body with a dashed line going back round; **AT THE SAME
+  TIME** draws one lane per branch; **TRY** has a TRY lane and an ON ERROR lane.
+- **Adding.** Every edge has a **+** in the middle, every empty lane has a **+**, and so does the end
+  of the task. Each opens a search over every step and every action — type a few letters, arrows,
+  Enter. An action that needs a permission this task has not been granted says so in the list.
+- **Editing.** Select a node and the panel on the right shows its fields. They are the *same* fields
+  as in Blocks, not a copy: the same pickers, the same checks.
+- **Moving.** Drag a node; it snaps to the grid. Where you put it is kept with the task, as an offset
+  from its automatic place, so inserting a step still pushes what comes after it along. **Auto-layout**
+  forgets the positions you placed by hand. Nothing about where a node sits changes what the task
+  does, or its content id.
+- **Last run.** For a saved task, each action shows how the last run went: a green dot for done, red
+  for failed (hover it for the error), a hollow dot for a step the run never reached. A block takes
+  the worst of what ran inside it.
+
+!!! warning "Permissions still decide"
+
+    A node whose step needs a permission the task lacks carries a **!** and says, in the words the run
+    would use, what it will be refused. The flow never grants anything: *Show it in Permissions*
+    takes you to the box in the sidebar, the same one as in the other modes, and the run checks the
+    grant exactly as it always did.
+
+### Flow shortcuts
+
+Every shortcut here is a command: it is in the :kbd[Ctrl+K] palette while the editor is open, and it
+can be changed in **Settings → Keyboard shortcuts**, under *Scheduler*. The flow's own keys only act
+while the canvas has the focus, so typing in a field is never taken over.
+
+| Command | Default |
+|---|---|
+| Add a node… | :kbd[/] |
+| Edit the selected node | :kbd[Enter] |
+| Delete the selection | :kbd[Delete] |
+| Duplicate the selection | :kbd[Ctrl+D] |
+| Undo · Redo | :kbd[Ctrl+Z] · :kbd[Ctrl+Shift+Z] |
+| Select every step | :kbd[Ctrl+A] |
+| Select the next node · Select the previous node | :kbd[→] · :kbd[←] |
+| Select the node above · Select the node below | :kbd[↑] · :kbd[↓] |
+| Move the step earlier · Move the step later | :kbd[Alt+←] · :kbd[Alt+→] |
+| Zoom in · Zoom out | :kbd[Ctrl+=] · :kbd[Ctrl+-] |
+| Fit the whole task in view | :kbd[F] |
+| Auto-layout (forget hand-placed positions) | :kbd[Shift+L] |
+| Blocks mode · Code mode · Flow mode | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
+
+With the mouse: drag the background, hold :kbd[Space] and drag, or scroll, to move around;
+:kbd[Ctrl] + wheel (or a pinch) to zoom; :kbd[Shift] + drag to select several nodes, :kbd[Ctrl] + click
+to add one to the selection.
+
 ## Everyday controls
 
 Each task row carries: an **enable/disable** toggle, ▶ **Run now** (fires immediately, ignoring the

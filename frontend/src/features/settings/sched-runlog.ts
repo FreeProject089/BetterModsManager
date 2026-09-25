@@ -16,6 +16,9 @@
 export type StepStatus = 'ok' | 'error' | 'stopped' | 'cancelled';
 
 export interface RunStep {
+    /** Where the step sits in the task's tree ("2.then.0"), for the flow view's last-run marks.
+     *  Absent on records written before it was recorded, and for an action the run built itself. */
+    path?: string;
     label: string;
     depth: number;
     at: number;

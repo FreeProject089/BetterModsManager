@@ -1,0 +1,415 @@
+/* ═══ Scheduler — the flow mode (sched-flow.ts) ═══════════════════════════════════════════
+   The task drawn as nodes on a canvas. Linked at run time by sched-flow.ts the first time the
+   flow opens, so it costs nothing to a launch that never does.
+
+   Theme tokens only: every colour below is a --bmm-* token or one of the kind colours the
+   brick editor already defines on .sched-modal (--sk-do, --sk-if, --sk-loop, --sk-wait,
+   --sk-pause), so the three modes paint a kind the same way in every theme. The accent is a
+   FILL or a ring here, never the colour of text: text is --bmm-text-primary / -secondary. */
+
+/* ── The mode switch grows a third position ──────────────────────────────────────────────── */
+.sched-mode-switch.has-flow .sched-mode-glider { width: calc((100% - 4px) / 3); }
+.sched-mode-switch.at-flow .sched-mode-glider { transform: translateX(200%); }
+
+/* ── The editor body in flow mode: a column whose canvas takes what is left ──────────────── */
+.sched-modal .modal-body.sched-body.sflow-on {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 14px;
+}
+.sched-body.sflow-on .sched-flow-head { margin-bottom: 10px; flex-shrink: 0; }
+.sched-body.sflow-on .sched-flow-hint,
+.sched-body.sflow-on .sched-legend-mini { display: none; }
+
+.sflow-pane {
+    position: relative;
+    flex: 1;
+    min-height: 320px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bmm-bg-base);
+    font-family: var(--bmm-font-sans);
+}
+.sflow-pane[hidden] { display: none; }
+
+/* ── Canvas ──────────────────────────────────────────────────────────────────────────────── */
+.sflow-canvas {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    outline: none;
+    cursor: default;
+    background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--bmm-text-muted) 30%, transparent) 1px, transparent 0);
+    background-size: 20px 20px;
+    touch-action: none;
+}
+.sflow-canvas:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--bmm-accent) 55%, transparent); }
+.sflow-canvas.is-hand, .sflow-canvas.is-panning { cursor: grab; }
+.sflow-canvas.is-panning { cursor: grabbing; }
+.sflow-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.sflow-edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.sflow-layer { position: absolute; left: 0; top: 0; }
+
+/* ── Edges ───────────────────────────────────────────────────────────────────────────────── */
+.sflow-edge { fill: none; stroke: var(--bmm-border-hover); stroke-width: 1.6; stroke-linecap: round; }
+.sflow-edge.e-loop { stroke-dasharray: 5 4; stroke: var(--sk-loop); opacity: .75; }
+.sflow-edge.e-bypass { stroke-dasharray: 3 4; }
+.sflow-edge.is-catch { stroke: var(--bmm-danger); opacity: .7; stroke-dasharray: 5 4; }
+.sflow-edge.is-hot { stroke: var(--bmm-accent); stroke-width: 2; opacity: 1; }
+
+/* ── Nodes ───────────────────────────────────────────────────────────────────────────────── */
+.sflow-node {
+    --kind: var(--sk-do);
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px 0 12px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 2px 8px -4px rgba(0, 0, 0, .18);
+    color: var(--bmm-text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .12s ease, box-shadow .12s ease;
+}
+.sflow-node::before {
+    content: '';
+    position: absolute;
+    left: -1px; top: 10px; bottom: 10px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--kind);
+}
+.sflow-node:hover { border-color: var(--bmm-border-hover); }
+.sflow-node.is-sel {
+    border-color: var(--bmm-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-accent) 24%, transparent), 0 6px 18px -8px rgba(0, 0, 0, .35);
+}
+.sflow-node.k-if, .sflow-node.k-switch, .sflow-node.k-ensure, .sflow-node.k-try { --kind: var(--sk-if); }
+.sflow-node.k-repeat, .sflow-node.k-forEach, .sflow-node.k-retry, .sflow-node.k-parallel { --kind: var(--sk-loop); }
+.sflow-node.k-waitFor { --kind: var(--sk-wait); }
+.sflow-node.k-delay, .sflow-node.k-break, .sflow-node.k-continue, .sflow-node.k-stop, .sflow-node.k-call { --kind: var(--sk-pause); }
+.sflow-node.sflow-trigger { --kind: var(--bmm-success); border-radius: 22px 10px 10px 22px; }
+/* A branching step points its lanes out to the right. */
+.sflow-node.is-branch { border-radius: 10px 20px 20px 10px; }
+.sflow-node.is-off { opacity: .55; }
+.sflow-node.is-off .sflow-title em { font-style: normal; font-weight: 500; color: var(--bmm-text-secondary); }
+.sflow-node.is-warn { border-color: var(--bmm-warning); }
+.sflow-canvas.is-dragging .sflow-node { transition: none; }
+.sflow-canvas.is-dragging .sflow-node.is-sel { z-index: 2; }
+
+.sflow-ic {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    color: var(--kind, var(--sk-do));
+    background: color-mix(in srgb, var(--kind, var(--sk-do)) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind, var(--sk-do)) 40%, transparent);
+}
+.sflow-ic svg { width: 14px; height: 14px; }
+.sflow-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.sflow-title { font-size: 12.5px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sflow-sub { font-size: 11.5px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+.sflow-warn {
+    position: absolute; top: -7px; right: -7px;
+    width: 17px; height: 17px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 11px; font-weight: 800;
+    background: var(--bmm-bg-elevated);
+    color: var(--bmm-text-primary);
+    border: 1.5px solid var(--bmm-warning);
+}
+.sflow-dot {
+    flex-shrink: 0;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--bmm-text-muted);
+}
+.sflow-node > .sflow-dot { position: absolute; top: 7px; right: 8px; }
+.sflow-dot.run-ok { background: var(--bmm-success); }
+.sflow-dot.run-error { background: var(--bmm-danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-danger) 22%, transparent); }
+.sflow-dot.run-stopped, .sflow-dot.run-cancelled { background: var(--bmm-warning); }
+.sflow-dot.run-skipped { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bmm-text-muted); }
+
+.sflow-join {
+    position: absolute;
+    width: 12px; height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: var(--bmm-bg-elevated);
+    border: 2px solid var(--bmm-border-hover);
+}
+
+.sflow-addnode, .sflow-edgeadd {
+    position: absolute;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--bmm-text-secondary);
+    background: var(--bmm-bg-elevated);
+    font: inherit;
+    transition: opacity .12s ease, border-color .12s ease, color .12s ease;
+}
+.sflow-addnode { width: 30px; height: 30px; border: 1.5px dashed var(--bmm-border-hover); }
+.sflow-edgeadd { width: 20px; height: 20px; border: 1px solid var(--bmm-border); opacity: .45; }
+.sflow-addnode:hover, .sflow-edgeadd:hover, .sflow-addnode:focus-visible, .sflow-edgeadd:focus-visible {
+    opacity: 1;
+    color: var(--bmm-text-primary);
+    border-color: var(--bmm-accent);
+    outline: none;
+}
+
+.sflow-lane {
+    position: absolute;
+    display: inline-flex; gap: 6px; align-items: baseline;
+    max-width: 230px;
+    padding: 1px 7px;
+    border-radius: 99px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-base);
+    font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+    white-space: nowrap;
+    pointer-events: auto;
+}
+.sflow-lane i { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; overflow: hidden; text-overflow: ellipsis; }
+.sflow-emptyhint { position: absolute; font-size: 12px; color: var(--bmm-text-secondary); white-space: nowrap; }
+.sflow-marquee {
+    position: absolute;
+    border: 1px solid var(--bmm-accent);
+    background: color-mix(in srgb, var(--bmm-accent) 10%, transparent);
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────────────────────── */
+.sflow-bar {
+    position: absolute; top: 10px; left: 10px;
+    display: flex; align-items: center; gap: 2px;
+    max-width: calc(100% - 20px);
+    flex-wrap: wrap;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .35);
+    z-index: 3;
+}
+.sflow-tb {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 28px; min-width: 28px;
+    padding: 0 7px;
+    border: 0; border-radius: 7px;
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font: 600 12px var(--bmm-font-sans);
+    cursor: pointer;
+    justify-content: center;
+}
+.sflow-tb:hover, .sflow-tb:focus-visible { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); outline: none; }
+.sflow-tb-add { background: var(--bmm-accent); color: var(--bmm-text-on-accent); padding: 0 10px 0 8px; }
+.sflow-tb-add:hover, .sflow-tb-add:focus-visible { background: var(--bmm-accent); color: var(--bmm-text-on-accent); filter: brightness(1.08); }
+.sflow-tb-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--bmm-border); }
+.sflow-zoom { min-width: 42px; text-align: center; font: 600 11px var(--bmm-font-mono); color: var(--bmm-text-secondary); }
+.sflow-run { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 11.5px; color: var(--bmm-text-secondary); }
+.sflow-run[hidden] { display: none; }
+
+/* ── Minimap ─────────────────────────────────────────────────────────────────────────────── */
+.sflow-mini {
+    position: absolute; right: 10px; bottom: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-elevated);
+    padding: 3px;
+    line-height: 0;
+    cursor: pointer;
+    z-index: 2;
+    transition: opacity .15s ease;
+}
+.sflow-mini.is-idle { opacity: 0; pointer-events: none; }
+.sflow-mini rect { fill: color-mix(in srgb, var(--bmm-text-muted) 45%, transparent); }
+.sflow-mini rect.is-sel { fill: var(--bmm-accent); }
+.sflow-mini rect.sflow-mini-view { fill: color-mix(in srgb, var(--bmm-accent) 8%, transparent); stroke: var(--bmm-accent); stroke-width: 1; }
+
+/* ── Inspector: the brick editor, for one step ───────────────────────────────────────────── */
+.sflow-insp {
+    position: absolute; top: 10px; right: 10px; bottom: 10px;
+    width: 380px; max-width: calc(100% - 20px);
+    display: flex; flex-direction: column;
+    border-radius: 12px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: 0 16px 40px -18px rgba(0, 0, 0, .45);
+    z-index: 4;
+    overflow: hidden;
+}
+.sflow-insp[hidden] { display: none; }
+.sflow-insp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 10px 10px 12px;
+    border-bottom: 1px solid var(--bmm-border);
+    font-size: 13px;
+    color: var(--bmm-text-primary);
+}
+.sflow-insp-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sflow-insp-x {
+    width: 28px; height: 28px; border-radius: 7px;
+    border: 0; background: transparent; cursor: pointer;
+    color: var(--bmm-text-secondary); font-size: 18px; line-height: 1;
+}
+.sflow-insp-x:hover, .sflow-insp-x:focus-visible { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); outline: none; }
+.sflow-insp-notes:empty { display: none; }
+.sflow-insp-notes { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 0; }
+.sflow-insp-body { flex: 1; overflow: auto; padding: 10px 12px 16px; }
+.sflow-insp-p { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
+.sflow-insp-hint { margin: 0 0 10px; font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.45; }
+.sflow-note {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px; line-height: 1.4;
+    color: var(--bmm-text-primary);
+    border: 1px solid var(--bmm-border);
+}
+.sflow-note > span:not(.sflow-dot) { flex: 1; min-width: 0; }
+.sflow-note.is-warn { border-color: var(--bmm-warning); background: color-mix(in srgb, var(--bmm-warning) 10%, transparent); }
+.sflow-note.run-error { border-color: var(--bmm-danger); background: color-mix(in srgb, var(--bmm-danger) 8%, transparent); }
+
+/* The brick editor's list tools act on a LIST; the canvas has those. Its bodies are the lanes
+   on the canvas, so only their labels (and a case's condition) stay here. */
+.sflow-insp .sched-drag-handle,
+.sflow-insp .sched-insert,
+.sflow-insp .sched-fold,
+.sflow-insp .sched-fold-sum,
+.sflow-insp .sched-tools .sched-dup,
+.sflow-insp .sched-tools .sched-del2,
+.sflow-insp .sched-branch > :not(.sched-branch-label) { display: none; }
+.sched-modal .sflow-insp .sched-step {
+    min-width: 0;
+    padding: 0 10px 10px 10px;
+    border-left-width: 1px;
+    box-shadow: none;
+}
+.sched-modal .sflow-insp .sched-step > .sched-step-head,
+.sched-modal .sflow-insp .sched-step > .sched-act-card > .sched-act-head {
+    margin: 0 -10px 0 -10px;
+    padding: 8px 10px;
+}
+.sched-modal .sflow-insp .sched-act-card,
+.sched-modal .sflow-insp .sched-act-card:hover { min-width: 0; }
+.sflow-insp .sched-tools { opacity: 1; }
+.sflow-insp .sched-branch { margin-top: 6px; }
+
+/* ── Node palette ────────────────────────────────────────────────────────────────────────── */
+.sflow-palette {
+    position: absolute;
+    z-index: 6;
+    display: flex; flex-direction: column;
+    max-height: min(440px, calc(100% - 24px));
+    border-radius: 12px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .55);
+    overflow: hidden;
+}
+.sflow-pal-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bmm-border);
+    color: var(--bmm-text-muted);
+}
+.sflow-pal-q {
+    flex: 1; min-width: 0;
+    border: 0; outline: none; background: transparent;
+    font: 14px var(--bmm-font-sans);
+    color: var(--bmm-text-primary);
+}
+.sflow-pal-q::placeholder { color: var(--bmm-text-muted); }
+.sflow-pal-list { overflow: auto; padding: 6px; }
+.sflow-pal-g {
+    padding: 8px 8px 4px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--bmm-text-muted);
+}
+.sflow-pal-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 7px 8px;
+    border: 0; border-radius: 8px;
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: inherit; text-align: left;
+    cursor: pointer;
+}
+.sflow-pal-item .sflow-ic { --kind: var(--bmm-text-secondary); width: 26px; height: 26px; }
+.sflow-pal-item.is-on, .sflow-pal-item:hover { background: var(--bmm-bg-hover); }
+.sflow-pal-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.sflow-pal-txt b { font-size: 12.5px; font-weight: 600; }
+.sflow-pal-txt span { font-size: 11px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sflow-pal-need {
+    flex-shrink: 0; max-width: 42%;
+    font-style: normal; font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 99px;
+    border: 1px solid var(--bmm-warning);
+    color: var(--bmm-text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sflow-pal-grp { flex-shrink: 0; max-width: 34%; font-size: 10.5px; color: var(--bmm-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sflow-pal-empty { padding: 22px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
+.sflow-pal-foot {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 7px 12px;
+    border-top: 1px solid var(--bmm-border);
+    font-size: 11px; color: var(--bmm-text-muted);
+}
+.sflow-pal-foot kbd, .sflow-keys kbd {
+    font: 600 10.5px var(--bmm-font-mono);
+    padding: 1px 6px;
+    border-radius: 5px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-base);
+    color: var(--bmm-text-secondary);
+}
+
+/* ── Shortcut sheet ──────────────────────────────────────────────────────────────────────── */
+.sflow-keys {
+    position: absolute; top: 52px; left: 10px;
+    width: 360px; max-width: calc(100% - 20px);
+    max-height: calc(100% - 64px);
+    overflow: auto;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: 0 16px 40px -18px rgba(0, 0, 0, .45);
+    z-index: 5;
+    font-size: 12px;
+    color: var(--bmm-text-primary);
+}
+.sflow-keys-h { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--bmm-text-muted); margin-bottom: 6px; }
+.sflow-keys ul { list-style: none; margin: 0; padding: 0; }
+.sflow-keys li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--bmm-border); }
+.sflow-keys li:last-child { border-bottom: 0; }
+.sflow-keys p { margin: 8px 0 0; font-size: 11.5px; color: var(--bmm-text-secondary); }
+
+/* The sidebar control a "Grant it" button pointed at. */
+.sflow-flash { animation: sflow-flash 1.3s ease-out; border-radius: 8px; }
+@keyframes sflow-flash {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    15% { box-shadow: 0 0 0 3px var(--bmm-accent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sflow-node, .sflow-addnode, .sflow-edgeadd, .sflow-mini { transition: none; }
+    .sflow-flash { animation: none; outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+}

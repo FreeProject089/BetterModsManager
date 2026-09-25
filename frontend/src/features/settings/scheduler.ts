@@ -45,6 +45,9 @@ import { getLinks } from '../../core/links-config.js';
 import { askConfirm } from '../../core/api.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { trustedLinkDispatcher } from '../../core/link-dispatch.js';
+import { actionPaths, pruneLayout, paletteStep, type FlowLayout } from './sched-flow-model.js';
+import { mountFlow, unmountFlow, type FlowHost } from './sched-flow.js';
+import { flowKeyActive } from './sched-flow-keys.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -298,6 +301,10 @@ interface Task {
     /** Run the whole task again after a failure: `times` more attempts (0-5), `backoffSec`
      *  seconds apart (5-3600). A stop or a cancel is never retried; each attempt is logged. */
     retry?: { times: number; backoffSec: number };
+    /** Where the flow editor's nodes were moved by hand (sched-flow-model.ts). Presentation
+     *  only: the executor never reads it, the code mode never prints it, and a task nobody
+     *  arranged has no such field at all. */
+    layout?: FlowLayout;
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
     history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
@@ -1093,6 +1100,20 @@ document.addEventListener('click', (e) => {
 /** The run record being written for each task that is running (sched-runlog.ts, A1). */
 const _runLogs = new Map<string, RunRecord>();
 
+/** Each action of a running task → its path in the tree, so the record can say WHICH step it
+ *  was and the flow view can mark it. A tag read by recordedAction, never a decision. */
+const _actionPath = new WeakMap<object, string>();
+function notePaths(steps: Step[]): void {
+    for (const [a, p] of actionPaths(steps as any)) _actionPath.set(a, p);
+}
+/** A for-each body runs as a substituted COPY; its actions take the paths of the originals. */
+function inheritPaths(orig: Step[], copy: Step[]): Step[] {
+    const a = actionPaths(orig as any);
+    const b = actionPaths(copy as any);
+    if (a.length === b.length) a.forEach(([o], i) => { const p = _actionPath.get(o); if (p) _actionPath.set(b[i][0], p); });
+    return copy;
+}
+
 /** Task id → the token of the resource preset it set for its own duration (A3). */
 const _taskPresetTokens = new Map<string, number>();
 
@@ -1104,6 +1125,7 @@ async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
     // One record per run, with a step per action, sent to the task's log when it ends.
     _runLogs.set(task.id, newRun(task.id, String((task as any).trigger?.type || 'manual'), t0));
+    notePaths(task.steps || []);
     noteTaskRunning(1);
     // Registered BEFORE the first step, so a task that fails immediately still appears in
     // the panel long enough to be seen, and a task started twice is visible as such.
@@ -1337,7 +1359,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
             for (const item of items.slice(0, max)) {
                 // The body runs on a per-item COPY with {item.*} placeholders resolved —
                 // actions stay ordinary actions, they just receive concrete values.
-                if (!await runLoopBody(substituteItem(step.steps, item), task, ctx)) break;
+                if (!await runLoopBody(inheritPaths(step.steps, substituteItem(step.steps, item)), task, ctx)) break;
                 if (gap) await new Promise(r => setTimeout(r, gap));
             }
         } else if (step.kind === 'retry') {
@@ -1895,6 +1917,8 @@ export async function importTasksFromPath(path: string): Promise<number> {
 async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     const log = _runLogs.get(task.id);
     const step = log ? startStep(log, stepLabel({ kind: 'action', action } as Step), depth) : null;
+    const where = _actionPath.get(action);
+    if (step && where) step.path = where;
     const t0 = Date.now();
     try {
         await runAction(action, task, ctx, depth);
@@ -4338,6 +4362,9 @@ function _ensureHistoryKeys(): void {
         const modal = document.getElementById('modal-scheduler');
         if (!modal || !modal.classList.contains('open')) return;
         if (!(e.ctrlKey || e.metaKey)) return;
+        // The flow canvas's undo/redo are registry commands (sched-flow-keys.ts), rebindable
+        // like every other shortcut; answering here too would undo twice.
+        if (flowKeyActive('flow')) return;
         const tag = (e.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         const k = e.key.toLowerCase();
@@ -5731,9 +5758,9 @@ function renderModal(modal: HTMLElement): void {
             <main class="modal-body sched-body sched-flow">
                 <div class="sched-flow-head">
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
-                    <!-- Two views of ONE draft. There is no third state where the code and
-                         the bricks disagree, because there is only ever one tree. -->
-                    <span class="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
+                    <!-- Three views of ONE draft. There is no state where the code, the
+                         bricks and the flow disagree, because there is only ever one tree. -->
+                    <span class="sched-mode-switch has-flow" id="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
                         <span class="sched-mode-glider" aria-hidden="true"></span>
                         <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
                                 data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
@@ -5744,6 +5771,11 @@ function renderModal(modal: HTMLElement): void {
                                 data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                             <span>${t('sched.modeCode') || 'Code'}</span>
+                        </button>
+                        <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
+                                data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
+                            <span>${t('sched.modeFlow') || 'Flow'}</span>
                         </button>
                     </span>
                     <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
@@ -5802,6 +5834,8 @@ function renderModal(modal: HTMLElement): void {
                     </div>
                     <div class="sched-code-status" id="sched-code-status"></div>
                 </div>
+                <!-- The flow view: built by sched-flow.ts over the same draft. -->
+                <div class="sflow-pane" id="sched-flowpane" hidden></div>
             </main>
         </div>
         <div class="modal-footer sched-footer">
@@ -5912,6 +5946,13 @@ function renderModal(modal: HTMLElement): void {
         if (!_draft.name.trim()) { toast(t('sched.needName') || 'Name required', 'warning'); return; }
         if (_draft.osSchedule && (_draft.trigger.type as string) === 'appStart') {
             // appStart already runs on launch; OS task would be redundant but harmless.
+        }
+        // Only the hand-placed positions that still describe a step on their path are kept, and
+        // none at all leaves no `layout` field: a task never arranged in the flow saves exactly
+        // as the other two modes would have saved it.
+        {
+            const lay = pruneLayout(_draft.steps as any, _draft.layout);
+            if (lay) _draft.layout = lay; else delete _draft.layout;
         }
         const idx = _tasks.findIndex(x => x.id === _draft.id);
         if (idx >= 0) _tasks[idx] = _draft; else _tasks.push(_draft);
@@ -6434,6 +6475,87 @@ function describeCompletion(c: { text: string; kind: string }): string {
     return '';
 }
 
+/** The three ways to edit a task: bricks, BMMScript text, and the flow graph. */
+type EditorMode = 'bricks' | 'code' | 'flow';
+const EDITOR_MODE_KEY = 'bmm.sched.editorMode';
+function readEditorMode(): EditorMode {
+    try {
+        const v = localStorage.getItem(EDITOR_MODE_KEY);
+        return v === 'code' || v === 'flow' ? v : 'bricks';
+    } catch { return 'bricks'; }
+}
+function writeEditorMode(m: EditorMode): void {
+    try { localStorage.setItem(EDITOR_MODE_KEY, m); } catch { /* private mode or quota: a preference, nothing lost */ }
+}
+/** Switch the open editor's mode, as its buttons do (the Alt+1/2/3 commands call this). */
+let _switchMode: ((m: EditorMode) => void) | null = null;
+export function switchEditorMode(m: EditorMode): void { _switchMode?.(m); }
+
+/** The one line under a node's title in the flow: what THIS step is about. */
+function flowSummary(step: Step): string {
+    switch (step.kind) {
+        case 'action': return condSubject({ type: step.action?.type, params: step.action?.params }, 38);
+        case 'delay': return `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
+        case 'waitFor': case 'if': case 'ensure': return condSummary(step.condition);
+        case 'repeat': return step.mode === 'times'
+            ? `${step.times || 0}\u00d7`
+            : `${t('sched.loop.' + step.mode) || step.mode} \u2014 ${condSummary(step.condition)}`;
+        case 'forEach': return t('sched.fe.' + step.source) || step.source;
+        case 'retry': return `${step.times || 0}\u00d7 \u00b7 ${step.everySec ?? 0}${t('sched.unitSec') || 's'}`;
+        case 'switch': return (t('sched.flow.nCases') || '{n} case(s)').replace('{n}', String(step.cases?.length || 0));
+        case 'parallel': return (t('sched.flow.nBranches') || '{n} branch(es)').replace('{n}', String(step.branches?.length || 0));
+        case 'call': return step.block || '';
+        default: return '';
+    }
+}
+
+/** What the flow view may use of this module. Passed in, so sched-flow.ts never imports the
+ *  scheduler (and so the executor, the permission check and the editors stay here, once). */
+function flowHost(): FlowHost {
+    return {
+        getDraft: () => _draft as any,
+        snapshot: _snapshot,
+        undo: _undoAction,
+        redo: _redoAction,
+        makeStep: (kind: string) => paletteStep(kind, (k) => _makeStep(k) as any),
+        // The inspector IS the brick editor, for one step: the same fields, the same pickers,
+        // the same validation. Its bodies are drawn on the canvas instead (sched-flow.css hides
+        // them here), and the tools that act on a LIST (duplicate, delete, drag) are the
+        // canvas's, so they are hidden too.
+        renderInspector: (host: HTMLElement, step: any) => renderStepsEditor(host, [step as Step], 1),
+        hasPerm: (key) => hasPerm(_draft as Task, key as keyof TaskPerms),
+        permLabel: (key: string) => t(key),
+        stepTitle: (step: any) => stepLabel(step as Step),
+        stepSummary: (step: any) => flowSummary(step as Step),
+        triggerTitle: () => triggerLabel(_draft.trigger),
+        kindIcon: (kind: string) => KIND_ICON[kind] || KIND_ICON.signal,
+        actionIcon: (type: string) => GROUP_ICON[ACTION_TYPES.find((a) => a.v === type)?.group || ''] || KIND_ICON.action,
+        triggerIcon: () => triggerIcon(_draft.trigger),
+        actionItems: () => actionPickItems(),
+        actionGroups: () => actionPickGroups(),
+        focusSidebar: (sel: string) => {
+            const el = document.querySelector(`#modal-scheduler ${sel}`) as HTMLElement | null;
+            const target = (el?.closest('.sched-perm, .sched-opt') as HTMLElement | null) || el;
+            if (!target) return;
+            target.scrollIntoView({ block: 'center' });
+            target.classList.remove('sflow-flash');
+            void target.offsetWidth;
+            target.classList.add('sflow-flash');
+            setTimeout(() => target.classList.remove('sflow-flash'), 1400);
+            (el as HTMLInputElement | null)?.focus?.();
+        },
+        lastRun: async () => {
+            if (!_editing || !_draft.id) return null;
+            try {
+                const runs = await invoke('sched_runs_list', { taskId: _draft.id }) as any[];
+                return Array.isArray(runs) && runs.length ? runs[0] : null;
+            } catch { return null; }
+        },
+        savedSteps: () => (_editing ? (_editing.steps as any) : null),
+        switchMode: (m) => switchEditorMode(m),
+    };
+}
+
 function wireCodeMode(modal: HTMLElement): void {
     const pane = modal.querySelector('#sched-codepane') as HTMLElement | null;
     const timeline = modal.querySelector('.sched-timeline') as HTMLElement | null;
@@ -6453,7 +6575,8 @@ function wireCodeMode(modal: HTMLElement): void {
     const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
     if (!pane || !timeline || !ta || !status || !btns.length) return;
 
-    let mode: 'bricks' | 'code' = 'bricks';
+    // Starts in Blocks; the mode used last is applied below, once everything is wired.
+    let mode: EditorMode = 'bricks';
 
     const say = (msg: string, bad: boolean) => {
         status.textContent = msg;
@@ -6496,10 +6619,14 @@ function wireCodeMode(modal: HTMLElement): void {
         }
     };
 
-    const show = (next: 'bricks' | 'code') => {
+    const flowPane = modal.querySelector('#sched-flowpane') as HTMLElement | null;
+    const main = modal.querySelector('.sched-body') as HTMLElement | null;
+    const show = (next: EditorMode) => {
         mode = next;
-        timeline.hidden = next === 'code';
+        timeline.hidden = next !== 'bricks';
         pane.hidden = next !== 'code';
+        if (flowPane) flowPane.hidden = next !== 'flow';
+        main?.classList.toggle('sflow-on', next === 'flow');
         for (const b of btns) {
             const on = b.dataset.mode === next;
             b.classList.toggle('on', on);
@@ -6507,35 +6634,52 @@ function wireCodeMode(modal: HTMLElement): void {
         }
         // The glider is moved by a class rather than by measuring, so it cannot drift out of
         // step with the buttons when the labels are translated to different widths.
-        modal.querySelector('.sched-mode-switch')?.classList.toggle('at-code', next === 'code');
+        const sw = modal.querySelector('.sched-mode-switch');
+        sw?.classList.toggle('at-code', next === 'code');
+        sw?.classList.toggle('at-flow', next === 'flow');
     };
 
-    for (const b of btns) {
-        b.addEventListener('click', async () => {
-            const next = (b.dataset.mode === 'code' ? 'code' : 'bricks') as 'bricks' | 'code';
-            if (next === mode) return;
-            if (next === 'code') {
-                // Printed fresh from the draft every time, so the text can never be a stale
-                // copy of steps edited in the other view since.
-                try {
-                    ta.value = await invoke('bmms_decompile', { task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps } }) as string;
-                    // Only the body: the header is the sidebar's business, and showing it
-                    // here would invite editing it in two places.
-                    ta.value = stripTaskWrapper(ta.value);
-                } catch { ta.value = ''; }
-                // Assigning .value fires no input event, so nothing would repaint and the
-                // mirror would keep showing the previous task.
-                hl?.refresh();
-                say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
-                show('code');
-                return;
-            }
+    /**
+     * One door for every switch, whichever way it goes. Leaving CODE compiles first and is
+     * refused if the text does not compile (the rule above); the flow and the blocks read the
+     * draft directly, so going between those two costs nothing and loses nothing.
+     */
+    const switchTo = async (next: EditorMode): Promise<void> => {
+        if (next === mode) return;
+        if (mode === 'code') {
             const steps = await readCode(true);
             if (steps === null) return;   // refused — stay here, the message says why
             _draft.steps = steps;
-            show('bricks');
-            renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
-            renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
+        }
+        if (mode === 'flow') unmountFlow();
+        writeEditorMode(next);
+        if (next === 'code') {
+            // Printed fresh from the draft every time, so the text can never be a stale
+            // copy of steps edited in the other view since.
+            try {
+                ta.value = await invoke('bmms_decompile', { task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps } }) as string;
+                // Only the body: the header is the sidebar's business, and showing it
+                // here would invite editing it in two places.
+                ta.value = stripTaskWrapper(ta.value);
+            } catch { ta.value = ''; }
+            // Assigning .value fires no input event, so nothing would repaint and the
+            // mirror would keep showing the previous task.
+            hl?.refresh();
+            say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
+            show('code');
+            return;
+        }
+        show(next);
+        if (next === 'flow' && flowPane) { mountFlow(flowPane, flowHost()); return; }
+        renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
+        renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
+    };
+    _switchMode = (m) => { void switchTo(m); };
+
+    for (const b of btns) {
+        b.addEventListener('click', () => {
+            const m = b.dataset.mode;
+            void switchTo(m === 'code' ? 'code' : m === 'flow' ? 'flow' : 'bricks');
         });
     }
 
@@ -6555,6 +6699,13 @@ function wireCodeMode(modal: HTMLElement): void {
             if (steps) say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(steps))), false);
         }, 350);
     });
+
+    // Open in the mode used last. After the listeners, so the code mode's first compile and
+    // print go through exactly the path a click does.
+    {
+        const pref = readEditorMode();
+        if (pref !== 'bricks') void switchTo(pref);
+    }
 
     // Saving from code mode must save the CODE, not the steps it replaced. Without this a
     // task edited entirely in text and saved without switching back would keep whatever the

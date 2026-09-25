@@ -461,6 +461,74 @@ L'exemple fourni est un `répéter` en mode `fois` (boucle 3×). Change le mode 
 obtiens des automatisations comme « *continue de vérifier jusqu'à ce que le processus du jeu
 sorte, puis exporte mes données* ».
 
+## Trois façons de modifier une tâche
+
+Le constructeur a un sélecteur au-dessus des étapes : **Blocs**, **Code** et **Flux**. Ce sont trois
+vues de la même tâche. Il n'y a qu'un arbre d'étapes ; chaque mode le lit et l'écrit, donc une tâche
+construite dans l'un s'ouvre à l'identique dans les deux autres, et le constructeur rouvre dans le
+dernier mode utilisé.
+
+| Mode | Ce que c'est | Utile pour |
+|---|---|---|
+| **Blocs** | Les étapes en cartes, de haut en bas, avec leurs champs. | Remplir des champs ; glisser une étape dans une branche. |
+| **Code** | Les étapes en texte [BMMScript](doc-page:features/bmmscript). En sortir compile le texte ; une erreur t'y garde, avec la ligne fautive. | Écrire vite ; coller ; relire une tâche entière d'un coup. |
+| **Flux** | La tâche en graphe, de gauche à droite : le déclencheur, un nœud par étape, une voie par branche, une jonction où les voies se rejoignent. | Voir la forme d'une tâche avec des branches, des boucles et du travail en parallèle. |
+
+### Le flux
+
+- **Les nœuds.** Chacun montre son icône, ce qu'il fait, et une ligne sur *lequel* (le fichier, le
+  mod, la condition). Un **SI**, un **SWITCH** ou un **S'ASSURER** ouvre ses voies à droite (ALORS /
+  SINON, chaque CAS et DÉFAUT) ; une boucle dessine son corps avec un trait pointillé qui revient ;
+  **EN MÊME TEMPS** dessine une voie par branche ; **ESSAYER** a une voie ESSAYER et une voie EN CAS
+  D'ERREUR.
+- **Ajouter.** Chaque lien a un **+** en son milieu, chaque voie vide a un **+**, et la fin de la
+  tâche aussi. Chacun ouvre une recherche sur toutes les étapes et toutes les actions — quelques
+  lettres, les flèches, Entrée. Une action qui demande une permission que la tâche n'a pas le dit
+  dans la liste.
+- **Modifier.** Sélectionne un nœud : le panneau de droite montre ses champs. Ce sont *les mêmes*
+  champs qu'en Blocs, pas une copie : les mêmes sélecteurs, les mêmes vérifications.
+- **Déplacer.** Fais glisser un nœud ; il s'aligne sur la grille. L'endroit où tu le poses est gardé
+  avec la tâche, comme un décalage par rapport à sa place automatique : insérer une étape pousse
+  toujours ce qui suit. La **disposition automatique** oublie les positions placées à la main. Où un
+  nœud se trouve ne change rien à ce que fait la tâche, ni à son identifiant de contenu.
+- **Dernière exécution.** Pour une tâche enregistrée, chaque action montre comment s'est passée la
+  dernière exécution : un point vert si elle a réussi, rouge si elle a échoué (survole-le pour
+  l'erreur), un point vide pour une étape jamais atteinte. Un bloc prend le pire de ce qui a tourné
+  dedans.
+
+!!! warning "Les permissions décident toujours"
+
+    Un nœud dont l'étape demande une permission que la tâche n'a pas porte un **!** et dit, avec les
+    mots de l'exécution, ce qui lui sera refusé. Le flux n'accorde jamais rien : *Le montrer dans
+    Permissions* t'emmène à la case du panneau latéral, la même que dans les autres modes, et
+    l'exécution vérifie l'autorisation exactement comme avant.
+
+### Raccourcis du flux
+
+Chaque raccourci ici est une commande : il est dans la palette :kbd[Ctrl+K] quand l'éditeur est
+ouvert, et il se change dans **Réglages → Raccourcis clavier**, sous *Planificateur*. Les touches du
+flux n'agissent que quand le canevas a le focus : taper dans un champ n'est jamais intercepté.
+
+| Commande | Par défaut |
+|---|---|
+| Ajouter un nœud… | :kbd[/] |
+| Modifier le nœud sélectionné | :kbd[Entrée] |
+| Supprimer la sélection | :kbd[Suppr] |
+| Dupliquer la sélection | :kbd[Ctrl+D] |
+| Annuler · Rétablir | :kbd[Ctrl+Z] · :kbd[Ctrl+Maj+Z] |
+| Sélectionner toutes les étapes | :kbd[Ctrl+A] |
+| Sélectionner le nœud suivant · Sélectionner le nœud précédent | :kbd[→] · :kbd[←] |
+| Sélectionner le nœud au-dessus · Sélectionner le nœud en dessous | :kbd[↑] · :kbd[↓] |
+| Avancer l’étape · Reculer l’étape | :kbd[Alt+←] · :kbd[Alt+→] |
+| Zoomer · Dézoomer | :kbd[Ctrl+=] · :kbd[Ctrl+-] |
+| Ajuster toute la tâche à la vue | :kbd[F] |
+| Disposition automatique (oublier les positions manuelles) | :kbd[Maj+L] |
+| Mode Blocs · Mode Code · Mode Flux | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
+
+À la souris : glisse le fond, maintiens :kbd[Espace] en glissant, ou fais défiler, pour te déplacer ;
+:kbd[Ctrl] + molette (ou un pincement) pour zoomer ; :kbd[Maj] + glisser pour sélectionner plusieurs
+nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection.
+
 ## Contrôles au quotidien
 
 Chaque ligne de tâche porte : un interrupteur **activer/désactiver**, ▶ **Lancer maintenant** (part

@@ -125,11 +125,12 @@ pub fn plugin_entries(install_dir: &std::path::Path) -> Vec<(String, String)> {
 ///
 /// `id`, `lastRun`, `lastResult`, `history` and `enabled` all describe THIS machine. Two people
 /// running the same automation must get the same id, and one of them having run it must not
-/// change the answer.
+/// change the answer. `layout` is where somebody dragged the nodes in the flow editor: how the
+/// task is drawn, not what it is, so moving a node must not rename the automation either.
 pub fn task_id(task: &serde_json::Value) -> String {
     let mut copy = task.clone();
     if let Some(o) = copy.as_object_mut() {
-        for k in ["id", "lastRun", "lastResult", "history", "enabled", "osSchedule", "createdAt"] {
+        for k in ["id", "lastRun", "lastResult", "history", "enabled", "osSchedule", "createdAt", "layout"] {
             o.remove(k);
         }
     }
@@ -278,6 +279,16 @@ mod tests {
             "createdAt": 5, "steps": [{ "kind": "action" }],
         });
         assert_eq!(task_id(&bare), task_id(&lived_in), "running it must not rename it");
+    }
+
+    #[test]
+    fn moving_a_node_in_the_flow_does_not_change_a_task() {
+        let bare = json!({ "name": "T", "steps": [{ "kind": "action" }] });
+        let arranged = json!({
+            "name": "T", "steps": [{ "kind": "action" }],
+            "layout": { "v": 1, "nudge": { "0": [40, 16, "action:"] } },
+        });
+        assert_eq!(task_id(&bare), task_id(&arranged), "where a node sits is not what the task is");
     }
 
     #[test]

@@ -1,0 +1,164 @@
+{
+  "name": "Built in the flow",
+  "trigger": {
+    "type": "manual"
+  },
+  "steps": [
+    {
+      "kind": "delay",
+      "seconds": 5
+    },
+    {
+      "kind": "action",
+      "action": {
+        "type": "mods.scan",
+        "params": {}
+      }
+    },
+    {
+      "kind": "if",
+      "condition": {
+        "type": "always",
+        "params": {}
+      },
+      "then": [
+        {
+          "kind": "action",
+          "action": {
+            "type": "notify",
+            "params": {}
+          }
+        }
+      ],
+      "else": [
+        {
+          "kind": "stop"
+        }
+      ]
+    },
+    {
+      "kind": "switch",
+      "cases": [
+        {
+          "condition": {
+            "type": "always",
+            "params": {}
+          },
+          "steps": [
+            {
+              "kind": "delay",
+              "seconds": 5
+            }
+          ]
+        }
+      ],
+      "default": [
+        {
+          "kind": "waitFor",
+          "condition": {
+            "type": "allModsActive",
+            "params": {}
+          },
+          "timeoutSec": 120
+        }
+      ]
+    },
+    {
+      "kind": "parallel",
+      "mode": "all",
+      "branches": [
+        [
+          {
+            "kind": "action",
+            "action": {
+              "type": "mods.scan",
+              "params": {}
+            }
+          }
+        ],
+        [
+          {
+            "kind": "delay",
+            "seconds": 5
+          }
+        ]
+      ]
+    },
+    {
+      "kind": "forEach",
+      "source": "enabledMods",
+      "maxIters": 100,
+      "everySec": 0,
+      "steps": [
+        {
+          "kind": "try",
+          "steps": [
+            {
+              "kind": "action",
+              "action": {
+                "type": "mod.enable",
+                "params": {}
+              }
+            }
+          ],
+          "onError": [
+            {
+              "kind": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "repeat",
+      "mode": "while",
+      "condition": {
+        "type": "always",
+        "params": {}
+      },
+      "maxIters": 100,
+      "everySec": 1,
+      "steps": [
+        {
+          "kind": "break"
+        }
+      ]
+    },
+    {
+      "kind": "retry",
+      "times": 3,
+      "everySec": 30,
+      "steps": [
+        {
+          "kind": "action",
+          "action": {
+            "type": "mods.scan",
+            "params": {}
+          }
+        }
+      ],
+      "onFail": "abort"
+    },
+    {
+      "kind": "ensure",
+      "condition": {
+        "type": "always",
+        "params": {}
+      },
+      "steps": [
+        {
+          "kind": "action",
+          "action": {
+            "type": "mods.scan",
+            "params": {}
+          }
+        }
+      ],
+      "onFail": "abort"
+    },
+    {
+      "kind": "call",
+      "block": "tidy"
+    }
+  ]
+}

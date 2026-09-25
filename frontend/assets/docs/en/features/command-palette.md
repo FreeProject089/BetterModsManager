@@ -64,6 +64,14 @@ want, and it's bound; the row's buttons also **reset to default** or **clear** i
     letter, so it will not fire while you are typing — useful if that is what you wanted, and a
     surprise if you expected it to work everywhere.
 
+## Shortcuts that belong to one screen
+
+Most commands work anywhere. A few belong to one place and only exist while it is open: the
+scheduler's task editor registers its three mode switches and every key of its [flow
+mode](doc-page:features/scheduler#three-ways-to-edit-a-task) this way. They are listed here under **Scheduler**,
+they can be rebound like any other, and while their screen has the focus they win over a global
+shortcut on the same keys. Elsewhere they do nothing and the palette does not offer them.
+
 ## Stopping something that is already running
 
 Enabling or disabling a mod copies files, and a big one takes a while. Two commands stop it:
