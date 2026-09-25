@@ -21,7 +21,10 @@ This guide explains how to launch a BMM repository server using Docker.
 
 The generated folder/ZIP will contain:
 - `Dockerfile` - Docker image configuration
-- `docker-compose.yml` - Docker Compose configuration
+- `docker-compose.yml` - Docker Compose configuration (no password in it)
+- `.env` - the admin password, read by `docker-compose.yml` through `env_file`. Keep it private.
+- `.gitignore` / `.dockerignore` - each gets a `.env` line (added to an existing file, never
+  replacing it), so the password stays out of git and out of the image
 - `BMM-Standalone-Server.bat` (Windows) or `BMM-Standalone-Server.sh` (Linux) - Standalone scripts
 - `mods/` - Mod files
 - `repo.json` - Repository configuration
@@ -131,18 +134,32 @@ The docker-compose.yml already mounts:
 - `history.json` - Download history (read-write)
 
 ### Environment Variables
-You can set the admin password via environment:
+The admin password is **not** in `docker-compose.yml`. BMM writes it to `.env` beside it:
+```bash
+# .env
+ADMIN_PASSWORD='your_password'
+```
+and the compose file reads that file:
 ```yaml
+env_file:
+  - .env
 environment:
-  - ADMIN_PASSWORD=your_password
   - PORT=8000
 ```
+To change the password, edit `.env` and run `docker compose up -d`: the server prefers
+`ADMIN_PASSWORD` from its environment over the value baked in at export. On Linux and macOS the
+file is created readable by its owner only (`chmod 600`).
 
 ## Windows-Specific Notes
 
 When using Windows containers:
 - Ensure Docker Desktop is running in Windows container mode
-- The generated Dockerfile uses Windows Nano Server base image
+- The generated Dockerfile uses a Windows Nano Server (ltsc2022) base image. Node.js 22 LTS is
+  downloaded in a Server Core build stage, checked against its SHA-256, and copied in (Nano
+  Server has no PowerShell). The server runs as the unprivileged `ContainerUser`, with write
+  access to `C:\app` only; the health check calls `node`, not PowerShell.
+- The Linux images use `node:22` (Alpine), pinned by version and digest, and run as a non-root
+  `bmm` user.
 - Some Linux-specific features may not be available
 
 ## Linux-Specific Notes

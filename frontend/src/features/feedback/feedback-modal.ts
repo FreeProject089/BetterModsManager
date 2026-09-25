@@ -2,8 +2,8 @@
 //
 // Built on demand, in BetterCommunity's own look: a kind selector (suggestion · bug · crash),
 // what happened, what to attach (screenshots, crash zips, logs, DxDiag), who you are — and a
-// Send that goes to the feedback centre through bc-feedback.ts. When links.json empties
-// `feedback_endpoint`, the older BetaHub forms are opened instead, untouched.
+// Send that goes to the feedback centre through bc-feedback.ts, the only transport. When
+// links.json empties `feedback_endpoint`, reports are switched off and the dialog says so.
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -71,9 +71,10 @@ function close(): void { _overlay?.classList.remove('open'); }
 /** Open the dialog. `kind` picks the tab; a crash zip pre-attaches itself. */
 export async function openFeedback(kind: Kind = 'bug', opts: OpenOpts = {}): Promise<void> {
     if (!usesBetterCommunity()) {
-        // links.json says BetaHub: the older forms, untouched.
-        const m = await import('../betahub/betahub-modals.js');
-        if (kind === 'feedback') m.openFeedbackModal(); else m.openBugReportModal(opts.crashZip);
+        // links.json emptied feedback_endpoint: reports are switched off in this build. There is
+        // no second transport any more (the BetaHub client was removed on 2026-09-25), so say so
+        // instead of opening a form whose Send could only fail.
+        toast(t('fbc.testNoUrl'), 'warning');
         return;
     }
     _kind = kind; _shots = []; _zips = opts.crashZip ? [opts.crashZip] : []; _steps = ['']; _busy = false;
@@ -555,10 +556,12 @@ export function initFeedbackCard(): void {
     const badge = document.getElementById('fbc-badge');
     const where = document.getElementById('fbc-where');
     const bc = usesBetterCommunity();
-    if (badge) { badge.textContent = bc ? 'BetterCommunity' : 'BetaHub'; badge.classList.toggle('is-bc', bc); }
+    // No endpoint = reports switched off (there is no fallback transport): the badge and the
+    // "follow your reports" line would name a destination that does not exist, so they hide.
+    if (badge) { badge.textContent = 'BetterCommunity'; badge.classList.toggle('is-bc', bc); badge.hidden = !bc; }
     if (where) {
         const a = where.querySelector('a');
-        if (a) { a.href = bc ? feedbackWebUrl() : 'https://app.betahub.io'; a.textContent = bc ? t('fbc.followSite') : 'BetaHub'; }
+        if (a && bc) { a.href = feedbackWebUrl(); a.textContent = t('fbc.followSite'); }
         where.hidden = !bc;
     }
     wireEndpointTest();

@@ -5,8 +5,9 @@
 // Two rules drive everything here. BetterCommunity being unreachable must never break BMM:
 // every network failure becomes a toast and, for the report itself, a local queue that is
 // retried on the next start. And the endpoint is configuration, not code: `feedback_endpoint`
-// in links.json can point at another BetterCommunity, at a tunnel, or be emptied to fall back
-// to the BetaHub client that this module replaces.
+// in links.json can point at another BetterCommunity, at a tunnel, or be emptied to switch
+// reports off. This is the ONLY transport: the BetaHub client it replaced was removed on
+// 2026-09-25, so an empty endpoint no longer falls back to anything.
 import { invoke } from '../../core/api.js';
 import { creatorProofFor } from '../../core/canvas-fingerprint.js';
 import { getLinks, bcApi } from '../../core/links-config.js';
@@ -82,7 +83,7 @@ export function feedbackWebUrl(): string {
     if (typeof raw === 'string' && /^https?:\/\//.test(raw)) return raw;
     return `${bcApi().replace(/\/api$/, '')}/dashboard?s=reports`;
 }
-/** True when reports go to BetterCommunity (the default); false = BetaHub fallback. */
+/** True when reports can be sent (the default); false = feedback_endpoint emptied, reports off. */
 export function usesBetterCommunity(): boolean { return feedbackEndpoint() !== ''; }
 
 let cfgCache: { at: number; cfg: FeedbackRemoteConfig | null } = { at: 0, cfg: null };
@@ -321,7 +322,7 @@ export function textToBase64(text: string): string {
 /** Show the failure the way the user can act on it. Returns true when the report was queued. */
 export function explainFeedbackError(e: unknown): boolean {
     const fe = e instanceof FeedbackError ? e : null;
-    if (!fe) { toast(`${t('betahub.errorSubmit')}: ${(e as Error)?.message || e}`, 'error'); return false; }
+    if (!fe) { toast(`${t('feedback.errorSubmit')}: ${(e as Error)?.message || e}`, 'error'); return false; }
     if (fe.code === 'offline') { toast(t('feedback.offlineQueued'), 'warning'); return true; }
     toast(fe.message, fe.code === 'rate_limited' ? 'warning' : 'error');
     return false;

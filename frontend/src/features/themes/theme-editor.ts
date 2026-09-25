@@ -647,7 +647,6 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'App picker',         sel: '#modal-app-picker .modal' },
         { label: 'Server panel',       sel: '#modal-server .modal' },
         { label: 'Crash report',       sel: '#modal-crash-report .modal' },
-        { label: 'BetaHub feedback',   sel: '#modal-betahub-feedback .modal, #modal-betahub-bugreport .modal' },
         { label: 'Diagram viewer',     sel: '#modal-docs-diagram .modal' },
         { label: 'Licence',            sel: '#modal-license .modal' },
         { label: 'Credits — contributor', sel: '#modal-contributor-detail .modal' },

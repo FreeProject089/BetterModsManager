@@ -26,3 +26,13 @@ e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api
 1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6190
 1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6196
 1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6202
+
+# --- BetaHub personal access token (tkn-…, generic-api-key) — NOT YET ACCEPTED -------------------
+# A real BetaHub token was committed in these two commits. The BetaHub integration was removed from
+# BMM on 2026-09-25 (no current file contains the token any more), but git history keeps it for ever,
+# so the secrets job stays RED on these two findings until the token is dead.
+# Uncomment the two lines below ONLY after the owner has revoked the token at BetaHub (or confirmed
+# the BetaHub account/project is closed), and write that date here:
+#   BetaHub integration removed on 2026-09-25; token revoked by the owner on <YYYY-MM-DD, TO BE FILLED>.
+#f46614f248c7d3783b5dd8c44e2ea0fbb33ac018:frontend/src/features/betahub/betahub-config.example.ts:generic-api-key:22
+#e90495878072f5c5243677d3481000178ed2a984:frontend/src/features/betahub/betahub-api.ts:generic-api-key:16

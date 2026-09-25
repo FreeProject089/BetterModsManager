@@ -25,6 +25,15 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
 const cors    = require('cors');
 const crypto  = require('crypto');
 // Per-repo credentials, read from each repo folder's access.json at request time. Kept out of
@@ -62,23 +71,41 @@ function ensureRepoState(folder) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function repoPath(folder)       { return path.join(ROOT, folder); }
-function bansPath(folder)       { return path.join(ROOT, folder, 'bans.json'); }
-function whitelistPath(folder)  { return path.join(ROOT, folder, 'whitelist.json'); }
-function logPath(folder)        { return path.join(ROOT, folder, 'server.log'); }
+// A repo folder named by a URL. Express DECODES route parameters, so `/%2e%2e/admin/data`
+// arrives as folder '..' and `/..%2F..%2Fsomewhere/admin/update` as '../../somewhere': joined
+// onto ROOT, both leave the hub (read another directory's repo.json, write bans.json and
+// whitelist.json wherever a repo.json exists). A repo is ROOT itself ('.', the root repo) or a
+// folder DIRECTLY inside it — exactly what discoverRepos() lists — so that is all this accepts:
+// one plain name (no separator, no drive colon), resolved, then checked to sit in ROOT.
+// Anything else is null, and a 404.
+function repoDir(folder) {
+    if (typeof folder !== 'string' || !folder || folder === '..' || /[\\/:\0]/.test(folder)) return null;
+    const root = path.resolve(ROOT);
+    const abs  = path.resolve(root, folder);
+    if (!insideDir(root, abs) || (abs !== root && path.dirname(abs) !== root)) return null;
+    return abs;
+}
+function repoFile(folder, name) { const d = repoDir(folder); return d ? path.join(d, name) : null; }
+function repoPath(folder)       { return repoDir(folder); }
+function bansPath(folder)       { return repoFile(folder, 'bans.json'); }
+function whitelistPath(folder)  { return repoFile(folder, 'whitelist.json'); }
+function logPath(folder)        { return repoFile(folder, 'server.log'); }
 
 function readJson(filePath, def) {
-    try { if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (_) {}
+    try { if (filePath && fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (_) {}
     return def;
 }
 function writeJson(filePath, data) {
+    if (!filePath) return;
     try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2)); } catch (_) {}
 }
 
 function logLine(folder, msg, event = 'INFO') {
     const ts   = new Date().toISOString();
     const line = `[${ts}] [${event}] ${msg}`;
-    try { fs.appendFileSync(logPath(folder), line + '\n'); } catch (_) {}
+    const lp = logPath(folder);
+    if (!lp) return;
+    try { fs.appendFileSync(lp, line + '\n'); } catch (_) {}
 }
 
 function discoverRepos() {
@@ -142,6 +169,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Every route with a :folder in it: refuse a folder that is not a repo of this hub BEFORE any
+// handler joins it onto a path (see repoDir). Registered once, it covers the routes below.
+app.param('folder', (req, res, next, folder) => {
+    if (!repoDir(folder)) return res.status(404).end();
+    next();
+});
+
 // Admin auth middleware
 const authAdmin = (req, res, next) => {
     if (ADMIN_PASSWORD === '' || safeEqual(req.headers['authorization'], ADMIN_PASSWORD)) return next();
@@ -174,7 +208,7 @@ function repoSecurityCheck(folder, ip, key, res) {
         return false;
     }
     // Owner requires a BetterCommunity identity to download from this repo.
-    const rj = readJson(path.join(ROOT, folder, 'repo.json'), {});
+    const rj = readJson(repoFile(folder, 'repo.json'), {});
     if ((rj.require_login || rj.requireLogin) && !key) {
         res.status(403).send('BetterCommunity login required');
         return false;
@@ -215,7 +249,7 @@ function repoMonitoring(folder) {
     ensureRepoState(folder);
     const st    = repoStats[folder];
     const now   = Date.now();
-    const rj    = readJson(path.join(ROOT, folder, 'repo.json'), {});
+    const rj    = readJson(repoFile(folder, 'repo.json'), {});
     let repoSize = 0;
     (rj.profiles || []).forEach(p => (p.mods || []).forEach(m => (m.files || []).forEach(f => repoSize += f.size || 0)));
     const active  = Array.from(repoActiveDownloads[folder].values()).map(d => ({
@@ -234,36 +268,36 @@ function repoMonitoring(folder) {
 
 app.get('/:folder/monitoring.json', (req, res) => {
     const folder = req.params.folder;
-    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    if (!repoDir(folder) || !fs.existsSync(repoFile(folder, 'repo.json'))) return res.status(404).end();
     res.json(publicMonitoring(repoMonitoring(folder)));
 });
 
 app.get('/:folder/admin/monitoring', authAdmin, (req, res) => {
     const folder = req.params.folder;
-    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    if (!repoDir(folder) || !fs.existsSync(repoFile(folder, 'repo.json'))) return res.status(404).end();
     res.json(repoMonitoring(folder));
 });
 
 app.get('/:folder/admin/data', authAdmin, (req, res) => {
     const folder = req.params.folder;
-    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    if (!repoDir(folder) || !fs.existsSync(repoFile(folder, 'repo.json'))) return res.status(404).end();
     const bans  = readJson(bansPath(folder),      { banned_ips: [], banned_keys: [] });
     const wl    = readJson(whitelistPath(folder), { enabled: false, ips: [], keys: [] });
-    const repo  = readJson(path.join(ROOT, folder, 'repo.json'), { modpacks: [] });
+    const repo  = readJson(repoFile(folder, 'repo.json'), { modpacks: [] });
     res.json({ bans, whitelist: wl, repo });
 });
 
 app.post('/:folder/admin/update', authAdmin, (req, res) => {
     const folder = req.params.folder;
-    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    if (!repoDir(folder) || !fs.existsSync(repoFile(folder, 'repo.json'))) return res.status(404).end();
     const { bans, whitelist, repo } = req.body;
     try {
         if (bans)      writeJson(bansPath(folder),      bans);
         if (whitelist) writeJson(whitelistPath(folder), whitelist);
         if (repo) {
-            const existing = readJson(path.join(ROOT, folder, 'repo.json'), {});
+            const existing = readJson(repoFile(folder, 'repo.json'), {});
             if (repo.modpacks !== undefined) existing.modpacks = repo.modpacks;
-            writeJson(path.join(ROOT, folder, 'repo.json'), existing);
+            writeJson(repoFile(folder, 'repo.json'), existing);
         }
         logLine(folder, 'Admin config updated', 'ADMIN');
         res.json({ ok: true });
@@ -284,7 +318,7 @@ app.get('/:folder/admin/logs', authAdmin, (req, res) => {
 // ── Per-repo single-page dashboard ────────────────────────────────────────────
 app.get('/:folder', (req, res, next) => {
     const f = req.params.folder;
-    if (f !== 'api' && fs.existsSync(path.join(ROOT, f, 'repo.json'))) {
+    if (f !== 'api' && repoDir(f) && fs.existsSync(repoFile(f, 'repo.json'))) {
         // Redirect to hub dashboard which handles per-repo view via JS
         return res.redirect(`/?repo=${encodeURIComponent(f)}`);
     }
@@ -299,12 +333,20 @@ app.use('/', async (req, res, next) => {
     const stripped = decodeURIComponent(req.path).replace(/^\/+/, '');
     if (!stripped) return next();
     const abs = path.resolve(path.join(ROOT, stripped));
-    if (!abs.startsWith(ROOT) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) return next();
+    if (!insideDir(ROOT, abs) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) return next();
 
     // Determine which repo folder this file belongs to
     const rel    = path.relative(ROOT, abs);
     const folder = rel.split(path.sep)[0] || '';
-    if (!folder || !fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    if (!folder || !repoDir(folder) || !fs.existsSync(repoFile(folder, 'repo.json'))) return res.status(404).end();
+    // Inside a repo folder, the same rule as BMM's built-in server (builtin_may_serve): at the
+    // repo's top level only its manifest and info file. The rest there belongs to the hub:
+    // access.json (the repo's download password), server.log (every downloader's IP and
+    // Creator ID), bans.json, whitelist.json. Nothing under node_modules either. Decided on the
+    // RESOLVED path, so `/alpha/mods/..%2Faccess.json` or `/alpha/ACCESS.json` cannot spell past it.
+    const inRepo = rel.split(path.sep).filter(Boolean).slice(1);
+    if ((inRepo.length === 1 && !['repo.json', 'info.json'].includes(inRepo[0].toLowerCase()))
+        || (inRepo.length > 1 && inRepo[0].toLowerCase() === 'node_modules')) return res.status(404).end();
     ensureRepoState(folder);
 
     const ip  = (req.ip || '').replace('::ffff:', '') || '127.0.0.1';
@@ -314,7 +356,7 @@ app.use('/', async (req, res, next) => {
 
     // This repo's own password / authorised keys, from its access.json. Checked AFTER bans and
     // the whitelist — those are local and cheap — and before a single byte is streamed.
-    const gate = await checkAccess(path.join(ROOT, folder), req, PUBLIC_ORIGIN);
+    const gate = await checkAccess(repoDir(folder), req, PUBLIC_ORIGIN);
     if (!gate.ok) {
         logLine(folder, `${ip} | ID: ${key} | ${gate.reason}`, 'REJECTED');
         return res.status(gate.status).send(gate.reason);

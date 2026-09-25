@@ -20,8 +20,6 @@ auto-update feed so installed copies pick the release up.
 - `npm ci` at the BMM repo root. `@tauri-apps/cli` is a **dev-dependency**, so the CLI is
   `npx tauri …` — *not* `cargo tauri …`.
 - A BetterInstaller checkout for the packaging step (below).
-- `frontend/src/features/betahub/betahub-config.local.ts` — copy it from
-  `betahub-config.example.ts` if you don't have the real one; the build fails without it.
 
 ---
 
@@ -135,8 +133,8 @@ Useful: `bpkg info app.bpkg`, `bpkg verify app.bpkg --key keys/public.key`,
 repos, builds `bpkg-cli` + `installer`, restores the key from the `BMM_PRIVATE_KEY` secret,
 and calls the same `release.ps1 … -Publish`.
 
-Secrets: **`BMM_PRIVATE_KEY`** (required — must be *the* existing key), `BETAHUB_CONFIG`
-(optional, falls back to the committed example).
+Secrets: **`BMM_PRIVATE_KEY`** (required — must be *the* existing key). That is the only one:
+`BETAHUB_CONFIG` went with the BetaHub client (removed 2026-09-25) and can be deleted.
 
 ```bash
 git tag v1.1.0 && git push origin v1.1.0

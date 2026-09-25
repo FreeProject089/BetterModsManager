@@ -128,7 +128,7 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 
 - **Discord Rich Presence** — Shows your active game profile, current mod count, and whether you're hosting a repository server — visible to friends in Discord without any setup.
 
-- **BetaHub Integration** — One-click structured bug reports sent directly from inside BMM. Includes automatic context capture (OS version, profile state, recent actions) and proof-of-work spam protection.
+- **Feedback & bug reports** — Structured bug reports, crash reports and suggestions sent from inside BMM to the BetterCommunity feedback centre, with automatic context capture (OS version, profile state, recent actions) and an offline queue.
 
 - **Notification centre** — A toast is a three-second window onto something that already happened; miss it and it was gone. Every message BMM has shown you is now kept, with its source, its time and its full text — searchable, filterable, with the unread count drawn onto the taskbar icon. Link a BetterCommunity account and its notifications join the same list.
 
@@ -220,7 +220,7 @@ not that the app works. **[Every command, grouped by what you are trying to do](
 ### Get Help
 - **Official Website** — https://freeproject089.github.io/BMM_Web/
 - **Discord** — [Join the server](https://discord.gg/CTaaEF9R75)
-- **Bug Reports** — [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues) or the **BetaHub** button inside the app
+- **Bug Reports** — [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues) or **Settings → Feedback & bug reports** inside the app
 - **Support Development** — [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
 
 ---

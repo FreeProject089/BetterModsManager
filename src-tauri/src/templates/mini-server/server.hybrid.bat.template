@@ -24,12 +24,16 @@ if %errorlevel% equ 0 ( set NODE_EXE=node ) else (
         if "%PROCESSOR_ARCHITECTURE%"=="x86" (
             if not defined PROCESSOR_ARCHITEW6432 set "NODE_ARCH=win-x86"
         )
-        set "NODE_URL=https://nodejs.org/dist/v20.11.1/!NODE_ARCH!/node.exe"
+        rem Node.js 22 LTS, pinned, and checked against nodejs.org SHASUMS256.txt before it ever runs.
+        set "NODE_URL=https://nodejs.org/dist/v22.23.3/!NODE_ARCH!/node.exe"
+        set "NODE_SHA256=9c9245166b4a8e182e0b797da9c20136117ff24368eaff1fec8343a123c8db0e"
+        if "!NODE_ARCH!"=="win-x86" set "NODE_SHA256=a8aa72dda43af5357d0a502548a54e402d4f7643be221662624a2cc876cd37bb"
         powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('!NODE_URL!', 'node.exe')"
+        if exist "node.exe" powershell -NoProfile -Command "if ((Get-FileHash node.exe -Algorithm SHA256).Hash -ne '!NODE_SHA256!') { Write-Host '[BMM] node.exe checksum mismatch - deleted'; Remove-Item -Force node.exe }"
         if exist "node.exe" (
             set NODE_EXE=".\node.exe"
         ) else (
-            echo [ERREUR] Impossible de telecharger Node.js. ; pause ; exit /b
+            echo [ERREUR] Impossible de telecharger Node.js. & pause & exit /b 1
         )
     )
 )
@@ -58,6 +62,15 @@ const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || 'PUBLIC_ORIGIN_PLACEHOLDE
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
 const { spawn, execSync } = require('child_process');
 
 // placeholders
@@ -212,7 +225,7 @@ const server = http.createServer(async (req, res) => {
     const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
     const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
 
-    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    if (!insideDir(__dirname, absolutePath) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
     // At the root, only the manifest and its stats (the rule of BMM's built-in server,

@@ -149,7 +149,8 @@ believe the whole network is down.
 
 Never fetched, only opened: `discord.com/invite/CTaaEF9R75`, `reddit.com/r/BetterModManager`,
 `ko-fi.com/I2I31ZIPPG`, `ko-fi.com/bettercommunity`, `forum.dcs.world/topic/385941-…`,
-`github.com/FreeProject089/BetterModsManager`, `app.betahub.io` (bug reports).
+`github.com/FreeProject089/BetterModsManager`. (`app.betahub.io`, the old bug-report service, was
+removed on 2026-09-25: reports go to the feedback centre, `feedback_endpoint`.)
 
 Downloaded on demand, only if the user asks for the feature:
 `nodejs.org/dist/…` (the Node runtime a plugin script may need) and

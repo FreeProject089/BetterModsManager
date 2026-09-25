@@ -16,7 +16,7 @@ import { writeSources } from '../catalogs/catalog-sources.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
-import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
+import { initReportHistory } from '../feedback/report-history.js';
 import { initFeedback } from '../feedback/bc-feedback.js';
 import { openFeedback, initFeedbackCard } from '../feedback/feedback-modal.js';
 import { initLaunchPackSettings } from './launch_packs.js';
@@ -3296,15 +3296,15 @@ export async function initSettings() {
             .then((m) => m.openRestoreBundle())
             .catch((e) => toast(String(e), 'error'));
     });
-    // ── BetaHub ──────────────────────────────────────────────
-    initBetaHub();
+    // ── Feedback & bug reports (BetterCommunity feedback centre, the only transport) ──
+    initReportHistory();
     initFeedback();
     initFeedbackCard();
-    // The BetterCommunity dialog; it opens the older BetaHub forms itself when links.json
-    // empties feedback_endpoint.
+    // The buttons keep their historical ids (btn-settings-betahub-*): the markup is in
+    // index.html. There is no fallback form any more — a failure to open says why.
     document.getElementById('btn-settings-betahub-bugreport')
-        ?.addEventListener('click', () => { openFeedback('bug').catch(() => openBugReportModal()); });
+        ?.addEventListener('click', () => { openFeedback('bug').catch((e) => toast(String(e?.message || e), 'error')); });
     document.getElementById('btn-settings-betahub-feedback')
-        ?.addEventListener('click', () => { openFeedback('feedback').catch(() => openFeedbackModal()); });
+        ?.addEventListener('click', () => { openFeedback('feedback').catch((e) => toast(String(e?.message || e), 'error')); });
 }
 //# sourceMappingURL=settings.js.map

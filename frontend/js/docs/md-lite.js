@@ -146,7 +146,10 @@ function inline(s) {
     s = s.replace(/:icon\[([^\]]+)\](?:\{[^}]*\})?/g, (_m, raw) => {
         const n = String(raw).trim().toLowerCase().replace(/[^a-z0-9:-]/g, '');
         // Phosphor (`ph:rocket`, `ph-bold:rocket`): a mask too, hydrated from `data-ph`.
-        const ph = n.match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+        // ReDoS (Semgrep detect-redos) reviewed 2026-09-25, false positive: every repetition of
+        // `(?:-[a-z0-9]+)*` must START with a hyphen, so a run of letters can be split one way only
+        // and a failed match backtracks linearly (40 000 chars: < 1 ms). tests/redos-budget.test.mjs.
+        const ph = n.match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/); // nosemgrep: rules.javascript.lang.security.audit.detect-redos
         if (ph) {
             const w = ph[1] || 'regular';
             return keep(`<span class="doc-icon doc-icon-mask" data-ph="${w}/${ph[2]}${w === 'regular' ? '' : `-${w}`}"></span>`);
@@ -468,8 +471,12 @@ function renderBlocks(lines) {
         }
         // tables (GFM) — a header row followed by a |---|:--:|---:| separator. Needed because the
         // reference articles (actions, API/deeplinks) are long lookup tables: prose can't carry them.
+        // ReDoS (Semgrep detect-redos) reviewed 2026-09-25, false positive: each repetition of the
+        // group must START with `|`, and `\s*` / `-{2,}` sit between fixed characters, so no run can
+        // be split two ways; a failing separator line backtracks linearly (40 000 chars: < 1 ms,
+        // a plugin README is untrusted input). tests/redos-budget.test.mjs.
         if (t.includes('|') && i + 1 < lines.length
-            && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(lines[i + 1].trim())) {
+            && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(lines[i + 1].trim())) { // nosemgrep: rules.javascript.lang.security.audit.detect-redos
             flushP();
             const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
             const head = cells(t);
@@ -524,7 +531,10 @@ function renderBlocks(lines) {
                 i++;
             }
             const block = buf.join(' ');
-            const at = (n) => (new RegExp(`data-${n}="([^"]*)"`).exec(block) || [, ''])[1];
+            // Non-literal RegExp (Semgrep) reviewed 2026-09-25, false positive: `n` is only ever one of
+            // the literal attribute names below ('src', 'remote', ...), never document text; the
+            // pattern around it is fixed and linear.
+            const at = (n) => (new RegExp(`data-${n}="([^"]*)"`).exec(block) || [, ''])[1]; // nosemgrep: rules.javascript.lang.security.audit.detect-non-literal-regexp
             const src = at('src'); // the bundled copy, when there is one
             const remote = at('remote'); // the same asset on the website
             const kind = /\.(mp4|webm)$/i.test(src || remote) ? 'video' : 'replay';

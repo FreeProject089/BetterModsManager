@@ -17,8 +17,12 @@ services:
       - ./server.log:/app/server.log
       - ./history.json:/app/history.json
       - ./downloads.json:/app/downloads.json
+    # ADMIN_PASSWORD is in .env beside this file, written by BMM with it and kept out of git
+    # (.gitignore) and out of the image (.dockerignore): this file can be shared or committed
+    # without the password in it. Change the password there, then `docker compose up -d`.
+    env_file:
+      - .env
     environment:
-      - ADMIN_PASSWORD=ADMIN_PASSWORD_PLACEHOLDER
       - PORT=PORT_PLACEHOLDER
     restart: unless-stopped
     healthcheck:

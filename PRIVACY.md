@@ -258,8 +258,9 @@ says what will become visible, and nothing changes unless you confirm in BMM.
 
 ### 5.1 Sending a report
 A suggestion, bug report or crash report goes to the **BetterCommunity feedback centre**
-(`bettercommunity.ch/api/feedback/bmm`); the older BetaHub forms are used only if the app is
-configured with an empty feedback endpoint. **Nothing is sent until you press Send.** Then BMM
+(`bettercommunity.ch/api/feedback/bmm`), and nowhere else: the BetaHub forms that used to be the
+fallback were removed on 25 September 2026, so an app configured with an empty feedback endpoint
+sends no report at all. **Nothing is sent until you press Send.** Then BMM
 uploads:
 
 - the title, description and reproduction steps you type, and any screenshots you attach;

@@ -148,7 +148,7 @@ export function presetPolicy(id: string): string {
  *  plus the ones the old literal forgot, so even the fallback no longer breaks the app. */
 const FALLBACK_NETWORK = "connect-src 'self' ipc: tauri: http://127.0.0.1:* http://localhost:*"
     + ' https://bettercommunity.ch https://telemetry.bettercommunity.ch https://api.github.com'
-    + " https://raw.githubusercontent.com https://app.betahub.io https://www.gstatic.com https://cloudflare.com; object-src 'none'; base-uri 'self'";
+    + " https://raw.githubusercontent.com https://www.gstatic.com https://cloudflare.com; object-src 'none'; base-uri 'self'";
 
 /** The connections table shown under the presets — the evidence for what the button writes. */
 function connectionsTable(): string {

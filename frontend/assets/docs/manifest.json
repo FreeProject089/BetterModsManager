@@ -316,7 +316,7 @@
         "en": "The in-app dialog that sends a suggestion, a bug or a crash to the BetterCommunity feedback centre — what it attaches, where it goes, and what happens when…",
         "fr": "Le dialogue intégré qui envoie une suggestion, un bug ou un plantage au centre de retours BetterCommunity — ce qu'il joint, où ça va, et ce qui se passe quand…"
       },
-      "words": 327,
+      "words": 344,
       "diagrams": 0,
       "fr": true
     },
@@ -646,7 +646,7 @@
         "en": "Every GitHub Actions workflow in the BMM repository: what starts it, what it checks, what makes it fail, what it leaves behind, and how to run the same thing…",
         "fr": "Chaque workflow GitHub Actions du dépôt BMM : ce qui le déclenche, ce qu'il vérifie, ce qui le fait échouer, ce qu'il laisse derrière lui, et comment lancer…"
       },
-      "words": 1730,
+      "words": 1732,
       "diagrams": 0,
       "fr": true
     },
@@ -751,7 +751,7 @@
         "en": "Every external address BMM touches — catalogues, the repo list, telemetry, the update feed — lives in one file, links.json, so any of them can be changed…",
         "fr": "Toutes les adresses externes que BMM utilise — catalogues, liste des dépôts, télémétrie, flux de mises à jour — vivent dans un seul fichier, links.json, pour…"
       },
-      "words": 736,
+      "words": 743,
       "diagrams": 0,
       "fr": true
     },

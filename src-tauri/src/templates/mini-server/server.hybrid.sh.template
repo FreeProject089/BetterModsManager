@@ -21,6 +21,15 @@ const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || 'PUBLIC_ORIGIN_PLACEHOLDE
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
 const { spawn, execSync } = require('child_process');
 
 // Placeholders (populated by BMM during export)
@@ -149,7 +158,7 @@ const server = http.createServer(async (req, res) => {
     const relativeUrl = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
     const absolutePath = path.resolve(__dirname, relativeUrl);
 
-    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    if (!insideDir(__dirname, absolutePath) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
     // At the root, only the manifest and its stats (the rule of BMM's built-in server,

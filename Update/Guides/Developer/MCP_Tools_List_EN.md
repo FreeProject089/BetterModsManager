@@ -43,7 +43,7 @@ The **Better Mods Manager (BMM) MCP Server** is a professional administrative co
 *   `bmm_list_crash_reports`: List recent crash report archives.
 *   `bmm_analyze_crash_report`: Extract metadata and stacktrace from a crash zip.
 *   `bmm_read_crash_report`: Read the raw content of a crash report.
-*   `bmm_generate_betahub_report`: Generate a full diagnostic report for BetaHub (requires `title`, `description`).
+*   `bmm_generate_diagnostic_report`: Build a diagnostic report (system, version, profile, mod counts) to paste into a bug report; sends nothing (requires `title`, `description`). Named `bmm_generate_betahub_report` before 2026-09-25.
 *   `bmm_export_config`: Export `data.json` for backup purposes (requires `target_path`).
 *   `bmm_run_benchmark`: Launch a benchmark in the running app. `dataset`: `sandbox` (generated) or `real` (your mods); `size`: `S|M|L|XL|CUSTOM` (`mb` required for CUSTOM); `sources`/`profiles` add real mod folders; `mode`: `manual` (opens pre-filled UI) or `auto` (runs now, returns results).
 *   `bmm_list_sessions`: List recorded session reports (the Session recorder's output zips).

@@ -28,7 +28,10 @@ Ce guide explique comment lancer un serveur de repository BMM avec Docker.
 Le dossier / ZIP généré contiendra :
 
 * `Dockerfile` → configuration de l’image Docker
-* `docker-compose.yml` → configuration Docker Compose
+* `docker-compose.yml` → configuration Docker Compose (sans mot de passe)
+* `.env` → le mot de passe admin, lu par `docker-compose.yml` via `env_file`. Garde-le privé.
+* `.gitignore` / `.dockerignore` → chacun reçoit une ligne `.env` (ajoutée à un fichier existant,
+  jamais remplacé), pour que le mot de passe reste hors de git et hors de l'image
 * `BMM-Standalone-Server.bat` (Windows) ou `.sh` (Linux) → scripts standalone
 * `mods/` → fichiers des mods
 * `repo.json` → configuration du repository
@@ -176,18 +179,37 @@ Le `docker-compose.yml` monte :
 
 ### Variables d’environnement
 
+Le mot de passe admin n'est **pas** dans `docker-compose.yml`. BMM l'écrit dans `.env` à côté :
+
+```bash
+# .env
+ADMIN_PASSWORD='ton_mot_de_passe'
+```
+
+et le fichier compose le lit :
+
 ```yaml
+env_file:
+  - .env
 environment:
-  - ADMIN_PASSWORD=ton_mot_de_passe
   - PORT=8000
 ```
+
+Pour changer le mot de passe, modifie `.env` puis lance `docker compose up -d` : le serveur
+préfère `ADMIN_PASSWORD` venu de son environnement à la valeur inscrite à l'export. Sous Linux et
+macOS, le fichier est créé lisible par son seul propriétaire (`chmod 600`).
 
 ---
 
 ## Notes Windows
 
 * Docker Desktop doit être en mode **Windows containers**
-* Le Dockerfile utilise une base **Windows Nano Server**
+* Le Dockerfile utilise une base **Windows Nano Server** (ltsc2022). Node.js 22 LTS est
+  téléchargé dans une étape Server Core, vérifié par son SHA-256, puis copié (Nano Server n'a pas
+  PowerShell). Le serveur tourne sous le compte non privilégié `ContainerUser`, avec l'écriture
+  sur `C:\app` seulement ; le health check appelle `node`, pas PowerShell.
+* Les images Linux utilisent `node:22` (Alpine), épinglée par version et digest, et tournent sous
+  un utilisateur `bmm` non root.
 * Certaines fonctionnalités Linux peuvent ne pas être dispo
 
 ---

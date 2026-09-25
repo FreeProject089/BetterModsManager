@@ -11,8 +11,10 @@
 //
 //   • `https://telemetry.bettercommunity.ch` — the session-end packet goes out through
 //     `navigator.sendBeacon`, which connect-src governs. Telemetry silently half-dies.
-//   • `https://app.betahub.io` — bug reports are a direct webview fetch. Reporting a bug
-//     stops working, which is also how you would have found out.
+//   • The feedback centre (`feedback_endpoint`) — bug reports are a direct webview fetch.
+//     By default it is BetterCommunity's own API; a moved endpoint must follow. (It used to
+//     be `https://app.betahub.io`, allowed by name; that client was removed on 2026-09-25,
+//     and so was the host: a policy that allows a service nobody calls is wider for nothing.)
 //   • The offline probes (`gstatic.com`, `cloudflare.com`). Both blocked ⇒ every probe
 //     fails ⇒ the app decides it is offline and shows the banner for ever, online.
 //   • A SELF-HOSTED or test BetterCommunity. `bcRoot()` exists precisely so the base can be
@@ -53,9 +55,6 @@ export function originOf(url: string): string {
 /** The hosts the offline detector probes. Blocked ⇒ BMM believes it is offline. */
 export const PROBE_ORIGINS = ['https://www.gstatic.com', 'https://cloudflare.com'];
 
-/** Bug reports (BetaHub) — a direct webview fetch, not an invoke. */
-export const BETAHUB_ORIGIN = 'https://app.betahub.io';
-
 /** Sources every build needs regardless of configuration: itself, the IPC bridge, and BMM's
  *  own local API server (the deep-link handler talks to it over 127.0.0.1). */
 export const LOCAL_SOURCES = ["'self'", 'ipc:', 'tauri:', 'http://127.0.0.1:*', 'http://localhost:*'];
@@ -90,7 +89,11 @@ export function connections(links: Partial<BmmLinks>, bcRoot: string): Connectio
     }
     add(links.autoupdate_api || '', 'csp.use.updates', 'code');
     add(links.autoupdate_api_fallback || '', 'csp.use.updates', 'code');
-    add(BETAHUB_ORIGIN, 'csp.use.bugs', 'support');
+    // Bug reports and suggestions — a direct webview fetch, not an invoke. Unset, the endpoint
+    // is `${bcApi}/feedback/bmm`, already allowed as BetterCommunity above; this row is for a
+    // feedback centre moved somewhere else (another BetterCommunity, a tunnel).
+    const fe = (links as Record<string, unknown>).feedback_endpoint;
+    add(typeof fe === 'string' ? fe : '', 'csp.use.bugs', 'support');
     for (const p of PROBE_ORIGINS) add(p, 'csp.use.probe', 'net');
     return out;
 }

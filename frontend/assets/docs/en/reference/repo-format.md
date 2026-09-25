@@ -27,6 +27,7 @@ Exporting a repo produces a directory containing:
 | `bans.json` | Ban list, used only by the bundled mini-server. |
 | `BMM-Standalone-Server.bat` / `.sh` | Launchers for the bundled mini-server. |
 | `Dockerfile`, `docker-compose.yml`, `package.json`, `public/` | The mini-server, if you asked for it. |
+| `.env` (+ a `.env` line in `.gitignore`, `.dockerignore`) | The mini-server's admin password, read by `docker-compose.yml` (`env_file`). Never served, never committed. |
 
 Only `repo.json` and `mods/` matter to a consumer. The rest is convenience for hosting the
 repo yourself, and you can delete it if you serve the folder with your own nginx, Caddy or

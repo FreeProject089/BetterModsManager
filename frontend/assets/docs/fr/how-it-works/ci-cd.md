@@ -46,8 +46,8 @@ ne font pas échouer.
 Construit BMM et le sidecar MCP, empaquette et signe l'installeur avec BetterInstaller, signe les
 manifestes de mise à jour, puis publie la release GitHub. Son unique job a `contents: write`.
 
-- **Secrets :** `BMM_PRIVATE_KEY` (obligatoire, la clé Ed25519 de l'éditeur) ; `BETAHUB_CONFIG`
-  (optionnel, le contenu complet de `betahub-config.local.ts` ; sans lui, l'exemple commité sert).
+- **Secrets :** `BMM_PRIVATE_KEY` (obligatoire, la clé Ed25519 de l'éditeur). Rien d'autre : le
+  secret `BETAHUB_CONFIG` est parti avec le client BetaHub (retiré le 2026-09-25) et peut être supprimé.
 - **Artefacts :** la release elle-même : installeur, delta, `update.json`, `update-manifest.json`.
 - **En local :** `examples/bmm/release.ps1` dans BetterInstaller fait les mêmes étapes. Ne le lance
   jamais avec `-Publish` pour un test.

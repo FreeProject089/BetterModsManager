@@ -357,28 +357,16 @@ BMM introduces a complete modpack lifecycle system for curating, sharing, and ve
 
 ---
 
-## 28. BetaHub Bug Reporting Integration (v0.9.9, now the fallback)
+## 28. BetaHub Bug Reporting Integration (v0.9.9, removed 2026-09-25)
 
-**Reports go to BetterCommunity, not BetaHub.** The feedback centre in §…/Feedback is the
-path every shipped install takes; BetaHub is what BMM falls back to when there is no
-BetterCommunity to send to.
-
-It is a live fallback, not dead code, and it is switched **remotely**: `feedbackEndpoint()`
-returns `''` only when `links.json` sets `feedback_endpoint` to `""` or `null`, which an
-admin can do from Admin → Downloads & assets. Every install then uses the BetaHub forms
-below, with no new BMM build. That is why `app.betahub.io` stays in the shipped CSP and in
-the privacy policy: removing it would leave a path that silently fails the moment somebody
-turns it on.
-
-The table below describes that fallback.
-
-| Feature | Description |
-| :--- | :--- |
-| **Bug & Suggestion Tabs** | Submit bugs or feature suggestions through a dedicated modal interface. |
-| **Proof-of-Work Spam Protection** | Uses SHA-256 cryptographic challenges to verify genuine submissions without captchas. |
-| **Privacy-First Design** | Strictly separates public report details from private system logs and contact information. |
-| **Crash-to-Report Flow** | From the crash report modal, users can directly open a pre-filled BetaHub bug report with the crash ZIP attached. |
-| **Report History** | View and track your recent submissions with direct links to view them on BetaHub. |
+**Removed.** BetaHub was BMM's first bug-report service, then the fallback behind the
+BetterCommunity feedback centre. It was taken out entirely on 25 September 2026: the client,
+its forms, its host in the network CSP preset (`app.betahub.io`) and the release secret that carried its token.
+Every report now goes to the feedback centre (see the Feedback section), which keeps the
+features this section used to list — bug and suggestion tabs, a client-side anti-spam
+proof-of-work, the crash-to-report flow with the crash zip attached, and the local history
+of recent reports, whose links now open the BetterCommunity dashboard. An empty
+`feedback_endpoint` in `links.json` no longer falls back to anything: reports are off.
 
 ---
 
@@ -490,7 +478,7 @@ The Documentation view has been expanded and rebranded as **"Help & Other"** to 
 | Tab | Content |
 | :--- | :--- |
 | **Basic** | Getting started guides, video tutorials, download link types, .MM format, dedicated hosting, mod mapper basics |
-| **Advanced** | Deep-dive technical cards with diagram links: Integrity Engine, I/O Limiter, Conflicts, Performance Monitor, Launch Packs, MCP/CLI, Security System, Crash Reporting, App Updates, BetaHub, Tech Stack, **Docker deployment guide with ngrok tunnel** |
+| **Advanced** | Deep-dive technical cards with diagram links: Integrity Engine, I/O Limiter, Conflicts, Performance Monitor, Launch Packs, MCP/CLI, Security System, Crash Reporting, App Updates, Tech Stack, **Docker deployment guide with ngrok tunnel** |
 | **FAQ** | Frequently asked questions with embedded diagram shortcuts — includes Docker & Infrastructure section, VPS vs. home PC, ngrok tunnel, Docker update procedure, and profile disk usage |
 
 ### Dual-Mode Semantic Search
@@ -633,7 +621,7 @@ All external URLs used by the app are consolidated into a single editable file, 
 | :--- | :--- |
 | **Single Source** | Plugin catalog, server-browse list, contributors, auto-update API, app catalog, and all social links (Discord, Reddit, Ko-fi, GitHub, ED forum) live in one JSON file. |
 | **3-Tier Loading** | Loaded at startup from a remote URL, falling back to the bundled local file, then built-in defaults. A log line states which source was used. |
-| **Runtime HTML Patching** | Static links in the Credits page, BetaHub modal, and repo-browser quick-links update from the JSON via `data-link-key` attributes. |
+| **Runtime HTML Patching** | Static links in the Credits page, the feedback card, and repo-browser quick-links update from the JSON via `data-link-key` attributes. |
 | **Update-Friendly** | `links.json` is tracked by the incremental update manifest, so URLs can change through a release without a full rebuild. |
 
 ---
@@ -1211,5 +1199,5 @@ a masked replay of the moments before the crash), a DxDiag report — and **noth
 machine until you press Send**. A report the site can't take is kept locally and retried at the
 next launch, never sent anywhere else, behind a self-imposed throttle and a client-side
 anti-spam proof-of-work. Link your BetterCommunity account and a report opens a **thread in your
-dashboard** with reply notifications; otherwise leave an e-mail or Discord. The older BetaHub
-forms remain only as a fallback when the endpoint is unset. Full detail: Privacy Policy §3.3.
+dashboard** with reply notifications; otherwise leave an e-mail or Discord. There is no other
+destination: with the endpoint unset, reports are off (the BetaHub fallback was removed in September 2026). Full detail: Privacy Policy §3.3.

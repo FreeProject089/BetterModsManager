@@ -53,8 +53,8 @@ back to whatever is bundled.
 Where **Settings → Feedback & bug reports** posts. Read by `features/feedback/bc-feedback.ts`.
 Default: the BetterCommunity feedback centre for project `bmm`
 (`https://bettercommunity.ch/api/feedback/bmm`). Point it at a tunnel to test against a local
-BCWEB. Set it to `""` to send through the BetaHub client instead (the pre-2026 pipeline, kept
-as a fallback). Unreachable → the report is queued locally and retried on the next start.
+BCWEB. Set it to `""` to switch reports off: the dialog then says so instead of opening (the
+BetaHub client that used to be the fallback was removed on 2026-09-25). Unreachable → the report is queued locally and retried on the next start.
 
 ### `feedback_web`
 The page a linked user opens to follow their reports (the history list links there).

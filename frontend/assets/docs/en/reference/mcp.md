@@ -203,7 +203,7 @@ a half-parsed task.
 | `bmm_list_crash_reports` | `limit` |  | List crash reports |
 | `bmm_read_crash_report` | `report_path`\* |  | Read raw content of a crash report |
 | `bmm_analyze_crash_report` | `report_path`\* |  | Analyze a crash report |
-| `bmm_generate_betahub_report` | `title`\*, `description`\* |  | Generate a report for BetaHub |
+| `bmm_generate_diagnostic_report` | `title`\*, `description`\* |  | Build a diagnostic report (system, version, profile, mod counts) for a bug report; sends nothing |
 | `bmm_get_statistics` | — |  | Get global statistics |
 
 ### Documentation & language

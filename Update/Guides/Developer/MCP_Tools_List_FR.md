@@ -43,7 +43,7 @@ Le **Serveur MCP de Better Mods Manager (BMM)** est une console d'administration
 *   `bmm_list_crash_reports` : Liste les archives de rapports de crash récents.
 *   `bmm_analyze_crash_report` : Extrait les métadonnées et la stacktrace d'un crash zip.
 *   `bmm_read_crash_report` : Lit le contenu brut d'un rapport de crash.
-*   `bmm_generate_betahub_report` : Génère un rapport de diagnostic complet pour BetaHub (nécessite `title`, `description`).
+*   `bmm_generate_diagnostic_report` : Construit un rapport de diagnostic (système, version, profil, nombre de mods) à coller dans un rapport de bug ; n'envoie rien (nécessite `title`, `description`). S'appelait `bmm_generate_betahub_report` avant le 2026-09-25.
 *   `bmm_export_config` : Exporte le fichier `data.json` pour sauvegarde (nécessite `target_path`).
 *   `bmm_run_benchmark` : Lance un benchmark dans l'app en cours d'exécution. `dataset` : `sandbox` (généré) ou `real` (vos mods) ; `size` : `S|M|L|XL|CUSTOM` (`mb` requis pour CUSTOM) ; `sources`/`profiles` ajoutent de vrais dossiers de mods ; `mode` : `manual` (ouvre l'UI pré-remplie) ou `auto` (exécute maintenant, renvoie les résultats).
 *   `bmm_list_sessions` : Liste les rapports de session enregistrés (les zips produits par l'enregistreur de sessions).

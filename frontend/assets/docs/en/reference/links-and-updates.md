@@ -94,8 +94,9 @@ this existed behaves the same way.
 `feedback_endpoint` is where the in-app **Send to BetterCommunity** dialog (Settings →
 Feedback, and the crash dialog's *Report to BetterCommunity* button) posts a suggestion, a
 bug or a crash — by default `https://bettercommunity.ch/api/feedback/bmm`. `feedback_web` is
-the page where a linked account follows its reports. An **empty** `feedback_endpoint` turns
-the dialog back into the older BetaHub forms. A report the app could not send (site down)
+the page where a linked account follows its reports. An **empty** `feedback_endpoint` switches
+reports off: there is no other transport (the BetaHub fallback was removed in September 2026).
+A report the app could not send (site down)
 is kept and sent on the next start; the app also throttles itself (5 per 10 min, 20 a day)
 before the server has to.
 

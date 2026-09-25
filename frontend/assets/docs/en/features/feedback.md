@@ -5,8 +5,9 @@
 > centre — what it attaches, where it goes, and what happens when the site is down.
 
 Open it from **Settings → Feedback & bug reports**, or from the button on the crash dialog. It
-sends to the **BetterCommunity feedback centre** by default; the older BetaHub forms are only used
-as a fallback when the app is configured with an empty `feedback_endpoint`.
+sends to the **BetterCommunity feedback centre**, the only destination. If the app is configured
+with an empty `feedback_endpoint`, reports are switched off and the button says so instead of
+opening the dialog (the older BetaHub forms, once the fallback, were removed in September 2026).
 
 
 ## Three kinds

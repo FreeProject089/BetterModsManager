@@ -82,17 +82,18 @@ export function initCrashReportUI() {
     if (openZipBtn) {
         openZipBtn.addEventListener('click', openZip);
     }
-    // ── BetaHub: Report this crash ────────────────────────────
-    const betahubBtn = document.getElementById('btn-crash-report-betahub');
-    if (betahubBtn) {
-        betahubBtn.addEventListener('click', () => {
+    // ── Report this crash (BetterCommunity feedback centre) ────
+    // The button keeps its historical id, btn-crash-report-betahub: the markup is index.html's.
+    const reportBtn = document.getElementById('btn-crash-report-betahub');
+    if (reportBtn) {
+        reportBtn.addEventListener('click', () => {
             const zipPathEl = document.getElementById('crash-zip-path');
             const zipPath = zipPathEl?.textContent?.trim();
             // Close crash modal first
             const crashModal = document.getElementById('modal-crash-report');
             if (crashModal)
                 crashModal.classList.remove('open');
-            // Open BetaHub bug report modal with crash zip pre-attached
+            // Open the feedback dialog on its crash tab, the crash zip pre-attached
             openFeedback('crash', { crashZip: zipPath && zipPath !== '—' ? zipPath : undefined }).catch(() => { });
         });
     }

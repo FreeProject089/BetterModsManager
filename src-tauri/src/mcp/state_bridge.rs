@@ -774,8 +774,9 @@ mod export_config_tests {
     }
 }
 
-/// Generate a BetaHub-ready diagnostic report
-pub fn generate_betahub_report(title: &str, description: &str) -> anyhow::Result<serde_json::Value> {
+/// Generate a diagnostic report for a bug report (BetaHub, its old destination, was removed
+/// on 2026-09-25; the MCP tool is now `bmm_generate_diagnostic_report`)
+pub fn generate_diagnostic_report(title: &str, description: &str) -> anyhow::Result<serde_json::Value> {
     let data = read_app_data()?;
     let sys = sysinfo::System::new_all();
     
@@ -1117,18 +1118,12 @@ pub fn generate_lightweight_server(
             (df, include_str!("../templates/docker/docker-compose.yml.template"))
         };
 
-        let dockerfile_path = output_path.join("Dockerfile");
-        let mut dockerfile_content = dockerfile_content.replace("PORT_PLACEHOLDER", &port.to_string());
-        dockerfile_content = dockerfile_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
-        std::fs::write(&dockerfile_path, dockerfile_content)?;
+        // Same writer as the app's exporter: the admin password goes to .env, not the compose file.
+        let written = crate::commands::docker_export::write_docker_files(
+            &output_path, dockerfile_content, compose_template, port, admin_password,
+        )?;
 
-        // Generate docker-compose.yml
-        let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
-        compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
-        let compose_path = output_path.join("docker-compose.yml");
-        std::fs::write(&compose_path, compose_content)?;
-
-        msg.push_str(&format!("\n[DOCKER] Docker files generated at: {:?}, {:?}", dockerfile_path, compose_path));
+        msg.push_str(&format!("\n[DOCKER] Docker files generated at: {:?}, {:?} (admin password in {:?}, git-ignored)", written.dockerfile, written.compose, written.env));
         msg.push_str(&format!("\n[DOCKER] To run: docker-compose up -d"));
     }
 

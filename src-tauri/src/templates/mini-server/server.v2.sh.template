@@ -21,6 +21,15 @@ const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || 'PUBLIC_ORIGIN_PLACEHOLDE
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
 const zlib = require('zlib');
 const { spawn, execSync } = require('child_process');
 
@@ -30,7 +39,8 @@ const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
 const USE_UPNP = USE_UPNP_PLACE_HOLDER; 
 const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
 const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
-const ADMIN_PASSWORD = 'ADMIN_PASSWORD_PLACEHOLDER';
+// .env (docker compose env_file) wins over the value BMM baked in when it generated this file.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ADMIN_PASSWORD_PLACEHOLDER';
 
 const VERSION = "2.4.0-linux";
 const logFile = path.join(__dirname, 'server.log');
@@ -663,7 +673,19 @@ const server = http.createServer(async (req, res) => {
     const relativeUrl = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
     const absolutePath = path.resolve(__dirname, relativeUrl);
 
-    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    if (!insideDir(__dirname, absolutePath) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        res.statusCode = 404; res.end('Not Found'); return;
+    }
+    // At the root, only the manifest and its info file (the rule of BMM's built-in server,
+    // builtin_may_serve, and of the hybrid server). Everything else there is this server's own
+    // and was served to anyone who asked: server.js with the admin password baked in,
+    // access.json with the download password, docker-compose.yml / .env with ADMIN_PASSWORD,
+    // server.log, history.json and downloads.json with every downloader's IP and Creator ID,
+    // the ban and whitelist files. Decided on the RESOLVED path, so a spelling such as
+    // `/mods/../server.js` or `/SERVER.JS` cannot get past it.
+    const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
+    if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
 

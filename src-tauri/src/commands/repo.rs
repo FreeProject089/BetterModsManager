@@ -2199,18 +2199,13 @@ fn generate_mini_server_files(
             (df, include_str!("../templates/docker/docker-compose.yml.template"))
         };
 
-        let dockerfile_path = output_path.join("Dockerfile");
-        let mut dockerfile_content = dockerfile_content.replace("PORT_PLACEHOLDER", &port.to_string());
-        dockerfile_content = dockerfile_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
-        fs::write(&dockerfile_path, dockerfile_content).map_err(|_| "repo.errWriteDockerfile".to_string())?;
+        // Dockerfile + docker-compose.yml, and the admin password in .env beside them (with its
+        // .gitignore / .dockerignore lines), not in the compose file. See docker_export.rs.
+        let written = crate::commands::docker_export::write_docker_files(
+            output_path, dockerfile_content, compose_template, port, admin_password,
+        ).map_err(|_| "repo.errWriteCompose".to_string())?;
 
-        // Generate docker-compose.yml
-        let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
-        compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
-        let compose_path = output_path.join("docker-compose.yml");
-        fs::write(&compose_path, compose_content).map_err(|_| "repo.errWriteCompose".to_string())?;
-
-        println!("[DOCKER] Docker files generated at: {:?}, {:?}", dockerfile_path, compose_path);
+        println!("[DOCKER] Docker files generated at: {:?}, {:?}, {:?}", written.dockerfile, written.compose, written.env);
     }
 
     // 7. Auto-start logic

@@ -297,7 +297,9 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
   // reveals a hover card (pure CSS, no runtime JS). Mirrors the site's md.jsx DocComment.
   // Done here (pre-sanitise) so it survives as plain spans instead of being stripped.
   s = s.replace(/<doc-comment\b([^>]*)>([\s\S]*?)<\/doc-comment>/gi, (_m, attrs, inner) => {
-    const at = (n: string) => { const mm = String(attrs).match(new RegExp(`data-${n}=("|')([\\s\\S]*?)\\1`, 'i')); return mm ? mm[2] : ''; };
+    // Non-literal RegExp (Semgrep) reviewed 2026-09-25, false positive: `n` is only ever one of
+    // the literal names on the next line ('comment', 'link', 'img', 'video'), never document text.
+    const at = (n: string) => { const mm = String(attrs).match(new RegExp(`data-${n}=("|')([\\s\\S]*?)\\1`, 'i')); return mm ? mm[2] : ''; }; // nosemgrep: rules.javascript.lang.security.audit.detect-non-literal-regexp
     const text = at('comment'), link = at('link'), img = at('img'), video = at('video');
     if (!text && !img && !link && !video) return inner;
     const card = `<span class="doc-comment-card">`

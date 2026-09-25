@@ -5,8 +5,10 @@
 > BetterCommunity — ce qu'il joint, où ça va, et ce qui se passe quand le site est injoignable.
 
 Ouvre-le depuis **Réglages → Retours & rapports de bug**, ou depuis le bouton du dialogue de
-plantage. Il envoie au **centre de retours BetterCommunity** par défaut ; les anciens formulaires
-BetaHub ne servent qu'en secours, quand l'appli est configurée avec un `feedback_endpoint` vide.
+plantage. Il envoie au **centre de retours BetterCommunity**, la seule destination. Si l'appli est
+configurée avec un `feedback_endpoint` vide, les rapports sont désactivés et le bouton le dit au lieu
+d'ouvrir le dialogue (les anciens formulaires BetaHub, qui servaient de secours, ont été retirés en
+septembre 2026).
 
 
 ## Trois types

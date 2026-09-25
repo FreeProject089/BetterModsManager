@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { originOf, connections, networkPolicy, networkPolicyFor, PROBE_ORIGINS, BETAHUB_ORIGIN, LOCAL_SOURCES } =
+const { originOf, connections, networkPolicy, networkPolicyFor, PROBE_ORIGINS, LOCAL_SOURCES } =
   await import(pathToFileURL(join(ROOT, 'frontend/js/features/settings/csp-hosts.js')).href);
 
 /** What links.json ships by default. */
@@ -49,8 +49,11 @@ describe('the preset covers what the webview actually calls', () => {
   test('telemetry — the session-end beacon is connect-src, and the old literal blocked it', () => {
     assert.match(p, /https:\/\/telemetry\.bettercommunity\.ch/);
   });
-  test('bug reports — BetaHub is a direct fetch, not an invoke', () => {
-    assert.ok(p.includes(BETAHUB_ORIGIN), 'app.betahub.io missing: reporting a bug would stop working');
+  test('bug reports — no BetaHub any more: the feedback centre is BetterCommunity itself', () => {
+    // The BetaHub client was removed on 2026-09-25. A policy that still allowed its host would
+    // be wider than the app for nothing; the default feedback endpoint is bcApi()/feedback/bmm.
+    assert.ok(!p.includes('betahub'), 'app.betahub.io is still allowed although nothing calls it');
+    assert.ok(p.includes('https://bettercommunity.ch'), 'the feedback centre host is missing');
   });
   test('the offline probes — block both and BMM shows the offline banner for ever, online', () => {
     for (const o of PROBE_ORIGINS) assert.ok(p.includes(o), `${o} missing: the connectivity probe can never succeed`);
@@ -74,6 +77,10 @@ describe('it follows the app instead of a literal', () => {
     const p = networkPolicyFor({ ...PROD, bettercommunity: 'https://bc.myserver.lan:8443/' }, 'https://bc.myserver.lan:8443');
     assert.ok(p.includes('https://bc.myserver.lan:8443'), 'the self-hosted base is not allowed — the app is cut off from its own server');
   });
+  test('a moved feedback centre is followed — bug reports are a direct webview fetch', () => {
+    const p = networkPolicyFor({ ...PROD, feedback_endpoint: 'https://reports.example.org:8443/api/feedback/bmm' }, 'https://bettercommunity.ch');
+    assert.ok(p.includes('https://reports.example.org:8443'), 'the moved feedback endpoint is blocked: reporting a bug would stop working');
+  });
   test('a moved telemetry collector is followed', () => {
     const p = networkPolicyFor({ ...PROD, analytics_endpoint: 'https://t.example.org/batch/' }, 'https://bettercommunity.ch');
     assert.ok(p.includes('https://t.example.org'));
@@ -85,7 +92,7 @@ describe('it follows the app instead of a literal', () => {
   test('an empty registry still produces a usable policy rather than a broken directive', () => {
     const p = networkPolicyFor({}, '');
     assert.match(p, /^connect-src 'self'/);
-    assert.ok(p.includes(BETAHUB_ORIGIN), 'the fixed hosts must survive an empty registry');
+    for (const o of PROBE_ORIGINS) assert.ok(p.includes(o), 'the fixed hosts must survive an empty registry');
     assert.ok(!/\s\s/.test(p), 'an empty source left a double space — the directive is malformed');
   });
 });

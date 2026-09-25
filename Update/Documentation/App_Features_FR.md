@@ -276,28 +276,16 @@ BMM introduit un système complet de cycle de vie des modpacks pour organiser, p
 
 ---
 
-## 28. Intégration BetaHub — Rapports de bugs (v0.9.9, désormais le repli)
+## 28. Intégration BetaHub — Rapports de bugs (v0.9.9, retirée le 2026-09-25)
 
-**Les rapports partent vers BetterCommunity, pas vers BetaHub.** Le centre de retours est le
-chemin que prend toute installation livrée ; BetaHub est ce vers quoi BMM se replie quand il
-n'y a pas de BetterCommunity à qui envoyer.
-
-C'est un repli vivant, pas du code mort, et il se déclenche **à distance** :
-`feedbackEndpoint()` ne renvoie `''` que si `links.json` met `feedback_endpoint` à `""` ou
-`null`, ce qu'un admin peut faire depuis Admin → Téléchargements & ressources. Toutes les
-installations basculent alors sur les formulaires BetaHub ci-dessous, sans nouvelle version de
-BMM. C'est pourquoi `app.betahub.io` reste dans la CSP livrée et dans la politique de
-confidentialité : le retirer laisserait un chemin qui échouerait en silence dès qu'on l'active.
-
-Le tableau ci-dessous décrit ce repli.
-
-| Fonctionnalité | Description |
-| :--- | :--- |
-| **Onglets Bug & Suggestion** | Soumettez des bugs ou des suggestions de fonctionnalités via une interface modale dédiée. |
-| **Protection Anti-Spam (PoW)** | Utilise des défis cryptographiques SHA-256 pour vérifier les soumissions authentiques sans captchas. |
-| **Conception Privée** | Sépare strictement les détails publics du rapport des logs système privés et informations de contact. |
-| **Flux Crash-to-Report** | Depuis la modale de crash, les utilisateurs peuvent ouvrir directement un rapport BetaHub pré-rempli avec le ZIP de diagnostic attaché. |
-| **Historique des Rapports** | Consultez et suivez vos soumissions récentes avec des liens directs vers BetaHub. |
+**Retirée.** BetaHub a été le premier service de rapports de bug de BMM, puis le repli derrière
+le centre de retours BetterCommunity. Il a été entièrement retiré le 25 septembre 2026 : le
+client, ses formulaires, son hôte dans le préréglage CSP réseau (`app.betahub.io`) et le secret de release qui
+portait son jeton. Tout rapport part désormais au centre de retours (voir la section Retours),
+qui garde ce que cette section listait — onglets bug et suggestion, preuve de travail anti-spam
+côté client, flux plantage → rapport avec le zip joint, et l'historique local des rapports
+récents, dont les liens ouvrent maintenant le tableau de bord BetterCommunity. Un
+`feedback_endpoint` vide dans `links.json` ne renvoie plus vers rien : les rapports sont coupés.
 
 ---
 
@@ -529,7 +517,7 @@ Toutes les URLs externes utilisées par l'app sont regroupées dans un seul fich
 | :--- | :--- |
 | **Source unique** | Catalogue plugins, liste server-browse, contributeurs, API de mise à jour, catalogue d'apps et tous les liens sociaux (Discord, Reddit, Ko-fi, GitHub, forum ED) dans un seul fichier JSON. |
 | **Chargement à 3 niveaux** | Chargé au démarrage depuis une URL distante, avec repli sur le fichier local intégré, puis les valeurs par défaut. Une ligne de log indique la source utilisée. |
-| **Injection HTML à l'exécution** | Les liens statiques de la page Crédits, de la modale BetaHub et des liens rapides du navigateur de dépôts se mettent à jour depuis le JSON via des attributs `data-link-key`. |
+| **Injection HTML à l'exécution** | Les liens statiques de la page Crédits, de la carte Retours et des liens rapides du navigateur de dépôts se mettent à jour depuis le JSON via des attributs `data-link-key`. |
 | **Compatible mises à jour** | `links.json` est suivi par le manifeste de mise à jour incrémentale, donc les URLs peuvent changer via une release sans rebuild complète. |
 
 ---
@@ -1137,6 +1125,6 @@ rapport DxDiag — et **rien ne quitte ta machine tant que tu n'as pas appuyé s
 rapport que le site ne peut pas prendre est gardé localement et renvoyé au prochain démarrage,
 jamais ailleurs, derrière une auto-limitation et une preuve de travail anti-spam côté client.
 Lie ton compte BetterCommunity et un rapport ouvre un **fil dans ton tableau de bord** avec des
-notifications de réponse ; sinon laisse un e-mail ou un Discord. Les anciens formulaires BetaHub
-ne servent qu'en secours quand l'endpoint est vide. Détail complet : Politique de
+notifications de réponse ; sinon laisse un e-mail ou un Discord. Il n'y a pas d'autre destination :
+sans endpoint, les rapports sont coupés (le secours BetaHub a été retiré en septembre 2026). Détail complet : Politique de
 confidentialité §3.3.

@@ -1,17 +1,33 @@
+# escape=`
 # BMM Express Server - Docker Image (Windows)
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+# -- Stage 1: fetch Node.js 22 LTS and CHECK it -----------------------------------------------
+# Nano Server has no PowerShell, so the download and the SHA-256 check happen in a Server Core
+# stage; only the unpacked folder reaches the final image. The version and the checksum are
+# pinned together (nodejs.org/dist/v<version>/SHASUMS256.txt, line node-v<version>-win-x64.zip):
+# bump both, or the build stops at the check. Node 20 reached end of life in April 2026.
+# The base images are pinned by digest too. To bump one:
+#   docker manifest inspect mcr.microsoft.com/windows/<image>:ltsc2022   (or read the registry's
+#   Docker-Content-Digest header) and replace tag AND digest.
+FROM mcr.microsoft.com/windows/servercore:ltsc2022@sha256:76cf422c98ca437b308374d0498280541fa42ac7061bb44015a6c8b70cf4db6a AS node
+SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+ENV NODE_VERSION=22.23.3 `
+    NODE_SHA256=2b0ff57b049cda1bbcea2240eec20467018713c1efe1f7360c2681859b90ed71
+RUN Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip" -OutFile node.zip; `
+    if ((Get-FileHash node.zip -Algorithm SHA256).Hash -ne $env:NODE_SHA256) { throw 'node.zip: SHA-256 mismatch' }; `
+    Expand-Archive node.zip -DestinationPath C:\; `
+    Rename-Item "C:\node-v$env:NODE_VERSION-win-x64" C:\nodejs; `
+    Remove-Item node.zip
+
+# -- Stage 2: the server, on Nano Server ------------------------------------------------------
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022@sha256:8e17c72fbf586d21e7e5a4edf51d97d05ce2c095cbbd345246c69d151fb3ddb3
 SHELL ["cmd", "/S", "/C"]
-
-# Create app directory
-WORKDIR /app
-
-# Install Node.js (download during build)
+COPY --from=node C:/nodejs C:/nodejs
+# ENV cannot extend PATH on Windows (Docker does not expand %PATH%, the old line set it to the
+# literal text): setx /M writes the machine PATH, which needs the administrator for this one step.
 USER ContainerAdministrator
-RUN curl -fSLo node.zip https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip && \
-    tar -xf node.zip && \
-    move node-v20.11.0-win-x64 C:\nodejs && \
-    del node.zip
-ENV PATH="C:\nodejs;%PATH%"
+RUN setx /M PATH "%PATH%;C:\nodejs"
+
+WORKDIR C:\app
 
 # Copy package manifest first for layer caching
 COPY package.json ./
@@ -28,11 +44,17 @@ COPY mods/ ./mods/
 COPY repo.json ./
 COPY Info.json ./
 
+# The server WRITES here at run time (server.log, bans.json, whitelist.json, history.json,
+# downloads.json), nothing else: no service, no port below 1024, no system path. So it runs as
+# the unprivileged ContainerUser, given modify rights on its own folder and nowhere else.
+RUN icacls C:\app /grant "ContainerUser:(OI)(CI)M" /T /Q
+USER ContainerUser
+
 # Expose configured port
 EXPOSE PORT_PLACEHOLDER
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+# Health check: node is on PATH (stage 1), so the same probe as the Linux image works here.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 `
+    CMD ["node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
 
 CMD ["node", "server.js"]

@@ -43,6 +43,9 @@ mod commands {
     pub mod proc;
     #[path = "../../commands/zipping.rs"]
     pub mod zipping;
+    // The Docker files of a generated repo server (the admin password goes to .env).
+    #[path = "../../commands/docker_export.rs"]
+    pub mod docker_export;
     // Reading a plugin's shipped files, and the path guard that keeps a `..` from leaving
     // the folder. Mounted rather than reimplemented: the CLI reads the same archives the app
     // does, and a second guard is the one that gets forgotten.

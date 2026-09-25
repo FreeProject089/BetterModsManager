@@ -26,7 +26,6 @@ import { codeStack } from './diagrams/code-stack.js';
 import { semanticSearch } from './diagrams/semantic-search.js';
 import { integrityEngine } from './diagrams/integrity-engine.js';
 import { mtimeCache } from './diagrams/mtime-cache.js';
-import { betahubReporting } from './diagrams/betahub-reporting.js';
 import { modpackFlow } from './diagrams/modpack-flow.js';
 import { bmmscriptFlow } from './diagrams/bmmscript-flow.js';
 import { securitySystem } from './diagrams/security-system.js';
@@ -75,7 +74,6 @@ export const diagrams = {
     'semantic-search': semanticSearch,
     'integrity-engine': integrityEngine,
     'mtime-cache': mtimeCache,
-    'betahub-reporting': betahubReporting,
     'modpack-flow': modpackFlow,
     'security-system': securitySystem,
     'mod-mapper': modMapper,

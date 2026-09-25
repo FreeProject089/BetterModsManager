@@ -44,8 +44,8 @@ advisory, the folder and a reason. Warnings (unmaintained, yanked) are printed a
 Builds BMM and the MCP sidecar, packs and signs the installer with BetterInstaller, signs the update
 manifests, and publishes the GitHub release. Its one job has `contents: write`.
 
-- **Secrets:** `BMM_PRIVATE_KEY` (required, the Ed25519 publisher key); `BETAHUB_CONFIG` (optional,
-  the full `betahub-config.local.ts`; without it the committed example is used).
+- **Secrets:** `BMM_PRIVATE_KEY` (required, the Ed25519 publisher key). Nothing else: the
+  `BETAHUB_CONFIG` secret went with the BetaHub client (removed 2026-09-25) and can be deleted.
 - **Artifacts:** the release itself: installer, delta, `update.json`, `update-manifest.json`.
 - **Run it locally:** `examples/bmm/release.ps1` in BetterInstaller does the same steps. Never run
   it with `-Publish` to test.

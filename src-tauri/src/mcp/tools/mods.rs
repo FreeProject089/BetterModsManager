@@ -387,8 +387,8 @@ pub fn export_config(path: &str) -> Result<String, String> {
 }
 
 /// Generate diagnostic report
-pub fn generate_betahub_report(title: &str, description: &str) -> Result<serde_json::Value, String> {
-    state_bridge::generate_betahub_report(title, description).map_err(|e| e.to_string())
+pub fn generate_diagnostic_report(title: &str, description: &str) -> Result<serde_json::Value, String> {
+    state_bridge::generate_diagnostic_report(title, description).map_err(|e| e.to_string())
 }
 
 /// List available languages

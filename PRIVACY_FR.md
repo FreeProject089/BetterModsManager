@@ -291,8 +291,9 @@ change sans votre confirmation dans BMM.
 
 ### 5.1 Envoyer un rapport
 Une suggestion, un rapport de bug ou un rapport de plantage est envoyé au **centre de retours
-BetterCommunity** (`bettercommunity.ch/api/feedback/bmm`) ; les anciens formulaires BetaHub ne
-servent que si l'application est configurée avec une adresse de retours vide. **Rien n'est envoyé
+BetterCommunity** (`bettercommunity.ch/api/feedback/bmm`), et nulle part ailleurs : les formulaires
+BetaHub qui servaient de secours ont été retirés le 25 septembre 2026, donc une application
+configurée avec une adresse de retours vide n'envoie aucun rapport. **Rien n'est envoyé
 avant que vous cliquiez sur Envoyer.** BMM transmet alors :
 
 - le titre, la description et les étapes de reproduction que vous saisissez, et les captures

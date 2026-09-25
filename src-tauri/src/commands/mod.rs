@@ -35,6 +35,7 @@ pub mod sandbox_gen;
 pub mod disk;
 pub mod image;
 pub mod repo;
+pub mod docker_export;
 pub mod zipping;
 pub mod repo_server;
 pub mod repo_ssh;

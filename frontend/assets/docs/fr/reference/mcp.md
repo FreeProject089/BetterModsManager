@@ -206,7 +206,7 @@ peut pas enregistrer une tâche à moitié analysée.
 | `bmm_list_crash_reports` | `limit` |  | Liste les rapports de plantage |
 | `bmm_read_crash_report` | `report_path`\* |  | Lit le contenu brut d'un rapport de plantage |
 | `bmm_analyze_crash_report` | `report_path`\* |  | Analyse un rapport de plantage |
-| `bmm_generate_betahub_report` | `title`\*, `description`\* |  | Génère un rapport pour BetaHub |
+| `bmm_generate_diagnostic_report` | `title`\*, `description`\* |  | Construit un rapport de diagnostic (système, version, profil, nombre de mods) pour un rapport de bug ; n'envoie rien |
 | `bmm_get_statistics` | — |  | Renvoie les statistiques globales |
 
 ### Documentation & langues

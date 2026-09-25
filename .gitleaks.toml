@@ -35,6 +35,13 @@ regexes = ['''discord_id['"]?\s*:\s*['"][0-9]{17,20}['"]''']
 # The telemetry INGEST key (bmm_pk_…) is public by design: it only permits submitting opt-in
 # telemetry and ships inside every copy of the app (frontend/assets/links.json, documented in
 # frontend/src/core/links-config.ts). A secret-bearing key would not use the bmm_pk_ prefix.
+# Re-checked 2026-09-25 against the collector (BCW/BCWEB/bmm/telemetry-dashboard/server,
+# src/main.rs): the key opens only POST /batch (ingest), GET the sampling/retention document,
+# POST /delete-request (the sender's own packet, applied after a delay) and POST /data-request
+# (FILES a GDPR request; the export goes to the linked account's address, processed by staff).
+# Reading data, approving deletions and processing requests take ADMIN_KEY (X-Admin-Key), which
+# exists only on the server. Documented as public in LINKS.md (analytics_key), ENDPOINTS.md and
+# BMM Docs > Reference > Links and updates.
 [[allowlists]]
 description = "Public telemetry ingest key (bmm_pk_ prefix)"
 targetRules = ["generic-api-key"]

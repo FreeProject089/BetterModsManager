@@ -128,7 +128,7 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 
 - **Discord Rich Presence** — Affiche votre profil de jeu actif, le nombre de mods en cours et si vous hébergez un serveur de dépôt — visible par vos amis dans Discord sans aucune configuration.
 
-- **Intégration BetaHub** — Rapports de bugs structurés envoyés directement depuis BMM en un clic. Inclut la capture automatique du contexte (version OS, état du profil, actions récentes) et une protection anti-spam par preuve de travail.
+- **Retours & rapports de bug** — Rapports de bug, de plantage et suggestions structurés envoyés depuis BMM au centre de retours BetterCommunity, avec capture automatique du contexte (version OS, état du profil, actions récentes) et une file d'attente hors ligne.
 
 - **Centre de notifications** — Un toast est une fenêtre de trois secondes sur un événement déjà passé ; le manquer, c'était le perdre. Chaque message que BMM vous a affiché est désormais conservé avec sa source, son heure et son texte complet — cherchable, filtrable, et le nombre de non-lues est dessiné sur l'icône de la barre des tâches. Liez un compte BetterCommunity et ses notifications rejoignent la même liste.
 
@@ -222,7 +222,7 @@ objectif](https://freeproject089.github.io/BMM-Docs/fr/reference/commands/)**.
 ### Obtenir de l'aide
 - **Site officiel** — https://freeproject089.github.io/BMM_Web/
 - **Discord** — [Rejoindre le serveur](https://discord.gg/CTaaEF9R75)
-- **Signaler un bug** — [Issues GitHub](https://github.com/FreeProject089/BetterModsManager/issues) ou le bouton **BetaHub** intégré à l'application
+- **Signaler un bug** — [Issues GitHub](https://github.com/FreeProject089/BetterModsManager/issues) ou **Réglages → Retours & rapports de bug** dans l'application
 - **Soutenir le développement** — [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
 
 ---

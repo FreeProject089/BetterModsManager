@@ -27,6 +27,7 @@ L'export d'un dépôt produit un dossier contenant :
 | `bans.json` | Liste de bannissement, utilisée uniquement par le mini-serveur fourni. |
 | `BMM-Standalone-Server.bat` / `.sh` | Lanceurs du mini-serveur. |
 | `Dockerfile`, `docker-compose.yml`, `package.json`, `public/` | Le mini-serveur, si vous l'avez demandé. |
+| `.env` (+ une ligne `.env` dans `.gitignore`, `.dockerignore`) | Le mot de passe admin du mini-serveur, lu par `docker-compose.yml` (`env_file`). Jamais servi, jamais commité. |
 
 Seuls `repo.json` et `mods/` comptent pour un consommateur. Le reste est un confort pour
 héberger le dépôt vous-même, et vous pouvez le supprimer si vous servez le dossier avec

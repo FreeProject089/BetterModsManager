@@ -50,7 +50,10 @@ export function brandIconUrl(slug: string): string {
  * The same spelling B.MD accepts on the website, so an icon named once draws in both places.
  */
 export function phosphorRef(name: string): string | null {
-    const m = String(name || '').toLowerCase().match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    // ReDoS (Semgrep detect-redos) reviewed 2026-09-25, false positive: every repetition of
+    // `(?:-[a-z0-9]+)*` must START with a hyphen, so a run of letters can be split one way only
+    // and a failed match backtracks linearly (40 000 chars: < 1 ms). tests/redos-budget.test.mjs.
+    const m = String(name || '').toLowerCase().match(/^(?:ph|phosphor)(?:-(thin|light|regular|bold|fill|duotone))?:([a-z0-9]+(?:-[a-z0-9]+)*)$/); // nosemgrep: rules.javascript.lang.security.audit.detect-redos
     if (!m) return null;
     const w = m[1] || 'regular';
     return `${w}/${m[2]}${w === 'regular' ? '' : `-${w}`}`;
@@ -91,7 +94,10 @@ const ISO_SET = new Set(ISO_NAMES);
 
 /** `iso:server` / `isometric:server` → `server` when it is one of ISO_NAMES, else null. */
 export function isoRef(name: string): string | null {
-    const m = String(name || '').trim().toLowerCase().match(/^(?:iso|isometric):([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+    // ReDoS (Semgrep detect-redos) reviewed 2026-09-25, false positive: every repetition of
+    // `(?:-[a-z0-9]+)*` must START with a hyphen, so a run of letters can be split one way only
+    // and a failed match backtracks linearly (40 000 chars: < 1 ms). tests/redos-budget.test.mjs.
+    const m = String(name || '').trim().toLowerCase().match(/^(?:iso|isometric):([a-z0-9]+(?:-[a-z0-9]+)*)$/); // nosemgrep: rules.javascript.lang.security.audit.detect-redos
     return m && ISO_SET.has(m[1]) ? m[1] : null;
 }
 

@@ -1,27 +1,56 @@
+# escape=`
 # BMM Repository Server - Docker Image (Windows)
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+# -- Stage 1: fetch Node.js 22 LTS and CHECK it -----------------------------------------------
+# Nano Server has no PowerShell, so the download and the SHA-256 check happen in a Server Core
+# stage; only the unpacked folder reaches the final image. The version and the checksum are
+# pinned together (nodejs.org/dist/v<version>/SHASUMS256.txt, line node-v<version>-win-x64.zip):
+# bump both, or the build stops at the check. Node 20 reached end of life in April 2026.
+# The base images are pinned by digest too. To bump one:
+#   docker manifest inspect mcr.microsoft.com/windows/<image>:ltsc2022   (or read the registry's
+#   Docker-Content-Digest header) and replace tag AND digest.
+FROM mcr.microsoft.com/windows/servercore:ltsc2022@sha256:76cf422c98ca437b308374d0498280541fa42ac7061bb44015a6c8b70cf4db6a AS node
+SHELL ["powershell", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+ENV NODE_VERSION=22.23.3 `
+    NODE_SHA256=2b0ff57b049cda1bbcea2240eec20467018713c1efe1f7360c2681859b90ed71
+RUN Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-win-x64.zip" -OutFile node.zip; `
+    if ((Get-FileHash node.zip -Algorithm SHA256).Hash -ne $env:NODE_SHA256) { throw 'node.zip: SHA-256 mismatch' }; `
+    Expand-Archive node.zip -DestinationPath C:\; `
+    Rename-Item "C:\node-v$env:NODE_VERSION-win-x64" C:\nodejs; `
+    Remove-Item node.zip
 
-# Create app directory
-WORKDIR /app
+# -- Stage 2: the server, on Nano Server ------------------------------------------------------
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022@sha256:8e17c72fbf586d21e7e5a4edf51d97d05ce2c095cbbd345246c69d151fb3ddb3
+SHELL ["cmd", "/S", "/C"]
+COPY --from=node C:/nodejs C:/nodejs
+# ENV cannot extend PATH on Windows (Docker does not expand %PATH%, the old line set it to the
+# literal text): setx /M writes the machine PATH, which needs the administrator for this one step.
+USER ContainerAdministrator
+RUN setx /M PATH "%PATH%;C:\nodejs"
+
+WORKDIR C:\app
 
 # Copy repository files
 COPY mods/ ./mods/
 COPY repo.json ./
 COPY Info.json ./
 
-# Copy server script (Windows batch file)
+# Copy server script (Windows batch file). It starts itself with the `node` found on PATH
+# (stage 1): without it the script would try to download node.exe with PowerShell, which Nano
+# Server does not have, and the container never served anything.
 COPY BMM-Standalone-Server.bat ./server.bat
 
-# Run as the unprivileged account. ContainerUser is already nanoserver's default; saying so
-# keeps it true if the base image or an edit above ever switches to ContainerAdministrator.
+# The script writes its own files here at run time (server.log, monitoring.json, history).
+# Run as the unprivileged ContainerUser, with modify rights on this folder only.
+RUN icacls C:\app /grant "ContainerUser:(OI)(CI)M" /T /Q
 USER ContainerUser
 
 # Expose default port (can be overridden)
 EXPOSE PORT_PLACEHOLDER
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD powershell -Command "try { (Invoke-WebRequest -Uri 'http://localhost:PORT_PLACEHOLDER/repo.json' -UseBasicParsing).StatusCode -eq 200 } catch { $false }"
+# Health check. The old one called `powershell`, which Nano Server does not have, so it could
+# only ever report "unhealthy". node is on PATH here; the probe is the Linux image's.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 `
+    CMD ["node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
 
 # Start the server
 CMD ["cmd", "/c", "server.bat"]

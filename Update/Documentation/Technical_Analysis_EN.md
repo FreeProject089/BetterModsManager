@@ -417,16 +417,15 @@ BMM implements a complete modpack lifecycle system in `commands/modpack.rs`.
 
 ---
 
-## 28. BetaHub Integration & Proof-of-Work (v0.9.9)
+## 28. BetaHub Integration & Proof-of-Work (v0.9.9, removed 2026-09-25)
 
-BMM integrates with BetaHub for structured bug reporting.
-
-| Component | Implementation |
-| :--- | :--- |
-| **API Client** | `betahub-api.ts` handles authentication, report submission, and history retrieval |
-| **Modal System** | `betahub-modals.ts` (~63KB) provides a full UI for bug/suggestion submission with category tabs |
-| **PoW Engine** | `betahub-pow.ts` implements SHA-256 proof-of-work challenges to prevent spam without captchas |
-| **Crash Integration** | `crash-report.ts` chains `openBugReportModal()` with crash ZIP path pre-attachment from the crash detection flow |
+Removed on 25 September 2026: `betahub-api.ts`, `betahub-modals.ts`, `betahub-pow.ts`, the
+gitignored `betahub-config.local.ts` that held a personal access token, the `app.betahub.io`
+source of the network CSP preset and the `BETAHUB_CONFIG` release secret. Reports go only through
+`features/feedback/bc-feedback.ts` (the BetterCommunity feedback centre, with its own
+proof-of-work in `feedback-modal.ts` and an offline queue); the "My recent reports" list moved
+to `features/feedback/report-history.ts`. The MCP tool `bmm_generate_betahub_report` became
+`bmm_generate_diagnostic_report` (same JSON, it never sent anything).
 
 ---
 
@@ -1331,7 +1330,6 @@ carrying the Creator ID, app version, OS and locale as headers. A send that fail
 dropped: it is written to a **local queue and retried at the next launch**, and only there —
 the endpoint is the single place a report is ever sent. A client-side **proof-of-work** and a
 self-imposed **throttle** (a few per ten minutes, dozens a day) sit in front of it so a stuck
-loop cannot flood the centre. BetaHub survives as a **dead-man's fallback**: an empty
-`feedback_endpoint` routes back to the old forms, so a misconfiguration degrades rather than
-fails. The crash zip's replay is masked by default; the DxDiag dump is pre-ticked only for a
+loop cannot flood the centre. There is no fallback any more (BetaHub was removed on
+2026-09-25): an empty `feedback_endpoint` switches reports off, and the dialog says so. The crash zip's replay is masked by default; the DxDiag dump is pre-ticked only for a
 crash and is untickable, because it is broad (machine/OS ids, the Windows user name).

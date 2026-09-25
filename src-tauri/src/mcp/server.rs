@@ -181,8 +181,8 @@ impl BmmMcpServer {
         }
     }
 
-    fn tool_generate_betahub_report(&self, title: &str, description: &str) -> Result<CallToolResult, rmcp::ErrorData> {
-        match mods::generate_betahub_report(title, description) {
+    fn tool_generate_diagnostic_report(&self, title: &str, description: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::generate_diagnostic_report(title, description) {
             Ok(report) => ok_json(&report),
             Err(e) => err_result(&e),
         }
@@ -816,8 +816,8 @@ impl ServerHandler for BmmMcpServer {
                 })).unwrap()),
             ),
             Tool::new(
-                "bmm_generate_betahub_report",
-                "Generate a report for BetaHub.",
+                "bmm_generate_diagnostic_report",
+                "Build a diagnostic report (system, BMM version, active profile, mod counts) to paste into a bug report. Returns JSON; sends nothing.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
@@ -1358,10 +1358,10 @@ impl ServerHandler for BmmMcpServer {
                     let p = args.get("report_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing report_path", None))?;
                     self.tool_read_crash_report(p)
                 }
-                "bmm_generate_betahub_report" => {
+                "bmm_generate_diagnostic_report" => {
                     let t = args.get("title").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing title", None))?;
                     let d = args.get("description").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing description", None))?;
-                    self.tool_generate_betahub_report(t, d)
+                    self.tool_generate_diagnostic_report(t, d)
                 }
                 "bmm_export_config" => {
                     let p = args.get("target_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing target_path", None))?;

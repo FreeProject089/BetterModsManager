@@ -96,7 +96,8 @@ Pour le désactiver, mets `autoupdate_api_fallback` à une chaîne vide. Un `lin
 Retours, et le bouton *Signaler à BetterCommunity* du dialogue de plantage) envoie une
 suggestion, un bug ou un plantage — par défaut `https://bettercommunity.ch/api/feedback/bmm`.
 `feedback_web` est la page où un compte lié suit ses rapports. Un `feedback_endpoint` **vide**
-ramène les anciens formulaires BetaHub. Un rapport que l’appli n’a pas pu envoyer (site
+désactive les rapports : il n’y a pas d’autre transport (le secours BetaHub a été retiré en
+septembre 2026). Un rapport que l’appli n’a pas pu envoyer (site
 injoignable) est gardé et envoyé au prochain démarrage ; l’appli se limite aussi elle-même
 (5 par 10 min, 20 par jour) avant que le serveur ait à le faire.
 

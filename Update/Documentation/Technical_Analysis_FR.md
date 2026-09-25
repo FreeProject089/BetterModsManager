@@ -343,16 +343,16 @@ BMM implémente un système complet de cycle de vie des modpacks dans `commands/
 
 ---
 
-## 28. Intégration BetaHub & Proof-of-Work (v0.9.9)
+## 28. Intégration BetaHub & Proof-of-Work (v0.9.9, retirée le 2026-09-25)
 
-BMM s'intègre avec BetaHub pour les rapports de bugs structurés.
-
-| Composant | Implémentation |
-| :--- | :--- |
-| **Client API** | `betahub-api.ts` gère l'authentification, la soumission de rapports et la récupération de l'historique |
-| **Système de Modale** | `betahub-modals.ts` (~63 Ko) fournit une UI complète pour la soumission de bugs/suggestions avec onglets de catégories |
-| **Moteur PoW** | `betahub-pow.ts` implémente des défis proof-of-work SHA-256 pour prévenir le spam sans captchas |
-| **Intégration Crash** | `crash-report.ts` chaîne `openBugReportModal()` avec le chemin du ZIP de crash pré-attaché depuis le flux de détection de crash |
+Retirée le 25 septembre 2026 : `betahub-api.ts`, `betahub-modals.ts`, `betahub-pow.ts`, le
+`betahub-config.local.ts` ignoré par git qui contenait un jeton d'accès personnel, la source
+`app.betahub.io` du préréglage CSP réseau et le secret de release `BETAHUB_CONFIG`. Les rapports passent uniquement par
+`features/feedback/bc-feedback.ts` (le centre de retours BetterCommunity, avec sa propre preuve
+de travail dans `feedback-modal.ts` et une file hors ligne) ; la liste « Mes rapports récents »
+a été déplacée dans `features/feedback/report-history.ts`. L'outil MCP
+`bmm_generate_betahub_report` est devenu `bmm_generate_diagnostic_report` (même JSON, il n'a
+jamais rien envoyé).
 
 ---
 
@@ -1292,7 +1292,7 @@ en-têtes. Un envoi qui échoue n'est pas jeté : il est écrit dans une **file 
 prochain démarrage**, et là seulement — l'endpoint est le seul endroit où un rapport part
 jamais. Une **preuve de travail** côté client et une **auto-limitation** (quelques-uns par dix
 minutes, des dizaines par jour) sont devant, pour qu'une boucle bloquée ne noie pas le centre.
-BetaHub survit en **secours passif** : un `feedback_endpoint` vide renvoie aux anciens
-formulaires, donc une mauvaise config se dégrade au lieu d'échouer. La relecture du zip de
+Il n'y a plus de secours (BetaHub a été retiré le 2026-09-25) : un `feedback_endpoint` vide
+coupe les rapports, et le dialogue le dit. La relecture du zip de
 plantage est masquée par défaut ; le dump DxDiag n'est pré-coché que pour un plantage et est
 décochable, car il est large (identifiants machine/OS, nom d'utilisateur Windows).
