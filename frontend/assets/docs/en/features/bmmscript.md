@@ -71,7 +71,7 @@ Everything before the first statement.
 | `manual` | only when you press Run, or a deeplink fires it |
 | `describe "…"` | the description shown in the list |
 | `disabled` | keep the task, do not run it |
-| `allow command, script, deeplink, stopProcess` | what the task may do outside BMM |
+| `allow command, script, deeplink, stopProcess` | what the task may do outside BMM (also `delete`, `resources`, `tasks`) |
 
 `allow` is the same four permissions as the brick editor's checkboxes, and it is required
 for the same steps. A task that runs a script without `allow script` fails at that step,

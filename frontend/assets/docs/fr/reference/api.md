@@ -495,7 +495,7 @@ exception est `data/export-auto`.
 | `GET` | `/api/resources/hardware` | `resources.read` | — · cœurs et jeux d’instructions du processeur, cartes graphiques (listées seulement — BMM n’y calcule rien), bus et pénalité de recherche de chaque disque. Le premier appel peut prendre les 3 secondes du pilote graphique | |
 | `POST` | `/api/resources/preset` | `resources.write` | `name`* (`silent` · `balanced` · `max` · `custom`), `scope` (`persistent`, par défaut, ou `task`), `ttlSecs` (task seulement, ≤ 7200) · un préréglage **nommé**. Il ne passe jamais devant le mode jeu | ✓ |
 | `POST` | `/api/resources/game-mode` | `resources.write` | `mode`* (`auto` · `on` · `off`) | |
-| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (un ticket, pour les trois derniers) · **`cancel` demande aussi `mods.write`** : il jette du travail | |
+| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (un ticket, pour les trois derniers) · **`cancel` demande aussi `mods.write`** : il jette du travail · un `pause_all` envoyé ici prend fin seul au bout de 30 min | |
 | `POST` | `/api/resources/io-rule` | jeton admin | `disk`* (`*`, `d:\`, `\\nas\partage\` ou `/`), `op`* (`*` ou un type d’opération), `rule` (`{ rate_mb_s?, parallel?, buffer_kib?, io_priority? }` ; `null` la supprime) · une règle fine, ramenée dans les bornes dures et enregistrée. **Jeton admin seulement** : un plugin est refusé même avec `resources.write` | |
 
 ---

@@ -158,7 +158,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~107 actions across eight groups:
+There are ~106 actions across eight groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -168,12 +168,17 @@ There are ~107 actions across eight groups:
 | **Appearance** | Set a theme |
 | **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:features/storage)) · **set the resource preset**, **game mode**, **pause or resume the queue** (see [below](#how-hard-bmm-works)) |
 | **Privacy & recorder** | Telemetry consent · session recorder · export/import a replay |
-| **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run an external program** · **run a script you wrote** · run a raw `bmm://` deeplink |
+| **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run an external program** · **run a script you wrote** |
 | **Logic & math** | Compute maths into a variable · ternary · decision table · a stop-task guard |
 
 Many actions run by firing a canonical `bmm://` deeplink through the app's own handler — the same
 plumbing the [Plugins & API](doc-page:features/plugins) page exposes, which is why the two systems can drive each
-other.
+other. Each of those steps builds its own link from its fields; no step fires a link you type.
+
+The old generic *Run bmm:// deeplink* step is **removed**: it never did anything when it ran, and
+the typed actions above cover what it was used for. A task saved with it still loads. The editor
+shows the step as removed, with its old link, and the run skips it with a warning, so the rest of
+the task runs as before. Pick a typed action in its place.
 
 ## Running when BMM is closed
 
@@ -210,18 +215,19 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants six things separately, and each says what it unlocks:
+Each task grants seven things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
 | **Run external programs** | Launch a program with arguments |
 | **Run scripts** | Run PowerShell / CMD / Bash / Python you wrote |
-| **Fire deeplinks** | Trigger `bmm://` links |
+| **Fire deeplinks** | Run the steps that act through a `bmm://` link they build themselves: follow a catalogue, open a screen, export data… |
 | **Stop a program** | Terminate a running process |
 | **Delete things** | Delete a profile, a modpack, or a mod's folder |
 | **Resources** | Change the resource preset, game mode and the queue ([below](#how-hard-bmm-works)) |
+| **Other tasks** | Run, start or switch on another of your tasks (*Run another scheduled task*, *Start another task without waiting*, *Arm or disarm another task*) |
 
-All six are off until you turn them on, and a step whose permission is missing fails with a
+All seven are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
 **Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
@@ -236,14 +242,24 @@ a decision about your machine, so it is a grant like the others.
 Stopping a program is separate from launching one because the risk differs in kind: starting
 something is undoable, killing something can lose unsaved work with nothing to undo.
 
-!!! warning "Deeplinks are the widest of them"
+**Other tasks** exists because running another task is acting with *that* task's permissions.
+Without it, a task granted nothing could run, or switch on for its schedule, one of your own
+tasks that may run programs or delete things. It is its own grant rather than part of **Fire
+deeplinks**, so letting a task call its sub-task does not also let it follow catalogues, open
+screens or export data through a link.
 
-    A `bmm://` link reaches anything the app exposes, including actions that have no scheduler
-    step of their own. It used to be gated by nothing at all.
+!!! warning "These links run as the scheduler"
+
+    The steps under **Fire deeplinks** go through the same handler a web page's `bmm://` link
+    reaches, but as the scheduler, which is trusted: nothing asks you at 3 a.m. The hard limits
+    (no network path, no raw program path, no script carried by a link) still apply. A task
+    cannot write a link of its own: every step builds a fixed one from its fields, and *Open a
+    screen or a window* opens only the windows its list offers.
 
 !!! note "Upgrading from the old single checkbox"
 
-    A task you built before the split keeps everything it already had — but none gains **Run
+    A task you built before the split keeps everything it already had, running other tasks
+    included — but none gains **Run
     scripts**, **Stop a program**, **Delete things** or **Resources**. None of those capabilities existed when
     you ticked *Allow custom commands*, so granting them now would be inventing your consent
     rather than honouring it.

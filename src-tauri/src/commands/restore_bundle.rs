@@ -82,7 +82,63 @@ pub struct BundleInfo {
     /// written before signing existed is unsigned — but a TAMPERED one is worth stopping for.
     pub signature: String,
     pub author_id: Option<String>,
+    /// Signed (validly) by THIS user's key. When false, restoring the page grants
+    /// (`navigation`) or the tasks (`automations`) needs the user's yes to a warning, and the
+    /// tasks come back disabled (security summary §9, `.DATABMM` restore).
+    pub own_bundle: bool,
     pub sections: Vec<BundleSection>,
+}
+
+/// The two sections that carry what another person's archive should not hand this machine
+/// silently: page grants (a page's permissions, `navigation/pages-data/<id>/grants.json`) and
+/// scheduled tasks (with their own permissions and triggers).
+pub const FOREIGN_SENSITIVE_SECTIONS: [&str; 2] = ["navigation", "automations"];
+
+/// Whether an archive with this verdict was written by this user: a VALID signature whose
+/// author is this installation's Creator ID. Unsigned, tampered and malformed are not.
+pub fn is_own_bundle(valid_author: Option<&str>, my_creator_id: Option<&str>) -> bool {
+    matches!((valid_author, my_creator_id), (Some(a), Some(me)) if !me.is_empty() && a.eq_ignore_ascii_case(me))
+}
+
+/// Refuse a restore of the sensitive sections from someone else's archive unless the user
+/// accepted the warning.
+pub fn foreign_restore_refusal(own: bool, wanted: &[String], accepted: bool) -> Option<&'static str> {
+    let sensitive = wanted.iter().any(|s| FOREIGN_SENSITIVE_SECTIONS.contains(&s.as_str()));
+    (!own && sensitive && !accepted).then_some("restore.errForeignNeedsConfirm")
+}
+
+/// The tasks of someone else's archive, every one switched off. A task that is not an object
+/// is dropped; a document that is not a task array is refused (`None`), never written raw.
+pub fn tasks_disabled(buf: &[u8]) -> Option<Vec<u8>> {
+    let v: serde_json::Value = serde_json::from_slice(buf).ok()?;
+    let arr = v.as_array()?;
+    let out: Vec<serde_json::Value> = arr
+        .iter()
+        .filter_map(|t| t.as_object().cloned())
+        .map(|mut o| {
+            o.insert("enabled".into(), serde_json::Value::Bool(false));
+            serde_json::Value::Object(o)
+        })
+        .collect();
+    serde_json::to_vec_pretty(&out).ok()
+}
+
+/// The author of a manifest whose signature verifies, and the verdict word.
+fn manifest_verdict(manifest: Option<&serde_json::Value>) -> (String, Option<String>, Option<String>) {
+    match manifest {
+        Some(m) => match crate::commands::doc_sign::verify_doc(m, "databmm") {
+            crate::commands::doc_sign::Verdict::Valid { author_id, .. } => ("valid".to_string(), Some(author_id.clone()), Some(author_id)),
+            crate::commands::doc_sign::Verdict::Tampered { author_id } => ("tampered".to_string(), Some(author_id), None),
+            crate::commands::doc_sign::Verdict::Malformed { .. } => ("malformed".to_string(), None, None),
+            crate::commands::doc_sign::Verdict::Unsigned => ("unsigned".to_string(), None, None),
+        },
+        None => ("unsigned".to_string(), None, None),
+    }
+}
+
+/// This installation's Creator ID, when it can be read.
+fn my_creator_id(app: &tauri::AppHandle) -> Option<String> {
+    crate::commands::security::get_creator_id(app.clone()).ok()
 }
 
 fn data_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -109,7 +165,12 @@ fn open_bundle_bytes(path: &str, passphrase: Option<&str>) -> Result<Vec<u8>, Ap
 
 /// Read the archive's shape without unpacking it.
 #[tauri::command]
-pub fn inspect_data_bundle(path: String, passphrase: Option<String>) -> Result<BundleInfo, AppError> {
+pub fn inspect_data_bundle(app_handle: tauri::AppHandle, path: String, passphrase: Option<String>) -> Result<BundleInfo, AppError> {
+    inspect_bundle_as(path, passphrase, my_creator_id(&app_handle).as_deref())
+}
+
+/// `inspect_data_bundle` for a given Creator ID (the one `ownBundle` compares with).
+fn inspect_bundle_as(path: String, passphrase: Option<String>, me: Option<&str>) -> Result<BundleInfo, AppError> {
     let bytes = open_bundle_bytes(&path, passphrase.as_deref())?;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| AppError::Internal(format!("Not a readable .DATABMM: {e}")))?;
@@ -138,15 +199,8 @@ pub fn inspect_data_bundle(path: String, passphrase: Option<String>) -> Result<B
         slot.1 += e.size();
     }
 
-    let (signature, author_id) = match manifest.as_ref() {
-        Some(m) => match crate::commands::doc_sign::verify_doc(m, "databmm") {
-            crate::commands::doc_sign::Verdict::Valid { author_id, .. } => ("valid".to_string(), Some(author_id)),
-            crate::commands::doc_sign::Verdict::Tampered { author_id } => ("tampered".to_string(), Some(author_id)),
-            crate::commands::doc_sign::Verdict::Malformed { .. } => ("malformed".to_string(), None),
-            crate::commands::doc_sign::Verdict::Unsigned => ("unsigned".to_string(), None),
-        },
-        None => ("unsigned".to_string(), None),
-    };
+    let (signature, author_id, valid_author) = manifest_verdict(manifest.as_ref());
+    let own_bundle = is_own_bundle(valid_author.as_deref(), me);
 
     Ok(BundleInfo {
         path: path.clone(),
@@ -154,6 +208,7 @@ pub fn inspect_data_bundle(path: String, passphrase: Option<String>) -> Result<B
         created: manifest.as_ref().and_then(|m| m.get("created")).and_then(|v| v.as_str()).map(String::from),
         signature,
         author_id,
+        own_bundle,
         sections: counts.into_iter().map(|(section, (files, bytes))| {
             let restorable = SECTIONS.iter().find(|s| s.prefix == section).map(|s| s.restorable).unwrap_or(false);
             BundleSection { section, files, bytes, restorable }
@@ -171,6 +226,10 @@ pub struct RestoreArgs {
     /// The passphrase, when the archive is a sealed envelope. Absent for a plain one.
     #[serde(default)]
     pub passphrase: Option<String>,
+    /// The user said yes to the warning about restoring page grants or tasks from an archive
+    /// that is not theirs (`inspect_data_bundle` → `ownBundle: false`).
+    #[serde(default)]
+    pub accept_foreign: bool,
 }
 
 #[derive(Serialize)]
@@ -203,6 +262,21 @@ pub fn restore_data_bundle(
     let bytes = open_bundle_bytes(&args.path, args.passphrase.as_deref())?;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| AppError::Internal(format!("Not a readable .DATABMM: {e}")))?;
+
+    // Whose archive it is, decided before anything is written (security summary §9): page
+    // grants and tasks from someone else's archive need the user's yes, and the tasks come
+    // back disabled.
+    let own = {
+        let manifest: Option<serde_json::Value> = zip
+            .by_name("manifest.json")
+            .ok()
+            .and_then(|mut e| { let mut s = String::new(); e.read_to_string(&mut s).ok()?; serde_json::from_str(&s).ok() });
+        let (_, _, valid_author) = manifest_verdict(manifest.as_ref());
+        is_own_bundle(valid_author.as_deref(), my_creator_id(&app_handle).as_deref())
+    };
+    if let Some(key) = foreign_restore_refusal(own, &args.sections, args.accept_foreign) {
+        return Err(AppError::Internal(key.into()));
+    }
 
     let mut result = RestoreResult {
         restored: vec![], files: 0, skipped: vec![],
@@ -251,6 +325,15 @@ pub fn restore_data_bundle(
 
         let mut buf = Vec::new();
         e.read_to_end(&mut buf)?;
+        if section.prefix == "automations" && !own {
+            match tasks_disabled(&buf) {
+                Some(b) => buf = b,
+                None => {
+                    result.skipped.push("automations".into());
+                    continue;
+                }
+            }
+        }
 
         // Where each section lands. Written out rather than "strip the prefix and join",
         // because three of them do NOT mirror their archive path: Lang lives outside the data
@@ -435,7 +518,7 @@ mod tests {
             ("Crashes/Reports/a.zip", "x"),
             ("app_data.json", "{}"),
         ]);
-        let info = inspect_data_bundle(p.to_string_lossy().to_string(), None).unwrap();
+        let info = inspect_bundle_as(p.to_string_lossy().to_string(), None, None).unwrap();
 
         assert_eq!(info.app_version.as_deref(), Some("1.0.0"));
         // No signature block in this manifest — unsigned, and that is not an error.
@@ -470,21 +553,50 @@ mod tests {
 
         let good = tmp("signed.DATABMM");
         write_bundle(&good, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
-        assert_eq!(inspect_data_bundle(good.to_string_lossy().to_string(), None).unwrap().signature, "valid");
+        assert_eq!(inspect_bundle_as(good.to_string_lossy().to_string(), None, None).unwrap().signature, "valid");
 
         // One field changed after signing — the archive now claims a version it was not
         // signed with.
         doc["app_version"] = serde_json::json!("9.9.9");
         let bad = tmp("edited.DATABMM");
         write_bundle(&bad, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
-        assert_eq!(inspect_data_bundle(bad.to_string_lossy().to_string(), None).unwrap().signature, "tampered");
+        assert_eq!(inspect_bundle_as(bad.to_string_lossy().to_string(), None, None).unwrap().signature, "tampered");
+
+        // Whose it is: only a VALID signature by this user's own key is "own".
+        let me = hex::encode(vk.to_bytes());
+        assert!(inspect_bundle_as(good.to_string_lossy().to_string(), None, Some(&me)).unwrap().own_bundle);
+        assert!(!inspect_bundle_as(good.to_string_lossy().to_string(), None, Some("someone-else")).unwrap().own_bundle);
+        assert!(!inspect_bundle_as(bad.to_string_lossy().to_string(), None, Some(&me)).unwrap().own_bundle,
+            "a tampered archive naming my key is not mine");
+    }
+
+    /// Security summary §9: page grants and tasks from an archive that is not this user's need
+    /// the user's yes, and the tasks come back disabled.
+    #[test]
+    fn someone_elses_grants_and_tasks_need_a_yes_and_come_back_disabled() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(foreign_restore_refusal(false, &s(&["automations"]), false), Some("restore.errForeignNeedsConfirm"));
+        assert_eq!(foreign_restore_refusal(false, &s(&["themes", "navigation"]), false), Some("restore.errForeignNeedsConfirm"));
+        assert_eq!(foreign_restore_refusal(false, &s(&["automations"]), true), None, "after the warning");
+        assert_eq!(foreign_restore_refusal(false, &s(&["themes", "Lang"]), false), None, "nothing sensitive asked");
+        assert_eq!(foreign_restore_refusal(true, &s(&["automations", "navigation"]), false), None, "my own archive");
+        assert!(!is_own_bundle(None, Some("abc")), "unsigned is not mine");
+        assert!(!is_own_bundle(Some("abc"), None));
+        assert!(is_own_bundle(Some("ABC"), Some("abc")));
+
+        let tasks = br#"[{"id":"a","enabled":true,"perms":{"command":true}},{"id":"b"},"junk"]"#;
+        let out: serde_json::Value = serde_json::from_slice(&tasks_disabled(tasks).unwrap()).unwrap();
+        let arr = out.as_array().unwrap();
+        assert_eq!(arr.len(), 2, "a task that is not an object is dropped");
+        assert!(arr.iter().all(|t| t["enabled"] == false), "every task comes back disabled: {out}");
+        assert!(tasks_disabled(br#"{"not":"an array"}"#).is_none(), "never written raw");
     }
 
     #[test]
     fn a_file_that_is_not_a_zip_is_an_error_not_a_panic() {
         let p = tmp("notazip.DATABMM");
         std::fs::write(&p, b"this is not a zip").unwrap();
-        assert!(inspect_data_bundle(p.to_string_lossy().to_string(), None).is_err());
+        assert!(inspect_bundle_as(p.to_string_lossy().to_string(), None, None).is_err());
     }
 
     #[test]

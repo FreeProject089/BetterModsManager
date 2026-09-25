@@ -39,10 +39,38 @@ pub fn dlg_pick_folder(app: tauri::AppHandle) -> Option<String> {
 
 #[tauri::command]
 pub fn dlg_pick_file(app: tauri::AppHandle, filters: Option<Vec<DlgFilter>>) -> Option<String> {
-    apply_filters(app.dialog().file(), &filters)
+    let picked = apply_filters(app.dialog().file(), &filters)
         .blocking_pick_file()
         .and_then(|f| f.into_path().ok())
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.to_string_lossy().into_owned());
+    if let Some(p) = &picked {
+        remember_picked(p);
+    }
+    picked
+}
+
+/// Files the user chose in this dialog during this session, canonicalised.
+///
+/// `read_file_base64` is confined to BMM's folders (security summary §9 #16), but a feedback
+/// screenshot or a zip the user attaches can live anywhere. A choice made in the native dialog
+/// is the user's own, and nothing else can make it (a plugin or an MCP tool cannot click in
+/// it), so that one file stays readable. Bounded: past 256 the oldest entry goes first.
+static PICKED: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+pub(crate) fn remember_picked(path: &str) {
+    let Ok(c) = std::fs::canonicalize(path) else { return };
+    let mut v = PICKED.lock().unwrap_or_else(|p| p.into_inner());
+    if !v.contains(&c) {
+        if v.len() >= 256 {
+            v.remove(0);
+        }
+        v.push(c);
+    }
+}
+
+/// Was this (already canonical) path picked in BMM's own file dialog?
+pub(crate) fn was_picked(canonical: &std::path::Path) -> bool {
+    PICKED.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|p| p == canonical)
 }
 
 #[tauri::command]

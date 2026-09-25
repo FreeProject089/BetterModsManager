@@ -33,7 +33,7 @@ for a reason recorded in [Architecture](doc-page:how-it-works/architecture).
 | `jwalk` | parallel directory walking on the hot paths (`walkdir` is kept for cold ones) |
 | `blake3` | local content hashing — a tree hash, tagged `b3:` |
 | `sha2` | legacy baselines, the repo wire format, and the `content_id` fingerprint |
-| `zip`, `sevenz-rust`, `unrar`, `tar`, `flate2` | archives, read from their index and never unpacked into the mods folder |
+| `zip`, `sevenz-rust2`, `unrar`, `tar`, `flate2` | archives, read from their index and never unpacked into the mods folder |
 | `fs_extra`, `tempfile` | bulk filesystem operations and scratch space |
 | `sysinfo` | the resource monitor and process checks |
 
@@ -113,6 +113,18 @@ never read it:
 Every dependency listed above keeps its own licence — mostly MIT and Apache-2.0, which are
 GPL-compatible. The in-app **Credits** screen links the full third-party notices, generated
 from the project's dependency data rather than maintained by hand.
+
+**Isometric icons** (`:icon[iso:…]`, the *Isometric* tab of the icon picker) come from three
+MIT sets, redistributed unchanged apart from a sanitising pass:
+
+| Set | Icons | Licence |
+|---|---|---|
+| [Isoflow isopack](https://github.com/markmanx/isopacks) | `iso:<name>` | MIT © 2023 Mark Mankarious |
+| [MI2 — My Isometric Icons](https://github.com/richbl/isometric-icons) | `iso:cube-<name>` | MIT © 2018 Rich; its glyphs are Google's Material Design Icons, Apache-2.0 |
+| [Jolloficons](https://github.com/gbmillz/jolloficons) | `iso:solid-<name>` | MIT © 2018 Gbolahan Fawale |
+
+The full licence texts and the file-by-file list ship with the app, in
+`frontend/assets/icons/iso/LICENSES.txt`.
 
 !!! info "See it in the app"
     Credits → **View the tech stack**, which opens the same list generated from the project's data.

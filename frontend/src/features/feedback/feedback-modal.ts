@@ -383,6 +383,11 @@ function wire(o: HTMLElement, who: Who, crashes: string[], cfg: Awaited<ReturnTy
             if (r.result === 'offline') say(t('fbm.offline'), 'err');
             else if (r.result === 'no-creator') say(t('settings.link.noCreator'), 'err');
             else if (r.result === 'error') say(t('common.error'), 'err');
+            // A key-pin refusal: the full sentence and the way out are on the Settings
+            // identity card; here, in the line the reader is looking at, what happened.
+            else if (r.result === 'pin') say(r.problem === 'key_fork' ? t('settings.link.pin.key_fork')
+                : r.problem === 'key_retired' ? t('settings.link.pin.key_retired')
+                : t('settings.link.pin.upgraded_key_required'), 'err');
             else if (r.result === 'already') { forgetBcLinkState(); render(await bcLinkState(true), crashes, cfg); }
         });
     });

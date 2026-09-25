@@ -215,6 +215,16 @@ const server = http.createServer(async (req, res) => {
     if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
+    // At the root, only the manifest and its stats (the rule of BMM's built-in server,
+    // builtin_may_serve). Everything else there is this server's own: monitoring.json lists
+    // every downloader's IP and Creator ID (BMM security summary, item 9), server.log the
+    // same, bans/whitelist/access files the owner's lists. Decided on the RESOLVED path, so
+    // `/mods/../monitoring.json` or `/monitoring.json.` cannot spell their way past it.
+    const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
+    if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')) {
+        res.statusCode = 404; res.end('Not Found'); return;
+    }
 
     const total = fs.statSync(absolutePath).size;
     const protocol = ip.startsWith('127.0.0.1') ? 'Local' : (ip.startsWith('192.168.') || ip.startsWith('10.') ? 'LAN' : 'WAN');

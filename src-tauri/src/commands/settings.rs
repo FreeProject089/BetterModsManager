@@ -80,13 +80,39 @@ fn write_json_dir(dir: &std::path::Path, files: &serde_json::Map<String, serde_j
 
 #[tauri::command]
 pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, dest_path: String, options: Option<ExportOptions>, extras: Option<serde_json::Value>) -> Result<(), AppError> {
-    let Some(opts) = options else {
-        // No options → raw copy of data.json (legacy behaviour)
-        std::fs::copy(&*state.data_path, dest_path)?;
-        return Ok(());
-    };
-    let root = build_export_json(&state, &app_handle, &opts, extras)?;
-    std::fs::write(&dest_path, serde_json::to_string_pretty(&root)?)?;
+    let _ = state.save(); // Save current memory to disk first
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.clone();
+    export_to_file(&data, &data_dir(&app_handle), &get_lang_dir(&app_handle), &dest_path, options, extras)
+}
+
+impl ExportOptions {
+    /// Every section: what an unattended backup writes, and what a call without options gets.
+    pub fn everything() -> Self {
+        Self {
+            profiles: true, mods: true, settings: true, custom_tags: true, disk_limits: true,
+            plugins: true, modpacks: true, launch_packs: true, themes: true, translations: true, apps: true,
+        }
+    }
+}
+
+/// Write an export of `data` to `dest`.
+///
+/// No options used to mean a RAW copy of `data.json`: the API token, the scheduler key, the
+/// plugin tokens and the GitHub token went into every unattended backup (the scheduler's, the
+/// API's `data/export-auto`), often to a NAS (security summary §9, exports). It now means
+/// every section, through the same builder as a manual export, so the same secrets are
+/// stripped whichever path wrote the file.
+pub(crate) fn export_to_file(
+    data: &crate::state::AppData,
+    dir: &std::path::Path,
+    lang_dir: &std::path::Path,
+    dest: &str,
+    options: Option<ExportOptions>,
+    extras: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    let opts = options.unwrap_or_else(ExportOptions::everything);
+    let root = export_document(data, &opts, extras, dir, lang_dir)?;
+    std::fs::write(dest, serde_json::to_string_pretty(&root)?)?;
     Ok(())
 }
 
@@ -103,36 +129,47 @@ pub fn export_app_data_json(state: State<AppState>, app_handle: tauri::AppHandle
 
 fn build_export_json(state: &State<AppState>, app_handle: &tauri::AppHandle, opts: &ExportOptions, extras: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
     let _ = state.save(); // Save current memory to disk first
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.clone();
+    export_document(&data, opts, extras, &data_dir(app_handle), &get_lang_dir(app_handle))
+}
 
-    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+/// The export document, from a copy of the data and the two folders it reads files from.
+fn export_document(
+    data: &crate::state::AppData,
+    opts: &ExportOptions,
+    extras: Option<serde_json::Value>,
+    dir: &std::path::Path,
+    lang_dir: &std::path::Path,
+) -> Result<serde_json::Value, AppError> {
     let mut export_data = crate::state::AppData::default();
     if opts.profiles { export_data.profiles = data.profiles.clone(); export_data.active_profile_id = data.active_profile_id.clone(); }
     if opts.mods { export_data.mods = data.mods.clone(); }
-    if opts.settings { export_data.settings = data.settings.clone(); }
+    // The resource governor's presets and rules are settings kept outside `settings` (see
+    // state.rs); the raw copy of data.json carried them, so the settings section does too.
+    if opts.settings { export_data.settings = data.settings.clone(); export_data.resources = data.resources.clone(); }
     if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
     if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
     if opts.plugins { export_data.installed_plugins = data.installed_plugins.clone(); export_data.plugin_permissions = data.plugin_permissions.clone(); }
     if opts.modpacks { export_data.modpacks = data.modpacks.clone(); }
     if opts.launch_packs { export_data.launch_packs = data.launch_packs.clone(); }
-    drop(data);
 
     // Versioned wrapper so we can carry file-based data + frontend extras alongside AppData.
     let mut root = serde_json::Map::new();
     root.insert("_bmm_backup".into(), serde_json::json!(2));
     let mut app_data_json = serde_json::to_value(&export_data)?;
-    // This machine's API token, scheduler key, plugin tokens and CORS list never travel: an
-    // import ignores them anyway (state::LOCAL_ONLY_SETTINGS), so all a copy in the file
-    // could do is leak them to whoever the backup is shared with.
+    // This machine's API token, scheduler key, plugin tokens, CORS and tunnel-host lists, and
+    // the user's GitHub token, never travel: an import keeps the local ones anyway
+    // (state::LOCAL_ONLY_SETTINGS), so all a copy in the file could do is leak them to
+    // whoever the backup is shared with.
     crate::state::strip_local_only_settings(&mut app_data_json);
     root.insert("app_data".into(), app_data_json);
 
-    let dir = data_dir(app_handle);
     if opts.themes {
         let themes = read_json_dir(&dir.join("themes"));
         if !themes.is_empty() { root.insert("themes".into(), serde_json::Value::Object(themes)); }
     }
     if opts.translations {
-        let langs = read_json_dir(&get_lang_dir(app_handle));
+        let langs = read_json_dir(lang_dir);
         if !langs.is_empty() { root.insert("translations".into(), serde_json::Value::Object(langs)); }
     }
     if opts.apps {
@@ -151,6 +188,47 @@ fn build_export_json(state: &State<AppState>, app_handle: &tauri::AppHandle, opt
     Ok(serde_json::Value::Object(root))
 }
 
+#[cfg(test)]
+mod export_secret_tests {
+    use super::*;
+
+    const GH: &str = "ghp_EXPORTTESTabcdefghijklmnopqrstuvwxyz01";
+
+    fn data() -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.settings.github_token = GH.into();
+        d.settings.api_token = "api-token-export-test".into();
+        d.settings.language = "fr".into();
+        d.profiles.push(crate::models::profile::Profile::new(
+            "Game".into(), "Game".into(), "C:/g".into(), "C:/g/mods".into(), "C:/g/bak".into(),
+        ));
+        d
+    }
+
+    /// The unattended export (no options) is a built export, not a raw copy of data.json.
+    #[test]
+    fn an_unattended_export_carries_no_token_and_keeps_the_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("auto.json");
+        export_to_file(&data(), tmp.path(), tmp.path(), &dest.to_string_lossy(), None, None).unwrap();
+        let text = std::fs::read_to_string(&dest).unwrap();
+        assert!(!text.contains(GH), "the GitHub token was exported");
+        assert!(!text.contains("api-token-export-test"), "the API token was exported");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["_bmm_backup"], 2, "built by the export builder");
+        assert_eq!(v["app_data"]["settings"]["language"], "fr", "the settings are still there");
+        assert_eq!(v["app_data"]["profiles"].as_array().map(|a| a.len()), Some(1));
+    }
+
+    #[test]
+    fn every_manual_export_drops_the_github_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let v = export_document(&data(), &ExportOptions::everything(), None, tmp.path(), tmp.path()).unwrap();
+        assert!(!v.to_string().contains(GH));
+        assert!(v["app_data"]["settings"].get("github_token").is_none());
+    }
+}
+
 /// Automated data export — picks the destination path itself from a target folder,
 /// a filename template ({date} {time} {datetime}) and an increment policy if the
 /// file already exists. Used by the scheduler / API so a backup can run unattended
@@ -161,7 +239,7 @@ pub fn export_app_data_auto(
     dir: String, name: Option<String>, increment: Option<String>,
 ) -> Result<String, String> {
     let dest = backup_dest_path(dir, name, increment, None)?;
-    export_app_data(state, app_handle, dest.clone(), None, None).map_err(|e| e.to_string())?;
+    export_app_data(state, app_handle, dest.clone(), Some(ExportOptions::everything()), None).map_err(|e| e.to_string())?;
     Ok(dest)
 }
 

@@ -113,3 +113,19 @@ test('the copy here is the website\'s copy', { skip: existsSync(BCW) ? false : '
   assert.deepEqual(readdirSync(BCW).sort(), readdirSync(DIR).sort());
   for (const f of readdirSync(DIR)) assert.equal(readFileSync(join(DIR, f), 'utf8'), readFileSync(join(BCW, f), 'utf8'), f);
 });
+
+// G5 follow-up: the family is documented where the other icon families are, in both
+// languages, and the three sets are credited on the docs site (EN + FR) with their licences.
+test('the icons help names iso: in both languages, and the credits page names the three sets', () => {
+  const hub = readFileSync(join(ROOT, 'frontend/src/docs/docs-hub.ts'), 'utf8');
+  const lines = hub.split('\n').filter((l) => l.includes(':icon[ph:rocket]'));
+  assert.equal(lines.length, 2, 'the EN and FR icon help lines (renamed?)');
+  for (const l of lines) assert.match(l, /:icon\[iso:server\]/, 'an icons help line without the isometric family');
+  for (const f of ['credits.md', 'credits.fr.md']) {
+    const md = readFileSync(join(ROOT, 'BMM Docs/docs/reference', f), 'utf8');
+    for (const who of ['Mark Mankarious', '2018 Rich', 'Gbolahan Fawale', 'Apache-2.0']) {
+      assert.ok(md.includes(who), `${f} does not credit ${who}`);
+    }
+    assert.match(md, /icons\/iso\/LICENSES\.txt/, `${f} does not point at the licence texts`);
+  }
+});

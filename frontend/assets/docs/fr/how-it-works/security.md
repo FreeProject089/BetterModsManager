@@ -170,6 +170,30 @@ fournie — et l'instantané + rollback protège d'une installation échouée, p
 malveillant. Ce qui est garanti, c'est qu'un payload intercepté ou altéré n'atteint jamais ton dossier
 d'installation.
 
+### La mise à jour rapide de BMM est signée aussi
+
+Une copie que BetterInstaller n'a pas installée (un lancement dev ou portable) se met à jour par la
+**mise à jour rapide** de BMM, qui remplace quelques fichiers listés dans l'asset de release
+`update-manifest.json`. Cette liste décide de ce qui est écrit dans le dossier de BMM : elle est donc
+signée avec la même clé d'éditeur que les paquets, et BMM la refuse si **une seule** règle manque :
+
+| Règle | Pourquoi |
+|---|---|
+| signature Ed25519 par la clé d'éditeur, compilée dans BMM | une clé lue dans un fichier du dossier d'installation serait remplaçable par quiconque peut y écrire |
+| signée sous la ligne de contexte propre à BMM | une signature faite pour le `update.json` de BetterInstaller ne peut jamais être rejouée ici, ni l'inverse |
+| l'app est `com.bettermm.desktop` | une liste signée pour une autre app n'est pas celle-ci |
+| valable 7 jours au plus, et pas expirée | un hôte qui ne reçoit plus de copies fraîches cesse d'être cru en une semaine |
+| une version strictement plus récente que celle qui tourne | une vieille liste authentique ne peut pas servir à faire revenir BMM en arrière |
+| URLs `https`, chemins relatifs simples, un SHA-256 par fichier | chaque fichier téléchargé est comparé à son hash avant d'être écrit |
+
+Seule la partie signée est lue. L'interface ne donne jamais à BMM une liste à appliquer : elle lui
+rend le document reçu, et BMM le vérifie **à nouveau** avant de télécharger ou d'écrire quoi que ce soit.
+
+Comme la signature expire, l'éditeur la renouvelle deux fois par semaine avec un job automatique (le
+workflow *Re-sign update manifests*, qui renouvelle aussi le `update.json` de BetterInstaller). Si ce
+job s'arrête, les copies installées ne se voient simplement plus proposer de mise à jour au bout de
+7 jours au plus — rien de faux n'est installé. Voir [Dépannage](doc-page:reference/troubleshooting#bmm-ne-propose-plus-de-mise-a-jour-apres-une-release).
+
 ---
 
 ## Ce que le contrôle d'intégrité bloque, et ce qu'il ne bloque pas
@@ -178,7 +202,7 @@ d'installation.
 
 | Chemin | Appliqué ? |
 |---|---|
-| Téléchargement depuis le catalogue d'apps | **Oui** — SHA-256 vérifié avant toute exécution (CWE-494). Si le catalogue ne porte aucun hash, BMM le dit et demande ; le journal enregistre le hash réel du payload |
+| Téléchargement depuis le catalogue d'apps | **Oui, avec un choix qui te revient** — SHA-256 contrôlé avant que le payload soit conservé (CWE-494). Une installation lancée par un lien `bmm://` **refuse** un hash qui ne correspond pas, et un lien sans hash ; une installation que tu lances dans l'app t'**avertit** d'un hash qui ne correspond pas ou absent et te laisse décider. Le journal enregistre le hash réel du payload dans tous les cas |
 | Synchro de dépôt | **Oui** — comparé avant le téléchargement, par chunk pendant, re-vérifié après |
 | Application d'un modpack | **Oui**, sauf si ce modpack a *ignorer le contrôle d'intégrité* |
 | Activation d'un mod depuis le planificateur | **Non** — le contrôle est contourné, une exécution de fond ne pouvant pas s'arrêter pour demander |

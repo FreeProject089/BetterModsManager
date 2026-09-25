@@ -1,6 +1,6 @@
 # Privacy Policy — Better Mods Manager (BMM)
 
-_Last updated: 2026-09-23_
+_Last updated: 2026-09-24_
 
 Better Mods Manager is an open-source desktop application (GPL‑3.0) that runs on your computer.
 Your profiles, mods, modpacks, plugins and settings are stored **locally**, in BMM's data folder,
@@ -315,7 +315,11 @@ key; BMM stores only the path to your key file, and which key answers which serv
 
 ### 6.2 Hosting a Server Repo, publishing over SSH
 If **you** host a repo, the people who connect expose **their** IP address and Creator ID to
-**your** machine, and you become responsible for those logs. Publishing over SSH connects to the
+**your** machine, and you become responsible for those logs. The repo's public status feed
+(`monitoring.json`, readable without a password) shows **aggregates only**: how many downloads are
+running, the bytes sent and each running file's progress, never an IP address or a Creator ID. Who
+is downloading is shown only to you, in BMM's own screen (or, for a standalone server, on its
+dashboard behind the admin password). Publishing over SSH connects to the
 server **you** configured; host, port, user, remote folder and your private‑key **path** are saved
 locally, while the key passphrase and any password are read at the moment of use and never stored.
 The server's fingerprint is recorded on first connection so a changed server is refused.

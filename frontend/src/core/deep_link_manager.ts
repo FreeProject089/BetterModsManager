@@ -118,6 +118,20 @@ export async function initDeepLinks(): Promise<void> {
 
 /** A name a person recognises, for the ids the dialog would otherwise show bare. Best effort:
  *  the id is always shown too, so a failed lookup hides nothing. */
+/**
+ * Install a theme named by a link: `bmm://catalog/theme/install` and `bmm://theme/import`.
+ *
+ * The download happens in Rust (`link_install_theme`) with the same rules as a plugin link
+ * (https, the host the dialog showed, a size cap), then the theme list is re-read so the new
+ * one can be applied. Returns what Rust installed.
+ */
+async function installThemeByLink(url: string): Promise<{ id: string; name: string }> {
+    const installed = await invoke('link_install_theme', { downloadUrl: url }) as { id: string; name: string };
+    const { loadInstalledThemes } = await import('../features/themes/theme-engine.js');
+    await loadInstalledThemes();
+    return installed;
+}
+
 async function friendlyName(p: LinkPrompt): Promise<string> {
     try {
         if (p.action === 'plugin/delete' || p.action === 'plugin/activate') {
@@ -573,11 +587,10 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
                     toast(`${name} ${t('plugins.installed') || 'installed'} — ${t('dlg.note.pluginDisabled')}`, 'success', 8000);
                     window._refreshModsFn?.(true);
                 } else if (kind === 'theme') {
-                    const res = await fetch(url);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const themeJson = await res.text();
-                    JSON.parse(themeJson); // validate it's a theme JSON before installing
-                    await invoke('install_theme', { themeJson });
+                    // Downloaded and checked in Rust (link_install_theme: https, the host the
+                    // dialog showed, a size cap, a theme document with a safe id), like the
+                    // plugin path. A webview fetch had none of those second checks.
+                    await installThemeByLink(url);
                     toast(`${name} ${t('themes.installed') || 'installed'}`, 'success');
                 } else {
                     toast(`${t('common.error')}: unknown catalog kind "${kind}"`, 'error');
@@ -751,12 +764,9 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
             const url = parsedUrl.searchParams.get('url');
             if (url) {
                 toast(t('themes.deeplink.import') || 'Importing theme…', 'info');
-                const { installTheme } = await import('../features/themes/theme-engine.js');
                 try {
-                    const resp = await fetch(url);
-                    const json = await resp.json();
-                    await installTheme(json);
-                    toast(`${t('themes.imported') || 'Theme imported'}: ${json.name}`, 'success');
+                    const installed = await installThemeByLink(url);
+                    toast(`${t('themes.imported') || 'Theme imported'}: ${installed.name}`, 'success');
                 } catch (e) { toast(String(e), 'error'); }
             }
             return;

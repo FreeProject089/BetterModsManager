@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    107 actions · 40 conditions · 36 values · 8 loop sources
+    106 actions · 40 conditions · 36 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -141,9 +141,9 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `app.checkUpdate` | Asks whether a BMM update exists. Sets update.available; downloads nothing. | `enabled` |
 | `system.clearApiLog` | Empties the API request log. | — |
 | `system.clearResourceRecords` | Empties the recorded CPU/memory samples. | — |
-| `task.run` | Trigger another scheduled task | `id` |
-| `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. | `id` |
-| `task.setEnabled` | Turns another scheduled task on or off. A task can arm the one that follows it and disarm itself. | `taskId` · `armOn` |
+| `task.run` | Trigger another scheduled task. Needs the “Other tasks” permission. | `id` |
+| `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. Needs the “Other tasks” permission. | `id` |
+| `task.setEnabled` | Turns another scheduled task on or off. A task can arm the one that follows it; it cannot arm or disarm itself (that is refused). Needs the “Other tasks” permission. | `taskId` · `armOn` |
 | `view.open` | Opens a BMM screen or window — any of them, by name. | `place` · `id` · `arg` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
@@ -151,7 +151,6 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `custom.script` | Runs PowerShell, CMD, Bash or Python you write. Needs “Run scripts”. | `keepGoing` · `engine` · `code` · `workingDir` · `into` |
 | `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` · `into` |
 | `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
-| `deeplink` | Trigger any bmm:// deep link | `url` |
 | `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
 | `wait.http` | Polls it until it answers — by status, or by what the reply says — or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |

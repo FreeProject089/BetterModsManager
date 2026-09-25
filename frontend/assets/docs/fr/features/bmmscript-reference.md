@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    107 actions · 40 conditions · 36 valeurs · 8 sources de boucle
+    106 actions · 40 conditions · 36 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -141,9 +141,9 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `app.checkUpdate` | Vérifie s’il existe une mise à jour de BMM. Renseigne update.available ; ne télécharge rien. | `enabled` |
 | `system.clearApiLog` | Vide le journal des requêtes API. | — |
 | `system.clearResourceRecords` | Vide les relevés CPU/mémoire enregistrés. | — |
-| `task.run` | Déclenche une autre tâche | `id` |
-| `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. | `id` |
-| `task.setEnabled` | Active ou désactive une autre tâche planifiée. Une tâche peut armer celle qui la suit et se désarmer elle-même. | `taskId` · `armOn` |
+| `task.run` | Déclenche une autre tâche. Demande la permission « Autres tâches ». | `id` |
+| `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. Demande la permission « Autres tâches ». | `id` |
+| `task.setEnabled` | Active ou désactive une autre tâche planifiée. Une tâche peut armer celle qui la suit ; elle ne peut ni s’armer ni se désarmer elle-même (c’est refusé). Demande la permission « Autres tâches ». | `taskId` · `armOn` |
 | `view.open` | Ouvre un écran ou une fenêtre de BMM — n’importe lequel, par son nom. | `place` · `id` · `arg` |
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
@@ -151,7 +151,6 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `custom.script` | Exécute du PowerShell, CMD, Bash ou Python que vous écrivez. Exige « Exécuter des scripts ». | `keepGoing` · `engine` · `code` · `workingDir` · `into` |
 | `folder.create` | Crée un dossier dans le dossier de données de BMM. Il ne peut pas en sortir. | `path` · `into` |
 | `catalog.create` | Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
-| `deeplink` | Déclenche n'importe quel deep link bmm:// | `url` |
 | `http.request` | Envoie une requête à n’importe quelle adresse et capture la réponse. Exige « Exécuter des programmes externes ». | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
 | `wait.http` | L'interroge jusqu'à ce qu'elle réponde — au statut, ou à ce que dit la réponse — ou abandonne et le dit. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Dort jusqu'à ce que quelque chose poste sur /api/hook avec ce nom, ou que BMM elle-même lève cet événement. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |

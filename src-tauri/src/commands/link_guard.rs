@@ -11,8 +11,11 @@
 //!   - `link_install_app`    https only, a sha256 is REQUIRED and must match, no script
 //!                           payloads, no "install anyway", and the install folder is
 //!                           BMM's own or a local folder (never a network share).
-//!   - `link_install_plugin` https only, sha256 checked when the link carries one, and the
-//!                           plugin lands DISABLED with no permissions (`install_plugin_bytes`).
+//!   - `link_install_plugin` https only, sha256 checked when the link carries one (required
+//!                           once the grace release is over), a size cap, and the plugin lands
+//!                           DISABLED with no permissions (`install_plugin_bytes`).
+//!   - `link_install_theme`  the same download rules (`fetch_link_payload`), then a theme
+//!                           document whose id is one plain folder name.
 //!   - `link_export_app_data` never a network path, and the data file is REDACTED on the way
 //!                           out (`report_redact`) — a link cannot produce a copy with tokens.
 //!
@@ -223,7 +226,32 @@ pub async fn link_install_plugin(
         Some(s) => Some(normalize_sha256(s).ok_or_else(|| refused(s, "bad-checksum"))?),
         None => None,
     };
-    let resp = crate::commands::net::catalog_get(&handle, &download_url)
+    // The plugin catalogue format makes `sha256` mandatory (security summary §9). During the
+    // grace release the link dialog warns ("unverified") and the install goes on; after it, a
+    // link without a checksum is refused like an app link.
+    if expected.is_none() && !crate::commands::plugins::unverified_plugin_grace(env!("CARGO_PKG_VERSION")) {
+        return Err(refused(&download_url, "no-checksum"));
+    }
+    let bytes = fetch_link_payload(&handle, &download_url, expected, LINK_PLUGIN_MAX_BYTES).await?;
+    crate::commands::plugins::install_plugin_bytes(&state, &handle, &bytes)
+}
+
+/// The most a plugin fetched by a link may weigh (a zip, held in memory while it is checked).
+pub const LINK_PLUGIN_MAX_BYTES: u64 = 256 << 20;
+/// The most a theme fetched by a link may weigh (a JSON document; images inline as data URLs).
+pub const LINK_THEME_MAX_BYTES: u64 = 8 << 20;
+
+/// The download half of every link install that takes a URL: the same rules for a plugin and
+/// a theme. https before and after redirects; with no checksum to pin the bytes, still the
+/// host the dialog showed; a size cap counted as the bytes arrive (a Content-Length over it is
+/// refused before the first byte); the checksum when there is one.
+async fn fetch_link_payload(
+    handle: &AppHandle,
+    download_url: &str,
+    expected: Option<String>,
+    max_bytes: u64,
+) -> Result<Vec<u8>, String> {
+    let resp = crate::commands::net::catalog_get(handle, download_url)
         .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
@@ -233,10 +261,10 @@ pub async fn link_install_plugin(
     if let Some(why) = https_refusal(resp.url().as_str()) {
         return Err(refused(resp.url().as_str(), why));
     }
-    if let Some(why) = redirect_refusal(&download_url, resp.url().as_str(), expected.is_some()) {
+    if let Some(why) = redirect_refusal(download_url, resp.url().as_str(), expected.is_some()) {
         return Err(refused(resp.url().as_str(), why));
     }
-    let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+    let bytes = read_body_capped(resp, max_bytes).await.map_err(|why| refused(download_url, why))?;
     if let Some(exp) = expected {
         use sha2::{Digest, Sha256};
         let actual = hex::encode(Sha256::digest(&bytes));
@@ -244,7 +272,74 @@ pub async fn link_install_plugin(
             return Err(format!("LINK_REFUSED:checksum-mismatch: expected {exp}, got {actual}"));
         }
     }
-    crate::commands::plugins::install_plugin_bytes(&state, &handle, &bytes)
+    Ok(bytes)
+}
+
+/// A response body, refused past `max_bytes` (announced or received). `Err` is the refusal
+/// reason: `too-large`, or `read` for a transfer error.
+pub(crate) async fn read_body_capped(mut resp: reqwest::Response, max_bytes: u64) -> Result<Vec<u8>, &'static str> {
+    if resp.content_length().is_some_and(|n| n > max_bytes) {
+        return Err("too-large");
+    }
+    let mut out: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|_| "read")? {
+        if (out.len() + chunk.len()) as u64 > max_bytes {
+            return Err("too-large");
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
+/// What `link_install_theme` installed, for the toast and the theme list.
+#[derive(serde::Serialize)]
+pub struct LinkedTheme {
+    pub id: String,
+    pub name: String,
+}
+
+/// Why a downloaded theme document is refused, or its id and name.
+///
+/// A theme is a JSON object with an `id` that becomes a folder name under the themes folder:
+/// one plain path component (`fs_utils::safe_folder_name`), so `..`, `C:\x` or `a\b` cannot
+/// place `theme.json` anywhere else.
+pub fn theme_document(bytes: &[u8]) -> Result<LinkedTheme, &'static str> {
+    let text = std::str::from_utf8(bytes).map_err(|_| "not-a-theme")?;
+    let v: serde_json::Value = serde_json::from_str(text).map_err(|_| "not-a-theme")?;
+    let obj = v.as_object().ok_or("not-a-theme")?;
+    let id = obj.get("id").and_then(|x| x.as_str()).unwrap_or("").trim().to_string();
+    let safe = crate::fs_utils::safe_folder_name(&id).ok_or("bad-id")?;
+    if safe != id || id.len() > 128 {
+        return Err("bad-id");
+    }
+    let name = obj.get("name").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+    Ok(LinkedTheme { id, name })
+}
+
+/// `bmm://catalog/theme/install` and `bmm://theme/import`, after the user confirmed in-app.
+///
+/// The theme path fetched from the webview before, with none of the second checks the plugin
+/// path has in Rust (security summary §9, "Theme install by link has no Rust second check").
+/// Same rules now, through `fetch_link_payload`, then the document is checked and written by
+/// the ordinary `install_theme`.
+#[tauri::command]
+pub async fn link_install_theme(
+    handle: AppHandle,
+    download_url: String,
+    sha256: Option<String>,
+) -> Result<LinkedTheme, String> {
+    if let Some(why) = https_refusal(&download_url) {
+        return Err(refused(&download_url, why));
+    }
+    let expected = match sha256.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => Some(normalize_sha256(s).ok_or_else(|| refused(s, "bad-checksum"))?),
+        None => None,
+    };
+    let bytes = fetch_link_payload(&handle, &download_url, expected, LINK_THEME_MAX_BYTES).await?;
+    let theme = theme_document(&bytes).map_err(|why| refused(&download_url, why))?;
+    let text = String::from_utf8(bytes).map_err(|_| refused(&download_url, "not-a-theme"))?;
+    crate::commands::themes::install_theme(handle, text)?;
+    Ok(theme)
 }
 
 /// `bmm://data/export-auto`, after the user confirmed and picked the folder. The data file
@@ -430,5 +525,66 @@ mod tests {
     #[test]
     fn refusal_marker_shape() {
         assert!(refused(r"\\h\s", "network").starts_with("LINK_REFUSED:network:"));
+    }
+}
+
+#[cfg(test)]
+mod link_theme_tests {
+    use super::*;
+
+    #[test]
+    fn a_theme_document_needs_an_object_with_a_plain_id() {
+        let ok = theme_document(br#"{"id":"neon-night","name":"Neon Night","vars":{}}"#).unwrap();
+        assert_eq!((ok.id.as_str(), ok.name.as_str()), ("neon-night", "Neon Night"));
+        for bad in [
+            &br#"{"id":"..","name":"x"}"#[..],
+            br#"{"id":"C:\\Windows","name":"x"}"#,
+            br#"{"id":"a\\b","name":"x"}"#,
+            br#"{"id":"a/b","name":"x"}"#,
+            br#"{"id":"","name":"x"}"#,
+            br#"{"name":"no id"}"#,
+            br#"["not","an","object"]"#,
+            b"not json",
+        ] {
+            assert!(theme_document(bad).is_err(), "{}", String::from_utf8_lossy(bad));
+        }
+    }
+
+    /// One local server: `/big` announces its length, `/endless` announces none and keeps going.
+    fn serve() -> u16 {
+        use std::io::{Read, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for s in l.incoming().flatten() {
+                let mut s = s;
+                let mut req = [0u8; 1024];
+                let n = s.read(&mut req).unwrap_or(0);
+                let head = String::from_utf8_lossy(&req[..n]).to_string();
+                let body = vec![b'x'; 64 * 1024];
+                if head.starts_with("GET /big") {
+                    let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", 10 << 20).as_bytes());
+                    let _ = s.write_all(&body);
+                } else if head.starts_with("GET /small") {
+                    let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
+                } else {
+                    let _ = s.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n");
+                    for _ in 0..64 { if s.write_all(&body).is_err() { break; } }
+                }
+            }
+        });
+        port
+    }
+
+    /// The size rule of the link installs, through the real body reader.
+    #[tokio::test]
+    async fn a_link_payload_over_the_cap_is_refused_announced_or_not() {
+        let port = serve();
+        let get = |p: &str| reqwest::Client::new().get(format!("http://127.0.0.1:{port}{p}")).send();
+        let cap = 1 << 20;
+        assert_eq!(read_body_capped(get("/big").await.unwrap(), cap).await.unwrap_err(), "too-large");
+        assert_eq!(read_body_capped(get("/endless").await.unwrap(), cap).await.unwrap_err(), "too-large");
+        assert_eq!(read_body_capped(get("/small").await.unwrap(), cap).await.unwrap(), b"hello");
+        assert!(LINK_THEME_MAX_BYTES <= LINK_PLUGIN_MAX_BYTES);
     }
 }

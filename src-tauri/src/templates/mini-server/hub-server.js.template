@@ -186,10 +186,32 @@ function repoSecurityCheck(folder, ip, key, res) {
     return true;
 }
 
+
+// The PUBLIC monitoring feed: aggregates only (BMM security summary, item 9). It is readable
+// without a password, so it carries no IP address and no Creator ID: how many downloads are
+// running, the bytes moved, each running file's progress. The detail (who is downloading) is
+// served under /admin/monitoring, behind the admin password, for the host's dashboard.
+function publicMonitoring(r) {
+    const s = (r && r.server) || {};
+    const active = ((r && r.active) || []).map(d => ({
+        file: String(d.file || ''), downloaded: Number(d.downloaded) || 0, total: Number(d.total) || 0
+    }));
+    const num = (v) => (typeof v === 'number' ? v : undefined);
+    const mods = {};
+    for (const [k, v] of Object.entries(s.modsDownloads || {})) if (typeof v === 'number') mods[k] = v;
+    return {
+        server: {
+            version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
+            totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
+            totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
+        },
+        active, sessions: [], history: []
+    };
+}
+
 // ── Per-repo admin routes ─────────────────────────────────────────────────────
-app.get('/:folder/monitoring.json', (req, res) => {
-    const folder = req.params.folder;
-    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+function repoMonitoring(folder) {
     ensureRepoState(folder);
     const st    = repoStats[folder];
     const now   = Date.now();
@@ -200,14 +222,26 @@ app.get('/:folder/monitoring.json', (req, res) => {
         ip: d.ip, file: path.basename(d.file), downloaded: d.downloaded, total: d.total,
         speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1),
     }));
-    res.json({
+    return {
         server: { uptime: now - startTime, totalDownloads: st.totalDownloads, totalBytes: st.totalBytesSent, totalRepoSize: repoSize },
         active,
         sessions: Array.from(repoSessions[folder].entries()).map(([ip, s]) => ({
             ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files,
         })),
         history: repoHistory[folder].slice(-100).reverse(),
-    });
+    };
+}
+
+app.get('/:folder/monitoring.json', (req, res) => {
+    const folder = req.params.folder;
+    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    res.json(publicMonitoring(repoMonitoring(folder)));
+});
+
+app.get('/:folder/admin/monitoring', authAdmin, (req, res) => {
+    const folder = req.params.folder;
+    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    res.json(repoMonitoring(folder));
 });
 
 app.get('/:folder/admin/data', authAdmin, (req, res) => {

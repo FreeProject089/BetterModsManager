@@ -378,7 +378,7 @@ mod governed_extract_tests {
     }
 
     fn sevenz_of(src: &Path, dst: &Path) {
-        let mut w = sevenz_rust::SevenZWriter::create(dst).unwrap();
+        let mut w = sevenz_rust2::ArchiveWriter::create(dst).unwrap();
         w.push_source_path(src, |_| true).unwrap();
         w.finish().unwrap();
     }

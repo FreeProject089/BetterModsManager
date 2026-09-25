@@ -468,7 +468,7 @@ pub async fn repair_modpack_mod(
     // it). This is an async command, so the loops below ask `is_cancelled()` rather than
     // sitting in `checkpoint()`: a pause must not park one of the async runtime's threads.
     use crate::governor::config::OpKind;
-    let ticket = crate::fs_utils::begin_ticket_async(OpKind::Install, mod_ref.mod_name.clone()).await;
+    let ticket = crate::governor::runtime::global().begin_async(OpKind::Install, mod_ref.mod_name.clone()).await;
     let cancelled = || AppError::Internal(crate::fs_utils::CANCELLED.to_string());
     let mut client_builder = reqwest::Client::builder();
     if let Some(ref cid) = args.creator_id {
@@ -532,12 +532,20 @@ pub async fn repair_modpack_mod(
                     let mut file_out = std::fs::File::create(&local_path).map_err(|e| e.to_string())?;
                     // The Download row's MB/s for the disk this lands on, waited on a timer.
                     let dl_pace = crate::governor::runtime::global().limiter(crate::governor::config::OpKind::Download, &local_path);
-                    
+                    // Stopped at 4 GiB however long the server keeps sending (fs_utils::DownloadCap).
+                    let mut cap = crate::fs_utils::DownloadCap::new();
+                    cap.check_announced(resp.content_length()).map_err(AppError::Internal)?;
+
                     while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
                         if ticket.is_cancelled() {
                             drop(file_out);
                             let _ = std::fs::remove_file(&local_path);
                             return Err(cancelled());
+                        }
+                        if let Err(e) = cap.add(chunk.len() as u64) {
+                            drop(file_out);
+                            let _ = std::fs::remove_file(&local_path);
+                            return Err(AppError::Internal(e));
                         }
                         file_out.write_all(&chunk).map_err(|e| e.to_string())?;
                         downloaded += chunk.len() as u64;
@@ -617,11 +625,22 @@ pub async fn repair_modpack_mod(
                 let mut res = res;
                 let mut out = std::fs::File::create(&temp_zip).map_err(|e| e.to_string())?;
                 let dl_pace = crate::governor::runtime::global().limiter(crate::governor::config::OpKind::Download, &temp_zip);
+                let mut cap = crate::fs_utils::DownloadCap::new();
+                if let Err(e) = cap.check_announced(res.content_length()) {
+                    drop(out);
+                    let _ = std::fs::remove_file(&temp_zip);
+                    return Err(AppError::Internal(e));
+                }
                 while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
                     if ticket.is_cancelled() {
                         drop(out);
                         let _ = std::fs::remove_file(&temp_zip);
                         return Err(cancelled());
+                    }
+                    if let Err(e) = cap.add(chunk.len() as u64) {
+                        drop(out);
+                        let _ = std::fs::remove_file(&temp_zip);
+                        return Err(AppError::Internal(e));
                     }
                     std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
                     ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
@@ -631,8 +650,16 @@ pub async fn repair_modpack_mod(
             }
             
             let file = std::fs::File::open(&temp_zip).map_err(|e| e.to_string())?;
+            let zip_len = file.metadata().map(|m| m.len()).unwrap_or(0);
             let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-            
+            // The size caps of archive.rs (security summary §9): the declared total first,
+            // then every byte written counted against the same limit.
+            if let Err(e) = crate::archive::check_zip_declared(&mut archive, zip_len) {
+                let _ = std::fs::remove_file(&temp_zip);
+                return Err(AppError::Internal(e.to_string()));
+            }
+            let budget = crate::archive::ExtractBudget::for_archive(zip_len);
+
             for i in 0..archive.len() {
                 if ticket.is_cancelled() {
                     let _ = std::fs::remove_file(&temp_zip);
@@ -650,7 +677,7 @@ pub async fn repair_modpack_mod(
                     if let Some(p) = outpath.parent() {
                         std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
                     }
-                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                    let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
                     std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
                 }
             }

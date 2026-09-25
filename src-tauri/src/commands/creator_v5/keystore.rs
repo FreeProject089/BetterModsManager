@@ -854,6 +854,13 @@ fn persist_locked(dir: &Path, vault: &dyn Vault, store: &KeyStoreV5, verify_unse
 /// equal to these need no second DPAPI call — the comparison is of BYTES, which is what
 /// matters, not of anything derived from them. Pins are still checked on every load.
 /// Two per folder: the file and its vault copy can differ (one of them being repaired).
+//
+// ACCEPTED RISK (security summary §9 #14, R12 card 1; owner decision 2026-09-24).
+// The decoded stores kept here hold the seeds for the process lifetime, so a memory dump of
+// BMM carries them. Accepted: anything able to read BMM's memory runs as the same user and
+// can call DPAPI (or the keyring) on the sealed bytes itself. The cache is here for proof
+// speed (no second unseal for bytes already opened). Same decision as `STORE` in
+// creator_v5.rs.
 static DECODED: Mutex<BTreeMap<std::path::PathBuf, Vec<(Vec<u8>, KeyStoreV5)>>> = Mutex::new(BTreeMap::new());
 
 fn remember(dir: &Path, bytes: &[u8], s: &KeyStoreV5) {

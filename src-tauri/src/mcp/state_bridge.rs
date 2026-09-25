@@ -734,9 +734,44 @@ pub fn export_config(target_path: &str) -> anyhow::Result<String> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    
-    std::fs::copy(data_path, &dest)?;
+
+    // Not a raw copy (security summary §9, exports): the keys that belong to THIS machine and
+    // the user's GitHub token are removed, as every export of the app does
+    // (state::LOCAL_ONLY_SETTINGS; the example does not compile state.rs, so the list is here).
+    let text = std::fs::read_to_string(&data_path)?;
+    let mut doc: serde_json::Value = serde_json::from_str(&text)?;
+    strip_export_secrets(&mut doc);
+    std::fs::write(&dest, serde_json::to_string_pretty(&doc)?)?;
     Ok(format!("Configuration exported to {:?}", dest))
+}
+
+/// Same list as `state::LOCAL_ONLY_SETTINGS`.
+const EXPORT_STRIPPED_SETTINGS: [&str; 6] = [
+    "api_token", "os_schedule_key", "plugin_tokens", "api_cors_origins", "api_allowed_hosts", "github_token",
+];
+
+fn strip_export_secrets(doc: &mut serde_json::Value) {
+    if let Some(s) = doc.get_mut("settings").and_then(|s| s.as_object_mut()) {
+        for k in EXPORT_STRIPPED_SETTINGS {
+            s.remove(k);
+        }
+    }
+}
+
+#[cfg(test)]
+mod export_config_tests {
+    #[test]
+    fn the_exported_config_carries_no_token() {
+        let mut doc = serde_json::json!({ "settings": {
+            "github_token": "ghp_x", "api_token": "a", "plugin_tokens": {"t": "p"}, "language": "fr"
+        }, "profiles": [] });
+        super::strip_export_secrets(&mut doc);
+        let s = doc["settings"].as_object().unwrap();
+        for k in super::EXPORT_STRIPPED_SETTINGS {
+            assert!(!s.contains_key(k), "{k}");
+        }
+        assert_eq!(s["language"], "fr");
+    }
 }
 
 /// Generate a BetaHub-ready diagnostic report
@@ -1409,7 +1444,7 @@ pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::
 }
 
 /// The permission keys a task can be granted (frontend `RISK_KEYS`, bmms.rs `allow`).
-const TASK_PERM_KEYS: [&str; 6] = ["command", "script", "deeplink", "stopProcess", "delete", "resources"];
+const TASK_PERM_KEYS: [&str; 7] = ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks"];
 
 /// What a NEW task gets when the caller leaves it out: disabled, and an explicit `perms`
 /// object with every capability off.

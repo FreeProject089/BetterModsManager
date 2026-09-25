@@ -674,13 +674,6 @@
       ]
     },
     {
-      "type": "deeplink",
-      "group": "system",
-      "params": [
-        "url"
-      ]
-    },
-    {
       "type": "list.set",
       "group": "logic",
       "params": [
@@ -1049,7 +1042,8 @@
     "deeplink",
     "stopProcess",
     "delete",
-    "resources"
+    "resources",
+    "tasks"
   ],
   "scriptEngines": [
     "powershell",

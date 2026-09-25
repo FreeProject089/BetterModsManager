@@ -127,17 +127,17 @@ function inline(s: string): string {
   s = s.replace(/<!--[\s\S]*?-->/g, '');
   // Protect inline code first, then escape, then apply the rest.
   const codes: string[] = [];
-  s = s.replace(/`([^`]+)`/g, (_m, c) => { codes.push(c); return ` ${codes.length - 1} `; });
+  s = s.replace(/`([^`]+)`/g, (_m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   // The maths placeholders `markMath` already inserted are HTML, and the next line escapes
   // everything — so a formula reached the reader as `&lt;span class="doc-math"…`. Protected
   // the same way inline code is, and restored at the end.
   const maths: string[] = [];
-  s = s.replace(/<span class="doc-math[^>]*>[\s\S]*?<\/span>/g, (m) => { maths.push(m); return `${maths.length - 1}`; });
+  s = s.replace(/<span class="doc-math[^>]*>[\s\S]*?<\/span>/g, (m) => { maths.push(m); return `\u0001${maths.length - 1}\u0001`; });
   // Every leaf below is rendered from the SOURCE — before esc() runs — because an attribute
   // is full of characters esc() rewrites: `href="…"` would arrive as `href=&quot;…&quot;` and
   // parse as nothing, and an `&` in a URL would become `&amp;`. So each one is stashed the way
   // the maths spans are, and restored at the end.
-  const keep = (h: string): string => { maths.push(h); return `${maths.length - 1}`; };
+  const keep = (h: string): string => { maths.push(h); return `\u0001${maths.length - 1}\u0001`; };
   // `:icon[rocket]` / `:icon[simple:discord]` — the website's inline icons.
   //
   // A lucide name becomes an empty span carrying the NAME; hydrateMdLite turns it into a CSS
@@ -272,9 +272,9 @@ function inline(s: string): string {
     // that navigates the app into nothing — or somewhere it should not go.
     return `<span class="dh-link-dead" title="${escRaw(safeDocUrl(url) ? url : '')}">${txt}</span>`;
   });
-  s = s.replace(/ (\d+) /g, (_m, i) => `<code>${esc(codes[+i])}</code>`);
+  s = s.replace(/\u0000(\d+)\u0000/g, (_m, i) => `<code>${esc(codes[+i])}</code>`);
   // Back to markup, after everything that escapes has run.
-  s = s.replace(/(\d+)/g, (_m, i) => maths[+i]);
+  s = s.replace(/\u0001(\d+)\u0001/g, (_m, i) => maths[+i]);
   return s;
 }
 

@@ -511,12 +511,6 @@
       "group": "repo"
     },
     {
-      "type": "deeplink",
-      "label": "Run bmm:// deeplink",
-      "needs": "url",
-      "group": "system"
-    },
-    {
       "type": "list.set",
       "label": "List — set it (JSON array or a, b, c)",
       "needs": "listSet",

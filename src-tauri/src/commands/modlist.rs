@@ -148,7 +148,7 @@ pub async fn export_modlist(
     // when only names and sizes are listed. Its checkpoint runs per file; a cancel from the
     // dashboard lands on the same flag as the export's own Cancel button.
     let kind = if include_hashes { crate::governor::config::OpKind::Hash } else { crate::governor::config::OpKind::Scan };
-    let ticket = std::sync::Arc::new(fs_utils::begin_ticket_async(kind, "export mod list".to_string()).await);
+    let ticket = std::sync::Arc::new(crate::governor::runtime::global().begin_async(kind, "export mod list".to_string()).await);
 
     for (i, snap) in snapshots.into_iter().enumerate() {
         // Check for cancellation before each mod

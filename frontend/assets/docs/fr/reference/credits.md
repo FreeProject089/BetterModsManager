@@ -33,7 +33,7 @@ alternative évidente pour une raison consignée dans [Architecture](doc-page:ho
 | `jwalk` | parcours de dossiers parallèle sur les chemins chauds (`walkdir` est gardé pour les froids) |
 | `blake3` | hachage de contenu local — un hash en arbre, préfixé `b3:` |
 | `sha2` | baselines legacy, format de transport des dépôts, et l'empreinte `content_id` |
-| `zip`, `sevenz-rust`, `unrar`, `tar`, `flate2` | les archives, lues depuis leur index et jamais décompressées dans le dossier mods |
+| `zip`, `sevenz-rust2`, `unrar`, `tar`, `flate2` | les archives, lues depuis leur index et jamais décompressées dans le dossier mods |
 | `fs_extra`, `tempfile` | opérations fichiers en masse et espace de travail temporaire |
 | `sysinfo` | le moniteur de ressources et les contrôles de processus |
 
@@ -114,6 +114,18 @@ l'essentiel, parce que presque personne ne le lit :
 Chaque dépendance listée plus haut garde sa propre licence — surtout MIT et Apache-2.0,
 compatibles GPL. L'écran **Crédits** de l'app renvoie aux mentions tierces complètes, générées
 depuis les données de dépendances du projet plutôt que tenues à la main.
+
+Les **icônes isométriques** (`:icon[iso:…]`, l'onglet *Isométrique* du sélecteur d'icônes)
+viennent de trois jeux sous MIT, redistribués sans modification hormis un passage de nettoyage :
+
+| Jeu | Icônes | Licence |
+|---|---|---|
+| [Isoflow isopack](https://github.com/markmanx/isopacks) | `iso:<nom>` | MIT © 2023 Mark Mankarious |
+| [MI2 — My Isometric Icons](https://github.com/richbl/isometric-icons) | `iso:cube-<nom>` | MIT © 2018 Rich ; ses glyphes sont les Material Design Icons de Google, Apache-2.0 |
+| [Jolloficons](https://github.com/gbmillz/jolloficons) | `iso:solid-<nom>` | MIT © 2018 Gbolahan Fawale |
+
+Les textes complets des licences et la liste fichier par fichier sont livrés avec l'app, dans
+`frontend/assets/icons/iso/LICENSES.txt`.
 
 !!! info "À voir dans l'app"
     Crédits → **Voir la stack technique**, qui ouvre la même liste générée depuis les données du projet.

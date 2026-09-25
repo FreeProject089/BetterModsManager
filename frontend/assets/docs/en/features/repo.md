@@ -202,8 +202,12 @@ The generated standalone server exposes matching endpoints:
 
 | Endpoint | Access |
 |---|---|
-| `/dashboard`, `/monitoring.json` | Public, read-only status. |
-| `/admin/data`, `/admin/update`, `/admin/logs` | Admin password (Authorization header, constant-time compare). |
+| `/monitoring.json` | Public, read-only totals: active downloads, bytes sent, each running file's progress. No IP address and no Creator ID. |
+| `/dashboard` | Public page; it shows nothing until you log in with the admin password. |
+| `/admin/monitoring`, `/admin/data`, `/admin/update`, `/admin/logs` | Admin password (Authorization header, constant-time compare). `/admin/monitoring` is who is downloading: IP, Creator ID, sessions. |
+
+The built-in server (hosting from BMM itself) publishes the same aggregate `monitoring.json`;
+who is downloading is shown only in BMM's Monitoring table, on the host's machine.
 
 ```mermaid
 graph LR

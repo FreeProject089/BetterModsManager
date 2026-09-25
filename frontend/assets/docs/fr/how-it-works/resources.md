@@ -61,7 +61,7 @@ moins un choix qu'un état :
 | Déploiement : un fichier à la fois, ou en parallèle | un à la fois | en parallèle, mais un à la fois quand le dossier du jeu ou de sauvegarde est sur le disque système | en parallèle, mais un à la fois sur un disque dur |
 | Tampon de copie | 256 Kio | 1 Mio | 4 Mio |
 | Courte pause pendant la copie | 150 µs tous les 16 Mio | 150 µs tous les 16 Mio | aucune |
-| Priorité des threads de la sorte | mode arrière-plan | normale · empreintes et maintenance : mode arrière-plan | normale |
+| Priorité des threads de la sorte | mode arrière-plan | normale · empreintes : sous la normale · maintenance : mode arrière-plan | normale |
 | Priorité d'E/S des fichiers qu'une copie ouvre | basse | normale | normale |
 | Parcours de dossiers (analyses) | sur un seul thread | comme avant | comme avant |
 
@@ -125,6 +125,17 @@ Silencieux, il s'attendrait lui-même pour toujours. Il reste listé, suspendabl
 La pause retient une opération à son prochain point de contrôle ; l'annulation fait échouer ce point
 de contrôle, et une copie annulée au milieu d'un fichier supprime le fichier à moitié écrit. **Tout
 suspendre** retient tous les tickets d'un coup.
+
+Seul ton propre **Tout suspendre**, depuis le tableau de bord, dure jusqu'à ce que tu reprennes. Une
+suspension générale venue d'ailleurs (l'étape *Ressources* d'une tâche planifiée, un plugin ou un
+script via `POST /api/resources/queue`) prend fin seule au bout de **30 minutes**, comme le preset
+d'une tâche à la fin de sa durée : une tâche qui suspend la file sans jamais la reprendre ne peut
+plus bloquer toutes les activations suivantes. Une tâche qui a besoin de plus suspend à nouveau.
+Une suspension bornée ne raccourcit jamais la tienne : si tu avais déjà suspendu, la tienne reste.
+Tant qu'une suspension générale est en place, le tableau de bord le dit, avec qui l'a posée et quand
+elle se termine, et un bouton **Tout reprendre** ; `GET /api/resources` et le flux en direct la
+portent dans `paused_all` (`by`, `age_ms`, `remaining_ms`, ce dernier à `null` pour ta propre
+suspension).
 
 !!! warning "Un déploiement dans le processus séparé s'annule, il ne se suspend pas"
     Les grosses activations et désactivations tournent dans un processus séparé

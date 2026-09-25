@@ -129,7 +129,6 @@ pilotent le [gouverneur de ressources](doc-page:how-it-works/resources) ; voir
 | Redémarrer BMM | Redémarre l'app | met fin à la tâche en cours |
 | Ouvrir une URL / un lien | Ouvre un lien dans ton navigateur | |
 | Lancer une commande personnalisée | **Exécute un programme arbitraire** | exige *Autoriser les commandes personnalisées* sur la tâche |
-| Lancer un deeplink `bmm://` | Déclenche n'importe quel deeplink | peut atteindre n'importe quelle action de deeplink |
 | Appeler une API HTTP | **Envoie une requête à n'importe quelle adresse** et capture la réponse | exige « Exécuter des programmes externes » ; renseigne `http.status` |
 
 ### Logique & maths
@@ -390,7 +389,7 @@ validé contre une liste ici, car une liste ici pourrait contredire la barre lat
     contiennent d'autres étapes). Le générateur, qui produit du texte plat, utilise à la place des
     **marqueurs de bloc** (`Si…` / `Sinon` / `Fin de bloc`). Certaines actions n'existent que d'un
     côté : le planificateur possède les actions de stockage, *Tout activer/désactiver*, *Scanner*,
-    *Appliquer un thème* et les deeplinks bruts ; le générateur possède le CRUD complet et les
+    *Appliquer un thème* ; le générateur possède le CRUD complet et les
     endpoints de lecture, *Fermer un processus*, *Code brut* et le contrôle de flux textuel.
 
 ---

@@ -19,14 +19,15 @@
  *  hands out English prose forces every view to print English, which is what the BCWEB
  *  copy of this actually did until its French moderation screen showed it. One client
  *  today is not a reason to build the shape that breaks with two. */
-export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources'] as const;
+export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks'] as const;
 
 /** What a task will be ALLOWED to do if it runs as it is — the question a "Run it now" button
  *  asks, as opposed to what a file asks for (the import strips that anyway).
  *
- *  Read the way the scheduler's `taskPerms` reads it at run time, never more narrowly: a
- *  `perms` object grants every key whose value is truthy; a task with no `perms` object is a
- *  legacy task, which the runtime grants `deeplink` always and `command` with the old
+ *  Read the way the scheduler's `taskPerms` / `hasPerm` read it at run time: a `perms` object
+ *  grants every key whose value is the boolean `true` (owner card 6: a truthy "yes" or 1 is
+ *  not a grant, at run time or here); a task with no `perms` object is a legacy task, which
+ *  the runtime grants `deeplink` and `tasks` always and `command` with the old
  *  `allowCustomCommands` flag. The flag is also reported beside a `perms` object (it grants
  *  nothing there at run time, but a reviewer should see it asked).
  *
@@ -37,10 +38,25 @@ export function grantedPermissions(task: any): string[] {
     const perms = task.perms;
     const out: string[] = [];
     if (perms && typeof perms === 'object') {
-        for (const k of RISK_KEYS) if (perms[k]) out.push(k);
+        for (const k of RISK_KEYS) if (perms[k] === true) out.push(k);
     } else if (!perms) {
-        out.push('deeplink');
+        out.push('deeplink', 'tasks');
     }
+    if (task.allowCustomCommands === true) for (const k of ['command', 'deeplink']) if (!out.includes(k)) out.push(k);
+    return out;
+}
+
+/** What a task in a FILE asks for: exactly what the import (`sanitiseImportedTask` in
+ *  scheduler.ts) will strip and report, so the inspector and the importer never disagree
+ *  (owner card 7). Every `perms` key that is `true`, plus the legacy `allowCustomCommands`
+ *  flag as command + deeplink — WHETHER OR NOT a `perms` object is present: the importer
+ *  reads both, and an inspector that dropped the flag beside `perms` showed a file as asking
+ *  for less than the import toast then said it asked for. A task with no `perms` asks for
+ *  nothing here (the import grants it nothing either: it is stored with every key off). */
+export function askedPermissions(task: any): string[] {
+    if (!task || typeof task !== 'object') return [];
+    const out: string[] = [];
+    for (const k of RISK_KEYS) if (task.perms?.[k] === true) out.push(k);
     if (task.allowCustomCommands === true) for (const k of ['command', 'deeplink']) if (!out.includes(k)) out.push(k);
     return out;
 }
@@ -276,15 +292,9 @@ export function inspectBmmpa(doc: unknown): InspectResult {
             stepCount: 0,
             steps: [],
         };
-        // The file's own claim about what it may do. Read from `perms`, falling back to the
-        // legacy single flag — a task exported before permissions were split still grants
-        // something, and reporting "no permissions" for it would be a lie of omission.
-        const perms = tk?.perms && typeof tk.perms === 'object' ? tk.perms : null;
-        if (perms) {
-            for (const k of RISK_KEYS) if (perms[k]) summary.perms.push(k);
-        } else if (tk?.allowCustomCommands) {
-            summary.perms.push('command', 'deeplink');
-        }
+        // The file's own claim about what it may do: `perms` AND the legacy single flag, read
+        // exactly as the import reads them to strip them (askedPermissions).
+        summary.perms = askedPermissions(tk);
         summary.steps = walkSteps(tk?.steps, summary);
         summary.stepCount = countSteps(summary.steps);
         return summary;

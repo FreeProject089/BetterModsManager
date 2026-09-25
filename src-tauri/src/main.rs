@@ -1000,6 +1000,7 @@ fn main() {
             commands::link_guard::link_launch_app,
             commands::link_guard::link_install_app,
             commands::link_guard::link_install_plugin,
+            commands::link_guard::link_install_theme,
             commands::link_guard::link_export_app_data,
             commands::apps::list_app_executables,
             commands::apps::set_app_main_exe,

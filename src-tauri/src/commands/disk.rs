@@ -491,12 +491,125 @@ pub(crate) fn folder_size(dir: &std::path::Path, ticket: &crate::governor::queue
 }
 
 /// `(async)`: a sync command runs on the main thread in Tauri v2, and this reads a whole file
-/// (an image, a replay) into memory and base64-encodes it. Same signature for the frontend.
+/// (an image, a replay) into memory and base64-encodes it. Same arguments for the frontend.
+///
+/// Confined (security summary §9 #16): it used to read ANY path, an arbitrary file read the
+/// day a plugin or an MCP tool reaches it. It now reads only under the configured profile
+/// roots (mods, game, backup folders), BMM's Crashes folder (crash and session reports, the
+/// session logs) and the API activity log, plus a file the user picked in BMM's own file
+/// dialog during this session (the feedback dialog's screenshots and zips can live anywhere).
+/// The check is the one the other disk guards use: canonicalise both sides, compare by
+/// component.
 #[tauri::command(async)]
-pub fn read_file_base64(path: String) -> Result<String, String> {
+pub fn read_file_base64(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    read_base64_confined(&path, &readable_roots(&state))
+}
+
+/// The body of `read_file_base64`, with the roots passed in (testable without an app).
+pub(crate) fn read_base64_confined(path: &str, roots: &[std::path::PathBuf]) -> Result<String, String> {
     use base64::{Engine as _, engine::general_purpose};
-    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    if !may_read(std::path::Path::new(path), roots) {
+        return Err("Refused: this file is outside BMM's folders".into());
+    }
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
     Ok(general_purpose::STANDARD.encode(data))
+}
+
+/// The folders `read_file_base64` may read under, as things stand now.
+fn readable_roots(state: &State<'_, AppState>) -> Vec<std::path::PathBuf> {
+    let crash = crate::commands::crash::get_crash_dir(None);
+    let mut roots = vec![crash.clone()];
+    if let Some(app_dir) = crash.parent() {
+        roots.push(app_dir.join("api-activity.log"));
+    }
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    for p in &data.profiles {
+        roots.push(p.mods_path.clone());
+        roots.push(p.game_path.clone());
+        roots.push(p.backup_path.clone());
+    }
+    roots
+}
+
+/// Is `path` an existing file inside one of `roots`, or one picked in BMM's own dialog?
+///
+/// Both sides canonicalised, so `..`, a symlink or a junction pointing out of a root resolves
+/// to where it really is before the comparison, and `starts_with` compares whole components
+/// (the `mods` / `mods-evil` sibling does not pass). A root that is a whole drive (`C:\`, say
+/// a profile folder set to a drive by a restored backup) grants nothing: it would grant
+/// everything.
+pub(crate) fn may_read(path: &std::path::Path, roots: &[std::path::PathBuf]) -> bool {
+    let Ok(target) = std::fs::canonicalize(path) else { return false };
+    if !target.is_file() {
+        return false;
+    }
+    if crate::commands::dialog::was_picked(&target) {
+        return true;
+    }
+    roots
+        .iter()
+        .filter(|r| !r.as_os_str().is_empty())
+        .filter_map(|r| std::fs::canonicalize(r).ok())
+        .filter(|r| r.parent().is_some())
+        .any(|r| target.starts_with(&r))
+}
+
+#[cfg(test)]
+mod read_confinement_tests {
+    use super::{may_read, read_base64_confined};
+
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_readconf_{}_{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn a_file_under_a_root_is_readable_and_one_outside_is_not() {
+        let base = tmp("roots");
+        let root = base.join("mods");
+        let sibling = base.join("mods-evil");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+        std::fs::write(root.join("sub").join("a.png"), b"x").unwrap();
+        std::fs::write(sibling.join("b.png"), b"y").unwrap();
+        std::fs::write(base.join("secret.txt"), b"z").unwrap();
+        let roots = vec![root.clone()];
+        let read = |p: std::path::PathBuf| read_base64_confined(&p.to_string_lossy(), &roots);
+        assert_eq!(read(root.join("sub").join("a.png")).as_deref(), Ok("eA=="), "inside a root: read");
+        assert!(read(sibling.join("b.png")).is_err(), "a sibling with the same prefix is outside");
+        assert!(read(base.join("secret.txt")).is_err(), "a file beside the root is outside");
+        assert!(
+            read(root.join("sub").join("..").join("..").join("secret.txt")).is_err(),
+            "`..` resolves before the check"
+        );
+        assert!(!may_read(&root.join("missing.png"), &roots), "a missing file is refused");
+        assert!(!may_read(&root, &roots), "a folder is not a file");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_drive_root_or_an_empty_root_grants_nothing() {
+        let base = tmp("drive");
+        std::fs::write(base.join("f.txt"), b"x").unwrap();
+        let drive = base.ancestors().last().unwrap().to_path_buf();
+        assert!(drive.parent().is_none(), "the last ancestor is the drive root");
+        assert!(!may_read(&base.join("f.txt"), &[drive]));
+        assert!(!may_read(&base.join("f.txt"), &[std::path::PathBuf::new()]));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_file_picked_in_bmms_own_dialog_is_readable_wherever_it_is() {
+        let base = tmp("picked");
+        let f = base.join("screenshot.png");
+        std::fs::write(&f, b"x").unwrap();
+        assert!(!may_read(&f, &[]), "not picked, under no root: refused");
+        crate::commands::dialog::remember_picked(&f.to_string_lossy());
+        assert!(may_read(&f, &[]), "picked by the user: readable");
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 

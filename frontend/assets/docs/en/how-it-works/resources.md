@@ -58,7 +58,7 @@ a choice so much as a state:
 | Deploy: one file at a time, or in parallel | one at a time | parallel, but one at a time when the game or backup folder is on the system drive | parallel, but one at a time on a hard disk |
 | Copy buffer | 256 KiB | 1 MiB | 4 MiB |
 | Short pause while copying | 150 µs every 16 MiB | 150 µs every 16 MiB | none |
-| Priority of the kind's threads | background mode | normal · hashing and maintenance: background mode | normal |
+| Priority of the kind's threads | background mode | normal · hashing: below normal · maintenance: background mode | normal |
 | I/O priority of the files a copy opens | low | normal | normal |
 | Folder walks (scans) | on one thread | as before | as before |
 
@@ -118,6 +118,15 @@ itself for ever. It is still listed, pausable and cancellable.
 
 Pause holds an operation at its next checkpoint; cancel makes that checkpoint fail, and a copy
 cancelled mid-file deletes the half-written file. **Pause all** holds every ticket at once.
+
+Only your own **Pause all**, from the dashboard, lasts until you resume. A pause-all from anything
+else (a scheduled task's *Resources* step, a plugin or script through `POST /api/resources/queue`)
+ends by itself after **30 minutes**, the way a task's preset ends after its TTL: a task that pauses
+the queue and never resumes cannot leave every later deploy waiting. A task that needs longer pauses
+again. A bounded pause never shortens yours: if you had already paused, yours stays. While a
+pause-all is in force the dashboard says so, who set it and when it ends, with a **Resume all**
+button; `GET /api/resources` and the live feed carry it as `paused_all` (`by`, `age_ms`,
+`remaining_ms`, the last `null` for your own pause).
 
 !!! warning "A deploy in the worker process can be cancelled, not paused"
     Big enables and disables run in a separate worker process

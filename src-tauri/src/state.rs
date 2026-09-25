@@ -181,6 +181,12 @@ pub struct AppSettings {
     /// Changing this requires an API restart.
     #[serde(default)]
     pub api_cors_origins: Vec<String>,
+    /// CWE-350 (DNS rebinding): the local API answers only a `Host` of `127.0.0.1:<port>` or
+    /// `localhost:<port>`, plus the hosts listed here for a tunnel the user runs to the API
+    /// (`abc.trycloudflare.com`, `box.lan:8080`). Empty by default. An entry without a port
+    /// names that host on any port; `*` is not a wildcard. Changing it needs an API restart.
+    #[serde(default)]
+    pub api_allowed_hosts: Vec<String>,
     /// Telemetry consent (GDPR opt-in). `None` = never asked yet (show the prompt),
     /// `Some(true)` = opted in, `Some(false)` = declined. Nothing is collected
     /// unless this is explicitly `Some(true)`.
@@ -226,6 +232,7 @@ impl Default for AppSettings {
             connected_server_repos: Vec::new(),
             plugin_tokens: std::collections::HashMap::new(),
             api_cors_origins: Vec::new(),
+            api_allowed_hosts: Vec::new(),
             analytics_consent: None,
         }
     }
@@ -281,7 +288,15 @@ pub struct AppData {
 /// launch apps, run scheduled tasks, write files through repo sync (CWE-15 / CWE-942). Nothing
 /// is lost by keeping the local ones even for your OWN backup: a token is a key to this
 /// machine's API, and the CLI, MCP and plugins read the current one from here.
-pub const LOCAL_ONLY_SETTINGS: [&str; 4] = ["api_token", "os_schedule_key", "plugin_tokens", "api_cors_origins"];
+///
+/// `api_allowed_hosts` for the same reason as the CORS list: a backup naming a host of its
+/// author's would let that name's pages through the DNS-rebinding check. `github_token`
+/// (security summary §9, exports): a personal access token of THIS user, which a backup
+/// shared as "my setup" handed to whoever received it; the machine's own token is kept on
+/// restore, like the others.
+pub const LOCAL_ONLY_SETTINGS: [&str; 6] = [
+    "api_token", "os_schedule_key", "plugin_tokens", "api_cors_origins", "api_allowed_hosts", "github_token",
+];
 
 impl AppData {
     /// Carry this installation's `LOCAL_ONLY_SETTINGS` over a document about to replace it.
@@ -290,6 +305,8 @@ impl AppData {
         self.settings.os_schedule_key = current.settings.os_schedule_key.clone();
         self.settings.plugin_tokens = current.settings.plugin_tokens.clone();
         self.settings.api_cors_origins = current.settings.api_cors_origins.clone();
+        self.settings.api_allowed_hosts = current.settings.api_allowed_hosts.clone();
+        self.settings.github_token = current.settings.github_token.clone();
     }
 
     /// An empty credential is not a credential: a constant-time compare of "" against "" is
@@ -346,6 +363,27 @@ mod local_only_settings_tests {
         assert!(theirs.settings.api_cors_origins.is_empty());
         // Everything else is still the file's — this is a restore, not a merge.
         assert_eq!(theirs.settings.language, "known-to-the-author-lang");
+    }
+
+    /// Security summary §9 (exports): a backup does not carry the GitHub token, and a restore
+    /// keeps this machine's own. Same for the tunnel hosts of the API Host check.
+    #[test]
+    fn the_github_token_and_tunnel_hosts_stay_on_this_machine() {
+        let mut mine = with("mine", &[]);
+        mine.settings.github_token = "ghp_mine".into();
+        mine.settings.api_allowed_hosts = vec!["mine.example".into()];
+        let mut theirs = with("theirs", &[]);
+        theirs.settings.github_token = "ghp_theirs".into();
+        theirs.settings.api_allowed_hosts = vec!["rebind.attacker.example".into()];
+
+        let mut exported = serde_json::to_value(&mine).unwrap();
+        strip_local_only_settings(&mut exported);
+        assert!(!exported.to_string().contains("ghp_mine"), "the GitHub token was exported");
+        assert!(!exported.to_string().contains("mine.example"));
+
+        theirs.keep_local_only_settings(&mine);
+        assert_eq!(theirs.settings.github_token, "ghp_mine", "the restore replaced this machine's token");
+        assert_eq!(theirs.settings.api_allowed_hosts, vec!["mine.example".to_string()]);
     }
 
     #[test]

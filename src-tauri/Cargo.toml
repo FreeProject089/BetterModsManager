@@ -65,7 +65,10 @@ reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls", "str
 zip = { version = "0.6", default-features = false, features = ["deflate-zlib", "bzip2", "zstd", "aes-crypto", "time"] }
 tar = "0.4"
 flate2 = "1"
-sevenz-rust = "0.6"
+# 7z reading. sevenz-rust2, not sevenz-rust 0.6: RUSTSEC-2026-0245 (path traversal in
+# decompress_impl, no fix) and RUSTSEC-2026-0246 (unmaintained). archive.rs keeps its own
+# pre-scan of every entry name on top of the crate's check.
+sevenz-rust2 = "0.23"
 unrar = "0.5"
 lazy_static = "1.4"
 backtrace = "0.3"
@@ -93,7 +96,9 @@ zeroize = { version = "1.8", features = ["serde"] }
 # single large file (mmap + rayon), unlike SHA-256. Used for file_hashes and the
 # modpack hash-match index. Repo delta-sync keeps its own SHA-256 (wire format).
 blake3 = { version = "1", features = ["rayon", "mmap"] }
-warp = "0.3"
+# warp 0.4 (hyper 1): warp 0.3 pinned hyper 0.14 and h2 0.3, which has no fix for
+# RUSTSEC-2026-0258 (h2 >= 0.4.16). `server` is the listener; the route tests add `test`.
+warp = { version = "0.4", features = ["server"] }
 local-ip-address = "0.6"
 igd = "0.12"
 regex = "1"
@@ -140,6 +145,8 @@ keyring = { version = "3.6", features = ["apple-native", "sync-secret-service", 
 # protocol is handled by the bundler/config, so the old `[features]` block is gone.
 
 [dev-dependencies]
+# warp::test, for the route tests (api::*_tests, the Host check).
+warp = { version = "0.4", features = ["test"] }
 # Tests generate a real key of each kind (ed25519, RSA, ECDSA) rather than committing one:
 # a private key checked into the repository is a private key in the repository, and a
 # signature test is worthless against a fake key. ssh-key builds against rand_core 0.10, so

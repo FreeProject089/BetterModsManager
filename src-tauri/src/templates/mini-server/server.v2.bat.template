@@ -163,6 +163,30 @@ function getMonitoringReport() {
     };
 }
 
+
+// The PUBLIC monitoring feed: aggregates only (BMM security summary, item 9). It is readable
+// without a password, so it carries no IP address and no Creator ID: how many downloads are
+// running, the bytes moved, each running file's progress. The detail (who is downloading) is
+// served under /admin/monitoring, behind the admin password, for the host's dashboard.
+function publicMonitoring(r) {
+    const s = (r && r.server) || {};
+    const active = ((r && r.active) || []).map(d => ({
+        file: String(d.file || ''), downloaded: Number(d.downloaded) || 0, total: Number(d.total) || 0
+    }));
+    const num = (v) => (typeof v === 'number' ? v : undefined);
+    const mods = {};
+    for (const [k, v] of Object.entries(s.modsDownloads || {})) if (typeof v === 'number') mods[k] = v;
+    return {
+        server: {
+            version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
+            totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
+            totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
+        },
+        active, sessions: [], history: []
+    };
+}
+
 function getSecurityData() {
     let bans = { banned_ips: [], banned_keys: [] };
     let wl = { enabled: false, ips: [], keys: [] };
@@ -446,7 +470,8 @@ const DASHBOARD_HTML = `
         }
 
         async function updateStats() {
-            const data = await fetch('/monitoring.json').then(r => r.json());
+            const data = await api('/admin/monitoring');
+            if (!data) return;
             lastFullData = data;
             document.getElementById('stat-uptime').innerText = formatUptime(data.server.uptime);
             document.getElementById('stat-data').innerText = formatBytes(data.server.totalBytes);
@@ -604,7 +629,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.url === '/dashboard') { res.setHeader('Content-Type', 'text/html'); res.end(DASHBOARD_HTML); return; }
-    if (req.url === '/monitoring.json') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(getMonitoringReport())); return; }
+    if (req.url === '/monitoring.json') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(publicMonitoring(getMonitoringReport()))); return; }
+    if (req.url === '/admin/monitoring') {
+        if (!isAuthorized()) { res.statusCode = 401; res.end(JSON.stringify({err: "Unauthorized"})); return; }
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(getMonitoringReport())); return;
+    }
 
     if (req.url === '/admin/data') {
         if (!isAuthorized()) { res.statusCode = 401; res.end(JSON.stringify({err: "Unauthorized"})); return; }

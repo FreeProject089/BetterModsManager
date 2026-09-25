@@ -165,6 +165,11 @@ pub struct CatalogEntry {
     #[serde(default)]
     pub official: bool,
     pub download_url: String,
+    /// SHA-256 of the file at `download_url` (64 hex digits, `sha256:` prefix accepted).
+    /// Mandatory in the catalogue format (security summary §9); for the grace release an entry
+    /// without one still installs, after a warning (`plugins::unverified_plugin_grace`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]

@@ -112,7 +112,9 @@ probable au moins probable :
   **Forcer** reste actif jusqu'à ce que tu le remettes sur **Le détecter** ou **Arrêter**, y compris
   après la fermeture du jeu.
 - **Quelqu'un a appuyé sur Tout suspendre**, ou une tâche planifiée avec la permission
-  **Ressources** a suspendu la file. **Tout reprendre** libère tout.
+  **Ressources** (ou un plugin via l'API) a suspendu la file. Un encadré au-dessus de la file le
+  dit, avec qui l'a fait ; **Tout reprendre** libère tout. Une suspension qui ne vient pas de toi
+  prend fin seule au bout de 30 minutes.
 
 Un preset choisi par une tâche planifiée « pour cette tâche seulement » se termine avec la tâche, et
 au bout de 2 heures au plus même si la tâche a planté.
@@ -161,6 +163,23 @@ Si la source du mod est un **téléchargement direct**, BMM est honnête :
 
 Il n'y a rien à comparer. Relie le mod à un [dépôt](doc-page:features/repo) qui publie des versions, ou
 utilise le re-téléchargement direct.
+
+### BMM ne propose plus de mise à jour après une release
+
+Les deux manifestes de mise à jour que lit BMM — le `update.json` de BetterInstaller et le
+`update-manifest.json` propre à BMM (la **mise à jour rapide**) — sont signés et expirent au bout de
+7 jours. Un manifeste expiré est refusé, et un manifeste refusé ressemble exactement à « tu es à
+jour » ; le journal dit pourquoi (`Update manifest refused: … expired`).
+
+- **Si tu utilises BMM :** vérifie que l'horloge de ton PC est juste. Sinon rien ne cloche de ton
+  côté ; l'installeur complet de la page de release marche toujours.
+- **Si tu publies BMM :** le workflow *Re-sign update manifests* (`.github/workflows/resign-manifests.yml`)
+  renouvelle les deux fichiers deux fois par semaine. Lance-le à la main depuis *Actions → Re-sign
+  update manifests → Run workflow* (en nommant un tag si besoin). Il lui faut le secret
+  `BMM_PRIVATE_KEY` — la clé qui signe les releases — et, seulement pour les miroirs BetterCommunity,
+  `BCWEB_ASSETS_TOKEN`. GitHub met en pause les workflows planifiés d'un dépôt sans activité depuis
+  60 jours : réactive-le depuis l'onglet Actions le cas échéant. Voir [Sécurité](doc-page:how-it-works/security)
+  pour les règles que BMM applique.
 
 ### Une synchro de dépôt dit qu'un fichier a échoué
 

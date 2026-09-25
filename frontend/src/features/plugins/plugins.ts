@@ -279,8 +279,15 @@ async function checkPluginUpdates(): Promise<void> {
         if (entry.version === p.manifest.version) continue;           // verify version differs
         const url = entry.download_url || localStorage.getItem('bmm_plugin_src_' + id);
         if (!url) continue;
+        // Unattended: nobody is there to read the no-checksum warning, so an entry without a
+        // sha256 is not auto-updated (the catalogue screen still installs it after the warning).
+        if (!entry.sha256) {
+            console.warn('[plugins] auto-update skipped, the catalogue entry has no sha256:', id);
+            toast(t('plugins.updateNeedsChecksum').replace('{name}', p.manifest.name || id), 'warning');
+            continue;
+        }
         try {
-            const fresh = await invoke('install_plugin', { downloadUrl: url }) as any;
+            const fresh = await invoke('install_plugin', { downloadUrl: url, sha256: entry.sha256, allowUnverified: false }) as any;
             _installedPlugins = _installedPlugins.filter(x => x.manifest.id !== fresh.manifest.id);
             _installedPlugins.push(fresh);
             localStorage.setItem('bmm_plugin_src_' + fresh.manifest.id, url);
@@ -596,6 +603,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
             ` : `
                 <button class="btn btn-sm btn-accent plug-btn-install"
                     data-url="${escHtml(manifest.download_url || '')}"
+                    data-sha="${escHtml((manifest as any).sha256 || '')}"
                     data-local="${(manifest as any)._local ? '1' : ''}"
                     data-name="${escHtml(manifest.name)}">
                     ${IC.download} ${t('plugins.install')}
@@ -716,7 +724,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     }
     card.querySelector('.plug-btn-install')?.addEventListener('click', (e) => {
         const btn = (e.target as HTMLElement).closest('.plug-btn-install') as HTMLButtonElement;
-        handleInstall(btn?.dataset.url, btn?.dataset.name, btn?.dataset.local === '1');
+        handleInstall(btn?.dataset.url, btn?.dataset.name, btn?.dataset.local === '1', btn?.dataset.sha || '');
     });
 
     return card;
@@ -10650,6 +10658,20 @@ async function renderPerms(container: HTMLElement) {
             <p class="plug-perm-global-warn" style="margin-top:10px;">${IC.alert} ${t('plugins.corsRestartWarn') || 'Restart BMM (or the API) for CORS changes to take effect.'}</p>
         </div>
 
+        <!-- ── Host names (DNS-rebinding check) ────────────────── -->
+        <div class="plug-section-card" style="margin-bottom:14px;">
+            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${escHtml(t('plugins.hostsTitle'))}</h3>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${escHtml(t('plugins.hostsDesc'))}</p>
+            <div class="plug-cors-allowlist">
+                <div class="plug-sources-add">
+                    <input type="text" id="plug-hosts-input" class="input" placeholder="abc.trycloudflare.com">
+                    <button class="btn btn-sm btn-accent" id="plug-hosts-add">${IC.plus} ${t('common.add') || 'Add'}</button>
+                </div>
+                <div id="plug-hosts-list" class="plug-sources-list"></div>
+            </div>
+            <p class="plug-perm-global-warn" style="margin-top:10px;">${IC.alert} ${escHtml(t('plugins.hostsRestartWarn'))}</p>
+        </div>
+
         <!-- ── Per-plugin permissions ──────────────────────────── -->
         <h3 class="plug-section-title" style="margin-bottom:8px;">${IC.puzzle} ${t('plugins.perPluginPermTitle') || 'Permissions par plugin'}</h3>
         <div id="plug-perms-list"></div>`;
@@ -10700,6 +10722,59 @@ async function renderPerms(container: HTMLElement) {
     };
     container.querySelector('#plug-cors-add')?.addEventListener('click', () => {
         addCorsOrigin((container.querySelector('#plug-cors-input') as HTMLInputElement).value);
+    });
+
+    // ── Host names (settings.api_allowed_hosts) ──────────────────────────────
+    // The API answers only Host 127.0.0.1:<port> and localhost:<port>; these are the extra
+    // names a tunnel to it presents. Rust reduces an entry to its host part the same way.
+    let apiHosts: string[] = Array.isArray(_settings.api_allowed_hosts) ? _settings.api_allowed_hosts.slice() : [];
+    const saveHosts = async () => {
+        try {
+            const s: any = await invoke('get_settings');
+            s.api_allowed_hosts = apiHosts;
+            await invoke('update_settings', { settings: s });
+        } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+    };
+    const renderHostList = () => {
+        const list = container.querySelector('#plug-hosts-list') as HTMLElement;
+        if (!list) return;
+        list.innerHTML = apiHosts.length
+            ? apiHosts.map(h => `
+                <div class="plug-source-row">
+                    <span class="plug-source-icon">${IC.globe}</span>
+                    <span class="plug-source-url">${escHtml(h)}</span>
+                    <button class="btn btn-xs btn-ghost plug-hosts-del" data-h="${escAttr(h)}">${IC.trash}</button>
+                </div>`).join('')
+            : `<p class="plug-sources-empty">${escHtml(t('plugins.hostsNone'))}</p>`;
+        list.querySelectorAll('.plug-hosts-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const h = (btn as HTMLElement).dataset.h!;
+                apiHosts = apiHosts.filter(x => x !== h);
+                await saveHosts();
+                renderHostList();
+            });
+        });
+    };
+    renderHostList();
+    const addHost = async (raw: string) => {
+        const h = raw.trim().toLowerCase().replace(/^https?:\/\//, '').split(/[/?#]/)[0];
+        if (!h) return;
+        if (!/^[a-z0-9.-]+(:\d{1,5})?$/.test(h) || h.startsWith('.') || h.endsWith('.')) {
+            toast(t('plugins.hostsInvalid'), 'warning');
+            return;
+        }
+        if (apiHosts.includes(h)) { toast(t('plugins.sourceExists') || 'Already added', 'info'); return; }
+        apiHosts.push(h);
+        await saveHosts();
+        renderHostList();
+        const inp = container.querySelector('#plug-hosts-input') as HTMLInputElement;
+        if (inp) inp.value = '';
+    };
+    container.querySelector('#plug-hosts-add')?.addEventListener('click', () => {
+        addHost((container.querySelector('#plug-hosts-input') as HTMLInputElement).value);
+    });
+    container.querySelector('#plug-hosts-input')?.addEventListener('keydown', (e: any) => {
+        if (e.key === 'Enter') { e.preventDefault(); addHost(e.target.value); }
     });
     container.querySelector('#plug-cors-input')?.addEventListener('keydown', (e: any) => {
         if (e.key === 'Enter') { e.preventDefault(); addCorsOrigin(e.target.value); }
@@ -10892,8 +10967,22 @@ function handlePluginChecksumModal(manifest: any, installDir: string, hash: stri
 
 // ── Action Handlers ────────────────────────────────────────────────────────
 
-async function handleInstall(downloadUrl: string, name: string, local = false) {
+async function handleInstall(downloadUrl: string, name: string, local = false, sha256 = '') {
     if (!downloadUrl) { toast(t('plugins.noDownloadUrl'), 'error'); return; }
+    // The catalogue format makes `sha256` mandatory (security summary §9). For this release an
+    // entry without one still installs, after this warning; Rust refuses it without the
+    // user's yes (allowUnverified), and refuses it outright once the grace release is over.
+    let allowUnverified = false;
+    if (!local && !sha256) {
+        const ok = await window.confirmCustom!(
+            t('plugins.noChecksumTitle'),
+            t('plugins.noChecksumBody').replace('{name}', name || ''),
+            'warning',
+            { yesLabel: t('plugins.noChecksumYes'), noLabel: t('common.cancel') || 'Cancel' },
+        );
+        if (!ok) return;
+        allowUnverified = true;
+    }
     try {
         toast(`${IC.download} ${t('plugins.installing')} ${name}...`, 'info');
         // From a bundle it is a file BMM extracted itself, so it is read rather than
@@ -10901,7 +10990,7 @@ async function handleInstall(downloadUrl: string, name: string, local = false) {
         // the file nor the reason.
         const plugin = local
             ? await invoke('install_plugin_from_file', { filePath: downloadUrl })
-            : await invoke('install_plugin', { downloadUrl });
+            : await invoke('install_plugin', { downloadUrl, sha256: sha256 || null, allowUnverified });
         _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== plugin.manifest.id);
         _installedPlugins.push(plugin);
         // Remember the catalog source so this plugin can be auto-updated later — but only
@@ -10913,7 +11002,12 @@ async function handleInstall(downloadUrl: string, name: string, local = false) {
         dispatchBmmAction(BMM_ACTIONS.PLUGIN_INSTALLED, { name });
         renderTab(_tab);
         await askForRequestedPerms(plugin);
-    } catch (e) { toast(`${t('plugins.installError')}: ${e}`, 'error'); }
+    } catch (e) {
+        // The checksum refusals come back as keys (`plugins.errChecksumMismatch|<exp>|<got>`).
+        const [key, ...args] = String(e).split('|');
+        const said = key.startsWith('plugins.err') ? t(key).replace('{expected}', args[0] || '').replace('{actual}', args[1] || '') : String(e);
+        toast(`${t('plugins.installError')}: ${said}`, 'error');
+    }
 }
 
 async function handleImportFile() {

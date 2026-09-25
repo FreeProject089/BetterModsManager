@@ -166,6 +166,14 @@ interface TaskPerms {
      *  written before these actions existed was consented to on the understanding that
      *  nothing it did could lose a mod folder. */
     delete?: boolean;
+    /** Run, start or arm ANOTHER task by id (`task.run`, `task.spawn`, `task.setEnabled`).
+     *
+     *  Its own key because running another task is acting with THAT task's grants: without
+     *  it a task granted nothing could run, or arm on its trigger, one of the user's own
+     *  privileged tasks (pentest R13, owner card 9). Not folded into `deeplink`, which would
+     *  make "may call my sub-task" cost "may fire any bmm:// link". A legacy task (no `perms`)
+     *  keeps it, like `deeplink`: it could always do this, and `schedule/run` is a deep link. */
+    tasks?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -176,11 +184,18 @@ interface TaskPerms {
  *  granting it retroactively would be inventing consent. */
 function taskPerms(task: Task): TaskPerms {
     if (task.perms) return task.perms;
-    return { command: !!task.allowCustomCommands, deeplink: true, script: false };
+    return { command: task.allowCustomCommands === true, deeplink: true, script: false, tasks: true };
+}
+
+/** A grant is the boolean `true` and nothing else (owner card 6, pentest R13). A truthy
+ *  "yes", 1 or {} in a hand-edited or generated schedules.json is not consent; the compiler
+ *  emits booleans and imports reset every grant to `false`, so this refuses no honest task. */
+function hasPerm(task: Task, key: keyof TaskPerms): boolean {
+    return taskPerms(task)[key] === true;
 }
 
 function requirePerm(task: Task, key: keyof TaskPerms, label: string): void {
-    if (!taskPerms(task)[key]) {
+    if (!hasPerm(task, key)) {
         throw new Error((t('sched.permDenied') || 'This task is not permitted to {what}. Grant it in the task’s permissions.').replace('{what}', label));
     }
 }
@@ -666,7 +681,7 @@ export function whyNotRunning(task: Task, now: Date = new Date()): { key: string
         task.enabled && task.trigger.type !== 'manual' ? nextDue(task, now) : null,
         {
             nameOf: (id) => _tasks.find((x) => x.id === id)?.name || null,
-            mayRunScripts: !!taskPerms(task).script,
+            mayRunScripts: hasPerm(task, 'script'),
         },
     );
 }
@@ -797,7 +812,7 @@ async function scriptFired(task: Task): Promise<boolean> {
     if (!code) return false;
     // The grant is checked BEFORE the probe runs, not when the task does. Otherwise a task
     // whose steps ask for nothing would still run its author's code every few minutes.
-    if (!taskPerms(task).script) return false;
+    if (!hasPerm(task, 'script')) return false;
     const now = Date.now();
     const every = Math.max(1, Number(tr.everyMinutes) || 5) * 60000;
     const due = _probeNext.get(task.id);
@@ -950,7 +965,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -964,7 +979,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -1913,7 +1928,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
     // success would lose exactly the case where a stale view is most confusing.
     for (const area of DIRTIES[action.type] || []) _dirty.add(area);
     // Fire a bmm:// deeplink through the app's canonical handler (covers every
-    // script-generator action that maps to a deeplink). Falls back to runDeepLink.
+    // script-generator action that maps to a deeplink), via runDeepLink.
     const dl = (path: string, qp: Record<string, any> = {}) => {
         // Asked HERE, once, for every action that fires a link — not at the twenty call
         // sites, where `catalog.follow` remembered and `data.exportAuto` did not.
@@ -1941,8 +1956,9 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         // 'scheduler': a task the user saved. Trusted by the deep-link gate (no dialog at 3am),
         // but the hard limits in deeplink-guard.ts still apply. Through link-dispatch.ts and not
         // `window.__bmmDeeplink`, which refuses to carry a trusted origin (anything can call it).
-        const fn = trustedLinkDispatcher();
-        return fn ? fn(url, 'scheduler') : runDeepLink(url);
+        // runDeepLink is that dispatch; it throws when the handler is missing rather than
+        // falling back to an event nothing listens to.
+        return runDeepLink(url);
     };
     const b = (v: any) => (v ? 1 : 0);
     switch (action.type) {
@@ -2162,9 +2178,19 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             _captureOutput(p, out, ctx);
             break;
         }
+        // The generic "Run bmm:// deeplink" step, REMOVED (security summary §9 #15).
+        //
+        // It dispatched a window event and a Tauri event that nothing listened to, so it never
+        // did anything — and a raw link is the one step whose reach nobody could read off the
+        // task. The typed actions cover what it was used for. A task saved with it still loads
+        // (the editor shows the step as removed, with its old link) and still runs: this step
+        // is skipped with a warning instead of failing, because it never had an effect and
+        // failing it now would stop the steps after it, which did.
+        // @retired-action deeplink
         case 'deeplink':
-            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
-            await runDeepLink(p.url); break;
+            console.warn('[scheduler] removed step skipped: deeplink', task.id);
+            toast(`${task.name}: ${t('sched.removedStepSkipped') || 'a removed step (Run bmm:// deeplink) was skipped — it never did anything. Replace it with a typed action.'}`, 'warning', 9000);
+            break;
 
         // ── Variables ────────────────────────────────────────────────────────
         case 'var.set': {
@@ -2296,7 +2322,9 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         case 'resources.queue':
             requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
-            await invoke('resources_queue', { action: p.action === 'resume_all' ? 'resume_all' : 'pause_all', id: null });
+            // `by` names the task on the dashboard's "everything is paused" line; any `by` but
+            // the dashboard's 'user' makes the pause end by itself after 30 min (owner card 2).
+            await invoke('resources_queue', { action: p.action === 'resume_all' ? 'resume_all' : 'pause_all', id: null, by: `task:${String(task.name || task.id || '').slice(0, 60)}` });
             break;
         case 'storage.diskBenchmark': {
             const mount = p.mountPoint || (await firstDiskMount());
@@ -2779,6 +2807,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // that is off and still running, and arming yourself is a no-op that reads as
             // one — both are states nobody can reason about from the list.
             if (id === task.id) { toast(`${task.name}: ${t('sched.arm.notSelf')}`, 'warning', 8000); break; }
+            requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
             const on = p.armOn !== false && p.armOn !== 0 && p.armOn !== '0';
             const ok = await setTaskEnabled(id, on);
             toast(`${task.name}: ${(ok ? t('sched.arm.done') : t('sched.arm.gone'))
@@ -2991,6 +3020,13 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             if (!place) { toast(`${task.name}: ${t('sched.view.noId')}`, 'warning', 6000); break; }
             if (place.startsWith('dl:')) {
                 const name = place.slice(3);
+                // Only the windows the picker offers. `dl:` took ANY path, query string
+                // included, and fired it as `scheduler` (trusted, no dialog) — so a task file
+                // saying `dl:api?method=POST&path=…` was the removed generic deeplink step
+                // under another name (security summary §9 #15).
+                if (!VIEW_WINDOWS.some(([w]) => w === name)) {
+                    throw new Error((t('sched.view.badWindow') || 'Not a window this step can open: {n}').replace('{n}', name));
+                }
                 dl(name, name === 'docs/open' ? { article: p.arg } : {});
             } else {
                 dl('view/open', { id: place.replace(/^view:/, '') });
@@ -3150,6 +3186,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // succeeded into ctx so a following IF / repeat can branch on the result
             // ("if task responded / did X"): value source `lasttask.ok` = 1 | 0.
             if (p.id) {
+                requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
                 await runTaskById(String(p.id));
                 const sub = _tasks.find(tk => tk.id === p.id);
                 ctx.nums['lasttask.ok'] = sub && sub.lastResult === 'ok' ? 1 : 0;
@@ -3168,6 +3205,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // guard is what makes this action safe to offer at all.
             const id = String(p.id || '');
             if (!id) break;
+            requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
             if (_running.has(id)) {
                 toast(t('sched.spawnBusy') || 'That task is already running — not started again.', 'warning');
                 ctx.nums['lasttask.spawned'] = 0;
@@ -3368,11 +3406,21 @@ async function applyModpack(modpackId: string, enable: boolean): Promise<void> {
     }
 }
 
+/**
+ * Hand a link the scheduler BUILT to the deep-link handler, as `scheduler`.
+ *
+ * Every caller builds its URL from a fixed path and its own typed parameters; no step passes a
+ * link a task wrote. This used to dispatch a `bmm:deeplink` window event and a
+ * `scheme-request-received` Tauri event, and nothing listens to either — so the catalogue
+ * steps that called it (follow, import, entry, delete, a bundle import) did nothing at all,
+ * and said nothing. Now it goes where `dl()` goes, and a missing handler is an error the run
+ * log shows instead of a step that "succeeded".
+ */
 async function runDeepLink(url: string): Promise<void> {
     if (!url || !/^bmm:\/\//i.test(url)) throw new Error('Invalid bmm:// URL');
-    // Re-dispatch through the app's deeplink listener.
-    window.dispatchEvent(new CustomEvent('bmm:deeplink', { detail: { url } }));
-    try { (window as any).__TAURI__?.event?.emit?.('scheme-request-received', url); } catch {}
+    const fn = trustedLinkDispatcher();
+    if (!fn) throw new Error(t('sched.linkHandlerMissing') || 'The bmm:// link handler is not ready, so this step could not run.');
+    await fn(url, 'scheduler');
 }
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
@@ -3813,6 +3861,8 @@ function stepLabel(step: Step): string {
     if (step.kind === 'action') {
         const type = String((step as any).action?.type || '');
         const def = ACTION_TYPES.find((a) => a.v === type);
+        const gone = removedAction(type);
+        if (!def && gone) return `${t('sched.removedStep') || 'Removed step'}: ${t(gone.labelKey) || gone.label}`;
         return def ? (t('sched.act.' + def.v) || def.label) : (type || 'action');
     }
     const words: Record<string, string> = {
@@ -4631,13 +4681,16 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
     {
         cat: 'advanced', key: 'deeplinkOpen', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
         title: 'Open a BMM screen on a schedule',
-        desc: 'Fire a bmm:// link — every screen and action the app exposes has one.',
+        desc: 'Open a screen or a window (the library, the docs, the theme editor) at a set time.',
         make: () => ({
             name: 'Open a screen',
             trigger: { type: 'dailyAt', time: '18:00' },
             permissions: { deeplink: true },
             steps: [
-                { kind: 'action', action: { type: 'deeplink', params: { url: 'bmm://mod/check-updates' } } },
+                // A typed step, not a raw bmm:// link: the generic deeplink step is removed
+                // (security summary §9 #15). view.open still fires its link through the
+                // handler, which is why the task asks for `deeplink`.
+                { kind: 'action', action: { type: 'view.open', params: { place: 'view:library', id: 'library' } } },
             ],
         }),
     },
@@ -5014,19 +5067,6 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'pluginVault', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/>',
-        title: 'Keep a copy of every plugin',
-        desc: 'Exports the plugin you pick to a folder every week. Give the destination and it runs without the save dialog — duplicate the step per plugin.',
-        make: () => ({
-            name: 'Plugin vault',
-            trigger: { type: 'weeklyAt', days: [0], time: '04:00' },
-            steps: [
-                { kind: 'action', action: { type: 'deeplink', params: { url: 'bmm://api?method=POST&path=/api/plugins/export&id=&destDir=' } } },
-                { kind: 'action', action: { type: 'notify', params: { message: 'Plugin copied.' } } },
-            ],
-        }),
-    },
-    {
         cat: 'advanced', key: 'countsAround', icon: '<path d="M12 2v20M2 12h20"/>',
         title: 'Measure what a step changed',
         desc: 'Counts the library before and after, then reports the difference. The shape for "did that import actually bring anything in?".',
@@ -5263,9 +5303,9 @@ function draftSummary(): string {
     {
         const pm = taskPerms(_draft as Task);
         const granted = [
-            pm.command  && (t('sched.sumCmd') || 'can run commands'),
-            pm.script   && (t('sched.sumScript') || 'can run scripts'),
-            pm.deeplink && (t('sched.sumDeeplink') || 'can fire deeplinks'),
+            pm.command === true && (t('sched.sumCmd') || 'can run commands'),
+            pm.script === true && (t('sched.sumScript') || 'can run scripts'),
+            pm.deeplink === true && (t('sched.sumDeeplink') || 'can fire deeplinks'),
         ].filter(Boolean) as string[];
         if (granted.length) bits.push(granted.join(', '));
     }
@@ -5631,27 +5671,30 @@ function renderModal(modal: HTMLElement): void {
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
-                    const granted = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources']
-                        .filter((k) => (pm as any)[k]).length;
+                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks'];
+                    const granted = keys.filter((k) => (pm as any)[k] === true).length;
                     return `<div class="sched-perm-group">
                         <div class="sched-perm-head">
                             ${t('sched.permsTitle') || 'Permissions'}
                             <span>${escHtml(granted
-                                ? (t('sched.permsN') || '{n} of 5 granted').replace('{n}', String(granted))
+                                ? (t('sched.permsN') || '{n} of {total} granted').replace('{n}', String(granted)).replace('{total}', String(keys.length))
                                 : (t('sched.permsNone') || 'none granted \u2014 it can only do things inside BMM'))}</span>
                         </div>
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOutside') || 'Reaches outside BMM')}</div>
-                        ${row('command', !!pm.command, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
-                        ${row('script', !!pm.script, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
-                        ${row('deeplink', !!pm.deeplink, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
-                        ${row('stopProcess', !!pm.stopProcess, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
+                        ${row('command', pm.command === true, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
+                        ${row('script', pm.script === true, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
+                        ${row('deeplink', pm.deeplink === true, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
+                        ${row('stopProcess', pm.stopProcess === true, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
-                        ${row('delete', !!pm.delete, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
+                        ${row('delete', pm.delete === true, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsPerf') || 'Changes how hard BMM works')}</div>
-                        ${row('resources', !!pm.resources, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, game mode and the queue. A preset set for the task ends with it.')}
+                        ${row('resources', pm.resources === true, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, game mode and the queue. A preset set for the task ends with it.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
+                        ${row('tasks', pm.tasks === true, t('sched.allowTasksTitle') || 'Other tasks', t('sched.allowTasks') || 'This task may run, start or switch on your other tasks, which then do whatever THEY are permitted to do.')}
                     </div>`;
                 })()}
                 <label class="sched-opt">
@@ -6042,7 +6085,7 @@ function renderTriggerEditor(host: HTMLElement): void {
             ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'],
             ['python', 'Python'], ['node', 'JavaScript (Node)'], ['rust', 'Rust'],
         ];
-        const granted = taskPerms(_draft as Task).script;
+        const granted = hasPerm(_draft as Task, 'script');
         // Old tasks carry neither field and meant exit-0 on pasted text, which is what these
         // defaults say. A saved task must keep firing exactly as it did.
         const fireOn = String((tr as any).fireOn || 'exit0');
@@ -7299,6 +7342,39 @@ export async function buildCatalogueInto(kind: string, dir: string, title: strin
     return entries.length;
 }
 
+/**
+ * The windows that are NOT screens, for `view.open`'s `dl:<name>` places.
+ *
+ * These have their own deeplinks and had no action at all, so "open the theme editor at the
+ * end of this task" meant hand-writing a bmm:// link into the generic action. Each one is
+ * `deeplink|params`, because that is what distinguishes them — there is no id that covers
+ * both kinds. The runner refuses a `dl:` name that is not here: the list is what makes the
+ * step typed rather than a raw link (security summary §9 #15).
+ */
+const VIEW_WINDOWS: readonly [string, string][] = [
+    ['theme/editor', 'sched.view.w.themeEditor'],
+    ['settings/layout', 'sched.view.w.layout'],
+    ['settings/navbar', 'sched.view.w.navbar'],
+    ['benchmark/open', 'sched.view.w.benchmark'],
+    ['docs/open', 'sched.view.w.docs'],
+];
+
+/**
+ * Steps that no longer exist, by type, with the key of their old label.
+ *
+ * A saved task can still hold one. It loads and keeps it (dropping it would silently change
+ * a task somebody wrote), the editor shows it as removed rather than as the first action of
+ * the list, and the runner skips it with a warning — see the `@retired-action` case in
+ * runAction. Distinct from an alias like `dcs.hook`, which still RUNS as its replacement.
+ */
+const REMOVED_ACTIONS: Record<string, { labelKey: string; label: string }> = {
+    deeplink: { labelKey: 'sched.act.deeplink', label: 'Run bmm:// deeplink' },
+};
+/** Own keys only: a step typed `toString` is not a removed step. */
+function removedAction(type: string): { labelKey: string; label: string } | null {
+    return Object.hasOwn(REMOVED_ACTIONS, type) ? REMOVED_ACTIONS[type] : null;
+}
+
 const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
     // ── Mods & profiles ──
     { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
@@ -7425,7 +7501,6 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'catalog.delete', label: 'Delete a catalogue you author', needs: 'catDelete', group: 'repo' },
     { v: 'code.run', label: 'Run BMMScript (advanced)', needs: 'bmms', group: 'logic' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
-    { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
     { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
     { v: 'list.push', label: 'List — add one item', needs: 'listPush', group: 'logic' },
     { v: 'list.clear', label: 'List — empty it', needs: 'listName', group: 'logic' },
@@ -7649,6 +7724,32 @@ const condPickItems = (): PickItem[] => COND_TYPES.map((c) => { const grp = COND
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
+        // A removed step is SHOWN as removed. Falling back to ACTION_TYPES[0] would have
+        // labelled it as the first action of the list — a task that looks like it switches
+        // profiles and does nothing of the kind. Its old link is shown so the person can see
+        // what it was for, and the picker turns it into a real action.
+        const gone = ACTION_TYPES.some(a => a.v === action.type) ? null : removedAction(action.type);
+        if (gone) {
+            const oldUrl = String((action.params as any)?.url || '');
+            el.className = 'sched-act-card';
+            el.innerHTML = `
+                <div class="sched-act-head">
+                    <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
+                    <button type="button" class="input sched-act-type sched-pickbtn" title="${escAttr(t('sched.removedStepHint'))}"><span class="sched-pickbtn-l">${escHtml(t('sched.removedStep'))}: ${escHtml(t(gone.labelKey) || gone.label)}</span><span class="sched-pickbtn-chev">▾</span></button>
+                </div>
+                <div class="sched-act-params">
+                    <span class="sched-cmd-hint">${escHtml(t('sched.removedStepHint'))}</span>
+                    ${oldUrl ? `<code class="sched-cmd-hint">${escHtml(oldUrl)}</code>` : ''}
+                </div>`;
+            el.querySelector('.sched-act-type')?.addEventListener('click', (e) => {
+                openKindPicker(e.currentTarget as HTMLElement, actionPickGroups(), actionPickItems(), action.type, (v) => {
+                    if (v === action.type) return;
+                    _snapshot(); action.type = v; action.params = {};
+                    if (onStructureChange) onStructureChange(); else render();
+                });
+            });
+            return;
+        }
         const def = ACTION_TYPES.find(a => a.v === action.type) || ACTION_TYPES[0];
         // Build a grouped <optgroup> dropdown that mirrors the script generator's
         // categorised action catalogue.
@@ -8067,17 +8168,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         const views = Array.from(document.querySelectorAll<HTMLElement>('.nav-item[data-view]'))
             .map((el) => ({ id: el.dataset.view || '', label: (el.textContent || '').trim() || el.dataset.view || '' }))
             .filter((v) => v.id);
-        // The windows that are NOT screens. These have their own deeplinks and had no action
-        // at all, so "open the theme editor at the end of this task" meant hand-writing a
-        // bmm:// link into the generic action. Each one is `deeplink|params`, because that is
-        // what distinguishes them — there is no id that covers both kinds.
-        const WINDOWS: [string, string][] = [
-            ['theme/editor', 'sched.view.w.themeEditor'],
-            ['settings/layout', 'sched.view.w.layout'],
-            ['settings/navbar', 'sched.view.w.navbar'],
-            ['benchmark/open', 'sched.view.w.benchmark'],
-            ['docs/open', 'sched.view.w.docs'],
-        ];
+        // The windows that are NOT screens: VIEW_WINDOWS, shared with the runner, which
+        // refuses any other `dl:` name.
+        const WINDOWS = VIEW_WINDOWS;
         const chosen = String(params.place || (params.id ? `view:${params.id}` : ''));
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.view.which'))}</label>
@@ -10843,6 +10936,7 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
         stopProcess: t('bmi.p.stop') || 'Stops running programs',
         delete: t('bmi.p.delete') || 'Deletes profiles, modpacks or mod folders',
         resources: t('bmi.p.resources') || 'Changes the resource preset, game mode or the queue',
+        tasks: t('bmi.p.tasks') || 'Runs, starts or switches on other tasks',
     };
     const REACH: Record<string, string> = {
         'custom.command': t('bmi.r.command') || 'Runs an external program',

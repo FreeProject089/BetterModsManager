@@ -1520,6 +1520,7 @@ async function refreshBcLinkStatus() {
     // cannot disagree about the same account.
     const wasLinked = localStorage.getItem('bc_linked') === '1';
     const st = await bcLinkState(true);
+    renderKeyPinProblem(st.pinProblem);
     if (st.state === 'unknown') {
         if (statusEl)
             statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).';
@@ -1553,6 +1554,51 @@ async function refreshBcLinkStatus() {
         if (discordBtn)
             discordBtn.style.display = 'none'; // must link the account before Discord
     }
+}
+// BetterCommunity refused this install's key against the chain it pinned for the Creator ID
+// (C8-C, see core/key-pin.ts). A static map, not t('…' + value): check-i18n-keys can only see
+// literal keys.
+const KEY_PIN_TEXT = {
+    key_fork: () => t('settings.link.pin.key_fork'),
+    key_retired: () => t('settings.link.pin.key_retired'),
+    upgraded_key_required: () => t('settings.link.pin.upgraded_key_required'),
+};
+/** Show (or clear) the pin refusal under the link status, with the way out: the owner of
+ *  the linked account resets the pin on BetterCommunity, and the next proof pins this key. */
+function renderKeyPinProblem(problem) {
+    const statusEl = document.getElementById('bc-link-status');
+    let box = document.getElementById('bc-key-pin');
+    if (!problem || !KEY_PIN_TEXT[problem]) {
+        box?.remove();
+        return;
+    }
+    if (!statusEl)
+        return;
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'bc-key-pin';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'margin-top:8px;font-size:12px;display:flex;flex-direction:column;gap:6px';
+        statusEl.insertAdjacentElement('afterend', box);
+    }
+    box.textContent = '';
+    const why = document.createElement('div');
+    why.style.color = 'var(--warning)';
+    why.textContent = KEY_PIN_TEXT[problem]();
+    box.appendChild(why);
+    const btn = document.createElement('button');
+    btn.id = 'btn-bc-key-pin-reset';
+    btn.className = 'btn btn-sm';
+    btn.style.alignSelf = 'flex-start';
+    btn.textContent = t('settings.link.pin.reset');
+    btn.title = t('settings.link.pin.resetHint');
+    // On the website and not from here: resetting the pin decides which key may speak for
+    // the id, so it takes the account owner's session, not this install's word.
+    btn.addEventListener('click', () => {
+        const url = `${bcBase()}/profile`;
+        invoke('open_external_url', { url }).catch(() => window.open(url, '_blank'));
+    });
+    box.appendChild(btn);
 }
 // Link a Discord account from BMM: enter the code from the Discord /link command.
 async function openDiscordLinkFlow() {
@@ -1789,6 +1835,8 @@ async function initSecurityInfoCard() {
                 toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
             else if (r.result === 'already')
                 toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
+            else if (r.result === 'pin')
+                toast(KEY_PIN_TEXT[r.problem](), 'warning', 12000);
             else if (r.result === 'error')
                 toast(t('common.error') || 'Failed to get a link code.', 'error');
             forgetBcLinkState();

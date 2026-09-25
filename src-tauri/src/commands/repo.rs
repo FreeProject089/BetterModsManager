@@ -339,11 +339,45 @@ fn carry_modpacks(
     }
 }
 
+/// Export profiles as a server repo. The command itself only hands the work to a blocking
+/// thread (owner card 4, pentest R13): the export is a long, synchronous job — the slot wait,
+/// the copy + hash pass, per-mod zips, the final archive, and the ticket's checkpoints, which
+/// park the thread they run on while the export is paused. Run inside this `async fn`, all of
+/// that held one of the runtime's few workers (the ones the local API and the built-in repo
+/// server answer on) for the whole export. On a blocking thread the governor keeps its
+/// synchronous semantics unchanged: the Compress ticket is taken there with `begin`, so the
+/// nested tickets the zips take on that same thread are recognised as nested (the rule
+/// `begin` records the thread for), and a pause parks that thread, not a runtime worker.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn export_server_repo(
     window: Window,
     handle: tauri::AppHandle,
-    state: State<'_, AppState>,
+    profile_ids: Vec<String>,
+    output_dir: String,
+    author_name: String,
+    seed: Option<String>,
+    modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    zip_output: bool,
+    zip_mods: bool,
+    compression: Option<String>,
+    server_options: Option<MiniServerExportOptions>,
+    creds: Option<crate::commands::creds::CredsRequest>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_server_repo_blocking(
+            window, handle, profile_ids, output_dir, author_name, seed, modpacks_share_config,
+            zip_output, zip_mods, compression, server_options, creds,
+        )
+    })
+    .await
+    .map_err(|e| format!("repo export stopped unexpectedly: {e}"))?
+}
+
+#[allow(clippy::too_many_arguments)]
+fn export_server_repo_blocking(
+    window: Window,
+    handle: tauri::AppHandle,
     profile_ids: Vec<String>,
     output_dir: String,
     author_name: String,
@@ -360,6 +394,8 @@ pub async fn export_server_repo(
     // fold, which is almost all of them.
     creds: Option<crate::commands::creds::CredsRequest>,
 ) -> Result<(), String> {
+    use tauri::Manager;
+    let state = handle.state::<AppState>();
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
     }
@@ -1713,7 +1749,18 @@ async fn fetch_url_validator(url: &str) -> Result<String, String> {
                 .and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
         if let Some(t) = total { parts.push(format!("total:{t}")); }
     }
-    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    // A server that ignores the Range header answers with the whole file: streamed against
+    // the download cap rather than buffered with `bytes()` whatever its size.
+    let bytes = {
+        let mut resp = resp;
+        let mut cap = crate::fs_utils::DownloadCap::new();
+        let mut buf: Vec<u8> = Vec::new();
+        while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+            cap.add(chunk.len() as u64)?;
+            buf.extend_from_slice(&chunk);
+        }
+        buf
+    };
     if !bytes.is_empty() {
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
@@ -1793,7 +1840,16 @@ pub async fn apply_direct_update(
         if !response.status().is_success() {
             return Err(format!("HTTP error: {}", response.status()));
         }
-        let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
+        // Read against the 4 GiB download cap: this one is held in memory before it is unpacked.
+        crate::fs_utils::DownloadCap::new().check_announced(response.content_length())?;
+        let bytes = {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            crate::fs_utils::CappedReader::new(response)
+                .read_to_end(&mut buf)
+                .map_err(|e| if e.to_string() == crate::fs_utils::DOWNLOAD_TOO_LARGE { e.to_string() } else { format!("Read failed: {}", e) })?;
+            buf
+        };
         ticket.add_bytes(bytes.len() as u64, 0);
         std::fs::create_dir_all(&folder_c).map_err(|e| e.to_string())?;
 
@@ -1802,6 +1858,9 @@ pub async fn apply_direct_update(
             let cursor = std::io::Cursor::new(&bytes);
             let mut archive = zip::ZipArchive::new(cursor)
                 .map_err(|e| format!("Zip error: {}", e))?;
+            // The size caps of archive.rs (security summary §9): declared, then streamed.
+            crate::archive::check_zip_declared(&mut archive, bytes.len() as u64).map_err(|e| e.to_string())?;
+            let budget = crate::archive::ExtractBudget::for_archive(bytes.len() as u64);
             let strip = archive_single_root(&mut archive);
             for i in 0..archive.len() {
                 ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
@@ -1818,7 +1877,7 @@ pub async fn apply_direct_update(
                     std::fs::create_dir_all(&outpath).ok();
                 } else {
                     if let Some(parent) = outpath.parent() { std::fs::create_dir_all(parent).ok(); }
-                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                    let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
                     let n = std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
                     ticket.add_bytes(0, n);
                 }
@@ -2800,7 +2859,10 @@ pub async fn sync_server_repo(
                     // The Download row's MB/s for the disk this lands on (the governor's budget for
                     // that disk), waited on a timer: this is async code.
                     let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &staged_zip);
+                    let mut cap = crate::fs_utils::DownloadCap::new();
+                    cap.check_announced(res.content_length())?;
                     while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                        cap.add(chunk.len() as u64)?;
                         std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
                         ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                         if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
@@ -2926,9 +2988,13 @@ pub async fn sync_server_repo(
                                         let mut stream = res.bytes_stream();
                                         file_to_patch.seek(SeekFrom::Start(current_offset)).map_err(|e| e.to_string())?;
                                         let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
+                                        // A range answer is one chunk; a server that ignores the
+                                        // range sends the whole file: capped either way.
+                                        let mut cap = crate::fs_utils::DownloadCap::new();
 
                                         while let Some(item) = stream.next().await {
                                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                                            cap.add(chunk.len() as u64)?;
                                             file_to_patch.write_all(&chunk).map_err(|e| e.to_string())?;
                                             ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                                             if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
@@ -2993,12 +3059,19 @@ pub async fn sync_server_repo(
                             return Err(format!("HTTP error {} pour le fichier: {}", res.status(), file.relative_path));
                         }
                         
+                        let mut cap = crate::fs_utils::DownloadCap::new();
+                        cap.check_announced(res.content_length())?;
                         let mut stream = res.bytes_stream();
                         let mut file_out = fs::File::create(&local_path).map_err(|e| format!("Création échouée: {}", e))?;
                         let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
-                        
+
                         while let Some(item) = stream.next().await {
                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                            if let Err(e) = cap.add(chunk.len() as u64) {
+                                drop(file_out);
+                                let _ = fs::remove_file(&local_path);
+                                return Err(e);
+                            }
                             file_out.write_all(&chunk).map_err(|e| e.to_string())?;
                             ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
                             if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
@@ -5186,5 +5259,36 @@ mod live_fallback_tests {
                 assert!(f.sha256_hash.is_empty(), "{} got a hash from nowhere", f.relative_path);
             }
         }
+    }
+}
+
+/// Owner card 4 (pentest R13): `export_server_repo` did its whole export — the slot wait, the
+/// copy + hash pass, the per-mod zips, the final archive, the ticket's paused checkpoints —
+/// synchronously inside an `async fn`, parking one of the runtime's few workers (the ones the
+/// local API and the built-in repo server answer on) for the length of the export. The command
+/// cannot run here without a `Window`, so this reads the source the way the gates do: the
+/// command body hands everything to a blocking thread, and the blocking half takes the ticket
+/// itself (on the thread that runs the work, so the nested-ticket rule means what it says).
+#[cfg(test)]
+mod export_off_runtime_tests {
+    fn body_of(src: &str, sig: &str) -> String {
+        let at = src.find(sig).unwrap_or_else(|| panic!("`{sig}` not found in repo.rs (renamed?)"));
+        let rest = &src[at..];
+        let end = rest.find("\n}\n").expect("the function's closing brace");
+        rest[..end].to_string()
+    }
+
+    #[test]
+    fn the_export_command_does_its_work_on_a_blocking_thread() {
+        let src = include_str!("repo.rs");
+        let cmd = body_of(src, "pub async fn export_server_repo(");
+        assert!(cmd.contains("spawn_blocking("), "the async command must hand the export to spawn_blocking");
+        for sync_work in ["fs::", ".begin(", "checkpoint()", "zip_dir_gated", "par_iter", "sign_message", ".lock()"] {
+            assert!(!cmd.contains(sync_work), "the async command still does `{sync_work}` on a runtime worker");
+        }
+        let blocking = body_of(src, "fn export_server_repo_blocking(");
+        // Defined at the start of a line, so not `async fn` (this test's own text says it).
+        assert!(src.contains("\nfn export_server_repo_blocking("), "the blocking half must be a plain, synchronous fn");
+        assert!(blocking.contains("gov.begin(OpKind::Compress"), "the blocking half takes its Compress ticket itself");
     }
 }

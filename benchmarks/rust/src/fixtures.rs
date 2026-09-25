@@ -123,6 +123,6 @@ pub fn make_tar_gz(tree_root: &Path, dest: &Path) -> std::io::Result<()> {
 /// Build a `.7z` of `tree_root` at `dest`. Best-effort: returns Err if the
 /// sevenz-rust convenience API isn't available, so callers can skip gracefully.
 pub fn make_7z(tree_root: &Path, dest: &Path) -> std::io::Result<()> {
-    sevenz_rust::compress_to_path(tree_root, dest)
+    sevenz_rust2::compress_to_path(tree_root, dest)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
 }

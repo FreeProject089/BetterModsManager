@@ -922,6 +922,177 @@ fn cors_origin_for<'a>(
     allowed.iter().any(|a| a == o).then_some(o)
 }
 
+// ── Host check (DNS rebinding, CWE-350; security summary §9 "Local API has no Host check") ──
+//
+// The API binds 127.0.0.1, but a web page can still reach it through DNS rebinding: its own
+// name first resolves to the attacker's server, then to 127.0.0.1, and the browser treats the
+// answers as same-origin. What it cannot change is the `Host` header, which keeps the page's
+// name. So only `127.0.0.1:<port>` and `localhost:<port>` are accepted, plus the hosts the
+// user lists for a tunnel (`settings.api_allowed_hosts`, empty by default). Anything else,
+// a missing Host included, gets 421 before any route runs.
+
+#[derive(Debug)]
+struct MisdirectedHost;
+impl warp::reject::Reject for MisdirectedHost {}
+
+/// One user entry, reduced to what a `Host` header can hold: `https://a.example/x` → `a.example`.
+fn clean_host_entry(entry: &str) -> String {
+    let e = entry.trim().to_ascii_lowercase();
+    let e = e.strip_prefix("https://").or_else(|| e.strip_prefix("http://")).unwrap_or(&e);
+    e.split(['/', '?', '#']).next().unwrap_or("").to_string()
+}
+
+/// Whether a request's `Host` header names this API.
+///
+/// An entry the user added with a port must match exactly; one without a port names that host
+/// on any port (a tunnel usually presents its public name with no port). `*` is not a wildcard:
+/// it names nothing, like any entry that is not a host.
+pub(crate) fn host_allowed(host: Option<&str>, port: u16, extra: &[String]) -> bool {
+    let Some(h) = host.map(|h| h.trim().to_ascii_lowercase()) else { return false };
+    if h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}") {
+        return true;
+    }
+    extra.iter().map(|e| clean_host_entry(e)).any(|e| {
+        if e.is_empty() || e.contains('*') {
+            return false;
+        }
+        if e == h {
+            return true;
+        }
+        if e.contains(':') {
+            return false;
+        }
+        match h.rsplit_once(':') {
+            Some((name, p)) => name == e && !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()),
+            None => h == e,
+        }
+    })
+}
+
+/// Put the Host check in front of `routes`: refused requests never reach a route.
+pub(crate) fn with_host_guard<F, R>(
+    routes: F,
+    port: u16,
+    extra: Vec<String>,
+) -> impl Filter<Extract = (warp::reply::Response,), Error = std::convert::Infallible> + Clone
+where
+    F: Filter<Extract = (R,), Error = std::convert::Infallible> + Clone + Send + Sync + 'static,
+    R: warp::Reply,
+{
+    let extra = Arc::new(extra);
+    warp::header::optional::<String>("host")
+        .and_then(move |h: Option<String>| {
+            let extra = extra.clone();
+            async move {
+                if host_allowed(h.as_deref(), port, &extra) {
+                    Ok(())
+                } else {
+                    Err(warp::reject::custom(MisdirectedHost))
+                }
+            }
+        })
+        .untuple_one()
+        .and(routes)
+        .map(|r: R| warp::Reply::into_response(r))
+        .recover(|_err: warp::Rejection| async move {
+            // The only rejection that can reach here is the Host check's: `routes` recovers
+            // its own (hence `Error = Infallible` on it). The CORS wrapper that runs after this
+            // stamps nothing for an origin nobody allowed, so a rebinding page cannot even read
+            // the refusal.
+            Ok::<_, std::convert::Infallible>(warp::Reply::into_response(warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "error": "misdirected_host" })),
+                StatusCode::MISDIRECTED_REQUEST,
+            )))
+        })
+        .unify()
+}
+
+#[cfg(test)]
+mod host_guard_tests {
+    use super::*;
+
+    #[test]
+    fn only_loopback_on_this_port_and_listed_hosts_are_this_api() {
+        let none: Vec<String> = vec![];
+        assert!(host_allowed(Some("127.0.0.1:51274"), 51274, &none));
+        assert!(host_allowed(Some("LOCALHOST:51274"), 51274, &none));
+        for bad in ["127.0.0.1:1", "localhost", "127.0.0.1", "evil.example:51274", "localhost.:51274",
+                    "127.0.0.1:51274.evil.example", "", "0.0.0.0:51274"] {
+            assert!(!host_allowed(Some(bad), 51274, &none), "{bad} was admitted");
+        }
+        assert!(!host_allowed(None, 51274, &none), "a request with no Host is refused");
+        let tunnel = vec!["https://abc.trycloudflare.com/".to_string(), "lan.box:8080".into(), "*".into()];
+        assert!(host_allowed(Some("abc.trycloudflare.com"), 51274, &tunnel));
+        assert!(host_allowed(Some("abc.trycloudflare.com:443"), 51274, &tunnel));
+        assert!(host_allowed(Some("lan.box:8080"), 51274, &tunnel));
+        assert!(!host_allowed(Some("lan.box:8081"), 51274, &tunnel), "a listed port is exact");
+        assert!(!host_allowed(Some("x.trycloudflare.com"), 51274, &tunnel), "`*` is not a wildcard");
+        assert!(!host_allowed(Some("evil.example"), 51274, &tunnel));
+    }
+
+    /// Through the real filter, in front of real routes (the resource governor's, with their
+    /// own `recover`), the way `start_api_server` mounts it.
+    #[tokio::test]
+    async fn a_rebinding_host_is_refused_before_any_route_runs() {
+        let mut d = AppData::default();
+        d.settings.api_token = "admin-token".into();
+        let data = Arc::new(std::sync::Mutex::new(d));
+        let dir = std::env::temp_dir().join(format!("bmm-host-guard-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let routes = with_host_guard(
+            resources_routes(data.clone(), Arc::new(dir.join("data.json"))).recover(handle_rejection),
+            51274,
+            vec!["tunnel.example".into()],
+        );
+        let ask = |host: Option<&'static str>| {
+            let mut r = warp::test::request()
+                .method("GET")
+                .path("/api/resources")
+                .header("authorization", "Bearer admin-token");
+            if let Some(h) = host {
+                r = r.header("host", h);
+            }
+            r
+        };
+        assert_eq!(ask(Some("127.0.0.1:51274")).reply(&routes).await.status().as_u16(), 200);
+        assert_eq!(ask(Some("localhost:51274")).reply(&routes).await.status().as_u16(), 200);
+        assert_eq!(ask(Some("tunnel.example")).reply(&routes).await.status().as_u16(), 200);
+        for bad in [Some("rebind.attacker.example:51274"), Some("127.0.0.1:9999"), None] {
+            let res = ask(bad).reply(&routes).await;
+            assert_eq!(res.status().as_u16(), 421, "{bad:?} reached a route");
+            assert!(res.headers().get("access-control-allow-origin").is_none());
+        }
+    }
+
+    /// Over a real socket, served the way `start_api_server` serves (warp 0.4: a bound
+    /// listener, `incoming`, `graceful`): the Host a browser sends decides.
+    #[tokio::test]
+    async fn over_tcp_the_host_header_decides() {
+        let mut d = AppData::default();
+        d.settings.api_token = "admin-token".into();
+        let data = Arc::new(std::sync::Mutex::new(d));
+        let dir = std::env::temp_dir().join(format!("bmm-host-guard-tcp-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let routes = with_host_guard(
+            resources_routes(data.clone(), Arc::new(dir.join("data.json"))).recover(handle_rejection),
+            port,
+            vec![],
+        );
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(warp::serve(routes).incoming(listener).graceful(async { rx.await.ok(); }).run());
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{port}/api/resources");
+        let ok = client.get(&url).bearer_auth("admin-token").send().await.unwrap();
+        assert_eq!(ok.status().as_u16(), 200, "the API's own address is answered");
+        let rebound = client.get(&url).bearer_auth("admin-token").header("host", format!("rebind.attacker.example:{port}")).send().await.unwrap();
+        assert_eq!(rebound.status().as_u16(), 421, "a rebinding page's Host is refused");
+        let _ = tx.send(());
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server).await;
+    }
+}
+
 #[cfg(test)]
 mod cors_tests {
     use super::cors_origin_for;
@@ -1154,6 +1325,18 @@ fn token_has_permission(data: &AppData, auth: Option<&str>, permission: &str) ->
     }
 }
 
+/// Who a `pause_all` through the API is from, for the dashboard's "paused by …" line:
+/// `plugin:<id>` for a plugin token, `api` for the admin token (CLI, MCP, the in-app tester).
+/// Never `user`: that label is the one an open-ended pause is kept for (resources.rs).
+fn pause_origin(data: &AppData, auth: Option<&str>) -> String {
+    let token = auth.unwrap_or("").strip_prefix("Bearer ").unwrap_or("");
+    if ct_eq(token, &data.settings.api_token) { return "api".into(); }
+    match data.settings.plugin_tokens.get(token) {
+        Some(pid) => format!("plugin:{pid}"),
+        None => "unknown".into(),
+    }
+}
+
 fn require_permission(
     data: Arc<std::sync::Mutex<AppData>>,
     permission: &'static str,
@@ -1330,7 +1513,13 @@ fn resources_routes(
                     return reply_err("Forbidden: cancelling an operation also needs 'mods.write'", StatusCode::FORBIDDEN);
                 }
             }
-            match crate::commands::resources::resources_queue(action.clone(), body.id) {
+            // Who paused: the plugin the token belongs to, never "user", so a pause set through
+            // the API always ends by itself (TASK_PAUSE_MAX, owner card 2).
+            let by = {
+                let d = data_queue.lock().unwrap_or_else(|p| p.into_inner());
+                pause_origin(&d, auth.as_deref())
+            };
+            match crate::commands::resources::resources_queue(action.clone(), body.id, Some(by)) {
                 Ok(changed) => {
                     tracing::info!("[resources] queue {action} {:?} through the API (changed: {changed})", body.id);
                     reply_json(serde_json::json!({ "ok": true, "action": action, "changed": changed }), StatusCode::OK)
@@ -1489,6 +1678,22 @@ mod resources_route_tests {
         assert_eq!(code, 200);
     }
 
+    /// Owner card 2: a pause-all through the API is labelled with its caller and is never the
+    /// user's open-ended one, whichever token sends it.
+    #[test]
+    fn a_pause_through_the_api_is_never_the_users() {
+        let data = data_with(&["resources.write"]);
+        let d = data.lock().unwrap();
+        let plugin = pause_origin(&d, Some(&format!("Bearer {PLUGIN}")));
+        assert_eq!(plugin, "plugin:p1");
+        let admin = pause_origin(&d, Some(&format!("Bearer {ADMIN}")));
+        assert_eq!(admin, "api");
+        assert_eq!(pause_origin(&d, None), "unknown");
+        for by in [plugin, admin] {
+            assert!(crate::commands::resources::pause_ttl_for(&by).is_some(), "{by} got an open-ended pause");
+        }
+    }
+
     #[tokio::test]
     async fn the_run_log_needs_schedules_read_and_a_clean_id() {
         let (code, _) = call(&["resources.read"], "GET", "/api/schedules/nightly/runs", PLUGIN, serde_json::Value::Null).await;
@@ -1625,8 +1830,14 @@ pub async fn start_api_server(
         .and(with_data(data_dump))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
+            // An export like the others (security summary §9, exports): without this
+            // machine's keys. A plugin granted `data.read` read the ADMIN token here, and the
+            // user's GitHub token with it.
+            let mut v = serde_json::to_value(&*data).unwrap_or(serde_json::Value::Null);
+            drop(data);
+            crate::state::strip_local_only_settings(&mut v);
             warp::reply::with_header(
-                warp::reply::json(&*data),
+                warp::reply::json(&v),
                 "Content-Disposition", "attachment; filename=\"bmm-data.json\"",
             )
         });
@@ -5031,6 +5242,17 @@ pub async fn start_api_server(
         .with(cors)
         .recover(handle_rejection);
 
+    // Host check (DNS rebinding): in front of every route, so a refused request runs none.
+    // Read once at start, like the CORS list (changing the tunnel hosts needs an API restart).
+    let routes = {
+        let (guard_port, tunnel_hosts) = {
+            let d = data.lock().unwrap_or_else(|p| p.into_inner());
+            let p = d.settings.api_port;
+            (if p == 0 { API_PORT } else { p }, d.settings.api_allowed_hosts.clone())
+        };
+        with_host_guard(routes, guard_port, tunnel_hosts)
+    };
+
     // The CORS headers a REJECTED request gets, decided here because this is the last place
     // that can see both the Origin and the finished response. `handle_rejection` runs after
     // `.with(cors)` and has neither.
@@ -5094,16 +5316,21 @@ pub async fn start_api_server(
     EFFECTIVE_API_PORT.store(port, Ordering::Relaxed);
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();
 
-    // try_bind: binding can fail (port held by a previous/zombie BMM instance,
-    // e.g. right after an in-app restart). bind_with_graceful_shutdown PANICS in
-    // that case and takes the whole app down — degrade gracefully instead.
-    match warp::serve(routes).try_bind_with_graceful_shutdown(addr, async {
-        shutdown_rx.await.ok();
-    }) {
-        Ok((_, server)) => {
+    // Binding can fail (port held by a previous/zombie BMM instance, e.g. right after an
+    // in-app restart). warp's own `bind` PANICS in that case and takes the whole app down, so
+    // the listener is bound here and a failure degrades gracefully instead. warp 0.4 (hyper 1,
+    // h2 0.4: RUSTSEC-2026-0258 is fixed there).
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
             API_RUNNING.store(true, Ordering::Relaxed);
             crate::commands::crash::log_line(format!("[PLUGIN-API] Server started on http://127.0.0.1:{}", port));
-            server.await;
+            warp::serve(routes)
+                .incoming(listener)
+                .graceful(async {
+                    shutdown_rx.await.ok();
+                })
+                .run()
+                .await;
             API_RUNNING.store(false, Ordering::Relaxed);
             crate::commands::crash::log_line("[PLUGIN-API] Server stopped.".to_string());
         }

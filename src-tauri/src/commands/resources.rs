@@ -9,7 +9,7 @@
 //! the TTL (at most 2 h), so a task killed mid-run cannot leave BMM in "Max" for good.
 use crate::governor::config::Preset;
 use crate::governor::game_mode::Manual;
-use crate::governor::queue::TicketView;
+use crate::governor::queue::{PauseAllView, TicketView, TASK_PAUSE_MAX};
 use crate::governor::runtime::{global, TASK_PRESET_MAX};
 use crate::state::AppState;
 use serde::Serialize;
@@ -36,6 +36,9 @@ pub struct ResourcesStatus {
     /// The manual list of executables that count as a game (beside the profiles' folders).
     pub game_exes: Vec<String>,
     pub tickets: Vec<TicketView>,
+    /// "Everything is paused": who set it and how long it has left (owner card 2). Without it
+    /// a task that paused the queue left every later deploy waiting with no reason on screen.
+    pub paused_all: Option<PauseAllView>,
 }
 
 pub(crate) fn parse<T: serde::de::DeserializeOwned>(what: &str, v: &str) -> Result<T, String> {
@@ -58,6 +61,7 @@ pub fn status() -> ResourcesStatus {
         game_manual,
         game_exes: g.config().game_exes,
         tickets: g.queue().snapshot(),
+        paused_all: g.queue().paused_all(),
     }
 }
 
@@ -126,13 +130,27 @@ pub fn resources_set_game_exes(state: State<AppState>, exes: Vec<String>) -> Res
     Ok(stored)
 }
 
+/// How long a `pause_all` from `by` may last. The user's own pause (`by` = "user", the
+/// dashboard's button) has no end, as before; anything else — a scheduled task
+/// (`task:<name>`), a plugin through the API (`plugin:<id>`), a caller that names nobody —
+/// ends by itself after `TASK_PAUSE_MAX` (30 min), the way a task-scoped preset ends after
+/// its TTL. The API never passes "user" (api/mod.rs builds `plugin:<id>` itself).
+pub fn pause_ttl_for(by: &str) -> Option<Duration> {
+    if by == "user" { None } else { Some(TASK_PAUSE_MAX) }
+}
+
 /// "pause_all" | "resume_all" | "pause" | "resume" | "cancel" (the last three need `id`).
+/// `by` says who pauses everything (see `pause_ttl_for`); missing = nobody named = bounded.
 #[tauri::command]
-pub fn resources_queue(action: String, id: Option<u64>) -> Result<bool, String> {
+pub fn resources_queue(action: String, id: Option<u64>, by: Option<String>) -> Result<bool, String> {
     let q = global().queue();
     let need = || id.ok_or_else(|| format!("{action} needs an id"));
     Ok(match action.as_str() {
-        "pause_all" => { q.pause_all(); true }
+        "pause_all" => {
+            let by = by.as_deref().map(str::trim).filter(|b| !b.is_empty()).unwrap_or("unknown");
+            q.pause_all_by(by, pause_ttl_for(by));
+            true
+        }
         "resume_all" => { q.resume_all(); true }
         "pause" => q.pause(need()?),
         "resume" => q.resume(need()?),
@@ -154,8 +172,19 @@ mod tests {
 
     #[test]
     fn a_queue_action_on_one_ticket_needs_its_id() {
-        assert!(resources_queue("cancel".into(), None).is_err());
-        assert!(resources_queue("explode".into(), Some(1)).is_err());
-        assert_eq!(resources_queue("cancel".into(), Some(u64::MAX)).unwrap(), false, "an unknown id changes nothing");
+        assert!(resources_queue("cancel".into(), None, None).is_err());
+        assert!(resources_queue("explode".into(), Some(1), None).is_err());
+        assert_eq!(resources_queue("cancel".into(), Some(u64::MAX), None).unwrap(), false, "an unknown id changes nothing");
+    }
+
+    /// Owner card 2: only the user's own pause is open-ended. (The global queue is not paused
+    /// here: other tests in this binary take real tickets from it.)
+    #[test]
+    fn only_the_users_pause_all_has_no_end() {
+        assert_eq!(pause_ttl_for("user"), None);
+        for by in ["task:Nightly", "plugin:p1", "unknown", "", "User", "user "] {
+            assert_eq!(pause_ttl_for(by), Some(TASK_PAUSE_MAX), "{by:?} got an open-ended pause");
+        }
+        assert!(TASK_PAUSE_MAX <= Duration::from_secs(2 * 60 * 60), "no longer than a task preset's TTL");
     }
 }

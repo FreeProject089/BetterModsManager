@@ -161,6 +161,30 @@ Two honest caveats: the pinning is **opt-in per caller** — it happens when a p
 package. What it does guarantee is that an intercepted or tampered payload never reaches your install
 directory.
 
+### BMM's own quick update is signed too
+
+A copy that BetterInstaller did not install (a dev or portable run) updates through BMM's own
+**quick update**, which replaces a few files listed in the release asset `update-manifest.json`.
+That list decides what is written into BMM's folder, so it is signed with the same publisher key as
+the packages, and BMM refuses it unless **every** rule holds:
+
+| Rule | Why |
+|---|---|
+| Ed25519 signature by the publisher key, compiled into BMM | a key read from a file in the install folder could be swapped by whoever can write there |
+| signed under BMM's own context line | a signature made for BetterInstaller's `update.json` can never be replayed here, nor the reverse |
+| the app is `com.bettermm.desktop` | a list signed for another app is not this one's |
+| valid at most 7 days, and not expired | a host that stops receiving fresh copies stops being believed within a week |
+| a version strictly newer than the running one | an old, genuine list cannot be served to roll BMM back |
+| `https` URLs, plain relative paths, a SHA-256 per file | each downloaded file is checked against its hash before it is written |
+
+Only the signed part is read. The interface never hands BMM a list to apply: it passes back the
+document it was given, and BMM verifies it **again** before downloading or writing anything.
+
+Because the signature expires, the publisher renews it twice a week with an automated job (the
+workflow *Re-sign update manifests*, which also renews BetterInstaller's `update.json`). If that job
+stops, installed copies are simply no longer offered updates after at most 7 days — nothing wrong is
+installed. See [Troubleshooting](doc-page:reference/troubleshooting#bmm-no-longer-offers-an-update-after-a-release).
+
 ---
 
 ## What integrity checking does and does not block
@@ -169,7 +193,7 @@ Worth separating, because "everything is hash-verified" is too strong:
 
 | Path | Enforced? |
 |---|---|
-| App catalog download | **Yes** — SHA-256 verified before it can run (CWE-494). If the catalog carries no hash, BMM says so and asks; the log records the payload's real hash |
+| App catalog download | **Yes, with one choice left to you** — SHA-256 checked before the payload is kept (CWE-494). An install started by a `bmm://` link **refuses** a mismatch, and a link without a hash; an install you start in the app **warns** you on a mismatch or a missing hash and lets you decide. The log records the payload's real hash either way |
 | Repo sync | **Yes** — compared before download, per-chunk during, re-verified after |
 | Modpack apply | **Yes**, unless that modpack has *skip integrity check* |
 | Enabling a mod from the scheduler | **No** — the check is bypassed, because a background run can't stop to ask you |

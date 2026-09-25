@@ -7,11 +7,11 @@
 //!   · BMM's CPU, as a share of the whole machine (process time delta / wall time / cores);
 //!   · the machine's CPU (GetSystemTimes: kernel includes idle, so busy = kernel + user - idle);
 //!   · BMM's disk I/O in MB/s (GetProcessIoCounters deltas);
-//!   · the queue, the preset in force and game mode, from the governor.
+//!   · the queue (and a pause-all in force), the preset in force and game mode, from the governor.
 //!
 //! Emitted as `bmm://governor-tick` by the command that subscribes.
 use super::config::Preset;
-use super::queue::TicketView;
+use super::queue::{PauseAllView, TicketView};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -31,6 +31,8 @@ pub struct Sample {
     /// "set by a task, N min left" line. None when there is none (or it has expired).
     pub task: Option<TaskTick>,
     pub tickets: Vec<TicketView>,
+    /// "Everything is paused", who by and for how long (owner card 2); None when it is not.
+    pub paused_all: Option<PauseAllView>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -123,6 +125,7 @@ impl Sampler {
             game_active: gov.game_mode().0,
             task,
             tickets: gov.queue().snapshot(),
+            paused_all: gov.queue().paused_all(),
         })
     }
 

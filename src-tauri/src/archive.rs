@@ -120,7 +120,7 @@ fn sevenz_entries(path: &Path) -> std::io::Result<Vec<(String, u64)>> {
 ///
 /// `sevenz_entries` above drops directories on purpose — a file listing should show files.
 /// The zip-slip pre-scan in `extract_to` must not, and for a while it did, because it was
-/// built on that function. `sevenz_rust`'s `default_entry_extract_fn` calls
+/// built on that function. `sevenz_rust` 0.6's `default_entry_extract_fn` called
 /// `create_dir_all(dest.join(entry.name()))` for a directory entry with no path check of
 /// its own (verified in the vendored 0.6.1 source), so a directory entry named
 /// `../../../x` created a directory tree OUTSIDE the destination while every file entry
@@ -128,8 +128,7 @@ fn sevenz_entries(path: &Path) -> std::io::Result<Vec<(String, u64)>> {
 /// checked — but an archive should not be able to reach outside `dest` at all.
 fn sevenz_all_entries(path: &Path) -> std::io::Result<Vec<(String, u64, bool)>> {
     let mut file = std::fs::File::open(path)?;
-    let len = file.metadata()?.len();
-    let archive = sevenz_rust::Archive::read(&mut file, len, &[]).map_err(io_err)?;
+    let archive = sevenz_rust2::Archive::read(&mut file, &sevenz_rust2::Password::empty()).map_err(io_err)?;
     Ok(archive
         .files
         .iter()
@@ -153,7 +152,7 @@ fn rar_entries(path: &Path) -> std::io::Result<Vec<(String, u64)>> {
 /// Reject any archive entry path that could escape the extraction dir once joined:
 /// parent-dir traversal (`..`), POSIX-absolute (`/…`), Windows drive-absolute (`C:\…`
 /// / `C:foo`) or UNC (`\\server`). An INDEPENDENT zip-slip guard for the formats whose
-/// crate we otherwise trust for path safety (`.7z` via sevenz_rust, `.rar` via unrar)
+/// crate we otherwise trust for path safety (`.7z` via sevenz_rust2, `.rar` via unrar)
 /// — belt-and-suspenders mirroring the `enclosed_name()` guarantee we rely on for zip.
 /// Entry names here are already normalised to forward slashes by the `*_entries` fns.
 fn is_unsafe_rel_path(name: &str) -> bool {
@@ -166,6 +165,105 @@ fn is_unsafe_rel_path(name: &str) -> bool {
         return true; // Windows drive-letter prefix "X:"
     }
     n.split(['/', '\\']).any(|seg| seg == "..")
+}
+
+// ── Size caps (security summary §9, "No size caps on extraction and download") ────────────
+//
+// A few kilobytes of archive can declare, or simply produce, terabytes (a zip bomb): the disk
+// fills, the app stalls. Two checks, both in this file so every caller of `extract_to` /
+// `materialize` gets them, and the zip loops elsewhere can borrow them:
+//
+// 1. BEFORE extracting, from the archive's own index (zip central directory, 7z header, rar
+//    headers): refuse a declared total over 16 GiB, or over 1000 times the archive's size.
+//    The ratio applies from 64 MiB declared: under that, there is nothing to protect, and a
+//    small archive of zero-filled files is legitimately very compressible.
+// 2. WHILE extracting, counting what is really written: an index can lie (a zip entry whose
+//    bzip2 stream expands far past its declared size), and a tar.gz has no index at all. The
+//    same limits, counted on the bytes that reach the disk.
+
+/// The most an archive may extract to, in total.
+pub const MAX_EXTRACT_TOTAL: u64 = 16 << 30;
+/// The most an archive may expand, relative to its own size.
+pub const MAX_EXTRACT_RATIO: u64 = 1000;
+/// Below this many bytes (declared or written), the ratio rule does not apply.
+pub const RATIO_FLOOR: u64 = 64 << 20;
+/// The error an archive over the caps is refused with.
+pub const EXTRACT_TOO_LARGE: &str = "extract.tooLarge";
+
+/// True for the error `check_declared` and the streamed budget return.
+#[allow(dead_code)]
+pub fn is_too_large(e: &std::io::Error) -> bool {
+    e.to_string() == EXTRACT_TOO_LARGE
+}
+
+/// How many bytes an archive of `archive_len` bytes may extract to.
+pub fn extract_limit(archive_len: u64) -> u64 {
+    MAX_EXTRACT_TOTAL.min(archive_len.saturating_mul(MAX_EXTRACT_RATIO).max(RATIO_FLOOR))
+}
+
+/// The up-front check: refuse what the archive DECLARES before a byte is written.
+pub fn check_declared(archive_len: u64, declared_total: u64) -> std::io::Result<()> {
+    if declared_total > extract_limit(archive_len) {
+        return Err(io_err(EXTRACT_TOO_LARGE));
+    }
+    Ok(())
+}
+
+/// The declared total of a zip, from its central directory (nothing is decompressed).
+pub fn zip_declared_total<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> std::io::Result<u64> {
+    let mut total = 0u64;
+    for i in 0..zip.len() {
+        total = total.saturating_add(zip.by_index_raw(i).map_err(io_err)?.size());
+    }
+    Ok(total)
+}
+
+/// `check_declared` for a zip opened elsewhere (the download-and-unpack loops outside this
+/// file): its declared total against its size.
+pub fn check_zip_declared<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, archive_len: u64) -> std::io::Result<()> {
+    check_declared(archive_len, zip_declared_total(zip)?)
+}
+
+/// The streamed half: every byte written into the destination is counted here, and past the
+/// limit the extraction stops (and what it wrote is removed, as after a cancel).
+pub struct ExtractBudget {
+    used: std::sync::atomic::AtomicU64,
+    limit: u64,
+    exceeded: std::sync::atomic::AtomicBool,
+}
+
+impl ExtractBudget {
+    pub fn for_archive(archive_len: u64) -> Self { Self::with_limit(extract_limit(archive_len)) }
+    pub fn with_limit(limit: u64) -> Self {
+        Self { used: std::sync::atomic::AtomicU64::new(0), limit, exceeded: std::sync::atomic::AtomicBool::new(false) }
+    }
+    /// Count `n` bytes about to be written.
+    pub fn spend(&self, n: u64) -> std::io::Result<()> {
+        let now = self.used.fetch_add(n, std::sync::atomic::Ordering::SeqCst).saturating_add(n);
+        if now > self.limit {
+            self.exceeded.store(true, std::sync::atomic::Ordering::SeqCst);
+            return Err(io_err(EXTRACT_TOO_LARGE));
+        }
+        Ok(())
+    }
+    pub fn exceeded(&self) -> bool { self.exceeded.load(std::sync::atomic::Ordering::SeqCst) }
+    /// A writer that spends from this budget before every write.
+    #[allow(dead_code)]
+    pub fn writer<W: std::io::Write>(&self, inner: W) -> BudgetWrite<'_, W> { BudgetWrite { inner, budget: self } }
+}
+
+/// See `ExtractBudget::writer`.
+pub struct BudgetWrite<'a, W> {
+    inner: W,
+    budget: &'a ExtractBudget,
+}
+
+impl<W: std::io::Write> std::io::Write for BudgetWrite<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.budget.spend(buf.len() as u64)?;
+        self.inner.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> { self.inner.flush() }
 }
 
 // ── Resource governor hook ────────────────────────────────────────────────────
@@ -201,10 +299,12 @@ pub trait ExtractControl: Sync {
 struct PacedWrite<'a, W> {
     inner: W,
     control: &'a dyn ExtractControl,
+    budget: &'a ExtractBudget,
 }
 
 impl<W: std::io::Write> std::io::Write for PacedWrite<'_, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.budget.spend(buf.len() as u64)?;
         self.control.pace(buf.len() as u64);
         self.inner.write(buf)
     }
@@ -216,11 +316,13 @@ impl<W: std::io::Write> std::io::Write for PacedWrite<'_, W> {
 struct PacedRead<'a, R> {
     inner: R,
     control: &'a dyn ExtractControl,
+    budget: &'a ExtractBudget,
 }
 
 impl<R: Read> Read for PacedRead<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = self.inner.read(buf)?;
+        self.budget.spend(n as u64)?;
         self.control.pace(n as u64);
         Ok(n)
     }
@@ -303,12 +405,19 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
 /// wrote (zip, 7z, rar; a tar into an existing folder keeps its partial files, the crate does
 /// not say which it wrote) — and `cancelled_error()` is returned.
 pub fn extract_to_with(path: &Path, dest: &Path, control: &dyn ExtractControl) -> std::io::Result<()> {
+    // The declared-size check comes before anything, `dest` included (security summary §9).
+    let archive_len = std::fs::metadata(path)?.len();
+    if let Some(total) = declared_total(path)? {
+        check_declared(archive_len, total)?;
+    }
+    let budget = ExtractBudget::for_archive(archive_len);
     let fresh = std::fs::symlink_metadata(dest).is_err();
     std::fs::create_dir_all(dest)?;
     let stopped = std::sync::atomic::AtomicBool::new(false);
     let written = std::sync::Mutex::new(Vec::<PathBuf>::new());
-    let result = extract_inner(path, dest, control, &stopped, &written);
-    if result.is_err() && stopped.load(std::sync::atomic::Ordering::SeqCst) {
+    let result = extract_inner(path, dest, control, &stopped, &written, &budget);
+    let cancelled = stopped.load(std::sync::atomic::Ordering::SeqCst);
+    if result.is_err() && (cancelled || budget.exceeded()) {
         if fresh {
             let _ = std::fs::remove_dir_all(dest);
         } else {
@@ -316,9 +425,24 @@ pub fn extract_to_with(path: &Path, dest: &Path, control: &dyn ExtractControl) -
                 let _ = std::fs::remove_file(p);
             }
         }
-        return Err(cancelled_error());
+        return Err(if cancelled { cancelled_error() } else { io_err(EXTRACT_TOO_LARGE) });
     }
     result
+}
+
+/// What the archive's index says it extracts to, for the formats that have an index (zip, 7z,
+/// rar). `None` for tar: its sizes are spread through the stream, and for a tar.gz reading
+/// them would mean decompressing the whole thing; the streamed budget covers it.
+fn declared_total(path: &Path) -> std::io::Result<Option<u64>> {
+    Ok(match kind_of(path) {
+        Some(Kind::Zip) => {
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?).map_err(io_err)?;
+            Some(zip_declared_total(&mut zip)?)
+        }
+        Some(Kind::SevenZ) => Some(sevenz_all_entries(path)?.iter().fold(0u64, |a, e| a.saturating_add(e.1))),
+        Some(Kind::Rar) => Some(rar_entries(path)?.iter().fold(0u64, |a, e| a.saturating_add(e.1))),
+        _ => None,
+    })
 }
 
 /// The control's checkpoint, remembering that it said stop.
@@ -335,26 +459,27 @@ fn extract_inner(
     control: &dyn ExtractControl,
     stopped: &std::sync::atomic::AtomicBool,
     written: &std::sync::Mutex<Vec<PathBuf>>,
+    budget: &ExtractBudget,
 ) -> std::io::Result<()> {
     gate(control, stopped)?;
     match kind_of(path) {
         Some(Kind::Zip) => {
-            extract_zip_parallel(path, dest, control, stopped, written)?;
+            extract_zip_parallel(path, dest, control, stopped, written, budget)?;
         }
         Some(Kind::Tar) => {
             let file = std::fs::File::open(path)?;
             let r = CheckedReader { inner: file, control, since: 0, stopped };
-            tar::Archive::new(PacedRead { inner: r, control }).unpack(dest)?;
+            tar::Archive::new(PacedRead { inner: r, control, budget }).unpack(dest)?;
         }
         Some(Kind::TarGz) => {
             let file = std::fs::File::open(path)?;
             let r = CheckedReader { inner: file, control, since: 0, stopped };
             // Paced AFTER decompression: the limit is on what is written, not on the archive.
-            tar::Archive::new(PacedRead { inner: flate2::read::GzDecoder::new(r), control }).unpack(dest)?;
+            tar::Archive::new(PacedRead { inner: flate2::read::GzDecoder::new(r), control, budget }).unpack(dest)?;
         }
         Some(Kind::SevenZ) => {
             // Independent zip-slip guard: refuse the whole archive if ANY entry path
-            // would escape `dest` (sevenz_rust::decompress_file writes everything at
+            // would escape `dest` (sevenz_rust2::decompress_file writes everything at
             // once, so validate the index up front rather than trusting the crate).
             // `sevenz_all_entries`, NOT `sevenz_entries`: the latter hides directory
             // entries, and a directory entry is a `create_dir_all(dest.join(name))` with
@@ -366,13 +491,13 @@ fn extract_inner(
             }
             // The crate's own per-entry writer, with the checkpoint in front of it: the same
             // bytes and timestamps as `decompress_file`, and a place to stop between entries.
-            sevenz_rust::decompress_file_with_extract_fn(path, dest, |entry, reader, out| {
-                gate(control, stopped).map_err(sevenz_rust::Error::io)?;
+            sevenz_rust2::decompress_file_with_extract_fn(path, dest, |entry, reader, out| {
+                gate(control, stopped).map_err(sevenz_rust2::Error::from)?;
                 if !entry.is_directory() {
                     written.lock().unwrap_or_else(|p| p.into_inner()).push(out.clone());
                 }
-                let mut paced = PacedRead { inner: reader, control };
-                let r = sevenz_rust::default_entry_extract_fn(entry, &mut paced, out);
+                let mut paced = PacedRead { inner: reader, control, budget };
+                let r = sevenz_rust2::default_entry_extract_fn(entry, &mut paced, out);
                 if r.is_ok() && !entry.is_directory() { control.add_bytes(0, entry.size()); }
                 r
             })
@@ -391,6 +516,9 @@ fn extract_inner(
                 archive = if header.entry().is_file() {
                     written.lock().unwrap_or_else(|p| p.into_inner()).push(dest.join(&name));
                     let size = header.entry().unpacked_size as u64;
+                    // unrar writes the entry itself: its declared size is spent first (the
+                    // whole archive's total was already checked against its index).
+                    budget.spend(size)?;
                     let next = header.extract_with_base(dest).map_err(io_err)?;
                     control.add_bytes(0, size);
                     // unrar writes the entry in one call: the limit is paid once it is out.
@@ -422,6 +550,7 @@ fn extract_zip_parallel(
     control: &dyn ExtractControl,
     stopped: &std::sync::atomic::AtomicBool,
     written: &std::sync::Mutex<Vec<PathBuf>>,
+    budget: &ExtractBudget,
 ) -> std::io::Result<()> {
     use rayon::prelude::*;
     let file = std::fs::File::open(path)?;
@@ -429,7 +558,7 @@ fn extract_zip_parallel(
     let count = zip.len();
 
     if count > 8000 {
-        return extract_zip_serial(&mut zip, dest, control, stopped, written);
+        return extract_zip_serial(&mut zip, dest, control, stopped, written, budget);
     }
 
     // Pass 1 (serial, cheap): create directories and collect the file entries.
@@ -463,7 +592,7 @@ fn extract_zip_parallel(
                 control.on_file(&f);
                 // No bigger than the entry: a 1 MiB buffer for a 2 KiB file is memory for nothing.
                 let cap = control.write_buffer().min((e.size() as usize).max(8 * 1024));
-                let mut w = std::io::BufWriter::with_capacity(cap, PacedWrite { inner: f, control });
+                let mut w = std::io::BufWriter::with_capacity(cap, PacedWrite { inner: f, control, budget });
                 let n = std::io::copy(&mut e, &mut w)?;
                 std::io::Write::flush(&mut w)?;
                 control.add_bytes(e.compressed_size(), n);
@@ -483,6 +612,7 @@ fn extract_zip_serial<R: Read + std::io::Seek>(
     control: &dyn ExtractControl,
     stopped: &std::sync::atomic::AtomicBool,
     written: &std::sync::Mutex<Vec<PathBuf>>,
+    budget: &ExtractBudget,
 ) -> std::io::Result<()> {
     use zip::result::ZipError;
     let zio = |e: std::io::Error| io_err(ZipError::Io(e));
@@ -506,7 +636,7 @@ fn extract_zip_serial<R: Read + std::io::Seek>(
             written.lock().unwrap_or_else(|p| p.into_inner()).push(outpath.clone());
             let outfile = std::fs::File::create(&outpath).map_err(zio)?;
             control.on_file(&outfile);
-            let mut outfile = PacedWrite { inner: outfile, control };
+            let mut outfile = PacedWrite { inner: outfile, control, budget };
             let n = std::io::copy(&mut file, &mut outfile).map_err(zio)?;
             control.add_bytes(file.compressed_size(), n);
         }
@@ -570,13 +700,100 @@ pub fn mod_read_root(mod_folder: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
+mod size_cap_tests {
+    use super::*;
+    use std::io::Write;
+
+    /// A zip holding `mib` MiB of zeros, zstd-compressed (a few KB on disk). With
+    /// `declare = Some(n)`, the local and central headers are patched to declare `n` bytes
+    /// instead: an index that lies.
+    fn zero_bomb(path: &Path, mib: usize, declare: Option<u32>) {
+        {
+            let f = std::fs::File::create(path).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let opts = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Zstd);
+            z.start_file("zeros.bin", opts).unwrap();
+            let block = vec![0u8; 1 << 20];
+            for _ in 0..mib { z.write_all(&block).unwrap(); }
+            z.finish().unwrap();
+        }
+        if let Some(n) = declare {
+            let mut b = std::fs::read(path).unwrap();
+            let le = n.to_le_bytes();
+            let local = b.windows(4).position(|w| w == [0x50, 0x4b, 0x03, 0x04]).unwrap();
+            b[local + 22..local + 26].copy_from_slice(&le);
+            let central = b.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
+            b[central + 24..central + 28].copy_from_slice(&le);
+            std::fs::write(path, b).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_limits_are_the_decided_ones() {
+        assert_eq!(MAX_EXTRACT_TOTAL, 16 * 1024 * 1024 * 1024);
+        assert_eq!(MAX_EXTRACT_RATIO, 1000);
+        assert_eq!(extract_limit(1 << 30), MAX_EXTRACT_TOTAL, "a 1 GiB archive: the 16 GiB total decides");
+        assert_eq!(extract_limit(1 << 20), 1000 << 20, "a 1 MiB archive: 1000:1 decides");
+        assert!(check_declared(1 << 30, (16 << 30) + 1).is_err());
+        assert!(check_declared(1 << 20, 1001 << 20).is_err());
+        assert!(check_declared(1 << 20, 1000 << 20).is_ok());
+        assert!(check_declared(1024, 60 << 20).is_ok(), "under the 64 MiB floor the ratio does not apply");
+    }
+
+    /// 80 MiB declared by an archive of a few KB: refused from the index, before `dest` exists.
+    #[test]
+    fn a_declared_bomb_is_refused_before_anything_is_written() {
+        let td = tempfile::tempdir().unwrap();
+        let bomb = td.path().join("bomb.zip");
+        zero_bomb(&bomb, 80, None);
+        assert!(std::fs::metadata(&bomb).unwrap().len() < 1 << 20);
+        let dest = td.path().join("out");
+        // Counts what reaches the destination: the streamed budget would also stop this bomb,
+        // so "refused" alone would not prove the index was read first.
+        struct Counting(std::sync::atomic::AtomicU64);
+        impl ExtractControl for Counting {
+            fn pace(&self, bytes: u64) { self.0.fetch_add(bytes, std::sync::atomic::Ordering::SeqCst); }
+        }
+        let control = Counting(std::sync::atomic::AtomicU64::new(0));
+        let err = extract_to_with(&bomb, &dest, &control).unwrap_err();
+        assert!(is_too_large(&err), "{err}");
+        assert_eq!(control.0.load(std::sync::atomic::Ordering::SeqCst), 0, "not one byte may be written");
+        assert!(!dest.exists(), "nothing may be written for a refused archive");
+    }
+
+    /// The same bomb with an index that says 1000 bytes: stopped while writing, and what it
+    /// wrote is removed.
+    #[test]
+    fn a_lying_index_is_stopped_while_writing() {
+        let td = tempfile::tempdir().unwrap();
+        let bomb = td.path().join("liar.zip");
+        zero_bomb(&bomb, 80, Some(1000));
+        let dest = td.path().join("out");
+        let err = extract_to_with(&bomb, &dest, &Ungoverned).unwrap_err();
+        assert!(is_too_large(&err), "{err}");
+        assert!(!dest.exists(), "the partial extraction is removed");
+    }
+
+    #[test]
+    fn an_ordinary_archive_still_extracts() {
+        let td = tempfile::tempdir().unwrap();
+        let ok = td.path().join("ok.zip");
+        zero_bomb(&ok, 2, None);
+        let dest = td.path().join("out");
+        extract_to_with(&ok, &dest, &Ungoverned).unwrap();
+        assert_eq!(std::fs::metadata(dest.join("zeros.bin")).unwrap().len(), 2 << 20);
+    }
+}
+
+#[cfg(test)]
 mod path_safety_tests {
     use super::is_unsafe_rel_path;
 
     /// This guard is what stands between a hostile mod archive and an arbitrary file write.
     ///
     /// RUSTSEC-2026-0245 (CVSS 8.3, CWE-23/CWE-36) is a path traversal in
-    /// `sevenz_rust::decompress_impl` with **no fixed upstream version**. BMM does not rely on
+    /// `sevenz_rust::decompress_impl` with **no fixed upstream version** (BMM moved to
+    /// `sevenz_rust2`, which checks the join itself, and keeps its own guard). BMM does not rely on
     /// the crate: extract_to() enumerates the archive index and refuses the whole file if any
     /// entry would escape, before decompression runs. The same guard covers `.rar`.
     ///
@@ -622,7 +839,7 @@ mod path_safety_tests {
     /// The guard above is only worth what `extract_to` actually FEEDS it.
     ///
     /// It was fed `sevenz_entries`, which drops directory entries — and a directory entry is
-    /// not inert: `sevenz_rust::default_entry_extract_fn` answers one with
+    /// not inert: `sevenz_rust` 0.6's `default_entry_extract_fn` answered one with
     /// `create_dir_all(dest.join(entry.name()))` and no path check of its own. So a `.7z`
     /// carrying a single directory entry named `../../bmm-escape-probe` reached outside the
     /// destination while every file in the same archive was being validated, and no test
@@ -634,7 +851,7 @@ mod path_safety_tests {
     /// first assertion (extract_to returned Ok) and on the second (the directory existed).
     #[test]
     fn a_directory_entry_cannot_reach_outside_the_destination() {
-        use sevenz_rust::{SevenZArchiveEntry, SevenZWriter};
+        use sevenz_rust2::{ArchiveEntry as SevenZArchiveEntry, ArchiveWriter as SevenZWriter};
 
         let tmp = std::env::temp_dir().join(format!("bmm-7z-dirslip-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);

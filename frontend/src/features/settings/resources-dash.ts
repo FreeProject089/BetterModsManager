@@ -6,18 +6,19 @@
 // is no longer on screen (the modal closed, the container re-rendered). Nothing samples at rest.
 import { invoke, listen } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { pushHistory, sparkPoints } from './resources-spark.js';
+import { pausedAllText, pushHistory, sparkPoints, type PausedAll } from './resources-spark.js';
 import { renderResourcesMatrix } from './resources-matrix.js';
 
 interface Ticket { id: number; kind: string; subject: string; state: 'waiting' | 'running' | 'paused'; bytes_read: number; bytes_written: number; age_ms: number; }
-interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; task: { preset: string; remaining_ms: number } | null; tickets: Ticket[]; }
-interface Status { preset: string; effective: string; task: { preset: string; remaining_ms: number } | null; game_active: boolean; game_manual: string; game_exes?: string[]; tickets: Ticket[]; }
+interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; task: { preset: string; remaining_ms: number } | null; tickets: Ticket[]; paused_all?: PausedAll | null; }
+interface Status { preset: string; effective: string; task: { preset: string; remaining_ms: number } | null; game_active: boolean; game_manual: string; game_exes?: string[]; tickets: Ticket[]; paused_all?: PausedAll | null; }
 
 const PRESETS = ['silent', 'balanced', 'max'] as const;
 
 const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 const presetLabel = (p: string) => t('res.p.' + p) || p;
 const kindLabel = (k: string) => t('res.k.' + k) || k;
+
 
 let _unlisten: (() => void) | null = null;
 let _subscribed = false;
@@ -77,6 +78,10 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
                     <button type="button" class="btn btn-sm res-q-all" data-a="resume_all">${esc(t('res.resumeAll') || 'Resume all')}</button>
                 </div>
             </div>
+            <div class="res-paused-all" role="status" hidden style="display:none;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--warning);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:12px">
+                <span class="res-paused-all-text" style="flex:1;min-width:0"></span>
+                <button type="button" class="btn btn-sm res-q-all" data-a="resume_all">${esc(t('res.resumeAll') || 'Resume all')}</button>
+            </div>
             <div class="res-queue" style="display:flex;flex-direction:column;gap:4px"></div>
             <div class="res-matrix-host"></div>
         </div>`;
@@ -93,6 +98,16 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
         }
         const gs = $('.res-game-state') as HTMLElement | null;
         if (gs) { gs.textContent = game ? (t('res.gameOn') || 'A game is running: background work is paused') : (t('res.gameOff') || 'No game detected'); gs.style.color = game ? 'var(--warning)' : 'var(--text-muted)'; }
+    };
+
+    // Owner card 2: a pause-all is said, with who set it and a Resume that calls resume_all.
+    const paintPausedAll = (p: PausedAll | null | undefined) => {
+        const box = $('.res-paused-all') as HTMLElement | null;
+        if (!box) return;
+        box.hidden = !p;
+        box.style.display = p ? 'flex' : 'none';
+        const txt = $('.res-paused-all-text');
+        if (txt) txt.textContent = p ? pausedAllText(p, t) : '';
     };
 
     const paintQueue = (tickets: Ticket[]) => {
@@ -123,10 +138,12 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
         set('wr', `${s.write_mbps.toFixed(1)} MB/s`, wr, 1);
         paintHead(s.effective, s.game_active, s.task ?? null);
         paintQueue(s.tickets);
+        paintPausedAll(s.paused_all);
     };
 
     paintHead(st.effective, st.game_active, st.task);
     paintQueue(st.tickets);
+    paintPausedAll(st.paused_all);
     // S1: the per disk × operation rules, collapsed under the card.
     const mh = $('.res-matrix-host') as HTMLElement | null;
     if (mh) {
@@ -155,7 +172,11 @@ export async function renderResourcesCard(host: HTMLElement): Promise<void> {
     host.addEventListener('click', (e) => {
         const b = (e.target as HTMLElement).closest('.res-q, .res-q-all') as HTMLElement | null;
         if (!b) return;
-        invoke('resources_queue', { action: b.dataset.a, id: b.dataset.id ? Number(b.dataset.id) : null }).catch(() => {});
+        // `by: 'user'`: the dashboard's pause-all is the user's, the only one with no end.
+        invoke('resources_queue', { action: b.dataset.a, id: b.dataset.id ? Number(b.dataset.id) : null, by: 'user' })
+            .then(() => (invoke('resources_status') as Promise<Status>))
+            .then((now) => { if (now) { paintQueue(now.tickets); paintPausedAll(now.paused_all); } })
+            .catch(() => {});
     });
 
     // Live: subscribe while this card is on screen. A tick that finds it gone (modal closed or

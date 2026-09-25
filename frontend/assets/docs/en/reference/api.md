@@ -481,7 +481,7 @@ is `data/export-auto`.
 | `GET` | `/api/resources/hardware` | `resources.read` | — · CPU cores and instruction sets, GPUs (listed only — BMM runs no compute on them), each disk’s bus and seek penalty. The first call can take the GPU driver’s 3-second budget | |
 | `POST` | `/api/resources/preset` | `resources.write` | `name`* (`silent` · `balanced` · `max` · `custom`), `scope` (`persistent`, the default, or `task`), `ttlSecs` (task only, ≤ 7200) · a **named** preset. It never overrides game mode | ✓ |
 | `POST` | `/api/resources/game-mode` | `resources.write` | `mode`* (`auto` · `on` · `off`) | |
-| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (a ticket, for the last three) · **`cancel` also needs `mods.write`**: it throws work away | |
+| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (a ticket, for the last three) · **`cancel` also needs `mods.write`**: it throws work away · a `pause_all` sent here ends by itself after 30 min | |
 | `POST` | `/api/resources/io-rule` | admin token | `disk`* (`*`, `d:\`, `\\nas\share\` or `/`), `op`* (`*` or an operation kind), `rule` (`{ rate_mb_s?, parallel?, buffer_kib?, io_priority? }`; `null` removes it) · a fine-grained rule, clamped to the hard bounds and stored. **The admin token only**: a plugin is refused even with `resources.write` | |
 
 ---

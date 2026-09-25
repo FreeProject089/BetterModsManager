@@ -21,6 +21,7 @@ import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { bcRoot } from './links-config.js';
 import { creatorProofFor } from './canvas-fingerprint.js';
+import { pinProblemOf, recordPinProblem, readPinProblem, clearPinProblem, type KeyPinProblem } from './key-pin.js';
 
 /**
  * Three states, not two.
@@ -35,6 +36,9 @@ export type BcLinkState = {
     state: 'linked' | 'anonymous' | 'unknown';
     displayName?: string;
     discord?: { linked: boolean; username?: string | null };
+    /** BetterCommunity refused this install's key against the id's pinned chain (C8-C).
+     *  Stored when it happened (key-pin.ts), so it shows even while offline. */
+    pinProblem?: KeyPinProblem;
 };
 
 /** What `openAccountLinkFlow` did, for the caller to put into words. */
@@ -43,6 +47,7 @@ export type LinkAttempt =
     | { result: 'already' }
     | { result: 'offline' }
     | { result: 'no-creator' }
+    | { result: 'pin'; problem: KeyPinProblem }
     | { result: 'error' };
 
 const TTL_MS = 60_000;
@@ -65,11 +70,11 @@ export async function creatorId(): Promise<string> {
  * this app takes that route.
  */
 export async function bcLinkState(force = false): Promise<BcLinkState> {
-    if (!force && _cache && Date.now() - _cache.at < TTL_MS) return _cache.value;
+    if (!force && _cache && Date.now() - _cache.at < TTL_MS) return withPin(_cache.value);
     const cid = await creatorId();
     // No creator id at all is not a network problem and not a missing account: there is
     // nothing to link yet, and "anonymous" is the honest answer.
-    if (!cid) return remember({ state: 'anonymous' });
+    if (!cid) return withPin(remember({ state: 'anonymous' }));
     let data: { linked?: boolean; displayName?: string; discord?: { linked: boolean; username?: string | null } } | null = null;
     try {
         const raw = await invoke('bc_api_get',
@@ -77,10 +82,17 @@ export async function bcLinkState(force = false): Promise<BcLinkState> {
             { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch { /* offline, tunnelled elsewhere, or down */ }
-    if (!data) return remember({ state: 'unknown' });
-    if (!data.linked) return remember({ state: 'anonymous' });
+    if (!data) return withPin(remember({ state: 'unknown' }));
+    if (!data.linked) return withPin(remember({ state: 'anonymous' }));
     void registerKeyV5();
-    return remember({ state: 'linked', displayName: data.displayName, discord: data.discord });
+    return withPin(remember({ state: 'linked', displayName: data.displayName, discord: data.discord }));
+}
+
+/** The stored pin refusal, added to a state (never cached with it: it changes on its own
+ *  when registerKeyV5 lands, and the card polls). */
+function withPin(st: BcLinkState): BcLinkState {
+    const pin = readPinProblem();
+    return pin ? { ...st, pinProblem: pin.error } : st;
 }
 
 /** The origin a proof for BetterCommunity must name. */
@@ -109,7 +121,14 @@ async function registerKeyV5(): Promise<void> {
     try {
         await invoke('bc_api_post', { url: `${bcRoot()}/api/link/upgrade`, body: JSON.stringify({ proof }) }, { quiet: true });
         try { localStorage.setItem('bc_key_v5', kid); } catch { /* private mode */ }
-    } catch { /* offline, or an older server without the route — try again next time */ }
+        clearPinProblem();
+    } catch (e) {
+        // A refusal against the id's PINNED chain is not "offline": it stays true until the
+        // owner resets the pin, and the identity card says so (C8-C). Anything else —
+        // offline, or an older server without the route — is tried again next time.
+        const pin = pinProblemOf(e);
+        if (pin) recordPinProblem(pin, kid);
+    }
 }
 
 function remember(value: BcLinkState): BcLinkState {
@@ -143,7 +162,11 @@ export async function openAccountLinkFlow(onLinked?: (st: BcLinkState) => void):
             { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId: cid, proof: (await creatorProofFor(bcAudience())) || undefined }) },
             { quiet: true }) as string;
         data = JSON.parse(raw);
-    } catch {
+    } catch (e) {
+        // The server answered, and what it said is about the key pin: telling the person
+        // they are offline would send them to check a network that works.
+        const pin = pinProblemOf(e);
+        if (pin) { recordPinProblem(pin); return { result: 'pin', problem: pin }; }
         return { result: 'offline' };
     }
     if (data?.linked) { forgetBcLinkState(); return { result: 'already' }; }

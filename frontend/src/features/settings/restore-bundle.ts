@@ -23,8 +23,15 @@ interface BundleInfo {
     created: string | null;
     signature: 'valid' | 'tampered' | 'malformed' | 'unsigned';
     authorId: string | null;
+    /** Validly signed by this user's own key. When false, page grants and tasks need a yes. */
+    ownBundle: boolean;
     sections: BundleSection[];
 }
+
+/** The sections whose content grants something (page permissions, tasks with theirs). From an
+ *  archive that is not the user's own, Rust refuses them without `acceptForeign` and brings
+ *  the tasks back disabled (security summary §9). Same list as FOREIGN_SENSITIVE_SECTIONS. */
+const FOREIGN_SENSITIVE = ['navigation', 'automations'];
 interface RestoreResult {
     restored: string[]; files: number; skipped: string[];
     backupOfPrevious: string | null;
@@ -149,6 +156,9 @@ export async function openRestoreBundle(): Promise<void> {
         if (s.section === 'app_data.json') {
             txt.appendChild(el('div', 'restore-row-warn', t('restore.replaceWarn')));
         }
+        if (!info.ownBundle && FOREIGN_SENSITIVE.includes(s.section)) {
+            txt.appendChild(el('div', 'restore-row-warn', t('restore.foreignRowWarn')));
+        }
         if (!s.restorable) {
             txt.appendChild(el('div', 'restore-row-sub', t('restore.notRestorable')));
         }
@@ -178,6 +188,10 @@ export async function openRestoreBundle(): Promise<void> {
             replacing ? t('restore.confirmReplace') : t('restore.confirmBody', { n: String(sections.length) }),
         );
         if (!ok) return;
+        // Someone else's page grants or tasks: said once more, in its own words, before Rust
+        // is told the user accepted it.
+        const foreign = !info.ownBundle && sections.some((s) => FOREIGN_SENSITIVE.includes(s));
+        if (foreign && !(await showConfirm(t('restore.foreignTitle'), t('restore.foreignBody')))) return;
 
         go.disabled = true;
         go.textContent = t('restore.working');
@@ -185,7 +199,7 @@ export async function openRestoreBundle(): Promise<void> {
             // The same passphrase the inspection used. Asking twice for one file would be
             // asking whether the answer that just worked still works.
             const r = await invoke('restore_data_bundle',
-                { args: { path: info.path, sections, passphrase: passphrase || null } }) as RestoreResult;
+                { args: { path: info.path, sections, passphrase: passphrase || null, acceptForeign: foreign } }) as RestoreResult;
             // localStorage is the frontend's to write — Rust hands these back rather than
             // guessing at a browser store it cannot reach.
             if (r.extras && typeof r.extras === 'object') {

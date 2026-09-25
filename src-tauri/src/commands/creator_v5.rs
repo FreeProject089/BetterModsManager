@@ -231,6 +231,13 @@ fn vault() -> &'static dyn Vault {
     .as_ref()
 }
 
+// ACCEPTED RISK (security summary §9 #14, R12 card 1; owner decision 2026-09-24).
+// The decoded key store, seeds included, stays in this process's memory for its whole
+// lifetime, so a memory dump of BMM carries them. Accepted, not overlooked: anything able to
+// read BMM's memory runs as the same user and can call DPAPI (or the keyring) itself, which
+// yields the same seeds from the sealed store without a dump. The cache exists for proof
+// speed (no DPAPI round trip per proof). Do not "fix" this by zeroing on a timer without
+// revisiting that decision; see also `DECODED` in creator_v5/keystore.rs.
 static STORE: Mutex<Option<KeyStoreV5>> = Mutex::new(None);
 
 fn store_dir(handle: &AppHandle) -> Result<PathBuf, String> {

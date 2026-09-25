@@ -205,7 +205,15 @@ pub fn export_data_bundle(
 
     if options.app_data {
         let mut rep = SectionReport { section: "app_data".into(), files: 0, bytes: 0, note: None };
-        let body = serde_json::to_vec_pretty(&app_data_json.clone().unwrap_or(serde_json::Value::Null))?;
+        // Filtered by the export builder already; stripped again here because this command
+        // takes the document from its caller, and the machine's keys and the GitHub token
+        // never go into an archive whoever built it (security summary §9, exports).
+        let mut doc = app_data_json.clone().unwrap_or(serde_json::Value::Null);
+        crate::state::strip_local_only_settings(&mut doc);
+        if let Some(inner) = doc.get_mut("app_data") {
+            crate::state::strip_local_only_settings(inner);
+        }
+        let body = serde_json::to_vec_pretty(&doc)?;
         zip.start_file("app_data.json", json_opts).map_err(|e| AppError::from(e.to_string()))?;
         zip.write_all(&body)?;
         rep.files = 1;

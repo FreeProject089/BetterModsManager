@@ -214,8 +214,12 @@ Le serveur autonome généré expose les endpoints correspondants :
 
 | Endpoint | Accès |
 |---|---|
-| `/dashboard`, `/monitoring.json` | Public, état en lecture seule. |
-| `/admin/data`, `/admin/update`, `/admin/logs` | Mot de passe admin (header Authorization, comparaison en temps constant). |
+| `/monitoring.json` | Public, totaux en lecture seule : téléchargements en cours, octets envoyés, progression de chaque fichier en cours. Aucune adresse IP, aucun Creator ID. |
+| `/dashboard` | Page publique ; elle n'affiche rien avant la connexion avec le mot de passe admin. |
+| `/admin/monitoring`, `/admin/data`, `/admin/update`, `/admin/logs` | Mot de passe admin (header Authorization, comparaison en temps constant). `/admin/monitoring` dit qui télécharge : IP, Creator ID, sessions. |
+
+Le serveur intégré (l'hébergement depuis BMM) publie le même `monitoring.json` agrégé ; qui
+télécharge n'est affiché que dans le tableau Monitoring de BMM, sur la machine de l'hôte.
 
 ```mermaid
 graph LR

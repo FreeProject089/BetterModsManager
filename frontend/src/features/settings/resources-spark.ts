@@ -29,3 +29,25 @@ export function ruleFromInputs(v: { rate?: string; parallel?: string; buffer?: s
     if (v.io === 'low' || v.io === 'normal') out.io_priority = v.io;
     return Object.keys(out).length ? out : null;
 }
+
+/** A pause-all in force (owner card 2): who set it and, unless the user did, when it ends. */
+export interface PausedAll { by: string; age_ms: number; remaining_ms: number | null; }
+
+/** The "everything is paused" line: who paused (`user`, `task:<name>`, `plugin:<id>`, `api`)
+ *  and, for anything but the user's own pause, when it ends by itself (TASK_PAUSE_MAX, 30 min).
+ *  Plain text: the caller puts it in `textContent`. `t` is i18n's (a parameter, so the tests
+ *  can call it without the i18n module); an empty answer falls back to the English text. */
+export function pausedAllText(p: PausedAll, t: (k: string) => string): string {
+    const by = String(p.by || '');
+    const [kind, ...rest] = by.split(':');
+    const name = rest.join(':');
+    let who: string;
+    if (by === 'user') who = t('res.pausedBy.user') || 'Paused by you, until you resume it.';
+    else if (kind === 'task' && name) who = (t('res.pausedBy.task') || 'Paused by the task “{n}”.').replace('{n}', name);
+    else if (kind === 'plugin' && name) who = (t('res.pausedBy.plugin') || 'Paused by the plugin {n}.').replace('{n}', name);
+    else if (by === 'api') who = t('res.pausedBy.api') || 'Paused through the local API.';
+    else who = t('res.pausedBy.unknown') || 'Paused by an automation.';
+    const left = p.remaining_ms == null ? ''
+        : ' ' + (t('res.pausedLeft') || 'Resumes by itself in {m} min.').replace('{m}', String(Math.max(1, Math.ceil(p.remaining_ms / 60000))));
+    return `${t('res.pausedAll') || 'Everything is paused: deploys and installs wait until it is resumed.'} ${who}${left}`;
+}

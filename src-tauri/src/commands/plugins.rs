@@ -70,17 +70,52 @@ pub async fn fetch_plugin_catalog(
 
 // ── Install / Uninstall ────────────────────────────────────────────────────
 
+/// The first release that no longer installs a catalogue plugin without a `sha256`.
+///
+/// Security summary §9: `sha256` is mandatory in the plugin catalogue format; for ONE release
+/// an entry without it still installs after a warning. That release is 1.0.x; from 1.1.0 on,
+/// such an entry is refused (in the catalogue screen, the auto-update and the link install).
+const UNVERIFIED_GRACE_ENDS: (u64, u64) = (1, 1);
+
+/// Whether this version is still in the grace release for catalogue entries without a checksum.
+pub fn unverified_plugin_grace(version: &str) -> bool {
+    let mut it = version.split(['.', '-', '+']).map(|p| p.parse::<u64>().unwrap_or(0));
+    let (major, minor) = (it.next().unwrap_or(0), it.next().unwrap_or(0));
+    (major, minor) < UNVERIFIED_GRACE_ENDS
+}
+
+/// Why a catalogue install is refused before the download, from its checksum and the user's
+/// answer to the no-checksum warning. `Ok(Some(hash))`: verify against it; `Ok(None)`: the
+/// user accepted an unverified install during the grace release.
+pub fn catalog_checksum_rule(sha256: Option<&str>, allow_unverified: bool, version: &str) -> Result<Option<String>, String> {
+    match sha256.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => crate::commands::link_guard::normalize_sha256(s)
+            .map(Some)
+            .ok_or_else(|| "plugins.errBadChecksum".to_string()),
+        None if allow_unverified && unverified_plugin_grace(version) => Ok(None),
+        None if unverified_plugin_grace(version) => Err("plugins.errNeedsConfirm".to_string()),
+        None => Err("plugins.errNoChecksum".to_string()),
+    }
+}
+
+/// Install a plugin from a catalogue entry.
+///
+/// `sha256` is the entry's checksum: the downloaded bytes must match it. Without one, the
+/// install needs `allow_unverified` (the user said yes to the warning) and the grace release.
 #[tauri::command]
 pub async fn install_plugin(
     state: State<'_, AppState>,
     handle: tauri::AppHandle,
     download_url: String,
+    sha256: Option<String>,
+    allow_unverified: Option<bool>,
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from: {}", download_url));
+    let expected = catalog_checksum_rule(sha256.as_deref(), allow_unverified.unwrap_or(false), env!("CARGO_PKG_VERSION"))?;
 
     // A Download ticket for the transfer and the unpacking (the governor's queue lists it
     // and can cancel it between archive entries).
-    let ticket = crate::fs_utils::begin_ticket_async(
+    let ticket = crate::governor::runtime::global().begin_async(
         crate::governor::config::OpKind::Download,
         download_url.rsplit('/').next().unwrap_or("plugin").to_string(),
     ).await;
@@ -88,14 +123,22 @@ pub async fn install_plugin(
     // catalog_get carries the identity header for a first-party (BetterCommunity) /dl
     // link so a PRIVATE managed-catalog payload passes the gate before redirecting to
     // storage; third-party download URLs get no header.
-    let bytes = crate::commands::net::catalog_get(&handle, &download_url)
+    let resp = crate::commands::net::catalog_get(&handle, &download_url)
         .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
-        .map_err(|e| format!("Download error: {}", e))?
-        .bytes()
+        .map_err(|e| format!("Download error: {}", e))?;
+    // The size rule of the link install, here too: a plugin is held in memory while checked.
+    let bytes = crate::commands::link_guard::read_body_capped(resp, crate::commands::link_guard::LINK_PLUGIN_MAX_BYTES)
         .await
-        .map_err(|e| format!("Read error: {}", e))?;
+        .map_err(|why| if why == "too-large" { crate::fs_utils::DOWNLOAD_TOO_LARGE.to_string() } else { "Read error".to_string() })?;
+    if let Some(exp) = expected {
+        use sha2::{Digest, Sha256};
+        let actual = hex::encode(Sha256::digest(&bytes));
+        if actual != exp {
+            return Err(format!("plugins.errChecksumMismatch|{exp}|{actual}"));
+        }
+    }
 
     let app_dir = handle
         .path()
@@ -142,7 +185,7 @@ pub async fn install_plugin_from_file(
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from file: {}", file_path));
 
-    let ticket = crate::fs_utils::begin_ticket_async(
+    let ticket = crate::governor::runtime::global().begin_async(
         crate::governor::config::OpKind::Install,
         std::path::Path::new(&file_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
     ).await;
@@ -312,6 +355,13 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf, ticket: Option<&crate
     if manifest.id.is_empty() || manifest.name.is_empty() {
         return Err("plugin.json: 'id' and 'name' are required".to_string());
     }
+    // The id names the install folder, which uninstall later deletes: one plain folder name
+    // (CWE-22). An id such as `../../../AppData/Roaming/Microsoft/Windows/Start Menu/Programs/
+    // Startup` put the plugin's files, scripts included, wherever the archive said, from a
+    // catalogue entry or a `bmm://catalog/plugin/install` link.
+    if crate::fs_utils::safe_folder_name(&manifest.id).as_deref() != Some(manifest.id.as_str()) {
+        return Err("plugin.json: 'id' must be one plain folder name".to_string());
+    }
 
     let plugin_dir = plugins_dir.join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
@@ -319,6 +369,10 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf, ticket: Option<&crate
     // Re-open archive to extract files
     let cursor2 = std::io::Cursor::new(bytes);
     let mut archive2 = zip::ZipArchive::new(cursor2).map_err(|e| format!("ZIP error: {}", e))?;
+    // The size caps of archive.rs (security summary §9): the declared total first, then every
+    // byte written counted against the same limit.
+    crate::archive::check_zip_declared(&mut archive2, bytes.len() as u64).map_err(|e| e.to_string())?;
+    let budget = crate::archive::ExtractBudget::for_archive(bytes.len() as u64);
 
     for i in 0..archive2.len() {
         if ticket.map(|t| t.is_cancelled()).unwrap_or(false) {
@@ -355,7 +409,7 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf, ticket: Option<&crate
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+        let mut out = budget.writer(std::fs::File::create(&dest).map_err(|e| e.to_string())?);
         let n = std::io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
         if let Some(t) = ticket { t.add_bytes(n, n); }
     }
@@ -2939,5 +2993,67 @@ mod plugin_automation_tests {
         assert!(!looks_like_bmmpa(r#"{"id":"t","name":"A theme","tokens":{}}"#));
         // Tasks that carry no steps: a shape that reads as a .bmmpa and is not one.
         assert!(!looks_like_bmmpa(r#"{"tasks":[{"name":"x"}]}"#));
+    }
+}
+
+#[cfg(test)]
+mod catalog_checksum_tests {
+    use super::{catalog_checksum_rule, unverified_plugin_grace};
+
+    const H: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// Security summary §9: `sha256` is mandatory in the plugin catalogue; for one release an
+    /// entry without it installs only after the user's yes to the warning.
+    #[test]
+    fn an_entry_without_a_checksum_needs_the_warning_and_the_grace_release() {
+        assert_eq!(catalog_checksum_rule(Some(H), false, "1.0.0").unwrap().as_deref(), Some(H));
+        assert_eq!(catalog_checksum_rule(Some(&format!("sha256:{}", H.to_uppercase())), false, "1.0.0").unwrap().as_deref(), Some(H));
+        assert!(catalog_checksum_rule(Some("abc"), true, "1.0.0").is_err(), "a malformed checksum is refused");
+        assert_eq!(catalog_checksum_rule(None, false, "1.0.0").unwrap_err(), "plugins.errNeedsConfirm", "no silent install");
+        assert_eq!(catalog_checksum_rule(Some("  "), false, "1.0.3").unwrap_err(), "plugins.errNeedsConfirm");
+        assert_eq!(catalog_checksum_rule(None, true, "1.0.0").unwrap(), None, "after the warning, during the grace release");
+        assert_eq!(catalog_checksum_rule(None, true, "1.1.0").unwrap_err(), "plugins.errNoChecksum", "after it, never");
+    }
+
+    #[test]
+    fn the_grace_release_is_this_one_and_only_this_one() {
+        assert!(unverified_plugin_grace(env!("CARGO_PKG_VERSION")) == (env!("CARGO_PKG_VERSION") < "1.1"));
+        assert!(unverified_plugin_grace("1.0.0") && unverified_plugin_grace("1.0.9-beta"));
+        assert!(!unverified_plugin_grace("1.1.0") && !unverified_plugin_grace("2.0.0"));
+    }
+}
+
+#[cfg(test)]
+mod plugin_folder_tests {
+    use std::io::Write;
+
+    fn plugin_zip(id: &str) -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut z = zip::ZipWriter::new(&mut buf);
+            let o = zip::write::FileOptions::default();
+            z.start_file("p/plugin.json", o).unwrap();
+            z.write_all(serde_json::json!({ "id": id, "name": "P" }).to_string().as_bytes()).unwrap();
+            z.start_file("p/run.bat", o).unwrap();
+            z.write_all(b"echo hi").unwrap();
+            z.finish().unwrap();
+        }
+        buf.into_inner()
+    }
+
+    /// The manifest id names the install folder (and what uninstall deletes): one plain folder
+    /// name, or the plugin is refused before a file is written.
+    #[test]
+    fn a_plugin_id_cannot_place_the_plugin_outside_the_plugins_folder() {
+        let td = tempfile::tempdir().unwrap();
+        let plugins = td.path().join("plugins");
+        std::fs::create_dir_all(&plugins).unwrap();
+        for bad in ["../escaped", "..", "a/b", r"C:\escaped", r"..\escaped"] {
+            assert!(super::extract_plugin_zip(&plugin_zip(bad), &plugins, None).is_err(), "{bad} was accepted");
+        }
+        assert!(!td.path().join("escaped").exists(), "nothing was written outside the plugins folder");
+        let ok = super::extract_plugin_zip(&plugin_zip("good.plugin"), &plugins, None).unwrap();
+        assert_eq!(ok.id, "good.plugin");
+        assert!(plugins.join("good.plugin").join("run.bat").exists());
     }
 }

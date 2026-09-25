@@ -296,7 +296,7 @@ export function findCycles(modules: GraphMod[]): string[][] {
             const at = path.indexOf(id);
             if (at >= 0) {
                 const cyc = path.slice(at);
-                found.set([...cyc].sort().join(' '), cyc);
+                found.set([...cyc].sort().join('\u0000'), cyc);
             }
             return;
         }

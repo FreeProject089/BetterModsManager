@@ -220,7 +220,7 @@ function showTabContent(tab) {
 async function pollData() {
     if (!currentRepo) return;
     const [mon, adm] = await Promise.all([
-        api(`/${currentRepo}/monitoring.json`),
+        api(`/${currentRepo}/admin/monitoring`),
         api(`/${currentRepo}/admin/data`),
     ]);
     lastMonitor = mon;

@@ -480,42 +480,14 @@ pub async fn start_repo_server(
                     return Err(warp::reject::not_found());
                 }
 
-                if rel_path == "monitoring.json" {
+                if is_monitoring_request(&rel_path) {
                     let dl_path = serve_dir.join("downloads.json");
                     let content = tokio::fs::read_to_string(&dl_path).await.unwrap_or_else(|_| "{}".to_string());
                     let json_val: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
-                    
-                    let total_dls = json_val["totalDownloads"].as_u64().unwrap_or(0);
-                    let total_bytes = json_val["totalBytesSent"].as_u64().unwrap_or(0);
-                    let mods_dl = json_val["mods"].clone();
-                    
-                    let active_dls: Vec<serde_json::Value> = {
+                    let response = {
                         let active = active_downloads.lock().unwrap_or_else(|p| p.into_inner());
-                        active.values().map(|dl| {
-                            serde_json::json!({
-                                "ip": dl.ip,
-                                "creatorId": dl.creator_id,
-                                "file": dl.file,
-                                "downloaded": dl.downloaded_size,
-                                "total": dl.total_size,
-                                "speed": 0 // Mocked for integrated server
-                            })
-                        }).collect()
+                        public_monitoring(&json_val, active.values())
                     };
-
-                    let response = serde_json::json!({
-                        "server": {
-                            "version": "1.0",
-                            "uptime": 0,
-                            "totalBytes": total_bytes,
-                            "totalDls": total_dls,
-                            "modsDownloads": mods_dl
-                        },
-                        "active": active_dls,
-                        "sessions": [],
-                        "history": []
-                    });
-                    
                     return Ok(warp::Reply::into_response(warp::reply::json(&response)));
                 }
 
@@ -588,9 +560,9 @@ pub async fn start_repo_server(
                                 let response = warp::http::Response::builder()
                                     .header("Content-Type", "application/json")
                                     .header("Content-Length", filtered_json.len())
-                                    .body(warp::hyper::Body::from(filtered_json))
+                                    .body(filtered_json)
                                     .expect("Failed to build warp response");
-                                return Ok::<_, warp::Rejection>(response);
+                                return Ok::<_, warp::Rejection>(warp::Reply::into_response(response));
                             }
                         }
                     }
@@ -767,9 +739,9 @@ pub async fn start_repo_server(
                         // Signal end-of-stream with an empty Ok chunk
                         Ok::<Bytes, std::io::Error>(Bytes::new())
                     }));
-                    warp::hyper::Body::wrap_stream(stream_with_end)
+                    warp::Reply::into_response(warp::reply::stream(stream_with_end))
                 } else {
-                    warp::hyper::Body::wrap_stream(final_stream)
+                    warp::Reply::into_response(warp::reply::stream(final_stream))
                 };
 
                 // Drop unused variable
@@ -780,11 +752,16 @@ pub async fn start_repo_server(
                     else if full_path.extension().map(|e| e == "zip").unwrap_or(false) { "application/zip" }
                     else { "application/octet-stream" };
 
-                let response = warp::http::Response::builder()
-                    .header("Content-Length", total_size)
-                    .header("Content-Type", content_type)
-                    .body(final_stream)
-                    .map_err(|_| warp::reject::not_found())?;
+                // warp 0.4: the streamed body is a reply of its own; the headers go on it.
+                let mut response = final_stream;
+                response.headers_mut().insert(
+                    warp::http::header::CONTENT_LENGTH,
+                    warp::http::HeaderValue::from(total_size),
+                );
+                response.headers_mut().insert(
+                    warp::http::header::CONTENT_TYPE,
+                    warp::http::HeaderValue::from_static(content_type),
+                );
 
                 Ok::<_, warp::Rejection>(response)
             }
@@ -843,10 +820,18 @@ pub async fn start_repo_server(
     }
 
     // 7. Spawn the server in a Tokio task
-    let (_addr_actual, server) = warp::serve(routes.recover(handle_rejection)).bind_with_graceful_shutdown(addr, async {
-        rx.await.ok();
-    });
-    
+    // warp 0.4 (hyper 1, h2 0.4: RUSTSEC-2026-0258 is fixed there). The listener is bound here
+    // so a port already in use is an error for the caller rather than a panic in the task.
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| format!("Could not bind port {}: {}", port, e))?;
+    let server = warp::serve(routes.recover(handle_rejection))
+        .incoming(listener)
+        .graceful(async {
+            rx.await.ok();
+        })
+        .run();
+
     tokio::task::spawn(server);
 
     // Return results
@@ -1035,6 +1020,119 @@ fn builtin_may_serve(rel: &str) -> bool {
             n == "repo.json" || n == "info.json" || n == "monitoring.json"
         }
         [first, ..] => !first.eq_ignore_ascii_case("node_modules"),
+    }
+}
+
+/// Is this request the synthesised monitoring feed, however it is spelled?
+///
+/// `builtin_may_serve` admits the root name case-insensitively and with a trailing slash; the
+/// route must intercept every one of those spellings, or `GET /MONITORING.json` falls through
+/// to the file on disk (the standalone hybrid server writes one there, with IPs in it).
+fn is_monitoring_request(rel: &str) -> bool {
+    let norm = rel.replace('\\', "/");
+    let segs: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
+    matches!(segs.as_slice(), [one] if one.eq_ignore_ascii_case("monitoring.json"))
+}
+
+/// The public `monitoring.json` of the built-in repo server: aggregates only.
+///
+/// Security summary §9 #9. The feed is public (no password, reachable over UPnP and a tunnel),
+/// and it used to list every active downloader's IP address and Creator ID: personal data of
+/// third parties, published by the user. It now says how many downloads are running, how many
+/// bytes they have moved, and each running file's progress, and nothing about who is
+/// downloading. The detail (IP, Creator ID, protocol, speed) stays in the host's own BMM
+/// screen, which reads it through `get_active_downloads`, not through this feed.
+///
+/// `downloads_json` is the server's `downloads.json`: only its counters and its per-mod
+/// counts are copied, so a key someone adds to that file is not published by accident.
+pub(crate) fn public_monitoring<'a>(
+    downloads_json: &serde_json::Value,
+    active: impl Iterator<Item = &'a ActiveDownload>,
+) -> serde_json::Value {
+    let total_dls = downloads_json["totalDownloads"].as_u64().unwrap_or(0);
+    let total_bytes = downloads_json["totalBytesSent"].as_u64().unwrap_or(0);
+    let mods: serde_json::Map<String, serde_json::Value> = downloads_json["mods"]
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| v.as_u64().map(|n| (k.clone(), serde_json::json!(n))))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut files = Vec::new();
+    let mut active_bytes: u64 = 0;
+    for dl in active {
+        active_bytes = active_bytes.saturating_add(dl.downloaded_size);
+        files.push(serde_json::json!({
+            "file": dl.file,
+            "downloaded": dl.downloaded_size,
+            "total": dl.total_size,
+        }));
+    }
+    serde_json::json!({
+        "server": {
+            "version": "1.0",
+            "uptime": 0,
+            "totalBytes": total_bytes,
+            "totalDls": total_dls,
+            "modsDownloads": mods,
+            "activeCount": files.len(),
+            "activeBytes": active_bytes,
+        },
+        "active": files,
+        "sessions": [],
+        "history": []
+    })
+}
+
+#[cfg(test)]
+mod public_monitoring_tests {
+    use super::{is_monitoring_request, public_monitoring, ActiveDownload};
+
+    fn dl(ip: &str, id: Option<&str>, file: &str, done: u64, total: u64) -> ActiveDownload {
+        ActiveDownload {
+            ip: ip.into(),
+            file: file.into(),
+            total_size: total,
+            downloaded_size: done,
+            start_time: 0,
+            creator_id: id.map(Into::into),
+            protocol: "WAN".into(),
+        }
+    }
+
+    #[test]
+    fn the_public_feed_carries_no_ip_and_no_creator_id() {
+        let active = vec![
+            dl("203.0.113.7", Some("BC-SECRET-ID-1"), "mods/a/x.pak", 10, 100),
+            dl("198.51.100.9", Some("BC-SECRET-ID-2"), "mods/b/y.pak", 5, 50),
+        ];
+        let stats = serde_json::json!({
+            "totalDownloads": 3, "totalBytesSent": 999,
+            "mods": { "a": 2, "b": 1, "leak": "203.0.113.7" },
+            "clients": ["203.0.113.7"]
+        });
+        let out = public_monitoring(&stats, active.iter());
+        let text = out.to_string();
+        for secret in ["203.0.113.7", "198.51.100.9", "BC-SECRET-ID", "\"ip\"", "creatorId", "WAN"] {
+            assert!(!text.contains(secret), "the public feed must not carry {secret}: {text}");
+        }
+        assert_eq!(out["server"]["activeCount"], 2);
+        assert_eq!(out["server"]["activeBytes"], 15);
+        assert_eq!(out["server"]["totalDls"], 3);
+        assert_eq!(out["server"]["totalBytes"], 999);
+        assert_eq!(out["server"]["modsDownloads"]["a"], 2);
+        assert_eq!(out["active"][0]["downloaded"], 10);
+        assert_eq!(out["active"][1]["total"], 50);
+    }
+
+    #[test]
+    fn every_spelling_the_server_admits_is_intercepted() {
+        for s in ["monitoring.json", "MONITORING.json", "Monitoring.JSON", "monitoring.json/", "/monitoring.json"] {
+            assert!(is_monitoring_request(s), "{s}");
+            assert!(super::builtin_may_serve(s), "{s} is servable, so it must be intercepted");
+        }
+        assert!(!is_monitoring_request("mods/monitoring.json"));
     }
 }
 

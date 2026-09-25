@@ -459,6 +459,36 @@ mod tests {
         drop((inner, outer));
     }
 
+    /// Pentest R13 card 3: async code takes its ticket through `begin_async`. The helper that
+    /// waited with the blocking `Queue::begin` on a pool thread (no game-mode pause, a ticket
+    /// tied to a reused thread) must not come back, under its old name or its old shape, and
+    /// the five async call sites that used it read `begin_async`.
+    #[test]
+    fn async_code_takes_tickets_through_begin_async() {
+        fn rs_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() { rs_files(&p, out) } else if p.extension().is_some_and(|x| x == "rs") { out.push(p) }
+            }
+        }
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rs_files(&src, &mut files);
+        // Spelled in two halves so this file does not match itself.
+        let old_call = concat!("begin_ticket", "_async(");
+        let old_shape = concat!("spawn_blocking(move || q.", "begin(");
+        let offenders: Vec<String> = files
+            .iter()
+            .filter(|f| std::fs::read_to_string(f).map(|t| t.contains(old_call) || t.contains(old_shape)).unwrap_or(false))
+            .map(|f| f.display().to_string())
+            .collect();
+        assert!(offenders.is_empty(), "a blocking ticket helper for async code is back in: {offenders:?}");
+        for (file, n) in [("commands/modlist.rs", 1), ("commands/modpack.rs", 1), ("commands/plugins.rs", 2), ("commands/repo.rs", 1)] {
+            let text = std::fs::read_to_string(src.join(file)).unwrap();
+            assert!(text.matches("global().begin_async(").count() >= n, "{file} no longer takes its ticket with begin_async");
+        }
+    }
+
     /// Pentest R13: two async operations of one kind under Silent (one slot) — game mode's
     /// setting. Polled on the SAME runtime thread, the second used to ride on the first as a
     /// "nested" ticket and take no slot.

@@ -105,8 +105,10 @@ likelihood:
   mods are being enabled or installed, and resume on their own afterwards.
 - **Game mode is on.** It pauses hashing and maintenance until it ends. **Force on** stays on until
   you set it back to **Detect it** or **Force off**, including after the game has closed.
-- **Somebody pressed Pause all**, or a scheduled task with the **Resources** permission paused the
-  queue. **Resume all** releases everything.
+- **Somebody pressed Pause all**, or a scheduled task with the **Resources** permission (or a
+  plugin through the API) paused the queue. A box above the queue says so and who did it;
+  **Resume all** releases everything. A pause that did not come from you ends by itself after 30
+  minutes.
 
 A preset set by a scheduled task "for this task only" ends with the task, and after 2 hours at the
 latest even if the task crashed.
@@ -152,6 +154,22 @@ If the mod's source is a **direct download**, BMM is being honest:
 
 There's nothing to compare. Link the mod to a [repo](doc-page:features/repo) that publishes versions, or
 use the direct re-download.
+
+### BMM no longer offers an update after a release
+
+Both update manifests BMM reads — BetterInstaller's `update.json` and BMM's own
+`update-manifest.json` (the **quick update**) — are signed and expire after 7 days. An expired one is
+refused, and a refused manifest looks exactly like "you are up to date"; the log says why
+(`Update manifest refused: … expired`).
+
+- **If you use BMM:** check that your PC's clock is right. Otherwise nothing is wrong on your side; the
+  full installer from the release page always works.
+- **If you publish BMM:** the workflow *Re-sign update manifests* (`.github/workflows/resign-manifests.yml`)
+  renews both files twice a week. Run it by hand from *Actions → Re-sign update manifests → Run
+  workflow* (optionally naming a tag). It needs the `BMM_PRIVATE_KEY` secret — the key that signs the
+  releases — and, only for the BetterCommunity mirrors, `BCWEB_ASSETS_TOKEN`. GitHub pauses scheduled
+  workflows in a repository with no activity for 60 days: re-enable it from the Actions tab if so.
+  See [Security](doc-page:how-it-works/security) for the rules BMM applies.
 
 ### A repo sync says a file failed
 

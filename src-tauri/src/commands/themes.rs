@@ -201,7 +201,11 @@ pub fn set_active_theme(app_handle: tauri::AppHandle, theme_id: String) -> Resul
 pub fn install_theme(app_handle: tauri::AppHandle, theme_json: String) -> Result<(), String> {
     let v: serde_json::Value = serde_json::from_str(&theme_json).map_err(|e| e.to_string())?;
     let id = v["id"].as_str().ok_or("missing id")?.to_string();
-    if id.is_empty() || id.contains("..") || id.contains('/') {
+    // One plain folder name: the old test let `C:\x` and `a\b` through (a backslash is a
+    // separator on Windows, and a drive path REPLACES the themes folder when joined).
+    if id.is_empty() || id.contains("..") || id.contains('/')
+        || crate::fs_utils::safe_folder_name(&id).as_deref() != Some(id.as_str())
+    {
         return Err("Invalid theme id".into());
     }
     let dir = themes_dir(&app_handle).join(&id);

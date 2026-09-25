@@ -58,6 +58,29 @@ function addToHistory(ip, creatorId, event, details) {
     log(`${ip} | ID: ${creatorId} | ${details}`, event);
 }
 
+// The PUBLIC monitoring feed: aggregates only (BMM security summary, item 9). It is readable
+// without a password, so it carries no IP address and no Creator ID: how many downloads are
+// running, the bytes moved, each running file's progress. The detail (who is downloading) is
+// served under /admin/monitoring, behind the admin password, for the host's dashboard.
+function publicMonitoring(r) {
+    const s = (r && r.server) || {};
+    const active = ((r && r.active) || []).map(d => ({
+        file: String(d.file || ''), downloaded: Number(d.downloaded) || 0, total: Number(d.total) || 0
+    }));
+    const num = (v) => (typeof v === 'number' ? v : undefined);
+    const mods = {};
+    for (const [k, v] of Object.entries(s.modsDownloads || {})) if (typeof v === 'number') mods[k] = v;
+    return {
+        server: {
+            version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
+            totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
+            totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
+        },
+        active, sessions: [], history: []
+    };
+}
+
 function getSecurityData() {
     let bans = { banned_ips: [], banned_keys: [] };
     let whitelist = { enabled: false, ips: [], keys: [] };
@@ -171,6 +194,10 @@ app.get('/dashboard', (req, res) => {
 });
 
 app.get('/monitoring.json', (req, res) => {
+    res.json(publicMonitoring(getMonitoringReport()));
+});
+
+app.get('/admin/monitoring', authAdmin, (req, res) => {
     res.json(getMonitoringReport());
 });
 

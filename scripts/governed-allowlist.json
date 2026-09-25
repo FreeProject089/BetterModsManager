@@ -175,8 +175,8 @@
       "why": "governed (G3c): export copy+hash pass on the Compress pool and manifest hashing on the Hash pool, both behind their ticket checkpoints"
     },
     "spawn_blocking": {
-      "count": 3,
-      "why": "governed (G3c): update_server_repo (Compress ticket), apply_direct_update (Install ticket), generate_repo_manifest (Hash ticket taken in generate_repo_manifest_sync), moved off the async runtime"
+      "count": 4,
+      "why": "governed (G3c): update_server_repo (Compress ticket), apply_direct_update (Install ticket), generate_repo_manifest (Hash ticket taken in generate_repo_manifest_sync), export_server_repo (Compress ticket taken in export_server_repo_blocking; pentest R13 owner card 4), moved off the async runtime"
     },
     "fs::copy": {
       "count": 4,
@@ -207,7 +207,7 @@
   },
   "src/commands/settings.rs": {
     "fs::copy": {
-      "count": 3,
+      "count": 2,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     },
     "fs_extra::": {
@@ -245,10 +245,6 @@
     "update_mmap": {
       "count": 1,
       "why": "governed (G3b): the BLAKE3 primitive itself (compute_file_hash, one file, one pass); bulk callers run it inside pool(Hash) under a Hash ticket, single-file callers (verify.rs hash_file, modpack) hold their own ticket"
-    },
-    "spawn_blocking": {
-      "count": 1,
-      "why": "governed (G3a): begin_ticket_async waits for a governor slot off the async runtime; no work of its own"
     }
   },
   "src/main.rs": {
@@ -267,7 +263,7 @@
   },
   "src/mcp/state_bridge.rs": {
     "fs::copy": {
-      "count": 6,
+      "count": 5,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     },
     "update_mmap": {

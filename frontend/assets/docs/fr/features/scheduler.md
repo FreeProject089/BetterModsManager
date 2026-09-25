@@ -173,7 +173,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~107 actions réparties en huit groupes :
+Il y a ~106 actions réparties en huit groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -183,12 +183,19 @@ Il y a ~107 actions réparties en huit groupes :
 | **Apparence** | Appliquer un thème |
 | **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:features/storage)) · **choisir le preset de ressources**, **le mode jeu**, **suspendre ou reprendre la file** (voir [plus bas](#lintensite-de-travail-de-bmm)) |
 | **Confidentialité & enregistreur** | Consentement télémétrie · enregistreur de session · exporter/importer un replay |
-| **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** · exécuter un deeplink `bmm://` brut |
+| **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** |
 | **Logique & maths** | Calcul mathématique dans une variable · ternaire · table de décision · garde d'arrêt de tâche |
 
 Beaucoup d'actions s'exécutent en émettant un deeplink `bmm://` canonique via le gestionnaire de
 l'app — la même plomberie qu'expose la page [Plugins & API](doc-page:features/plugins), d'où le fait que les deux
-systèmes peuvent se piloter mutuellement.
+systèmes peuvent se piloter mutuellement. Chacune de ces étapes construit son propre lien à partir
+de ses champs ; aucune étape ne déclenche un lien que tu tapes.
+
+L'ancienne étape générique *Lancer un deeplink bmm://* est **supprimée** : elle ne faisait rien
+quand elle s'exécutait, et les actions typées ci-dessus couvrent ce à quoi elle servait. Une tâche
+enregistrée avec elle se charge toujours. L'éditeur affiche l'étape comme supprimée, avec son
+ancien lien, et l'exécution l'ignore avec un avertissement : le reste de la tâche s'exécute comme
+avant. Choisis une action typée à sa place.
 
 ## Tourner quand BMM est fermé
 
@@ -226,18 +233,19 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde six choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde sept choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
 | **Lancer des programmes externes** | Démarrer un programme avec des arguments |
 | **Exécuter des scripts** | Exécuter du PowerShell / CMD / Bash / Python que tu as écrit |
-| **Déclencher des deeplinks** | Déclencher des liens `bmm://` |
+| **Déclencher des deeplinks** | Exécuter les étapes qui agissent par un lien `bmm://` qu'elles construisent elles-mêmes : suivre un catalogue, ouvrir un écran, exporter les données… |
 | **Arrêter un programme** | Terminer un processus en cours |
 | **Supprimer des choses** | Supprimer un profil, un modpack, ou le dossier d'un mod |
 | **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
+| **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
 
-Les six sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les sept sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
@@ -256,14 +264,26 @@ Arrêter un programme est séparé de le lancer parce que le risque est d'une au
 démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré sans
 rien pour revenir en arrière.
 
-!!! warning "Les deeplinks sont la plus large d'entre elles"
+**Autres tâches** existe parce que lancer une autre tâche, c'est agir avec les permissions de
+*cette* tâche-là. Sans elle, une tâche à qui rien n'est accordé pouvait lancer, ou activer pour
+son déclencheur, une de tes propres tâches capable de lancer des programmes ou de supprimer des
+choses. C'est une permission à part plutôt qu'une partie de **Déclencher des deeplinks** : laisser
+une tâche appeler sa sous-tâche ne lui permet pas aussi de suivre des catalogues, d'ouvrir des écrans
+ou d'exporter les données par un lien.
 
-    Un lien `bmm://` atteint tout ce que l'app expose, y compris des actions sans étape dédiée
-    dans le planificateur. Auparavant, rien ne les gardait.
+!!! warning "Ces liens s'exécutent en tant que planificateur"
+
+    Les étapes sous **Déclencher des deeplinks** passent par le même gestionnaire qu'un lien
+    `bmm://` venu d'une page web, mais en tant que planificateur, qui est de confiance : rien ne
+    te demande quoi que ce soit à 3 h du matin. Les limites strictes (pas de chemin réseau, pas de
+    chemin de programme brut, pas de script porté par un lien) s'appliquent toujours. Une tâche
+    ne peut pas écrire son propre lien : chaque étape en construit un fixe à partir de ses champs,
+    et *Ouvrir un écran ou une fenêtre* n'ouvre que les fenêtres de sa liste.
 
 !!! note "Migration depuis l'ancienne case unique"
 
-    Une tâche construite avant la séparation garde tout ce qu'elle avait — mais aucune ne gagne
+    Une tâche construite avant la séparation garde tout ce qu'elle avait, y compris lancer
+    d'autres tâches — mais aucune ne gagne
     **Exécuter des scripts**, **Arrêter un programme**, **Supprimer des choses** ni **Ressources**. Aucune de
     ces capacités n'existait quand tu as coché *Autoriser les commandes personnalisées* : te
     les accorder maintenant reviendrait à inventer ton consentement plutôt qu'à l'honorer.

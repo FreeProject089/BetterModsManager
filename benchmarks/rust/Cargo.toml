@@ -40,7 +40,7 @@ test = false
 zip = { version = "0.6", features = ["deflate"] }
 tar = "0.4"
 flate2 = "1"
-sevenz-rust = "0.6"
+sevenz-rust2 = "0.23"
 unrar = "0.5"
 # ── deps for the faithful FS / JSON mirrors ──
 jwalk = "0.8"

@@ -1865,11 +1865,19 @@ pub async fn download_mod(
         {
             let mut out = std::fs::File::create(&tmp_path)
                 .map_err(|e| format!("Cannot open the download file: {}", e))?;
-            // Chunked under the ticket (pause / cancel between chunks, bytes on the dashboard).
-            if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut response, &mut out, &ticket) {
+            // Chunked under the ticket (pause / cancel between chunks, bytes on the dashboard),
+            // and stopped at 4 GiB however long the server keeps sending (fs_utils::DownloadCap).
+            if let Err(e) = crate::fs_utils::DownloadCap::new().check_announced(response.content_length()) {
+                drop(out);
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(e);
+            }
+            let mut capped = crate::fs_utils::CappedReader::new(&mut response);
+            if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut capped, &mut out, &ticket) {
                 drop(out);
                 let _ = std::fs::remove_file(&tmp_path);
                 if e.to_string() == crate::fs_utils::CANCELLED { return Err(e.to_string()); }
+                if e.to_string() == crate::fs_utils::DOWNLOAD_TOO_LARGE { return Err(e.to_string()); }
                 return Err(format!("Read failed: {}", e));
             }
             std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
@@ -1893,8 +1901,12 @@ pub async fn download_mod(
             // scanner would then pick it up as an unrecognised file.
             let extract = || -> Result<(), String> {
                 let file = std::fs::File::open(&tmp_path).map_err(|e| e.to_string())?;
+                let zip_len = file.metadata().map(|m| m.len()).unwrap_or(0);
                 let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file))
                     .map_err(|e| format!("Zip error: {}", e))?;
+                // The size caps of archive.rs (security summary §9): declared, then streamed.
+                crate::archive::check_zip_declared(&mut archive, zip_len).map_err(|e| e.to_string())?;
+                let budget = crate::archive::ExtractBudget::for_archive(zip_len);
                 for i in 0..archive.len() {
                     crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
                     let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
@@ -1907,7 +1919,7 @@ pub async fn download_mod(
                         if let Some(parent) = outpath.parent() {
                             std::fs::create_dir_all(parent).ok();
                         }
-                        let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                        let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
                         if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut file, &mut outfile, &ticket) {
                             drop(outfile);
                             let _ = std::fs::remove_file(&outpath);
@@ -2188,6 +2200,9 @@ pub async fn install_from_modlist(
                     }
                     let mut response = req.send().map_err(|e| e.to_string())?;
                     let total = response.content_length().unwrap_or(0);
+                    // Held in memory until it is unpacked: the 4 GiB cap matters twice here.
+                    let mut cap = crate::fs_utils::DownloadCap::new();
+                    cap.check_announced(response.content_length())?;
                     let mut bytes = Vec::new();
                     let mut buffer = [0; 8192];
                     let mut downloaded: u64 = 0;
@@ -2202,6 +2217,7 @@ pub async fn install_from_modlist(
                             return Err("Cancelled".to_string());
                         }
 
+                        cap.add(c as u64)?;
                         bytes.extend_from_slice(&buffer[..c]);
                         downloaded += c as u64;
                         ticket.add_bytes(c as u64, 0);
@@ -2231,8 +2247,12 @@ pub async fn install_from_modlist(
 
                     let is_zip = bytes.len() > 4 && &bytes[0..2] == b"PK";
                     if is_zip {
+                        let zip_len = bytes.len() as u64;
                         let cursor = std::io::Cursor::new(bytes);
                         let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+                        // The size caps of archive.rs (security summary §9): declared, then streamed.
+                        crate::archive::check_zip_declared(&mut archive, zip_len).map_err(|e| e.to_string())?;
+                        let budget = crate::archive::ExtractBudget::for_archive(zip_len);
                         for i in 0..archive.len() {
                             if cancelled() {
                                 return Err("Cancelled".to_string());
@@ -2245,7 +2265,7 @@ pub async fn install_from_modlist(
                                 std::fs::create_dir_all(&outpath).ok();
                             } else {
                                 if let Some(p) = outpath.parent() { std::fs::create_dir_all(p).ok(); }
-                                let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                                let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
                                 if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut file, &mut outfile, &ticket) {
                                     drop(outfile);
                                     let _ = std::fs::remove_file(&outpath);

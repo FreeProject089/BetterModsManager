@@ -163,7 +163,15 @@ pub fn consume_installer_handoff(
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     };
-    if !parsed.install_dir.is_empty() {
+    // C9-F: `install_dir` names where BMM was installed, and the files under it are copied into
+    // BMM's data and offered for import. It is only ever BMM's own install folder; any other
+    // folder (a download folder, a share) is ignored whatever the file says.
+    let own_install_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf));
+    if !parsed.install_dir.is_empty() && !is_own_install_dir(&parsed.install_dir, own_install_dir.as_deref()) {
+        crate::commands::crash::log_line(format!(
+            "[HANDOFF] install_dir ignored: it is not BMM's install folder ({})", parsed.install_dir
+        ));
+    } else if !parsed.install_dir.is_empty() {
         let presets = Path::new(&parsed.install_dir).join("presets");
         // Extra language packs → BMM's Lang dir (so they're available immediately).
         if want("import_extra_languages") {
@@ -202,6 +210,27 @@ pub fn consume_installer_handoff(
     res
 }
 
+/// Whether the handoff's `install_dir` is BMM's own install folder (both sides canonicalised,
+/// so a different spelling of the same folder still matches and `..` cannot).
+fn is_own_install_dir(given: &str, own: Option<&Path>) -> bool {
+    let Some(own) = own else { return false };
+    match (std::fs::canonicalize(given.trim()), std::fs::canonicalize(own)) {
+        (Ok(g), Ok(o)) => g == o,
+        _ => false,
+    }
+}
+
+/// A language code as BMM's Lang files are named (`en`, `fr`, `pt-BR`, `zh_Hans`): it becomes a
+/// file name under the Lang folder, so the shape is checked like every other handoff value.
+fn valid_language(lang: &str) -> bool {
+    let mut parts = lang.split(['-', '_']);
+    let first = parts.next().unwrap_or("");
+    lang.len() <= 16
+        && (2..=3).contains(&first.len())
+        && first.chars().all(|c| c.is_ascii_alphabetic())
+        && parts.all(|p| (2..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
 fn mark_consumed(file: &Path) {
     let consumed = file.with_file_name("installer-handoff.consumed.json");
     let _ = std::fs::rename(file, consumed);
@@ -218,7 +247,7 @@ fn apply_settings(
     // Language: only a real, non-"auto" value overrides the default.
     if let Some(lang) = s.get("language").and_then(|v| v.as_str()) {
         let lang = lang.trim();
-        if !lang.is_empty() && lang != "auto" {
+        if !lang.is_empty() && lang != "auto" && valid_language(lang) {
             settings.language = lang.to_string();
             res.language_set = true;
         }
@@ -398,6 +427,37 @@ mod tests {
         assert!(!settings.discord_rpc_enabled);
         assert_eq!(res.telemetry_preselect, None);
         assert_eq!(res.telemetry_bench, None);
+    }
+
+    #[test]
+    fn a_language_is_a_language_code_or_nothing() {
+        for ok in ["en", "fr", "pt-BR", "zh_Hans", "deu"] {
+            assert!(valid_language(ok), "{ok}");
+        }
+        for bad in ["../../x", "en/../../evil", "e", "english-language-long", "fr\\x", "en.json", "", "12"] {
+            assert!(!valid_language(bad), "{bad}");
+        }
+        let json = r#"{ "source":"betterinstaller", "settings": { "language":"../../../evil" } }"#;
+        let parsed: HandoffFile = serde_json::from_str(json).unwrap();
+        let mut settings = crate::state::AppSettings::default();
+        let before = settings.language.clone();
+        let res = apply_settings(&parsed.settings, &mut settings);
+        assert!(!res.language_set);
+        assert_eq!(settings.language, before, "an invalid language is not applied");
+    }
+
+    /// C9-F: presets are read only from BMM's own install folder.
+    #[test]
+    fn install_dir_must_be_bmms_own() {
+        let own = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        assert!(is_own_install_dir(&own.path().to_string_lossy(), Some(own.path())));
+        let dotted = own.path().join("sub").join("..");
+        std::fs::create_dir_all(own.path().join("sub")).unwrap();
+        assert!(is_own_install_dir(&dotted.to_string_lossy(), Some(own.path())), "same folder, other spelling");
+        assert!(!is_own_install_dir(&other.path().to_string_lossy(), Some(own.path())));
+        assert!(!is_own_install_dir(r"\\attacker\share", Some(own.path())));
+        assert!(!is_own_install_dir(&own.path().to_string_lossy(), None));
     }
 
     #[test]

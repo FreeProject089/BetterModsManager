@@ -195,7 +195,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 5469,
+      "words": 5496,
       "diagrams": 1,
       "fr": true
     },
@@ -225,7 +225,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 8650,
+      "words": 8866,
       "diagrams": 0,
       "fr": true
     },
@@ -252,8 +252,8 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "107 actions · 40 conditions · 36 values · 8 loop sources",
-        "fr": "107 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
+        "en": "106 actions · 40 conditions · 36 values · 8 loop sources",
+        "fr": "106 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
       },
       "words": 845,
       "diagrams": 0,
@@ -585,7 +585,7 @@
         "en": "Every heavy thing BMM does (enabling mods, installing, backing up originals, extracting and compressing archives, scanning, hashing, downloading, cropping…",
         "fr": "Tout ce que BMM fait de lourd (activer des mods, installer, sauvegarder les originaux, extraire et compresser des archives, analyser, calculer des empreintes,…"
       },
-      "words": 2363,
+      "words": 2490,
       "diagrams": 7,
       "fr": true
     },
@@ -630,7 +630,7 @@
         "en": "BMM runs on your machine, with your files, and can reach the network. That earns it a clear set of trust boundaries.",
         "fr": "BMM tourne sur ta machine, avec tes fichiers, et peut atteindre le réseau. Cela impose des frontières de confiance nettes."
       },
-      "words": 968,
+      "words": 1120,
       "diagrams": 3,
       "fr": true
     },
@@ -780,7 +780,7 @@
         "en": "Every action BMM can perform for you, in one place. There are two catalogues — they overlap in capability but are separate systems:",
         "fr": "Toutes les actions que BMM peut exécuter pour toi, au même endroit. Il y a deux catalogues — leurs capacités se recoupent mais ce sont deux systèmes distincts :"
       },
-      "words": 1195,
+      "words": 1193,
       "diagrams": 0,
       "fr": true
     },
@@ -840,7 +840,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1699,
+      "words": 1903,
       "diagrams": 0,
       "fr": true
     },
@@ -870,7 +870,7 @@
         "en": "BMM is built by the Better project and its contributors. The in-app Credits screen is the authoritative list of people — it's generated from the project's own…",
         "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
       },
-      "words": 430,
+      "words": 472,
       "diagrams": 0,
       "fr": true
     }

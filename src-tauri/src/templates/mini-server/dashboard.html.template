@@ -266,7 +266,8 @@
         }
 
         async function updateStats() {
-            const data = await fetch('/monitoring.json').then(r => r.json());
+            const data = await api('/admin/monitoring');
+            if (!data) return;
             lastFullData = data;
             document.getElementById('stat-uptime').innerText = formatUptime(data.server.uptime);
             document.getElementById('stat-data').innerText = formatBytes(data.server.totalBytes);

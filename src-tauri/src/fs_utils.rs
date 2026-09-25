@@ -298,17 +298,103 @@ pub fn copy_reader_ticketed<R: Read + ?Sized, W: std::io::Write + ?Sized>(
     Ok(total)
 }
 
-/// Take a governor ticket from async code: waiting for a slot blocks a thread, which must not
-/// be one of the async runtime's workers.
-pub async fn begin_ticket_async(kind: crate::governor::config::OpKind, subject: String) -> crate::governor::queue::Ticket {
-    let q = crate::governor::runtime::global().queue().clone();
-    match tauri::async_runtime::spawn_blocking(move || q.begin(kind, &subject)).await {
-        Ok(t) => t,
-        // The blocking task panicked (it cannot, short of a poisoned lock, which `begin`
-        // recovers from): take the ticket here rather than run ungoverned.
-        Err(_) => crate::governor::runtime::global().begin(kind, "ticket"),
+// ── Download size cap (security summary §9, "No size caps on extraction and download") ──
+//
+// A server that never ends its response (or announces 200 GB) filled the disk, or the memory
+// for the downloads that buffer. Every download stops at 4 GiB, counted as it streams: the
+// announced Content-Length is checked first, but a server may send none or lie, so the bytes
+// actually received are what decides.
+
+/// The most a single download may bring in.
+pub const MAX_DOWNLOAD_BYTES: u64 = 4 << 30;
+/// The error a download past the cap stops with (an i18n key the frontend can show).
+pub const DOWNLOAD_TOO_LARGE: &str = "download.tooLarge";
+
+/// The running count of one download, against `MAX_DOWNLOAD_BYTES`.
+pub struct DownloadCap {
+    seen: u64,
+    limit: u64,
+}
+
+impl Default for DownloadCap {
+    fn default() -> Self { Self::new() }
+}
+
+impl DownloadCap {
+    pub fn new() -> Self { Self { seen: 0, limit: MAX_DOWNLOAD_BYTES } }
+    #[allow(dead_code)] // tests use a small limit
+    pub fn with_limit(limit: u64) -> Self { Self { seen: 0, limit } }
+    /// Refuse before the first byte when the server already says it is too big.
+    pub fn check_announced(&self, content_length: Option<u64>) -> Result<(), String> {
+        match content_length {
+            Some(n) if n > self.limit => Err(DOWNLOAD_TOO_LARGE.to_string()),
+            _ => Ok(()),
+        }
+    }
+    /// Count `n` more bytes; an error once the total passes the cap.
+    pub fn add(&mut self, n: u64) -> Result<(), String> {
+        self.seen = self.seen.saturating_add(n);
+        if self.seen > self.limit { Err(DOWNLOAD_TOO_LARGE.to_string()) } else { Ok(()) }
     }
 }
+
+/// A reader that stops with `DOWNLOAD_TOO_LARGE` once it has handed over more than the cap:
+/// for the blocking downloads that are copied with `copy_reader_ticketed` or read to the end.
+pub struct CappedReader<R> {
+    inner: R,
+    cap: DownloadCap,
+}
+
+impl<R: Read> CappedReader<R> {
+    pub fn new(inner: R) -> Self { Self { inner, cap: DownloadCap::new() } }
+    #[allow(dead_code)] // tests use a small limit
+    pub fn with_limit(inner: R, limit: u64) -> Self { Self { inner, cap: DownloadCap::with_limit(limit) } }
+}
+
+impl<R: Read> Read for CappedReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.cap
+            .add(n as u64)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(n)
+    }
+}
+
+#[cfg(test)]
+mod download_cap_tests {
+    use super::*;
+
+    #[test]
+    fn a_download_stops_past_the_cap_and_not_before() {
+        let mut cap = DownloadCap::with_limit(10);
+        assert!(cap.add(6).is_ok());
+        assert!(cap.add(4).is_ok(), "exactly the cap is fine");
+        assert_eq!(cap.add(1).unwrap_err(), DOWNLOAD_TOO_LARGE);
+        assert!(DownloadCap::with_limit(10).check_announced(Some(11)).is_err());
+        assert!(DownloadCap::with_limit(10).check_announced(None).is_ok());
+        assert_eq!(MAX_DOWNLOAD_BYTES, 4 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn a_capped_reader_ends_an_endless_stream() {
+        // 64 MiB standing in for "never ends" (bounded, so a broken cap fails instead of hanging).
+        let endless = std::io::repeat(7u8).take(64 << 20);
+        let mut r = CappedReader::with_limit(endless, 1 << 20);
+        let mut sink = std::io::sink();
+        let err = std::io::copy(&mut r, &mut sink).unwrap_err();
+        assert_eq!(err.to_string(), DOWNLOAD_TOO_LARGE);
+        let mut ok = CappedReader::with_limit(&b"hello"[..], 5);
+        let mut out = Vec::new();
+        ok.read_to_end(&mut out).unwrap();
+        assert_eq!(out, b"hello");
+    }
+}
+
+// A governor ticket taken from async code goes through `governor::runtime::Governor::begin_async`
+// (pentest R13 card 3). The helper that lived here, `begin_ticket_async`, waited on a blocking
+// thread with `Queue::begin`: it skipped game mode's pause of background kinds and tied the
+// ticket to a pool thread, so whatever reused that thread looked "nested" and took no slot.
 
 /// The ticket subject for a mod folder: its name, as the user knows it.
 fn subject_of(p: &Path) -> String {

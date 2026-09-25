@@ -710,9 +710,21 @@ pub async fn install_app(
         let mut hasher = Sha256::new();
         let mut out = std::fs::File::create(&tmp_download)
             .map_err(|e| format!("Cannot open the download file: {}", e))?;
+        // Stopped at 4 GiB however long the server keeps sending (fs_utils::DownloadCap).
+        let mut cap = crate::fs_utils::DownloadCap::new();
+        if let Err(e) = cap.check_announced(resp.content_length()) {
+            drop(out);
+            let _ = std::fs::remove_file(&tmp_download);
+            return Err(e);
+        }
         loop {
             match resp.chunk().await {
                 Ok(Some(chunk)) => {
+                    if let Err(e) = cap.add(chunk.len() as u64) {
+                        drop(out);
+                        let _ = std::fs::remove_file(&tmp_download);
+                        return Err(e);
+                    }
                     hasher.update(&chunk);
                     if let Err(e) = std::io::Write::write_all(&mut out, &chunk) {
                         let _ = std::fs::remove_file(&tmp_download);
@@ -832,9 +844,10 @@ pub async fn install_app(
         is_managed = false;
     } else if ext == "zip" {
         // Extract, then decide: portable app, or an installer bundled inside the zip?
-        let f = std::fs::File::open(&file_path).map_err(|e| e.to_string())?;
-        let mut archive = zip::ZipArchive::new(f).map_err(|e| format!("Zip open failed: {}", e))?;
-        archive.extract(&target_dir).map_err(|e| format!("Zip extract failed: {}", e))?;
+        // Through archive.rs, the extraction chokepoint: the same zip-slip guard, the
+        // governor's Extract ticket, and the size caps (security summary §9).
+        crate::archive::extract_to(std::path::Path::new(&file_path), std::path::Path::new(&target_dir))
+            .map_err(|e| if crate::archive::is_too_large(&e) { e.to_string() } else { format!("Zip extract failed: {}", e) })?;
         let _ = std::fs::remove_file(&file_path);
 
         let found = detect_executables_in(&target_dir);
