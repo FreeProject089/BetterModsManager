@@ -27,8 +27,13 @@ concurrency:
 
 # Least privilege for GITHUB_TOKEN. Without a block the token gets the repository's default,
 # which on an older repository is write-all — handed to every step, including third-party
-# actions pinned to moving refs (`dtolnay/rust-toolchain@stable` is a BRANCH). Nothing here
-# writes: it checks out, installs and runs the gate chain and cargo test.
+# actions. Nothing here writes: it checks out, installs and runs the gate chain and cargo test.
+#
+# Every action is pinned to a full commit SHA with its tag in the comment (SECURITY_SUMMARY §9
+# #3): a tag or branch can be moved by whoever controls the action's repository, a SHA cannot.
+# `dtolnay/rust-toolchain` used to be referenced by its `stable` BRANCH; pinned, the toolchain
+# is named by `toolchain: stable` instead. To bump: `git ls-remote https://github.com/<owner>/
+# <repo> refs/tags/<tag>` (peel an annotated tag with `^{}`), read the diff, change both.
 permissions:
   contents: read
 
@@ -37,8 +42,8 @@ jobs:
     name: Frontend (tsc · guard · i18n)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -68,9 +73,11 @@ jobs:
     name: Rust (compile check)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
       # Still no fmt/clippy gate: this codebase predates both, clippy's correctness lints
@@ -83,3 +90,34 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
+
+  # Dependency advisories, blocking (SECURITY_SUMMARY §9, "No dependency audit in CI").
+  # .github/scripts/dep-audit.mjs runs the audit and fails on anything not explained in
+  # .github/audit-ignore.json — each entry there names the advisory, the folder and the reason it
+  # was judged unreachable. A new advisory is a finding: fix the dependency, do not grow the list.
+  npm-audit:
+    name: npm audit (shipped dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      # = `npm audit --omit=dev --audit-level=high`, read from the lockfile (no install needed).
+      - name: npm audit --omit=dev (high and critical fail)
+        run: node .github/scripts/dep-audit.mjs npm .
+
+  cargo-audit:
+    name: cargo audit (src-tauri)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      # Pinned version, built from its own lockfile. It only reads Cargo.lock and the RustSec
+      # database, so Linux audits the Windows app's lockfile as well as Windows would.
+      - name: install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - name: cargo audit (vulnerabilities fail)
+        run: node .github/scripts/dep-audit.mjs cargo src-tauri

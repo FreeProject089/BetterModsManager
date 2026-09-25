@@ -1,0 +1,14 @@
+{
+  "$comment": "Advisories judged unreachable, read by .github/scripts/dep-audit.mjs. One entry per advisory and folder; every entry needs a reason. Anything not listed here fails CI. Remove an entry the day the dependency is fixed (the audit prints a warning when an entry is no longer reported). Decision: BCW/BCWEB/guides/SECURITY_SUMMARY_EN.md section 9, 'No dependency audit in CI'.",
+  "ignore": [
+    {
+      "id": "RUSTSEC-2023-0071",
+      "tool": "cargo",
+      "package": "rsa 0.10.0-rc.18",
+      "paths": ["src-tauri"],
+      "reason": "Marvin timing attack on RSA PKCS#1 v1.5 DECRYPTION. rsa is pulled only by russh 0.63 (+ ssh-key), the SSH client of the server manager, which signs for authentication and never decrypts attacker-timed input. No fixed version exists upstream.",
+      "ref": ".Assets/.md/CWE_REMEDIATION_PLAN.md C10-F (accepted); SECURITY_SUMMARY_EN.md section 6",
+      "reviewed": "2026-09-24"
+    }
+  ]
+}
