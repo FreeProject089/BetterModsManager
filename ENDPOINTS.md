@@ -36,6 +36,7 @@ that feature fails.
 | Release asset `update.json` | BetterInstaller's update manifest — version, package URL, optional deltas | Copies installed by BetterInstaller never see an update |
 | Release asset `bmm.bpkg` | The signed package `update.json` points at | The update is offered and then fails to download |
 | Release asset `update-manifest.json` | BMM's own incremental manifest, for installs that did not come from BetterInstaller | Dev/portable copies stop updating |
+| Both manifests, renewed | `update.json` and `update-manifest.json` are signed and expire after 7 days; `.github/workflows/resign-manifests.yml` re-signs them twice a week | Installed copies stop seeing updates within 7 days (nothing wrong is installed) |
 
 !!! danger "GitHub is a single point of failure for updates, and nothing catches it"
 

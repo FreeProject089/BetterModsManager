@@ -175,6 +175,18 @@ Two paths exist, and they are not rivals:
 - **Anything else** (dev runs, portable copies) — BMM's own incremental updater reads
   `update-manifest.json` from the GitHub release, which `npm run build` generates.
 
+`update-manifest.json` is **signed**. `npm run build` writes it unsigned into
+`dist/release-assets-v<version>/`; the release workflow then signs it with the publisher key
+(`node scripts/sign-update-manifest.mjs sign <file> --key private.key`), checks it against the key
+BMM pins (`… verify <file>`) and uploads it with the files it names. BMM refuses an unsigned,
+foreign, expired or not-newer manifest (`autoupdate.rs`, `verify_manifest_text`).
+
+Both signed manifests — this one and BetterInstaller's `update.json` — expire after 7 days.
+`.github/workflows/resign-manifests.yml` renews them twice a week (secret `BMM_PRIVATE_KEY`; the
+BetterCommunity mirror upload also needs `BCWEB_ASSETS_TOKEN` and is skipped without it). Run it by
+hand from *Actions → Re-sign update manifests → Run workflow*. If it stops, installed copies stop
+being offered updates after at most 7 days.
+
 `src-tauri/src/commands/autoupdate.rs` picks between them by looking for the maintenance binary, so
 there is nothing to configure per install.
 

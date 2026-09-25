@@ -9,6 +9,9 @@ name: Release
 #   BMM_PRIVATE_KEY  – the Ed25519 private key (contents of examples/bmm/keys/private.key).
 #                      MUST be the existing key, so the public_key baked in installer.toml
 #                      still matches (otherwise installed copies reject the update).
+#                      It also signs update-manifest.json (scripts/sign-update-manifest.mjs).
+# Both signed manifests (update.json, update-manifest.json) expire after 7 days:
+# resign-manifests.yml renews them every week with the same secret.
 # BetterInstaller is public, so its checkout needs no token. GITHUB_TOKEN is
 # provided automatically and is what `gh release create` uses.
 
@@ -27,21 +30,30 @@ jobs:
     permissions:
       contents: write          # gh release create
     steps:
+      # Every action is pinned to a full commit SHA, the tag in the comment (SECURITY_SUMMARY §9 #3).
+      # A tag or a branch can be moved by whoever controls the action's repository; this job holds
+      # BMM_PRIVATE_KEY, the key every installed BMM trusts, so a moved ref here is a signed
+      # malicious update for every user. To bump one: `git ls-remote https://github.com/<owner>/<repo>
+      # refs/tags/<tag>` (peel an annotated tag with `^{}`), read the diff, then change SHA and comment.
       - name: Checkout BMM
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Checkout BetterInstaller (public)
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: FreeProject089/BetterInstaller
           path: betterinstaller-src
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      # Pinned to the commit of tag v1 (= master), so the toolchain is no longer named by the ref:
+      # `toolchain: stable` says it explicitly.
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             src-tauri
@@ -65,6 +77,54 @@ jobs:
         working-directory: betterinstaller-src
         run: cargo build --release -p bpkg-cli -p installer
 
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        # Through `env:`, not `${{ }}` inside the script: the dispatch input is typed by a person
+        # and would otherwise become script text. It is also checked for shape, because it ends up
+        # in file names, in regex replacements (release.ps1) and in the release tag.
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $v = $env:INPUT_VERSION
+          if (-not $v) { $v = $env:REF_NAME -replace '^v', '' }
+          if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "not a version: '$v'" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      # The MCP sidecar is BUILT for every release (SECURITY_SUMMARY §9 #7). Tauri bundles
+      # `externalBin: binaries/bmm-mcp-server` from src-tauri/binaries/, which holds a committed
+      # .exe: without this step every release shipped whatever binary was last committed, however
+      # old its MCP sources were. It must stay a cargo [[example]], not a [[bin]] (see Cargo.toml:
+      # as a [[bin]] it collides with the sidecar in WiX, LGHT0091, and the MSI fails).
+      #
+      # The version bump is the same one release.ps1 applies a step later, done first so the
+      # sidecar's CARGO_PKG_VERSION (its --version and the MCP server info) is the release's own.
+      # Built BEFORE the signing key is written to disk, so no build step runs with it present.
+      - name: Build the MCP sidecar (never ship the committed binary)
+        working-directory: src-tauri
+        shell: pwsh
+        env:
+          BMM_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $toml = "Cargo.toml"
+          (Get-Content $toml -Raw) -replace '(?m)^(version\s*=\s*")[^"]+(")', ('${1}' + $env:BMM_VERSION + '${2}') | Set-Content -Encoding utf8 $toml
+          cargo build --release --example bmm-mcp-server
+          if ($LASTEXITCODE -ne 0) { throw "sidecar build failed" }
+          $src = "target/release/examples/bmm-mcp-server.exe"
+          $dst = "binaries/bmm-mcp-server-x86_64-pc-windows-msvc.exe"
+          Copy-Item $src $dst -Force
+          # tauri-build copies externalBin into target/release on the app build; put the fresh one
+          # there too so a cached build script that does not re-run cannot resurrect the old copy.
+          Copy-Item $src "target/release/bmm-mcp-server.exe" -Force
+          $hSrc = (Get-FileHash $src -Algorithm SHA256).Hash
+          if ((Get-FileHash $dst -Algorithm SHA256).Hash -ne $hSrc) { throw "sidecar copy mismatch" }
+          $out = & $dst --version
+          if ($LASTEXITCODE -ne 0 -or "$out" -notmatch [regex]::Escape($env:BMM_VERSION)) {
+            throw "sidecar reports '$out', expected version $env:BMM_VERSION"
+          }
+          Write-Host "sidecar $out sha256=$hSrc"
+
       - name: Restore signing key
         shell: pwsh
         # Through `env:`, NOT `${{ secrets.… }}` inline. An expression is substituted into the
@@ -82,22 +142,51 @@ jobs:
           New-Item -ItemType Directory -Force $keyDir | Out-Null
           Set-Content -Path "$keyDir/private.key" -Value $env:BMM_PRIVATE_KEY -NoNewline
 
-      - name: Resolve version
-        id: ver
-        shell: pwsh
-        run: |
-          $v = "${{ github.event.inputs.version }}"
-          if (-not $v) { $v = "${{ github.ref_name }}" -replace '^v', '' }
-          "version=$v" >> $env:GITHUB_OUTPUT
-
       - name: Build + pack + sign + release
         working-directory: betterinstaller-src
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BMM_VERSION: ${{ steps.ver.outputs.version }}
+          BMM_ROOT: ${{ github.workspace }}
         run: |
           ./examples/bmm/release.ps1 `
-            -Version "${{ steps.ver.outputs.version }}" `
-            -BmmRoot "${{ github.workspace }}" `
-            -Notes "Better Mods Manager ${{ steps.ver.outputs.version }}" `
+            -Version $env:BMM_VERSION `
+            -BmmRoot $env:BMM_ROOT `
+            -Notes "Better Mods Manager $env:BMM_VERSION" `
             -Publish
+
+      # BMM's own incremental manifest (update-manifest.json, read by autoupdate.rs for copies
+      # that BetterInstaller did not install). `npm run build`, inside release.ps1, wrote it
+      # UNSIGNED to dist/release-assets-v<version>/ next to the files it names, and release.ps1
+      # publishes neither. It is signed here with the same key under BMM's own context string,
+      # checked against the public key BMM pins, then uploaded with those files. BMM refuses an
+      # unsigned, foreign or expired manifest; resign-manifests.yml renews it every week.
+      # Node built-ins only: nothing is built or installed while the key is on disk.
+      - name: Sign + publish the incremental manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BMM_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $dir = "dist/release-assets-v$env:BMM_VERSION"
+          $mf = "$dir/update-manifest.json"
+          if (-not (Test-Path $mf)) { throw "$mf is missing: npm run build did not write it" }
+          node scripts/sign-update-manifest.mjs sign $mf --key betterinstaller-src/examples/bmm/keys/private.key
+          if ($LASTEXITCODE -ne 0) { throw "signing update-manifest.json failed" }
+          node scripts/sign-update-manifest.mjs verify $mf
+          if ($LASTEXITCODE -ne 0) { throw "update-manifest.json does not verify against the pinned key" }
+          $assets = @($mf)
+          foreach ($f in (Get-Content $mf -Raw | ConvertFrom-Json).files) {
+            $name = ($f.download_url -split '/')[-1]
+            $path = Join-Path $dir $name
+            if (-not (Test-Path $path)) { throw "$name is named by the manifest but absent from $dir" }
+            $assets += $path
+          }
+          gh release upload "v$env:BMM_VERSION" @assets --clobber
+          if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
+
+      - name: Remove signing key
+        if: always()
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue "betterinstaller-src/examples/bmm/keys/private.key"

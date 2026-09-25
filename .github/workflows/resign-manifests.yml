@@ -1,0 +1,166 @@
+name: Re-sign update manifests
+
+# Both update manifests BMM publishes are signed and EXPIRE after 7 days:
+#
+#   update.json           BetterInstaller's (bpkg-core/src/update.rs), read by <install>/uninstall.exe
+#   update-manifest.json  BMM's incremental one (src-tauri/src/commands/autoupdate.rs)
+#
+# An expired manifest is refused, and a refused manifest looks exactly like "no update": installed
+# copies silently stop being offered the latest release. The release job signs both; this job
+# renews them between releases — same content, fresh `issued` / `expires` — verifies them, and
+# re-uploads them to the release they came from.
+#
+# It runs twice a week although each signature lasts 7 days: GitHub delays scheduled runs (often
+# by hours) and drops some under load, so a once-a-week job with a 7-day validity has no slack.
+# Two runs a week means one failed or skipped run is not an outage.
+#
+# Secrets:
+#   BMM_PRIVATE_KEY     (required) the publisher key, the same one release.yml uses.
+#   BCWEB_ASSETS_TOKEN  (optional) pushes the renewed files to the BCWEB mirror slots
+#                       `bmm-update-json` and `bmm-update-manifest`. Skipped when unset. BCWEB's
+#                       asset routes accept a session + 2FA only today, so this stays unset until
+#                       BCWEB grants a scoped key for them (scripts/publish-bcweb-asset.mjs).
+#
+# By hand: Actions → "Re-sign update manifests" → Run workflow (optionally naming a tag).
+# Docs: frontend/assets/docs/en/reference/troubleshooting.md, BetterInstaller/docs/UPDATER-SETUP.md.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1,4'   # Monday and Thursday, 04:17 UTC
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to renew (default: the latest release), e.g. v1.2.3'
+        required: false
+
+# Nothing by default; the one job below asks for exactly what it uses.
+permissions: {}
+
+# Never two renewals at once: the second would download what the first is replacing.
+concurrency:
+  group: resign-manifests
+  cancel-in-progress: false
+
+jobs:
+  resign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write          # gh release download / upload --clobber
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      HAS_BCWEB_TOKEN: ${{ secrets.BCWEB_ASSETS_TOKEN != '' }}
+    steps:
+      # Pinned by full commit SHA, the tag in the comment, as in release.yml: this job holds the
+      # key every installed BMM trusts. To bump: `git ls-remote https://github.com/<owner>/<repo>
+      # refs/tags/<tag>` (peel an annotated tag with `^{}`), read the diff, change SHA and comment.
+      - name: Checkout BMM
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Checkout BetterInstaller (public)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: FreeProject089/BetterInstaller
+          path: betterinstaller-src
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: betterinstaller-src
+
+      # Built BEFORE the key is written to disk: nothing compiles while it is present.
+      - name: Build bpkg
+        working-directory: betterinstaller-src
+        run: cargo build --release --locked -p bpkg-cli
+
+      - name: Resolve the release
+        id: rel
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [ -z "$tag" ]; then tag="$(gh release view --json tagName --jq .tagName)"; fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::not a release tag: '$tag'"; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Renewing the manifests of $tag"
+
+      - name: Download the published manifests
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p manifests
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          found=0
+          for name in update.json update-manifest.json; do
+            if grep -qxF "$name" <<<"$assets"; then
+              gh release download "$TAG" --pattern "$name" --dir manifests --clobber
+              found=$((found + 1))
+            else
+              echo "::warning::$TAG has no $name; nothing to renew for it"
+            fi
+          done
+          if [ "$found" -eq 0 ]; then echo "::error::$TAG carries neither manifest"; exit 1; fi
+          ls -l manifests
+
+      # The key comes in through env (never `${{ }}` in script text) and leaves in the always()
+      # step below. The public key checked against is the one installed copies pin.
+      - name: Re-sign and verify
+        env:
+          BMM_PRIVATE_KEY: ${{ secrets.BMM_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BMM_PRIVATE_KEY:-}" ]; then echo "::error::the BMM_PRIVATE_KEY secret is not set"; exit 1; fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$BMM_PRIVATE_KEY" > "$RUNNER_TEMP/keys/private.key"
+          pub="$(sed -n 's/^[[:space:]]*public_key[[:space:]]*=[[:space:]]*"\([0-9a-fA-F]\{64\}\)".*/\1/p' betterinstaller-src/examples/bmm/installer.toml | head -n1)"
+          if [ -z "$pub" ]; then echo "::error::no public_key in installer.toml"; exit 1; fi
+          printf '%s' "$pub" > "$RUNNER_TEMP/keys/public.key"
+          bpkg=betterinstaller-src/target/release/bpkg
+          if [ -f manifests/update.json ]; then
+            "$bpkg" resign-manifest manifests/update.json --key "$RUNNER_TEMP/keys/private.key"
+            "$bpkg" verify-manifest manifests/update.json --key "$RUNNER_TEMP/keys/public.key" --app-id com.bettermm.desktop
+          fi
+          if [ -f manifests/update-manifest.json ]; then
+            node scripts/sign-update-manifest.mjs sign manifests/update-manifest.json --key "$RUNNER_TEMP/keys/private.key" --require-signed
+            node scripts/sign-update-manifest.mjs verify manifests/update-manifest.json
+          fi
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+
+      - name: Upload to the release
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" manifests/*.json --clobber
+
+      - name: Upload to the BCWEB mirrors
+        if: env.HAS_BCWEB_TOKEN == 'true'
+        env:
+          BCWEB_ASSETS_TOKEN: ${{ secrets.BCWEB_ASSETS_TOKEN }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          v="${TAG#v}"
+          if [ -f manifests/update.json ]; then
+            node scripts/publish-bcweb-asset.mjs manifests/update.json --slot bmm-update-json --version "$v"
+          fi
+          if [ -f manifests/update-manifest.json ]; then
+            node scripts/publish-bcweb-asset.mjs manifests/update-manifest.json --slot bmm-update-manifest --version "$v"
+          fi

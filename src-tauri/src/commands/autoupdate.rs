@@ -25,7 +25,11 @@ pub struct UpdateInfo {
 }
 
 /// A single file entry in the incremental update manifest.
-#[derive(Serialize, Deserialize, Clone)]
+///
+/// `Deserialize` is only ever reached through [`SignedBody`], i.e. after the signature over
+/// the body that contains it has been checked. No command takes a `ManifestFile` (or a list of
+/// them) as an argument.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ManifestFile {
     /// Relative path within the BMM install directory (e.g. "frontend/js/docs/interactive-docs.js")
     pub path: String,
@@ -37,11 +41,222 @@ pub struct ManifestFile {
     pub size: u64,
 }
 
-/// The incremental update manifest — published as a release asset named `update-manifest.json`.
-#[derive(Serialize, Deserialize, Clone)]
+/// What `fetch_update_manifest` hands the UI: the verified content, plus the raw document it
+/// was read from.
+///
+/// Deliberately NOT `Deserialize`. It used to be, and `apply_incremental_update` took one as its
+/// argument: the UI fetched the manifest, then passed the parsed object back, and Rust wrote
+/// whatever `files` that object listed. Anything able to call `invoke` could therefore name the
+/// files to write and the hashes to expect. Now the UI passes the object back unchanged and Rust
+/// reads ONLY `document` from it ([`ApplyRequest`]), verifying it again from scratch; `version`
+/// and `files` here are for display.
+#[derive(Serialize, Clone)]
 pub struct UpdateManifest {
     pub version: String,
     pub files: Vec<ManifestFile>,
+    /// The `update-manifest.json` exactly as downloaded.
+    pub document: String,
+}
+
+// ── The signed incremental manifest ─────────────────────────────────────────────────────────
+//
+// Same scheme as BetterInstaller's signed `update.json` (bpkg-core/src/update.rs), with its
+// own context string so a signature made for one can never be accepted by the other:
+//
+//   {
+//     "version": "1.2.0", "files": [ … ],            ← copy for BMM builds that predate signing
+//     "signed": "{\"app_id\":\"com.bettermm.desktop\",\"version\":\"1.2.0\",\"files\":[…],
+//                 \"issued\":\"…Z\",\"expires\":\"…Z\"}",
+//     "signature": "<128 hex>"                         ← Ed25519 over CONTEXT ‖ bytes of `signed`
+//   }
+//
+// `signed` is a JSON document carried as a STRING, so the signature covers its exact bytes and
+// nothing has to be re-serialised identically on both sides. Only the signed body is read; the
+// top-level copy is never trusted. Publisher side: scripts/sign-update-manifest.mjs.
+
+/// Prefix of the signed message. BetterInstaller's is `BetterInstaller update manifest v1\n`.
+pub const MANIFEST_SIG_CONTEXT: &[u8] = b"BetterModsManager incremental manifest v1\n";
+
+/// The app a manifest must name — BMM's bundle identifier (tauri.conf.json `identifier`).
+pub const MANIFEST_APP_ID: &str = "com.bettermm.desktop";
+
+/// The publisher key, `[security].public_key` of BetterInstaller/examples/bmm/installer.toml.
+/// Compiled in on purpose: a key read from a file in the install directory would be replaced by
+/// whoever can write there, which is exactly who this check is meant to stop. A test compares it
+/// with installer.toml and with the Node signer (tests/sign-update-manifest.test.mjs).
+pub const MANIFEST_PUBLIC_KEY_HEX: &str =
+    "8e0647c277dd67158d34dd1c10d0a2d97191716dc4f92aebde6d349d1c0f168b";
+
+/// Longest `expires - issued` accepted. The publisher re-signs weekly
+/// (.github/workflows/resign-manifests.yml); a host that stops receiving fresh copies — a
+/// freeze, or a stalled job — stops being believed after this long.
+pub const MANIFEST_MAX_VALIDITY_DAYS: i64 = 7;
+
+/// The signed body. Every field is required: a body missing one is not a manifest.
+#[derive(Deserialize)]
+struct SignedBody {
+    app_id: String,
+    version: String,
+    files: Vec<ManifestFile>,
+    issued: String,
+    expires: String,
+}
+
+/// What survived verification.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VerifiedManifest {
+    pub version: String,
+    pub files: Vec<ManifestFile>,
+}
+
+/// The argument of `apply_incremental_update`. The UI passes back the object
+/// `fetch_update_manifest` returned; only its raw `document` is read (unknown fields such as a
+/// top-level `files` are ignored by serde), and it is verified again before anything is written.
+/// A pre-parsed `{version, files}` has no `document` and does not deserialize.
+#[derive(Deserialize)]
+pub struct ApplyRequest {
+    document: String,
+}
+
+fn publisher_key() -> Result<ed25519_dalek::VerifyingKey, String> {
+    let bytes = hex::decode(MANIFEST_PUBLIC_KEY_HEX).map_err(|_| "bad built-in key".to_string())?;
+    let arr: [u8; 32] = bytes.try_into().map_err(|_| "bad built-in key".to_string())?;
+    ed25519_dalek::VerifyingKey::from_bytes(&arr).map_err(|_| "bad built-in key".to_string())
+}
+
+/// The first dotted number run in `text` (`v1.2.3-rc1` → [1, 2, 3]), `None` when there is no
+/// number at all. A mirror of `bpkg_core::version::extract_version` — BMM does not depend on
+/// the BetterInstaller crate, but the two must order versions the same way.
+fn extract_version(text: &str) -> Option<Vec<u64>> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_digit() {
+            let start = i;
+            while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+                // A trailing dot ends the run rather than joining what follows.
+                if bytes[i] == b'.' && (i + 1 >= bytes.len() || !bytes[i + 1].is_ascii_digit()) {
+                    break;
+                }
+                i += 1;
+            }
+            let parts: Vec<u64> = text[start..i].split('.').filter_map(|x| x.parse().ok()).collect();
+            if !parts.is_empty() {
+                return Some(parts);
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Component-wise comparison, a missing component counting as 0 (`1.3` = `1.3.0`).
+fn cmp_version(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x.cmp(&y);
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+/// Is `a` strictly newer than `b`? `bpkg_core::version::is_newer`'s rule: `a` with no number is
+/// never newer; `b` with no number counts as 0.
+pub(crate) fn is_newer(a: &str, b: &str) -> bool {
+    let Some(va) = extract_version(a) else { return false };
+    let vb = extract_version(b).unwrap_or_default();
+    cmp_version(&va, &vb) == std::cmp::Ordering::Greater
+}
+
+/// A manifest path is relative and made of plain names only: no `..`, no root, no drive.
+fn safe_relative_path(p: &str) -> bool {
+    use std::path::Component;
+    if p.is_empty() || p.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
+        return false;
+    }
+    std::path::Path::new(p).components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+}
+
+fn is_https(url: &str) -> bool {
+    reqwest::Url::parse(url).map(|u| u.scheme() == "https" && u.host_str().is_some()).unwrap_or(false)
+}
+
+/// Read an `update-manifest.json`, refusing it unless every rule holds:
+/// signed by `key` over [`MANIFEST_SIG_CONTEXT`] ‖ `signed`; for [`MANIFEST_APP_ID`];
+/// `issued < expires`, `expires - issued <= 7 days`, `now < expires`; a version strictly newer
+/// than `current_version`; every file with an https URL, a SHA-256 and a safe relative path.
+/// Only the signed body is read.
+pub(crate) fn verify_manifest_text(
+    text: &str,
+    key: &ed25519_dalek::VerifyingKey,
+    current_version: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<VerifiedManifest, String> {
+    let refuse = |why: String| Err(format!("Update manifest refused: {why}"));
+    let doc: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("Update manifest refused: not JSON ({e})"))?;
+    let Some(signed) = doc.get("signed").and_then(|s| s.as_str()) else {
+        return refuse("it is not signed".into());
+    };
+    let sig: [u8; 64] = match doc
+        .get("signature")
+        .and_then(|s| s.as_str())
+        .filter(|s| s.len() == 128)
+        .and_then(|s| hex::decode(s).ok())
+        .and_then(|b| <[u8; 64]>::try_from(b).ok())
+    {
+        Some(s) => s,
+        None => return refuse("the signature is missing or malformed".into()),
+    };
+    let mut msg = MANIFEST_SIG_CONTEXT.to_vec();
+    msg.extend_from_slice(signed.as_bytes());
+    if key.verify_strict(&msg, &ed25519_dalek::Signature::from_bytes(&sig)).is_err() {
+        return refuse("its signature does not match the publisher key".into());
+    }
+
+    let body: SignedBody = serde_json::from_str(signed)
+        .map_err(|e| format!("Update manifest refused: the signed part is incomplete ({e})"))?;
+    if body.app_id != MANIFEST_APP_ID {
+        return refuse(format!("it is for {:?}, not {:?}", body.app_id, MANIFEST_APP_ID));
+    }
+    let time = |field: &str, v: &str| {
+        chrono::DateTime::parse_from_rfc3339(v)
+            .map(|t| t.with_timezone(&chrono::Utc))
+            .map_err(|_| format!("Update manifest refused: `{field}` is not an RFC 3339 time"))
+    };
+    let issued = time("issued", &body.issued)?;
+    let expires = time("expires", &body.expires)?;
+    if expires <= issued || expires - issued > chrono::Duration::days(MANIFEST_MAX_VALIDITY_DAYS) {
+        return refuse(format!(
+            "it claims to be valid from {issued} to {expires}; the limit is {MANIFEST_MAX_VALIDITY_DAYS} days"
+        ));
+    }
+    if now >= expires {
+        return refuse(format!(
+            "it expired on {expires} (the publisher re-signs it every week; an expired copy means \
+             the host is not serving a current one, or this PC's clock is wrong)"
+        ));
+    }
+    if !is_newer(&body.version, current_version) {
+        return refuse(format!(
+            "it offers {} and this is {current_version}; only a newer version is applied",
+            body.version
+        ));
+    }
+    for f in &body.files {
+        if !is_https(&f.download_url) {
+            return refuse(format!("{} is not downloaded over https", f.path));
+        }
+        if !safe_relative_path(&f.path) {
+            return refuse(format!("{:?} is not a plain relative path", f.path));
+        }
+        // Lowercase only: the apply loop compares against `format!("{:x}")`.
+        if f.sha256.len() != 64 || !f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+            return refuse(format!("{} has no lowercase SHA-256", f.path));
+        }
+    }
+    Ok(VerifiedManifest { version: body.version, files: body.files })
 }
 
 /// Progress event emitted per file during incremental update.
@@ -293,29 +508,14 @@ pub fn update_via_installer(app_handle: tauri::AppHandle) -> Result<(), String> 
     std::process::exit(0);
 }
 
-/// Compares two semver-like version strings (e.g., "1.0.9" > "1.0.8").
 /// Returns true if `latest` is strictly newer than `current`.
+///
+/// The same ordering as the signed manifest's version rule ([`is_newer`]). It used to drop
+/// any component that was not a bare number (`1.2.3-rc1` read as `1.2`), so the release check
+/// and the manifest check could disagree about the same two strings: the Quick Update button
+/// would appear for a release whose manifest is then refused as "not newer", or the reverse.
 fn is_newer_version(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect()
-    };
-
-    let latest_parts = parse(latest);
-    let current_parts = parse(current);
-
-    for i in 0..std::cmp::max(latest_parts.len(), current_parts.len()) {
-        let l = latest_parts.get(i).copied().unwrap_or(0);
-        let c = current_parts.get(i).copied().unwrap_or(0);
-        if l > c {
-            return true;
-        }
-        if l < c {
-            return false;
-        }
-    }
-    false
+    is_newer(latest, current)
 }
 
 #[tauri::command]
@@ -369,31 +569,54 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
     std::process::exit(0);
 }
 
-/// Fetches and parses the incremental update manifest from the given URL.
+/// Largest manifest accepted. It lists a handful of files; anything near this is not one.
+const MANIFEST_MAX_BYTES: usize = 1024 * 1024;
+
+/// Fetches the incremental update manifest from the given URL and verifies it
+/// ([`verify_manifest_text`]). Returns the verified content for display, plus the raw document
+/// that `apply_incremental_update` verifies again.
 #[tauri::command]
-pub async fn fetch_update_manifest(url: String) -> Result<UpdateManifest, String> {
+pub async fn fetch_update_manifest(app_handle: tauri::AppHandle, url: String) -> Result<UpdateManifest, String> {
     log_line(format!("[UPDATE] Fetching incremental manifest from: {}", url));
+    if !is_https(&url) {
+        return Err("Update manifest refused: its URL is not https".to_string());
+    }
     let response = crate::commands::net::client().get(&url)
         .header(reqwest::header::USER_AGENT, "BetterModManager")
+        .timeout(std::time::Duration::from_secs(30))
         .send().await.map_err(|e| format!("Network error: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("Manifest fetch failed: {}", response.status()));
     }
-
-    let manifest: UpdateManifest = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
-    log_line(format!("[UPDATE] Manifest loaded: {} files listed", manifest.files.len()));
-    Ok(manifest)
+    let bytes = response.bytes().await.map_err(|e| format!("Network error: {}", e))?;
+    if bytes.len() > MANIFEST_MAX_BYTES {
+        return Err("Update manifest refused: too large".to_string());
+    }
+    let document = String::from_utf8(bytes.to_vec()).map_err(|_| "Update manifest refused: not UTF-8".to_string())?;
+    let current = app_handle.package_info().version.to_string();
+    let verified = verify_manifest_text(&document, &publisher_key()?, &current, chrono::Utc::now())
+        .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    log_line(format!("[UPDATE] Manifest verified: v{}, {} files listed", verified.version, verified.files.len()));
+    Ok(UpdateManifest { version: verified.version, files: verified.files, document })
 }
 
 /// Applies an incremental update: downloads only changed files and replaces them in-place.
 /// Emits `update-progress` events to the window during the process.
+///
+/// `manifest` is whatever the UI got from `fetch_update_manifest`; only its raw `document` is
+/// read, and it is verified again here — signature, app, expiry, version — before any file is
+/// downloaded or written. Nothing the UI parsed or edited is trusted.
 #[tauri::command]
 pub async fn apply_incremental_update(
     app_handle: tauri::AppHandle,
     window: tauri::Window,
-    manifest: UpdateManifest,
+    manifest: ApplyRequest,
 ) -> Result<IncrementalResult, String> {
     use sha2::{Sha256, Digest};
+
+    let current = app_handle.package_info().version.to_string();
+    let manifest = verify_manifest_text(&manifest.document, &publisher_key()?, &current, chrono::Utc::now())
+        .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
 
     // Resolve the BMM install root: parent of the resource dir (where frontend/, Lang/, etc. live)
     let install_root = app_handle
@@ -554,3 +777,7 @@ pub async fn apply_incremental_update(
 
     Ok(IncrementalResult { applied, skipped, errors })
 }
+
+#[cfg(test)]
+#[path = "autoupdate_manifest_tests.rs"]
+mod manifest_tests;
