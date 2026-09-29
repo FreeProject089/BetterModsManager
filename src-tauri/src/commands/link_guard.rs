@@ -362,7 +362,9 @@ pub fn link_export_app_data(
     Ok(dest)
 }
 
-/// The data file with every secret redacted, by field name and by value.
+/// The data file with every secret redacted, by field name and by value. Only the tests still
+/// call it (to show what the key-name layer alone misses); the export uses the `_beside` form.
+#[cfg(test)]
 pub fn redacted_export(data_json: &str) -> String {
     let mut r = crate::commands::report_redact::Redactor::new();
     r.absorb_json_text(data_json);

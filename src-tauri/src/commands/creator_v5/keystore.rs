@@ -455,6 +455,8 @@ impl FpCache {
         FpCache { map: Mutex::new(BTreeMap::new()), misses: std::sync::atomic::AtomicUsize::new(0) }
     }
     pub fn len(&self) -> usize { self.map.lock().map(|m| m.len()).unwrap_or(0) }
+    // Kept beside len() (clippy::len_without_is_empty); nothing calls it in the test build.
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool { self.len() == 0 }
     pub fn misses(&self) -> usize { self.misses.load(std::sync::atomic::Ordering::Relaxed) }
     /// `fields` must be the same map for the life of the cache (the process's hardware).
