@@ -401,6 +401,9 @@ fn main() {
             // the app-data dir. Bring a pre-1.0 user's data across BEFORE we read data.json, so
             // upgrading from 0.9.x doesn't silently start from an empty profile.
             migrate_legacy_appdata(&app_dir);
+            // « Laya intégré »: finish removing a downloaded model whose runtime DLL was still
+            // mapped when the user clicked « Supprimer ». Disk only, no load.
+            commands::ai_embedded::cleanup_pending();
             let data_path = app_dir.join("data.json");
             let app_state = AppState::load(data_path);
             // Mirror the key-auth path into the module that signs with it. Without this
@@ -589,6 +592,10 @@ fn main() {
             commands::ai::ai_apply_mod_metadata,
             commands::ai::ai_report_precheck,
             commands::ai::ai_triage_report,
+            commands::ai::ai_embedded_status,
+            commands::ai::ai_embedded_install,
+            commands::ai::ai_embedded_cancel,
+            commands::ai::ai_embedded_remove,
             commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
             commands::settings::is_dev_build,

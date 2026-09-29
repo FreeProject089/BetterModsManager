@@ -54,13 +54,13 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
 
     const providerLine = (): string => {
         if (!block) {
-            const which = settings?.classifier === 'local' ? t('ai.src.laya') : t('ai.src.bettercommunity');
+            const which = settings?.classifier === 'embedded' ? t('ai.src.embedded') : settings?.classifier === 'local' ? t('ai.src.laya') : t('ai.src.bettercommunity');
             return `<span class="ai-pill ai-pill-on">${escHtml(t('ai.suggest.withProvider', { provider: which }))}</span>`;
         }
         return `<span class="ai-pill">${escHtml(t('ai.suggest.filesOnly'))}</span> <span class="ai-muted">${escHtml(reasonText(block))}</span>`;
     };
 
-    const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; error?: string } = {}) => {
+    const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; error?: string; offline?: boolean } = {}) => {
         const applicable = rows.filter((r) => r.applicable);
         const hints = rows.filter((r) => !r.applicable);
         const nChecked = rows.filter((r) => r.checked).length;
@@ -72,6 +72,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
                    ${hints.length ? `<div class="ai-hints"><div class="ai-sub">${escHtml(t('ai.suggest.hints'))}</div>${hints.map(hintHtml).join('')}</div>` : ''}
                    ${(extra.notes || []).length ? `<ul class="ai-notes">${(extra.notes || []).map((n) => `<li>${escHtml(reasonText(n))}</li>`).join('')}</ul>` : ''}
                    ${(extra.read || []).length ? `<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))} ${escHtml((extra.read || []).slice(0, 8).join(', '))}</div>` : ''}
+                   ${extra.offline && !extra.sent ? `<div class="ai-muted">${escHtml(t('ai.emb.offline'))}</div>` : ''}
                    ${extra.sent ? `<details class="ai-sent"><summary>${escHtml(t('ai.suggest.sentSummary'))}</summary><pre>${escHtml(extra.sent)}</pre></details>` : ''}`;
         o.innerHTML = `
         <div class="modal ai-modal" role="dialog" aria-labelledby="ais-title">
@@ -132,7 +133,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
           <span class="ai-conf">${pct(r.confidence)}%</span></div>`;
 
     let wantDraft = false;
-    let last: { notes?: string[]; sent?: string | null; read?: string[] } = {};
+    let last: { notes?: string[]; sent?: string | null; read?: string[]; offline?: boolean } = {};
 
     const run = async (): Promise<void> => {
         if (busy) return;
@@ -148,7 +149,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             });
             const view: ModView = mod;
             rows = rowsFromSuggestions((res?.suggestions || []) as AiSuggestion[], view, tagName);
-            last = { notes: res?.notes || [], sent: res?.sentText || null, read: res?.sourcesRead || [] };
+            last = { notes: res?.notes || [], sent: res?.sentText || null, read: res?.sourcesRead || [], offline: !!res?.offline };
             busy = false;
             render('ready', last);
         } catch (e) {

@@ -8,6 +8,8 @@
 //! * `ai_triage_report` gives a hint (category / severity / likely duplicate) — never a verdict.
 //!
 //! Every network call goes through `ai_core`'s gate; with the master switch off, none happens.
+//! The embedded provider (« Laya intégré », `ai_embedded`) goes through the same gate and makes
+//! no network call at all; installing its model is a separate, explicit click (`ai_embedded_*`).
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -15,6 +17,7 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::commands::ai_core::{self, AiSettings, BcAuth, Ctx, Feature, HttpTransport, ModFacts};
+use crate::commands::ai_embedded;
 use crate::state::AppState;
 
 fn data_dir(state: &AppState) -> PathBuf {
@@ -45,9 +48,20 @@ fn bc_auth(dir: &std::path::Path, base: Option<String>, headers: Option<HashMap<
     Some(BcAuth { base: checked.url, headers: out })
 }
 
+/// The settings as they apply now: an installed embedded model is the default provider until
+/// the user picks one (it sends nothing anywhere).
+fn effective(dir: &std::path::Path) -> AiSettings {
+    ai_core::effective_settings(ai_core::load_settings(dir), ai_embedded::installed())
+}
+
+fn status_view(dir: &std::path::Path) -> Value {
+    let emb = ai_embedded::status();
+    let installed = emb.installed;
+    ai_core::status_with(dir, json!(emb), installed)
+}
+
 fn settings_view(dir: &std::path::Path) -> Value {
-    let s = ai_core::load_settings(dir);
-    json!({ "settings": s, "status": ai_core::status(dir) })
+    json!({ "settings": effective(dir), "status": status_view(dir) })
 }
 
 /// Settings + status for the Settings card. Never contains a key.
@@ -72,6 +86,8 @@ pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> Result<
     let mut s = s;
     // The installer's choice is history, not something the page can rewrite.
     s.installer_choice = before.installer_choice;
+    // Saved from the card = the user's own choice of classifier from now on.
+    s.classifier_chosen = true;
     ai_core::save_settings(&dir, &s)?;
     crate::commands::crash::log_line(format!(
         "[AI] settings saved: enabled={} classifier={} generative={}",
@@ -101,7 +117,7 @@ pub fn ai_check_url(url: String, kind: String, allow_remote: bool) -> Result<Val
 
 fn ctx_owned(dir: &std::path::Path, bc: Option<BcAuth>) -> (AiSettings, Option<String>, Option<String>, Option<BcAuth>) {
     (
-        ai_core::load_settings(dir),
+        effective(dir),
         ai_core::get_secret(dir, "local_key"),
         ai_core::get_secret(dir, "external_key"),
         bc,
@@ -120,7 +136,7 @@ pub async fn ai_test_connection(
     let (settings, lk, ek, bc) = ctx_owned(&dir, bc);
     tauri::async_runtime::spawn_blocking(move || {
         let t = HttpTransport;
-        let ctx = Ctx { settings: &settings, transport: &t, killed: ai_core::kill_switch(), local_key: lk, external_key: ek, bc };
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed: ai_core::kill_switch(), local_key: lk, external_key: ek, bc };
         ai_core::test_connection(&ctx, &target)
     })
     .await
@@ -173,11 +189,14 @@ pub async fn ai_suggest_mod_metadata(
         let killed = ai_core::kill_switch();
         if use_providers {
             let t = HttpTransport;
-            let ctx = Ctx { settings: &settings, transport: &t, killed, local_key: lk, external_key: ek, bc };
+            let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed, local_key: lk, external_key: ek, bc };
             let text = ai_core::provider_text(&facts, &ex);
             if ai_core::gate(&settings, Feature::ModSuggest, killed).is_ok() {
                 let (s, n) = ai_core::classify_mod(&ctx, &text, &vocab);
-                sent = Some(text.clone());
+                // The embedded engine reads the text in this process: nothing was SENT.
+                if settings.classifier != "embedded" {
+                    sent = Some(text.clone());
+                }
                 all.extend(s);
                 notes.extend(n);
             }
@@ -203,7 +222,9 @@ pub async fn ai_suggest_mod_metadata(
             "notes": notes,
             "sourcesRead": ex.sources_read,
             "sentText": sent,
-            "status": ai_core::status(&dir),
+            // The embedded engine sends nothing: say so rather than show "what was sent".
+            "offline": settings.classifier == "embedded" && !draft,
+            "status": status_view(&dir),
         }))
     })
     .await
@@ -324,9 +345,96 @@ pub async fn ai_triage_report(
         let (clean, _) = ai_core::scrub_pii(&text, user.as_deref(), pc.as_deref(), &[]);
         let clean: String = clean.chars().take(ai_core::MAX_PROVIDER_TEXT).collect();
         let t = HttpTransport;
-        let ctx = Ctx { settings: &settings, transport: &t, killed, local_key: lk, external_key: ek, bc };
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed, local_key: lk, external_key: ek, bc };
         let tr = ai_core::triage_report(&ctx, &clean, &known)?;
-        Ok(json!({ "triage": tr, "sentText": clean }))
+        let offline = settings.classifier == "embedded";
+        Ok(json!({ "triage": tr, "sentText": if offline { Value::Null } else { json!(clean) }, "offline": offline }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// « Laya intégré » — the model pack
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn embedded_cancel() -> &'static std::sync::atomic::AtomicBool {
+    static C: std::sync::OnceLock<std::sync::atomic::AtomicBool> = std::sync::OnceLock::new();
+    C.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
+}
+
+fn embedded_busy() -> &'static std::sync::atomic::AtomicBool {
+    static B: std::sync::OnceLock<std::sync::atomic::AtomicBool> = std::sync::OnceLock::new();
+    B.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
+}
+
+/// Installed / absent, where, how big, loaded or not. Reads the disk only (no hashing, no load).
+#[tauri::command]
+pub fn ai_embedded_status() -> Value {
+    json!(ai_embedded::status())
+}
+
+/// Settings → « Installer le modèle »: download the pinned pack (resumable, SHA-256 checked),
+/// unpack it into %LOCALAPPDATA%, and make the embedded engine the classifier. An explicit click,
+/// and the only network request this feature ever makes: to the pinned URL, carrying nothing
+/// about the user. Progress: `ai-embedded-progress` events ({ received, total }).
+#[tauri::command(async)]
+pub async fn ai_embedded_install(window: tauri::Window, state: State<'_, AppState>) -> Result<Value, String> {
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+    if ai_core::kill_switch() {
+        return Err("killed".into());
+    }
+    if embedded_busy().swap(true, Ordering::SeqCst) {
+        return Err("busy".into());
+    }
+    embedded_cancel().store(false, Ordering::SeqCst);
+    let dir = data_dir(&state);
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        let w = window.clone();
+        let progress = move |p: ai_embedded::Progress| {
+            let _ = w.emit("ai-embedded-progress", p);
+        };
+        let out = ai_embedded::install_user_copy(&progress, embedded_cancel());
+        if out.is_ok() {
+            let mut s = ai_core::load_settings(&dir);
+            if !s.classifier_chosen || s.classifier == "off" {
+                s.classifier = "embedded".into();
+            }
+            let _ = ai_core::save_settings(&dir, &s);
+        }
+        crate::commands::crash::log_line(format!("[AI] embedded model install: {}", match &out { Ok(_) => "ok".to_string(), Err(e) => e.clone() }));
+        out
+    })
+    .await
+    .map_err(|e| e.to_string());
+    embedded_busy().store(false, Ordering::SeqCst);
+    r?
+}
+
+/// Stop a download in progress; what was received stays on disk and the next click resumes it.
+#[tauri::command]
+pub fn ai_embedded_cancel() {
+    embedded_cancel().store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Settings → « Supprimer le modèle »: the downloaded copy only (the installed one belongs to
+/// the uninstaller). If the classifier was the embedded engine it goes back to « off ».
+#[tauri::command(async)]
+pub async fn ai_embedded_remove(state: State<'_, AppState>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        let r = ai_embedded::remove_user_copy()?;
+        if !ai_embedded::installed() {
+            let mut s = ai_core::load_settings(&dir);
+            if s.classifier == "embedded" {
+                s.classifier = "off".into();
+                s.classifier_chosen = true;
+                let _ = ai_core::save_settings(&dir, &s);
+            }
+        }
+        crate::commands::crash::log_line("[AI] embedded model removed".to_string());
+        Ok(r)
     })
     .await
     .map_err(|e| e.to_string())?

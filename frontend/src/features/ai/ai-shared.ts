@@ -31,6 +31,7 @@ export function sourceLabel(src: string): string {
         case 'file': return t('ai.src.file');
         case 'folder': return t('ai.src.folder');
         case 'laya': return t('ai.src.laya');
+        case 'embedded': return t('ai.src.embedded');
         case 'bettercommunity': return t('ai.src.bettercommunity');
         case 'api': return t('ai.src.api');
         default: return src;
@@ -54,6 +55,24 @@ export function fieldLabel(f: string): string {
 /** A Rust note ("bettercommunity:rate_limited", "classifier:ai_off", an `ai.url.*` key) in words. */
 export function reasonText(note: string): string {
     const raw = String(note || '');
+    // The built-in engine: "embedded:<reason>[:<detail>]".
+    if (raw.startsWith('embedded:')) {
+        const why = raw.split(':')[1] || '';
+        const emb: Record<string, string> = {
+            absent: t('ai.reason.embAbsent'),
+            corrupt: t('ai.reason.embCorrupt'),
+            not_published: t('ai.reason.embNotPublished'),
+            hash_mismatch: t('ai.reason.embHash'),
+            incomplete: t('ai.reason.embIncomplete'),
+            runtime: t('ai.reason.embRuntime'),
+            runtime_path: t('ai.reason.embRuntime'),
+            in_use: t('ai.reason.embInUse'),
+            busy: t('ai.reason.embInUse'),
+            question_too_long: t('ai.reason.embTooLong'),
+        };
+        return `${t('ai.src.embedded')} — ${emb[why] || t('ai.reason.embFailed', { why })}`;
+    }
+    if (raw === 'cancelled') return t('ai.reason.cancelled');
     const reason = raw.includes(':') ? raw.slice(raw.lastIndexOf(':') + 1) : raw;
     const who = raw.includes(':') ? raw.slice(0, raw.indexOf(':')) : '';
     const whoLabel = who === 'bettercommunity' ? t('ai.src.bettercommunity') : who === 'laya' ? t('ai.src.laya') : who === 'api' || who === 'generative' ? t('ai.src.api') : '';

@@ -1,7 +1,8 @@
 //! Optional AI tools for MCP clients and the CLI (`bmm_ai_status`, `bmm_ai_suggest_mod_metadata`,
 //! `bmm_ai_apply_mod_metadata`; `ai-status`, `ai-suggest`, `ai-apply`).
 //!
-//! Same engine as the app (`commands/ai_core.rs`, mounted into this binary), same rules:
+//! Same engine as the app (`commands/ai_core.rs` and, for « Laya intégré », the in-process model
+//! runner `commands/ai_embedded.rs`, both mounted into this binary), same rules:
 //! suggesting NEVER writes; applying writes only the fields named, through the same validation
 //! as the in-app dialog, straight to data.json like the other write tools (`bmm_set_mod_enabled`).
 //! A classifier or generative provider is only called when the user turned AI on in BMM and
@@ -10,10 +11,13 @@
 use serde_json::{json, Value};
 
 use crate::commands::ai_core::{self, BcAuth, Ctx, Feature, HttpTransport, ModFacts};
+use crate::commands::ai_embedded;
 use crate::mcp::state_bridge;
 
 pub fn status() -> Value {
-    ai_core::status(&state_bridge::get_bmm_data_dir())
+    let emb = ai_embedded::status();
+    let installed = emb.installed;
+    ai_core::status_with(&state_bridge::get_bmm_data_dir(), json!(emb), installed)
 }
 
 /// BetterCommunity from the CLI: only the account API key BMM stored (there is no creator
@@ -55,12 +59,13 @@ pub fn suggest(mod_id: &str, use_providers: bool, draft: bool) -> Result<Value, 
     let mut notes: Vec<String> = Vec::new();
     let mut sent: Option<String> = None;
     if use_providers {
-        let settings = ai_core::load_settings(&dir);
+        let settings = ai_core::effective_settings(ai_core::load_settings(&dir), ai_embedded::installed());
         let killed = ai_core::kill_switch();
         let t = HttpTransport;
         let ctx = Ctx {
             settings: &settings,
             transport: &t,
+            local_model: Some(&ai_embedded::Embedded),
             killed,
             local_key: ai_core::get_secret(&dir, "local_key"),
             external_key: ai_core::get_secret(&dir, "external_key"),
@@ -70,7 +75,10 @@ pub fn suggest(mod_id: &str, use_providers: bool, draft: bool) -> Result<Value, 
         match ai_core::gate(&settings, Feature::ModSuggest, killed) {
             Ok(_) => {
                 let (s, n) = ai_core::classify_mod(&ctx, &text, &vocab);
-                sent = Some(text.clone());
+                // The embedded engine runs in this process: nothing was sent anywhere.
+                if settings.classifier != "embedded" {
+                    sent = Some(text.clone());
+                }
                 all.extend(s);
                 notes.extend(n);
             }

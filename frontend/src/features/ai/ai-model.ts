@@ -23,7 +23,9 @@ export interface AiSuggestion {
 
 export interface AiSettings {
     enabled: boolean;
-    classifier: 'off' | 'bettercommunity' | 'local' | string;
+    classifier: 'off' | 'embedded' | 'bettercommunity' | 'local' | string;
+    /** The user picked the classifier in Settings; until then an installed built-in model is the default. */
+    classifier_chosen?: boolean;
     generative: 'off' | 'external' | string;
     mod_suggest: boolean;
     report_triage: boolean;
@@ -135,6 +137,15 @@ export function buildFields(rows: SuggestionRow[]): Record<string, unknown> {
     return out;
 }
 
+/** Bytes → "327 MB" (decimal units, like the installer and the docs). */
+export function fmtBytes(n: number): string {
+    const v = Math.max(0, Number(n) || 0);
+    if (v >= 1e9) return `${(v / 1e9).toFixed(1)} GB`;
+    if (v >= 1e6) return `${Math.round(v / 1e6)} MB`;
+    if (v >= 1e3) return `${Math.round(v / 1e3)} kB`;
+    return `${v} B`;
+}
+
 /** 0..1 → "87 %"-style integer. */
 export function pct(c: number): number { return Math.round(Math.max(0, Math.min(1, Number(c) || 0)) * 100); }
 
@@ -188,7 +199,7 @@ export function providerBlock(s: Pick<AiSettings, 'enabled' | 'classifier' | 'bc
     if (!s || !s.enabled) return 'ai_off';
     const f = feature === 'mod' ? (s as any).mod_suggest : (s as any).report_triage;
     if (f === false) return 'feature_off';
-    if (s.classifier === 'local') return '';
+    if (s.classifier === 'local' || s.classifier === 'embedded') return '';
     if (s.classifier === 'bettercommunity') return s.bc_consent ? '' : 'no_consent';
     return 'no_provider';
 }

@@ -426,11 +426,20 @@ Tout ce que vous configurez vous‑même (webhook Discord, tunnel Cloudflare, �
 service, selon ses propres conditions.
 
 ### 6.10 IA optionnelle (Laya)
-**Désactivée par défaut**, dans BMM comme dans l'installateur. BMM n'embarque aucun modèle d'IA.
-L'action *Suggérer des infos* du panneau d'un mod lit toujours d'abord les fichiers du mod sur votre
-PC ; rien n'en sort tant que vous n'activez pas Réglages → IA **et** ne choisissez pas un
-fournisseur, et alors seulement quand vous cliquez sur *Suggérer*, *demander un brouillon de
-description* ou *Obtenir un indice IA* :
+**Laya intégré (hors ligne)** — l'option *Laya hors ligne (IA locale, aucune donnée envoyée)* de
+l'installateur, cochée par défaut — fait tourner le classifieur Laya **sur votre PC** : le texte d'un
+mod ou d'un rapport est lu dans la mémoire de BMM et **rien n'est envoyé nulle part**, ni à
+BetterCommunity ni à personne. L'installer télécharge une fois un paquet de modèle (depuis la release
+GitHub de BMM, ou le miroir BetterCommunity), vérifié contre un SHA‑256 épinglé ; ce téléchargement
+ne transporte rien vous concernant. BMM coupe les événements de télémétrie de la bibliothèque ONNX
+Runtime qu'il utilise (les versions de Microsoft émettent par défaut des événements de traçage
+Windows ; selon Microsoft, un événement minimal de démarrage peut encore être écrit dans le traçage
+local de Windows, que Windows ne transmet que selon vos propres réglages de données de diagnostic).
+
+Les autres fournisseurs sont **désactivés par défaut**. L'action *Suggérer des infos* du panneau
+d'un mod lit toujours d'abord les fichiers du mod sur votre PC ; rien n'en sort tant que vous
+n'activez pas Réglages → IA **et** ne choisissez pas un fournisseur réseau, et alors seulement quand
+vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir un indice IA* :
 
 - **Ce qui est envoyé** pour un mod : son nom, son auteur, sa description, des extraits de son
   readme ou manifeste, jusqu'à 40 noms de fichiers et les noms de vos tags, après que BMM a masqué
@@ -448,9 +457,10 @@ description* ou *Obtenir un indice IA* :
   ni l'autre, elles ne sont gardées que pour la session.
 - **Rien n'est écrit** dans un mod tant que vous ne cochez pas une suggestion puis cliquez sur
   Appliquer.
-- Désactivez‑la dans Réglages → IA, avec la case *Fonctionnalités IA optionnelles* de l'installateur
+- Désactivez‑la dans Réglages → IA, avec la case *Laya hors ligne* de l'installateur
   (ou `--set=ai_features=false`), ou pour une session avec `--no-ai` / `BMM_NO_AI=1`. Interrupteur
-  éteint, BMM ne fait aucune requête d'IA.
+  éteint, BMM ne fait aucune requête d'IA et ne fait tourner aucun modèle. Réglages → IA →
+  *Supprimer le modèle* efface un paquet de modèle téléchargé.
 
 ---
 

@@ -116,9 +116,11 @@ pub struct HandoffResult {
     /// already ships and ignores anything else, so the worst a tampered handoff can do is
     /// name a preset that does not exist.
     pub csp_preset: Option<String>,
-    /// The installer's "Fonctionnalités IA optionnelles (Laya)" box. Unlike the JS-side
-    /// preferences above it is APPLIED here (ai-settings.json, read by Rust), and surfaced only
-    /// so the frontend can mention it. `None` = not asked → AI stays at its default (off).
+    /// The installer's « Laya hors ligne (IA locale, aucune donnée envoyée) » box (key kept as
+    /// `ai_features` so older installers still map). Unlike the JS-side preferences above it is
+    /// APPLIED here (ai-settings.json, read by Rust): ticked = master switch on with the embedded,
+    /// offline engine as the provider; unticked = off. Surfaced only so the frontend can mention
+    /// it. `None` = not asked → AI stays at its default (off).
     pub ai_features: Option<bool>,
 }
 
@@ -489,7 +491,8 @@ mod tests {
         assert!(!crate::commands::ai_core::load_settings(dir.path()).enabled);
         crate::commands::ai_core::apply_installer_choice(dir.path(), true).unwrap();
         let s = crate::commands::ai_core::load_settings(dir.path());
-        assert!(s.enabled && s.classifier == "off" && s.generative == "off");
+        // The box is « Laya hors ligne »: on, with the in-process engine and nothing that sends.
+        assert!(s.enabled && s.classifier == "embedded" && s.generative == "off");
     }
 
     #[test]

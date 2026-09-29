@@ -7,10 +7,10 @@
 // Keys are write-only from here: the field sends a key to `ai_set_secret` and is emptied; the
 // card only ever learns WHERE a key is stored (DPAPI / keyring / this session only), never
 // the key.
-import { invoke } from '../../core/api.js';
+import { invoke, listen, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import type { AiSettings } from './ai-model.js';
+import { fmtBytes, type AiSettings } from './ai-model.js';
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
 
 const CARD_ID = 'settings-ai-section';
@@ -19,6 +19,31 @@ const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="
 
 function container(): HTMLElement | null {
     return document.querySelector('#view-settings .settings-sections');
+}
+
+/** The « Laya intégré » box: installed / absent, where, and the install / remove buttons. */
+function embeddedHtml(st: any): string {
+    const e = st?.embedded || {};
+    const installed = !!e.installed;
+    const host = 'github.com';
+    const pill = `<span class="ai-pill${installed ? ' ai-pill-on' : ''}" id="ai-emb-pill">${escHtml(installed ? t('ai.emb.installed') : t('ai.emb.absent'))}</span>`;
+    const where = installed
+        ? `<div class="ai-muted">${escHtml(t('ai.emb.where', { size: fmtBytes(e.sizeBytes), dir: String(e.dir || '') }))} · ${escHtml(e.source === 'install' ? t('ai.emb.fromInstaller') : t('ai.emb.fromUser'))}</div>
+           ${e.loaded ? `<div class="ai-muted">${escHtml(t('ai.emb.loaded'))}</div>` : ''}`
+        : `<div class="ai-muted">${escHtml(t('ai.emb.installHint', { host }))}</div>
+           ${e.partialBytes > 0 ? `<div class="ai-muted">${escHtml(t('ai.emb.resume', { got: fmtBytes(e.partialBytes) }))}</div>` : ''}`;
+    const buttons = installed
+        ? (e.removable ? `<button type="button" class="btn btn-ghost btn-sm" id="ai-emb-remove">${escHtml(t('ai.emb.remove'))}</button>` : '')
+        : `<button type="button" class="btn btn-primary btn-sm" id="ai-emb-install">${escHtml(t('ai.emb.install', { size: fmtBytes(e.downloadBytes) }))}</button>
+           <button type="button" class="btn btn-ghost btn-sm" id="ai-emb-cancel" hidden>${escHtml(t('common.cancel'))}</button>`;
+    return `
+      <div class="ai-block" id="ai-emb-block">
+        <div class="ai-sub">${escHtml(t('ai.emb.title'))} ${pill}</div>
+        <p class="ai-muted">${escHtml(t('ai.emb.what'))}</p>
+        ${where}
+        <progress id="ai-emb-progress" max="1" value="0" hidden></progress>
+        <div class="ai-actions">${buttons}<span class="ai-muted" id="ai-emb-status" aria-live="polite"></span></div>
+      </div>`;
 }
 
 function keyWhere(where: string): string {
@@ -70,6 +95,7 @@ function render(card: HTMLElement, view: AiView | null): void {
       <p class="ai-muted">${escHtml(t('ai.settings.notBundled'))}</p>
       ${killed ? `<div class="ai-warn">${escHtml(t('ai.settings.killedNote'))}</div>` : ''}
       ${s.installer_choice != null ? `<div class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</div>` : ''}
+      ${embeddedHtml(st)}
       <label class="ai-switch"><input type="checkbox" id="ai-enabled" ${s.enabled ? 'checked' : ''} ${killed ? 'disabled' : ''}>
         <span><b>${escHtml(t('ai.settings.master'))}</b><small>${escHtml(t('ai.settings.masterHint'))}</small></span></label>
       <div class="ai-settings-body${s.enabled ? '' : ' is-off'}" id="ai-body">
@@ -77,6 +103,7 @@ function render(card: HTMLElement, view: AiView | null): void {
           <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.settings.classifier'))}</label>
           <select id="ai-classifier" class="form-input">
             ${opt('off', s.classifier, t('ai.settings.classifierOff'))}
+            ${opt('embedded', s.classifier, t('ai.settings.classifierEmbedded'))}
             ${opt('bettercommunity', s.classifier, t('ai.settings.classifierBc'))}
             ${opt('local', s.classifier, t('ai.settings.classifierLocal'))}
           </select>
@@ -127,6 +154,7 @@ function render(card: HTMLElement, view: AiView | null): void {
         <details class="ai-sent">
           <summary>${escHtml(t('ai.settings.whatSent'))}</summary>
           <ul class="ai-list">
+            <li>${escHtml(t('ai.settings.sent0'))}</li>
             <li>${escHtml(t('ai.settings.sent1'))}</li>
             <li>${escHtml(t('ai.settings.sent2'))}</li>
             <li>${escHtml(t('ai.settings.sent3'))}</li>
@@ -217,11 +245,12 @@ function wire(card: HTMLElement, s: AiSettings): void {
         });
     });
     q('ai-save')?.addEventListener('click', () => { void save(); });
+    wireEmbedded(card);
     q('ai-docs')?.addEventListener('click', () => openAiDocs());
     q('ai-test')?.addEventListener('click', async () => {
         const cur = read(card, s);
         const targets: string[] = [];
-        if (cur.classifier === 'local' || cur.classifier === 'bettercommunity') targets.push(cur.classifier);
+        if (cur.classifier === 'local' || cur.classifier === 'bettercommunity' || cur.classifier === 'embedded') targets.push(cur.classifier);
         if (cur.generative === 'external') targets.push('external');
         if (!targets.length) { say(t('ai.reason.noProvider'), 'err'); return; }
         if (!(await save())) return;
@@ -237,5 +266,49 @@ function wire(card: HTMLElement, s: AiSettings): void {
             }
         }
         if (st) { st.textContent = lines.join(' · '); st.className = 'ai-muted'; }
+    });
+}
+
+/** Install (download, verify, unpack) and remove the built-in model. Rust does the work. */
+function wireEmbedded(card: HTMLElement): void {
+    const q = <T extends HTMLElement>(id: string) => card.querySelector<T>('#' + id);
+    const out = q('ai-emb-status');
+    const say = (msg: string) => { if (out) out.textContent = msg; };
+    const refresh = async () => { const v = await loadAiView(); if (card.isConnected) render(card, v); };
+    q('ai-emb-install')?.addEventListener('click', async () => {
+        const btn = q<HTMLButtonElement>('ai-emb-install');
+        const cancel = q<HTMLButtonElement>('ai-emb-cancel');
+        const bar = q<HTMLProgressElement>('ai-emb-progress');
+        if (btn) btn.disabled = true;
+        if (cancel) cancel.hidden = false;
+        if (bar) bar.hidden = false;
+        const stop = await listen('ai-embedded-progress', (p: any) => {
+            const total = Number(p?.total) || 0;
+            const got = Number(p?.received) || 0;
+            if (bar && total > 0) { bar.max = total; bar.value = got; }
+            say(got >= total && total > 0 ? t('ai.emb.checking') : t('ai.emb.progress', { got: fmtBytes(got), total: fmtBytes(total) }));
+        });
+        try {
+            await invoke('ai_embedded_install');
+            stop();
+            await refresh();
+            const st = card.querySelector('#ai-emb-status');
+            if (st) st.textContent = t('ai.emb.done');
+        } catch (e) {
+            stop();
+            if (btn) btn.disabled = false;
+            if (cancel) cancel.hidden = true;
+            say(reasonText(String((e as Error)?.message || e)));
+        }
+    });
+    q('ai-emb-cancel')?.addEventListener('click', () => { void invoke('ai_embedded_cancel'); });
+    q('ai-emb-remove')?.addEventListener('click', async () => {
+        if (!(await askConfirm(t('ai.emb.removeConfirm')))) return;
+        try {
+            const r: any = await invoke('ai_embedded_remove');
+            await refresh();
+            const st = card.querySelector('#ai-emb-status');
+            if (st) st.textContent = (r?.pendingRestart || []).length ? t('ai.emb.pending') : t('ai.emb.removed');
+        } catch (e) { say(reasonText(String((e as Error)?.message || e))); }
     });
 }

@@ -68,6 +68,10 @@ mod commands {
     // app's, so `bmm ai-suggest` and the in-app "Suggest" follow one set of rules.
     #[path = "../../commands/ai_core.rs"]
     pub mod ai_core;
+    // « Laya intégré »: the same in-process engine as the app, so the MCP AI tools answer with
+    // the same model, the same caps and the same idle unload — and, like the app, offline.
+    #[path = "../../commands/ai_embedded.rs"]
+    pub mod ai_embedded;
 }
 
 // What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI

@@ -80,4 +80,5 @@ pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;
 pub mod ai_core;
+pub mod ai_embedded;
 pub mod ai;

@@ -1,0 +1,72 @@
+{
+  "note": "« Laya hors ligne »: the one model pack BMM installs. Pinned here, in src-tauri/src/commands/ai_embedded.rs and in BetterInstaller/examples/bmm/installer.toml; the tests fail when they drift. Built by scripts/laya/build_pack.py; measured by scripts/laya/measure.py.",
+  "model": {
+    "id": "convaiinnovations/laya-multilingual",
+    "license": "Apache-2.0",
+    "revision": "e4e9ddf21a7b1903b7acffd8814ad4307bf63a67",
+    "files": {
+      "rl_agent_config.json": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6",
+      "encoder/config.json": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4",
+      "tokenizer/tokenizer.json": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+      "tokenizer/tokenizer_config.json": "2c0c4d82d4b4bc6b4ac40b2375e067a1645f78b381a9774248d47915f33d751f",
+      "model.safetensors": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204"
+    }
+  },
+  "package": {
+    "name": "laya",
+    "version": "0.3.21",
+    "wheel_sha256": "6d6e73b2729d561643e79719c212b1159332fd25345f050efa5734d22e89ace3"
+  },
+  "variant": "int8-weight-only-matmul-b32+int8-embedding-rows",
+  "onnxruntime": {
+    "version": "1.30.0",
+    "license": "MIT",
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-win-x64-1.30.0.zip",
+    "sha256": "c6ba983baf5681af108599675d2a89c2d145512d02de28aed0bff177cd0ba949"
+  },
+  "pack": {
+    "file": "laya-offline-1.zip",
+    "urls": [
+      "https://github.com/FreeProject089/BetterModsManager/releases/download/laya-model-1/laya-offline-1.zip",
+      "https://bettercommunity.ch/api/assets/bmm-laya-offline"
+    ],
+    "sha256": "e276b90f3e16de8273fa34cc202ea140b64cd08345072fcea19fc5df31de62b5",
+    "size": 327125837
+  },
+  "files": {
+    "laya.onnx": {
+      "sha256": "38d9ebb08aa48432a650853c3de520b7fc1c70df6bca8dec7da7afacd15cc5b5",
+      "size": 352534760
+    },
+    "tokenizer.json": {
+      "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+      "size": 34363188
+    },
+    "rl_agent_config.json": {
+      "sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6",
+      "size": 472
+    },
+    "onnxruntime.dll": {
+      "sha256": "7e39e2bdbba836d98071ef28620735ba36a47c554cf794585269aecc50fab0da",
+      "size": 16462648
+    }
+  },
+  "measured": {
+    "note": "scripts/laya/measure.py on 59 texts (EN/FR/DE/ES/IT/PT/RU/PL/JA/ZH), 186 answers (84 choice, 102 yes/no), vs the fp32 PyTorch Agent. CPU, 2 threads, one text per call. Sept 2026.",
+    "chosen": {
+      "size_mb": 352.5,
+      "top1": "184/186 (98.92%)",
+      "max_prob_delta": 0.0909,
+      "flips": "2, both near-ties in the reference (margins 0.020 and 0.061)"
+    },
+    "rejected": {
+      "laya --quantize recipe (dynamic int8 MatMul, fp32 embedding)": "926 MB, 77.96%",
+      "dynamic int8 MatMul + int8 Gather": "337 MB, 77.96%",
+      "4-bit MatMul + 4-bit embedding": "217 MB, 84.95%",
+      "8-bit MatMul + 4-bit embedding": "278 MB, 92.47%",
+      "8-bit MatMul (int8 compute) + fp32 embedding": "941 MB, 97.85%",
+      "8-bit MatMul + fp16 embedding": "548 MB, 98.92%",
+      "fp32 export": "1291 MB, 100%"
+    }
+  }
+}

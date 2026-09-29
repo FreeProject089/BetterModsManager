@@ -62,6 +62,12 @@ jobs:
       - name: Install BMM deps
         run: npm ci
 
+      # « Laya hors ligne »: setup downloads the model pack from its pinned URL and refuses it
+      # unless the SHA-256 matches. Check, before anything is built, that it is published there
+      # and is still the pinned file — otherwise every new install's default option would fail.
+      - name: Laya model pack is published and matches its pin
+        run: node scripts/check-laya-pins.mjs --online
+
       - name: Build BetterInstaller (bpkg + installer)
         working-directory: betterinstaller-src
         run: cargo build --release -p bpkg-cli -p installer

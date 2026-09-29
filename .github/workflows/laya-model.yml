@@ -1,0 +1,58 @@
+# « Laya intégré »: the embedded engine against the Python reference, on the REAL pinned pack.
+#
+# The unit tests in `cargo test` check the input building row for row (no model needed). This job
+# adds what they cannot: it downloads the pinned model pack from its release URL, fails if the file
+# is missing or its size / SHA-256 drifted (scripts/check-laya-pins.mjs --online), unpacks it and
+# runs the golden test with the real tokenizer + ONNX Runtime (BMM_LAYA_REQUIRE=1: a missing pack
+# is a failure, not a skip). Weekly too, so a pack removed from the release is noticed before a
+# user's setup is.
+name: Laya model
+
+on:
+  push:
+    paths:
+      - laya-model.lock.json
+      - src-tauri/src/commands/ai_embedded.rs
+      - src-tauri/tests/laya_golden.json
+      - scripts/laya/**
+      - scripts/check-laya-pins.mjs
+      - .github/workflows/laya-model.yml
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden:
+    name: Pinned pack + golden test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - name: Download the pack and check its pin
+        env:
+          LAYA_PACK_OUT: '1'
+        shell: pwsh
+        run: |
+          $out = node scripts/check-laya-pins.mjs --online
+          if ($LASTEXITCODE -ne 0) { throw "pin check failed" }
+          $out
+          $zip = ($out | Select-String 'pack kept at (.+)$').Matches[0].Groups[1].Value
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\laya" -Force
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+      - name: Golden test on the real model
+        working-directory: src-tauri
+        shell: pwsh
+        run: |
+          $env:BMM_LAYA_DIR = "$env:RUNNER_TEMP\laya"
+          $env:BMM_LAYA_REQUIRE = '1'
+          cargo test --bin better-mods-manager ai_embedded -- --nocapture

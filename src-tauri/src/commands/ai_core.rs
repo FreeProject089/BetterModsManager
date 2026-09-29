@@ -6,9 +6,11 @@
 //!
 //! ## What this is, and what it is not
 //!
-//! BMM does NOT bundle a model. Laya (`convaiinnovations/laya-multilingual`) is a multilingual
-//! CLASSIFIER: it picks one option from a list (`choice`), gives a calibrated P(true) for a
-//! yes/no question (`noul`) or an ordinal score. It does not write text. So:
+//! Laya (`convaiinnovations/laya-multilingual`) is a multilingual CLASSIFIER: it picks one option
+//! from a list (`choice`), gives a calibrated P(true) for a yes/no question (`noul`) or an ordinal
+//! score. It does not write text. BMM can run it three ways: EMBEDDED (« Laya intégré », the model
+//! pack installed next to BMM or downloaded from Settings, run in-process by `ai_embedded` — no
+//! network at all), on the user's own laya-serve, or on BetterCommunity's server. So:
 //!
 //! * a **description** comes from the mod's own files (manifest, readme, entry.lua …), or — only
 //!   if the user configured one — from an OpenAI-compatible **external API** they chose;
@@ -58,8 +60,11 @@ pub const MAX_TAGS_PER_MOD: usize = 3;
 pub struct AiSettings {
     /// Master switch. Off = no network call from any AI feature, anywhere.
     pub enabled: bool,
-    /// Classifier provider: "off" | "bettercommunity" | "local".
+    /// Classifier provider: "off" | "embedded" | "bettercommunity" | "local".
     pub classifier: String,
+    /// The user picked `classifier` themselves in Settings. Until they do, an installed embedded
+    /// model is the default provider (see [`effective_settings`]) — it sends nothing anywhere.
+    pub classifier_chosen: bool,
     /// Generative provider (description drafts only): "off" | "external".
     pub generative: String,
     /// Per-feature toggles — only meaningful while `enabled`.
@@ -85,6 +90,7 @@ impl Default for AiSettings {
         AiSettings {
             enabled: false,
             classifier: "off".into(),
+            classifier_chosen: false,
             generative: "off".into(),
             mod_suggest: true,
             report_triage: true,
@@ -103,7 +109,7 @@ impl Default for AiSettings {
 impl AiSettings {
     /// Unknown words become "off"; numbers are clamped; strings are trimmed and bounded.
     pub fn normalized(mut self) -> Self {
-        if !matches!(self.classifier.as_str(), "off" | "bettercommunity" | "local") {
+        if !matches!(self.classifier.as_str(), "off" | "embedded" | "bettercommunity" | "local") {
             self.classifier = "off".into();
         }
         if !matches!(self.generative.as_str(), "off" | "external") {
@@ -144,14 +150,28 @@ pub fn save_settings(dir: &Path, s: &AiSettings) -> Result<AiSettings, String> {
     Ok(s)
 }
 
-/// The installer's "Fonctionnalités IA optionnelles (Laya)" box. Ticked turns the master
-/// switch on (providers stay "off", so still nothing is sent until one is chosen); unticked
-/// turns it off. Either way the choice is remembered for the Settings screen to show.
+/// The installer's « Laya hors ligne (IA locale, aucune donnée envoyée) » box. Ticked turns the
+/// master switch on and, unless the user already chose a provider, picks the EMBEDDED one — which
+/// sends nothing anywhere; every feature still waits for the user's click. Unticked turns the
+/// master switch off. Either way the choice is remembered for the Settings screen to show.
 pub fn apply_installer_choice(dir: &Path, on: bool) -> Result<AiSettings, String> {
     let mut s = load_settings(dir);
     s.enabled = on;
     s.installer_choice = Some(on);
+    if on && !s.classifier_chosen && s.classifier == "off" {
+        s.classifier = "embedded".into();
+    }
     save_settings(dir, &s)
+}
+
+/// The settings as they apply right now: while the user has not picked a classifier, an
+/// installed embedded model is the provider (nothing leaves the machine). The master switch,
+/// the per-feature toggles and `--no-ai` are untouched — [`gate`] still decides.
+pub fn effective_settings(mut s: AiSettings, embedded_installed: bool) -> AiSettings {
+    if embedded_installed && !s.classifier_chosen && s.classifier == "off" {
+        s.classifier = "embedded".into();
+    }
+    s
 }
 
 /// `--no-ai` on the command line or `BMM_NO_AI=1` in the environment: AI is off for this run,
@@ -177,6 +197,8 @@ pub enum Feature {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
+    /// « Laya intégré »: in-process, offline. Not a network provider at all.
+    Embedded,
     BetterCommunity,
     Local,
     External,
@@ -207,6 +229,7 @@ pub fn gate(s: &AiSettings, feature: Feature, killed: bool) -> Result<Provider, 
         return if s.generative == "external" { Ok(Provider::External) } else { Err("no_provider") };
     }
     match s.classifier.as_str() {
+        "embedded" => Ok(Provider::Embedded),
         "local" => Ok(Provider::Local),
         "bettercommunity" if s.bc_consent => Ok(Provider::BetterCommunity),
         "bettercommunity" => Err("no_consent"),
@@ -1280,9 +1303,22 @@ pub struct BcAuth {
     pub headers: Vec<(String, String)>,
 }
 
+/// One Laya question as BMM builds it: (id, "choice" | "noul" | "score", instructions,
+/// criteria in order).
+pub type LayaQuestion<'a> = (String, &'a str, String, Vec<(String, String)>);
+
+/// The embedded engine (`ai_embedded::Embedded` in the app and the CLI; a fake in the tests).
+/// Answers in laya-serve's response shape, so one parser reads both.
+pub trait LocalModel {
+    fn available(&self) -> bool;
+    fn predict(&self, state_text: &str, questions: &[LayaQuestion]) -> Result<Value, String>;
+}
+
 pub struct Ctx<'a> {
     pub settings: &'a AiSettings,
     pub transport: &'a dyn Transport,
+    /// The embedded engine, when this binary has one. `None` → the embedded provider is absent.
+    pub local_model: Option<&'a dyn LocalModel>,
     pub killed: bool,
     pub local_key: Option<String>,
     pub external_key: Option<String>,
@@ -1297,6 +1333,32 @@ fn short_reason(e: &str) -> String {
 fn laya_url(ctx: &Ctx) -> Result<String, String> {
     let u = validate_url(&ctx.settings.local_url, EndpointKind::LocalLaya, ctx.settings.local_allow_remote)?;
     Ok(if u.url.ends_with("/v1/systemone") { u.url } else { format!("{}/v1/systemone", u.url) })
+}
+
+/// Ask Laya: in-process when the provider is the embedded engine (no request of any kind),
+/// otherwise the user's laya-serve over HTTP.
+fn ask_laya(ctx: &Ctx, provider: Provider, text: &str, qs: &[LayaQuestion]) -> Result<Value, String> {
+    match provider {
+        Provider::Embedded => {
+            let m = ctx.local_model.filter(|m| m.available()).ok_or_else(|| "embedded:absent".to_string())?;
+            m.predict(text, qs)
+        }
+        _ => {
+            let url = laya_url(ctx)?;
+            ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, qs), ctx.settings.timeout_ms)
+        }
+    }
+}
+
+/// A Laya failure as a note: the embedded engine's reasons already say "embedded:…".
+fn laya_note(provider: Provider, e: &str) -> String {
+    if e.starts_with("embedded:") {
+        short_reason(e)
+    } else if provider == Provider::Embedded {
+        format!("embedded:{}", short_reason(e))
+    } else {
+        format!("laya:{}", short_reason(e))
+    }
 }
 
 fn laya_headers(ctx: &Ctx) -> Vec<(String, String)> {
@@ -1334,8 +1396,10 @@ pub fn laya_answer(resp: &Value, id: &str) -> (Option<String>, Option<f64>, Opti
         Value::Bool(b) => (None, Some(if b { 1.0 } else { 0.0 }), conf),
         Value::Object(o) => {
             let choice = ["choice", "answer", "label", "value"].iter().find_map(|k| o.get(*k).and_then(|v| v.as_str()).map(str::to_string));
-            let p = ["p", "prob", "probability", "p_true", "value", "score"].iter().find_map(|k| o.get(*k).and_then(|v| v.as_f64()));
-            let c2 = o.get("confidence").and_then(|v| v.as_f64()).or(conf);
+            // `noul` is where laya-serve (and the embedded engine) put P(true) for a yes/no
+            // question; without it every tag answer from a real server read as "no answer".
+            let p = ["noul", "p", "prob", "probability", "p_true", "value", "score"].iter().find_map(|k| o.get(*k).and_then(|v| v.as_f64()));
+            let c2 = o.get("answer_confidence").or_else(|| o.get("confidence")).and_then(|v| v.as_f64()).or(conf);
             (choice, p, c2)
         }
         _ => (None, None, conf),
@@ -1372,18 +1436,20 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
     let mut out = Vec::new();
     let mut notes = Vec::new();
     match provider {
-        Provider::Local => {
-            let url = match laya_url(ctx) {
-                Ok(u) => u,
-                Err(e) => return (out, vec![format!("laya:{}", e)]),
-            };
-            let mut qs: Vec<(String, &str, String, Vec<(String, String)>)> = Vec::new();
+        Provider::Local | Provider::Embedded => {
+            if provider == Provider::Local {
+                if let Err(e) = laya_url(ctx) {
+                    return (out, vec![format!("laya:{}", e)]);
+                }
+            }
+            let (source, origin) = if provider == Provider::Embedded { ("laya", "Laya (embedded)") } else { ("laya", "laya (local)") };
+            let mut qs: Vec<LayaQuestion> = Vec::new();
             for (i, (_, name)) in asked.iter().enumerate() {
                 qs.push((format!("tag_{}", i), "noul", format!("Is this game mod about \"{}\"? Answer yes only if the text clearly says so.", name), Vec::new()));
             }
             qs.push(("language".into(), "choice", "In which language is this text written?".into(), LANGS.iter().map(|(c, n)| (c.to_string(), n.to_string())).collect()));
             qs.push(("nsfw".into(), "noul", "Does this game mod contain sexual or adult-only content?".into(), Vec::new()));
-            match ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, &qs), ctx.settings.timeout_ms) {
+            match ask_laya(ctx, provider, text, &qs) {
                 Ok(resp) => {
                     let mut ranked: Vec<(f64, &String, &String)> = Vec::new();
                     for (i, (id, name)) in asked.iter().enumerate() {
@@ -1395,18 +1461,18 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
                     }
                     ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
                     for (p, id, name) in ranked.into_iter().take(MAX_TAGS_PER_MOD) {
-                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: "laya".into(), origin: "laya (local)".into(), confidence: p as f32, applicable: true, note: name.clone() });
+                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: p as f32, applicable: true, note: name.clone() });
                     }
                     if let (Some(code), _, c) = laya_answer(&resp, "language") {
                         if LANGS.iter().any(|(k, _)| *k == code) {
-                            out.push(Suggestion { field: "language".into(), value: json!(code), source: "laya".into(), origin: "laya (local)".into(), confidence: c.unwrap_or(0.6) as f32, applicable: false, note: String::new() });
+                            out.push(Suggestion { field: "language".into(), value: json!(code), source: source.into(), origin: origin.into(), confidence: c.unwrap_or(0.6) as f32, applicable: false, note: String::new() });
                         }
                     }
                     if let (_, Some(p), _) = laya_answer(&resp, "nsfw") {
-                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: "laya".into(), origin: "laya (local)".into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p) });
+                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: source.into(), origin: origin.into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p) });
                     }
                 }
-                Err(e) => notes.push(format!("laya:{}", short_reason(&e))),
+                Err(e) => notes.push(laya_note(provider, &e)),
             }
         }
         Provider::BetterCommunity => {
@@ -1529,10 +1595,9 @@ pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, 
     let known: Vec<&String> = known.iter().take(8).collect();
     let mut t = Triage::default();
     match provider {
-        Provider::Local => {
-            t.provider = "laya".into();
-            let url = laya_url(ctx)?;
-            let mut qs: Vec<(String, &str, String, Vec<(String, String)>)> = vec![
+        Provider::Local | Provider::Embedded => {
+            t.provider = if provider == Provider::Embedded { "embedded".into() } else { "laya".into() };
+            let mut qs: Vec<LayaQuestion> = vec![
                 ("category".into(), "choice", "What kind of problem does this report describe?".into(), REPORT_CATEGORIES.iter().map(|c| (c.to_string(), c.replace('_', " "))).collect()),
                 ("severity".into(), "choice", "How severe is the problem for the user?".into(), REPORT_SEVERITIES.iter().map(|c| (c.to_string(), c.to_string())).collect()),
             ];
@@ -1541,7 +1606,7 @@ pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, 
                 crit.push(("none".into(), "None of these: a new problem".into()));
                 qs.push(("duplicate".into(), "choice", "Which earlier report describes the same problem?".into(), crit));
             }
-            let resp = ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, &qs), ctx.settings.timeout_ms).map_err(|e| format!("laya:{}", short_reason(&e)))?;
+            let resp = ask_laya(ctx, provider, text, &qs).map_err(|e| laya_note(provider, &e))?;
             if let (Some(c), _, p) = laya_answer(&resp, "category") {
                 if REPORT_CATEGORIES.contains(&c.as_str()) {
                     t.category = Some(c);
@@ -1581,6 +1646,13 @@ pub fn test_connection(ctx: &Ctx, target: &str) -> Result<Value, String> {
     gate(ctx.settings, Feature::TestConnection, ctx.killed).or_else(|w| if w == "no_provider" || w == "no_consent" { Ok(Provider::Local) } else { Err(w) }).map_err(|w| w.to_string())?;
     let started = std::time::Instant::now();
     match target {
+        "embedded" => {
+            let q: Vec<LayaQuestion> = vec![("ping".into(), "noul", "Is this text a test?".into(), Vec::new())];
+            let resp = ask_laya(ctx, Provider::Embedded, "BetterModsManager connection test.", &q)?;
+            if resp.get("answers").is_none() {
+                return Err("bad_response".into());
+            }
+        }
         "local" => {
             let url = laya_url(ctx)?;
             let body = laya_body("BetterModsManager connection test.", &[("ping".into(), "noul", "Is this text a test?".into(), Vec::new())]);
@@ -1705,8 +1777,10 @@ pub fn merge_tags(existing: &[String], add: &[String]) -> (Vec<String>, Vec<Stri
 }
 
 /// A status snapshot (Settings, `bmm_ai_status`, `bmm ai-status`). Never contains a key.
-pub fn status(dir: &Path) -> Value {
-    let s = load_settings(dir);
+/// `embedded` is the embedded engine's own report (`ai_embedded::status()`), which this file
+/// cannot ask for itself (it may only use external crates).
+pub fn status_with(dir: &Path, embedded: Value, embedded_installed: bool) -> Value {
+    let s = effective_settings(load_settings(dir), embedded_installed);
     let killed = kill_switch();
     let can = |f| gate(&s, f, killed).map(|p| format!("{:?}", p).to_lowercase()).unwrap_or_else(|w| format!("blocked:{}", w));
     json!({
@@ -1714,6 +1788,7 @@ pub fn status(dir: &Path) -> Value {
         "masterSwitch": s.enabled,
         "killSwitch": killed,
         "classifier": s.classifier,
+        "classifierChosen": s.classifier_chosen,
         "generative": s.generative,
         "features": { "modSuggest": s.mod_suggest, "reportTriage": s.report_triage, "descriptionDrafts": s.description_drafts },
         "localUrl": s.local_url,
@@ -1724,7 +1799,10 @@ pub fn status(dir: &Path) -> Value {
         "installerChoice": s.installer_choice,
         "keys": { "local": secret_storage(dir, "local_key"), "external": secret_storage(dir, "external_key") },
         "network": { "modSuggest": can(Feature::ModSuggest), "reportTriage": can(Feature::ReportTriage), "descriptionDrafts": can(Feature::DescriptionDraft) },
-        "bundledModel": false,
+        "bundledModel": embedded_installed,
+        "embedded": embedded,
+        // True when nothing an enabled feature does can leave this PC.
+        "offline": !s.enabled || killed || (matches!(s.classifier.as_str(), "off" | "embedded") && s.generative == "off"),
     })
 }
 
@@ -1777,7 +1855,105 @@ mod tests {
     }
 
     fn ctx<'a>(s: &'a AiSettings, t: &'a dyn Transport) -> Ctx<'a> {
-        Ctx { settings: s, transport: t, killed: false, local_key: None, external_key: Some("k".into()), bc: Some(BcAuth { base: "https://bettercommunity.ch".into(), headers: vec![] }) }
+        Ctx { settings: s, transport: t, local_model: None, killed: false, local_key: None, external_key: Some("k".into()), bc: Some(BcAuth { base: "https://bettercommunity.ch".into(), headers: vec![] }) }
+    }
+
+    /// A stand-in for the embedded engine: counts calls, answers like laya-serve does.
+    struct FakeModel {
+        calls: Cell<usize>,
+        present: bool,
+    }
+    impl LocalModel for FakeModel {
+        fn available(&self) -> bool {
+            self.present
+        }
+        fn predict(&self, _text: &str, qs: &[LayaQuestion]) -> Result<Value, String> {
+            self.calls.set(self.calls.get() + 1);
+            let mut a = serde_json::Map::new();
+            for (id, kind, _, crit) in qs {
+                let v = if *kind == "noul" {
+                    json!({ "type": "noul", "noul": if id == "tag_0" { 0.93 } else { 0.1 }, "confidence": 0.9, "answer_confidence": 0.9 })
+                } else {
+                    json!({ "type": "choice", "choice": crit[0].0, "probabilities": {}, "confidence": 0.4, "answer_confidence": 0.77 })
+                };
+                a.insert(id.clone(), v);
+            }
+            Ok(json!({ "answers": a }))
+        }
+    }
+
+    /// The embedded provider: answers from the engine, and not one request leaves — whatever
+    /// the transport would have said. The master switch and --no-ai still stop it.
+    #[test]
+    fn embedded_provider_never_touches_the_network() {
+        let mut s = all_on();
+        s.classifier = "embedded".into();
+        s.generative = "off".into();
+        let t = Counting::new(json!({ "answers": {} }));
+        let m = FakeModel { calls: Cell::new(0), present: true };
+        let mut c = ctx(&s, &t);
+        c.local_model = Some(&m);
+        let (sugg, notes) = classify_mod(&c, "a mod about weapons", &vocab());
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(m.calls.get(), 1);
+        assert!(sugg.iter().any(|x| x.field == "tags" && x.value == json!("t-weap") && x.origin == "Laya (embedded)"));
+        let lang = sugg.iter().find(|x| x.field == "language").expect("language hint");
+        assert!((lang.confidence - 0.77).abs() < 1e-6, "answer_confidence is the calibrated one");
+        let tr = triage_report(&c, "it crashed", &["old".into()]).unwrap();
+        assert_eq!(tr.provider, "embedded");
+        assert_eq!(tr.category.as_deref(), Some("crash"));
+        assert!(test_connection(&c, "embedded").is_ok());
+        assert_eq!(t.calls.get(), 0, "the embedded provider made a network request");
+
+        // Switch off → the engine is not even asked.
+        let mut off = s.clone();
+        off.enabled = false;
+        let mut c2 = ctx(&off, &t);
+        c2.local_model = Some(&m);
+        let before = m.calls.get();
+        let _ = classify_mod(&c2, "x", &vocab());
+        assert!(triage_report(&c2, "x", &[]).is_err());
+        let mut c3 = ctx(&s, &t);
+        c3.local_model = Some(&m);
+        c3.killed = true;
+        let _ = classify_mod(&c3, "x", &vocab());
+        assert_eq!(m.calls.get(), before, "master switch / --no-ai let the engine run");
+
+        // Not installed → a note, never a fallback to some server.
+        let absent = FakeModel { calls: Cell::new(0), present: false };
+        let mut c4 = ctx(&s, &t);
+        c4.local_model = Some(&absent);
+        let (sugg, notes) = classify_mod(&c4, "x", &vocab());
+        assert!(sugg.is_empty());
+        assert_eq!(notes, vec!["embedded:absent".to_string()]);
+        let c5 = ctx(&s, &t);
+        assert_eq!(classify_mod(&c5, "x", &vocab()).1, vec!["embedded:absent".to_string()]);
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn an_installed_model_is_the_default_until_the_user_chooses() {
+        let s = AiSettings::default();
+        assert_eq!(effective_settings(s.clone(), true).classifier, "embedded");
+        assert_eq!(effective_settings(s.clone(), false).classifier, "off");
+        let chosen = AiSettings { classifier_chosen: true, ..AiSettings::default() };
+        assert_eq!(effective_settings(chosen, true).classifier, "off", "an explicit « off » stays off");
+        let local = AiSettings { classifier: "local".into(), ..AiSettings::default() };
+        assert_eq!(effective_settings(local, true).classifier, "local");
+        // The default provider changes nothing about the master switch.
+        assert!(!effective_settings(AiSettings::default(), true).enabled);
+        assert_eq!(gate(&effective_settings(AiSettings::default(), true), Feature::ModSuggest, false), Err("ai_off"));
+    }
+
+    /// laya-serve answers a yes/no question as { "type": "noul", "noul": p }: that is P(true).
+    #[test]
+    fn laya_answer_reads_the_noul_field() {
+        let resp = json!({ "answers": { "t": { "type": "noul", "noul": 0.82, "confidence": 0.82, "answer_confidence": 0.82 },
+                                        "c": { "type": "choice", "choice": "fr", "confidence": 0.3, "answer_confidence": 0.61 } } });
+        assert_eq!(laya_answer(&resp, "t").1, Some(0.82));
+        let (c, _, conf) = laya_answer(&resp, "c");
+        assert_eq!(c.as_deref(), Some("fr"));
+        assert_eq!(conf, Some(0.61));
     }
 
     #[test]
@@ -2127,14 +2303,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = apply_installer_choice(dir.path(), true).unwrap();
         assert!(s.enabled);
-        assert_eq!(s.classifier, "off", "the installer box never picks a provider");
-        let st = status(dir.path());
+        assert_eq!(s.classifier, "embedded", "the « Laya hors ligne » box picks the offline engine, nothing else");
+        assert!(!s.classifier_chosen);
+        let st = status_with(dir.path(), Value::Null, false);
         assert_eq!(st["masterSwitch"], json!(true));
-        assert_eq!(st["network"]["modSuggest"], json!("blocked:no_provider"));
+        assert_eq!(st["network"]["modSuggest"], json!("embedded"));
+        assert_eq!(st["offline"], json!(true));
+        // A provider the user chose is never replaced by the installer box.
+        let mut mine = load_settings(dir.path());
+        mine.classifier = "bettercommunity".into();
+        mine.classifier_chosen = true;
+        save_settings(dir.path(), &mine).unwrap();
+        assert_eq!(apply_installer_choice(dir.path(), true).unwrap().classifier, "bettercommunity");
         let s = apply_installer_choice(dir.path(), false).unwrap();
         assert!(!s.enabled);
         assert_eq!(s.installer_choice, Some(false));
-        assert!(!status(dir.path()).to_string().contains("secret"));
+        assert!(!status_with(dir.path(), Value::Null, false).to_string().contains("secret"));
     }
 
     #[test]

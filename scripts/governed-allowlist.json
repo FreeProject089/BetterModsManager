@@ -295,8 +295,8 @@
   },
   "src/commands/ai.rs": {
     "spawn_blocking": {
-      "count": 3,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+      "count": 5,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO"
     }
   },
   "src/extra_tools/mcp_server.rs": {
@@ -309,6 +309,12 @@
     "spawn_blocking": {
       "count": 1,
       "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+    }
+  },
+  "src/commands/ai_embedded.rs": {
+    "io::copy": {
+      "count": 1,
+      "why": "one file of the verified model pack into the staging folder, once per explicit « Installer le modèle » click (≤ 353 MB, size-capped per entry)"
     }
   }
 }

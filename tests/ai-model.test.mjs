@@ -106,6 +106,14 @@ describe('provider gate mirror (explains; Rust decides)', () => {
         assert.equal(M.providerBlock({ enabled: true, classifier: 'bettercommunity', bc_consent: false }, 'report'), 'no_consent');
         assert.equal(M.providerBlock({ enabled: true, classifier: 'local', bc_consent: false, mod_suggest: false }, 'mod'), 'feature_off');
         assert.equal(M.providerBlock({ enabled: true, classifier: 'local', bc_consent: false }, 'mod'), '');
+        // The built-in engine needs no consent (nothing is sent) but still the master switch.
+        assert.equal(M.providerBlock({ enabled: true, classifier: 'embedded', bc_consent: false }, 'report'), '');
+        assert.equal(M.providerBlock({ enabled: false, classifier: 'embedded', bc_consent: false }, 'mod'), 'ai_off');
+    });
+    test('sizes read like the installer', () => {
+        assert.equal(M.fmtBytes(327125837), '327 MB');
+        assert.equal(M.fmtBytes(0), '0 B');
+        assert.equal(M.fmtBytes(1.5e9), '1.5 GB');
     });
 });
 

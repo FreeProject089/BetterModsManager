@@ -26,3 +26,9 @@ src-tauri/gen/
 
 # Working plan for the current batch — local scratch, deliberately never committed.
 PLAN.md
+
+# « Laya hors ligne » model pack and ONNX exports: hundreds of MB, pinned in laya-model.lock.json
+# and published as a release asset — never committed (no LFS in this repo).
+*.onnx
+*.onnx.data
+laya-offline-*.zip

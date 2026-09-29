@@ -377,10 +377,19 @@ Anything you set up yourself (a Discord webhook, a Cloudflare tunnel, …) sends
 under its own terms.
 
 ### 6.10 Optional AI (Laya)
-**Off by default**, in BMM and in the installer. BMM bundles no AI model. The mod-detail
-*Suggest details* action always reads the mod's own files on your PC first; nothing leaves it
-unless you turn on Settings → AI **and** choose a provider, and then only when you click
-*Suggest*, *ask for a description draft* or *Get an AI hint*:
+**Laya built in (offline)** — the installer's *Laya offline (local AI, nothing sent)* option, ticked
+by default — runs the Laya classifier **on your PC**: the text of a mod or a report is read in
+BMM's memory and **nothing is sent anywhere**, to BetterCommunity or anyone else. Installing it
+downloads a model pack once (from BMM's GitHub release, or the BetterCommunity mirror), checked
+against a pinned SHA‑256; that download carries nothing about you. BMM switches off the telemetry
+events of the ONNX Runtime library it uses (Microsoft's builds emit Windows event‑tracing events by
+default; per Microsoft, a minimal start‑up event may still be written to Windows' local event
+tracing, which Windows only forwards under your own Windows diagnostic‑data settings).
+
+The other providers are **off by default**. The mod-detail *Suggest details* action always reads
+the mod's own files on your PC first; nothing leaves it unless you turn on Settings → AI **and**
+choose a network provider, and then only when you click *Suggest*, *ask for a description draft*
+or *Get an AI hint*:
 
 - **What is sent** for a mod: its name, author, description, excerpts of its readme or manifest,
   up to 40 file names and the names of your tags, after BMM masks user names in paths, e‑mail and
@@ -395,9 +404,10 @@ unless you turn on Settings → AI **and** choose a provider, and then only when
   (Windows DPAPI, the macOS/Linux keychain) and never sent anywhere else; without either, they are
   kept for the session only.
 - **Nothing is written** to a mod until you tick a suggestion and click Apply.
-- Turn it off in Settings → AI, with the installer's *Optional AI features* box (or
+- Turn it off in Settings → AI, with the installer's *Laya offline* box (or
   `--set=ai_features=false`), or for one session with `--no-ai` / `BMM_NO_AI=1`. With the switch off,
-  BMM makes no AI request at all.
+  BMM makes no AI request and runs no model at all. Settings → AI → *Remove the model* deletes a
+  downloaded model pack.
 
 ---
 

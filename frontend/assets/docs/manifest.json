@@ -421,10 +421,10 @@
         "fr": "IA optionnelle (Laya)"
       },
       "summary": {
-        "en": "BMM can help you fill in a mod's details and check a bug report before you send it.",
-        "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer."
+        "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
+        "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 917,
+      "words": 1265,
       "diagrams": 1,
       "fr": true
     },

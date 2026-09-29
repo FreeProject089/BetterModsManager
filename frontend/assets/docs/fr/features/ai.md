@@ -2,8 +2,9 @@
 
 
 BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant
-de l'envoyer. **Tout est optionnel et désactivé par défaut** : tant que vous ne l'activez pas et
-ne choisissez pas de fournisseur, rien de tout cela ne quitte votre PC. La partie qui lit les
+de l'envoyer. **Tout est optionnel.** Avec **Laya intégré (hors ligne)** — installé par défaut
+avec BMM — le classifieur tourne sur votre PC et *rien* n'est envoyé nulle part. Les autres
+fournisseurs restent coupés tant que vous n'en choisissez pas un. La partie qui lit les
 fichiers du mod fonctionne sans rien de tout ça.
 
 ## Ce que ça fait — et ce que ça ne fait pas
@@ -15,7 +16,7 @@ fichiers du mod fonctionne sans rien de tout ça.
 | Indiquer la langue du texte d'un mod et s'il ressemble à du contenu adulte | Enregistrer ces indications : BMM n'a pas ce champ, elles sont affichées puis oubliées |
 | Masquer les données personnelles d'un rapport et vous signaler un rapport semblable déjà envoyé | Décider de ce que dit un rapport ni s'il part |
 | Donner un indice pour un rapport : catégorie, gravité, « ressemble à votre rapport … » | Clôturer, orienter ou juger un rapport — le tri côté serveur est le travail de BetterCommunity |
-| Demander un **brouillon** de description à **votre** API externe, si vous en configurez une | Embarquer un modèle : BMM ne contient aucun modèle d'IA |
+| Demander un **brouillon** de description à **votre** API externe, si vous en configurez une | Tourner en arrière-plan : le modèle ne répond que quand vous cliquez |
 
 ### Pourquoi Laya n'écrit pas de descriptions
 
@@ -29,17 +30,42 @@ Donc dans BMM :
 - les **tags** sont le choix de Laya parmi *vos* tags, chacun avec sa probabilité ;
 - sa réponse est un **signal** : affichée avec une confiance, jamais appliquée sans votre clic.
 
-### Pourquoi BMM ne l'embarque pas
+### Laya intégré (hors ligne)
 
-Faire tourner Laya en local demande Python et PyTorch — environ 1,5 Go — pour une fonction que
-la plupart des gens utiliseront quelques fois. BMM n'en embarque donc rien, et c'est vous qui
-choisissez où tourne le classifieur.
+BMM peut faire tourner Laya **lui-même**, sans Python, sans serveur et sans aucun réseau pendant
+qu'il travaille. C'est un **paquet de modèle** à part (327 Mo à télécharger, 404 Mo sur le disque) :
+
+- le modèle `laya-multilingual` (révision `e4e9ddf`), exporté en ONNX et quantifié — chaque
+  matrice de poids sur 8 bits, la table du vocabulaire sur 8 bits par ligne. Sur un jeu fixe de
+  186 réponses en dix langues, il donne la même réponse que le modèle d'origine dans **98,9 %**
+  des cas (les deux écarts étaient des quasi-égalités dans l'original), à 0,09 près au plus sur
+  une probabilité ;
+- son tokenizer, et ONNX Runtime 1.30 de Microsoft (`onnxruntime.dll`), chargé depuis le dossier
+  du paquet — BMM coupe les événements de télémétrie d'ONNX Runtime.
+
+**D'où il vient.** L'option de l'installeur *Laya hors ligne (IA locale, aucune donnée envoyée)*
+est cochée par défaut : l'installation télécharge le paquet une fois, le refuse s'il ne
+correspond pas à son SHA-256 épinglé, et le décompresse dans `<dossier d'installation>\models\laya`.
+Si vous l'avez décochée, **Réglages → IA → Laya intégré → Installer le modèle** télécharge le même
+paquet dans `%LOCALAPPDATA%\com.bettermm.desktop\models\laya` (avec une barre de progression ; un
+téléchargement interrompu reprend). **Supprimer le modèle** efface cette copie ; celle de
+l'installation part avec la désinstallation.
+
+**Ce que ça coûte.** Rien tant que vous ne cliquez pas : le modèle est chargé à la première
+question (environ 1,5 s), hors du fil de l'interface, sur deux cœurs, et libéré après 5 minutes
+sans utilisation. Chargé, il occupe environ 0,5 à 0,75 Go de mémoire ; un mod prend environ
+0,7 s sur un processeur de portable. Chaque fichier est vérifié contre son empreinte avant d'être chargé.
+
+Quand le paquet est installé et que vous n'avez pas choisi de fournisseur vous-même, le moteur
+intégré est le fournisseur. Chaque fonction attend toujours votre clic, et l'interrupteur
+principal coupe toujours tout.
 
 ## Fournisseurs
 
 | Fournisseur | Où part le texte | Ce qu'il faut |
 |---|---|---|
-| **Désactivé** (par défaut) | Nulle part. Les suggestions viennent des fichiers seulement | Rien |
+| **Désactivé** | Nulle part. Les suggestions viennent des fichiers seulement | Rien |
+| **Laya intégré (hors ligne)** (par défaut quand le modèle est installé) | **Nulle part** — lu sur ce PC par BMM lui-même | Le paquet de modèle (option de l'installeur, ou *Installer le modèle* dans les Réglages) |
 | **BetterCommunity** | `bettercommunity.ch`, qui fait tourner Laya sur son serveur | Un compte BetterCommunity lié à BMM, et cocher la case de consentement dans les Réglages |
 | **Mon propre serveur Laya** | Votre `laya-serve`, par défaut `http://127.0.0.1:8000` — ce PC | `pip install "laya[serve]"`, puis `laya-serve` (avec `LAYA_MODELS=multilingual`) |
 | **API externe** (rédaction seulement) | L'adresse compatible OpenAI que vous indiquez | Son URL, un nom de modèle et votre clé |
@@ -120,9 +146,10 @@ Si les deux premiers ne trouvent rien, le rapport part directement, comme avant.
 
 - **Réglages → IA (optionnelle)** : l'interrupteur principal. Éteint, aucune requête réseau
   d'IA nulle part dans BMM ; c'est couvert par un test automatisé qui compte les requêtes.
-- **L'installeur** : *Fonctionnalités IA optionnelles (Laya)* sur la page d'options, décochée
-  par défaut. Cochée, elle ne fait qu'allumer l'interrupteur principal — aucun fournisseur n'est
-  choisi, donc rien ne part tant que vous n'en choisissez pas un. En ligne de commande :
+- **L'installeur** : *Laya hors ligne (IA locale, aucune donnée envoyée)* sur la page
+  d'options, cochée par défaut puisque rien ne quitte le PC. Cochée, elle installe le paquet de
+  modèle et allume l'interrupteur principal avec le moteur intégré comme fournisseur ; décochée,
+  aucun modèle n'est installé et l'IA reste coupée. En ligne de commande :
   `--set=ai_features=false` (ou `true`).
 - **Pour une session** : lancez BMM avec `--no-ai`, ou définissez la variable d'environnement
   `BMM_NO_AI=1`. Les Réglages indiquent alors que l'IA est coupée pour cette session et

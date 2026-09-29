@@ -2,8 +2,9 @@
 
 
 BMM can help you fill in a mod's details and check a bug report before you send it. **All of it
-is optional and off by default**: until you turn it on and choose a provider, nothing about it
-leaves your PC. The part that reads a mod's own files works without any of it.
+is optional.** With **Laya built in (offline)** — installed by default with BMM — the classifier
+runs on your PC and *nothing* is sent anywhere. The other providers are off until you choose one.
+The part that reads a mod's own files works without any of it.
 
 ## What it does — and what it does not
 
@@ -14,7 +15,7 @@ leaves your PC. The part that reads a mod's own files works without any of it.
 | Hint the language of a mod's text and whether it looks like adult content | Store those hints anywhere: BMM has no such field, they are shown and forgotten |
 | Mask personal data in a report and tell you if you already sent a similar one | Decide what a report says or whether it is sent |
 | Give a hint for a report: category, severity, "looks like your earlier report …" | Close, route or judge a report — the server's triage is BetterCommunity's job |
-| Ask **your own** external API for a description **draft**, if you configure one | Ship a model: BMM contains no AI model at all |
+| Ask **your own** external API for a description **draft**, if you configure one | Run anything in the background: the model answers only when you click |
 
 ### Why Laya does not write descriptions
 
@@ -27,16 +28,39 @@ that a yes/no question is true (`noul`), or a score. It does not generate text. 
 - **tags** are Laya's choice among *your* tags, each with its probability;
 - its output is a **signal**: shown with a confidence, never applied without your click.
 
-### Why BMM does not bundle it
+### Laya built in (offline)
 
-Running Laya locally needs Python and PyTorch — about 1.5 GB — for a feature most people will
-use a few times. So BMM ships none of it, and you choose where the classifier runs.
+BMM can run Laya **itself**, without Python, without a server and without any network while it
+works. It is a separate **model pack** (327 MB to download, 404 MB on disk):
+
+- the `laya-multilingual` model (revision `e4e9ddf`), exported to ONNX and quantized — every
+  weight matrix to 8 bits, the vocabulary table to 8 bits per row. On a fixed set of 186 answers
+  in ten languages it agrees with the original model on **98.9 %** of them (the two differences
+  were near-ties in the original), with at most 0.09 of difference on a probability;
+- its tokenizer, and Microsoft's ONNX Runtime 1.30 (`onnxruntime.dll`), loaded from the pack's
+  own folder — BMM turns ONNX Runtime's telemetry events off.
+
+**Where it comes from.** The installer's option *Laya offline (local AI, nothing sent)* is
+ticked by default: setup downloads the pack once, refuses it unless it matches its pinned
+SHA-256, and unpacks it into `<install folder>\models\laya`. If you unticked it, **Settings → AI
+→ Laya built in → Install the model** downloads the same pack into
+`%LOCALAPPDATA%\com.bettermm.desktop\models\laya` (with a progress bar; an interrupted download
+resumes). **Remove the model** deletes that copy; the installed one goes with the uninstaller.
+
+**What it costs.** Nothing until you click: the model is loaded on the first question (about
+1.5 s), off the interface thread, with two CPU threads, and released after 5 minutes without
+use. Loaded, it takes about 0.5–0.75 GB of memory; one mod takes about 0.7 s on a laptop CPU.
+Each file is checked against its pin before it is loaded.
+
+When the pack is installed and you have not picked a provider yourself, the built-in engine is
+the provider. Every feature still waits for your click, and the master switch still turns it all off.
 
 ## Providers
 
 | Provider | Where the text goes | What you need |
 |---|---|---|
-| **Off** (default) | Nowhere. Suggestions come from the files only | Nothing |
+| **Off** | Nowhere. Suggestions come from the files only | Nothing |
+| **Laya built in (offline)** (default when the model is installed) | **Nowhere** — read on this PC by BMM itself | The model pack (installer option, or *Install the model* in Settings) |
 | **BetterCommunity** | `bettercommunity.ch`, which runs Laya on its server | A BetterCommunity account linked to BMM, and ticking the consent box in Settings |
 | **My own Laya server** | Your `laya-serve`, by default `http://127.0.0.1:8000` — this PC | `pip install "laya[serve]"`, then `laya-serve` (with `LAYA_MODELS=multilingual`) |
 | **External API** (writing only) | The OpenAI-compatible address you enter | Its URL, a model name and your key |
@@ -58,7 +82,9 @@ Rules BMM enforces before anything is sent — in the Rust core, not in the page
 Only when **you** click: *Suggest details* on a mod, *Also ask for a description draft*, or
 *Get an AI hint* on a report. Never in the background.
 
-- **For a mod:** its name, author, description, excerpts of its readme/manifest, up to 40 file
+- **With Laya built in:** nothing at all. The same text is read in memory by BMM and the dialog
+  says *Nothing was sent*.
+- **For a mod (other providers):** its name, author, description, excerpts of its readme/manifest, up to 40 file
   names, and the names of your tags. User names inside paths, e-mail addresses and IP addresses
   are masked first; the text is capped at 4 000 characters. The dialog shows the exact text sent.
 - **For a report hint:** the report text, after masking.
@@ -109,9 +135,10 @@ secrets when they were written.
 
 - **Settings → AI (optional)**: the master switch. Off means no AI network request anywhere in
   BMM; this is covered by an automated test that counts requests.
-- **The installer**: *Optional AI features (Laya)* on the options page, unticked by default.
-  Ticked only turns the master switch on — no provider is chosen, so still nothing is sent
-  until you pick one. From a command line: `--set=ai_features=false` (or `true`).
+- **The installer**: *Laya offline (local AI, nothing sent)* on the options page, ticked by
+  default because nothing leaves the PC. Ticked installs the model pack and turns the master
+  switch on with the built-in engine as the provider; unticked installs no model and leaves AI
+  off. From a command line: `--set=ai_features=false` (or `true`).
 - **For one session**: start BMM with `--no-ai`, or set the environment variable `BMM_NO_AI=1`.
   Settings then says AI is off for this session and the switch cannot be turned on.
 
@@ -126,7 +153,9 @@ The switch lives in `ai-settings.json` beside `data.json`; keys are in `ai-secre
 | `bmm_ai_suggest_mod_metadata` | `ai-suggest <mod-id> [--offline] [--draft]` | The same suggestions as the dialog. **Writes nothing** |
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Writes the fields named, with the dialog's validation |
 
-An agent must show the suggestions to you and apply only what you pick. See the
+The CLI and the MCP server use the same built-in engine as the app when the model pack is
+installed (the same files, the same caps), so they work offline too. An agent must show the
+suggestions to you and apply only what you pick. See the
 [MCP reference](doc-page:reference/mcp) and the [CLI reference](doc-page:reference/cli).
 
 ## See also

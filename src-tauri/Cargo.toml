@@ -111,6 +111,18 @@ hex = "0.4"
 # feature set fails here with "NASM command not found".
 russh = { version = "0.63.0", default-features = false, features = ["ring", "rsa", "flate2"] }
 russh-sftp = "2.4.0"
+# « Laya intégré » (commands/ai_embedded.rs): the Laya classifier run in-process, offline.
+# ONNX Runtime through `ort` (MIT OR Apache-2.0), with `load-dynamic`: nothing is linked or
+# downloaded at BUILD time (the default `download-binaries` fetches prebuilt libraries from a
+# third-party CDN during the build) — the official Microsoft onnxruntime.dll ships inside the
+# model pack and is loaded by absolute path, after its SHA-256 is checked. Pinned exactly: an
+# rc crate may change its API between candidates. api-27 needs ONNX Runtime >= 1.27 (the pack
+# ships 1.30.0).
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-27"] }
+# The Hugging Face tokenizer, the same 0.23.2 the Python `tokenizers` wheel is built from, so
+# tokenizer.json means byte-for-byte the same ids (checked by the golden test). `fancy-regex`
+# instead of the default `onig`, which needs a C toolchain step; no progress bar, no hub client.
+tokenizers = { version = "=0.23.2", default-features = false, features = ["fancy-regex"] }
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_Foundation", "Win32_Security_Cryptography", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_System_Ioctl", "Win32_System_IO"] }
 rand = "0.8"
