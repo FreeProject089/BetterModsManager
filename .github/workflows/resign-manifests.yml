@@ -17,9 +17,13 @@ name: Re-sign update manifests
 # Secrets:
 #   BMM_PRIVATE_KEY     (required) the publisher key, the same one release.yml uses.
 #   BCWEB_ASSETS_TOKEN  (optional) pushes the renewed files to the BCWEB mirror slots
-#                       `bmm-update-json` and `bmm-update-manifest`. Skipped when unset. BCWEB's
-#                       asset routes accept a session + 2FA only today, so this stays unset until
-#                       BCWEB grants a scoped key for them (scripts/publish-bcweb-asset.mjs).
+#                       `bmm-update-json` and `bmm-update-manifest`. Skipped when unset. It is a
+#                       BCWEB "CI publish key": BCWEB Admin > Downloads & assets > CI publish key,
+#                       tick those two slots (add `bmm-laya-offline` to share the key with
+#                       laya-model.yml), pick an expiry (90 days at most), confirm with 2FA, and
+#                       paste the key (shown once) here. It can only replace the slots it is bound
+#                       to, and BCWEB keeps the old file unless the upload matches its SHA-256
+#                       (scripts/publish-bcweb-asset.mjs). Mint the next one before it expires.
 #
 # By hand: Actions → "Re-sign update manifests" → Run workflow (optionally naming a tag).
 # Docs: frontend/assets/docs/en/reference/troubleshooting.md, BetterInstaller/docs/UPDATER-SETUP.md.

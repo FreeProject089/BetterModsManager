@@ -183,7 +183,8 @@ foreign, expired or not-newer manifest (`autoupdate.rs`, `verify_manifest_text`)
 
 Both signed manifests — this one and BetterInstaller's `update.json` — expire after 7 days.
 `.github/workflows/resign-manifests.yml` renews them twice a week (secret `BMM_PRIVATE_KEY`; the
-BetterCommunity mirror upload also needs `BCWEB_ASSETS_TOKEN` and is skipped without it). Run it by
+BetterCommunity mirror upload also needs `BCWEB_ASSETS_TOKEN`, a BCWEB CI publish key minted in BCWEB
+Admin → Downloads & assets → CI publish key, and is skipped without it). Run it by
 hand from *Actions → Re-sign update manifests → Run workflow*. If it stops, installed copies stop
 being offered updates after at most 7 days.
 

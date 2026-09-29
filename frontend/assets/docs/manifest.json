@@ -694,7 +694,7 @@
         "en": "Every GitHub Actions workflow in the BMM repository: what starts it, what it checks, what makes it fail, what it leaves behind, and how to run the same thing…",
         "fr": "Chaque workflow GitHub Actions du dépôt BMM : ce qui le déclenche, ce qu'il vérifie, ce qui le fait échouer, ce qu'il laisse derrière lui, et comment lancer…"
       },
-      "words": 1732,
+      "words": 1915,
       "diagrams": 0,
       "fr": true
     },
@@ -904,7 +904,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1903,
+      "words": 1938,
       "diagrams": 0,
       "fr": true
     },

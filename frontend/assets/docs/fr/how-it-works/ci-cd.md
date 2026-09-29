@@ -9,7 +9,7 @@ Cette page s'adresse aux contributeurs et aux mainteneurs. Rien ici ne tourne da
 
 ---
 
-## Les quatre workflows
+## Les cinq workflows
 
 | Workflow | Fichier | Se lance sur | Bloque sur |
 |---|---|---|---|
@@ -17,6 +17,7 @@ Cette page s'adresse aux contributeurs et aux mainteneurs. Rien ici ne tourne da
 | Release | `.github/workflows/release.yml` | un tag `v*`, ou à la main avec une version | une étape de build, de signature ou d'envoi |
 | Re-sign update manifests | `.github/workflows/resign-manifests.yml` | lundi et jeudi 04:17 UTC, ou à la main | un manifeste qui ne se vérifie pas avec la clé publique épinglée |
 | Security | `.github/workflows/security.yml` | push sur `main` / `master` / `Tdev`, chaque pull request, lundi 04:23 UTC, à la main | un secret dans l'historique, ou un résultat Semgrep / Trivy au seuil ou au-dessus |
+| Laya model | `.github/workflows/laya-model.yml` | un push qui touche l'épinglage ou le moteur Laya, lundi 04:17 UTC, à la main | un pack dont la taille ou le SHA-256 a dérivé de `laya-model.lock.json`, ou un test golden en échec |
 
 Chaque action est épinglée par SHA de commit complet, avec son tag en commentaire. Chaque image
 Docker des scans de sécurité est épinglée par digest. Un tag peut être déplacé par qui le contrôle,
@@ -60,8 +61,26 @@ qu'épinglent les copies installées, puis les renvoie. Il tourne deux fois par 
 planifié sauté ne provoque donc pas de panne.
 
 - **Secrets :** `BMM_PRIVATE_KEY` (obligatoire) ; `BCWEB_ASSETS_TOKEN` (optionnel : pousse aussi les
-  fichiers vers le miroir BCWEB ; ignoré s'il est absent).
+  fichiers vers les emplacements miroirs BCWEB `bmm-update-json` et `bmm-update-manifest` ; ignoré s'il
+  est absent).
+
+`BCWEB_ASSETS_TOKEN` est une **clé de publication CI** BCWEB. Un administrateur la crée dans BCWEB,
+*Admin → Téléchargements et assets → Clé de publication CI* : il coche les emplacements qu'elle peut
+remplacer (`bmm-update-json`, `bmm-update-manifest`, et `bmm-laya-offline` si le job Laya la partage),
+choisit une expiration de 90 jours au plus, confirme avec son code 2FA, puis colle la clé, montrée une
+seule fois, dans le secret du dépôt. La clé ne remplace que ces emplacements, via
+`scripts/publish-bcweb-asset.mjs`, et BCWEB garde l'ancien fichier si l'envoi ne correspond pas au
+SHA-256 que le script déclare. Crée la clé suivante avant que l'actuelle expire : une clé expirée fait
+échouer l'étape miroir, pas la release GitHub.
 - **Artefacts :** aucun ; il remplace les deux assets de la release.
+
+### Laya model (`laya-model.yml`)
+
+Télécharge le pack Laya hors ligne épinglé, échoue si sa taille ou son SHA-256 a dérivé de
+`laya-model.lock.json`, puis lance le test golden sur le vrai modèle. Quand `BCWEB_ASSETS_TOKEN` est
+défini et lié à `bmm-laya-offline`, un push sur `main` ou un lancement à la main recopie ensuite le pack
+validé vers `https://bettercommunity.ch/api/assets/bmm-laya-offline`, la seconde URL du fichier de
+verrouillage. Le passage hebdomadaire n'envoie jamais rien.
 
 ### Security (`security.yml`)
 

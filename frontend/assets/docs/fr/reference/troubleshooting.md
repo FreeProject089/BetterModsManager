@@ -177,7 +177,10 @@ jour » ; le journal dit pourquoi (`Update manifest refused: … expired`).
   renouvelle les deux fichiers deux fois par semaine. Lance-le à la main depuis *Actions → Re-sign
   update manifests → Run workflow* (en nommant un tag si besoin). Il lui faut le secret
   `BMM_PRIVATE_KEY` — la clé qui signe les releases — et, seulement pour les miroirs BetterCommunity,
-  `BCWEB_ASSETS_TOKEN`. GitHub met en pause les workflows planifiés d'un dépôt sans activité depuis
+  `BCWEB_ASSETS_TOKEN`, une clé de publication CI qu'un administrateur crée dans BCWEB (*Admin →
+  Téléchargements et assets → Clé de publication CI* ; elle expire en 90 jours au plus, donc une étape
+  miroir qui se met à échouer en HTTP 401 demande en général une nouvelle clé). GitHub met en pause les
+  workflows planifiés d'un dépôt sans activité depuis
   60 jours : réactive-le depuis l'onglet Actions le cas échéant. Voir [Sécurité](doc-page:how-it-works/security)
   pour les règles que BMM applique.
 

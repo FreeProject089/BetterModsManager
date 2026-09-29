@@ -167,7 +167,9 @@ refused, and a refused manifest looks exactly like "you are up to date"; the log
 - **If you publish BMM:** the workflow *Re-sign update manifests* (`.github/workflows/resign-manifests.yml`)
   renews both files twice a week. Run it by hand from *Actions → Re-sign update manifests → Run
   workflow* (optionally naming a tag). It needs the `BMM_PRIVATE_KEY` secret — the key that signs the
-  releases — and, only for the BetterCommunity mirrors, `BCWEB_ASSETS_TOKEN`. GitHub pauses scheduled
+  releases — and, only for the BetterCommunity mirrors, `BCWEB_ASSETS_TOKEN`, a CI publish key an
+  administrator creates in BCWEB (*Admin → Downloads & assets → CI publish key*; it expires within 90
+  days, so a mirror step that starts failing with HTTP 401 usually needs a new one). GitHub pauses scheduled
   workflows in a repository with no activity for 60 days: re-enable it from the Actions tab if so.
   See [Security](doc-page:how-it-works/security) for the rules BMM applies.
 
