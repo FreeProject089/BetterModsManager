@@ -298,9 +298,10 @@ fn main() {
     //   - background-networking: no telemetry pings
     //   - renderer-process-limit=2: cap renderer/subframe processes
     //
-    // Plus, when the user turned it off in Settings, the two fixed flags that stop WebView2
-    // from using the GPU (boot_flags.rs: read here because it must be decided before the
-    // webview exists). A variable the user set themselves still wins, untouched.
+    // Plus the Graphics choice from the Storage Manager (boot_flags.rs: read here because it
+    // must be decided before the webview exists): nothing for Automatic, one fixed switch for
+    // High performance or Power saving, the two fixed flags that stop WebView2 from using the
+    // GPU for Off. A variable the user set themselves still wins, untouched.
     if let Some(args) = boot_flags::apply_at_boot(
         "--disable-features=AudioServiceOutOfProcess,Translate,BackgroundNetworking,InterestFeedContentSuggestions \
          --disable-extensions \
@@ -448,9 +449,15 @@ fn main() {
             // profiles are re-read each poll, without waiting for a busy state lock.
             {
                 let data = app.state::<AppState>().data.clone();
+                let notice = app.handle().clone();
                 crate::governor::procs::start(move || {
                     let d = data.try_lock().ok()?;
                     Some(d.profiles.iter().map(|p| p.game_path.to_string_lossy().into_owned()).collect())
+                }, move |view| {
+                    // Game mode turned on or off by itself: the Storage Manager's notice (a toast,
+                    // unless the user turned it off) and its live status.
+                    let notify = crate::governor::runtime::global().config().game.notify;
+                    let _ = tauri::Emitter::emit(&notice, "bmm://game-mode", serde_json::json!({ "view": view, "notify": notify }));
                 });
             }
 
@@ -573,6 +580,15 @@ fn main() {
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::installer_handoff::consume_installer_handoff,
+            commands::ai::ai_get_settings,
+            commands::ai::ai_save_settings,
+            commands::ai::ai_set_secret,
+            commands::ai::ai_check_url,
+            commands::ai::ai_test_connection,
+            commands::ai::ai_suggest_mod_metadata,
+            commands::ai::ai_apply_mod_metadata,
+            commands::ai::ai_report_precheck,
+            commands::ai::ai_triage_report,
             commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
             commands::settings::is_dev_build,
@@ -619,6 +635,7 @@ fn main() {
             commands::scheduler::scheduler_script_engines,
             commands::bmms::bmms_compile,
             commands::bmms::bmms_compile_steps,
+            commands::bmms::bmms_line_map,
             commands::bmms::bmms_decompile,
             commands::scheduler::list_running_processes,
             commands::scheduler::stop_process,
@@ -852,6 +869,8 @@ fn main() {
             commands::creator_v5::creator_identity_reset,
             boot_flags::get_webview_gpu,
             boot_flags::set_webview_gpu,
+            boot_flags::set_webview_gpu_mode,
+            boot_flags::app_restart,
             commands::security::bc_api_get,
             commands::security::set_bcweb_api_key,
             commands::security::has_bcweb_api_key,
@@ -929,6 +948,9 @@ fn main() {
             crate::commands::mapper::rename_mod_item,
             commands::net::fetch_remote_json,
             commands::net::http_request,
+            commands::sched_net::sched_webhook,
+            commands::sched_net::sched_feed_fetch,
+            commands::sched_net::task_feed_append,
             commands::sandbox_gen::generate_sandbox_library,
             commands::sandbox_gen::clear_sandbox_library,
             commands::sandbox_gen::sandbox_library_info,
@@ -953,6 +975,9 @@ fn main() {
             commands::plugin_assets::plugin_file_read,
             commands::mod_order::mod_order_get,
             commands::mod_order::mod_order_set,
+            commands::mod_order::mod_order_preview,
+            commands::mod_order::mod_order_place,
+            commands::mod_order::mod_order_reapply,
             commands::task_output::task_write_file,
             commands::task_output::task_output_dir,
             commands::sched_runs::sched_run_append,
@@ -963,6 +988,7 @@ fn main() {
             commands::resources::resources_clear_task_preset,
             commands::resources::resources_game_mode,
             commands::resources::resources_set_game_exes,
+            commands::resources::resources_set_game_options,
             commands::resources::resources_queue,
             commands::resources_live::resources_subscribe,
             commands::resources_live::resources_unsubscribe,

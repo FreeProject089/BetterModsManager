@@ -21,7 +21,9 @@
 const DIALOG_SELECTOR = [
     '.modal-overlay',        // every static modal in index.html (shown with .open)
     '#onboarding-overlay',   // the first-run tour
-    '.ptb-modal',            // the PTB-mode notice
+    '.ptb-modal',            // the PTB-mode notice (no element wears this class any more…)
+    '#ptb-welcome-modal',    // …this is the one it actually builds (update-notes.ts)
+    '#launch-deck',          // the start-up deck (it is a .modal-overlay too; named for the reader)
     '#upd-card',             // the update-notes card
     '#bc-link-modal',        // the account pairing code
     '#bc-discord-modal',     // the Discord pairing code

@@ -125,6 +125,43 @@ Keep the `_info` block (name + flag shown in the picker) and the `_synonyms` gro
 semantic search in your language). **French is the base**: an untranslated key falls back to
 FR; a key missing everywhere shows its raw id. `en`, `fr` and the template can't be deleted.
 
+<a id="graphics"></a>
+### Graphics & display
+> How BMM's own window is drawn. It only concerns the interface, never your games or your mods.
+
+BMM's interface is a web view (Microsoft WebView2), which draws with a graphics card like a browser
+does. The card has a **Learn more** link and is reachable from the command palette
+(*Graphics & display*).
+
+| Choice | What BMM does | When to pick it |
+|---|---|---|
+| **Automatic** (the default) | Adds nothing: WebView2 and Windows choose. A choice made for WebView2 in Windows **Settings → Display → Graphics** still applies | Almost always |
+| **Power saving** | Starts WebView2 with `--force_low_power_gpu` | A laptop with two graphics chips, to save battery and heat |
+| **High performance** | Starts WebView2 with `--force_high_performance_gpu` | A PC with two graphics chips where the window's animations stutter |
+| **Off** | Starts WebView2 with `--disable-gpu --disable-gpu-compositing`: the processor draws | Only when the window turns black, freezes or flickers because of a broken driver |
+
+**Off** is the former *Hardware acceleration* switch: one control now, not two. A choice saved by
+an older BMM keeps its meaning.
+
+- The choice is read **before the window exists**, so it applies at the **next start**. The card
+  says which choice this session started with, and offers **Restart BMM now** (after asking: a
+  restart stops a deploy or an install in progress).
+- On a PC with **one** graphics card, Power saving and High performance both use it; the card says
+  how many cards it found.
+- **Drawing the window right now** names the card that really draws BMM, read from the window
+  itself (WebGL). If it says *the processor* although the PC has a card and the choice is not
+  **Off**, WebView2 has fallen back to software drawing, usually because the driver is blocked or
+  crashed: updating the graphics driver fixes it in most cases.
+- **Reduce animations** ends transitions and effects at once, whatever the theme (a theme can also
+  do it with `--bmm-anim-speed: 0`; either one is enough). Progress spinners keep turning, slowly.
+  It applies immediately. Windows' own *show fewer animations* setting is honoured too.
+- Folded underneath: the hardware BMM detected (processor instructions, graphics cards, each
+  disk's bus).
+- If you set the `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` environment variable yourself, BMM leaves
+  it and all its arguments alone, and the choice is greyed out.
+- The file behind it is `boot-flags.json` in BMM's app-data folder. It holds a switch and one of
+  three words; nothing in it is ever pasted into the arguments, and a damaged file means Automatic.
+
 ### Identity & API
 
 > All your important credentials in one place. Click the eye icon to reveal a value.

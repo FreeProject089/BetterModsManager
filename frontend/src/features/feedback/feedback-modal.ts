@@ -9,6 +9,7 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen, anonLimits, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
 import { bcLinkState, openAccountLinkFlow, forgetBcLinkState, type BcLinkState } from '../../core/bc-link.js';
+import { reportSig } from '../ai/ai-model.js';
 
 type Kind = FeedbackKind;
 interface OpenOpts { crashZip?: string }
@@ -475,13 +476,23 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
     if (_busy) return;
     const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
     const status = q('fbm-status');
-    const title = q<HTMLInputElement>('fbm-title')?.value.trim() || '';
-    const desc = q<HTMLTextAreaElement>('fbm-desc')?.value.trim() || '';
+    let title = q<HTMLInputElement>('fbm-title')?.value.trim() || '';
+    let desc = q<HTMLTextAreaElement>('fbm-desc')?.value.trim() || '';
     const email = q<HTMLInputElement>('fbm-email')?.value.trim() || '';
     const discord = q<HTMLInputElement>('fbm-discord')?.value.trim() || '';
     const say = (msg: string, tone: '' | 'err' | 'ok' = '') => { if (status) { status.textContent = msg; status.className = `fbm-status${tone ? ` fbm-status-${tone}` : ''}`; } };
     if (desc.length < 10) { say(t('fbm.tooShort'), 'err'); q('fbm-desc')?.focus(); return; }
     if (!linked && cfg?.requireContact && !email) { say(t('feedback.contactRequired'), 'err'); q('fbm-email')?.focus(); return; }
+    // Before anything is packed: personal data masked, "already sent?", an optional AI hint
+    // (features/ai/ai-report.ts). Local unless the user asks for the hint, and the user decides
+    // what goes. The check is a help, never a gate: if it fails, the report sends as before.
+    let reviewedSteps: string[] | null = null;
+    try {
+        const { reviewBeforeSend } = await import('../ai/ai-report.js');
+        const rv = await reviewBeforeSend({ title, desc, steps: _steps.map((s) => s.trim()).filter(Boolean) });
+        if (!rv.proceed) { say(t('ai.report.review')); return; }
+        title = rv.parts.title; desc = rv.parts.desc; reviewedSteps = rv.parts.steps;
+    } catch { /* sent as typed */ }
     // Both ceilings, resolved in one place — see attachLimits for why there are two.
     const lim = attachLimits(cfg);
     const maxN = lim.maxAttachments;
@@ -520,7 +531,7 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
             const diag = await invoke('get_dxdiag_report').catch(() => null);
             if (diag && !put('dxdiag_report.txt', 'text/plain', textToBase64(String(diag)))) toast(t('fbm.skippedBig').replace('{f}', 'dxdiag_report.txt'), 'warning');
         }
-        const steps = _steps.map((s) => s.trim()).filter(Boolean);
+        const steps = reviewedSteps ?? _steps.map((s) => s.trim()).filter(Boolean);
         const body = steps.length ? `${desc}\n\n${t('fbm.fSteps')}\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : desc;
         // Anti-spam friction: a bit of proof-of-work before the report goes out. Shown so the
         // brief wait reads as "checking", not "stuck".
@@ -536,7 +547,7 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
             { linked: who.state !== 'anonymous' });
         try {
             const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
-            history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString() });
+            history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString(), sig: reportSig(title, body) });
             localStorage.setItem('bmm_report_history', JSON.stringify(history.slice(0, 50)));
             document.getElementById('bh-history-refresh')?.click();
         } catch { /* private mode */ }

@@ -47,6 +47,14 @@ matters.
     mods "not installed". `All` is the safe default for anything leaving your machine; save
     `Manual`/`None` for personal packs where you're managing dependencies yourself.
 
+## The order inside a pack
+
+A pack's list is an **order**: the arrows on each mod in the editor move it up or down. When the
+pack is applied, its mods are enabled and then placed **on top** of the profile's activation order,
+in the pack's sequence, as one block — so where two of the pack's mods share a file, the one lower
+in the pack wins, and the pack wins what it shares with mods the profile already had. See
+[Activation order](doc-page:how-it-works/load-order).
+
 ## Sharing one: the hash is the point
 
 When you export, BMM doesn't ship the mods — it ships a **signature**:

@@ -52,6 +52,7 @@ a dashed edge; a collapsed one keeps its tag so a long automation still reads as
 | `afterTask` | Another task finished. Optionally only when it succeeded, or only when it failed. |
 | `condition` | One of the 34 conditions became true. |
 | `script` | A script you wrote exited 0. |
+| `rss` | A feed (RSS or Atom) has an item it did not have before — [below](#telling-the-outside-world-webhooks-discord-slack-feeds). |
 | `manual` | Never on its own — only the ▶ **Run now** button or `bmm://schedule/run`. |
 
 !!! warning "Time triggers only fire while BMM is awake"
@@ -158,7 +159,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~106 actions across eight groups:
+There are ~110 actions across nine groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -215,7 +216,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants seven things separately, and each says what it unlocks:
+Each task grants eight things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -226,8 +227,9 @@ Each task grants seven things separately, and each says what it unlocks:
 | **Delete things** | Delete a profile, a modpack, or a mod's folder |
 | **Resources** | Change the resource preset, game mode and the queue ([below](#how-hard-bmm-works)) |
 | **Other tasks** | Run, start or switch on another of your tasks (*Run another scheduled task*, *Start another task without waiting*, *Arm or disarm another task*) |
+| **Network** | Send webhooks and Discord or Slack messages, and read a feed for the `rss` trigger — http(s) only, never a private address unless the step allows the local network ([below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
 
-All seven are off until you turn them on, and a step whose permission is missing fails with a
+All eight are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
 **Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
@@ -403,6 +405,17 @@ until the game process exits, then export my data*".
 
 ## Three ways to edit a task
 
+**The first time you create a task**, BMM asks which of the three you prefer — **Flow**
+(recommended: the whole task at once, a test per node, the debugger walking it), **BMMScript**
+or **Blocks**, one line each. The answer is a setting: **Settings → Planning → Tasks open in**,
+and the switch at the top of the editor changes it too.
+
+**The editor's header** carries what you act on: the task's name, whether it is **On** or **Off**
+(click to switch), *Unsaved changes* when there are some, the mode switch, **Preview** (a dry run
+that changes nothing), **Debug**, **Test run** and **Save** — which keeps the editor open
+(:kbd[Ctrl+S]). The footer keeps **Cancel** and **Save and close**.
+
+
 The builder has a switch at the top of the steps: **Blocks**, **Code** and **Flow**. They are three
 views of the same task. There is one tree of steps; each mode reads it and writes it, so a task built
 in one opens identically in the other two, and the mode you used last is the one the builder opens in
@@ -423,8 +436,14 @@ next time.
 - **Adding.** Every edge has a **+** in the middle, every empty lane has a **+**, and so does the end
   of the task. Each opens a search over every step and every action — type a few letters, arrows,
   Enter. An action that needs a permission this task has not been granted says so in the list.
-- **Editing.** Select a node and the panel on the right shows its fields. They are the *same* fields
-  as in Blocks, not a copy: the same pickers, the same checks.
+- **Editing.** Select a node and the panel on the right shows it in sections: what it does (with a
+  *Learn more* link), what is wrong with it (a missing permission, how the last run went), its
+  **Settings**, **Test**, and **Debugging** (a breakpoint, and the values it names while a run is
+  paused). The settings are the *same* fields as in Blocks, not a copy: the same pickers, the same
+  checks. Fields are grouped, say what is wrong with them **as you type** (an address that would be
+  refused, a JSON body that does not parse, a regular expression that would backtrack for minutes),
+  and every field that takes `{variables}` has a **{x}** button listing the variables this task can
+  name — what its steps write, what its trigger hands over, the shared ones and the built-ins.
 - **Moving.** Drag a node; it snaps to the grid. Where you put it is kept with the task, as an offset
   from its automatic place, so inserting a step still pushes what comes after it along. **Auto-layout**
   forgets the positions you placed by hand. Nothing about where a node sits changes what the task
@@ -461,10 +480,87 @@ while the canvas has the focus, so typing in a field is never taken over.
 | Fit the whole task in view | :kbd[F] |
 | Auto-layout (forget hand-placed positions) | :kbd[Shift+L] |
 | Blocks mode · Code mode · Flow mode | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
+| Save the task (and keep editing) | :kbd[Ctrl+S] |
+| Test the selected step once | :kbd[T] |
+| Breakpoint on the selected step | :kbd[F9] |
+| Step (run the next step, then stop) · Continue to the next breakpoint · Stop the run | :kbd[F10] · :kbd[F5] · :kbd[Shift+F5] |
 
 With the mouse: drag the background, hold :kbd[Space] and drag, or scroll, to move around;
 :kbd[Ctrl] + wheel (or a pinch) to zoom; :kbd[Shift] + drag to select several nodes, :kbd[Ctrl] + click
 to add one to the selection.
+
+## Telling the outside world — webhooks, Discord, Slack, feeds
+
+Four steps in the **Notifications & web** group, and one trigger.
+
+| Step | Sends | Permission |
+|---|---|---|
+| **Send a webhook** (`webhook.send`) | POST, PUT or PATCH to any address, with a JSON (or text) body, headers, **secret headers**, and retries | **Network** |
+| **Send a Discord message** (`discord.send`) | A message to a channel, through its webhook address | **Network** |
+| **Send a Slack message** (`slack.send`) | A message to a channel, through an incoming webhook | **Network** |
+| **Add an entry to a feed** (`feed.publish`) | Nothing over the network: an entry at the top of an Atom file the task keeps | none |
+
+The body of a webhook is a template: `{variables}` are filled in before sending, and in a JSON
+body they are **escaped as JSON text**, so a feed title with a quote in it or a log line with a
+line break cannot break the document. A JSON body that does not parse is refused before
+anything is sent — a half-formed body is otherwise a `400` with no hint of why.
+
+**What stays secret.** Put tokens in **Secret headers**: they are sent like the others and are
+never shown in a log, an error, the debugger or a step's one-line summary. A Discord or Slack
+webhook address *is* the password, so it is typed in a masked field and a node shows only its
+host. Errors never quote the address (the network library puts it in its errors; BMM rebuilds
+them without it), and the run log already removes query strings and long tokens.
+
+**What is refused, whatever the task says** (the checks run in BMM's backend):
+
+- anything but `http://` and `https://`, and an address with `user:password@` in it;
+- a **private address** — this PC (`localhost`, `127.0.0.1`, `::1`), your network (`10.x`,
+  `192.168.x`, `172.16–31.x`), link-local (`169.254.x`, the cloud metadata address), CGNAT
+  (`100.64.x`), IPv6 local ranges, and IPv4 hidden inside IPv6 — unless the **step** ticks *Allow
+  the local network*. The check is made on the addresses the name **resolves to**, and the
+  connection is pinned to exactly those, so a name that answers one thing to the check and
+  another to the connection reaches nothing new. No system proxy is used for these requests;
+- a Discord step whose address is not `https://discord.com/api/webhooks/…`, a Slack step whose
+  address is not `https://hooks.slack.com/…`;
+- redirects on a webhook (the 3xx is reported; the body is not re-sent somewhere else). A feed
+  read follows up to five redirects and checks every hop again.
+
+Every request has a **timeout** (15 s by default, 60 s at most) and a **size cap** on the answer
+(256 KB for a webhook, 4 MB for a feed). A webhook is retried on a network error, a `429` or a
+`5xx` — up to four more times, with a growing pause — and never on another `4xx`: sending a wrong
+request again is sending it wrong again. `{http.status}` and `{http.body}` (the first lines of the
+answer) are readable afterwards; a non-2xx stops the step unless *Treat 4xx and 5xx as success* is
+ticked.
+
+**"RSS" means two things, and BMM does both.**
+
+- **A feed as a trigger** — *When a feed has a new item* (`rss`). Give it the address of an RSS or
+  Atom feed and how often to check it (every 5 minutes at the most often). The first check only
+  **learns** what is there, so arming a task on a feed with fifty items does not run it fifty
+  times. After that, new items run the task **once**, with the newest one as `{event.title}`,
+  `{event.link}`, `{event.id}`, `{event.published}`, and how many there were as `{event.count}`.
+  What was seen is remembered across launches, so an item published while BMM was closed still
+  runs the task at the next check. It needs **Network**; without it the feed is never read, and
+  the task's "why is it not running" line says so. *Read the feed now* shows what the trigger
+  would see without remembering anything.
+- **A feed of the task's own** — *Add an entry to a feed* writes an Atom file (newest first,
+  50 entries kept by default) in the task's output folder, or wherever you point it. Any feed
+  reader can follow it, or host the folder with Server Repo. With an *after a task* trigger, that
+  is a feed of another task's results. BMM never overwrites a file that is not a feed it keeps.
+
+Email is not offered: BMM has no mail path, and adding one means storing an SMTP password.
+
+## Testing one step
+
+Every step has a **Test** button — ▶ on a block, a *Test this step* section in the flow's panel,
+:kbd[T] on a selected node. It runs that step once, on its own, with the task's permissions and
+fresh variables, and shows what came back **on the step itself**: a pulse while it runs, then a
+green or red outline and a line with the verdict, the HTTP status and the first words of the
+answer. Under *reduced motion* the pulse is a still outline.
+
+A step that only computes, reads or sends a message is tested straight away. A step that changes
+something — enables a mod, deletes a profile, starts a program — asks first, because a Test
+button that silently did that would be a trap.
 
 ## Everyday controls
 
@@ -943,8 +1039,9 @@ and stops before each one to show you what the task is holding.
 | **Copy** | The steps and the variables as text, for a bug report. A failure is stated on the second line, above the log. |
 | **Stop** | End the run here. |
 
-The two keys are ignored while a text field has focus, so typing an F in the filter does not
-advance the run. Nothing is bound to ++esc++: it closes dialogs everywhere else in BMM, and a
+The keys are commands like every other (Ctrl+K lists them, Settings → Keyboard shortcuts rebinds
+them), and they are ignored while a text field has focus, so typing an F in the filter does not
+advance the run. :kbd[Shift+F5] stops; :kbd[F9] puts a breakpoint on the selected step. Nothing is bound to ++esc++: it closes dialogs everywhere else in BMM, and a
 key that sometimes stops a debug run and sometimes shuts the window behind it is worse than no
 key.
 
@@ -974,6 +1071,22 @@ The panel can be dragged by its header — it is pinned to a corner, and the cor
 exactly where the step you are reading is drawn. Its header also counts **steps run and seconds
 elapsed**: a step that took nine seconds was not visible as one, and it is usually the step
 being looked for.
+
+### In each editor
+
+The run is shown where you are looking, and the three editors agree because the debugger reports
+**which step** it stands on (its path in the task — the same path the run log records):
+
+| Mode | While it runs | Breakpoints |
+|---|---|---|
+| **Flow** | The node the run stands on glows; a running node pulses; a failed one turns red. Hover a node while paused to see the values **that step** reads or writes. | The dot on a node's left edge, or *Pause here* in its panel |
+| **Blocks** | The running block is outlined and scrolled into view. | The ● button of a block |
+| **Code** | The running line is highlighted. | Click the gutter beside a line |
+
+A breakpoint set in one mode is there in the other two — it is on the step, not on the picture.
+**Continue** runs to the next breakpoint (or to a step matching the box below). The log lists each
+step with the time since the start (`+1.2s`); click a line to show that step in the editor. When a
+step fails, the message says **which step** it was and *Show the step* takes you there.
 
 ### When it breaks, the window stays open
 

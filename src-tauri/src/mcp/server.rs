@@ -2,6 +2,7 @@ use rmcp::{ServerHandler, model::*, service::RequestContext, RoleServer};
 use serde_json::json;
 
 use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs, search};
+use crate::mcp::tools::ai as ai_tools;
 use crate::mcp::state_bridge;
 
 /// The BMMScript vocabulary, as `scripts/gen-bmms-reference.mjs` generates it.
@@ -494,6 +495,24 @@ impl ServerHandler for BmmMcpServer {
                 "Synchronize files for the active profile (apply mods).",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
+            Tool::new(
+                "bmm_get_mod_order",
+                "The activation order of the active profile in the running BMM app: `mods` in deployment order (position 0 is applied first, the LAST one wins a file two mods share), each with the mods it overrides and is overridden by, plus `contested`: every shared file and which mod is on disk for it.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_set_mod_order",
+                "Set the activation order in the running BMM app. `order` must list exactly the active mods (the same set bmm_get_mod_order returns, rearranged): anything else is refused. The last mod wins a shared file; BMM re-copies the files that change hands and answers how many moved.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "order": { "type": "array", "items": { "type": "string" }, "description": "Every active mod id, first applied first. The last one wins a file several mods ship." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." },
+                        "reapply": { "type": "boolean", "description": "Also re-copy the winner of every contested file, not only the ones that change hands (a repair)." }
+                    },
+                    "required": ["order"]
+                })).unwrap()),
+            ),
 
             // Writing an automation as CODE, reading one back as code, and being told the
             // vocabulary rather than guessing it.
@@ -543,7 +562,7 @@ impl ServerHandler for BmmMcpServer {
 
             Tool::new(
                 "bmm_create_schedule",
-                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], perms? }. perms is { command?, script?, deeplink?, stopProcess?, delete?, resources?, tasks? } (tasks = may run, start or switch on OTHER tasks by id) — each one false unless set, and a step needing a capability the task was not granted FAILS with a message instead of running. `allowCustomCommands` is the older single flag and means command+deeplink. trigger, one of: {type:'manual'} | {type:'appStart'} | {type:'once', at:'2026-01-01T09:00'} | {type:'interval', everyMinutes:30} | {type:'hourly', everyHours:2} | {type:'dailyAt', time:'03:00'} | {type:'weeklyAt', time:'08:00', days:[1,3]} (0=Sunday) | {type:'monthlyAt', day:1, time:'00:00'} | {type:'watchFile', path:'C:/.../dcs.log'} | {type:'onEvent', event:'...'} | {type:'afterTask', taskId:'...', outcome:'any'|'ok'|'fail'} | {type:'condition', condition:{type,params}} (fires on the CHANGE to true, not repeatedly while it is true) | {type:'script', engine:'powershell'|'cmd'|'bash'|'python'|'node'|'rust', everyMinutes:5, code:'...'} (exit code 0 runs the task; needs the `script` permission). steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
+                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], perms? }. perms is { command?, script?, deeplink?, stopProcess?, delete?, resources?, tasks?, network? } (tasks = may run, start or switch on OTHER tasks by id; network = may send webhooks / Discord / Slack messages and read feeds, http(s) only, never a private address unless the step sets allowLan) — each one false unless set, and a step needing a capability the task was not granted FAILS with a message instead of running. `allowCustomCommands` is the older single flag and means command+deeplink. trigger, one of: {type:'manual'} | {type:'appStart'} | {type:'once', at:'2026-01-01T09:00'} | {type:'interval', everyMinutes:30} | {type:'hourly', everyHours:2} | {type:'dailyAt', time:'03:00'} | {type:'weeklyAt', time:'08:00', days:[1,3]} (0=Sunday) | {type:'monthlyAt', day:1, time:'00:00'} | {type:'watchFile', path:'C:/.../dcs.log'} | {type:'onEvent', event:'...'} | {type:'afterTask', taskId:'...', outcome:'any'|'ok'|'fail'} | {type:'condition', condition:{type,params}} (fires on the CHANGE to true, not repeatedly while it is true) | {type:'script', engine:'powershell'|'cmd'|'bash'|'python'|'node'|'rust', everyMinutes:5, code:'...'} (exit code 0 runs the task; needs the `script` permission) | {type:'rss', url:'https://…/feed.xml', everyMinutes:15, allowLan?:false} (fires once per NEW feed item, which the steps read as {event.title} {event.link} {event.id} {event.published}; needs the `network` permission). steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
@@ -1113,6 +1132,38 @@ impl ServerHandler for BmmMcpServer {
                 })).unwrap()),
             ),
 
+            // ── Optional AI (Laya) ─────────────────────────────────────
+            Tool::new(
+                "bmm_ai_status",
+                "Optional AI features (Laya / an external API): whether the master switch is on, which provider is chosen, which features may reach the network and why not, and where API keys are stored (never the keys). Off by default. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_suggest_mod_metadata",
+                "Propose metadata for ONE installed mod: name, version, author, description, tags and links read from its own files (mod.json / modinfo / descriptor.mod / About.xml / ModInfo.xml / entry.lua / VERSION.txt / README / folder name), then — only if the user turned AI on in BMM and chose a provider — tags ranked from the user's EXISTING tag vocabulary by the Laya classifier, a language and an adult-content hint, and optionally a description draft from the user's external API. Each suggestion carries field, value, source (file|folder|laya|bettercommunity|api), origin, confidence and applicable (false = a hint that cannot be written). NEVER writes anything: show the list to the user and apply only what they pick with bmm_ai_apply_mod_metadata. Laya is a classifier; it never writes text.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "use_providers": { "type": "boolean", "description": "Default true: call the provider the user configured (only when AI is on). false = files only, no network, whatever the settings." },
+                        "draft": { "type": "boolean", "description": "Default false: also ask the user's external OpenAI-compatible API for a description draft (only when configured and enabled)." }
+                    },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_apply_mod_metadata",
+                "Write the fields the USER chose from bmm_ai_suggest_mod_metadata to one mod. Writes to data.json like bmm_set_mod_enabled; only the fields listed are touched. `fields` may hold name, version, author, description (strings, same limits as the mod editor: 100/30/50/2000 chars), tags (existing tag ids only, added up to 3 per mod) and links ([{url, label?}], http(s) only, appended). Any other key (language, nsfw…) is refused. Do not call this without the user's choice.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "fields": { "type": "object", "description": "Only the fields to write, e.g. { \"description\": \"…\", \"tags\": [\"<tag id>\"] }. Tag ids come from bmm_list_tags or the suggestion's value." }
+                    },
+                    "required": ["mod_id", "fields"]
+                })).unwrap()),
+            ),
+
             // ── Live app bridge ────────────────────────────────────────
             Tool::new(
                 "bmm_api_call",
@@ -1183,6 +1234,15 @@ impl ServerHandler for BmmMcpServer {
             self.tool_set_mod_enabled(id, enabled)
         }
         "bmm_sync" => self.tool_sync_active_profile(),
+        "bmm_get_mod_order" => self.tool_api_call("GET", "/api/mods/order", None).await,
+        "bmm_set_mod_order" => {
+            let order = args.get("order").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing order", None))?;
+            let order: Vec<String> = order.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            let mut body = json!({ "order": order });
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            if let Some(r) = args.get("reapply").and_then(|v| v.as_bool()) { body["reapply"] = r.into(); }
+            self.tool_api_call("POST", "/api/mods/order", Some(body)).await
+        }
         "bmm_generate_repo" => {
             let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
             let ids = args.get("mod_ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_ids", None))?;
@@ -1552,6 +1612,28 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_get_theme" => {
                     let id = args.get("theme_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing theme_id", None))?;
                     self.tool_get_theme(id)
+                }
+
+                // Optional AI (Laya)
+                "bmm_ai_status" => ok_json(&ai_tools::status()),
+                "bmm_ai_suggest_mod_metadata" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?.to_string();
+                    let use_providers = args.get("use_providers").and_then(|v| v.as_bool()).unwrap_or(true);
+                    let draft = args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
+                    // A provider call is blocking HTTP: off the async runtime.
+                    match tokio::task::spawn_blocking(move || ai_tools::suggest(&id, use_providers, draft)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_apply_mod_metadata" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    let fields = args.get("fields").cloned().ok_or_else(|| rmcp::ErrorData::invalid_params("Missing fields", None))?;
+                    match ai_tools::apply(id, &fields) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e),
+                    }
                 }
 
                 // Live app bridge

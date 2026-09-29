@@ -16,10 +16,11 @@ import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
 import { initDocsHub } from '../docs/docs-hub.js';
+import { mountLearnMoreLinks } from './learn-more-mount.js';
 import { initCommands } from '../core/commands.js';
 import { debugUI } from '../features/debug/debug-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
-import { initAnalytics, trackView } from '../core/analytics.js';
+import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
@@ -27,12 +28,12 @@ import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
 import { fireErrorEvent } from '../core/bmm-events.js';
-import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
+import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkLangSelect, renderMarkdown, markEulaAccepted, openUpdateNotesModal } from './update-notes.js';
 
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
 import { initModpackCreator } from '../features/mods/modpack-creator.js';
-import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
+import { initCrashReportUI } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
@@ -236,6 +237,13 @@ export function toast(message, type = 'info', duration = 3000, icon = '', source
         remove();
     };
 }
+// The global handle. Modules the app shell itself imports (core/commands.ts,
+// core/analytics.ts, core/offline.ts, restore-bundle, navbar-customize, the scheduler's
+// undo…) cannot import ui/app.js without closing an import cycle, so they call
+// `window.toast?.()`. Nothing ever assigned it, and the optional call hid that: "nothing
+// to undo", "telemetry exported" and every other message sent that way silently vanished.
+// Assigned at module evaluation, so it exists before any init() can fire one.
+(window as any).toast = toast;
 
 // ── Tasky Sync Loading ──────────────────────────────────────
 export function startTaskyLoader(reverse = false) {
@@ -1036,6 +1044,7 @@ async function main() {
     void import('../features/repo/auto-sync.js').then((m) => m.runAutoSyncCheck());
     initInteractiveDocs();   // diagram modal engine + Tasky tooltips (still used app-wide)
     initDocsHub();           // the rebuilt Help & documentation hub (owns #view-docs)
+    try { mountLearnMoreLinks(); } catch (e) { console.warn('[learn-more] mount failed', e); }   // "Learn more" on the static screens
     initCommands();          // command registry + Ctrl+K palette + global shortcut dispatcher
     initDeepLinks();
     // A double-clicked .bmmscript arrives the same two ways a bmm:// link does. Imported
@@ -1074,6 +1083,9 @@ async function main() {
     // Second source for the same centre. Does nothing without a stored key, so it
     // costs an idle check for everyone who has not linked an account.
     void import('../core/bcweb-notifications.js').then(m => m.startBcwebNotifications()).catch(() => {});
+    // BetterCommunity's launch announcements: asked for now, shown by the launch deck later.
+    // Never awaited — a slow or absent answer costs the start-up nothing (launch-announcements.ts).
+    void import('./launch-announcements.js').then((m) => m.prefetchLaunchFeed()).catch(() => {});
     // These are async and were called bare — no await, no catch. A rejection in any of them
     // became an unhandled promise rejection and, more importantly, silently abandoned the
     // REST OF THAT init: every listener the function had not reached yet was never attached,
@@ -1199,105 +1211,68 @@ async function main() {
         localStorage.setItem('bmm_sound_volume', String(soundVol));
     } catch (_e) { /* use defaults */ }
 
-    // ── Startup Modal Sequence ──
-    // First run = onboarding hasn't been shown yet. We use this to AVOID piling
-    // first-launch-irrelevant modals onto a brand-new user (e.g. "what's new" release
-    // notes for a version they never had).
+    // ── Start-up: ONE dialog ──
+    // First run = onboarding hasn't been shown yet. Used to keep first-launch-irrelevant
+    // steps (release notes, file-access mode, telemetry, the start-up cards) off a brand-new
+    // user, exactly as the separate dialogs did.
     const isFirstRun = await shouldShowOnboarding();
 
-    // 0. Language selection on first start (before everything else)
-    await checkLangSelect();
-    await waitForModalClosed('modal-lang-select');
-
-    // 1. Auto TOS (Terms of Service) on first start (if enabled in app.cfg)
-    const tosShown = await checkAutoEula();
-    await waitForModalClosed('modal-tos');
-
-    // 1.5. Privacy Policy right after the TOS (first start only)
-    if (tosShown) {
-        await checkAutoPrivacy();
-        await waitForModalClosed('modal-privacy');
-    }
-
-    // 2. Crash report UI wiring and check
     // The getting-started checklist measures real state now (see gs-checklist.ts).
     try { const { initSetupChecklist } = await import('./gs-checklist.js'); initSetupChecklist(); } catch { /* decorative if it fails */ }
     initCrashReportUI();
-    await checkPreviousCrash();
-    await waitForModalClosed('modal-crash-report');
 
-    // 3. Auto Update System
-    initAutoUpdate();
-
-    // 4. Release notes — only for returning users. A fresh install has no previous
-    // version, so "what's new" is just noise; mark it seen and skip it (the onboarding
-    // + tutorial hub is the first-run welcome instead).
-    if (isFirstRun) {
-        try { localStorage.setItem('bmm_release_notes_shown', 'true'); } catch { /* ignore */ }
-    } else {
-        await checkShowReleaseNotes();
-        await waitForModalClosed('modal-update-notes');
-    }
-
-    // 4.5 + 4.9 — De-spam the first launch. A brand-new user already wades through
-    // language + TOS + privacy before even seeing the welcome; the FS-security-mode and
-    // telemetry-consent prompts are NOT urgent, so we DON'T stack them on top on the very
-    // first run. They surface on a later launch instead (and stay reachable in Settings),
-    // and a fresh install keeps its safe defaults until then. Returning users see them
-    // normally.
-    if (!isFirstRun) {
-        // 4.5. FS Security Mode Choice (Persistent)
-        await checkSecurityMode();
-        await waitForModalClosed('modal-security-choice');
-
-        // 4.9. Telemetry consent.
-        try {
-            const { maybeShowConsentModal } = await import('../core/analytics.js');
-            await maybeShowConsentModal();
-        } catch (e) { console.warn('[BMM] consent modal failed', e); }
-    }
-
-    // 4.95. If BMM crashed (or was killed) in the middle of an interactive tutorial,
-    // the example profile survived on disk — remove it now, before the user sees it.
+    // If BMM crashed (or was killed) in the middle of an interactive tutorial, the example
+    // profile survived on disk — remove it now, before the user sees it.
     try {
         const { cleanupOrphanTutorialDemo } = await import('./tutorial-engine.js');
         await cleanupOrphanTutorialDemo();
     } catch (e) { console.warn('[BMM] orphan tutorial demo cleanup failed', e); }
 
-    // 5. Show onboarding on first launch (it handles language too, so the standalone
-    // picker above won't be repeated — see startOnboarding).
-    if (isFirstRun) {
-        // Delay slightly to allow UI to render — then, if something opened in the meantime,
-        // wait for it. "Report this crash" closes the crash notice to open the feedback
-        // dialog, which satisfies the `waitForModalClosed` above and let the tour land on
-        // top of a report being written.
-        setTimeout(() => {
-            void startOnboardingWhenClear();
-        }, 800);
-    } else {
-        // The start-up cards take TURNS, in this order, one at a time, with a pill in the
-        // corner saying how many are still waiting. It used to be "one per launch": whichever
-        // fired first won and the other was simply never seen — and before that, both fired
-        // and stacked. The queue waits for anything already on screen (an update, a crash
-        // notice) to close before the first one opens, and for each card to close before the
-        // next. Not awaited: this is inside main(), and everything below it must still run.
-        //
-        // BetterCommunity first while it is still being shown: it says what the place this
-        // app talks to all day actually is, which is worth more early than a tip jar.
-        void (async () => {
+    // Everything BMM used to say at start-up in a relay of separate dialogs — language, terms,
+    // privacy policy, file-access mode, telemetry, the crash notice, release notes, the test
+    // build notice, BetterCommunity's announcements, the BetterCommunity and Ko-fi cards — is
+    // ONE deck now, with Previous / Next (launch-deck.ts, steps in launch-steps.ts). The
+    // questions that must be answered still must be; what they save has not changed.
+    //
+    // Not awaited: this is inside main(), and everything below it must still run. What has to
+    // wait for the deck waits here: the update check (its dialog would otherwise land on the
+    // deck) and the first-run tour.
+    void (async () => {
+        try {
+            const { runStartupDeck } = await import('./launch-steps.js');
+            await runStartupDeck({ firstRun: isFirstRun }, {
+                renderMarkdown: (md: string) => renderMarkdown(md),
+                markEulaAccepted,
+                openFullReleaseNotes: () => { void openUpdateNotesModal(); },
+                openPtbGuide: () => { void checkPtbMode(true); },
+                showConsentModal: () => showConsentModal(),
+            });
+        } catch (e) {
+            // The deck could not load. The questions that cannot be skipped are still asked,
+            // the old way, one dialog after the other.
+            console.error('[BMM] launch deck failed; falling back to the separate dialogs', e);
             try {
-                const [{ runNudges }, bc, kofi] = await Promise.all([
-                    import('./nudge-queue.js'),
-                    import('./bettercommunity-modal.js'),
-                    import('./kofi-modal.js'),
-                ]);
-                await runNudges([
-                    { id: 'bettercommunity', wants: bc.bcIntroWanted, show: () => bc.openBetterCommunity(true) },
-                    { id: 'kofi', wants: kofi.kofiWanted, show: kofi.showKofiReminder },
-                ]);
-            } catch (e) { console.error('start-up nudges failed', e); }
-        })();
-    }
+                await checkLangSelect();
+                await waitForModalClosed('modal-lang-select');
+                const tosShown = await checkAutoEula();
+                await waitForModalClosed('modal-tos');
+                if (tosShown) {
+                    await checkAutoPrivacy();
+                    await waitForModalClosed('modal-privacy');
+                }
+                if (!isFirstRun) {
+                    await checkSecurityMode();
+                    await waitForModalClosed('modal-security-choice');
+                    const { maybeShowConsentModal } = await import('../core/analytics.js');
+                    await maybeShowConsentModal();
+                }
+                void checkPtbMode();
+            } catch (err) { console.warn('[BMM] start-up fallback failed', err); }
+        }
+        initAutoUpdate();
+        // Show onboarding on first launch, once the screen is clear (see startOnboardingWhenClear).
+        if (isFirstRun) setTimeout(() => { void startOnboardingWhenClear(); }, 800);
+    })();
 
     // ── Auto-Calibration trigger at startup ──
     setTimeout(async () => {
@@ -1335,8 +1310,7 @@ async function main() {
         }
     } catch { /* ignore */ }
 
-    // PTB Mode check
-    checkPtbMode();
+    // The PTB (test build) notice is a step of the launch deck now (launch-steps.ts).
 
 
     const restartBtn = document.getElementById('btn-restart-tutorial');

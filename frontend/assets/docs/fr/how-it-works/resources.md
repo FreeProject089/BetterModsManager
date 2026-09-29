@@ -12,9 +12,10 @@ Un disque limité à 40 Mo/s était écrit à 80 Mo/s par deux threads de copie 
 de leur côté. Le gouverneur existe pour qu'un chiffre veuille dire un chiffre.
 
 !!! info "Le voir dans l'app"
-    **Réglages → Stockage → Ouvrir le Gestionnaire de Stockage.** La carte du haut, *Intensité de
-    travail de BMM*, c'est le gouverneur : le preset, le mode jeu, la file en direct et, repliées
-    en dessous, les règles par disque.
+    **Réglages → Stockage → Ouvrir le Gestionnaire de Stockage.** Quatre de ses onglets sont le
+    gouverneur : **Intensité de travail** (le preset), **Mode jeu**, **Activité en direct** (la file
+    en direct) et **Règles par disque**. Ce que montre chaque onglet est dans
+    [Stockage & E/S disque](doc-page:features/storage#tabs).
 
 ---
 
@@ -49,8 +50,8 @@ sous lesquelles les règles sont enregistrées.
 
 ---
 
+<a id="presets"></a>
 ## Les presets
-
 Un preset, c'est une politique entière en un mot. Il y en a trois au choix, et un quatrième qui est
 moins un choix qu'un état :
 
@@ -146,8 +147,8 @@ suspension).
 
 ---
 
+<a id="rules"></a>
 ## Règles par disque, et d'où vient chaque valeur
-
 Sous le preset, il y a tes **règles** : une valeur pour un disque et une sorte d'opération. Chaque
 champ (Mo/s, en même temps, tampon, priorité) est résolu à part, depuis la règle la plus précise qui
 le fixe :
@@ -255,21 +256,29 @@ un disque NVMe est cadencée par la règle du disque NVMe.
 
 ---
 
+<a id="game-mode"></a>
 ## Le mode jeu
-
 Le mode jeu, c'est « un jeu tourne : pousse-toi ». Tant qu'il est actif :
 
 ```mermaid
 flowchart TB
     GM{"Mode jeu actif ?"} -- non --> N["Chaque sorte : le preset en vigueur"]
     GM -- oui --> Q["Le preset devient Silencieux"]
-    Q --> BG["hash, maintenance :<br/>EN PAUSE jusqu'à la fin du mode jeu"]
-    Q --> FG["deploy, install et toutes les autres sortes :<br/>RALENTIES, jamais en pause"]
+    Q --> BG["les sortes que tu as cochées (hash, maintenance par défaut) :<br/>EN PAUSE jusqu'à la fin du mode jeu"]
+    Q --> FG["deploy, install, backup et toute sorte non cochée :<br/>RALENTIES, jamais en pause"]
 ```
 
-Les déploiements sont ralentis, jamais suspendus, exprès : un dossier de jeu à moitié moddé est pire
-qu'un dossier lent. Le travail de fond suspendu pour le mode jeu reprend quand il se termine, et
-seulement celui-là : une opération que tu as suspendue à la main reste suspendue.
+Ce qui attend, c'est toi qui le choisis dans l'onglet Mode jeu : les empreintes et la maintenance
+(benchmarks de disque compris) par défaut, et au choix les téléchargements, les analyses de
+dossiers, la décompression et la compression d'archives et le traitement d'images. Les
+déploiements, installations et sauvegardes sont ralentis, jamais suspendus, exprès, quoi qui soit
+coché : un dossier de jeu à moitié moddé est pire qu'un dossier lent. Le travail suspendu pour le
+mode jeu reprend quand il se termine, et seulement celui-là : une opération que tu as suspendue à la
+main reste suspendue.
+
+**Tout suspendre jusqu'à ce que je quitte le jeu** est l'exception que tu demandes : une pause
+générale appartenant à `game`, déploiements compris, levée quand le mode jeu se termine (ou par
+**Tout reprendre**). Elle est refusée quand aucun jeu ne tourne, puisqu'elle n'attendrait rien.
 
 Tu le règles dans le tableau de bord, avec les trois mêmes choix qu'une tâche planifiée :
 
@@ -288,25 +297,41 @@ fois qu'elle le voit) et compte un jeu quand l'exécutable d'un programme est :
 - n'importe où sous **le dossier de jeu d'un de tes profils** (`D:\Games\Skyrim\SkyrimSE.exe` pour
   un profil dont le dossier de jeu est `D:\Games\Skyrim` ; `D:\Games\SkyrimTools\x.exe` n'est pas
   dessous) ;
-- dans la liste **Jeux surveillés par BMM**, repliée sous le choix du mode jeu sur la carte : un nom
-  d'exécutable (`eldenring.exe`, où qu'il tourne) ou un chemin complet, un par ligne, 64 au plus.
+- dans la liste **Jeux surveillés par BMM** : un nom d'exécutable (`eldenring.exe`, où qu'il
+  tourne) ou un chemin complet, 64 au plus, ajouté par son nom, en parcourant jusqu'au `.exe`, ou en
+  choisissant un programme lancé (les programmes de Windows lui-même sont écartés de cette liste).
+
+Le dossier de jeu de chaque profil a un interrupteur dans l'onglet Mode jeu : un dossier que tu
+éteins est ignoré (un profil qui pointe vers un dossier d'outils, par exemple).
 
 BMM lui-même ne compte jamais, même rangé dans un dossier de jeu, et un dossier de jeu qui est un
 disque entier (`C:\`) ne compte pour rien : tous les programmes dessus seraient des jeux.
 
 Il demande aussi à Windows si un programme tourne **en plein écran exclusif avec Direct3D**, ce qui
 compte comme un jeu même hors de toute liste. Les jeux en fenêtre sans bordure ne se voient pas
-ainsi ; ce sont les deux listes qui les attrapent.
+ainsi ; ce sont les deux listes qui les attrapent, et un troisième signal que tu peux allumer,
+**Compter aussi toute fenêtre plein écran** : la fenêtre au premier plan qui couvre tout son écran
+(quatre appels légers, aucune liste). Il est désactivé par défaut parce qu'une vidéo plein écran
+compte aussi. La fenêtre de BMM et le bureau ne comptent jamais.
 
 La comparaison ne tient pas compte de la casse. Le mode jeu démarre dès que le jeu est vu et se
-termine après **30 secondes** sans lui, pour qu'un lanceur qui le redémarre ou un écran de
-chargement qui change de processus ne fasse pas basculer BMM dans un sens puis dans l'autre. Un
+termine après le **délai** sans lui (30 secondes par défaut, de 5 à 600 dans l'onglet Mode jeu), pour
+qu'un lanceur qui le redémarre ou un écran de chargement qui change de processus ne fasse pas
+basculer BMM dans un sens puis dans l'autre. BMM retient ce qui l'a allumé (l'exécutable, la source,
+le dossier du profil) et depuis quand, c'est ce que montrent l'onglet et la ligne d'état ; quand il
+s'allume ou s'éteint tout seul, l'événement `bmm://game-mode` le transporte, et un avis le dit sauf
+si tu l'as désactivé. Un
 profil que tu enregistres ou une liste que tu modifies compte au regard suivant. Quand il démarre ou
 se termine, le preset en vigueur, les pools de threads et le travail de fond suspendu suivent
 aussitôt.
 
 Avec **Forcer** ou **Arrêter**, et quand aucun profil n'a de dossier de jeu et que la liste est
 vide, BMM ne liste pas les programmes du tout.
+
+Ce que coûte un coup d'œil, mesuré sur le PC de développement (378 processus, build de debug) par
+le test `game_detector_cost` : la liste des processus environ 11 ms (24 ms la première fois, quand
+chaque chemin est lu), la question du plein écran 0,3 ms, la fenêtre au premier plan 0,05 ms, la
+décision 0,3 ms. Un coup d'œil toutes les 5 secondes, c'est environ 0,25 % d'un cœur.
 
 ### Qui l'emporte
 
@@ -349,9 +374,9 @@ lourde, et laisser la fin de la tâche tout remettre en place. Voir
 
 ---
 
+<a id="live"></a>
 ## Le tableau de bord en direct
-
-La carte du Gestionnaire de Stockage montre quatre courbes en direct (le CPU de BMM, le CPU de tout
+L'onglet **Activité en direct** du Gestionnaire de Stockage montre quatre courbes en direct (le CPU de BMM, le CPU de tout
 le PC, les lectures et écritures de BMM en Mo/s), le preset en vigueur et pourquoi, le mode jeu, et
 la file avec *Suspendre*, *Reprendre* et *Annuler* sur chaque opération.
 
@@ -367,9 +392,17 @@ sequenceDiagram
     Note over S: aucun abonné : le thread s'arrête,<br/>aucun compteur n'est lu
 ```
 
-**L'échantillonneur ne coûte rien au repos.** Il ne tourne que tant que quelqu'un est abonné, et la
-carte ne s'abonne que tant qu'elle est à l'écran. Gestionnaire de Stockage fermé, BMM ne se mesure
-pas du tout.
+**L'échantillonneur ne coûte rien au repos.** Il ne tourne que tant que quelqu'un est abonné, et le
+Gestionnaire de Stockage ne s'abonne que tant que trois choses sont vraies à la fois : il est ouvert,
+un des onglets à valeurs en direct est affiché (**Intensité de travail**, **Mode jeu**, **Activité en
+direct**), et la fenêtre de BMM est visible. Fermer la fenêtre désabonne tout de suite, sans attendre
+un tick ; cacher la fenêtre dans la zone de notification aussi, et la réafficher réabonne. Deux rendus
+de suite partagent un seul abonnement. Gestionnaire de Stockage fermé, BMM ne se mesure pas du tout.
+
+Un tick est peint au plus une fois par image et une fois par seconde, avec le dernier échantillon
+seulement (des ticks arrivés ensemble, après que la fenêtre a été occupée, ne sont pas peints un par
+un), et il n'écrit que les chiffres et les lignes qui ont changé : la file est mise à jour ligne par
+ligne, par opération.
 
 Le CPU de BMM est affiché en part de toute la machine (tous les cœurs = 100 %) : 12 % sur un PC à
 huit cœurs, c'est à peu près un cœur occupé.

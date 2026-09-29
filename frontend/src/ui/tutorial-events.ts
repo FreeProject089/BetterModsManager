@@ -53,4 +53,6 @@ export const BMM_ACTIONS = {
     SCRIPT_GENERATED:  'bmm:action:script-generated',
     API_TOKEN_COPIED:  'bmm:action:api-token-copied',
     PALETTE_OPENED:    'bmm:action:palette-opened',
+    ORDER_OPENED:      'bmm:action:order-opened',
+    ORDER_APPLIED:     'bmm:action:order-applied',
 } as const;

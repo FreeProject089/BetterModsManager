@@ -95,8 +95,10 @@ pub fn resources_matrix(disk: String) -> Result<Vec<Cell>, String> {
 }
 
 /// Store (or with `rule: None`, remove) the rule for (disk, op). `op` may be "*".
+// Async, like every command here that saves data.json: a worker thread waits for the fsync,
+// not the window (a sync command runs on the main thread in Tauri v2).
 #[tauri::command]
-pub fn resources_set_rule(state: State<AppState>, disk: String, op: String, rule: Option<IoRule>) -> Result<(), String> {
+pub async fn resources_set_rule(state: State<'_, AppState>, disk: String, op: String, rule: Option<IoRule>) -> Result<(), String> {
     // The same path as POST /api/resources/io-rule (config.rs set_rule + sync_disk_limit):
     // keys normalised or refused, out-of-bound values refused, disk_limits kept in step.
     let cfg = {
@@ -112,7 +114,7 @@ pub fn resources_set_rule(state: State<AppState>, disk: String, op: String, rule
 
 /// Remove every rule for one disk ("*" = the all-disks rules), or all of them with `None`.
 #[tauri::command]
-pub fn resources_reset_rules(state: State<AppState>, disk: Option<String>) -> Result<(), String> {
+pub async fn resources_reset_rules(state: State<'_, AppState>, disk: Option<String>) -> Result<(), String> {
     let cfg = {
         let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
         match disk {

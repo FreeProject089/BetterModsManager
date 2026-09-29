@@ -143,13 +143,61 @@ pub struct ResourcesConfig {
     /// Edited in the dashboard; bounded by `set_game_exes`.
     #[serde(default)]
     pub game_exes: Vec<String>,
+    /// How game mode behaves: what it holds, how long it waits after the game closes, whether
+    /// it says so, and which profile folders it ignores (agent-bmm-storage, second pass).
+    #[serde(default)]
+    pub game: GameOptions,
 }
 
 fn one() -> u32 { 1 }
 
+/// Game mode's options. A document written before they existed reads as the defaults, which
+/// are exactly what game mode did before: hold hashing and maintenance, leave 30 s after the
+/// game, say nothing about windows that merely cover the screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameOptions {
+    /// The kinds held at their checkpoints while a game runs (op keys). Deploy, install and
+    /// backup can never be held: a half-modded game folder is worse than a slow one.
+    #[serde(default = "default_game_pause")]
+    pub pause: Vec<String>,
+    /// Seconds without the game before game mode ends (GAME_LEAVE_MIN..=GAME_LEAVE_MAX).
+    #[serde(default = "default_leave_after")]
+    pub leave_after_secs: u32,
+    /// Say it (a toast) when game mode turns on or off by itself.
+    #[serde(default = "yes_true")]
+    pub notify: bool,
+    /// Also count any window covering a whole screen in the foreground (a borderless game,
+    /// but a full-screen video too): off unless the user turns it on.
+    #[serde(default)]
+    pub fullscreen_window: bool,
+    /// Profile game folders the user asked not to watch (lower-cased, `\`, trailing `\`).
+    #[serde(default)]
+    pub ignored_dirs: Vec<String>,
+    /// Hold scheduled tasks too: a task that falls due while a game runs waits until game mode
+    /// ends (the scheduler reads this in resources_status). Off by default — nobody's nightly
+    /// task starts waiting on a game without being asked; a task run by hand is never held.
+    #[serde(default)]
+    pub hold_scheduler: bool,
+}
+
+fn default_game_pause() -> Vec<String> { vec!["hash".into(), "maintenance".into()] }
+fn default_leave_after() -> u32 { 30 }
+fn yes_true() -> bool { true }
+
+impl Default for GameOptions {
+    fn default() -> Self {
+        GameOptions { pause: default_game_pause(), leave_after_secs: default_leave_after(), notify: true, fullscreen_window: false, ignored_dirs: Vec::new(), hold_scheduler: false }
+    }
+}
+
+/// The kinds game mode may hold. Deploy, install and backup are not among them.
+pub const GAME_PAUSABLE: [OpKind; 7] = [OpKind::Hash, OpKind::Maintenance, OpKind::Download, OpKind::Scan, OpKind::Extract, OpKind::Compress, OpKind::Image];
+pub const GAME_LEAVE_MIN: u32 = 5;
+pub const GAME_LEAVE_MAX: u32 = 600;
+
 impl Default for ResourcesConfig {
     fn default() -> Self {
-        ResourcesConfig { version: 1, preset: Preset::Balanced, rules: BTreeMap::new(), migrated_disk_limits: false, game_exes: Vec::new() }
+        ResourcesConfig { version: 1, preset: Preset::Balanced, rules: BTreeMap::new(), migrated_disk_limits: false, game_exes: Vec::new(), game: GameOptions::default() }
     }
 }
 
@@ -367,7 +415,49 @@ pub const MAX_RULE_DISKS: usize = 64;
 pub const MAX_GAME_EXES: usize = 64;
 pub const MAX_GAME_EXE_LEN: usize = 260;
 
+/// A folder as game mode compares it: lower-cased, `/` as `\`, one trailing `\`.
+pub fn norm_game_dir(d: &str) -> String {
+    let mut s = d.trim().replace('/', "\\").to_lowercase();
+    while s.ends_with("\\\\") { s.pop(); }
+    if !s.ends_with('\\') { s.push('\\'); }
+    s
+}
+
 impl ResourcesConfig {
+    /// Replace game mode's options, validated: only GAME_PAUSABLE kinds (deploy, install and
+    /// backup are refused with the reason), a cooldown within GAME_LEAVE_MIN..=GAME_LEAVE_MAX
+    /// seconds, at most MAX_GAME_EXES ignored folders of at most MAX_GAME_EXE_LEN characters.
+    /// Kinds and folders are normalised and deduplicated. Refused = the options unchanged.
+    pub fn set_game_options(&mut self, o: GameOptions) -> Result<(), String> {
+        let mut pause: Vec<String> = Vec::new();
+        for k in &o.pause {
+            let k = k.trim().to_lowercase();
+            if !GAME_PAUSABLE.iter().any(|p| p.key() == k) {
+                return Err(format!("game mode cannot hold \"{k}\" (it may hold: {})", GAME_PAUSABLE.iter().map(|p| p.key()).collect::<Vec<_>>().join(", ")));
+            }
+            if !pause.contains(&k) { pause.push(k); }
+        }
+        if !(GAME_LEAVE_MIN..=GAME_LEAVE_MAX).contains(&o.leave_after_secs) {
+            return Err(format!("the cooldown must be {GAME_LEAVE_MIN} to {GAME_LEAVE_MAX} seconds"));
+        }
+        let mut ignored: Vec<String> = Vec::new();
+        for d in &o.ignored_dirs {
+            if d.trim().is_empty() { continue; }
+            if d.chars().any(char::is_control) || d.chars().count() > MAX_GAME_EXE_LEN { return Err("an ignored folder is not a valid path".into()); }
+            let n = norm_game_dir(d);
+            if !ignored.contains(&n) { ignored.push(n); }
+        }
+        if ignored.len() > MAX_GAME_EXES { return Err(format!("at most {MAX_GAME_EXES} ignored folders")); }
+        self.game = GameOptions { pause, leave_after_secs: o.leave_after_secs, notify: o.notify, fullscreen_window: o.fullscreen_window, ignored_dirs: ignored, hold_scheduler: o.hold_scheduler };
+        Ok(())
+    }
+
+    /// The kinds game mode holds, as kinds (unknown or refused keys in a hand-edited document
+    /// are skipped, never honoured).
+    pub fn game_pause_kinds(&self) -> Vec<OpKind> {
+        self.game.pause.iter().filter_map(|k| GAME_PAUSABLE.iter().copied().find(|p| p.key() == k.trim().to_lowercase())).collect()
+    }
+
     /// Replace the manual game list. Entries are trimmed, blank ones dropped, duplicates
     /// (case-insensitive, `/` = `\`) removed; one with a control character, one longer than
     /// MAX_GAME_EXE_LEN, or more than MAX_GAME_EXES entries is refused with the reason (and
@@ -590,4 +680,43 @@ mod tests {
         c.set_rule("*", "*", Some(IoRule::default())).unwrap();
         assert!(c.rules.is_empty());
     }
+
+    // ── Game-mode options (agent-bmm-storage) ────────────────────────────────────────────
+
+    #[test]
+    fn game_options_default_to_todays_behaviour_and_refuse_what_they_must() {
+        let c = ResourcesConfig::default();
+        assert_eq!(c.game.pause, vec!["hash".to_string(), "maintenance".to_string()], "hashing and maintenance, as before");
+        assert_eq!(c.game.leave_after_secs, 30);
+        assert!(c.game.notify);
+        assert!(!c.game.fullscreen_window);
+        assert!(!c.game.hold_scheduler, "holding scheduled tasks is opt-in");
+        let old: ResourcesConfig = serde_json::from_str(r#"{"version":1,"preset":"balanced"}"#).unwrap();
+        assert_eq!(old.game, GameOptions::default(), "a document from before has the defaults");
+        let mut c = ResourcesConfig::default();
+        let mut o = GameOptions::default();
+        o.pause = vec!["download".into(), "deploy".into()];
+        assert!(c.set_game_options(o.clone()).is_err(), "deploy can never be held");
+        o.pause = vec!["download".into(), "Scan".into(), "download".into()];
+        o.leave_after_secs = 3;
+        assert!(c.set_game_options(o.clone()).is_err(), "a cooldown under 5 s flips on every loading screen");
+        o.leave_after_secs = 90;
+        o.ignored_dirs = vec!["E:/Tools/".into(), "e:\\tools".into()];
+        c.set_game_options(o).unwrap();
+        assert_eq!(c.game.pause, vec!["download".to_string(), "scan".to_string()], "normalised and deduplicated");
+        assert_eq!(c.game.ignored_dirs, vec!["e:\\tools\\".to_string()]);
+        assert_eq!(c.game_pause_kinds(), vec![OpKind::Download, OpKind::Scan]);
+    }
+
+    #[test]
+    fn holding_scheduled_tasks_is_kept_and_read_from_an_older_document() {
+        let mut c = ResourcesConfig::default();
+        let mut o = GameOptions::default();
+        o.hold_scheduler = true;
+        c.set_game_options(o).unwrap();
+        assert!(c.game.hold_scheduler, "the switch survives validation");
+        let old: GameOptions = serde_json::from_str(r#"{"pause":["hash"],"leave_after_secs":30}"#).unwrap();
+        assert!(!old.hold_scheduler, "an older document means off");
+    }
+
 }

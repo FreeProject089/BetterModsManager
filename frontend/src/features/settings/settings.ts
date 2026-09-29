@@ -5,7 +5,8 @@
 
 import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } from '../../core/api.js';
 import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
-import { renderResourcesCard } from './resources-dash.js';
+import { initStorageModal, refreshIfOpen, openStorageManager } from './storage-modal.js';
+import { initGraphicsSettings } from './graphics-settings.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
@@ -396,413 +397,19 @@ export async function runAutoBenchmarks(disksList, isBoot = false) {
     _renderStorageModal();
 }
 
-const _renderStorageModal = async () => {
-    const container = document.getElementById('storage-disks-container');
-    if (!container) return;
-
-    container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        <div data-i18n="common.loading">${t('storage.loading')}</div></div>`;
-
-    try {
-        const disks = await invoke('get_system_disks');
-        if (!disks || disks.length === 0) {
-            container.innerHTML = `<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:30px;">${t('storage.noDisks')}</div>`;
-            return;
-        }
-
-        const usageTypeLabels = {
-            game_directory: { label: t('storage.gameDir') || 'Game Dir', color: '#60a5fa' },
-            mod_folder: { label: t('storage.modsDir') || 'Mods', color: '#a78bfa' },
-            backup: { label: t('storage.backupDir') || 'Backup', color: '#fbbf24' },
-        };
-
-        const settings = await getSettings();
-        // Auto I/O calibration: defaults to ON when undefined (matches new Rust default).
-        const isAuto = settings.auto_io_calibration !== false;
-        // Smart I/O defaults to ON if undefined (matches Rust default_true)
-        const smartIo = settings.smart_io_enabled !== false;
-        const alertEnabled = settings.storage_alert_enabled || false;
-        const warningPct = settings.storage_warning_space_pct !== undefined ? settings.storage_warning_space_pct : 40;
-        const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
-        // Publish threshold so profile cards use the same value (converted: warningPct% free → ratio)
-        (window as any).__storageWarnPct = Math.max(0, Math.min(99, 100 - warningPct)) / 100;
-
-        // Storage alert thresholds block
-        const thresholdsBlock = `
-            <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : t('settings.disabledOverlay')}">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${alertEnabled ? '12px' : '0px'}">
-                    <div style="font-size:14px; font-weight:700; color:var(--text-primary); position:relative; z-index:60; pointer-events:auto;">${t('storage.alertThresholds')}</div>
-                    <label class="bmm-switch" data-tooltip="${alertEnabled ? t('settings.disabledOverlay') : t('settings.disabledOverlay')}" style="position:relative; z-index:60; pointer-events:auto;">
-                        <input type="checkbox" id="chk-alert-enabled" ${alertEnabled ? 'checked' : ''}>
-                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                    </label>
-                </div>
-                ${alertEnabled ? `
-                <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                    <div style="flex:1; min-width:200px;">
-                        <label style="font-size:11px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">${t('storage.alertLimit')}</label>
-                        <input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99" style="width:100%; font-size:13px; padding:8px 10px;">
-                    </div>
-                    <div style="flex:1; min-width:200px;">
-                        <label style="font-size:11px; font-weight:600; color:var(--bmm-danger); display:block; margin-bottom:4px;">${t('storage.alertCritical')}</label>
-                        <input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99" style="width:100%; font-size:13px; padding:8px 10px; border-color:rgba(239,68,68,0.3);">
-                    </div>
-                </div>` : `
-                <div style="padding-top:6px;">
-                    <span style="font-size:12px;color:var(--text-muted)">${t('storage.alertDisabledHint')}</span>
-                </div>`}
-            </div>
-        `;
-
-        // Global auto/dynamic control. The resources card (G6) sits above it, filled below.
-        container.innerHTML = `
-            <div id="storage-resources-card"></div>
-            <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
-                <div style="width:40px; height:40px; background:rgba(59,130,246,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" style="${isAuto ? 'animation:pulse 2s infinite' : ''}"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                </div>
-                <div style="flex:1">
-                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.autoCalibTitle')}</div>
-                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.autoCalibDesc')}</div>
-                </div>
-                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
-                    <label class="bmm-switch">
-                        <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
-                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                    </label>
-                    <button id="btn-reset-limits" class="btn btn-outline-danger btn-xs" style="font-size:9px; height:20px; padding:0 8px; border-radius:6px; font-weight:800; border-color:rgba(239, 68, 68, 0.2);">
-                        ${t('storage.resetBtn')}
-                    </button>
-                </div>
-            </div>
-
-            <div style="background:rgba(34,197,94,0.05); border:1px solid rgba(34,197,94,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
-                <div style="width:40px; height:40px; background:rgba(34,197,94,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                </div>
-                <div style="flex:1">
-                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.smartIoTitle')}</div>
-                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.smartIoDesc')}</div>
-                </div>
-                <label class="bmm-switch">
-                    <input type="checkbox" id="chk-smart-io" ${smartIo ? 'checked' : ''}>
-                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                </label>
-            </div>
-
-            <!-- The window's own GPU use (boot_flags.rs). Read before the webview starts, so it
-                 applies on the next start; greyed when the user's environment variable rules. -->
-            <div style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
-                <div style="width:40px; height:40px; background:color-mix(in srgb, var(--accent) 12%, transparent); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-                </div>
-                <div style="flex:1">
-                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.gpuTitle')}</div>
-                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.gpuDesc')}</div>
-                    <div id="gpu-note" style="font-size:11px; color:var(--text-muted); margin-top:4px; display:none"></div>
-                </div>
-                <label class="bmm-switch">
-                    <input type="checkbox" id="chk-webview-gpu" checked>
-                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                </label>
-            </div>
-
-            <!-- What hw_detect.rs sees (get_hardware_info). Filled after the modal opens: the
-                 first call can take the GPU driver's 3-second budget. -->
-            <div id="hw-card" style="border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; display:none">
-                <div style="font-size:14px; font-weight:800; color:var(--text-bright); margin-bottom:8px">${t('storage.hwTitle')}</div>
-                <div id="hw-body" style="font-size:12px; color:var(--text-muted); line-height:1.6"></div>
-                <div style="font-size:11px; color:var(--text-muted); line-height:1.4; margin-top:8px">${t('storage.hwNote')}</div>
-            </div>
-
-            ${thresholdsBlock}
-
-            <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
-        `;
-
-        // Setup dynamic toggle listener
-        document.getElementById('chk-auto-io').addEventListener('change', async (e) => {
-            const checked = e.target.checked;
-            settings.auto_io_calibration = checked;
-            await updateSettings(settings);
-            _renderStorageModal();
-            if (checked) {
-                toast(t('storage.autoCalibToast'), 'info');
-                runAutoBenchmarks(disks);
-            }
-        });
-
-        document.getElementById('btn-reset-limits')?.addEventListener('click', () => {
-            resetStorageLimits();
-        });
-
-        // Smart I/O toggle
-        document.getElementById('chk-smart-io')?.addEventListener('change', async (e: any) => {
-            settings.smart_io_enabled = e.target.checked;
-            await updateSettings(settings);
-            toast(t(e.target.checked ? 'storage.smartIoOnToast' : 'storage.smartIoOffToast'), 'info');
-        });
-
-        // Interface GPU (boot_flags.rs): what is saved, what this session started with, and
-        // whether the user's own environment variable is in charge.
-        const gpuBox = document.getElementById('chk-webview-gpu') as HTMLInputElement | null;
-        const gpuNote = document.getElementById('gpu-note');
-        const showGpu = (st: any) => {
-            if (!gpuBox || !st) return;
-            gpuBox.checked = !!st.enabled;
-            gpuBox.disabled = !!st.overridden;
-            const note = st.overridden ? t('storage.gpuEnv') : (st.enabled !== st.active ? t('storage.gpuPending') : '');
-            if (gpuNote) { gpuNote.textContent = note; gpuNote.style.display = note ? '' : 'none'; }
-        };
-        invoke('get_webview_gpu').then(showGpu).catch(() => {});
-
-        // Detected hardware. Text only, built with textContent: names come from drivers.
-        invoke('get_hardware_info').then((hw: any) => {
-            const card = document.getElementById('hw-card');
-            const body = document.getElementById('hw-body');
-            if (!card || !body || !hw) return;
-            const line = (text: string) => { const d = document.createElement('div'); d.textContent = text; body.appendChild(d); };
-            body.textContent = '';
-            const feats = [hw.cpu?.avx512f && 'AVX-512', hw.cpu?.avx2 && 'AVX2', hw.cpu?.sse41 && 'SSE4.1', hw.cpu?.sha_ni && 'SHA-NI', hw.cpu?.aes_ni && 'AES-NI'].filter(Boolean);
-            line(`CPU: ${t('storage.hwCpu', { n: String(hw.cpu?.logical_cores ?? '?') })}${feats.length ? ' · ' + feats.join(' · ') : ''}`);
-            const gpus = (hw.gpus || []) as any[];
-            if (hw.gpu_timed_out) line(`GPU: ${t('storage.hwGpuSlow')}`);
-            else if (!gpus.length) line(`GPU: ${t('storage.hwNoGpu')}`);
-            for (const g of gpus) line(`GPU: ${g.name}${g.software ? ` (${t('storage.hwSoftware')})` : g.dedicated_mb ? ` · ${Math.round(g.dedicated_mb / 1024)} GB` : ''}`);
-            for (const d of (hw.disks || []) as any[]) {
-                const kind = d.seek_penalty === true ? t('storage.hwSpinning') : d.seek_penalty === false ? t('storage.hwFlash') : '';
-                line(`${d.mount} ${String(d.bus || 'unknown').toUpperCase()}${kind ? ' · ' + kind : ''}`);
-            }
-            card.style.display = '';
-        }).catch(() => {});
-        gpuBox?.addEventListener('change', async (e: any) => {
-            try {
-                showGpu(await invoke('set_webview_gpu', { enabled: e.target.checked }));
-                toast(t('storage.gpuRestart'), 'info');
-            } catch (err) {
-                e.target.checked = !e.target.checked;
-                toast(String(err), 'error');
-            }
-        });
-
-        // Alert enabled toggle
-        document.getElementById('chk-alert-enabled')?.addEventListener('change', async (e) => {
-            settings.storage_alert_enabled = e.target.checked;
-            await updateSettings(settings);
-            _renderStorageModal();
-        });
-
-        const updateThresholds = async () => {
-            let w = parseInt(document.getElementById('input-warning-pct')?.value, 10);
-            let c = parseInt(document.getElementById('input-critical-pct')?.value, 10);
-            if (isNaN(w) || w < 1) w = 40;
-            if (isNaN(c) || c < 0) c = 30;
-            if (w < c) w = c + 1;
-            settings.storage_warning_space_pct = w;
-            settings.storage_critical_space_pct = c;
-            await updateSettings(settings);
-            _renderStorageModal();
-        };
-
-        let thTimer;
-        document.getElementById('input-warning-pct')?.addEventListener('input', () => {
-            clearTimeout(thTimer);
-            thTimer = setTimeout(updateThresholds, 800);
-        });
-        document.getElementById('input-critical-pct')?.addEventListener('input', () => {
-            clearTimeout(thTimer);
-            thTimer = setTimeout(updateThresholds, 800);
-        });
-
-        const getKindBadge = (disk) => {
-            if (disk.is_cloud && disk.cloud_provider) {
-                if (disk.kind === 'Network') return `<span style="background:rgba(245,158,11,0.15);color:var(--bmm-warning);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
-                return `<span style="background:rgba(168,85,247,0.15);color:var(--bmm-purple);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">☁️ ${disk.cloud_provider}</span>`;
-            }
-            if (disk.kind === 'SSD') return '<span style="background:rgba(59,130,246,0.15);color:var(--bmm-accent);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
-            if (disk.kind === 'HDD') return '<span style="background:rgba(245,158,11,0.15);color:var(--bmm-warning);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
-            return '<span style="background:rgba(156,163,175,0.15);color:var(--bmm-text-muted);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
-        };
-
-        const subContainer = document.getElementById('disks-list-subcontainer');
-        subContainer.innerHTML = disks.map(disk => {
-            const limitVal = disk.current_limit_mb_s || 0;
-            const usedPct = disk.total_space_bytes > 0 ? ((disk.total_space_bytes - disk.available_space_bytes) / disk.total_space_bytes * 100).toFixed(0) : 0;
-            const usedColor = usedPct > 90 ? '#ef4444' : usedPct > 70 ? '#fbbf24' : '#60a5fa';
-
-            let profilePills = '';
-            if (disk.profiles_using && disk.profiles_using.length > 0) {
-                profilePills = disk.profiles_using.map(pu => {
-                    const info = usageTypeLabels[pu.usage_type] || { label: pu.usage_type, color: '#9ca3af' };
-                    return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.05);border:1px solid ${info.color}33;color:${info.color};padding:2px 8px;border-radius:12px;font-size:10px;font-weight:500;">
-                        <span style="width:6px;height:6px;border-radius:50%;background:${info.color};flex-shrink:0;"></span>
-                        ${pu.profile_name} → ${info.label}
-                    </span>`;
-                }).join('');
-            }
-
-            return `
-            <div class="storage-disk-card">
-                <div class="storage-disk-header">
-                    <div class="storage-disk-identity">
-                        <div style="width:42px;height:42px;background:var(--accent-dim);border:1px solid var(--border-accent);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:var(--accent-glow);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
-                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
-                                <line x1="6" y1="12" x2="6.01" y2="12"/>
-                            </svg>
-                        </div>
-                        <div class="storage-disk-meta">
-                            <div class="storage-disk-name">
-                                ${escHtml(disk.name)}
-                                ${getKindBadge(disk)}
-                                <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;margin-left:4px;">${escHtml(disk.file_system)}</span>
-                            </div>
-                            <div class="storage-disk-path">${escHtml(disk.mount_point)}</div>
-                        </div>
-                    </div>
-                    <div class="storage-disk-actions">
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
-                            <span style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Limit</span>
-                            <div style="display:flex;align-items:center;gap:6px;">
-                                <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${escHtml(disk.mount_point)}" value="${limitVal}" style="width:80px;font-size:12px;padding:4px 8px;text-align:right;border-radius:6px;background:rgba(0,0,0,0.2);" placeholder="0">
-                                <span style="font-size:11px;color:var(--text-muted);font-weight:700;">MB/s</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="storage-usage-container">
-                    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px;font-family:var(--font-mono);">
-                        <span style="font-weight:500;">USED: <span style="color:var(--text-secondary);">${formatBytes(disk.total_space_bytes - disk.available_space_bytes)}</span> / ${formatBytes(disk.total_space_bytes)}</span>
-                        <span style="color:${usedColor};font-weight:900;">${usedPct}%</span>
-                    </div>
-                    <div class="storage-usage-bar">
-                        <div class="storage-usage-fill" style="width:${usedPct}%;background:${usedColor};box-shadow:0 0 15px ${usedColor}66;"></div>
-                    </div>
-                </div>
-
-                ${(() => {
-                    // Profile-aware section: show how much available space profiles need
-                    const profileTotal: number = ((window as any).__profileTotalPerDisk
-                        ?.get(disk.mount_point)) || 0;
-                    if (profileTotal === 0) return '';
-
-                    const avail   = disk.available_space_bytes;
-                    const ratio   = avail > 0 ? profileTotal / avail : 1;
-                    const barPct  = Math.min(ratio * 100, 100);
-                    const isCrit  = profileTotal > avail;
-                    // Use configurable warningPct: warn when profiles use more than (100 - warningPct)% of available space
-                    // e.g. warningPct=40 → warn when profiles use > 60% of available space
-                    const warnThreshold = Math.max(0, Math.min(99, 100 - warningPct)) / 100;
-                    const isWarn  = !isCrit && ratio > warnThreshold;
-                    const barCol  = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#10b981';
-                    const labelCol = isCrit ? '#f87171' : isWarn ? '#fbbf24' : 'var(--text-muted)';
-
-                    return `
-                    <div class="storage-usage-container" style="margin-top:8px;">
-                        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px;font-family:var(--font-mono);">
-                            <span style="font-weight:500;display:flex;align-items:center;gap:5px;">
-                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
-                                PROFILES: <span style="color:var(--text-secondary);">${formatBytes(profileTotal)}</span> / ${formatBytes(avail)} ${t('storage.available') || 'available'}
-                            </span>
-                            <span style="color:${labelCol};font-weight:900;">${Math.round(ratio * 100)}%</span>
-                        </div>
-                        <div class="storage-usage-bar">
-                            <div class="storage-usage-fill" style="width:${barPct}%;background:${barCol};box-shadow:0 0 12px ${barCol}55;transition:width 0.4s ease;"></div>
-                        </div>
-                        ${isCrit ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;font-size:11px;color:var(--bmm-danger);font-weight:700;animation:pulse-danger 2s infinite;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            ${t('storage.profilesCritical') || 'Profile mods ('+ formatBytes(profileTotal) +') exceed available space ('+ formatBytes(avail) +')'}
-                        </div>` : isWarn ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;font-size:11px;color:var(--bmm-warning);font-weight:600;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            ${t('storage.profilesWarning') || 'Profile mods are using '+ Math.round(ratio*100) +'% of available disk space'}
-                        </div>` : ''}
-                    </div>`;
-                })()}
-
-
-                ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:8px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.03);">${profilePills}</div>` : ''}
-
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <button class="btn btn-add disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:12px;gap:6px;padding:6px 14px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        <span data-i18n="storage.benchmark">${t('storage.benchmark')}</span>
-                    </button>
-                    <span class="disk-bench-result" style="font-size:11px;color:var(--text-muted);"></span>
-                </div>
-            </div>`;
-        }).join('');
-
-        // Listeners
-        container.querySelectorAll('.disk-limit-input').forEach(input => {
-            let timer;
-            input.addEventListener('input', (e) => {
-                clearTimeout(timer);
-                timer = setTimeout(async () => {
-                    let val = parseInt(e.target.value, 10);
-                    if (isNaN(val) || val < 0) val = 0;
-                    const limitMbS = val === 0 ? null : val;
-                    const mountPoint = e.target.getAttribute('data-mount');
-                    try {
-                        await invoke('set_disk_limit', { mountPoint, limitMbS });
-                        toast(t('common.success'), 'success');
-                    } catch (err) { toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error'); }
-                }, 800);
-            });
-        });
-
-        container.querySelectorAll('.disk-bench-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const mountPoint = btn.getAttribute('data-mount');
-                const resultSpan = btn.closest('div').querySelector('.disk-bench-result');
-                const original = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('storage.benchmarking')}</span>`;
-                try {
-                    const res = await invoke('benchmark_disk', { mountPoint });
-                    resultSpan.innerHTML = `
-                        <span style="color:var(--bmm-accent);">↓ ${res.read_mb_s} MB/s</span>
-                        <span style="margin:0 4px;">·</span>
-                        <span style="color:var(--bmm-purple);">↑ ${res.write_mb_s} MB/s</span>
-                        <span style="margin:0 4px;">·</span>
-                        <span style="color:var(--bmm-success);">${t('storage.suggestedLimit')}: ${res.suggested_limit} MB/s</span>
-                        <button class="btn btn-ghost btn-sm disk-apply-suggestion" data-mount="${mountPoint}" data-value="${res.suggested_limit}" style="font-size:10px;padding:2px 8px;margin-left:4px;">${t('storage.applySuggested')}</button>
-                    `;
-                    resultSpan.querySelector('.disk-apply-suggestion')?.addEventListener('click', async (ev) => {
-                        const sugVal = parseInt(ev.target.getAttribute('data-value'), 10);
-                        const mp = ev.target.getAttribute('data-mount');
-                        const input = btn.closest('.storage-disk-card').querySelector('.disk-limit-input');
-                        if (input) input.value = sugVal;
-                        try {
-                            await invoke('set_disk_limit', { mountPoint: mp, limitMbS: sugVal });
-                            toast(t('common.success'), 'success');
-                        } catch (err) { toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error'); }
-                    });
-                } catch (err) {
-                    resultSpan.textContent = t('common.error') + ': ' + err;
-                    resultSpan.style.color = 'var(--error)';
-                }
-                btn.disabled = false;
-                btn.innerHTML = original;
-            });
-        });
-        // Live only while the modal shows it: the card unsubscribes itself once it is hidden.
-        const resHost = document.getElementById('storage-resources-card');
-        if (resHost) renderResourcesCard(resHost).catch((e) => console.warn('[resources] card:', e));
-    } catch (err) {
-        console.error(err);
-        container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">${t('storage.error', { err: String(err) })}</div>`;
-    }
-};
+// The Storage Manager lives in storage-modal.ts (tabs: disks & space, work intensity, game
+// mode, live activity, rules per disk). This name stays: the calibration above and
+// the command palette call it. It redraws the modal only when it is open.
+const _renderStorageModal = () => refreshIfOpen();
 
 async function initStorageSettings() {
+    initStorageModal({ runAutoBenchmarks, resetStorageLimits });
+    // Graphics & display, an app-wide card (graphics-settings.ts), built before the cards are
+    // ordered so card-order.ts places it with the others.
+    try { initGraphicsSettings({ toast }); } catch (e) { console.warn('[graphics] card:', e); }
     const openBtn = document.getElementById('btn-open-storage');
     if (openBtn) {
-        openBtn.addEventListener('click', () => {
-            const modal = document.getElementById('modal-storage');
-            if (modal) { modal.classList.add('open'); _renderStorageModal(); }
-        });
+        openBtn.addEventListener('click', () => openStorageManager());
     }
     const faqBtn = document.getElementById('btn-storage-faq');
     if (faqBtn) {
@@ -818,7 +425,6 @@ async function initStorageSettings() {
         });
     }
 }
-window._renderStorageModal = _renderStorageModal;
 
 // ── Language Settings ──
 async function initLanguageSettings() {
@@ -2611,6 +2217,9 @@ export async function initSettings() {
     await initSecuritySettings();
     await initLaunchPackSettings();
     initScheduler().catch(() => {});
+    // Optional AI card (features/ai/ai-settings.ts) — slotted in after Privacy, BEFORE the
+    // reorder pass so it gets its handle and its saved place like every other card.
+    try { await (await import('../ai/ai-settings.js')).mountAiSettings(); } catch (e) {}
     try { initCardReorder(); } catch (e) {}
     try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
     initSecurityInfoCard().catch(() => {});

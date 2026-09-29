@@ -176,6 +176,11 @@ pub fn tutorial_setup_demo(state: State<AppState>) -> Result<DemoSetupResult, St
         data.profiles.push(prof);
     }
     data.active_profile_id = Some(DEMO_PROFILE_ID.to_string());
+    drop(data);
+    // The file cache is built once and reused: without this the demo mods were in no file list,
+    // so the conflict badge and the activation order view showed the example pair as sharing
+    // nothing — the one thing the conflict steps exist to show.
+    crate::commands::mods::invalidate_cache(&state);
     // Intentionally NOT saved to disk — cleanup + startup purge handle removal.
     Ok(DemoSetupResult { created: true, profile_id: DEMO_PROFILE_ID.to_string(), prev_active })
 }
@@ -192,6 +197,7 @@ pub fn tutorial_cleanup_demo(state: State<AppState>, prev_active: Option<String>
                 .or_else(|| data.profiles.first().map(|p| p.id.clone()));
         }
     }
+    crate::commands::mods::invalidate_cache(&state);
     // Remove the on-disk sandbox too.
     purge_demo_files();
     // Persist a clean state so any demo that an auto-save may have written is gone.

@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 66
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 70
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-66 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+70 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -68,6 +68,7 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 | `enable` | `<mod-id>`\* | Active un mod dans le profil actif |
 | `disable` | `<mod-id>`\* | Désactive un mod |
 | `sync` | — | Applique le profil actif : déploie ce qui est activé, retire le reste |
+| `mod-order` | `--set`, `--reapply` (`false`), `--profile` | Affiche l'ordre d'activation (le dernier mod gagne un fichier partagé) et chaque fichier disputé. `--set a,b,c` réordonne : les mêmes mods que ceux actifs, le premier appliqué en premier ; les fichiers qui changent de main sont recopiés. `--reapply` recopie le gagnant de chaque fichier disputé _(app ouverte)_ |
 
 ### Dépôts serveur
 
@@ -200,6 +201,14 @@ tourne ; ici la ligne et la colonne sont nommées. Aucune des deux n'a besoin de
 | `theme-apply` | `<theme-id>`\* | Définit le thème actif ; il s'applique au prochain rechargement des thèmes |
 | `theme-info` | `<theme-id>`\* | La définition complète d'un thème personnalisé installé |
 
+### IA optionnelle (Laya)
+
+| Commande | Arguments | Ce que ça fait |
+|---|---|---|
+| `ai-status` | — | Les réglages de l'IA optionnelle : interrupteur principal, fournisseur, quelles fonctions peuvent passer par le réseau et pourquoi pas, où sont stockées les clés (jamais les clés) |
+| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Suggestions de métadonnées pour un mod, tirées de ses fichiers, plus le fournisseur choisi seulement si l'IA est activée. `--offline` n'appelle jamais de fournisseur ; `--draft` demande aussi un brouillon de description à l'API externe. **N'écrit rien** |
+| `ai-apply` | `<mod-id>`\*, `--fields`\* | Écrit les champs choisis, donnés en objet JSON (`{"description":"…","tags":["<id de tag>"]}`) ; uniquement nom, version, auteur, description, tags (ids existants, 3 par mod au plus) et liens |
+
 ---
 
 ## Garder cette page honnête
@@ -211,15 +220,15 @@ Chaque commande doit figurer ici, chaque argument doit être nommé, et le total
 être le vrai.
 
 C'est le même dispositif que pour la [référence MCP](doc-page:reference/mcp.fr), et pour la même raison : une
-liste de soixante-six choses tenue à la main se trompe la première fois que quelqu'un en
-ajoute une soixante-septième, et rien, dans une page de référence fausse, ne refuse de
+liste de soixante-sept choses tenue à la main se trompe la première fois que quelqu'un en
+ajoute une soixante-huitième, et rien, dans une page de référence fausse, ne refuse de
 compiler.
 
 ---
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 69 outils
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 78 outils MCP
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — ce que `call` appelle
 - [Référence BMMScript](doc-page:features/bmmscript-reference.fr) — le langage que lit `bmms-compile`
 - [Référence des actions](doc-page:reference/actions.fr) — ce que liste `actions`

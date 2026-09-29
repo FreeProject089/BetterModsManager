@@ -32,6 +32,7 @@ const DEFAULT_ORDER: string[] = [
     // ─ How it looks and reads ─
     'k:settings.language',
     'k:themes.settingsTitle',
+    'settings-graphics-card',
     'k:settings.taskyTitle',
     'k:settings.shortcutsTitle',
     // ─ The library itself ─
@@ -53,6 +54,7 @@ const DEFAULT_ORDER: string[] = [
     //   access, the other is the app's own, and split across the page they read as a
     //   duplicate rather than as two halves of one subject.
     'settings-privacy-section',
+    'settings-ai-section',
     'settings-watcher-section',
     'settings-security-section',
     'settings-security-card',

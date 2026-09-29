@@ -635,6 +635,30 @@
       "label": "Follow (or stop following) a catalogue",
       "needs": "catFollow",
       "group": "repo"
+    },
+    {
+      "type": "webhook.send",
+      "label": "Send a webhook (HTTP POST/PUT)",
+      "needs": "webhook",
+      "group": "notify"
+    },
+    {
+      "type": "discord.send",
+      "label": "Send a Discord message",
+      "needs": "discordHook",
+      "group": "notify"
+    },
+    {
+      "type": "slack.send",
+      "label": "Send a Slack message",
+      "needs": "slackHook",
+      "group": "notify"
+    },
+    {
+      "type": "feed.publish",
+      "label": "Add an entry to a feed (RSS/Atom)",
+      "needs": "feedPublish",
+      "group": "notify"
     }
   ]
 }

@@ -22,6 +22,13 @@ import {
     NODE_W, NODE_H, type FlowGraph, type FlowNode, type FlowEdge, type FlowLayout, type AnyStep, type PermKey, type RunMark,
 } from './sched-flow-model.js';
 import { bindFlowKeys, FLOW_KEYS, type FlowScope } from './sched-flow-keys.js';
+import { varsOfStep } from './sched-debug-map.js';
+
+/** What a one-step test came back with (scheduler.ts testOneStep → sched-test.ts). */
+export interface StepTestResult { ok: boolean; status?: number; excerpt?: string; message: string; skipped?: boolean }
+
+/** The debugger's position, as the flow draws it (sched-debug.ts DebugEvent, the parts used). */
+export interface FlowDebug { phase: 'paused' | 'running' | 'done' | 'failed' | 'closed'; path: string | null; rows: [string, string, string][]; error?: string }
 
 type PickItem = { v: string; label: string; desc?: string; group: string };
 
@@ -48,6 +55,15 @@ export interface FlowHost {
     /** The steps as saved — what the last run actually ran. */
     savedSteps(): AnyStep[] | null;
     switchMode(m: 'bricks' | 'code' | 'flow'): void;
+    /** One line about what this step does, in the reader's language ('' when there is none). */
+    describe(step: AnyStep): string;
+    /** The "Learn more" link for this step's documentation (HTML, from core/learn-more.ts). */
+    learnMore(step: AnyStep | null): string;
+    /** Breakpoints live in the debugger (sched-debug.ts); the flow only shows and toggles them. */
+    hasBreakpoint(path: string): boolean;
+    toggleBreakpoint(path: string): void;
+    /** Run this one step now, isolated, and say how it went. */
+    testStep(path: string): Promise<StepTestResult>;
 }
 
 // ── State. Module-level on purpose: an undo re-renders the whole editor, and the view and the
@@ -79,6 +95,11 @@ let _keysBound = false;
 let _ro: ResizeObserver | null = null;
 /** The canvas had the focus when the Ctrl+K palette took it: the palette still offers the flow's commands. */
 let _focusToPalette = false;
+/** Where a debug run stands, drawn on the nodes. Null when nothing is being debugged. */
+let _dbg: FlowDebug | null = null;
+/** A one-step test in flight or just finished, per node: the pulse, then the verdict. */
+const _tests = new Map<string, 'testing' | 'ok' | 'fail'>();
+let _tipEl: HTMLElement | null = null;
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const reduced = (): boolean => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
@@ -102,6 +123,7 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
     _host = host;
     _pane = pane;
     _runRec = null;
+    _tipEl = null;
     _view = _views.get(draftKey()) || _view;
     const fresh = !_views.has(draftKey());
     pane.innerHTML = `
@@ -174,6 +196,8 @@ function focusCanvasSoon(tries = 6): void {
 }
 
 export function unmountFlow(): void {
+    _tipEl?.remove();
+    _tipEl = null;
     _obs?.disconnect();
     _obs = null;
     _ro?.disconnect();
@@ -181,6 +205,76 @@ export function unmountFlow(): void {
     closePalette();
     _host = null;
     _pane = null;
+}
+
+/**
+ * Draw the debugger on the canvas: the node the run stands on glows (paused) or pulses (running),
+ * a failed one turns red, and the view follows it. Values on hover come from `rows`.
+ */
+export function flowDebugPaint(ev: FlowDebug | null): void {
+    _dbg = ev && ev.phase !== 'closed' && ev.phase !== 'done' ? ev : null;
+    if (!_host || !_layer) return;
+    render();
+    if (_dbg?.path && (_dbg.phase === 'paused' || _dbg.phase === 'failed')) reveal(_dbg.path);
+    if (_inspected && _insp && !_insp.hidden) refreshInspectorDebug();
+}
+
+/** The breakpoints changed somewhere (a brick, a gutter line): redraw the dots. */
+export function flowRefresh(): void {
+    if (_host && _layer) render();
+    if (_inspected && _insp && !_insp.hidden) refreshInspectorDebug();
+}
+
+/** Select and show one step — the debugger's "jump to step". */
+export function flowReveal(path: string): void {
+    if (!_host || !_graph) return;
+    if (!_graph.nodes.some((n) => n.id === path)) return;
+    select([path]);
+    reveal(path);
+}
+
+/** The step the keyboard would act on: the one selected. */
+export function flowSelectedPath(): string | null {
+    const id = _sel[_sel.length - 1];
+    return id && id !== 'trigger' ? id : null;
+}
+
+/** Test the selected step (T). The pulse is on the node; the verdict in the inspector. */
+export function flowTestSelected(): void {
+    const id = flowSelectedPath();
+    if (id) void runNodeTest(id);
+}
+
+async function runNodeTest(path: string): Promise<void> {
+    const h = _host;
+    if (!h) return;
+    _tests.set(path, 'testing');
+    render();
+    paintTestOut(path, null);
+    let res: StepTestResult;
+    try { res = await h.testStep(path); } catch (e) { res = { ok: false, message: String(e) }; }
+    if (res.skipped) { _tests.delete(path); render(); paintTestOut(path, null); return; }
+    _tests.set(path, res.ok ? 'ok' : 'fail');
+    render();
+    paintTestOut(path, res);
+    // The verdict stays long enough to be read, then the node goes back to normal. A failure
+    // stays until the next test: it is the one thing on the canvas somebody has to act on.
+    if (res.ok) setTimeout(() => { if (_tests.get(path) === 'ok') { _tests.delete(path); render(); } }, 4000);
+}
+
+function paintTestOut(path: string, res: StepTestResult | null): void {
+    if (!_insp || _inspected !== path) return;
+    const out = _insp.querySelector('.sflow-test-out') as HTMLElement | null;
+    const btn = _insp.querySelector('[data-test]') as HTMLButtonElement | null;
+    if (btn) btn.disabled = _tests.get(path) === 'testing';
+    if (!out) return;
+    if (!res) {
+        out.className = `sflow-test-out${_tests.get(path) === 'testing' ? ' is-testing' : ''}`;
+        out.textContent = _tests.get(path) === 'testing' ? t('sched.test.running') : '';
+        return;
+    }
+    out.className = `sflow-test-out ${res.ok ? 'is-ok' : 'is-fail'}`;
+    out.innerHTML = `<b>${escHtml(res.message)}</b>${res.status ? ` <span class="sflow-test-status">HTTP ${res.status}</span>` : ''}${res.excerpt ? `<code>${escHtml(res.excerpt)}</code>` : ''}`;
 }
 
 /** The flow owns the keyboard only while it is on screen and has the focus (or nothing has). */
@@ -215,6 +309,7 @@ function bindKeys(): void {
         'sched.flow.zoomOut': () => zoomBy(1 / 1.2),
         'sched.flow.fit': () => fit(1.25),
         'sched.flow.autoLayout': () => autoLayout(),
+        'sched.flow.testNode': () => flowTestSelected(),
         'sched.mode.blocks': () => _modeSwitch('bricks'),
         'sched.mode.code': () => _modeSwitch('code'),
         'sched.mode.flow': () => _modeSwitch('flow'),
@@ -351,7 +446,12 @@ function nodeHtml(n: FlowNode, draft: ReturnType<FlowHost['getDraft']>, needs: s
     const run = _marks.get(n.path!);
     const branchy = ['if', 'switch', 'ensure'].includes(kind);
     const loopy = ['repeat', 'forEach', 'retry'].includes(kind);
-    const cls = ['sflow-node', `k-${kind}`, branchy ? 'is-branch' : '', loopy ? 'is-loop' : '', sel ? 'is-sel' : '', st.disabled ? 'is-off' : '', needs.length ? 'is-warn' : ''].filter(Boolean).join(' ');
+    const here = _dbg && _dbg.path === n.path;
+    const dbgCls = here ? (_dbg!.phase === 'failed' ? 'is-dbg-fail' : _dbg!.phase === 'paused' ? 'is-dbg-here' : 'is-dbg-run') : '';
+    const test = _tests.get(n.path!);
+    const bp = h.hasBreakpoint(n.path!);
+    const cls = ['sflow-node', `k-${kind}`, branchy ? 'is-branch' : '', loopy ? 'is-loop' : '', sel ? 'is-sel' : '', st.disabled ? 'is-off' : '', needs.length ? 'is-warn' : '',
+        dbgCls, test ? `is-test-${test}` : '', bp ? 'has-bp' : ''].filter(Boolean).join(' ');
     const runTip = run ? `${t('sched.flow.run.' + run.mark)}${run.error ? ` — ${run.error}` : ''}` : '';
     return `<div class="${cls}" data-id="${escAttr(n.id)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px"
         role="button" tabindex="-1" aria-label="${escAttr(`${title}${sub ? ' — ' + sub : ''}`)}">
@@ -359,6 +459,8 @@ function nodeHtml(n: FlowNode, draft: ReturnType<FlowHost['getDraft']>, needs: s
         <span class="sflow-txt"><span class="sflow-title">${escHtml(title)}${st.disabled ? ` <em>${escHtml(t('sched.flow.off'))}</em>` : ''}</span>${sub ? `<span class="sflow-sub">${escHtml(sub)}</span>` : ''}</span>
         ${needs.length ? `<span class="sflow-warn" data-tooltip="${escAttr(needs.join('\n'))}">!</span>` : ''}
         ${run ? `<span class="sflow-dot run-${run.mark}" data-tooltip="${escAttr(runTip)}" aria-label="${escAttr(runTip)}"></span>` : ''}
+        <button type="button" class="sflow-bp" data-bp="${escAttr(n.path!)}" aria-pressed="${bp ? 'true' : 'false'}"
+            aria-label="${escAttr(t(bp ? 'sched.bp.remove' : 'sched.bp.add'))}" data-tooltip="${escAttr(t(bp ? 'sched.bp.remove' : 'sched.bp.add'))}"></button>
     </div>`;
 }
 
@@ -523,12 +625,27 @@ function wireCanvas(): void {
             openPaletteAt({ slot: plus.dataset.slot || '', index: Number(plus.dataset.index) || 0, x: r.left + r.width / 2, y: r.bottom + 6 });
             return;
         }
+        const bpEl = target.closest('.sflow-bp') as HTMLElement | null;
+        if (bpEl && e.button === 0) {
+            e.stopPropagation();
+            _host?.toggleBreakpoint(bpEl.dataset.bp || '');
+            render();
+            return;
+        }
         c.focus({ preventScroll: true });
         const nodeEl = target.closest('.sflow-node') as HTMLElement | null;
         if (nodeEl && !_space && e.button === 0) { startNodeDrag(e, nodeEl.dataset.id!); return; }
         if (e.shiftKey && e.button === 0 && !_space) { startMarquee(e); return; }
         startPan(e, !nodeEl);
     });
+    // While a debug run is paused (or has failed), hovering a node shows the values THAT step
+    // reads or writes — not all forty variables, only the ones it names.
+    c.addEventListener('pointerover', (e) => {
+        const nodeEl = (e.target as HTMLElement).closest('.sflow-node') as HTMLElement | null;
+        if (!nodeEl || !_dbg || (_dbg.phase !== 'paused' && _dbg.phase !== 'failed')) { hideTip(); return; }
+        showTip(nodeEl);
+    });
+    c.addEventListener('pointerleave', hideTip);
     c.addEventListener('dblclick', (e) => {
         const nodeEl = (e.target as HTMLElement).closest('.sflow-node') as HTMLElement | null;
         if (nodeEl) openInspector(nodeEl.dataset.id!, true);
@@ -641,6 +758,29 @@ function drawEdgesWith(ids: string[], dx: number, dy: number): void {
     const g: FlowGraph = { ..._graph, nodes: _graph.nodes.map((n) => (ids.includes(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n)) };
     _svg.innerHTML = g.edges.map((e) => edgeSvg(g, e)).join('');
 }
+
+function showTip(nodeEl: HTMLElement): void {
+    const id = nodeEl.dataset.id || '';
+    const st = id === 'trigger' ? null : resolve(_host?.getDraft().steps || [], id);
+    if (!st || !_dbg || !_pane) { hideTip(); return; }
+    const names = varsOfStep(st);
+    const rows = _dbg.rows.filter(([k]) => names.includes(k));
+    if (!_tipEl) {
+        _tipEl = document.createElement('div');
+        _tipEl.className = 'sflow-dbgtip';
+        _tipEl.setAttribute('role', 'tooltip');
+        _pane.appendChild(_tipEl);
+    }
+    _tipEl.innerHTML = `<div class="sflow-dbgtip-h">${escHtml(t('sched.dbg.tipTitle'))}</div>${rows.length
+        ? rows.map(([k, kind, v]) => `<div class="sflow-dbgtip-r"><code>${escHtml(k)}</code><span>${escHtml(kind)}</span><b>${escHtml(v.length > 120 ? v.slice(0, 120) + '\u2026' : v)}</b></div>`).join('')
+        : `<p>${escHtml(names.length ? t('sched.dbg.tipUnset') : t('sched.dbg.tipNone'))}</p>`}`;
+    const pr = _pane.getBoundingClientRect();
+    const r = nodeEl.getBoundingClientRect();
+    _tipEl.style.left = `${Math.max(8, Math.min(pr.width - 280, r.left - pr.left))}px`;
+    _tipEl.style.top = `${Math.max(8, r.bottom - pr.top + 8)}px`;
+    _tipEl.hidden = false;
+}
+function hideTip(): void { if (_tipEl) _tipEl.hidden = true; }
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────────────────────
 
@@ -910,6 +1050,23 @@ function closeInspector(): void {
     if (_insp) { _insp.hidden = true; _insp.innerHTML = ''; }
 }
 
+/** The inspector's debug section: whether a breakpoint sits here, and — while a run is paused —
+ *  the values this step names. */
+function refreshInspectorDebug(): void {
+    if (!_insp || !_host || !_inspected || _inspected === 'trigger') return;
+    const cb = _insp.querySelector('[data-bp-toggle]') as HTMLInputElement | null;
+    if (cb) cb.checked = _host.hasBreakpoint(_inspected);
+    const box = _insp.querySelector('.sflow-insp-vals') as HTMLElement | null;
+    if (!box) return;
+    const st = resolve(_host.getDraft().steps, _inspected);
+    if (!_dbg || !st) { box.innerHTML = `<p class="sflow-insp-hint">${escHtml(t('sched.insp.debugHint'))}</p>`; return; }
+    const names = varsOfStep(st);
+    const rows = _dbg.rows.filter(([k]) => names.includes(k));
+    box.innerHTML = rows.length
+        ? rows.map(([k, kind, v]) => `<div class="sflow-dbgtip-r"><code>${escHtml(k)}</code><span>${escHtml(kind)}</span><b>${escHtml(v.length > 200 ? v.slice(0, 200) + '\u2026' : v)}</b></div>`).join('')
+        : `<p class="sflow-insp-hint">${escHtml(names.length ? t('sched.dbg.tipUnset') : t('sched.dbg.tipNone'))}</p>`;
+}
+
 function refreshInspectorHead(): void {
     if (!_insp || !_host || !_inspected) return;
     const head = _insp.querySelector('.sflow-insp-notes') as HTMLElement | null;
@@ -940,12 +1097,35 @@ function openInspector(id: string, focus: boolean): void {
     const title = st ? h.stepTitle(st) : t('sched.fTrigger');
     const icon = st ? (st.kind === 'action' ? h.actionIcon(String(st.action?.type || '')) : h.kindIcon(st.kind)) : h.triggerIcon();
     _insp.hidden = false;
+    const kindWord = st ? (st.kind === 'action' ? t('sched.do') : t('sched.flow.kind.' + st.kind)) : t('sched.fTrigger');
+    const desc = st ? h.describe(st) : t('sched.flow.triggerHint');
+    const isAction = st?.kind === 'action';
+    // Sections, top to bottom in the order somebody works through a step: what it is, what is
+    // wrong with it (permissions, last run), its settings, then trying it — and pausing on it.
     _insp.innerHTML = `<div class="sflow-insp-head">
-            <span class="sflow-ic">${icon}</span><b>${escHtml(title)}</b>
+            <span class="sflow-ic">${icon}</span>
+            <span class="sflow-insp-titles"><b>${escHtml(title)}</b><span class="sflow-insp-kind">${escHtml(kindWord)}${st ? ` · ${escHtml(id)}` : ''}</span></span>
             <button type="button" class="sflow-insp-x" aria-label="${escAttr(t('common.close'))}">&times;</button>
         </div>
-        <div class="sflow-insp-notes">${notesHtml(id)}</div>
-        <div class="sflow-insp-body"></div>`;
+        <div class="sflow-insp-scroll">
+            ${desc ? `<p class="sflow-insp-desc">${escHtml(desc)} ${h.learnMore(st)}</p>` : `<p class="sflow-insp-desc">${h.learnMore(st)}</p>`}
+            <div class="sflow-insp-notes">${notesHtml(id)}</div>
+            <section class="sflow-insp-sec">
+                <h4 class="sflow-insp-h">${escHtml(t('sched.insp.settings'))}</h4>
+                <div class="sflow-insp-body"></div>
+            </section>
+            ${isAction ? `<section class="sflow-insp-sec sflow-insp-test">
+                <h4 class="sflow-insp-h">${escHtml(t('sched.insp.test'))}</h4>
+                <p class="sflow-insp-hint">${escHtml(t('sched.insp.testHint'))}</p>
+                <button type="button" class="btn btn-sm btn-secondary" data-test>${escHtml(t('sched.test.btn'))}</button>
+                <div class="sflow-test-out" aria-live="polite"></div>
+            </section>` : ''}
+            ${st ? `<section class="sflow-insp-sec sflow-insp-dbg">
+                <h4 class="sflow-insp-h">${escHtml(t('sched.insp.debug'))}</h4>
+                <label class="sflow-insp-check"><input type="checkbox" data-bp-toggle ${h.hasBreakpoint(id) ? 'checked' : ''}> <span>${escHtml(t('sched.bp.here'))}</span></label>
+                <div class="sflow-insp-vals"></div>
+            </section>` : ''}
+        </div>`;
     const body = _insp.querySelector('.sflow-insp-body') as HTMLElement;
     if (st) {
         h.renderInspector(body, st);
@@ -955,6 +1135,10 @@ function openInspector(id: string, focus: boolean): void {
             <button type="button" class="btn btn-sm" data-trigger>${escHtml(t('sched.flow.editTrigger'))}</button>`;
     }
     _insp.querySelector('.sflow-insp-x')?.addEventListener('click', () => { select([], false); _canvas?.focus({ preventScroll: true }); });
+    _insp.querySelector('[data-bp-toggle]')?.addEventListener('change', () => { h.toggleBreakpoint(id); render(); });
+    _insp.querySelector('[data-test]')?.addEventListener('click', () => { void runNodeTest(id); });
+    refreshInspectorDebug();
+    paintTestOut(id, null);
     _insp.addEventListener('click', onInspectorClick);
     // Anything edited in the inspector redraws the canvas (the title, the one-line summary,
     // a case added to a switch). The inspector itself is left alone so the caret stays put.

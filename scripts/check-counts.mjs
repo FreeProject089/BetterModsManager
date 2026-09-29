@@ -97,6 +97,12 @@ const PAGES = [
   'BMM Docs/docs/reference/api.fr.md',
   'BMM Docs/docs/reference/commands.md',
   'BMM Docs/docs/reference/commands.fr.md',
+  // The two halves of the same binary quote each other's size in their 'See also' lists —
+  // cli.md said 69 MCP tools and mcp.md 62 CLI subcommands long after both had grown.
+  'BMM Docs/docs/reference/cli.md',
+  'BMM Docs/docs/reference/cli.fr.md',
+  'BMM Docs/docs/reference/mcp.md',
+  'BMM Docs/docs/reference/mcp.fr.md',
 ];
 
 const WANT = [

@@ -47,6 +47,11 @@ exist in both mods, because *these files exist in both mods and create a direct 
 is why the **Activation Order** matters and why BMM lets you set it: the order *is* the
 resolution. Two people with the same mods in a different order do not have the same game.
 
+To change it, open the profile's **activation order** (the list icon on its card, or `Ctrl+K` →
+**Activation order**) and drag the mods: each row says which files it overrides and which of its
+own are overridden, and **Apply order** re-copies only the files that change hands. See
+[Activation order](doc-page:how-it-works/load-order).
+
 ### Global Conflict View
 
 Rather than discovering conflicts one at a time, the global view shows every overlap in the

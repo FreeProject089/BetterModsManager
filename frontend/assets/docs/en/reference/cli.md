@@ -2,7 +2,7 @@
 
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
-running it with a subcommand instead of `serve` gives you 66 commands from a terminal, a
+running it with a subcommand instead of `serve` gives you 70 commands from a terminal, a
 `.bat`, a cron job or a CI step.
 
 ```bash
@@ -39,7 +39,7 @@ bmm-mcp-server api --reveal
 
 ## The commands
 
-66 of them. `*` marks a required argument; a value in brackets is the default. Positional
+70 of them. `*` marks a required argument; a value in brackets is the default. Positional
 arguments are written `<like-this>`, flags `--like-this`.
 
 ### Getting your bearings
@@ -67,6 +67,7 @@ arguments are written `<like-this>`, flags `--like-this`.
 | `enable` | `<mod-id>`\* | Enable a mod in the active profile |
 | `disable` | `<mod-id>`\* | Disable a mod |
 | `sync` | — | Apply the active profile: deploy what is enabled, remove what is not |
+| `mod-order` | `--set`, `--reapply` (`false`), `--profile` | Print the activation order (the last mod wins a shared file) and every contested file. `--set a,b,c` reorders: the same mods that are active, first applied first; the files that change hands are re-copied. `--reapply` re-copies every contested file's winner _(running app)_ |
 
 ### Server repos
 
@@ -199,6 +200,14 @@ and the column instead. Neither command needs the app open.
 | `theme-apply` | `<theme-id>`\* | Set the active theme; it applies when BMM next reloads themes |
 | `theme-info` | `<theme-id>`\* | An installed custom theme's full definition |
 
+### Optional AI (Laya)
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `ai-status` | — | The optional-AI settings: master switch, provider, which features may reach the network and why not, where keys are stored (never the keys) |
+| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Metadata suggestions for one mod from its own files, plus the chosen provider only if AI is on. `--offline` never calls a provider; `--draft` also asks the external API for a description draft. **Writes nothing** |
+| `ai-apply` | `<mod-id>`\*, `--fields`\* | Writes the chosen fields, given as a JSON object (`{"description":"…","tags":["<tag id>"]}`); name, version, author, description, tags (existing ids, 3 per mod at most) and links only |
+
 ---
 
 ## Keeping this page honest
@@ -209,14 +218,14 @@ from — by `scripts/check-cli-reference.mjs`, which runs in CI. Every command m
 every argument must be named, and the count above must be the real one.
 
 That is the same arrangement the [MCP reference](doc-page:reference/mcp) has, and for the same reason: a list
-of sixty-six things maintained by hand goes wrong the first time somebody adds a
-sixty-seventh, and nothing about a wrong reference page fails to compile.
+of sixty-seven things maintained by hand goes wrong the first time somebody adds a
+sixty-eighth, and nothing about a wrong reference page fails to compile.
 
 ---
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 69 tools it exposes
+- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 78 MCP tools it exposes
 - [Local API &amp; deeplinks](doc-page:reference/api) — what `call` is calling
 - [BMMScript reference](doc-page:features/bmmscript-reference) — the language `bmms-compile` reads
 - [Action reference](doc-page:reference/actions) — what `actions` lists

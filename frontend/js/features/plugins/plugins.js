@@ -68,6 +68,7 @@ import { showConfirm } from '../../ui/confirm.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { apiBodyFor } from './script-request.js';
+import { learnMore } from '../../core/learn-more.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 const IC = {
     paperclip: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
@@ -359,6 +360,7 @@ function renderPluginsView() {
                 <h1 class="view-title" data-i18n="plugins.title">${t('plugins.title')}</h1>
                 <p class="view-subtitle" data-i18n="plugins.subtitle">${t('plugins.subtitle')}</p>
             </div>
+            <div class="view-actions">${learnMore('plugins')}${learnMore('api', { label: t('learnMore.api') })}</div>
         </div>
         <div class="plug-tabs">
             <button class="plug-tab active" data-tab="installed">${IC.puzzle} ${t('plugins.tabInstalled')}</button>
@@ -7718,6 +7720,7 @@ function getEndpointDefs() {
             fields: [
                 { name: 'order', type: 'array', required: true, desc: 'Every active mod id, in deployment order. Last wins a shared file.' },
                 { name: 'profileId', type: 'string', required: false, desc: 'Which profile. Default: the active one.' },
+                { name: 'reapply', type: 'boolean', required: false, desc: t('order.reapplyTip') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "moved": 3 }' },

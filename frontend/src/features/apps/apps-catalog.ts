@@ -14,6 +14,7 @@ import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { learnMore } from '../../core/learn-more.js';
 
 // Renders a labelled, fully-visible (wrapping) + copyable hash block for the
 // checksum warning modals. Inline styles so it works inside the generic confirm
@@ -176,6 +177,7 @@ function renderShell(view: HTMLElement) {
           </div>
         </div>
         <div class="apps-header-right">
+          ${learnMore('catalogs')}
           <button class="btn btn-sm btn-ghost" id="apps-btn-reload">${IC.refresh} <span data-i18n="common.refresh">Refresh</span></button>
         </div>
       </div>

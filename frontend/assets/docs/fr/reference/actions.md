@@ -190,6 +190,20 @@ BetterCommunity : une automatisation arrivée dans un `.bmmpa` téléchargé ne 
 faire vous identifier auprès d'un tiers. Rien de la requête n'est journalisé, car l'adresse peut
 porter un jeton dans sa query string.
 
+### Notifications et web
+
+| Action | Ce qu'elle fait | Permission |
+|---|---|---|
+| `webhook.send` | POST / PUT / PATCH d'un corps JSON ou texte (`{variables}` échappées en JSON), avec en-têtes, en-têtes secrets, nouvelles tentatives (0–4), délai, *autoriser le réseau local* | Réseau |
+| `discord.send` | Un message dans un salon Discord par son webhook (`discord.com/api/webhooks/…`) | Réseau |
+| `slack.send` | Un message dans un salon Slack par un webhook entrant (`hooks.slack.com/…`) | Réseau |
+| `feed.publish` | Une entrée (titre, texte, lien) en tête d'un fichier Atom que la tâche tient | — |
+
+Les étapes réseau sont envoyées par le backend de BMM : http(s) uniquement, aucune adresse privée
+sauf si l'étape autorise le réseau local, un délai et une taille maximale sur chaque requête, et
+rien de secret dans une erreur ou un journal. Détails dans [Planification → Prévenir le monde
+extérieur](doc-page:features/scheduler#prevenir-le-monde-exterieur-webhooks-discord-slack-flux).
+
 ### Conditions
 
 Utilisées par **SI**, **ATTENDRE** et **BOUCLE**. Chaque condition a une case **NON**.

@@ -489,13 +489,14 @@ export function marksForDraft(saved: AnyStep[] | null | undefined, record: Param
 // runAction and evalConditionRaw to prove the two lists are the same list. The executor still
 // decides; this only lets the flow say so before the run does.
 
-export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks';
+export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network';
 interface PermRule { perm: PermKey; label: string; when?: (p: Record<string, any>) => boolean }
 
 const DL: PermRule = { perm: 'deeplink', label: 'sched.permDeeplink' };
 const DEL: PermRule = { perm: 'delete', label: 'sched.permDelete' };
 const RES: PermRule = { perm: 'resources', label: 'sched.permResources' };
 const TASKS: PermRule = { perm: 'tasks', label: 'sched.permTasks' };
+const NET: PermRule = { perm: 'network', label: 'sched.permNetwork' };
 
 export const ACTION_PERMS: Record<string, PermRule> = {
     'app.stop': { perm: 'stopProcess', label: 'sched.permStopProcess' },
@@ -518,6 +519,8 @@ export const ACTION_PERMS: Record<string, PermRule> = {
     'repo.gen': DL, 'repo.update': DL, 'repo.host': DL, 'app.install': DL, 'telemetry.consent': DL,
     'telemetry.set': DL, 'recorder.set': DL, 'replay.export': DL, 'replay.import': DL, 'discord.rpc': DL,
     'data.exportAuto': DL, 'restart': DL,
+    // The notification steps reach the network (sched_net.rs holds the address rules).
+    'webhook.send': NET, 'discord.send': NET, 'slack.send': NET,
 };
 
 export const CONDITION_PERMS: Record<string, PermRule> = {
@@ -542,6 +545,7 @@ export function permNeeds(steps: AnyStep[], trigger?: any): PermNeed[] {
     const out: PermNeed[] = [];
     if (trigger?.type === 'script') out.push({ path: 'trigger', perm: 'script', label: 'sched.permRunScript', what: 'trigger:script' });
     if (trigger?.type === 'condition') condNeeds(trigger.condition, 'trigger', out);
+    if (trigger?.type === 'rss') out.push({ path: 'trigger', perm: 'network', label: 'sched.permNetwork', what: 'trigger:rss' });
     walkSteps(steps, (st, path) => {
         if (st.disabled) return false;
         if (st.kind === 'action') {

@@ -226,3 +226,12 @@ describe('buildModuleGraph', () => {
         assert.deepEqual(cyc, [['a.ts']]);
     });
 });
+
+// agent-bmm-sched (Sept 2026): a worker started with `new URL('./x.js', import.meta.url)` is loaded
+// by the page as surely as an import, so it is an edge — regex-worker.ts read as dead code without it.
+describe('a worker module is reached through its URL', () => {
+    test('new URL(…, import.meta.url) is an edge, an absolute URL is not', () => {
+        const src = "const w = new Worker(new URL('./regex-worker.js', import.meta.url), { type: 'module' });\nconst u = new URL('https://x.example/a.js', import.meta.url);";
+        assert.deepEqual(parseImports(src), ['./regex-worker.js']);
+    });
+});

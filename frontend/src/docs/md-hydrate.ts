@@ -65,6 +65,87 @@ if (typeof document !== 'undefined') {
 }
 
 /**
+ * Code-block "Copy" buttons in rendered markdown (`renderMarkdown` — Release Notes, the Community
+ * tab, app descriptions), and the stylesheet that makes them look like a button at all.
+ *
+ * The renderer gave the button its look through an inline `style` with `position:absolute`, and
+ * its own sanitiser strips any style carrying `position:absolute` (the anti-overlay rule). So the
+ * button arrived with NO style — a bare native button under the block — and its click handler
+ * wrote to `navigator.clipboard` with no fallback and no visible result. The look lives in a
+ * class-based stylesheet now (css/md-body.css), which no attribute filter can take away, and the
+ * click is handled here, before the renderer's older listener, with a fallback that works where
+ * the Clipboard API is refused.
+ *
+ * Window, CAPTURE phase: it runs before any document listener, and stops the event so the old
+ * listener in ui/update-notes.ts does not run a second copy over the top of this one.
+ */
+function ensureMdCss(): void {
+    if (typeof document === 'undefined' || document.getElementById('md-body-css')) return;
+    const link = document.createElement('link');
+    link.id = 'md-body-css';
+    link.rel = 'stylesheet';
+    link.href = 'css/md-body.css';
+    (document.head || document.documentElement).appendChild(link);
+}
+
+/** Put text on the clipboard. The Clipboard API first; the textarea + execCommand route when it
+ *  is missing or refuses (no focus, a denied permission, an older webview). */
+export async function copyText(text: string): Promise<boolean> {
+    try {
+        if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+    } catch { /* fall through to the legacy route */ }
+    const back = document.activeElement as HTMLElement | null;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.setAttribute('aria-hidden', 'true');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    document.body.appendChild(ta);
+    let ok = false;
+    try {
+        ta.focus();
+        ta.select();
+        ok = document.execCommand('copy');
+    } catch { ok = false; }
+    ta.remove();
+    try { back?.focus?.({ preventScroll: true }); } catch { /* the button may be gone */ }
+    return ok;
+}
+
+const copyTimers = new WeakMap<HTMLElement, number>();
+function flashCopy(btn: HTMLElement, ok: boolean): void {
+    if (btn.dataset.label === undefined) btn.dataset.label = (btn.textContent || '').trim();
+    const prev = copyTimers.get(btn);
+    if (prev) window.clearTimeout(prev);
+    btn.classList.toggle('is-copied', ok);
+    btn.classList.toggle('is-failed', !ok);
+    btn.setAttribute('aria-live', 'polite');
+    btn.textContent = ok ? (t('update.copied') || 'Copied!') : (t('md.copy.failed') || 'Copy failed');
+    copyTimers.set(btn, window.setTimeout(() => {
+        btn.classList.remove('is-copied', 'is-failed');
+        btn.textContent = btn.dataset.label || t('update.copy');
+        copyTimers.delete(btn);
+    }, 1800));
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    ensureMdCss();
+    window.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement)?.closest?.('.md-copy-btn') as HTMLElement | null;
+        const block = btn?.closest('.md-code-block');
+        if (!btn || !block) return;
+        const code = block.querySelector('pre code') || block.querySelector('pre');
+        if (!code) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // A tooltip for the pointer; the visible word stays the accessible name, so the live
+        // region announces "Copied!" instead of an aria-label masking it.
+        if (!btn.title) btn.title = t('md.copy.aria') || 'Copy this code to the clipboard';
+        void copyText(code.textContent || '').then((ok) => flashCopy(btn, ok));
+    }, true);
+}
+
+/**
  * Show one panel of a strip, and tell assistive technology which.
  *
  * Both renderers draw this markup, so the ids are assigned HERE rather than by either of

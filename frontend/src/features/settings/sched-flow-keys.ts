@@ -17,8 +17,9 @@ export interface FlowChord { ctrl?: boolean; shift?: boolean; alt?: boolean; key
 /**
  * `flow`: only while the flow canvas has the focus (or nothing else does).
  * `editor`: while the task editor is open, whichever of its three modes is showing.
+ * `debug`: while a debug run is going (the panel's Step / Continue / Stop).
  */
-export type FlowScope = 'flow' | 'editor';
+export type FlowScope = 'flow' | 'editor' | 'debug';
 
 export interface FlowKey {
     id: string;
@@ -69,10 +70,30 @@ export const FLOW_KEYS: FlowKey[] = [
         title: { en: 'Task editor: Code mode', fr: 'Éditeur de tâche : mode Code' } },
     { id: 'sched.mode.flow', scope: 'editor', chord: { alt: true, key: '3' }, keywords: 'mode flow graph canvas nodes n8n flux graphe nœuds',
         title: { en: 'Task editor: Flow mode', fr: 'Éditeur de tâche : mode Flux' } },
+    { id: 'sched.save', scope: 'editor', chord: { ctrl: true, key: 's' }, keywords: 'save task store enregistrer sauvegarder tâche',
+        title: { en: 'Task editor: save the task', fr: 'Éditeur de tâche : enregistrer la tâche' } },
+    { id: 'sched.flow.testNode', scope: 'flow', chord: { key: 't' }, keywords: 'test try run once node step essayer tester lancer nœud',
+        title: { en: 'Flow: test the selected step once', fr: 'Flux : tester une fois l’étape sélectionnée' } },
+    { id: 'sched.debug.breakpoint', scope: 'editor', chord: { key: 'f9' }, keywords: 'breakpoint pause stop here debug point d’arrêt déboguer',
+        title: { en: 'Debugger: breakpoint on the selected step', fr: 'Débogueur : point d’arrêt sur l’étape sélectionnée' } },
+    { id: 'sched.debug.step', scope: 'debug', chord: { key: 'f10' }, keywords: 'debug step next over déboguer pas suivant',
+        title: { en: 'Debugger: step (run the next step, then stop)', fr: 'Débogueur : pas à pas (exécuter l’étape suivante, puis s’arrêter)' } },
+    { id: 'sched.debug.continue', scope: 'debug', chord: { key: 'f5' }, keywords: 'debug continue resume run déboguer continuer reprendre',
+        title: { en: 'Debugger: continue to the next breakpoint', fr: 'Débogueur : continuer jusqu’au prochain point d’arrêt' } },
+    { id: 'sched.debug.stop', scope: 'debug', chord: { shift: true, key: 'f5' }, keywords: 'debug stop end abort déboguer arrêter terminer',
+        title: { en: 'Debugger: stop the run', fr: 'Débogueur : arrêter l’exécution' } },
 ];
 
 const _handlers = new Map<string, () => void>();
 let _active: (scope: FlowScope) => boolean = () => false;
+/** A scope bound by somebody other than the flow (the debugger, the editor's save). */
+const _activeBy = new Map<FlowScope, () => boolean>();
+
+/** Bind the commands of one scope, with its own "does it apply now". */
+export function bindScopeKeys(scope: FlowScope, handlers: Record<string, () => void>, active: () => boolean): void {
+    for (const [id, fn] of Object.entries(handlers)) _handlers.set(id, fn);
+    _activeBy.set(scope, active);
+}
 
 /** Called by the editor when it mounts: what each command does, and when it applies. */
 export function bindFlowKeys(handlers: Record<string, () => void>, active: (scope: FlowScope) => boolean): void {
@@ -81,7 +102,10 @@ export function bindFlowKeys(handlers: Record<string, () => void>, active: (scop
 }
 
 export function flowKeyActive(scope: FlowScope): boolean {
-    try { return _active(scope); } catch { return false; }
+    try {
+        const own = _activeBy.get(scope);
+        return own ? own() : _active(scope);
+    } catch { return false; }
 }
 
 export function flowKeyRun(id: string): void {

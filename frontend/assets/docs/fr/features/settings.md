@@ -134,6 +134,46 @@ Conserve le bloc `_info` (nom + drapeau affichés dans le sélecteur) et les gro
 non traduite retombe sur le FR ; une clé absente partout affiche son id brut. `en`, `fr` et le
 modèle ne peuvent pas être supprimés.
 
+<a id="graphics"></a>
+### Graphismes et affichage
+> Comment la fenêtre de BMM est dessinée. Cela ne concerne que l'interface, jamais tes jeux ni tes
+> mods.
+
+L'interface de BMM est une vue web (Microsoft WebView2), qui dessine avec une carte graphique comme
+un navigateur. La carte a un lien **En savoir plus** et s'ouvre depuis la palette de commandes
+(*Graphismes et affichage*).
+
+| Choix | Ce que fait BMM | Quand le choisir |
+|---|---|---|
+| **Automatique** (par défaut) | N'ajoute rien : WebView2 et Windows choisissent. Un choix fait pour WebView2 dans **Paramètres → Affichage → Graphiques** de Windows s'applique toujours | Presque toujours |
+| **Économie d'énergie** | Démarre WebView2 avec `--force_low_power_gpu` | Un portable à deux puces graphiques, pour économiser la batterie et la chaleur |
+| **Hautes performances** | Démarre WebView2 avec `--force_high_performance_gpu` | Un PC à deux puces graphiques dont les animations saccadent |
+| **Désactivé** | Démarre WebView2 avec `--disable-gpu --disable-gpu-compositing` : le processeur dessine | Seulement quand la fenêtre devient noire, se fige ou clignote à cause d'un pilote cassé |
+
+**Désactivé** est l'ancien interrupteur *Accélération matérielle* : un seul réglage maintenant, pas
+deux. Un choix enregistré par une ancienne version de BMM garde son sens.
+
+- Le choix est lu **avant que la fenêtre existe** : il s'applique au **prochain démarrage**. La
+  carte dit avec quel choix cette session a démarré, et propose **Redémarrer BMM maintenant**
+  (après avoir demandé : un redémarrage arrête un déploiement ou une installation en cours).
+- Sur un PC à **une seule** carte graphique, Économie d'énergie et Hautes performances l'utilisent
+  toutes les deux ; la carte dit combien de cartes elle a trouvées.
+- **Dessine la fenêtre en ce moment** nomme la carte qui dessine vraiment BMM, lue depuis la fenêtre
+  elle-même (WebGL). S'il dit *le processeur* alors que le PC a une carte et que le choix n'est pas
+  **Désactivé**, WebView2 est retombé sur un dessin logiciel, en général parce que le pilote est
+  bloqué ou a planté : mettre à jour le pilote graphique règle le problème la plupart du temps.
+- **Réduire les animations** termine tout de suite les transitions et les effets, quel que soit le
+  thème (un thème peut aussi le faire avec `--bmm-anim-speed: 0` ; l'un ou l'autre suffit). Les
+  indicateurs de progression continuent de tourner, lentement. Ça s'applique immédiatement. Le
+  réglage Windows *afficher moins d'animations* est respecté aussi.
+- Replié en dessous : le matériel détecté par BMM (instructions du processeur, cartes graphiques,
+  bus de chaque disque).
+- Si tu as défini toi-même la variable d'environnement `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, BMM
+  n'y touche pas, ni à aucun argument, et le choix est grisé.
+- Le fichier derrière, c'est `boot-flags.json` dans le dossier de données de BMM. Il contient un
+  interrupteur et un mot parmi trois ; rien n'en est jamais collé dans les arguments, et un fichier
+  abîmé veut dire Automatique.
+
 ### Identité & API
 
 > Tous tes identifiants importants au même endroit. Clique sur l'icône œil pour révéler une

@@ -9,7 +9,9 @@
 // - The palette does classic + semantic (synonym-expanded, Algolia-style) search over commands.
 import { getLang, t, getSynonyms } from './i18n.js';
 import { registerSearchProvider, searchAll } from './search.js';
+import { learnMore, LEARN_MORE_EVENT } from './learn-more.js';
 import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
+import { ORDER_KEYS, orderKeysActive, orderKeyRun } from '../features/profiles/load-order-keys.js';
 const tr = (s) => (getLang() === 'fr' ? s.fr : s.en);
 // ── chord helpers ──────────────────────────────────────────────────────────────
 const MOD_KEYS = new Set(['control', 'shift', 'alt', 'meta', 'os']);
@@ -262,12 +264,14 @@ export function openCommandPalette() {
         </div>
       </div>
       <div class="cp-list"></div>
-      <div class="cp-foot"><kbd>↑</kbd><kbd>↓</kbd> ${tr({ en: 'navigate', fr: 'naviguer' })} · <kbd>↵</kbd> ${tr({ en: 'run', fr: 'exécuter' })} · <kbd>Esc</kbd> ${tr({ en: 'close', fr: 'fermer' })}</div>
+      <div class="cp-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${tr({ en: 'navigate', fr: 'naviguer' })} · <kbd>↵</kbd> ${tr({ en: 'run', fr: 'exécuter' })} · <kbd>Esc</kbd> ${tr({ en: 'close', fr: 'fermer' })}</span>${learnMore('command-palette', { className: 'cp-learn' })}</div>
     </div>`;
     // Mount inside the visible, rounded, clipped app window (#app-window-outer) so the backdrop
     // and the box's drop-shadow can't bleed into the transparent OS-webview margin around BMM.
     // Falls back to <body> if the frame element isn't present.
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    // "Learn more" in the footer opens the docs view — which the palette would sit on top of.
+    overlay.addEventListener(LEARN_MORE_EVENT, () => closePalette());
     const input = overlay.querySelector('.cp-input');
     updateResults('');
     input.focus();
@@ -708,6 +712,21 @@ function registerCore() {
             run: () => flowKeyRun(k.id), defaultChord: k.chord, when: () => flowKeyActive(k.scope),
         });
     }
+    // The activation-order view: open it from anywhere, and its keys (scoped to the open view,
+    // like the flow keys above — listed and rebindable before it is first opened).
+    registerCommand({
+        id: 'profiles.loadOrder', category: 'profiles',
+        title: { en: 'Activation order (which mod wins)…', fr: 'Ordre d’activation (quel mod gagne)…' },
+        keywords: 'load order activation priority conflict wins overwrite reorder ordre activation priorité conflit gagne écrase réordonner',
+        run: () => { void import('../features/profiles/load-order.js').then((m) => m.openLoadOrder(null)); },
+        defaultChord: null,
+    });
+    for (const k of ORDER_KEYS) {
+        registerCommand({
+            id: k.id, category: 'profiles', title: k.title, keywords: `activation order ordre ${k.keywords}`,
+            run: () => orderKeyRun(k.id), defaultChord: k.chord, when: () => orderKeysActive(),
+        });
+    }
     registerCommand({
         id: 'mods.graph', category: 'mods',
         title: { en: 'Dependencies & conflicts…', fr: 'Dépendances et conflits…' },
@@ -798,7 +817,8 @@ function registerCore() {
     registerCommand({ id: 'tools.checkAppUpdates', category: 'tools', title: { en: 'Check for app updates', fr: 'Vérifier les mises à jour de l’app' }, keywords: 'update app version check upgrade mise à jour application', run: clickId('btn-check-updates'), defaultChord: null });
     registerCommand({ id: 'tools.restartOnboarding', category: 'tools', title: { en: 'Restart the onboarding tour', fr: 'Relancer la visite d’accueil' }, keywords: 'onboarding tour welcome restart guide accueil tutoriel', run: clickId('btn-restart-onboarding'), defaultChord: null });
     // ── Settings ────────────────────────────────────────────────────────────────
-    registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('_renderStorageModal'), defaultChord: null });
+    registerCommand({ id: 'settings.graphics', category: 'settings', title: { en: 'Graphics & display', fr: 'Graphismes et affichage' }, keywords: 'graphics gpu card webview hardware acceleration animations reduce motion display graphismes carte graphique accélération matérielle animations affichage', run: callGlobal('openGraphicsSettings'), defaultChord: null });
+    registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('openStorageManager'), defaultChord: null });
     registerCommand({ id: 'settings.hashing', category: 'settings', title: { en: 'Hashing statistics', fr: 'Statistiques de hachage' }, keywords: 'hash hashing blake3 cache stats hachage', run: callGlobal('showHashingStats'), defaultChord: null });
     // The CSP panel sits at the bottom of the Identity & API card, which is the right place
     // for it and not a place anyone browses. Reachable by typing "CSP" is the difference
@@ -850,6 +870,9 @@ function registerCore() {
     // actually reach for. It was findable only by typing "bettercommunity" — a question-shaped
     // title with English-only keywords, so "écran", "accueil", "modal" or "bienvenue" found
     // nothing, and the screen you are looking for is the one you cannot name.
+    // The launch deck, on demand: this version's release notes and BetterCommunity's current
+    // announcements, in the same Previous / Next dialog BMM opens at start-up.
+    registerCommand({ id: 'help.whatsnew', category: 'help', title: { en: 'Show what’s new', fr: 'Afficher les nouveautés' }, keywords: 'whats new what\'s new news release notes changelog announcements launch deck startup start-up welcome nouveautés nouveautes notes de version changements annonces démarrage demarrage accueil quoi de neuf', run: () => { void import('../ui/launch-steps.js').then((m) => m.openWhatsNew()); }, defaultChord: null });
     registerCommand({ id: 'help.bettercommunity', category: 'help', title: { en: 'Open the BetterCommunity screen', fr: 'Ouvrir l’écran BetterCommunity' }, keywords: 'bettercommunity better community site web discord bot about who what welcome intro splash startup start-up modal dialog screen reopen open communauté site bienvenue accueil démarrage écran fenêtre rouvrir ouvrir presentation présentation', run: () => { void import('../ui/bettercommunity-modal.js').then((m) => m.openBetterCommunity()); }, defaultChord: null });
 }
 /** Wire the command system: register commands + start the global keyboard dispatcher. */

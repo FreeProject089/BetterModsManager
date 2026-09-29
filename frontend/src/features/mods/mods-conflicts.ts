@@ -508,6 +508,7 @@ export async function openConflictTree(mod1Id, mod2Id) {
             ? `<div style="margin-bottom:12px"><button type="button" class="btn btn-sm btn-secondary" id="conf-flip">
                    ${escHtml(t('conflict.makeWin').replace('{m}', nameOf(loserId, byId.get(loserId))))}
                </button>
+               <button type="button" class="btn btn-sm btn-ghost" id="conf-order">${escHtml(t('conflict.openOrder'))}</button>
                <p style="font-size:10.5px;color:var(--text-muted);margin:6px 2px 0;line-height:1.45">${escHtml(t('conflict.makeWinHint'))}</p></div>`
             : ''}`;
 
@@ -526,6 +527,10 @@ export async function openConflictTree(mod1Id, mod2Id) {
         </span>
       </div>`;
       }).join('');
+      // The whole order, not just this pair: every mod, who it overrides, drag to change.
+      container.querySelector('#conf-order')?.addEventListener('click', () => {
+          void import('../profiles/load-order.js').then((m) => m.openLoadOrder(null, undefined, toast));
+      });
       container.querySelector('#conf-flip')?.addEventListener('click', async () => {
           if (!loserId) return;
           try {

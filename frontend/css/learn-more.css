@@ -1,0 +1,44 @@
+/* "Learn more" links — core/learn-more.ts links this file the first time one is drawn.
+   A quiet text link, not a button: it sits beside headings and hints and must never compete
+   with the action next to it. Text is a MIX of the accent and the text ink, so it stays
+   readable on a light theme where the raw accent is only a fill colour. */
+.lm-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    margin: 0;
+    border: 1px solid transparent;
+    border-radius: var(--bmm-radius-chip, 6px);
+    background: transparent;
+    color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary));
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background var(--bmm-transition-fast, 0.15s), border-color var(--bmm-transition-fast, 0.15s), color var(--bmm-transition-fast, 0.15s);
+}
+.lm-link:hover {
+    background: color-mix(in srgb, var(--bmm-accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-accent) 30%, transparent);
+    color: color-mix(in srgb, var(--bmm-accent) 60%, var(--bmm-text-primary));
+}
+.lm-link:hover .lm-label { text-decoration: underline; text-underline-offset: 2px; }
+.lm-link:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent);
+    outline-offset: 1px;
+}
+.lm-link .lm-ico { flex: none; opacity: 0.9; }
+.lm-link--compact { padding: 3px; }
+/* In a row of right-aligned header actions: push to the end, keep the row's height. */
+.lm-link.lm-end { margin-left: auto; }
+/* A block-level variant for the foot of a hint or an empty state. */
+.lm-row { display: flex; justify-content: flex-start; margin-top: 6px; }
+/* Command palette footer: the shortcuts on the left, the link at the right end. */
+.cp-foot .lm-link.cp-learn { margin-left: auto; }
+/* A Settings card title that had no flex row of its own (text only): lay it out like the others. */
+.card-title.lm-title-row { display: flex; align-items: center; gap: 10px; }
+.card-title > .lm-link.lm-end { margin-left: auto; }

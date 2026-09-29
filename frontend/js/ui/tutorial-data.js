@@ -478,6 +478,24 @@ const BASICS = {
                     nav: 'library',
                 },
                 {
+                    // The activation order: open it on the example profile, move the texture
+                    // pack to the bottom, apply. Its config.ini is then the one in the game.
+                    id: 'order1',
+                    title_key: 'tut.basics.conflicts.order1.title',
+                    text_key: 'tut.basics.conflicts.order1.text',
+                    nav: 'profiles',
+                    icon: ICON.conflict,
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-list',
+                    action: { event: BMM_ACTIONS.ORDER_APPLIED, desc_key: 'tut.basics.conflicts.order1.action' },
+                },
+                {
+                    id: 'order2',
+                    title_key: 'tut.basics.conflicts.order2.title',
+                    text_key: 'tut.basics.conflicts.order2.text',
+                    nav: 'profiles',
+                },
+                {
                     id: 's2',
                     title_key: 'tut.basics.conflicts.s2.title',
                     text_key: 'tut.basics.conflicts.s2.text',
@@ -1060,6 +1078,8 @@ const OTHER = {
                         { sel: 'sched-trigger', key: 'tut.other.automation.f.trigger' },
                         { sel: 'sched-mode-switch', key: 'tut.other.automation.f.modes' },
                         { sel: 'sched-steps', key: 'tut.other.automation.f.steps' },
+                        { sel: 'sched-status', key: 'tut.other.automation.f.status' },
+                        { sel: 'sched-debug', key: 'tut.other.automation.f.debug' },
                         { sel: 'sched-save', key: 'tut.other.automation.f.save' },
                     ],
                 },
@@ -1076,6 +1096,13 @@ const OTHER = {
                     text_key: 'tut.other.automation.s4.text',
                     nav: 'settings',
                     icon: ICON.share,
+                },
+                {
+                    id: 's5',
+                    title_key: 'tut.other.automation.s5.title',
+                    text_key: 'tut.other.automation.s5.text',
+                    nav: 'settings',
+                    icon: ICON.api,
                 },
             ],
         },

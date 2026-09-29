@@ -49,7 +49,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mods/enable` | oui · `mods.write` | `{ mod_id }` |
 | `/api/mods/disable` | oui · `mods.write` | `{ mod_id }` |
 | `/api/mods/order` | oui · `mods.read` | — (GET) l'ordre de déploiement, chaque fichier disputé et qui le gagne |
-| `/api/mods/order` | oui · `mods.write` | `{ order[], profileId? }` — permutation obligatoire ; le dernier gagne un fichier partagé |
+| `/api/mods/order` | oui · `mods.write` | `{ order[], profileId?, reapply? }` — permutation obligatoire ; le dernier gagne un fichier partagé (`reapply: true` recopie le gagnant de chaque fichier disputé) |
 | `/api/schedules` | oui | — (GET) id, nom, activée, déclencheur. **Pas** les étapes |
 | `/api/schedules/enabled` | oui | `{ id, enabled }` — seul `enabled` est modifiable |
 | `/api/schedules/:id/runs` | oui | — (GET) journal d’exécution d’une tâche, le plus récent d’abord (50 exécutions, étapes, durées, erreurs ; secrets retirés). `schedules.read` |

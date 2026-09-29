@@ -11,8 +11,9 @@ capped at 40 MB/s was written at 80 MB/s by two copy threads that each paced the
 governor exists so that one number means one number.
 
 !!! info "See it in the app"
-    **Settings → Storage → Open Storage Manager.** The card at the top, *How hard BMM works*, is
-    the governor: the preset, game mode, the live queue and, folded underneath, the per-disk rules.
+    **Settings → Storage → Open Storage Manager.** Four of its tabs are the governor:
+    **Work intensity** (the preset), **Game mode**, **Live activity** (the live queue) and
+    **Rules per disk**. What each tab shows is in [Storage & disk I/O](doc-page:features/storage#tabs).
 
 ---
 
@@ -46,8 +47,8 @@ rules are stored under.
 
 ---
 
+<a id="presets"></a>
 ## Presets
-
 A preset is a whole policy in one word. There are three to choose from, and a fourth that is not
 a choice so much as a state:
 
@@ -137,8 +138,8 @@ button; `GET /api/resources` and the live feed carry it as `paused_all` (`by`, `
 
 ---
 
+<a id="rules"></a>
 ## Rules per disk, and where each value comes from
-
 Under the preset sit your **rules**: a value for one disk and one kind of operation. Each field
 (MB/s, how many at once, buffer, priority) is resolved on its own, from the most specific rule that
 sets it:
@@ -243,21 +244,27 @@ an NVMe disk is paced by the NVMe disk's rule.
 
 ---
 
+<a id="game-mode"></a>
 ## Game mode
-
 Game mode is "a game is running: get out of the way". While it is on:
 
 ```mermaid
 flowchart TB
     GM{"Game mode on?"} -- no --> N["Every kind: the preset in force"]
     GM -- yes --> Q["The preset becomes Quiet"]
-    Q --> BG["hash, maintenance:<br/>PAUSED until game mode ends"]
-    Q --> FG["deploy, install and every other kind:<br/>SLOWED, never paused"]
+    Q --> BG["the kinds you ticked (hash, maintenance by default):<br/>PAUSED until game mode ends"]
+    Q --> FG["deploy, install, backup and every unticked kind:<br/>SLOWED, never paused"]
 ```
 
-Deploys are slowed, never paused, on purpose: a half-modded game folder is worse than a slow one.
-Background work paused for game mode is resumed when it ends, and only that work: an operation
-you paused by hand stays paused.
+Which kinds wait is yours to choose in the Game mode tab: hashing and maintenance (disk
+benchmarks included) by default, and optionally downloads, folder scans, unpacking and packing
+archives and image processing. Deploys, installs and backups are slowed, never paused, on purpose,
+whatever is ticked: a half-modded game folder is worse than a slow one. Work paused for game mode
+is resumed when it ends, and only that work: an operation you paused by hand stays paused.
+
+**Pause everything until I quit the game** is the exception you ask for: a pause-all owned by
+`game`, deploys included, lifted when game mode ends (or by **Resume all**). It is refused when no
+game is running, since it would wait for nothing.
 
 You set it in the dashboard, with the same three choices a scheduled task has:
 
@@ -275,24 +282,39 @@ game when a program's executable is:
 
 - anywhere under **one of your profiles' game folders** (`D:\Games\Skyrim\SkyrimSE.exe` for a
   profile whose game folder is `D:\Games\Skyrim`; `D:\Games\SkyrimTools\x.exe` is not under it);
-- in the list **Games BMM watches for**, folded under the game mode choice on the card: an
-  executable name (`eldenring.exe`, wherever it runs) or a full path, one per line, 64 at most.
+- in the list **Games BMM watches for**: an executable name (`eldenring.exe`, wherever it runs)
+  or a full path, 64 at most, added by name, by browsing to the `.exe`, or by picking a running
+  program (Windows' own programs are left out of that list).
+
+Each profile's game folder has a switch in the Game mode tab: a folder you switch off is ignored
+(a profile pointing at a tools folder, say).
 
 BMM itself never counts, even kept inside a game folder, and a game folder that is a whole drive
 (`C:\`) counts for nothing: every program on it would be a game.
 
 It also asks Windows whether a program is running **in exclusive full screen with Direct3D**,
 which counts as a game even in no list. Games in a borderless window do not show up that way; the
-two lists are what catch them.
+two lists are what catch them, and so does a third signal you can turn on, **Also count any
+full-screen window**: the foreground window covering its whole monitor (four cheap calls, no
+list). It is off by default because a full-screen video counts too. BMM's own window and the
+desktop never do.
 
-The comparison ignores case. Game mode starts at the first sighting and ends after
-**30 seconds** without the game, so a launcher that restarts it or a loading screen that swaps
-processes does not flip BMM back and forth. A profile you save or a list you edit counts at the
+The comparison ignores case. Game mode starts at the first sighting and ends after the
+**cooldown** without the game (30 seconds by default, 5 to 600 in the Game mode tab), so a
+launcher that restarts it or a loading screen that swaps processes does not flip BMM back and
+forth. BMM remembers what turned it on (the executable, the source, the profile folder) and since
+when, which is what the tab and the status line show; when it turns on or off by itself, the
+`bmm://game-mode` event carries that, and a notice says it unless you turned the notice off. A profile you save or a list you edit counts at the
 next look. When it starts or ends, the preset in force, the thread pools and the paused background
 work follow at once.
 
 With **Force on** or **Force off**, and when no profile has a game folder and the list is empty,
 BMM does not list programs at all.
+
+What one look costs, measured on the development PC (378 processes, a debug build) by the
+`game_detector_cost` test: the process list about 11 ms (24 ms the first time, when every path
+is read), the full-screen question 0.3 ms, the foreground window 0.05 ms, the decision 0.3 ms. One
+look every 5 seconds is about 0.25 % of one processor core.
 
 ### Who wins
 
@@ -333,9 +355,9 @@ let the task's end put everything back. See [Scheduling & automation](doc-page:f
 
 ---
 
+<a id="live"></a>
 ## The live dashboard
-
-The card in the Storage Manager shows four live curves (BMM's CPU, the whole PC's CPU, BMM's
+The Storage Manager's **Live activity** tab shows four live curves (BMM's CPU, the whole PC's CPU, BMM's
 reads and writes in MB/s), the preset in force and why, game mode, and the queue with *Pause*,
 *Resume* and *Cancel* on each operation.
 
@@ -351,9 +373,16 @@ sequenceDiagram
     Note over S: no subscriber: the thread ends,<br/>not a single counter is read
 ```
 
-**The sampler costs nothing at rest.** It runs only while somebody is subscribed, and the card
-subscribes only while it is on screen. With the Storage Manager closed, BMM does not measure
-itself at all.
+**The sampler costs nothing at rest.** It runs only while somebody is subscribed, and the
+Storage Manager subscribes only while three things are true at once: it is open, one of the tabs
+with live values is shown (**Work intensity**, **Game mode**, **Live activity**), and BMM's window
+is visible. Closing the modal unsubscribes at once, without waiting for a tick; hiding the window
+in the tray does too, and showing it again subscribes again. Two renders in a row share one
+subscription. With the Storage Manager closed, BMM does not measure itself at all.
+
+A tick is painted at most once per frame and once per second, with the latest sample only (ticks
+that arrive together, after the window was busy, are not painted one by one), and it only writes
+the numbers and rows that changed: the queue is updated row by row, by operation.
 
 BMM's CPU is shown as a share of the whole machine (all cores = 100 %), so 12 % on an eight-core
 PC is about one busy core.

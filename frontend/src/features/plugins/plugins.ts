@@ -71,6 +71,7 @@ import { showConfirm } from '../../ui/confirm.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { apiBodyFor, _prune, _json } from './script-request.js';
+import { learnMore } from '../../core/learn-more.js';
 
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 
@@ -345,6 +346,7 @@ function renderPluginsView() {
                 <h1 class="view-title" data-i18n="plugins.title">${t('plugins.title')}</h1>
                 <p class="view-subtitle" data-i18n="plugins.subtitle">${t('plugins.subtitle')}</p>
             </div>
+            <div class="view-actions">${learnMore('plugins')}${learnMore('api', { label: t('learnMore.api') })}</div>
         </div>
         <div class="plug-tabs">
             <button class="plug-tab active" data-tab="installed">${IC.puzzle} ${t('plugins.tabInstalled')}</button>
@@ -7353,6 +7355,7 @@ function getEndpointDefs(): EndpointDef[] {
             fields: [
                 { name: 'order', type: 'array', required: true, desc: 'Every active mod id, in deployment order. Last wins a shared file.' },
                 { name: 'profileId', type: 'string', required: false, desc: 'Which profile. Default: the active one.' },
+                { name: 'reapply', type: 'boolean', required: false, desc: t('order.reapplyTip') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "moved": 3 }' },

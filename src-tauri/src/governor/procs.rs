@@ -15,6 +15,12 @@
 //!
 //! With detection forced on or off nothing is listed at all. The thread is started by main.rs
 //! only: tests exercise `sample_once` with a governor of their own and never start the loop.
+//!
+//! Second pass (agent-bmm-storage): a third, opt-in signal (a foreground window covering a
+//! whole screen: borderless games, but videos too), and a report on every change, which
+//! main.rs turns into the `bmm://game-mode` event (the engage / disengage notice). The cost of
+//! one poll is measured by `game_detector_cost` (ignored; run it with --ignored --nocapture).
+use super::game_mode::{GameView, Signals};
 use super::runtime::Governor;
 use std::time::{Duration, Instant};
 
@@ -67,18 +73,51 @@ pub fn sample_once(
     gov.observe_games(&running, fullscreen(), now)
 }
 
+/// `sample_once` with every signal and a report: `window` (the foreground full-screen
+/// window's executable) is only asked when the user turned that signal on, and `report` is
+/// called once per change of game mode, with the new view (which game, since when).
+pub fn sample_and_report(
+    gov: &Governor,
+    game_dirs: Option<Vec<String>>,
+    list: &mut dyn FnMut() -> Vec<String>,
+    exclusive: &dyn Fn() -> bool,
+    window: &dyn Fn() -> Option<String>,
+    now: Instant,
+    report: &dyn Fn(&GameView),
+) -> bool {
+    let (auto, worth_listing) = gov.set_game_lists(game_dirs.as_deref());
+    if !auto { return false; }
+    let running = if worth_listing { list() } else { Vec::new() };
+    let win = if gov.config().game.fullscreen_window { window() } else { None };
+    let changed = gov.observe_game_signals(&running, Signals { exclusive_fullscreen: exclusive(), fullscreen_window: win.as_deref() }, now);
+    if changed { report(&gov.game_view()); }
+    changed
+}
+
+/// A foreground full-screen window, unless it is BMM itself or the desktop's shell.
+fn foreground_game_window(me: Option<&str>) -> Option<String> {
+    let exe = super::win::foreground_fullscreen_exe()?;
+    let low = exe.replace('/', "\\").to_lowercase();
+    if me.map(|m| m.replace('/', "\\").to_lowercase() == low).unwrap_or(false) { return None; }
+    if low.ends_with("\\explorer.exe") { return None; }
+    Some(exe)
+}
+
 /// Start the 5 s loop (main.rs, once). `game_dirs` returns every profile's game folder, or
 /// None when the state is busy right now (the previous folders are kept for this poll).
-pub fn start<F>(game_dirs: F)
+/// `on_change` is called on the sampler's thread each time game mode turns on or off by itself.
+pub fn start<F, R>(game_dirs: F, on_change: R)
 where
     F: Fn() -> Option<Vec<String>> + Send + 'static,
+    R: Fn(&GameView) + Send + 'static,
 {
     let _ = std::thread::Builder::new().name("bmm-game-detect".into()).spawn(move || {
         let gov = super::runtime::global();
         let mut procs = ProcList::new();
         let me = std::env::current_exe().ok().map(|p| p.to_string_lossy().into_owned());
         loop {
-            sample_once(gov, game_dirs(), &mut || without_self(procs.executables(), me.as_deref()), &super::win::d3d_full_screen, Instant::now());
+            sample_and_report(gov, game_dirs(), &mut || without_self(procs.executables(), me.as_deref()), &super::win::d3d_full_screen,
+                &|| foreground_game_window(me.as_deref()), Instant::now(), &on_change);
             std::thread::sleep(POLL);
         }
     });
@@ -164,4 +203,58 @@ mod tests {
         assert!(list.iter().any(|e| e.to_lowercase() == me), "the test binary itself is running");
         assert!(!p.executables().is_empty(), "the same System is reused for the next poll");
     }
+
+    // ── Game mode, second pass (agent-bmm-storage) ────────────────────────────────────────
+
+    #[test]
+    fn pause_until_the_game_ends_is_lifted_when_it_ends() {
+        let g = gov_with(&["game.exe"]);
+        let t0 = Instant::now();
+        assert!(sample_once(&g, Some(vec![]), &mut || vec!["C:\\g\\game.exe".into()], &|| false, t0));
+        assert!(g.pause_until_game_ends().is_ok());
+        assert_eq!(g.queue().paused_all().unwrap().by, "game");
+        sample_once(&g, Some(vec![]), &mut || vec![], &|| false, t0 + LEAVE_AFTER);
+        assert!(!g.game_mode().0);
+        assert!(g.queue().paused_all().is_none(), "the game ended: everything resumes by itself");
+        assert!(g.pause_until_game_ends().is_err(), "no game running: nothing to wait for");
+    }
+
+    #[test]
+    fn a_change_is_reported_with_its_trigger() {
+        let g = gov_with(&["game.exe"]);
+        let t0 = Instant::now();
+        let seen = std::cell::RefCell::new(Vec::new());
+        let report = |v: &crate::governor::game_mode::GameView| seen.borrow_mut().push((v.active, v.trigger.as_ref().map(|t| t.name.clone())));
+        sample_and_report(&g, Some(vec![]), &mut || vec!["C:\\g\\game.exe".into()], &|| false, &|| None, t0, &report);
+        sample_and_report(&g, Some(vec![]), &mut || vec!["C:\\g\\game.exe".into()], &|| false, &|| None, t0 + POLL, &report);
+        sample_and_report(&g, Some(vec![]), &mut || vec![], &|| false, &|| None, t0 + LEAVE_AFTER + POLL, &report);
+        assert_eq!(*seen.borrow(), vec![(true, Some("game.exe".to_string())), (false, None)], "one report per change, none in between");
+    }
+
+
+    /// The cost of one poll on this machine, part by part. Ignored (it measures, it does not
+    /// check): `cargo test --bin better-mods-manager game_detector_cost -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn game_detector_cost() {
+        let time = |f: &mut dyn FnMut()| { let t = Instant::now(); f(); t.elapsed().as_secs_f64() * 1000.0 };
+        let mut p = ProcList::new();
+        let mut n = 0;
+        let first = time(&mut || n = p.executables().len());
+        let mut next = Vec::new();
+        for _ in 0..10 { next.push(time(&mut || { p.executables(); })); }
+        let d3d: Vec<f64> = (0..10).map(|_| time(&mut || { crate::governor::win::d3d_full_screen(); })).collect();
+        let win: Vec<f64> = (0..10).map(|_| time(&mut || { crate::governor::win::foreground_fullscreen_exe(); })).collect();
+        let g = gov_with(&["game.exe"]);
+        let running = p.executables();
+        let decide: Vec<f64> = (0..10).map(|_| time(&mut || { sample_once(&g, Some(vec!["D:/Games/X".into()]), &mut || running.clone(), &|| false, Instant::now()); })).collect();
+        let avg = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+        println!("processes listed: {n}");
+        println!("first process list: {first:.2} ms; next ones: avg {:.2} ms, max {:.2} ms", avg(&next), next.iter().cloned().fold(0.0, f64::max));
+        println!("exclusive full-screen query: avg {:.3} ms", avg(&d3d));
+        println!("foreground full-screen window: avg {:.3} ms", avg(&win));
+        println!("decision over the list: avg {:.3} ms", avg(&decide));
+        println!("one poll every {} s: about {:.3} % of one core", POLL.as_secs(), (avg(&next) + avg(&d3d) + avg(&win) + avg(&decide)) / (POLL.as_secs_f64() * 1000.0) * 100.0);
+    }
+
 }

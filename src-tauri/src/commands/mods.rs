@@ -54,7 +54,7 @@ pub struct SharedActivation {
 }
 
 lazy_static::lazy_static! {
-    static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
+    pub(crate) static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
     /// PID of the currently-running CANCELLABLE mod-IO worker subprocess.
     /// `cancel_mod_ops` kills this PID for near-instant cancellation.
     static ref MOD_OP_CHILD_PID: Mutex<Option<u32>> = Mutex::new(None);
@@ -460,7 +460,7 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, AppError> {
     Ok(results)
 }
 
-fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
+pub(crate) fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
     // 1. First check if update is needed (read-only check under data lock to ensure ordering)
     // Actually, we must enforce Data -> LastUpdate -> Cache -> Index
     let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
@@ -1294,13 +1294,15 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         if !p.active_mods.contains(&mod_id) { return Ok(()); }
 
-        let mut others = Vec::new();
-        for mid in p.active_mods.iter().rev() {
-            if mid == &mod_id { continue; }
-            if let Some(other_m) = data.mods.iter().find(|om| &om.id == mid) {
-                others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
-            }
-        }
+        // The mods that stay, in ACTIVATION order (oldest first): unapply falls back to the LAST
+        // of them that ships a file, the one directly under this mod. This list used to be built
+        // newest-first and was then walked backwards by unapply, so the OLDEST copy came back —
+        // a layer nobody had seen since the mod above it was enabled (mod_order_tests).
+        let leaving: HashSet<String> = [mod_id.clone()].into_iter().collect();
+        let others: Vec<(String, PathBuf)> = crate::commands::mod_order::fallback_order(&p.active_mods, &leaving)
+            .into_iter()
+            .filter_map(|mid| data.mods.iter().find(|om| om.id == mid).map(|om| (om.id.clone(), om.mod_folder_path.clone())))
+            .collect();
 
         // Hybrid cleanup: Tracked files + Current physical files
         let mut unique_files = std::collections::HashSet::new();
@@ -1340,6 +1342,13 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         if crate::fs_utils::is_mod_op_cancelled() {
             return Err("CANCELLED".to_string());
         }
+        // Archived providers are read from their extracted cache (a path inside `Mod.zip` names
+        // nothing, so they used to be skipped and the vanilla file came back instead of their
+        // copy). Only the archives that ship one of these files are extracted.
+        let wanted: HashSet<String> = files_to_remove.iter().map(|f| crate::commands::mod_order::rel_key(f)).collect();
+        let ids: Vec<String> = other_active_mods.iter().map(|(id, _)| id.clone()).collect();
+        let folders: HashMap<String, PathBuf> = other_active_mods.into_iter().collect();
+        let other_active_mods = crate::commands::mod_order::read_roots(&ids, &folders, Some(&wanted));
         let worker_in = crate::fs_utils::WorkerInput {
             op: "unapply".to_string(),
             // Pass mod_folder so a cancel-undo can re-apply the mod files.
@@ -2642,50 +2651,44 @@ pub async fn disable_mods_for_profiles(
     };
 
     for ((game_path, backup_path), mod_ids) in tasks {
-
-        for mod_id in mod_ids {
-            let (files_to_remove, other_active_mods) = {
-                let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-                let m = match data.mods.iter().find(|m| m.id == mod_id) {
-                    Some(m) => m.clone(),
-                    None => continue,
-                };
-                
-                let mut others = Vec::new();
-                let mut seen_others = HashSet::new();
-                
-                for p in &data.profiles {
-                    if p.game_path == game_path {
-                        for mid in &p.active_mods {
-                            if mid != &mod_id && !seen_others.contains(mid) {
-                                if let Some(om) = data.mods.iter().find(|o| &o.id == mid) {
-                                    others.push((om.id.clone(), om.mod_folder_path.clone()));
-                                    seen_others.insert(mid.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let mut unique_files = m.installed_files.clone();
+        // ONE unapply per game folder for the whole batch (mod_order::plan_batch_disable): the
+        // union of the leaving mods' files, falling back to the mods that STAY, in order.
+        // Unapplying each mod in turn either put a batch member's copy back (it still counted
+        // as active until the loop ended) or, once they were excluded, freed the vanilla backup
+        // on the first pass and deleted the game's own file on the second.
+        let (files_to_remove, remaining, folders) = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let root_orders: Vec<Vec<String>> = data.profiles.iter()
+                .filter(|p| p.game_path == game_path)
+                .map(|p| p.active_mods.clone())
+                .collect();
+            let files_of = |id: &str| -> Vec<String> {
+                let Some(m) = data.mods.iter().find(|m| m.id == id) else { return Vec::new() };
+                let mut v = m.installed_files.clone();
                 if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
-                    for s in scanned { unique_files.push(s.to_string_lossy().to_string()); }
+                    for sc in scanned { v.push(sc.to_string_lossy().to_string()); }
                 }
-                unique_files.sort();
-                unique_files.dedup();
-                
-                (unique_files, others)
+                v
             };
+            let plan = crate::commands::mod_order::plan_batch_disable(&root_orders, &mod_ids, &files_of);
+            let folders: HashMap<String, PathBuf> = data.mods.iter()
+                .filter(|m| plan.remaining.contains(&m.id))
+                .map(|m| (m.id.clone(), m.mod_folder_path.clone()))
+                .collect();
+            (plan.files, plan.remaining, folders)
+        };
+        if files_to_remove.is_empty() { continue; }
 
-            let gp = game_path.clone();
-            let bp = backup_path.clone();
-            
-            let _ = tauri::async_runtime::spawn_blocking(move || {
-                let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-                // Takes its own Deploy ticket (in this process: no worker here).
-                fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, smart_io)
-            }).await.map_err(|e| e.to_string())?;
-        }
+        let gp = game_path.clone();
+        let bp = backup_path.clone();
+
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            let wanted: HashSet<String> = files_to_remove.iter().map(|f| crate::commands::mod_order::rel_key(f)).collect();
+            let other_active_mods = crate::commands::mod_order::read_roots(&remaining, &folders, Some(&wanted));
+            // Takes its own Deploy ticket (in this process: no worker here).
+            fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, smart_io)
+        }).await.map_err(|e| e.to_string())?;
     }
 
     {

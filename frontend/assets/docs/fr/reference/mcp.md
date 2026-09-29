@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-73 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+78 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -88,6 +88,8 @@ donne les valeurs acceptées.
 | `bmm_verify_mod_integrity` | `mod_id`\* |  | Vérifie les fichiers d'un mod sur disque contre ses empreintes SHA-256 stockées |
 | `bmm_list_tags` | — |  | Liste les tags de mods personnalisés |
 | `bmm_sync` | — | app | Synchronise les fichiers du profil actif (applique les mods) |
+| `bmm_get_mod_order` | — | app | L'ordre d'activation : chaque mod actif dans l'ordre de déploiement (le dernier gagne un fichier partagé), ceux qu'il écrase et ceux qui l'écrasent, et chaque fichier disputé avec son gagnant |
+| `bmm_set_mod_order` | `order`\*, `profile_id`, `reapply` | app | Fixe l'ordre d'activation. `order` doit être le même ensemble que les mods actifs ; les fichiers qui changent de main sont recopiés (`reapply` : chaque fichier disputé) |
 
 ### Modpacks & Launch Packs
 
@@ -199,6 +201,17 @@ peut pas enregistrer une tâche à moitié analysée.
 | `bmm_recorder_set` | `on`, `full`, `rust`, `js` | app | Configure l'enregistreur de session local dans l'app BMM ouverte |
 | `bmm_list_sessions` | — |  | Liste les rapports de session enregistrés (les zips produits par l'enregistreur) |
 
+### IA optionnelle (Laya)
+
+Désactivée tant que l'utilisateur ne l'a pas activée dans BMM (Réglages → IA). Suggérer
+n'écrit jamais rien ; appliquer n'écrit que les champs nommés. Voir [IA optionnelle](doc-page:features/ai).
+
+| Outil | Paramètres | Requiert | Ce que ça fait |
+|---|---|---|---|
+| `bmm_ai_status` | — |  | Si l'interrupteur principal est allumé, le fournisseur choisi, quelles fonctions peuvent passer par le réseau et pourquoi pas, où les clés sont stockées (jamais les clés). Fonctionne hors ligne |
+| `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Nom, version, auteur, description, tags et liens lus dans les fichiers du mod ; puis, seulement si l'IA est activée avec un fournisseur, des tags classés par Laya parmi les tags EXISTANTS de l'utilisateur, des indications de langue et de contenu adulte, et un brouillon de description optionnel via l'API externe de l'utilisateur. Chaque suggestion porte sa source et sa confiance. **N'écrit rien** |
+| `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Écrit dans data.json les champs choisis par l'utilisateur (nom, version, auteur, description, ids de tags existants jusqu'à 3 par mod, liens http(s)) ; toute autre clé est refusée |
+
 ### Diagnostic
 
 | Outil | Paramètres | Requiert | Ce que ça fait |
@@ -257,19 +270,19 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 73 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 78 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 73 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 78 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---
 
 ## Voir aussi
 
-- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 62 sous-commandes pour un terminal ou un `.bat`
+- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 70 sous-commandes CLI pour un terminal ou un `.bat`
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — la surface REST, ses jetons et ses permissions
 - [Référence des actions](doc-page:reference/actions) — ce que les plugins et le planificateur peuvent déclencher
 - [Étendre BMM](doc-page:how-it-works/extending) — la place du serveur MCP dans la conception

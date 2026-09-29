@@ -606,5 +606,63 @@
       "name": "gameplay",
       "color": "#10b981"
     }
+  ],
+  "mod_order_get": [
+    [
+      {
+        "id": "demo-mod-01",
+        "name": "Enhanced Textures",
+        "position": 0,
+        "contested": 2,
+        "winning": 0,
+        "archived": false,
+        "added_at": "2026-02-11T10:03:00Z"
+      },
+      {
+        "id": "demo-mod-02",
+        "name": "Weather Overhaul",
+        "position": 1,
+        "contested": 1,
+        "winning": 1,
+        "archived": false,
+        "added_at": "2026-03-12T10:06:00Z"
+      },
+      {
+        "id": "demo-mod-03",
+        "name": "Quiet Footsteps",
+        "position": 2,
+        "contested": 0,
+        "winning": 0,
+        "archived": false,
+        "added_at": "2026-04-13T10:09:00Z"
+      },
+      {
+        "id": "demo-mod-04",
+        "name": "Extended Inventory",
+        "position": 3,
+        "contested": 1,
+        "winning": 1,
+        "archived": true,
+        "added_at": "2026-05-14T10:12:00Z"
+      }
+    ],
+    [
+      {
+        "path": "Data/sky.dds",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-02"
+        ],
+        "winner": "demo-mod-02"
+      },
+      {
+        "path": "Data/ui/hud.xml",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-04"
+        ],
+        "winner": "demo-mod-04"
+      }
+    ]
   ]
 }

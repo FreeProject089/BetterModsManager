@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    106 actions · 40 conditions · 36 values · 8 loop sources
+    110 actions · 40 conditions · 36 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -129,6 +129,15 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
 | `data.validate` | Works out what a document IS from its shape, and what is wrong with it. Use it before acting on something you downloaded. | `path` · `text` · `expect` · `strict` |
 | `file.write` | Write or append text to a file. A relative path lands in the task's output folder. | `path` · `text` · `append` |
+
+### Notifications & web
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `webhook.send` | POST or PUT a JSON (or text) body to any web address, with headers, secret headers and retries. | `url` · `format` · `body` · `headers` · `secretHeaders` · `method` · `timeoutMs` · `allowLan` · `retries` |
+| `discord.send` | Post a message to a Discord channel through its webhook address. | — |
+| `slack.send` | Post a message to a Slack channel through an incoming webhook. | `url` · `message` · `username` · `retries` |
+| `feed.publish` | Add an entry to an Atom feed file this task keeps: any RSS reader can follow it. | `path` · `feedTitle` · `title` · `body` · `link` · `max` |
 
 ### System & flow
 

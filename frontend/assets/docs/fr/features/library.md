@@ -53,6 +53,11 @@ créent un conflit direct*.
 pour ça que l'**ordre d'activation** compte et que BMM te laisse le fixer : l'ordre *est* la
 résolution. Deux personnes avec les mêmes mods dans un ordre différent n'ont pas le même jeu.
 
+Pour le changer, ouvre l'**ordre d'activation** du profil (l'icône de liste sur sa carte, ou
+`Ctrl+K` → **Ordre d'activation**) et glisse les mods : chaque ligne dit quels fichiers elle écrase
+et lesquels des siens sont écrasés, et **Appliquer l'ordre** ne recopie que les fichiers qui changent
+de main. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
+
 ### Vue globale des conflits
 
 Plutôt que de découvrir les conflits un par un, la vue globale montre d'un coup tous les

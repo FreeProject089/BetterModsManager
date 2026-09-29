@@ -111,6 +111,14 @@ export function bcIntroWanted(): boolean {
     try { return localStorage.getItem(OPTOUT_KEY) !== '1'; } catch { return false; }
 }
 
+/** The same opt-out the "don't show again" box writes — for the launch deck's copy of this card. */
+export function setBcIntroOptOut(on: boolean): void {
+    try {
+        if (on) localStorage.setItem(OPTOUT_KEY, '1');
+        else localStorage.removeItem(OPTOUT_KEY);
+    } catch { /* nothing here can fix a storage that refuses to write */ }
+}
+
 export function maybeShowBetterCommunityIntro(): boolean {
     try {
         if (!bcIntroWanted()) return false;

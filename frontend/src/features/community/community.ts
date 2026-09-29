@@ -13,6 +13,7 @@ import { renderMarkdown } from '../../ui/update-notes.js';
 import { bcRoot, bcApi } from '../../core/links-config.js';
 import { openBetterCommunity } from '../../ui/bettercommunity-modal.js';
 import { ALL_TAGS, PROJ_LOGO, blogTags, effectiveTag, tagOf } from './blog-tags.js';
+import { learnMore } from '../../core/learn-more.js';
 
 // BetterCommunity base resolution is centralized in links-config.ts and driven by
 // app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
@@ -279,6 +280,7 @@ function render(): void {
         <button class="btn btn-secondary" id="community-refresh" data-tooltip="${escAttr(t('community.refresh') || 'Refresh')}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
+        ${learnMore('community')}
       </div>
     </div>
     <div class="community-toolbar">

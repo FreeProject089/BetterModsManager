@@ -1,6 +1,6 @@
 # Privacy Policy — Better Mods Manager (BMM)
 
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-29_
 
 Better Mods Manager is an open-source desktop application (GPL‑3.0) that runs on your computer.
 Your profiles, mods, modpacks, plugins and settings are stored **locally**, in BMM's data folder,
@@ -24,6 +24,7 @@ do not repeat any of this: on questions about data, this document is the referen
 | Weekly benchmark + detailed hardware report (§3.3) | **Off**, and the installer now asks about it as its own option | **Off** — unticked in the consent screen's "Customize" section |
 | **Discord Rich Presence** (§4) | **Off**: the installer's box is unticked | Off |
 | Bug, crash and feedback reports (§5) | Only when you press Send | Only when you press Send |
+| **Optional AI** (§6.10) | **Off**: the installer's box is unticked; ticking it turns the switch on with **no provider**, so still nothing is sent | Off |
 
 Every one of these can be turned off in BMM's settings (Settings → Privacy for telemetry and its
 options, the Discord and update toggles in Settings). Everything that sends data off this PC is
@@ -275,8 +276,16 @@ uploads:
 
 A small anti‑spam proof‑of‑work runs before sending; it sends no extra data. If the site cannot be
 reached, the report is kept locally and retried 15 seconds after the next launch, and nowhere else.
-BMM keeps a local list of your last 50 submissions. Once received, a report is held under the
-BetterCommunity platform's terms.
+BMM keeps a local list of your last 50 submissions (with a list of each report's significant words,
+used only to tell you, on this PC, that you already sent a similar one). Once received, a report is
+held under the BetterCommunity platform's terms.
+
+Before a report is sent, BMM checks its text **on your PC**: it finds secrets, folder paths with
+your user name, e‑mail and IP addresses and your Windows account and PC names, shows you how many
+it found and offers to mask them (ticked by default), and points out a similar report you sent in
+the last 30 days. None of this sends anything. Only if you turned on the optional AI (§6.10) and
+click *Get an AI hint* is the **already masked** text sent to the provider you chose, for a
+category / severity hint; the report itself still goes only when you press Send.
 
 ### 5.2 What a crash report zip contains
 When BMM crashes it writes a report `.zip` **on your disk**. It contains BMM's logs, a system‑info
@@ -367,6 +376,29 @@ token stay on your computer; they are not sent to the BMM team.
 Anything you set up yourself (a Discord webhook, a Cloudflare tunnel, …) sends data to that service,
 under its own terms.
 
+### 6.10 Optional AI (Laya)
+**Off by default**, in BMM and in the installer. BMM bundles no AI model. The mod-detail
+*Suggest details* action always reads the mod's own files on your PC first; nothing leaves it
+unless you turn on Settings → AI **and** choose a provider, and then only when you click
+*Suggest*, *ask for a description draft* or *Get an AI hint*:
+
+- **What is sent** for a mod: its name, author, description, excerpts of its readme or manifest,
+  up to 40 file names and the names of your tags, after BMM masks user names in paths, e‑mail and
+  IP addresses; at most 4 000 characters. For a report hint: the report text, after masking.
+  The dialog shows the exact text sent.
+- **To whom**: *BetterCommunity* — `bettercommunity.ch`, with your Creator ID, its signed proof
+  (§2.4) and, if you stored one, your BetterCommunity API key, only after you tick the consent box;
+  processed there by the Laya classifier. *Your own Laya server* — the address you enter, on this PC
+  by default (another machine needs an explicit tick). *An external API* you configure (for
+  description drafts only) — that service, with your key, under its own terms.
+- **Keys** you enter for your Laya server or external API are stored by the operating system
+  (Windows DPAPI, the macOS/Linux keychain) and never sent anywhere else; without either, they are
+  kept for the session only.
+- **Nothing is written** to a mod until you tick a suggestion and click Apply.
+- Turn it off in Settings → AI, with the installer's *Optional AI features* box (or
+  `--set=ai_features=false`), or for one session with `--no-ai` / `BMM_NO_AI=1`. With the switch off,
+  BMM makes no AI request at all.
+
 ---
 
 ## 7. Summary
@@ -386,6 +418,7 @@ under its own terms.
 | Send a suggestion, bug or crash report | Yes, when you press Send | What you type, your attachments (the crash zip holds logs and, for a normal-close report, a snapshot of your settings with tokens and passwords redacted; DxDiag, with your Windows account name, only if you tick it), Creator ID with signed proof and hashed device fingerprint (§2.4), app and OS details | BetterCommunity feedback centre |
 | Link a BetterCommunity account (and once per key while linked) | Yes | Creator ID, signed proof, hashed device fingerprint (§2.4) | bettercommunity.ch |
 | BetterCommunity notifications (only with a stored API key) | Yes, every 10 min | The API key, scoped to `notifications:read` | bettercommunity.ch |
+| Optional AI — *Suggest* / *draft* / *AI hint* (**off** by default; only when you click) | Yes | A mod's name, author, description, readme excerpts, file names and your tag names, or a report's text — masked first (§6.10) | The provider you chose: bettercommunity.ch (with Creator ID and proof), your own Laya server, or your external API |
 
 ---
 

@@ -68,10 +68,11 @@ Everything before the first statement.
 | `every 30m` · `every 2h` | an interval. A whole number of hours becomes an hourly trigger |
 | `once at "2026-01-01T09:00"` | a single moment |
 | `on app start` | once per launch of BMM |
+| `on feed "https://…/feed.xml" every 15m` | when that RSS or Atom feed has a new item (at most every 5 minutes); add `lan` after it for a feed on your local network. Needs `allow network` |
 | `manual` | only when you press Run, or a deeplink fires it |
 | `describe "…"` | the description shown in the list |
 | `disabled` | keep the task, do not run it |
-| `allow command, script, deeplink, stopProcess` | what the task may do outside BMM (also `delete`, `resources`, `tasks`) |
+| `allow command, script, deeplink, stopProcess` | what the task may do outside BMM (also `delete`, `resources`, `tasks`, `network`) |
 
 `allow` is the same four permissions as the brick editor's checkboxes, and it is required
 for the same steps. A task that runs a script without `allow script` fails at that step,

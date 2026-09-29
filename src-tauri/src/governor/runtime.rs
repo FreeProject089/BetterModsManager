@@ -16,7 +16,10 @@
 //! `(cores / 2).clamp(1, 4)`, no rate limit unless a disk rule (migrated from `disk_limits`)
 //! sets one. So wiring a site changes nothing until somebody picks another preset.
 use super::config::{pool_threads, DiskKind, IoPolicy, OpKind, Preset, ResourcesConfig, Target, ThreadPriority};
-use super::game_mode::{GameMode, Manual, Treatment};
+use super::game_mode::{GameMode, GameView, Manual, Signals, Treatment};
+
+/// Who a "pause everything until I quit the game" belongs to (queue.rs `pause_all_by`).
+pub const GAME_PAUSE_BY: &str = "game";
 use super::io::{copy_file_governed, limiter_for, CopyError, RateLimiter};
 use super::queue::{Queue, Ticket};
 use std::collections::HashMap;
@@ -175,7 +178,12 @@ impl Governor {
     pub fn task_preset(&self) -> Option<TaskPreset> { *self.task.lock().unwrap_or_else(|p| p.into_inner()) }
 
     pub fn set_game_manual(&self, m: Manual) {
-        self.game.lock().unwrap_or_else(|p| p.into_inner()).manual = m;
+        let active = {
+            let mut g = self.game.lock().unwrap_or_else(|p| p.into_inner());
+            g.manual = m;
+            g.is_active()
+        };
+        if !active { self.end_game_pause(); }
         self.refresh();
     }
 
@@ -188,8 +196,11 @@ impl Governor {
     /// (None: the profiles could not be read this time, keep the previous folders); the manual
     /// list comes from the document. Returns (detection is on, listing processes is worth it).
     pub fn set_game_lists(&self, game_dirs: Option<&[String]>) -> (bool, bool) {
-        let extra = self.config.read().map(|c| c.game_exes.clone()).unwrap_or_default();
+        let cfg = self.config();
+        let extra = cfg.game_exes.clone();
         let mut g = self.game.lock().unwrap_or_else(|p| p.into_inner());
+        // The user's options first, so an ignored folder is left out of the lists below.
+        g.set_options(&cfg.game_pause_kinds(), Duration::from_secs(cfg.game.leave_after_secs as u64), &cfg.game.ignored_dirs, cfg.game.fullscreen_window);
         match game_dirs {
             Some(d) => g.set_lists(d, &extra),
             None => g.set_extra(&extra),
@@ -202,18 +213,50 @@ impl Governor {
     /// full-screen signal. When game mode turns on or off, the preset in force, the slots, the
     /// pools and the background pauses follow at once. Returns whether it changed.
     pub fn observe_games(&self, running: &[String], fullscreen: bool, now: Instant) -> bool {
-        let changed = {
+        self.observe_game_signals(running, Signals { exclusive_fullscreen: fullscreen, fullscreen_window: None }, now)
+    }
+
+    /// `observe_games` with every screen signal (the foreground full-screen window too). When
+    /// game mode ends, a "pause everything until I quit the game" is lifted with it.
+    pub fn observe_game_signals(&self, running: &[String], sig: Signals<'_>, now: Instant) -> bool {
+        let (changed, active) = {
             let mut g = self.game.lock().unwrap_or_else(|p| p.into_inner());
             let before = g.is_active();
-            before != g.observe_with(running.iter().map(|s| s.as_str()), fullscreen, now)
+            let list: Vec<&str> = running.iter().map(|s| s.as_str()).collect();
+            let after = g.observe_signals(&list, sig, now);
+            (before != after, after)
         };
-        if changed { self.refresh(); }
+        if changed {
+            if !active { self.end_game_pause(); }
+            self.refresh();
+        }
         changed
+    }
+
+    /// Game mode as the Storage Manager shows it.
+    pub fn game_view(&self) -> GameView {
+        self.game.lock().unwrap_or_else(|p| p.into_inner()).view(Instant::now())
+    }
+
+    /// "Pause everything until I quit the game": a pause-all owned by `game`, lifted when game
+    /// mode ends (or by Resume all). Refused when no game is running: it would wait for nothing.
+    pub fn pause_until_game_ends(&self) -> Result<(), String> {
+        if !self.game_mode().0 { return Err("no game is running".into()); }
+        self.queue.pause_all_by(GAME_PAUSE_BY, None);
+        Ok(())
+    }
+
+    fn end_game_pause(&self) {
+        if self.queue.paused_all().map(|p| p.by == GAME_PAUSE_BY).unwrap_or(false) { self.queue.resume_all(); }
     }
 
     /// Apply a new resources document. Slots change at once; pools are rebuilt on next use
     /// (a pool already running work keeps it: the old `Arc` lives until its jobs finish).
     pub fn configure(&self, cfg: ResourcesConfig) {
+        // Game mode's options follow at once (what it holds, applied to what is queued now),
+        // not at the next detection poll.
+        self.game.lock().unwrap_or_else(|p| p.into_inner())
+            .set_options(&cfg.game_pause_kinds(), Duration::from_secs(cfg.game.leave_after_secs as u64), &cfg.game.ignored_dirs, cfg.game.fullscreen_window);
         if let Ok(mut c) = self.config.write() { *c = cfg; }
         self.refresh();
     }

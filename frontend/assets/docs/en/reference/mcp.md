@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-73 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+78 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -86,6 +86,8 @@ values.
 | `bmm_verify_mod_integrity` | `mod_id`\* |  | Verify a mod's on-disk files against its stored SHA-256 hashes |
 | `bmm_list_tags` | — |  | List the user's custom mod tags |
 | `bmm_sync` | — | app | Synchronize files for the active profile (apply mods) |
+| `bmm_get_mod_order` | — | app | The activation order: each active mod in deployment order (the last wins a shared file), whom it overrides and who overrides it, and every contested file with its winner |
+| `bmm_set_mod_order` | `order`\*, `profile_id`, `reapply` | app | Set the activation order. `order` must be the same set of mods that are active; the files that change hands are re-copied (`reapply`: every contested file) |
 
 ### Modpacks & launch packs
 
@@ -196,6 +198,17 @@ a half-parsed task.
 | `bmm_recorder_set` | `on`, `full`, `rust`, `js` | app | Configure the local Session recorder in the running BMM app |
 | `bmm_list_sessions` | — |  | List recorded session reports (the Session recorder's output zips) |
 
+### Optional AI (Laya)
+
+Off unless the user turned AI on in BMM (Settings → AI). Suggesting never writes; applying
+writes only the fields named. See [Optional AI](doc-page:features/ai).
+
+| Tool | Parameters | Needs | What it does |
+|---|---|---|---|
+| `bmm_ai_status` | — |  | Whether the master switch is on, the chosen provider, which features may reach the network and why not, where keys are stored (never the keys). Works offline |
+| `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Name, version, author, description, tags and links read from the mod's own files; then, only if AI is on with a provider, tags ranked from the user's EXISTING tags by Laya, language and adult-content hints, and an optional description draft from the user's external API. Each suggestion carries its source and confidence. **Writes nothing** |
+| `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Writes the fields the user chose (name, version, author, description, existing tag ids up to 3 per mod, http(s) links) to data.json; any other key is refused |
+
 ### Diagnostics
 
 | Tool | Parameters | Needs | What it does |
@@ -254,19 +267,19 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 73 tools with their parameters is exactly the list that rots the
+written by hand, because 78 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 73 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 78 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---
 
 ## See also
 
-- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 62 subcommands for a terminal or a `.bat`
+- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 70 CLI subcommands for a terminal or a `.bat`
 - [Local API &amp; deeplinks](doc-page:reference/api) — the REST surface, its tokens and permissions
 - [Action reference](doc-page:reference/actions) — what plugins and the scheduler can trigger
 - [Extending BMM](doc-page:how-it-works/extending) — where the MCP server sits in the design

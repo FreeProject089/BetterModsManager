@@ -759,7 +759,11 @@ export function applyTheme(theme: BmmTheme): void {
     } catch {}
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
-    document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
+    // ...or when the user asked for fewer animations app-wide (Settings → Graphics & display,
+    // graphics-settings.ts): either one is enough.
+    let appReduces = false;
+    try { appReduces = localStorage.getItem('bmm.reduceAnimations') === '1'; } catch { /* no storage: the theme decides */ }
+    document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0' || appReduces);
     // Flag light themes so CSS can fix hover/dropdown contrast that hardcodes light text.
     document.body.classList.toggle('bmm-theme-light', isLightTheme(theme));
     if (theme.id !== '__preview__') localStorage.setItem(ACTIVE_KEY, theme.id);

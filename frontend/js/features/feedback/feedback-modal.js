@@ -9,6 +9,7 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen, anonLimits } from './bc-feedback.js';
 import { bcLinkState, openAccountLinkFlow, forgetBcLinkState } from '../../core/bc-link.js';
+import { reportSig } from '../ai/ai-model.js';
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const base = (p) => p.split(/[\\/]/).pop() || p;
 const IC = {
@@ -550,8 +551,8 @@ async function send(who, cfg) {
         return;
     const q = (id) => document.getElementById(id);
     const status = q('fbm-status');
-    const title = q('fbm-title')?.value.trim() || '';
-    const desc = q('fbm-desc')?.value.trim() || '';
+    let title = q('fbm-title')?.value.trim() || '';
+    let desc = q('fbm-desc')?.value.trim() || '';
     const email = q('fbm-email')?.value.trim() || '';
     const discord = q('fbm-discord')?.value.trim() || '';
     const say = (msg, tone = '') => { if (status) {
@@ -568,6 +569,22 @@ async function send(who, cfg) {
         q('fbm-email')?.focus();
         return;
     }
+    // Before anything is packed: personal data masked, "already sent?", an optional AI hint
+    // (features/ai/ai-report.ts). Local unless the user asks for the hint, and the user decides
+    // what goes. The check is a help, never a gate: if it fails, the report sends as before.
+    let reviewedSteps = null;
+    try {
+        const { reviewBeforeSend } = await import('../ai/ai-report.js');
+        const rv = await reviewBeforeSend({ title, desc, steps: _steps.map((s) => s.trim()).filter(Boolean) });
+        if (!rv.proceed) {
+            say(t('ai.report.review'));
+            return;
+        }
+        title = rv.parts.title;
+        desc = rv.parts.desc;
+        reviewedSteps = rv.parts.steps;
+    }
+    catch { /* sent as typed */ }
     // Both ceilings, resolved in one place — see attachLimits for why there are two.
     const lim = attachLimits(cfg);
     const maxN = lim.maxAttachments;
@@ -623,7 +640,7 @@ async function send(who, cfg) {
             if (diag && !put('dxdiag_report.txt', 'text/plain', textToBase64(String(diag))))
                 toast(t('fbm.skippedBig').replace('{f}', 'dxdiag_report.txt'), 'warning');
         }
-        const steps = _steps.map((s) => s.trim()).filter(Boolean);
+        const steps = reviewedSteps ?? _steps.map((s) => s.trim()).filter(Boolean);
         const body = steps.length ? `${desc}\n\n${t('fbm.fSteps')}\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : desc;
         // Anti-spam friction: a bit of proof-of-work before the report goes out. Shown so the
         // brief wait reads as "checking", not "stuck".
@@ -638,7 +655,7 @@ async function send(who, cfg) {
         const r = await submitFeedback({ kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length }, attachments }, { linked: who.state !== 'anonymous' });
         try {
             const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
-            history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString() });
+            history.unshift({ id: r.id || 'N/A', type: _kind === 'feedback' ? 'feedback' : 'bug', title: title || t(`fbm.kind.${_kind}`), source: 'bc', date: new Date().toISOString(), sig: reportSig(title, body) });
             localStorage.setItem('bmm_report_history', JSON.stringify(history.slice(0, 50)));
             document.getElementById('bh-history-refresh')?.click();
         }

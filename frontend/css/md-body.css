@@ -1,0 +1,165 @@
+/* Rendered markdown — `renderMarkdown` (ui/update-notes.ts): the Release Notes modal, the
+   Community tab, app descriptions. Linked once by docs/md-hydrate.ts.
+
+   The base rules are injected by update-notes.ts as `.md-body x` (one class). These corrections
+   are written `.md-body.md-body x` so they win on specificity whatever order the two sheets
+   load in, and only use theme tokens: the injected base painted code on a fixed navy and
+   callout text with raw accents, both of which disappear on a light theme. */
+
+/* ── The column never widens ─────────────────────────────────────────────────────────── */
+.md-body.md-body { min-width: 0; max-width: 100%; overflow-wrap: break-word; }
+/* The Release Notes content pane is a flex item: without min-width:0 its widest line sets it. */
+#update-notes-content-target { min-width: 0; }
+#update-notes-content-target > .ptb-modal-body { min-width: 0; overflow-x: hidden; }
+
+/* Inline code: a long path (`%LOCALAPPDATA%\Packages\…\Scripts`) has no break opportunity and
+   used to push the whole page sideways. `anywhere` also lowers the min-content width, so a
+   table holding such a path can still fit its column. */
+.md-body.md-body :not(pre) > code {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    background: var(--bmm-s06);
+    border: 1px solid var(--bmm-s08);
+    color: var(--bmm-text-primary);
+    padding: 1px 5px;
+}
+
+.md-body.md-body img,
+.md-body.md-body video,
+.md-body.md-body iframe { max-width: 100%; height: auto; }
+
+/* ── Code blocks: the house look (docs hub `.dh-code`) + an overlaid copy button ─────── */
+.md-body.md-body .md-code-block {
+    position: relative;
+    margin: 12px 0;
+    max-width: 100%;
+    min-width: 0;
+}
+.md-body.md-body .md-code-block > pre,
+.md-body.md-body pre {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 14px 16px;
+    background: var(--bmm-bg-base);
+    border: 1px solid var(--bmm-border);
+    border-radius: 10px;
+    backdrop-filter: none;
+    scrollbar-width: thin;
+}
+.md-body.md-body .md-code-block > pre { padding-top: 36px; }
+.md-body.md-body pre code {
+    display: block;
+    white-space: pre;
+    font-family: var(--bmm-font-mono, ui-monospace, monospace);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--bmm-text-primary);
+    overflow-wrap: normal;
+}
+
+.md-body.md-body .md-copy-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    padding: 3px 9px 3px 7px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 6px;
+    background: var(--bmm-bg-elevated);
+    color: var(--bmm-text-secondary);
+    font: 600 10.5px/1.4 var(--bmm-font-sans, inherit);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s, color 0.15s;
+}
+.md-body.md-body .md-copy-btn::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    flex: none;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.md-body.md-body .md-code-block:hover .md-copy-btn,
+.md-body.md-body .md-copy-btn:focus-visible { opacity: 1; }
+.md-body.md-body .md-copy-btn:hover {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--bmm-accent) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 12%, var(--bmm-bg-elevated));
+    color: var(--bmm-text-primary);
+}
+.md-body.md-body .md-copy-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent);
+    outline-offset: 1px;
+}
+.md-body.md-body .md-copy-btn.is-copied {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--bmm-success) 50%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 14%, var(--bmm-bg-elevated));
+    color: color-mix(in srgb, var(--bmm-success) 65%, var(--bmm-text-primary));
+}
+.md-body.md-body .md-copy-btn.is-copied::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+}
+.md-body.md-body .md-copy-btn.is-failed {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-danger) 12%, var(--bmm-bg-elevated));
+    color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary));
+}
+
+/* ── Callouts ([!NOTE] … [!CAUTION]) ─────────────────────────────────────────────────── */
+.md-body.md-body blockquote.md-alert { padding: 12px 16px; min-width: 0; }
+.md-body.md-body blockquote.md-alert > :last-child { margin-bottom: 0; }
+.md-body.md-body blockquote.md-alert .md-code-block { margin: 10px 0; }
+/* Title inks: the accent family mixed toward the text ink, readable on light and dark. */
+.md-body.md-body .md-alert-note .md-alert-title { color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary)); }
+.md-body.md-body .md-alert-tip .md-alert-title { color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.md-body.md-body .md-alert-important .md-alert-title { color: color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary)); }
+.md-body.md-body .md-alert-warning .md-alert-title { color: color-mix(in srgb, var(--bmm-warning) 70%, var(--bmm-text-primary)); }
+.md-body.md-body .md-alert-caution .md-alert-title { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+
+/* ── Headings, links ─────────────────────────────────────────────────────────────────── */
+.md-body.md-body h1, .md-body.md-body h2, .md-body.md-body h3, .md-body.md-body h4 { overflow-wrap: anywhere; scroll-margin-top: 12px; }
+.md-body.md-body h3 { color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary)); }
+.md-body.md-body h4 { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); margin: 16px 0 6px; }
+.md-body.md-body a { color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary)); overflow-wrap: anywhere; }
+
+/* ── Lists: nested levels keep a readable indent and no double spacing ───────────────── */
+.md-body.md-body ul, .md-body.md-body ol { padding-left: 22px; }
+.md-body.md-body li > ul, .md-body.md-body li > ol { margin: 4px 0 2px; }
+.md-body.md-body li > p { margin: 4px 0; }
+.md-body.md-body li::marker { color: var(--bmm-text-muted); }
+
+/* ── Tables: a wide one scrolls inside itself instead of widening the page ──────────── */
+.md-body.md-body table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.md-body.md-body th { background: var(--bmm-s04); color: var(--bmm-text-primary); }
+.md-body.md-body td, .md-body.md-body th { vertical-align: top; }
+
+/* ── The Release Notes card on a light theme ─────────────────────────────────────────────
+   main.css paints `.ptb-modal-card` a fixed #0d1117, so on a light theme the dark-ink text
+   of the notes sat on a near-black card. The card follows the theme's surface there. */
+body.bmm-theme-light #modal-update-notes .ptb-modal-card { background: var(--bmm-bg-elevated); }
+body.bmm-theme-light #modal-update-notes .ptb-modal-header { background: var(--bmm-s04); }
+body.bmm-theme-light #modal-update-notes .ptb-modal-sidebar { background: var(--bmm-s03); }
+/* Inside a table, inline code keeps its words whole: `anywhere` would let the auto layout
+   squeeze a column down to "/api/healt|h". A table that then outgrows the column scrolls. */
+.md-body.md-body td code, .md-body.md-body th code { overflow-wrap: break-word; }
+.md-body.md-body td, .md-body.md-body th { min-width: 4em; }

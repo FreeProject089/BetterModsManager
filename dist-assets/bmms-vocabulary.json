@@ -883,6 +883,48 @@
         "unfollow",
         "password"
       ]
+    },
+    {
+      "type": "webhook.send",
+      "group": "notify",
+      "params": [
+        "url",
+        "format",
+        "body",
+        "headers",
+        "secretHeaders",
+        "method",
+        "timeoutMs",
+        "allowLan",
+        "retries"
+      ]
+    },
+    {
+      "type": "discord.send",
+      "group": "notify",
+      "params": []
+    },
+    {
+      "type": "slack.send",
+      "group": "notify",
+      "params": [
+        "url",
+        "message",
+        "username",
+        "retries"
+      ]
+    },
+    {
+      "type": "feed.publish",
+      "group": "notify",
+      "params": [
+        "path",
+        "feedTitle",
+        "title",
+        "body",
+        "link",
+        "max"
+      ]
     }
   ],
   "conditions": [
@@ -998,10 +1040,12 @@
     "event",
     "every",
     "failed",
+    "feed",
     "file",
     "for",
     "if",
     "in",
+    "lan",
     "manual",
     "month",
     "not",
@@ -1043,7 +1087,8 @@
     "stopProcess",
     "delete",
     "resources",
-    "tasks"
+    "tasks",
+    "network"
   ],
   "scriptEngines": [
     "powershell",

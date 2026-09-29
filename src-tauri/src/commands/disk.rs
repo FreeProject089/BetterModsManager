@@ -121,8 +121,25 @@ fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
     None
 }
 
+/// Every volume, its space and which profiles use it: the Storage Manager's disk list.
+///
+/// Off the main thread. It was a sync command, and in Tauri v2 a sync command runs on the main
+/// thread: the enumeration asks every volume for its size and free space, and a hard disk that
+/// has to spin up or a mapped network drive that went away answers in seconds, not
+/// milliseconds, with the whole window frozen meanwhile (the Storage Manager asked twice per
+/// opening). Nothing here is bulk I/O, so it takes no ticket.
 #[tauri::command]
-pub fn get_system_disks(state: State<AppState>) -> Result<Vec<DiskLimitInfo>, AppError> {
+pub async fn get_system_disks(app: tauri::AppHandle) -> Result<Vec<DiskLimitInfo>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        system_disks(&state)
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?
+}
+
+pub fn system_disks(state: &AppState) -> Result<Vec<DiskLimitInfo>, AppError> {
     let disks_list = Disks::new_with_refreshed_list();
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
@@ -239,8 +256,9 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
     }
 }
 
+/// Async (a worker thread, not the main one): it saves data.json, with an fsync.
 #[tauri::command]
-pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), AppError> {
+pub async fn set_disk_limit(state: State<'_, AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), AppError> {
     {
         let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         // The governor reads its rules, not this table (migrated once at startup), so the

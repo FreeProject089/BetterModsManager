@@ -356,6 +356,40 @@ export async function renderModDetail(modId) {
 
   setupTagPicker(panel, () => modTags, addTag);
   renderTagsUI();
+
+  // "Suggest" (optional AI): reads the mod's own files — and, only if the user turned AI on
+  // and chose a provider, asks it to rank THEIR tags. Opens a list; nothing is written until
+  // the user ticks fields and clicks Apply (features/ai/ai-suggest.ts). Loaded on click.
+  const saveBtn = panel.querySelector('#btn-save-detail');
+  if (saveBtn && !panel.querySelector('#btn-ai-suggest')) {
+    const aiBtn = document.createElement('button');
+    aiBtn.type = 'button';
+    aiBtn.id = 'btn-ai-suggest';
+    aiBtn.className = 'btn btn-ghost';
+    aiBtn.style.cssText = 'margin-top:12px;width:100%;height:34px;font-weight:600;flex-shrink:0';
+    aiBtn.title = t('ai.suggest.tip');
+    aiBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:8px" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>'
+      + `<span>${escHtml(t('ai.suggest.button'))}</span>`;
+    aiBtn.onclick = async () => {
+      try {
+        const { openAiSuggest } = await import('../ai/ai-suggest.js');
+        await openAiSuggest(mod, {
+          tagName: (id: string) => (S.userTags || []).find((x) => x.id === id)?.name || id,
+          onApplied: (res) => {
+            const u = res?.mod;
+            if (u) Object.assign(mod, { name: u.name, version: u.version, author: u.author, description: u.description, tags: u.tags, download_links: u.download_links });
+            appState.set('allMods', [...(S.allMods || [])]);
+            const c = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
+            if (c) updateCardState(c, mod);
+            renderModList(true);
+            renderModDetail(mod.id);
+            toast((res?.skippedTags || []).length ? t('ai.suggest.appliedSkipped') : t('ai.suggest.applied'), 'success');
+          },
+        });
+      } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+    };
+    saveBtn.parentElement?.insertBefore(aiBtn, saveBtn);
+  }
   
   panel.querySelector('#btn-save-detail').onclick = async () => {
     const name = panel.querySelector('#detail-name').value.trim().substring(0, 100);

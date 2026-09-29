@@ -64,6 +64,10 @@ mod commands {
     // `bmm_schedule_runs` read the same files the app writes, through the same guard.
     #[path = "../../commands/sched_runs.rs"]
     pub mod sched_runs;
+    // Optional AI (Laya): the extractor, the gate and the providers. The same file as the
+    // app's, so `bmm ai-suggest` and the in-app "Suggest" follow one set of rules.
+    #[path = "../../commands/ai_core.rs"]
+    pub mod ai_core;
 }
 
 // What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI
@@ -79,6 +83,7 @@ use comfy_table::{Table, ContentArrangement, presets::UTF8_FULL_CONDENSED};
 use mcp::server::BmmMcpServer;
 use mcp::state_bridge;
 use mcp::tools::{mods, profiles, diagnostics, launch_packs};
+use mcp::tools::ai as ai_tools;
 
 /// Better Mods Manager — CLI & MCP Server
 #[derive(Parser)]
@@ -175,6 +180,22 @@ enum Commands {
 
     /// Sync files for the active profile (apply mods)
     Sync,
+
+    /// The activation order of the active profile; --set reorders it (running app)
+    #[command(name = "mod-order")]
+    ModOrder {
+        /// New order: every active mod id, comma-separated, first applied first (the last wins)
+        #[arg(long, value_delimiter = ',')]
+        set: Vec<String>,
+
+        /// Re-copy the winner of every contested file (repair)
+        #[arg(long)]
+        reapply: bool,
+
+        /// Profile ID (defaults to the active profile)
+        #[arg(short, long)]
+        profile: Option<String>,
+    },
 
     // ── Repository ────────────────────────────────────────────────────
 
@@ -662,6 +683,32 @@ enum Commands {
     ThemeInfo {
         /// Theme id
         theme_id: String,
+    },
+
+    // ── Optional AI (Laya) ────────────────────────────────────────────
+
+    /// Show the optional-AI settings and what may reach the network (never a key)
+    AiStatus,
+
+    /// Suggest metadata for a mod from its files (+ the chosen provider if AI is on); writes nothing
+    AiSuggest {
+        /// Mod id (or exact name)
+        mod_id: String,
+        /// Files only: never call a provider, whatever the settings say
+        #[arg(long, default_value_t = false)]
+        offline: bool,
+        /// Also ask the configured external API for a description draft
+        #[arg(long, default_value_t = false)]
+        draft: bool,
+    },
+
+    /// Apply the chosen fields to a mod (name, version, author, description, tags, links)
+    AiApply {
+        /// Mod id (or exact name)
+        mod_id: String,
+        /// JSON object of the fields to write, e.g. {"description":"...","tags":["<tag id>"]}
+        #[arg(long)]
+        fields: String,
     },
 }
 
@@ -1370,6 +1417,29 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             }
         }
 
+        // ── Activation order ─────────────────────────────────────────
+        Commands::ModOrder { set, reapply, profile } => {
+            if set.is_empty() && !reapply {
+                let res = state_bridge::api_call("GET", "/api/mods/order", None).await?;
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            } else {
+                // --reapply alone keeps the order as it is: read it, send it back with the flag.
+                let order: Vec<String> = if set.is_empty() {
+                    let cur = state_bridge::api_call("GET", "/api/mods/order", None).await?;
+                    http_ok(&cur)?;
+                    cur.pointer("/body/mods").and_then(|v| v.as_array()).map(|a| {
+                        a.iter().filter_map(|m| m.get("id").and_then(|v| v.as_str()).map(String::from)).collect()
+                    }).unwrap_or_default()
+                } else { set };
+                let mut body = serde_json::json!({ "order": order, "reapply": reapply });
+                if let Some(p) = profile { body["profileId"] = p.into(); }
+                let res = state_bridge::api_call("POST", "/api/mods/order", Some(body)).await?;
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            }
+        }
+
         // ── Resources ────────────────────────────────────────────────
         Commands::Resources => {
             let res = state_bridge::api_call("GET", "/api/resources", None).await?;
@@ -1422,6 +1492,24 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
         Commands::ThemeInfo { theme_id } => {
             let v = state_bridge::get_theme(&theme_id)?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+
+        // ── Optional AI (Laya) ───────────────────────────────────────
+        Commands::AiStatus => {
+            println!("{}", serde_json::to_string_pretty(&ai_tools::status())?);
+        }
+        Commands::AiSuggest { mod_id, offline, draft } => {
+            // Blocking HTTP (a provider, if one is on) off the async runtime.
+            let v = tokio::task::spawn_blocking(move || ai_tools::suggest(&mod_id, !offline, draft))
+                .await?
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiApply { mod_id, fields } => {
+            let f: serde_json::Value = serde_json::from_str(&fields)
+                .map_err(|e| anyhow::anyhow!("--fields is not JSON: {e}"))?;
+            let v = ai_tools::apply(&mod_id, &f).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
 

@@ -389,7 +389,7 @@ Deux formes échappent à la règle :
 | `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
 | `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow`, `password`, `key` · suivre ou cesser de suivre un catalogue. `password` pour un secret partagé, `key` pour désigner QUELLE clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, jamais ignorée : une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé | |
 | `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |
-| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main | |
+| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId`, `reapply` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main (`reapply: true` : chaque fichier disputé) | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · retire l'entrée, **garde les fichiers** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · relie un mod aux dépôts qui peuvent le mettre à jour | |
@@ -552,8 +552,8 @@ périme en silence ; un check, non.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 73 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
-- [Référence CLI](doc-page:reference/cli.fr) — les 66 sous-commandes du même binaire, pour un terminal ou un `.bat`
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 78 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
+- [Référence CLI](doc-page:reference/cli.fr) — les 70 sous-commandes du même binaire, pour un terminal ou un `.bat`
 - [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
 - [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
 - [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

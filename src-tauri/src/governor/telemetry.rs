@@ -33,6 +33,8 @@ pub struct Sample {
     pub tickets: Vec<TicketView>,
     /// "Everything is paused", who by and for how long (owner card 2); None when it is not.
     pub paused_all: Option<PauseAllView>,
+    /// Game mode in detail (which game, since when, the cooldown left): the Game mode tab.
+    pub game: super::game_mode::GameView,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -126,6 +128,7 @@ impl Sampler {
             task,
             tickets: gov.queue().snapshot(),
             paused_all: gov.queue().paused_all(),
+            game: gov.game_view(),
         })
     }
 

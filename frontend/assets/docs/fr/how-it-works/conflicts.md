@@ -53,12 +53,14 @@ d'une façon qui survivrait à un redémarrage.
 
 ---
 
-## Qui gagne : le dernier mod activé
+## Qui gagne : le dernier mod de l'ordre d'activation
 
-Il n'y a **aucun sélecteur de gagnant par fichier ni liste de priorités**. La règle est : **celui que
-tu actives en dernier gagne.** La liste `active_mods` d'un profil est *ordonnée*, le déploiement la
-parcourt dans l'ordre, et un mod plus tardif écrase un plus ancien sur tout chemin partagé. Ton seul
-levier est l'ordre d'activation — active en dernier celui qui doit gagner.
+Il n'y a **aucun sélecteur de gagnant par fichier**. La règle est : **le mod appliqué en dernier
+gagne.** La liste `active_mods` d'un profil est *ordonnée* — l'[ordre d'activation](doc-page:how-it-works/load-order) —,
+le déploiement la parcourt dans l'ordre, et un mod plus tardif écrase un plus ancien sur tout chemin
+partagé. Un mod nouvellement activé va à la fin, donc par défaut c'est le dernier activé qui gagne ;
+la vue de l'ordre permet de monter ou descendre n'importe quel mod, et ne recopie que les fichiers qui
+changent de main.
 
 ```mermaid
 flowchart LR
@@ -68,8 +70,8 @@ flowchart LR
 ```
 
 C'est une vraie simplification par rapport aux gestionnaires à arbre de priorités. Elle t'achète une
-chose : il n'y a jamais de règle cachée à reconstituer. Ce qui est sur le disque est ce que tu as
-activé en dernier.
+chose : il n'y a jamais de règle cachée à reconstituer. Ce qui est sur le disque est le dernier mod
+d'une seule liste visible.
 
 ---
 
@@ -108,15 +110,17 @@ que le mod retire, BMM pose trois questions dans l'ordre :
 ```mermaid
 flowchart TB
     REM(["fichier à retirer"]) --> OTHER{"un autre mod activé<br/>livre-t-il aussi ce fichier ?"}
-    OTHER -- oui --> FROMMOD["restaurer depuis LE PLUS<br/>RÉCEMMENT activé qui l'a"]
+    OTHER -- oui --> FROMMOD["restaurer depuis le DERNIER<br/>de l'ordre d'activation qui l'a"]
     OTHER -- non --> ORIG{"est-il dans _original/ ?"}
     ORIG -- oui --> FROMORIG["restaurer le fichier du jeu,<br/>puis supprimer la copie de sauvegarde"]
     ORIG -- non --> DEL["le mod a ajouté ce fichier —<br/>le supprimer"]
 ```
 
-1. **Un autre mod activé le livre** → restaurer depuis ce mod. La recherche parcourt la liste active
-   **à l'envers**, donc le mod activé le plus récemment gagne — la même règle que le déploiement,
-   appliquée en marche arrière. Désactiver le mod du dessus révèle correctement celui du dessous.
+1. **Un autre mod activé le livre** → restaurer depuis ce mod : le **dernier** de l'ordre
+   d'activation qui a le fichier — la même règle que le déploiement. Désactiver le mod du dessus
+   révèle celui juste en dessous, mods archivés (zippés) compris : leur copie est lue depuis le cache
+   extrait. (Il restaurait la copie *la plus ancienne*, et ignorait les mods archivés ; les deux sont
+   corrigés et testés — voir [Ordre d'activation](doc-page:how-it-works/load-order).)
 2. **Sinon, `_original/` l'a** → restaurer le fichier du jeu, puis **supprimer la copie de
    sauvegarde** : *« Optimisation d'espace : retirer le fichier de sauvegarde puisqu'il a été
    restauré en sécurité. »* Le dossier de sauvegarde rétrécit à mesure que tu désactives, au lieu de
@@ -140,7 +144,7 @@ Deux détails de sûreté dans ce nettoyage :
 
 | Tu veux | Fais ça |
 |---|---|
-| La version du fichier partagé de Mod B | Active B **après** A |
+| La version du fichier partagé de Mod B | Mets B **sous** A dans l'[ordre d'activation](doc-page:how-it-works/load-order) (ou active-le après A) |
 | Voir ce qui se recouvre réellement | Ouvre la vue des conflits — la liste est exacte, et gratuite à calculer |
 | Tout annuler | Désactive dans n'importe quel ordre ; chaque fichier retombe sur le mod suivant qui l'a, puis sur l'original du jeu |
 | Choisir fichier par fichier | Non supporté — utilise le [Mapper](doc-page:how-it-works/mapper) pour changer ce qu'un mod livre, ou édite le dossier du mod |

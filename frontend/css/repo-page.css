@@ -1,0 +1,98 @@
+/* Server Repo — the page frame (features/repo/repo-page.ts links this file).
+ *
+ * The title and the Sync/Host tab strip share one sticky wrapper (.rp-sticky, built at runtime
+ * from the existing nodes). At rest it looks as it always did; once the page scrolls under it
+ * (.is-stuck) the tab cards fold to one line so the header costs ~110px, not ~180px, while
+ * still saying which tab you are on, whether your server runs and which repo you joined.
+ * Tokens only: every colour below is a theme variable or a mix of two. */
+
+/* ── Sticky frame ──────────────────────────────────────────────────────────────────────── */
+#view-repo .rp-sentinel { height: 1px; margin-bottom: -1px; }
+#view-repo .rp-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin: 0 -8px 22px;
+    padding: 0 8px;
+    background: var(--bmm-bg-base);
+    transition: box-shadow 0.18s ease, padding 0.18s ease;
+}
+#view-repo .rp-sticky > .view-header { margin-bottom: 18px !important; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+#view-repo .rp-sticky > .repo-tabs { margin-bottom: 0; }
+#view-repo .rp-sticky.is-stuck {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bmm-border);
+    box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--bmm-bg-base) 40%, transparent);
+}
+#view-repo .rp-sticky.is-stuck > .view-header { margin-bottom: 10px !important; }
+#view-repo .rp-sticky.is-stuck .view-subtitle { display: none; }
+#view-repo .rp-sticky.is-stuck .view-title { font-size: 18px; }
+/* Stuck: each tab card becomes a one-line pill (icon + title). */
+#view-repo .rp-sticky.is-stuck .repo-tab-btn { padding: 7px 12px; border-radius: 10px; gap: 10px; }
+#view-repo .rp-sticky.is-stuck .repo-tab-ic { width: 28px; height: 28px; border-radius: 8px; }
+#view-repo .rp-sticky.is-stuck .repo-tab-sub { display: none; }
+#view-repo .rp-sticky.is-stuck .repo-tab-btn:hover { transform: none; }
+
+/* ── Tabs: a visible keyboard focus, and the selected one is unmistakable ─────────────── */
+#view-repo .repo-tab-btn:focus-visible,
+#view-repo .repo-method-pill:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent);
+    outline-offset: 2px;
+}
+#view-repo .repo-tab-btn[aria-selected="true"] .repo-tab-title { color: var(--bmm-text-primary); }
+#view-repo .repo-tab-btn[aria-selected="false"] .repo-tab-title { color: var(--bmm-text-secondary); }
+
+/* ── Status + main actions (the header's right side) ──────────────────────────────────── */
+#view-repo .rp-head-slot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px 14px;
+    min-width: 0;
+    margin-left: auto;
+}
+#view-repo .rp-status, #view-repo .rp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+#view-repo .rp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 280px;
+    min-width: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+#view-repo .rp-chip svg { flex: none; opacity: 0.8; }
+#view-repo .rp-chip-txt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#view-repo .rp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--bmm-text-muted); }
+#view-repo .rp-chip--on {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 10%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-chip--on .rp-dot { background: var(--bmm-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-success) 22%, transparent); }
+#view-repo .rp-chip--repo {
+    border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: color-mix(in srgb, var(--bmm-accent) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-chip--muted { color: var(--bmm-text-muted); }
+#view-repo .rp-act { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* ── Step headers: the "Learn more" link sits at the end of the row ───────────────────── */
+#view-repo .repo-group-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+#view-repo .repo-group-h > .lm-link { margin-left: auto; align-self: center; }
+
+/* ── Empty states in the export lists: what to do next, and a way there ──────────────── */
+#view-repo .rp-empty-a { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+
+@media (max-width: 900px) {
+    #view-repo .rp-head-slot { justify-content: flex-start; margin-left: 0; width: 100%; }
+}

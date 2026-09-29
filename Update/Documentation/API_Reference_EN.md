@@ -49,7 +49,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mods/enable` | yes | `{ mod_id }` | Enables a mod in the active profile (resolves deps). |
 | `/api/mods/disable` | yes | `{ mod_id }` | Disables a mod. |
 | `/api/mods/order` | yes | — (GET) | The deployment order, every contested file, and who wins it. |
-| `/api/mods/order` | yes | `{ order[], profileId? }` | Reorders the active mods and re-copies the files that change hands. `order` must be a permutation of what is active; last in the list wins a shared file. |
+| `/api/mods/order` | yes | `{ order[], profileId?, reapply? }` | Reorders the active mods and re-copies the files that change hands (`reapply: true` re-copies the winner of every contested file). `order` must be a permutation of what is active; last in the list wins a shared file. |
 | `/api/schedules` | yes | — (GET) | id, name, enabled and trigger for every saved task. **Not** its steps. |
 | `/api/schedules/enabled` | yes | `{ id, enabled }` | Arms or disarms one task. Only `enabled` is writable — a route that could write a whole task could install one with a script step in it. |
 | `/api/schedules/:id/runs` | yes | — (GET) | A task’s run log, newest first: the last 50 runs with each step’s duration, status and error. Secrets are removed before a run is written. `schedules.read`. |

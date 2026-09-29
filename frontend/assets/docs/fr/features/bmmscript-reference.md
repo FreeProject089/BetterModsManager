@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    106 actions · 40 conditions · 36 valeurs · 8 sources de boucle
+    110 actions · 40 conditions · 36 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -129,6 +129,15 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `log.print` | Met une ligne dans le panneau d'exécution et dans le run.log de la tâche. En code, c'est `print "…"`. | `message` · `text` |
 | `data.validate` | Détermine ce qu'un document EST d'après sa forme, et ce qui ne va pas dedans. À utiliser avant d'agir sur quelque chose de téléchargé. | `path` · `text` · `expect` · `strict` |
 | `file.write` | Écrit ou ajoute du texte dans un fichier. Un chemin relatif atterrit dans le dossier de sortie de la tâche. | `path` · `text` · `append` |
+
+### Notifications et web
+
+| Action | Ce qu'elle fait | Paramètres |
+|---|---|---|
+| `webhook.send` | Envoie un corps JSON (ou texte) en POST ou PUT à n’importe quelle adresse web, avec en-têtes, en-têtes secrets et nouvelles tentatives. | `url` · `format` · `body` · `headers` · `secretHeaders` · `method` · `timeoutMs` · `allowLan` · `retries` |
+| `discord.send` | Publie un message dans un salon Discord par son adresse de webhook. | — |
+| `slack.send` | Publie un message dans un salon Slack par un webhook entrant. | `url` · `message` · `username` · `retries` |
+| `feed.publish` | Ajoute une entrée à un fichier de flux Atom que la tâche tient à jour : n’importe quel lecteur RSS peut le suivre. | `path` · `feedTitle` · `title` · `body` · `link` · `max` |
 
 ### Système & flux
 

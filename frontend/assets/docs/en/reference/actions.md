@@ -186,6 +186,19 @@ BetterCommunity: an automation that arrived in a downloaded `.bmmpa` must not be
 BMM identify you to a third party. Nothing about the request is written to the log, because the
 address can carry a token in its query string.
 
+### Notifications & web
+
+| Action | What it does | Permission |
+|---|---|---|
+| `webhook.send` | POST / PUT / PATCH a JSON or text body (`{variables}` escaped as JSON), with headers, secret headers, retries (0–4), timeout, *allow the local network* | Network |
+| `discord.send` | A message to a Discord channel through its webhook (`discord.com/api/webhooks/…`) | Network |
+| `slack.send` | A message to a Slack channel through an incoming webhook (`hooks.slack.com/…`) | Network |
+| `feed.publish` | An entry (title, text, link) at the top of an Atom file the task keeps | — |
+
+The network steps are sent by BMM's backend: http(s) only, no private address unless the step
+allows the local network, a timeout and a size cap on every request, and nothing secret in an
+error or a log. Details in [Scheduling → Telling the outside world](doc-page:features/scheduler#telling-the-outside-world-webhooks-discord-slack-feeds).
+
 ### Conditions
 
 Used by **IF**, **WAIT UNTIL** and **LOOP**. Every condition has a **NOT** box.

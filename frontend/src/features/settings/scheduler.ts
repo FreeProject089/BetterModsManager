@@ -24,10 +24,13 @@ import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type O
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
-import { reasonNotRunning } from './sched-why.js';
+import { reasonNotRunning, gameHoldsTasks } from './sched-why.js';
 import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
 import { planOf, previewAgainst } from './sched-preview.js';
-import { debugging, gate, startDebug, endDebug, failDebug, DebugStopped } from './sched-debug.js';
+import {
+    debugging, gate, startDebug, endDebug, failDebug, DebugStopped, setDebugHost, subscribeDebug, subscribeBreakpoints,
+    toggleBreakpoint, breakpointPaths, lastDebugEvent, debugStep, debugContinue, debugStop, debugActive, type DebugEvent,
+} from './sched-debug.js';
 import { newRun, startStep, endStep, finishRun, type RunRecord } from './sched-runlog.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
@@ -45,9 +48,19 @@ import { getLinks } from '../../core/links-config.js';
 import { askConfirm } from '../../core/api.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { trustedLinkDispatcher } from '../../core/link-dispatch.js';
-import { actionPaths, pruneLayout, paletteStep, type FlowLayout } from './sched-flow-model.js';
-import { mountFlow, unmountFlow, type FlowHost } from './sched-flow.js';
-import { flowKeyActive } from './sched-flow-keys.js';
+import { actionPaths, pruneLayout, paletteStep, walkSteps, resolve as resolvePath, findPath, type FlowLayout } from './sched-flow-model.js';
+import {
+    mountFlow, unmountFlow, flowDebugPaint, flowRefresh, flowReveal, flowSelectedPath, type FlowHost, type StepTestResult,
+} from './sched-flow.js';
+import { readMode, writeMode, needsModePrompt, MODE_CHOICES, isMode } from './sched-modes.js';
+import { debugTargetFor, pathForLine, type LineRow } from './sched-debug-map.js';
+import { testNeedsConfirm, testOutcome } from './sched-test.js';
+import { learnMore } from '../../core/learn-more.js';
+import { flowKeyActive, bindScopeKeys } from './sched-flow-keys.js';
+import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProblem, discordBody, slackBody, webhookBody, jsonTemplate, type FeedItem } from './sched-feed.js';
+import { regexWithBudget } from './regex-budget.js';
+import { fieldProblem } from './sched-feed.js';
+import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -130,6 +143,16 @@ type Trigger =
      * before the first one had finished making room.
      */
     | { type: 'condition'; condition: Condition }
+    /**
+     * Fires when a feed (RSS or Atom) has an item it did not have before.
+     *
+     * The first read only LEARNS what is there, so arming a task on a feed with fifty items
+     * does not run it fifty times. What was seen is kept across launches (per task and per
+     * address), so an item published while BMM was closed still fires once at the next check;
+     * the newest new item reaches the steps as {event.title}, {event.link}, {event.id},
+     * {event.published}, and how many there were as {event.count}. Needs `network`.
+     */
+    | { type: 'rss'; url: string; everyMinutes: number; allowLan?: boolean }
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
@@ -177,6 +200,12 @@ interface TaskPerms {
      *  make "may call my sub-task" cost "may fire any bmm:// link". A legacy task (no `perms`)
      *  keeps it, like `deeplink`: it could always do this, and `schedule/run` is a deep link. */
     tasks?: boolean;
+    /** Send to, or read from, the network: the webhook, Discord and Slack steps and the feed
+     *  trigger. Narrower than `command` — it cannot start a program — and bounded on the Rust
+     *  side (commands/sched_net.rs): http(s) only, never a private address unless the STEP
+     *  allows the local network, a timeout and a size cap on every request. Off for every
+     *  existing task: none of them could do this when its consent was given. */
+    network?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -678,17 +707,20 @@ function isDue(task: Task, now: Date): boolean {
  * two lookups only this side can do — because those are the parts that only exist here.
  */
 export function whyNotRunning(task: Task, now: Date = new Date()): { key: string; v?: string } {
+    if (task.enabled && _owed.has(task.id)) return { key: 'sched.why.heldGame' };
     return reasonNotRunning(
         task as any,
         {
             watch: _watchSeen as any, event: _eventSeen as any,
             appStart: _appStartFired, once: _onceFired,
             after: _afterSeen as any, cond: _condWas as any, probe: _probeNext as any,
+            rss: _rssNext as any,
         },
         task.enabled && task.trigger.type !== 'manual' ? nextDue(task, now) : null,
         {
             nameOf: (id) => _tasks.find((x) => x.id === id)?.name || null,
             mayRunScripts: hasPerm(task, 'script'),
+            mayUseNetwork: hasPerm(task, 'network'),
         },
     );
 }
@@ -874,6 +906,57 @@ async function scriptFired(task: Task): Promise<boolean> {
     }
 }
 
+/** When each feed trigger may next read its feed, and which are reading one now. */
+const _rssNext = new Map<string, number>();
+const _rssBusy = new Set<string>();
+const RSS_SEEN_KEY = 'bmm.sched.rssSeen';
+
+/** What each feed trigger has already seen, per task AND address: a new address re-learns. */
+function readRssSeen(): Record<string, string[]> {
+    try {
+        const v = JSON.parse(localStorage.getItem(RSS_SEEN_KEY) || '{}');
+        return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+}
+function writeRssSeen(all: Record<string, string[]>): void {
+    // Only tasks that still exist: a deleted task's history is not worth keeping.
+    const live = new Set(_tasks.map((x) => x.id));
+    const kept = Object.fromEntries(Object.entries(all).filter(([k]) => live.has(k.split('|')[0])));
+    try { localStorage.setItem(RSS_SEEN_KEY, JSON.stringify(kept)); } catch { /* quota: re-learned next time */ }
+}
+
+async function rssFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'rss'; url: string; everyMinutes: number; allowLan?: boolean };
+    const url = String(tr.url || '').trim();
+    if (!url) return false;
+    // The grant before the request, like the script probe: a task whose steps ask for
+    // nothing must not reach the network on a timer without it.
+    if (!hasPerm(task, 'network')) return false;
+    const now = Date.now();
+    const every = Math.max(5, Number(tr.everyMinutes) || 15) * 60000;
+    const due = _rssNext.get(task.id);
+    if (due !== undefined && now < due) return false;
+    if (_rssBusy.has(task.id)) return false;
+    _rssBusy.add(task.id);
+    try {
+        const items = await invoke('sched_feed_fetch', { url, allowLan: tr.allowLan === true, timeoutMs: 20000 }) as FeedItem[];
+        const all = readRssSeen();
+        const key = `${task.id}|${url}`;
+        const r = newFeedItems(all[key], Array.isArray(items) ? items : []);
+        all[key] = r.seen;
+        writeRssSeen(all);
+        if (r.baseline || !r.fresh.length) return false;
+        _eventData.set(task.id, feedEventData(r.fresh, url));
+        return true;
+    } catch {
+        // A feed that is down is not a fire, and not a reason to stop polling the others.
+        return false;
+    } finally {
+        _rssNext.set(task.id, Date.now() + every);
+        _rssBusy.delete(task.id);
+    }
+}
+
 /** What each condition trigger saw last time, so it can fire on the CHANGE. */
 const _condWas = new Map<string, boolean>();
 
@@ -896,10 +979,27 @@ async function conditionFired(task: Task): Promise<boolean> {
     return was === false && hit;
 }
 
+/**
+ * Runs owed because game mode held them (GameOptions.hold_scheduler). A task that fell due
+ * while a game ran is remembered here and run once, when game mode ends — its trigger has
+ * already fired (a file changed, a feed had a new item), so waiting for it to fire again would
+ * lose the run. A task run by hand (Run now, a deeplink, another task) is never held.
+ */
+const _owed = new Set<string>();
+
 async function tick(): Promise<void> {
     const now = new Date();
+    const held = gameHoldsTasks(await (invoke('resources_status') as Promise<any>).catch(() => null));
+    if (!held && _owed.size) {
+        for (const id of [..._owed]) {
+            _owed.delete(id);
+            const task = _tasks.find((x) => x.id === id);
+            if (task?.enabled) await runTask(task);
+        }
+    }
     for (const task of _tasks) {
         if (!task.enabled) continue;
+        if (_owed.has(task.id)) continue;
         if (task.trigger.type === 'watchFile') {
             if (!(await watchFired(task))) continue;
         } else if (task.trigger.type === 'onEvent') {
@@ -910,9 +1010,12 @@ async function tick(): Promise<void> {
             if (!(await scriptFired(task))) continue;
         } else if (task.trigger.type === 'condition') {
             if (!(await conditionFired(task))) continue;
+        } else if (task.trigger.type === 'rss') {
+            if (!(await rssFired(task))) continue;
         } else if (!isDue(task, now)) continue;
         if (task.trigger.type === 'appStart') _appStartFired.add(task.id);
         if (task.trigger.type === 'once') _onceFired.add(task.id);
+        if (held) { _owed.add(task.id); renderScheduleList(); continue; }
         await runTask(task);
     }
 }
@@ -972,7 +1075,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -986,7 +1089,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -1103,14 +1206,22 @@ const _runLogs = new Map<string, RunRecord>();
 /** Each action of a running task → its path in the tree, so the record can say WHICH step it
  *  was and the flow view can mark it. A tag read by recordedAction, never a decision. */
 const _actionPath = new WeakMap<object, string>();
+/** Every STEP of a running task → its path: the debugger's position, in all three editors. */
+const _stepPath = new WeakMap<object, string>();
 function notePaths(steps: Step[]): void {
     for (const [a, p] of actionPaths(steps as any)) _actionPath.set(a, p);
+    walkSteps(steps as any, (st, p) => { _stepPath.set(st, p); });
 }
-/** A for-each body runs as a substituted COPY; its actions take the paths of the originals. */
+/** A for-each body runs as a substituted COPY; its steps take the paths of the originals. */
 function inheritPaths(orig: Step[], copy: Step[]): Step[] {
     const a = actionPaths(orig as any);
     const b = actionPaths(copy as any);
     if (a.length === b.length) a.forEach(([o], i) => { const p = _actionPath.get(o); if (p) _actionPath.set(b[i][0], p); });
+    const sa: object[] = [];
+    const sb: object[] = [];
+    walkSteps(orig as any, (st) => { sa.push(st); });
+    walkSteps(copy as any, (st) => { sb.push(st); });
+    if (sa.length === sb.length) sa.forEach((o, i) => { const p = _stepPath.get(o); if (p) _stepPath.set(sb[i], p); });
     return copy;
 }
 
@@ -1120,6 +1231,12 @@ const _taskPresetTokens = new Map<string, number>();
 /** The only settings `storage.flag` may touch. It used to toggle ANY boolean setting by name,
  *  which made one step a way to switch off whatever safety a setting stood for. */
 export const STORAGE_FLAGS = ['auto_io_calibration', 'smart_io_enabled', 'storage_alert_enabled', 'enable_lazy_sha_calculation'] as const;
+
+/** What every run knows about itself: `{task.name}` and `{task.id}`, for a message to say
+ *  WHICH task it comes from. Under a dotted name, which no user variable can have. */
+function taskVars(task: { name?: string; id?: string }): Record<string, string> {
+    return { 'task.name': String(task.name || ''), 'task.id': String(task.id || '') };
+}
 
 async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
@@ -1145,7 +1262,7 @@ async function runTask(task: Task): Promise<void> {
         // task rewrote halfway through would behave differently depending on scheduling,
         // which is the least debuggable kind of difference. A var.set inside THIS run
         // updates the snapshot as well as the store, so a later step sees its own write.
-        const ctx: RunCtx = { nums: {}, text: {}, shared: readSharedVars() };
+        const ctx: RunCtx = { nums: {}, text: taskVars(task), shared: readSharedVars() };
         // What the event carried, as `{event.<key>}`.
         //
         // Prefixed rather than merged: an event describing a mod as `id` must not quietly
@@ -1170,7 +1287,7 @@ async function runTask(task: Task): Promise<void> {
             try {
                 if (attempt > 0) {
                     // What the triggering event carried ({event.*}) is kept: it is the same event.
-                    const keep = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('event.'))) as Record<string, T>;
+                    const keep = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('event.') || k.startsWith('task.'))) as Record<string, T>;
                     ctx.nums = keep(ctx.nums); ctx.text = keep(ctx.text); ctx.shared = readSharedVars();
                     ctx.nums['retry.task_attempt'] = attempt + 1;
                 }
@@ -1305,7 +1422,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
         // Before the step, never inside one. Same rule as the cancel check above, for the same
         // reason: a step already in flight has changed something, and pausing half-way through
         // one leaves the world in a state nothing here can describe.
-        if (debugging(task.id)) await gate(task.id, stepLabel(step), ctx);
+        if (debugging(task.id)) await gate(task.id, stepLabel(step), ctx, _stepPath.get(step));
         if (step.kind === 'action') {
             await recordedAction(step.action, task, ctx, depth);
         } else if (step.kind === 'delay') {
@@ -1936,6 +2053,61 @@ async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0
     }
 }
 
+/** A whole number in [lo, hi]; the default for anything that is not one. */
+function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
+    const n = parseInt(String(v ?? ''), 10);
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+}
+
+/** What `{name}` would be replaced by in a step, or undefined when it names nothing. */
+function varText(ctx: RunCtx, name: string): string | undefined {
+    const probe = `{${name}}`;
+    const out = substituteVars({ v: probe }, ctx).v;
+    return out === probe ? undefined : String(out);
+}
+
+/** A refusal reason, in words. */
+function netWhy(code: string): string {
+    return t('sched.net.why.' + code) || code;
+}
+
+/**
+ * A network error from the Rust side, in words. Those are codes (`sched.net.refused|private`)
+ * so they can be translated here — and so they never carry the address, which for Discord and
+ * Slack is the credential.
+ */
+function netErrorText(e: unknown): string {
+    const raw = String(e instanceof Error ? e.message : e ?? '');
+    const [key, arg = ''] = raw.split('|');
+    if (!/^(sched\.net|sched\.feed|task\.feed|task\.out)\./.test(key)) return raw;
+    const words = t(key);
+    if (!words || words === key) return raw;
+    const why = arg ? (t('sched.net.why.' + arg) !== 'sched.net.why.' + arg ? t('sched.net.why.' + arg) : arg) : '';
+    return words.replace('{why}', why).replace('{s}', arg);
+}
+
+/**
+ * One call to the network through `sched_webhook`, and what it leaves behind: {http.status}
+ * as a number and as text, the answer's first lines as {http.body} (and {last.out} / `into`).
+ * A failing status throws unless the step accepts any status — the same rule as http.request.
+ */
+async function sendNet(ctx: RunCtx, p: Record<string, any>, req: Record<string, any>): Promise<void> {
+    let res: { status: number; ok: boolean; attempts: number; ms: number; excerpt: string; truncated: boolean };
+    try {
+        res = await invoke('sched_webhook', { req }) as any;
+    } catch (e) {
+        throw new Error(netErrorText(e));
+    }
+    const status = Number(res?.status) || 0;
+    ctx.nums['http.status'] = status;
+    ctx.text['http.status'] = String(status);
+    ctx.text['http.body'] = String(res?.excerpt ?? '');
+    _captureOutput(p, String(res?.excerpt ?? ''), ctx);
+    if (!res?.ok && !p.allowAnyStatus) {
+        throw new Error((t('sched.http.status') || 'HTTP {s} from {u}').replace('{s}', String(status)).replace('{u}', hostOf(String(req.url || ''))));
+    }
+}
+
 async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
@@ -2290,6 +2462,63 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
+        // ── Notifications ─────────────────────────────────────────────────────
+        //
+        // Sent by the Rust side (sched_net.rs), which holds the rules no step can lift:
+        // http(s) only, no private address unless `allowLan`, pinned DNS, a timeout, a size
+        // cap, and errors that never quote the address (a Discord or Slack URL IS the token).
+        case 'webhook.send': {
+            requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const url = String(p.url || '').trim();
+            const bad = webhookUrlProblem(url, 'webhook');
+            if (bad) throw new Error(netWhy(bad));
+            const format = p.format === 'text' ? 'text' : 'json';
+            // A JSON body is substituted from the RAW template as JSON string content, so a
+            // value holding a quote or a newline (a feed title, a log line) cannot break it.
+            const raw = String((action.params || {}).body ?? '');
+            const text = format === 'json' ? jsonTemplate(raw, (n) => varText(ctx, n)) : String(p.body ?? '');
+            const { body, error } = webhookBody(text, format);
+            if (error) throw new Error((t('sched.wh.badJson') || 'The body is not valid JSON: {e}').replace('{e}', error));
+            const plain = parseHeaderBlock(String(p.headers || ''));
+            const secret = parseHeaderBlock(String(p.secretHeaders || ''));
+            const badNames = [...plain.bad, ...secret.bad];
+            if (badNames.length) throw new Error((t('sched.wh.badHeader') || 'Not a header line: {h}').replace('{h}', badNames[0]));
+            await sendNet(ctx, p, {
+                url, method: String(p.method || 'POST').toUpperCase(), headers: plain.headers,
+                secretHeaders: secret.headers, body: body || null,
+                timeoutMs: clampInt(p.timeoutMs, 1000, 60000, 15000), allowLan: p.allowLan === true,
+                retries: clampInt(p.retries, 0, 4, 2),
+            });
+            break;
+        }
+        case 'discord.send':
+        case 'slack.send': {
+            requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const kind = action.type === 'discord.send' ? 'discord' : 'slack';
+            const url = String(p.url || '').trim();
+            const bad = webhookUrlProblem(url, kind);
+            if (bad) throw new Error(netWhy(bad));
+            const message = String(p.message ?? '').trim();
+            if (!message) throw new Error(t('sched.wh.noMessage') || 'There is no message to send.');
+            await sendNet(ctx, p, {
+                url, method: 'POST', headers: {}, secretHeaders: {}, kind,
+                body: kind === 'discord' ? discordBody(message, String(p.username || '')) : slackBody(message),
+                timeoutMs: 15000, allowLan: false, retries: clampInt(p.retries, 0, 4, 2),
+            });
+            break;
+        }
+        case 'feed.publish': {
+            // A local Atom file: no network, no permission — the same rule as file.write.
+            const where = await (invoke('task_feed_append', {
+                taskId: task.id, outputDir: task.outputDir || null,
+                path: String(p.path || 'feed.xml'), feedTitle: String(p.feedTitle || task.name || ''),
+                title: String(p.title || ''), body: String(p.body ?? ''), link: String(p.link || ''),
+                maxEntries: clampInt(p.max, 1, 500, 50),
+            }) as Promise<string>).catch((e) => { throw new Error(netErrorText(e)); });
+            ctx.text['feed.file'] = where;
+            break;
+        }
+
         // ── Benchmarks ────────────────────────────────────────────────────────
         case 'benchmark.run': {
             const dataset = p.dataset === 'real' ? 'real' : 'sandbox';
@@ -2414,18 +2643,17 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             let value = '';
             const pattern = String(p.regex || '').trim();
             if (pattern) {
-                try {
-                    // LAST match, not first. In a log the most recent line is the one that
-                    // describes now; the first is whatever happened when the game started.
-                    const re = new RegExp(pattern, 'g');
-                    let m: RegExpExecArray | null;
-                    let last: RegExpExecArray | null = null;
-                    while ((m = re.exec(hay)) !== null) {
-                        last = m;
-                        if (m.index === re.lastIndex) re.lastIndex += 1;  // a zero-width match
-                    }
-                    if (last) value = String(last[Number(p.group) || 1] ?? last[0] ?? '');
-                } catch {
+                // LAST match, not first. In a log the most recent line is the one that
+                // describes now; the first is whatever happened when the game started.
+                //
+                // In a worker with a time budget: a pattern like (a+)+$ against a long log
+                // backtracks for minutes, and on the UI thread that is a frozen BMM — from a
+                // task somebody imported from a catalogue.
+                const r = await regexWithBudget({ op: 'last', pattern, flags: 'g', hay, group: Number(p.group) || 1 });
+                if (r.ok) value = r.value;
+                else if (r.error === 'timeout') {
+                    toast(`${task.name}: ${t('sched.regex.timeout')}`, 'warning', 10000);
+                } else {
                     // A regex somebody typed. A bad one is a mistake in the task, not a
                     // reason to abandon the run half-way through.
                     toast(`${task.name}: ${t('sched.textExtract.badRegex')}`, 'warning', 8000);
@@ -3619,7 +3847,11 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             const needle = String(p.text || '');
             if (!needle) return false;
             if (p.regex) {
-                try { return new RegExp(needle, 'i').test(hay); } catch { return false; }
+                // A time budget, in a worker: see text.extract. A pattern that runs out of time
+                // FAILS the step rather than reading as "not found", which would be a lie.
+                const r = await regexWithBudget({ op: 'test', pattern: needle, flags: 'i', hay });
+                if (!r.ok && r.error === 'timeout') throw new Error(t('sched.regex.timeout'));
+                return r.ok && r.hit;
             }
             return hay.toLowerCase().includes(needle.toLowerCase());
         }
@@ -3635,8 +3867,11 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
                 case 'contains': return left.toLowerCase().includes(right.toLowerCase());
                 case 'empty': return left.trim() === '';
                 case 'notEmpty': return left.trim() !== '';
-                case 'matches':
-                    try { return new RegExp(right, 'i').test(left); } catch { return false; }
+                case 'matches': {
+                    const r = await regexWithBudget({ op: 'test', pattern: right, flags: 'i', hay: left });
+                    if (!r.ok && r.error === 'timeout') throw new Error(t('sched.regex.timeout'));
+                    return r.ok && r.hit;
+                }
                 default: return false;
             }
         }
@@ -3960,6 +4195,8 @@ function triggerIcon(tr: Trigger): string {
         case 'script':    return P('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>');
         // A branch: true one way, false the other.
         case 'condition': return P('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>');
+        // The feed glyph: a dot and two arcs.
+        case 'rss':       return P('<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>');
         case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
     }
 }
@@ -4025,6 +4262,7 @@ export function ensureRunTicker(): void {
 export function renderScheduleList(): void {
     const container = document.getElementById('scheduler-list-container');
     if (!container) return;
+    renderModePref();
     renderRunningPanel();
     if (!_tasks.length) {
         // Modern empty state: icon tile + message + hint, instead of a bare line.
@@ -4310,6 +4548,12 @@ function triggerLabel(tr: Trigger): string {
             return tr.condition?.type
                 ? `${t('sched.trCondition')}: ${condSummary(tr.condition)}`
                 : t('sched.trConditionNone');
+        }
+        case 'rss': {
+            const host = hostOf(tr.url);
+            return host
+                ? `${t('sched.trRss')}: ${host} (${t('sched.lblEvery') || 'every'} ${Math.max(5, Number(tr.everyMinutes) || 15)} ${t('sched.unitMin') || 'min'})`
+                : t('sched.trRssNone');
         }
         case 'manual': return t('sched.trManual') || 'Manual only';
     }
@@ -5292,7 +5536,31 @@ function taskFromPreset(p: (typeof PRESETS)[number]): Task {
     } as Task;
 }
 
+/** The stylesheet of the task editor's newer parts, linked the first time the editor opens. */
+function ensureSchedCss(): void {
+    if (document.getElementById('sched-editor-css')) return;
+    const link = document.createElement('link');
+    link.id = 'sched-editor-css';
+    link.rel = 'stylesheet';
+    link.href = 'css/sched-editor.css';
+    document.head.appendChild(link);
+}
+
+/** The draft as it was when the editor opened or last saved — the "unsaved changes" baseline. */
+let _savedJson = '';
+let _bpTask = '';
+
 async function openTaskModal(task: Task | null): Promise<void> {
+    ensureSchedCss();
+    bindEditorKeys();
+    if (!task) {
+        let store: Storage | null = null;
+        try { store = localStorage; } catch { store = null; }
+        if (needsModePrompt(store, { isNew: true, taskCount: _tasks.length })) {
+            const m = await askEditorMode();
+            if (m) writeEditorMode(m);
+        }
+    }
     await loadPickers();
     _editing = task;
     _draft = task ? JSON.parse(JSON.stringify(task)) : {
@@ -5300,7 +5568,10 @@ async function openTaskModal(task: Task | null): Promise<void> {
         trigger: { type: 'interval', everyMinutes: 60 }, steps: [], allowCustomCommands: false,
     };
     _undo = []; _redo = [];          // fresh undo history per open
+    _savedJson = JSON.stringify(_draft);
     _ensureHistoryKeys();
+    // Breakpoints belong to the task they were set on.
+    if (_bpTask !== (_draft.id || '')) { _bpTask = _draft.id || ''; for (const p of [...breakpointPaths()]) toggleBreakpoint(p); }
     let modal = document.getElementById('modal-scheduler');
     if (!modal) {
         modal = document.createElement('div');
@@ -5314,6 +5585,45 @@ async function openTaskModal(task: Task | null): Promise<void> {
     }
     renderModal(modal);
     modal.classList.add('open');
+}
+
+/** Show "unsaved changes" when the draft differs from what was opened or last saved. */
+function refreshDirty(modal: HTMLElement): void {
+    const el = modal.querySelector('#sched-dirty') as HTMLElement | null;
+    if (el) el.hidden = JSON.stringify(_draft) === _savedJson;
+}
+
+/**
+ * Save the draft. `close` is "Save and close" (the footer); the header's Save keeps the editor
+ * open, which is what somebody iterating on a task wants between two test runs.
+ */
+async function saveDraft(modal: HTMLElement, close: boolean): Promise<void> {
+    if (!(await flushCode())) return;
+    if (!_draft.name.trim()) {
+        toast(t('sched.needName') || 'Name required', 'warning');
+        (modal.querySelector('#sched-name') as HTMLInputElement | null)?.focus();
+        return;
+    }
+    // Only the hand-placed positions that still describe a step on their path are kept, and
+    // none at all leaves no `layout` field: a task never arranged in the flow saves exactly
+    // as the other two modes would have saved it.
+    {
+        const lay = pruneLayout(_draft.steps as any, _draft.layout);
+        if (lay) _draft.layout = lay; else delete _draft.layout;
+    }
+    const idx = _tasks.findIndex(x => x.id === _draft.id);
+    // A copy goes into the list, so editing on after a Save-and-stay does not change the saved
+    // task behind the editor's back.
+    const saved = JSON.parse(JSON.stringify(_draft)) as Task;
+    if (idx >= 0) _tasks[idx] = saved; else _tasks.push(saved);
+    _editing = saved;
+    await saveTasks();
+    await syncOsSchedule(saved);
+    _savedJson = JSON.stringify(_draft);
+    refreshDirty(modal);
+    renderScheduleList();
+    if (close) modal.classList.remove('open');
+    else toast(t('sched.head.saved'), 'success', 1500);
 }
 
 /** Human one-liner for the header summary: "Daily at 08:00 · 3 steps · even when BMM is closed". */
@@ -5333,6 +5643,7 @@ function draftSummary(): string {
             pm.command === true && (t('sched.sumCmd') || 'can run commands'),
             pm.script === true && (t('sched.sumScript') || 'can run scripts'),
             pm.deeplink === true && (t('sched.sumDeeplink') || 'can fire deeplinks'),
+            pm.network === true && (t('sched.sumNetwork') || 'can reach the network'),
         ].filter(Boolean) as string[];
         if (granted.length) bits.push(granted.join(', '));
     }
@@ -5620,11 +5931,46 @@ function renderModal(modal: HTMLElement): void {
             <div class="sched-head-main">
                 <div class="sched-head-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <div class="sched-head-text">
-                    <h2 class="modal-title">${_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')}</h2>
+                    <div class="sched-head-line">
+                        <h2 class="modal-title sched-head-name" id="sched-head-name">${escHtml(_draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')))}</h2>
+                        <button type="button" class="sched-status ${_draft.enabled ? 'is-on' : 'is-off'}" id="sched-status" aria-pressed="${_draft.enabled ? 'true' : 'false'}"
+                            data-tooltip="${escAttr(t('sched.head.statusTip'))}">${escHtml(t(_draft.enabled ? 'sched.head.on' : 'sched.head.off'))}</button>
+                        <span class="sched-dirty" id="sched-dirty" hidden>${escHtml(t('sched.head.unsaved'))}</span>
+                    </div>
                     <span class="sched-head-summary" id="sched-summary">${escHtml(draftSummary())}</span>
                 </div>
             </div>
-            <button class="modal-close" id="sched-close">&times;</button>
+            <div class="sched-head-actions" role="toolbar" aria-label="${escAttr(t('sched.head.actions'))}">
+                <!-- Three views of ONE draft. There is no state where the code, the
+                     bricks and the flow disagree, because there is only ever one tree. -->
+                <span class="sched-mode-switch has-flow" id="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
+                    <span class="sched-mode-glider" aria-hidden="true"></span>
+                    <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
+                            data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                        <span>${t('sched.modeBricks') || 'Blocks'}</span>
+                    </button>
+                    <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
+                            data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        <span>${t('sched.modeCode') || 'Code'}</span>
+                    </button>
+                    <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
+                            data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
+                        <span>${t('sched.modeFlow') || 'Flow'}</span>
+                    </button>
+                </span>
+                <span class="sched-head-sep" aria-hidden="true"></span>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>${escHtml(t('sched.prev.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg><span>${escHtml(t('sched.dbg.run'))}</span></button>
+                <button class="btn btn-sm btn-secondary sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${t('sched.testRun') || 'Test run'}</span></button>
+                <button class="btn btn-sm btn-primary" id="sched-save-stay" data-tooltip="${escAttr(t('sched.head.saveTip'))}">${escHtml(t('common.save') || 'Save')}</button>
+            </div>
+            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}">&times;</button>
         </div>
         <div class="sched-layout">
             <aside class="sched-side">
@@ -5698,7 +6044,7 @@ function renderModal(modal: HTMLElement): void {
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
-                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks'];
+                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network'];
                     const granted = keys.filter((k) => (pm as any)[k] === true).length;
                     return `<div class="sched-perm-group">
                         <div class="sched-perm-head">
@@ -5713,6 +6059,7 @@ function renderModal(modal: HTMLElement): void {
                         ${row('script', pm.script === true, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
                         ${row('deeplink', pm.deeplink === true, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
                         ${row('stopProcess', pm.stopProcess === true, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
+                        ${row('network', pm.network === true, t('sched.allowNetTitle') || 'Network', t('sched.allowNet') || 'This task may send webhooks and Discord or Slack messages, and read feeds. Never a private address unless a step allows the local network.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
                         ${row('delete', pm.delete === true, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
@@ -5758,26 +6105,6 @@ function renderModal(modal: HTMLElement): void {
             <main class="modal-body sched-body sched-flow">
                 <div class="sched-flow-head">
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
-                    <!-- Three views of ONE draft. There is no state where the code, the
-                         bricks and the flow disagree, because there is only ever one tree. -->
-                    <span class="sched-mode-switch has-flow" id="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
-                        <span class="sched-mode-glider" aria-hidden="true"></span>
-                        <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
-                                data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-                            <span>${t('sched.modeBricks') || 'Blocks'}</span>
-                        </button>
-                        <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
-                                data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                            <span>${t('sched.modeCode') || 'Code'}</span>
-                        </button>
-                        <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
-                                data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
-                            <span>${t('sched.modeFlow') || 'Flow'}</span>
-                        </button>
-                    </span>
                     <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
                     <!-- The legend must list what the language actually has. It still
                          showed four blocks after For-Each, Switch, Try and the loop
@@ -5825,7 +6152,10 @@ function renderModal(modal: HTMLElement): void {
                         <aside class="sched-outline" id="sched-outline" hidden>
                             <div class="bo-list" id="sched-outline-list"></div>
                         </aside>
+                        <div class="sched-code-gutter" id="sched-code-gutter" role="button" tabindex="-1"
+                             aria-label="${escAttr(t('sched.bp.gutter'))}" data-tooltip="${escAttr(t('sched.bp.gutter'))}"></div>
                         <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
+                        <div class="sched-code-hl" id="sched-code-hl" hidden aria-hidden="true"></div>
                         <aside class="sched-ref" id="sched-ref" hidden>
                             <input type="search" class="input sched-ref-q" id="sched-ref-q"
                                    placeholder="${escAttr(t('sched.ref.search'))}" spellcheck="false">
@@ -5839,14 +6169,9 @@ function renderModal(modal: HTMLElement): void {
             </main>
         </div>
         <div class="modal-footer sched-footer">
+            <span class="sched-foot-left">${learnMore('scheduler')}<span class="sched-foot-keys">${escHtml(t('sched.head.keys'))}</span></span>
             <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
-            <button class="btn btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>${escHtml(t('sched.prev.run'))}</button>
-            <button class="btn btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg>${escHtml(t('sched.dbg.run'))}</button>
-            <button class="btn btn-ghost sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polygon points="5 3 19 12 5 21 5 3"/></svg>${t('sched.testRun') || 'Test run'}</button>
-            <button class="btn btn-primary" id="sched-save">${t('common.save') || 'Save'}</button>
+            <button class="btn btn-primary" id="sched-save">${escHtml(t('sched.head.saveClose'))}</button>
         </div>
       </div>`;
 
@@ -5857,7 +6182,33 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
     modal.querySelector('#sched-preset-open')?.addEventListener('click', () => { void openPresetGallery(modal); });
-    modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
+    modal.querySelector('#sched-name')?.addEventListener('input', (e) => {
+        _draft.name = (e.target as HTMLInputElement).value;
+        const h = modal.querySelector('#sched-head-name');
+        if (h) h.textContent = _draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task'));
+    });
+    modal.querySelector('#sched-status')?.addEventListener('click', (e) => {
+        const b = e.currentTarget as HTMLElement;
+        _draft.enabled = !_draft.enabled;
+        b.className = `sched-status ${_draft.enabled ? 'is-on' : 'is-off'}`;
+        b.setAttribute('aria-pressed', _draft.enabled ? 'true' : 'false');
+        b.textContent = t(_draft.enabled ? 'sched.head.on' : 'sched.head.off');
+        refreshDirty(modal);
+    });
+    // "Unsaved changes": compared with the draft as it was opened or last saved, after anything
+    // that can change it. Cheap next to a keystroke; debounced anyway.
+    {
+        let dt: any = null;
+        const later = () => { clearTimeout(dt); dt = setTimeout(() => refreshDirty(modal), 250); };
+        modal.addEventListener('input', later);
+        modal.addEventListener('change', later);
+        modal.addEventListener('click', later);
+        refreshDirty(modal);
+    }
+    _unsubDebug?.();
+    _unsubDebug = subscribeDebug((ev) => paintDebug(ev));
+    _unsubBps?.();
+    _unsubBps = subscribeBreakpoints(() => paintBreakpoints());
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
     modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
         cb.addEventListener('change', () => {
@@ -5869,6 +6220,8 @@ function renderModal(modal: HTMLElement): void {
             _draft.perms = pm;
             _draft.allowCustomCommands = !!pm.command;   // keep the legacy field truthful
             refreshSummary(modal);
+            // The flow's "!" marks read the grants: redraw them now, not at the next edit.
+            if (_mode === 'flow') flowRefresh();
         });
     });
     modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
@@ -5887,13 +6240,17 @@ function renderModal(modal: HTMLElement): void {
     // the bug.
     modal.querySelector('#sched-preview')?.addEventListener('click', () => { void openPreview(); });
 
-    modal.querySelector('#sched-debug')?.addEventListener('click', () => {
+    modal.querySelector('#sched-debug')?.addEventListener('click', async () => {
+        // In code mode the TEXT is the task: compiled first, so the run, the line map and the
+        // breakpoints all describe what is on screen.
+        if (!(await flushCode())) return;
         if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
         startDebug(_draft.id || 'draft', _draft.name || (t('sched.untitled') || 'Untitled'));
         (modal.querySelector('#sched-test') as HTMLButtonElement | null)?.click();
     });
 
     modal.querySelector('#sched-test')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
         if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
         const btn = modal.querySelector('#sched-test') as HTMLButtonElement;
         btn.disabled = true;
@@ -5916,7 +6273,10 @@ function renderModal(modal: HTMLElement): void {
         renderRunningPanel();
         ensureRunTicker();
         try {
-            await runSteps(_draft.steps, { ..._draft, id: testId } as Task, { nums: {}, text: {}, shared: readSharedVars() });
+            // Paths noted first: the debugger reports where it stands by path, and a test run is
+            // the run it debugs.
+            notePaths(_draft.steps);
+            await runSteps(_draft.steps, { ..._draft, id: testId } as Task, { nums: {}, text: taskVars(_draft), shared: readSharedVars() });
             toast(t('sched.testOk') || 'Test run finished.', 'success');
         } catch (e) {
             if (e instanceof DebugStopped) toast(t('sched.dbg.ended'), 'info');
@@ -5942,23 +6302,9 @@ function renderModal(modal: HTMLElement): void {
             endDebug();
         }
     });
+    modal.querySelector('#sched-save-stay')?.addEventListener('click', () => { void saveDraft(modal, false); });
     modal.querySelector('#sched-save')?.addEventListener('click', async () => {
-        if (!_draft.name.trim()) { toast(t('sched.needName') || 'Name required', 'warning'); return; }
-        if (_draft.osSchedule && (_draft.trigger.type as string) === 'appStart') {
-            // appStart already runs on launch; OS task would be redundant but harmless.
-        }
-        // Only the hand-placed positions that still describe a step on their path are kept, and
-        // none at all leaves no `layout` field: a task never arranged in the flow saves exactly
-        // as the other two modes would have saved it.
-        {
-            const lay = pruneLayout(_draft.steps as any, _draft.layout);
-            if (lay) _draft.layout = lay; else delete _draft.layout;
-        }
-        const idx = _tasks.findIndex(x => x.id === _draft.id);
-        if (idx >= 0) _tasks[idx] = _draft; else _tasks.push(_draft);
-        await saveTasks();
-        await syncOsSchedule(_draft);
-        renderScheduleList(); modal.classList.remove('open');
+        await saveDraft(modal, true);
     });
 
     renderTriggerEditor(modal.querySelector('#sched-trigger') as HTMLElement);
@@ -5991,7 +6337,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         { g: 'clock', label: t('sched.trGrp.clock') || 'On a schedule',
           kinds: ['interval', 'hourly', 'dailyAt', 'weeklyAt', 'monthlyAt', 'once'] },
         { g: 'event', label: t('sched.trGrp.event') || 'When something happens',
-          kinds: ['appStart', 'watchFile', 'onEvent', 'afterTask', 'condition', 'script'] },
+          kinds: ['appStart', 'watchFile', 'onEvent', 'afterTask', 'condition', 'script', 'rss'] },
         { g: 'manual', label: t('sched.trGrp.manual') || 'Never on its own',
           kinds: ['manual'] },
     ];
@@ -6008,6 +6354,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         ['afterTask', t('sched.trAfter')],
         ['condition', t('sched.trCondition')],
         ['script',    t('sched.trScript')],
+        ['rss',       t('sched.trRss')],
         ['manual',    t('sched.trManual')  || 'Manual only'],
     ];
     const labelOf = (v: string) => (kinds.find(([k]) => k === v) || [v, v])[1];
@@ -6056,6 +6403,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'condition') _draft.trigger = { type: 'condition', condition: { type: 'fileExists', params: {} } };
         else if (v === 'script') _draft.trigger = { type: 'script', engine: 'powershell', code: '', everyMinutes: 5 };
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
+        else if (v === 'rss') _draft.trigger = { type: 'rss', url: '', everyMinutes: 15 };
         else _draft.trigger = { type: 'appStart' };
         // Closed again: the answer replaces the menu, and the parameters for what was just
         // chosen are the next thing on screen instead of being ten rows down.
@@ -6311,6 +6659,63 @@ function renderTriggerEditor(host: HTMLElement): void {
         ph.querySelector('#sched-tr-at')?.addEventListener('input', (e) => { (_draft.trigger as any).at = new Date((e.target as HTMLInputElement).value).toISOString(); });
     } else if (tr.type === 'appStart') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trAppStartHint') || 'Runs once each time BMM launches.'}</span>`;
+    } else if (tr.type === 'rss') {
+        const granted = hasPerm(_draft as Task, 'network');
+        ph.innerHTML = `
+            <div class="sched-field"><label class="sched-flabel" for="sched-tr-rss">${escHtml(t('sched.trRssUrl'))}</label>
+                <input class="input" id="sched-tr-rss" spellcheck="false" placeholder="https://example.com/feed.xml" value="${escAttr(tr.url || '')}">
+                <span class="sched-field-err" id="sched-tr-rss-err" hidden></span></div>
+            <div class="sched-tr-row">
+                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.trRssEvery'))}</span>
+                <input type="number" class="input" id="sched-tr-rss-min" min="5" value="${Math.max(5, Number(tr.everyMinutes) || 15)}" style="max-width:90px">
+                <span>${t('sched.unitMin') || 'min'}</span>
+            </div>
+            <label class="sched-cmd-row"><input type="checkbox" id="sched-tr-rss-lan" ${tr.allowLan ? 'checked' : ''}>
+                <span>${escHtml(t('sched.net.allowLan'))}</span></label>
+            <p class="sched-hint">${escHtml(t('sched.trRssHint'))}</p>
+            ${granted ? '' : `<p class="sched-hint sched-hint-warn">${escHtml(t('sched.trRssNoPerm'))}</p>`}
+            <div class="sched-tr-row">
+                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-rss-test">${escHtml(t('sched.trRssTest'))}</button>
+                <span class="sched-test-out" id="sched-tr-rss-out" aria-live="polite"></span>
+            </div>`;
+        const err = ph.querySelector('#sched-tr-rss-err') as HTMLElement;
+        const check = (v: string) => {
+            const bad = v.trim() ? webhookUrlProblem(v, 'webhook') : null;
+            err.hidden = !bad;
+            err.textContent = bad ? netWhy(bad) : '';
+        };
+        check(String(tr.url || ''));
+        ph.querySelector('#sched-tr-rss')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value;
+            (_draft.trigger as any).url = v.trim();
+            check(v);
+        });
+        ph.querySelector('#sched-tr-rss-min')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).everyMinutes = Math.max(5, parseInt((e.target as HTMLInputElement).value) || 15);
+        });
+        ph.querySelector('#sched-tr-rss-lan')?.addEventListener('change', (e) => {
+            if ((e.target as HTMLInputElement).checked) (_draft.trigger as any).allowLan = true;
+            else delete (_draft.trigger as any).allowLan;
+        });
+        // Reads the feed once, now, and says what the trigger would see. Reading is not a
+        // fire: nothing is remembered, so the task still learns the feed on its first check.
+        ph.querySelector('#sched-tr-rss-test')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            const out = ph.querySelector('#sched-tr-rss-out') as HTMLElement;
+            const cur = _draft.trigger as any;
+            btn.disabled = true;
+            out.className = 'sched-test-out is-testing';
+            out.textContent = t('sched.test.running');
+            try {
+                const items = await invoke('sched_feed_fetch', { url: String(cur.url || ''), allowLan: cur.allowLan === true, timeoutMs: 20000 }) as FeedItem[];
+                out.className = 'sched-test-out is-ok';
+                out.textContent = (t('sched.trRssFound') || '{n} item(s) — newest: {t}')
+                    .replace('{n}', String(items.length)).replace('{t}', items[0]?.title || '—');
+            } catch (x) {
+                out.className = 'sched-test-out is-fail';
+                out.textContent = netErrorText(x);
+            } finally { btn.disabled = false; }
+        });
     }
     // Named, not a catch-all — and that one word was the whole bug.
     //
@@ -6478,15 +6883,21 @@ function describeCompletion(c: { text: string; kind: string }): string {
 /** The three ways to edit a task: bricks, BMMScript text, and the flow graph. */
 type EditorMode = 'bricks' | 'code' | 'flow';
 const EDITOR_MODE_KEY = 'bmm.sched.editorMode';
+void EDITOR_MODE_KEY;
+/** The preference lives in sched-modes.ts (the key is the same one, so nobody's choice is lost). */
 function readEditorMode(): EditorMode {
-    try {
-        const v = localStorage.getItem(EDITOR_MODE_KEY);
-        return v === 'code' || v === 'flow' ? v : 'bricks';
-    } catch { return 'bricks'; }
+    try { return readMode(localStorage); } catch { return 'bricks'; }
 }
 function writeEditorMode(m: EditorMode): void {
-    try { localStorage.setItem(EDITOR_MODE_KEY, m); } catch { /* private mode or quota: a preference, nothing lost */ }
+    try { writeMode(localStorage, m); } catch { /* private mode or quota: a preference, nothing lost */ }
+    const sel = document.getElementById('sched-mode-pref') as HTMLSelectElement | null;
+    if (sel && sel.value !== m) sel.value = m;
 }
+/** The mode the open editor is showing. */
+let _mode: EditorMode = 'bricks';
+/** Compile the code box into the draft when the code mode is showing; false when it does not compile. */
+let _flushCode: (() => Promise<boolean>) | null = null;
+async function flushCode(): Promise<boolean> { return _flushCode ? _flushCode() : true; }
 /** Switch the open editor's mode, as its buttons do (the Alt+1/2/3 commands call this). */
 let _switchMode: ((m: EditorMode) => void) | null = null;
 export function switchEditorMode(m: EditorMode): void { _switchMode?.(m); }
@@ -6494,7 +6905,13 @@ export function switchEditorMode(m: EditorMode): void { _switchMode?.(m); }
 /** The one line under a node's title in the flow: what THIS step is about. */
 function flowSummary(step: Step): string {
     switch (step.kind) {
-        case 'action': return condSubject({ type: step.action?.type, params: step.action?.params }, 38);
+        case 'action': {
+            // A webhook address is often the credential itself (Discord, Slack): the node
+            // shows only the host, never the path or the query.
+            const ty = String(step.action?.type || '');
+            if (ty === 'webhook.send' || ty === 'discord.send' || ty === 'slack.send') return hostOf(String(step.action?.params?.url || ''));
+            return condSubject({ type: step.action?.type, params: step.action?.params }, 38);
+        }
         case 'delay': return `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
         case 'waitFor': case 'if': case 'ensure': return condSummary(step.condition);
         case 'repeat': return step.mode === 'times'
@@ -6553,7 +6970,366 @@ function flowHost(): FlowHost {
         },
         savedSteps: () => (_editing ? (_editing.steps as any) : null),
         switchMode: (m) => switchEditorMode(m),
+        describe: (step: any) => describeStep(step as Step),
+        learnMore: (step: any) => learnMore(step?.kind === 'action' ? 'actions' : 'scheduler', { compact: false }),
+        hasBreakpoint: (path: string) => breakpointPaths().has(path),
+        toggleBreakpoint: (path: string) => { toggleBreakpoint(path); },
+        testStep: async (path: string) => {
+            const st = resolvePath(_draft.steps as any, path) as Step | undefined;
+            return st ? testOneStep(st) : { ok: false, message: t('common.error') || 'Error' };
+        },
     };
+}
+
+/** One line about what a step does: the action's description, or the legend of its kind. */
+function describeStep(step: Step): string {
+    if (step.kind === 'action') {
+        const k = 'sched.actd.' + String(step.action?.type || '');
+        const d = t(k);
+        return d === k ? '' : d;
+    }
+    const LEGEND: Record<string, string> = {
+        if: 'sched.legendIf', repeat: 'sched.legendLoop', forEach: 'sched.legendForEach', switch: 'sched.legendSwitch',
+        try: 'sched.legendTry', waitFor: 'sched.legendWait', break: 'sched.legendBreak', stop: 'sched.legendStop',
+        ensure: 'sched.legendEnsure', continue: 'sched.legendBreak',
+    };
+    const key = LEGEND[step.kind];
+    if (!key) return '';
+    const d = t(key);
+    return d === key ? '' : d;
+}
+
+// ── One step, tested ───────────────────────────────────────────────────────────
+//
+// The Test button of a brick and of the flow's inspector: run THIS step once, on its own, with
+// the draft's permissions and fresh variables, and say how it went — the HTTP status and the
+// first line of the answer for a webhook, whether it threw for anything else. A step that
+// changes something (enables a mod, deletes a profile) asks first: a Test button that silently
+// did that would be a trap (sched-test.ts decides which do).
+async function testOneStep(step: Step): Promise<StepTestResult> {
+    if (testNeedsConfirm(step as any)) {
+        const go = await showConfirm(t('sched.test.confirmTitle'), t('sched.test.confirm').replace('{s}', stepLabel(step)));
+        if (!go) return { ok: false, message: '', skipped: true };
+    }
+    if (!(await flushCode())) return { ok: false, message: t('sched.bmms.badcode') || 'This BMMScript did not compile.' };
+    const ctx: RunCtx = { nums: {}, text: taskVars(_draft), shared: readSharedVars() };
+    let err: unknown = undefined;
+    try {
+        await runSteps([{ ...(step as any), disabled: false } as Step], { ..._draft, id: `${_draft.id || 'draft'}#test` } as Task, ctx);
+    } catch (e) { err = e; }
+    return testOutcome(ctx, err, {
+        ok: t('sched.test.ok'), fail: t('sched.test.fail'), stopped: t('sched.test.stopped'),
+    }, (e) => e instanceof _StopTask);
+}
+
+/** Show a test's verdict on a brick: the pulse while it runs, then a chip with what came back. */
+function paintBrickTest(block: HTMLElement, res: StepTestResult | null): void {
+    block.classList.remove('sched-testing', 'sched-test-ok', 'sched-test-fail');
+    block.querySelector(':scope > .sched-test-chip')?.remove();
+    if (!res) { block.classList.add('sched-testing'); return; }
+    if (res.skipped) return;
+    block.classList.add(res.ok ? 'sched-test-ok' : 'sched-test-fail');
+    const chip = document.createElement('div');
+    chip.className = `sched-test-chip ${res.ok ? 'is-ok' : 'is-fail'}`;
+    chip.setAttribute('role', 'status');
+    chip.innerHTML = `<b>${escHtml(res.message)}</b>${res.status ? ` <span class="sched-test-status">HTTP ${res.status}</span>` : ''}${res.excerpt ? `<code>${escHtml(res.excerpt)}</code>` : ''}
+        <button type="button" class="sched-test-x" aria-label="${escAttr(t('common.close'))}">&times;</button>`;
+    chip.querySelector('.sched-test-x')?.addEventListener('click', (e) => { e.stopPropagation(); chip.remove(); block.classList.remove('sched-test-ok', 'sched-test-fail'); });
+    const head = block.querySelector('.sched-act-head, .sched-step-head');
+    (head?.parentElement === block ? head : block.firstElementChild)?.insertAdjacentElement('afterend', chip);
+    if (res.ok) setTimeout(() => { if (chip.isConnected) { chip.remove(); block.classList.remove('sched-test-ok'); } }, 6000);
+}
+
+// ── The debugger, in each editor ────────────────────────────────────────────────
+//
+// The runner reports WHERE it stands as a path (sched-debug.ts); sched-debug-map.ts turns that
+// into a node, a brick or a line. This is the painting.
+
+/** Brick element ↔ step, for lighting the brick a run stands on. Registered by the main editor. */
+const _brickOf = new WeakMap<object, HTMLElement>();
+const _stepOfBrick = new WeakMap<HTMLElement, Step>();
+/** The code box's statement lines (bmms_line_map), for the highlight and the gutter. */
+let _lineMap: LineRow[] = [];
+let _codeLine: number | null = null;
+let _codeLineFail = false;
+let _unsubDebug: (() => void) | null = null;
+let _unsubBps: (() => void) | null = null;
+
+async function refreshLineMap(src: string): Promise<void> {
+    try { _lineMap = await invoke('bmms_line_map', { source: src }) as LineRow[]; } catch { _lineMap = []; }
+    paintCodeGutter();
+}
+
+function reducedMotion(): boolean {
+    try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+function paintDebug(ev: DebugEvent | null): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal) return;
+    const live = ev && ev.phase !== 'closed' && ev.phase !== 'done' ? ev : null;
+    // Blocks.
+    modal.querySelectorAll('.sched-dbg-here, .sched-dbg-run, .sched-dbg-fail').forEach((el) => el.classList.remove('sched-dbg-here', 'sched-dbg-run', 'sched-dbg-fail'));
+    if (live?.path && _mode === 'bricks') {
+        const st = resolvePath(_draft.steps as any, live.path);
+        const el = st ? _brickOf.get(st) : undefined;
+        if (el?.isConnected) {
+            el.classList.add(live.phase === 'failed' ? 'sched-dbg-fail' : live.phase === 'paused' ? 'sched-dbg-here' : 'sched-dbg-run');
+            if (live.phase !== 'running') el.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+        }
+    }
+    // Flow.
+    if (_mode === 'flow') flowDebugPaint(ev);
+    // Code.
+    const target = live ? debugTargetFor('code', live.path, _lineMap) : null;
+    _codeLine = target?.line ?? null;
+    _codeLineFail = live?.phase === 'failed';
+    paintCodeGutter();
+}
+
+function paintBreakpoints(): void {
+    paintBrickBreakpoints();
+    if (_mode === 'flow') flowRefresh();
+    paintCodeGutter();
+}
+
+function paintBrickBreakpoints(): void {
+    const bps = breakpointPaths();
+    document.querySelectorAll<HTMLElement>('#sched-steps .sched-step').forEach((el) => {
+        const st = _stepOfBrick.get(el);
+        const path = st ? findPath(_draft.steps as any, st as any) : null;
+        const on = !!path && bps.has(path);
+        el.classList.toggle('sched-has-bp', on);
+        const b = el.querySelector(':scope > .sched-act-card .sched-bp, :scope > .sched-step-head .sched-bp, :scope .sched-act-head .sched-bp') as HTMLElement | null;
+        b?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
+/** The gutter beside the code box: a dot per breakpoint line, and the line the run stands on. */
+function paintCodeGutter(): void {
+    const modal = document.getElementById('modal-scheduler');
+    const gut = modal?.querySelector('#sched-code-gutter') as HTMLElement | null;
+    const ta = modal?.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const hl = modal?.querySelector('#sched-code-hl') as HTMLElement | null;
+    if (!gut || !ta || !hl) return;
+    const m = codeMetrics(ta, gut);
+    const bps = breakpointPaths();
+    const lines = new Set<number>();
+    for (const r of _lineMap) if (bps.has(r.path)) lines.add(r.line);
+    gut.innerHTML = [...lines].map((ln) => {
+        const top = m.top + (ln - 1) * m.lh - ta.scrollTop;
+        return top < -m.lh || top > gut.clientHeight ? '' : `<span class="sched-gutter-bp" style="top:${top}px;height:${m.lh}px"></span>`;
+    }).join('');
+    if (_codeLine === null || _mode !== 'code') { hl.hidden = true; return; }
+    const row = hl.parentElement as HTMLElement;
+    const rr = row.getBoundingClientRect();
+    const tr = ta.getBoundingClientRect();
+    const top = tr.top - rr.top + m.pad + (_codeLine - 1) * m.lh - ta.scrollTop;
+    hl.hidden = top < tr.top - rr.top - m.lh || top > tr.bottom - rr.top;
+    hl.classList.toggle('is-fail', _codeLineFail);
+    hl.style.top = `${top}px`;
+    hl.style.left = `${tr.left - rr.left}px`;
+    hl.style.width = `${tr.width}px`;
+    hl.style.height = `${m.lh}px`;
+}
+
+function codeMetrics(ta: HTMLTextAreaElement, gut: HTMLElement): { lh: number; pad: number; top: number } {
+    const cs = getComputedStyle(ta);
+    const fs = parseFloat(cs.fontSize) || 13;
+    const lh = parseFloat(cs.lineHeight) || fs * 1.5;
+    const pad = parseFloat(cs.paddingTop) || 0;
+    const top = ta.getBoundingClientRect().top - gut.getBoundingClientRect().top + pad;
+    return { lh, pad, top };
+}
+
+function wireGutter(modal: HTMLElement, ta: HTMLTextAreaElement): void {
+    const gut = modal.querySelector('#sched-code-gutter') as HTMLElement | null;
+    if (!gut) return;
+    gut.addEventListener('click', (e) => {
+        const m = codeMetrics(ta, gut);
+        const y = (e as MouseEvent).clientY - gut.getBoundingClientRect().top;
+        const line = Math.floor((y - m.top + ta.scrollTop) / m.lh) + 1;
+        const path = pathForLine(_lineMap, line);
+        if (!path) { toast(t('sched.bp.noStep'), 'info', 2500); return; }
+        toggleBreakpoint(path);
+    });
+    ta.addEventListener('scroll', () => paintCodeGutter());
+}
+
+/** "Jump to the step": show it in whichever editor is open. */
+function revealStep(path: string): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal || !modal.classList.contains('open')) return;
+    if (_mode === 'flow') { flowReveal(path); return; }
+    if (_mode === 'code') {
+        const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+        const target = debugTargetFor('code', path, _lineMap);
+        if (!ta || !target?.line) return;
+        const at = ta.value.split('\n').slice(0, target.line - 1).join('\n').length + (target.line > 1 ? 1 : 0);
+        ta.focus();
+        ta.setSelectionRange(at, at);
+        return;
+    }
+    const st = resolvePath(_draft.steps as any, path);
+    const el = st ? _brickOf.get(st) : undefined;
+    if (!el?.isConnected) return;
+    el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    el.classList.remove('sched-flash');
+    void el.offsetWidth;
+    el.classList.add('sched-flash');
+    setTimeout(() => el.classList.remove('sched-flash'), 1400);
+}
+
+/** The step the keyboard means in the open editor: the selected node, the focused brick, the caret's line. */
+function selectedStepPath(): string | null {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal) return null;
+    if (_mode === 'flow') return flowSelectedPath();
+    if (_mode === 'code') {
+        const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+        if (!ta) return null;
+        const line = ta.value.slice(0, ta.selectionStart).split('\n').length;
+        return pathForLine(_lineMap, line);
+    }
+    const el = (document.activeElement as HTMLElement | null)?.closest?.('#sched-steps .sched-step') as HTMLElement | null;
+    const st = el ? _stepOfBrick.get(el) : undefined;
+    return st ? findPath(_draft.steps as any, st as any) : null;
+}
+
+setDebugHost({
+    jump: revealStep,
+    modeHint: () => t('sched.dbg.where.' + _mode),
+});
+
+let _editorKeysBound = false;
+/** The editor's own commands (Ctrl+S, F9, the mode switches) and the debugger's (F10, F5, Shift+F5). */
+function bindEditorKeys(): void {
+    if (_editorKeysBound) return;
+    _editorKeysBound = true;
+    const editorOpen = () => !!document.getElementById('modal-scheduler')?.classList.contains('open') && !document.querySelector('.sflow-palette');
+    bindScopeKeys('editor', {
+        'sched.save': () => { (document.getElementById('sched-save-stay') as HTMLButtonElement | null)?.click(); },
+        'sched.debug.breakpoint': () => {
+            const p = selectedStepPath();
+            if (!p) { toast(t('sched.bp.noStep'), 'info', 2500); return; }
+            const on = toggleBreakpoint(p);
+            toast(t(on ? 'sched.bp.set' : 'sched.bp.cleared'), 'info', 1500);
+        },
+        'sched.mode.blocks': () => switchEditorMode('bricks'),
+        'sched.mode.code': () => switchEditorMode('code'),
+        'sched.mode.flow': () => switchEditorMode('flow'),
+    }, editorOpen);
+    bindScopeKeys('debug', {
+        'sched.debug.step': debugStep, 'sched.debug.continue': debugContinue, 'sched.debug.stop': debugStop,
+    }, debugActive);
+}
+
+// ── The first task: which editor? ──────────────────────────────────────────────
+/**
+ * Asked once, the first time somebody creates a task: Flux (recommended), BMMScript or Blocs,
+ * one line each. Resolves with the choice, or null when the dialog is dismissed (asked again
+ * next time, until answered).
+ */
+function askEditorMode(): Promise<EditorMode | null> {
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay open sched-modeask';
+        ov.innerHTML = `<div class="modal glass sched-modeask-card" role="dialog" aria-modal="true" aria-labelledby="sched-modeask-h">
+            <div class="modal-header"><h3 id="sched-modeask-h">${escHtml(t('sched.modes.askTitle'))}</h3>
+                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+            <div class="modal-body">
+                <p class="sched-modeask-lede">${escHtml(t('sched.modes.askLede'))}</p>
+                <div class="sched-modeask-list" role="radiogroup" aria-labelledby="sched-modeask-h">
+                ${MODE_CHOICES.map((c, i) => `<button type="button" class="sched-modeask-opt${c.recommended ? ' is-rec' : ''}" role="radio" aria-checked="${i === 0 ? 'true' : 'false'}" data-mode="${c.mode}">
+                    <span class="sched-modeask-ic">${modeIcon(c.mode)}</span>
+                    <span class="sched-modeask-txt"><b>${escHtml(t(c.titleKey))}${c.recommended ? ` <em class="sched-modeask-rec">${escHtml(t('sched.modes.recommended'))}</em>` : ''}</b>
+                        <span>${escHtml(t(c.descKey))}</span></span>
+                </button>`).join('')}
+                </div>
+                <p class="sched-modeask-foot">${escHtml(t('sched.modes.askFoot'))} ${learnMore('scheduler')}</p>
+            </div>
+        </div>`;
+        const done = (m: EditorMode | null) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(m); };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                const opts = [...ov.querySelectorAll<HTMLElement>('.sched-modeask-opt')];
+                const i = opts.indexOf(document.activeElement as HTMLElement);
+                opts[(i + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length]?.focus();
+                e.preventDefault();
+            }
+        };
+        ov.querySelectorAll<HTMLElement>('.sched-modeask-opt').forEach((b) => b.addEventListener('click', () => {
+            const m = b.dataset.mode;
+            done(isMode(m) ? m : null);
+        }));
+        ov.querySelector('[data-x]')?.addEventListener('click', () => done(null));
+        document.addEventListener('keydown', onKey, true);
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        raiseAboveAll(ov);
+        (ov.querySelector('.sched-modeask-opt') as HTMLElement | null)?.focus();
+    });
+}
+
+function modeIcon(m: EditorMode): string {
+    const P = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    if (m === 'flow') return P('<rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/>');
+    if (m === 'code') return P('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>');
+    return P('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>');
+}
+
+/** The preference, as a setting: a row in Settings → the scheduler card. */
+function renderModePref(): void {
+    const section = document.getElementById('settings-scheduler-section');
+    if (!section) return;
+    let row = document.getElementById('sched-mode-pref-row');
+    if (!row) {
+        row = document.createElement('div');
+        row.id = 'sched-mode-pref-row';
+        row.className = 'sched-mode-pref';
+        row.innerHTML = `<label for="sched-mode-pref">${escHtml(t('sched.modes.pref'))}</label>
+            <select class="input" id="sched-mode-pref">
+                ${MODE_CHOICES.map((c) => `<option value="${c.mode}">${escHtml(t(c.titleKey))}${c.recommended ? ` (${escHtml(t('sched.modes.recommended'))})` : ''}</option>`).join('')}
+            </select>
+            <span class="sched-mode-pref-hint">${escHtml(t('sched.modes.prefHint'))}</span>`;
+        const list = document.getElementById('scheduler-running') || document.getElementById('scheduler-list-container');
+        list?.insertAdjacentElement('beforebegin', row);
+        row.querySelector('#sched-mode-pref')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            if (isMode(v)) writeEditorMode(v);
+        });
+    }
+    const sel = row.querySelector('#sched-mode-pref') as HTMLSelectElement | null;
+    if (sel) sel.value = readEditorMode();
+}
+
+// ── Learn more, from inside the editor ─────────────────────────────────────────
+//
+// The docs open in the main view, which the task editor covers. Closing the editor would lose
+// an unsaved draft; so a "Learn more" clicked inside it PARKS the editor (hidden, draft intact)
+// and leaves a "Back to the task" button that brings it back exactly as it was.
+if (typeof window !== 'undefined' && !(window as any).__bmmSchedLearnPark) {
+    (window as any).__bmmSchedLearnPark = true;
+    window.addEventListener('click', (e) => {
+        const el = (e.target as Element | null)?.closest?.('[data-learn-more]');
+        const modal = el?.closest('#modal-scheduler') as HTMLElement | null;
+        if (!modal || !modal.classList.contains('open')) return;
+        modal.classList.remove('open');
+        let back = document.getElementById('sched-return');
+        if (!back) {
+            back = document.createElement('button');
+            back.id = 'sched-return';
+            back.setAttribute('type', 'button');
+            back.className = 'btn btn-primary sched-return';
+            back.textContent = t('sched.returnToTask');
+            back.addEventListener('click', () => {
+                document.getElementById('modal-scheduler')?.classList.add('open');
+                back?.remove();
+            });
+            (document.getElementById('app-window-outer') || document.body).appendChild(back);
+            raiseAboveAll(back, 11900);
+        }
+    }, true);
 }
 
 function wireCodeMode(modal: HTMLElement): void {
@@ -6623,6 +7399,7 @@ function wireCodeMode(modal: HTMLElement): void {
     const main = modal.querySelector('.sched-body') as HTMLElement | null;
     const show = (next: EditorMode) => {
         mode = next;
+        _mode = next;
         timeline.hidden = next !== 'bricks';
         pane.hidden = next !== 'code';
         if (flowPane) flowPane.hidden = next !== 'flow';
@@ -6667,14 +7444,26 @@ function wireCodeMode(modal: HTMLElement): void {
             hl?.refresh();
             say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
             show('code');
+            // The printed text is the draft, statement for statement, so its line map names the
+            // same paths the runner will report.
+            void refreshLineMap(ta.value);
             return;
         }
         show(next);
-        if (next === 'flow' && flowPane) { mountFlow(flowPane, flowHost()); return; }
+        if (next === 'flow' && flowPane) { mountFlow(flowPane, flowHost()); flowDebugPaint(lastDebugEvent()); return; }
         renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
         renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
     };
     _switchMode = (m) => { void switchTo(m); };
+    _flushCode = async () => {
+        if (mode !== 'code') return true;
+        const steps = await readCode(true);
+        if (steps === null) return false;
+        _draft.steps = steps;
+        void refreshLineMap(ta.value);
+        return true;
+    };
+    wireGutter(modal, ta);
 
     for (const b of btns) {
         b.addEventListener('click', () => {
@@ -6697,6 +7486,7 @@ function wireCodeMode(modal: HTMLElement): void {
         timer = setTimeout(async () => {
             const steps = await readCode(false, true);
             if (steps) say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(steps))), false);
+            void refreshLineMap(ta.value);
         }, 350);
     });
 
@@ -6745,7 +7535,7 @@ const TRIGGER_HEAD: Record<Trigger['type'], RegExp> = {
     once: /^once\b/, interval: /^every\b/, hourly: /^every\b/, dailyAt: /^every\b/,
     weeklyAt: /^every\b/, monthlyAt: /^every\b/, appStart: /^on\s+app\b/,
     watchFile: /^on\s+file\b/, onEvent: /^on\s+event\b/, afterTask: /^after\s+task\b/,
-    condition: /^when\b/, script: /^probe\b/, manual: /^manual\b/,
+    condition: /^when\b/, script: /^probe\b/, manual: /^manual\b/, rss: /^on\s+feed\b/,
 };
 /** The header lines that are not the trigger: what the task is called, and what it may do. */
 const HEADER_WORDS = /^(describe|disabled|allow)\b/;
@@ -6805,6 +7595,10 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
     steps.forEach((step, i) => {
         const block = document.createElement('div');
         block.className = 'sched-step sched-step-' + step.kind + (step.collapsed ? ' collapsed' : '') + (step.disabled ? ' sched-disabled' : '');
+        // The main editor's bricks are what the debugger lights; the flow's inspector draws the
+        // same editor for one step and must not take the step's place in that map.
+        if (!host.closest('.sflow-insp')) { _brickOf.set(step, block); _stepOfBrick.set(block, step); }
+        block.tabIndex = -1;
         // Indentation is handled entirely by the branch containers' padding (one
         // clean guide line per level) — NOT a per-step margin, which used to stack
         // on top of the branch padding and squeezed deep blocks into a tiny column.
@@ -7076,7 +7870,8 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             tools.className = 'sched-tools';
             const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
             tools.innerHTML = `
-                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.runStep') || 'Run this step now')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.test.btnTip'))}" aria-label="${escAttr(t('sched.test.btn'))}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+                <button class="sched-tool sched-bp" aria-pressed="false" data-tooltip="${escAttr(t('sched.bp.add'))}" aria-label="${escAttr(t('sched.bp.add'))}"><svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg></button>
                 <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                 <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
                 <button class="sched-tool sched-del2" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
@@ -7085,15 +7880,17 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 e.stopPropagation();
                 const btn = e.currentTarget as HTMLButtonElement;
                 btn.disabled = true;
+                // The Test button: a pulse on the brick while it runs, then the verdict on it —
+                // the status and the first line of the answer — rather than a toast in a corner.
+                paintBrickTest(block, null);
                 try {
-                    // Run a shallow copy with disabled cleared, so even a switched-off
-                    // step can be test-fired on demand.
-                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, { nums: {}, text: {}, shared: readSharedVars() });
-                    toast(t('sched.stepDone') || 'Step finished.', 'success');
-                } catch (err) {
-                    if (err instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(err as any).reason ? `: ${(err as any).reason}` : ''}`, 'info');
-                    else toast(`${t('sched.stepFail') || 'Step failed'} — ${err}`, 'error');
+                    paintBrickTest(block, await testOneStep(step));
                 } finally { btn.disabled = false; }
+            });
+            tools.querySelector('.sched-bp')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const p = findPath(_draft.steps as any, step as any);
+                if (p) toggleBreakpoint(p);
             });
             tools.querySelector('.sched-dup')?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -7150,6 +7947,8 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
 
         host.appendChild(block);
     });
+    // The breakpoints set in another mode show on the bricks as soon as they are drawn.
+    if (depth === 0 && !host.closest('.sflow-insp')) queueMicrotask(paintBrickBreakpoints);
 }
 
 function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?: HTMLElement, rerenderSteps?: Step[], rerenderDepth = 0): void {
@@ -7216,6 +8015,7 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
     { g: 'perf',    label: 'Benchmarks & storage' },
     { g: 'privacy', label: 'Privacy & recorder' },
     { g: 'logic',   label: 'Logic & math' },
+    { g: 'notify',  label: 'Notifications & web' },
     { g: 'system',  label: 'System & flow' },
 ];
 
@@ -7232,6 +8032,8 @@ const GROUP_ICON: Record<string, string> = {
     privacy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
     system:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
+    // A paper plane: something leaves BMM for somewhere else.
+    notify:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
@@ -7687,6 +8489,13 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // same each time — where is it, is the source protected, is the file locked.
     { v: 'import.file', label: 'Import a file (list, plugin, theme, automation, backup)', needs: 'importFile', group: 'system' },
     { v: 'catalog.follow', label: 'Follow (or stop following) a catalogue', needs: 'catFollow', group: 'repo' },
+    // Telling the outside world. A generic webhook (any service that takes an HTTP POST),
+    // the two chat services people actually ask for, and a feed of the task's own that any
+    // RSS reader can follow. The first three need `network`; the feed is a local file.
+    { v: 'webhook.send', label: 'Send a webhook (HTTP POST/PUT)', needs: 'webhook', group: 'notify' },
+    { v: 'discord.send', label: 'Send a Discord message', needs: 'discordHook', group: 'notify' },
+    { v: 'slack.send', label: 'Send a Slack message', needs: 'slackHook', group: 'notify' },
+    { v: 'feed.publish', label: 'Add an entry to a feed (RSS/Atom)', needs: 'feedPublish', group: 'notify' },
 ];
 
 /**
@@ -8789,7 +9598,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <option value="">${escHtml(t('sched.rx.pick'))}</option>
                 ${REGEX_LIBRARY.map((r) => `<option value="${escAttr(r.re)}">${escHtml(t(r.label))}</option>`).join('')}
             </select>
-            <input class="input sched-p-txregex" spellcheck="false"
+            <input data-validate="regex" class="input sched-p-txregex" spellcheck="false"
                 placeholder="${escAttr(t('sched.tx.regexPh') || '')}"
                 value="${escAttr(params.regex || '')}">
             <span class="sched-cmd-hint">${escHtml(t('sched.tx.regexHint') || '')}</span>
@@ -9062,6 +9871,121 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'varClear') host.innerHTML = _field(needs,
         `<input class="input sched-p-varname" spellcheck="false" placeholder="${escAttr(t('sched.var.clearPh') || 'name to clear — leave empty to clear them all')}" value="${escAttr(params.name || '')}">`)
         + `<span class="sched-cmd-hint">${escHtml(t('sched.var.clearHint') || 'Only shared variables. A run’s own values disappear when it ends.')}</span>`;
+    else if (needs === 'webhook') {
+        // Sensible defaults on a fresh step: a POST of a small JSON document, retried twice.
+        if (params.method === undefined) params.method = 'POST';
+        if (params.format === undefined) params.format = 'json';
+        if (params.retries === undefined) params.retries = 2;
+        if (params.body === undefined) params.body = '{\n  "text": "{task.name} finished at {stamp}"\n}';
+        const m = String(params.method || 'POST').toUpperCase();
+        host.innerHTML = `
+        <div class="sched-cmd-builder sched-net-form">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gWhere'))}</div>
+                <div class="sched-cmd-row">
+                    <select class="input" data-pk="method" style="max-width:110px" aria-label="${escAttr(t('sched.wh.method'))}">
+                        ${['POST', 'PUT', 'PATCH'].map((x) => `<option value="${x}"${m === x ? ' selected' : ''}>${x}</option>`).join('')}
+                    </select>
+                    <input class="input" data-pk="url" data-vars="1" data-validate="url:webhook" spellcheck="false"
+                        placeholder="https://hooks.example.com/…" value="${escAttr(params.url || '')}" aria-label="${escAttr(t('sched.wh.url'))}">
+                </div>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.urlHint'))}</span>
+                <label class="sched-cmd-opt"><input type="checkbox" data-pk="allowLan" ${params.allowLan ? 'checked' : ''}>
+                    <span>${escHtml(t('sched.net.allowLan'))}</span></label>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gBody'))}</div>
+                <div class="sched-cmd-row">
+                    <select class="input" data-pk="format" style="max-width:180px" aria-label="${escAttr(t('sched.wh.format'))}">
+                        <option value="json"${params.format !== 'text' ? ' selected' : ''}>${escHtml(t('sched.wh.fmtJson'))}</option>
+                        <option value="text"${params.format === 'text' ? ' selected' : ''}>${escHtml(t('sched.wh.fmtText'))}</option>
+                    </select>
+                </div>
+                <textarea class="input" data-pk="body" data-vars="1" data-validate="${params.format === 'text' ? '' : 'json'}" rows="4" spellcheck="false"
+                    aria-label="${escAttr(t('sched.wh.body'))}">${escHtml(params.body || '')}</textarea>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.bodyHint'))}</span>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gHeaders'))}</div>
+                <textarea class="input" data-pk="headers" data-vars="1" data-validate="headers" rows="2" spellcheck="false"
+                    placeholder="${escAttr(t('sched.wh.headersPh'))}" aria-label="${escAttr(t('sched.wh.headers'))}">${escHtml(params.headers || '')}</textarea>
+                <label class="sched-cmd-label">${escHtml(t('sched.wh.secret'))}</label>
+                <textarea class="input sched-secret" data-pk="secretHeaders" data-validate="headers" rows="2" spellcheck="false" autocomplete="off"
+                    placeholder="Authorization: Bearer …" aria-label="${escAttr(t('sched.wh.secret'))}">${escHtml(params.secretHeaders || '')}</textarea>
+                <button type="button" class="btn btn-xs btn-ghost sched-secret-show" aria-pressed="false">${escHtml(t('sched.wh.show'))}</button>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.secretHint'))}</span>
+            </div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.wh.adv'))}</summary>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.retries'))}</label>
+                    <input class="input" type="number" min="0" max="4" data-pk="retries" data-validate="int:0-4" value="${escAttr(String(params.retries ?? 2))}" style="max-width:90px"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.timeout'))}</label>
+                    <input class="input" type="number" min="1000" max="60000" step="500" data-pk="timeoutMs" data-validate="int:1000-60000" placeholder="15000" value="${escAttr(params.timeoutMs || '')}" style="max-width:120px"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.into'))}</label>
+                    <input class="input" data-pk="into" spellcheck="false" placeholder="reply" value="${escAttr(params.into || '')}" style="max-width:200px"></div>
+                <label class="sched-cmd-opt"><input type="checkbox" data-pk="allowAnyStatus" ${params.allowAnyStatus ? 'checked' : ''}>
+                    <span>${escHtml(t('sched.http.anyT') || 'Treat 4xx and 5xx as success')}</span></label>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.net.permHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'discordHook' || needs === 'slackHook') {
+        const kind = needs === 'discordHook' ? 'discord' : 'slack';
+        if (params.retries === undefined) params.retries = 2;
+        host.innerHTML = `
+        <div class="sched-cmd-builder sched-net-form">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t(kind === 'discord' ? 'sched.chat.gDiscord' : 'sched.chat.gSlack'))}</div>
+                <div class="sched-cmd-row">
+                    <input class="input sched-secret" type="password" data-pk="url" data-validate="url:${kind}" spellcheck="false" autocomplete="off"
+                        placeholder="${kind === 'discord' ? 'https://discord.com/api/webhooks/…' : 'https://hooks.slack.com/services/…'}"
+                        value="${escAttr(params.url || '')}" aria-label="${escAttr(t('sched.chat.url'))}">
+                    <button type="button" class="btn btn-xs btn-ghost sched-secret-show" aria-pressed="false">${escHtml(t('sched.wh.show'))}</button>
+                </div>
+                <span class="sched-cmd-hint">${escHtml(t(kind === 'discord' ? 'sched.chat.discordHint' : 'sched.chat.slackHint'))}</span>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.chat.gMessage'))}</div>
+                <textarea class="input" data-pk="message" data-vars="1" data-validate="required" rows="3"
+                    placeholder="${escAttr(t('sched.chat.messagePh'))}" aria-label="${escAttr(t('sched.chat.message'))}">${escHtml(params.message || '')}</textarea>
+                ${kind === 'discord' ? `<div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.chat.username'))}</label>
+                    <input class="input" data-pk="username" data-vars="1" placeholder="BMM" value="${escAttr(params.username || '')}" style="max-width:220px"></div>` : ''}
+            </div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.wh.adv'))}</summary>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.retries'))}</label>
+                    <input class="input" type="number" min="0" max="4" data-pk="retries" data-validate="int:0-4" value="${escAttr(String(params.retries ?? 2))}" style="max-width:90px"></div>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.net.permHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'feedPublish') {
+        if (params.path === undefined) params.path = 'feed.xml';
+        if (params.title === undefined) params.title = '{task.name} — {stamp}';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.feed.gEntry'))}</div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.title'))}</label>
+                    <input class="input" data-pk="title" data-vars="1" data-validate="required" value="${escAttr(params.title || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.body'))}</label>
+                    <textarea class="input" data-pk="body" data-vars="1" rows="3">${escHtml(params.body || '')}</textarea></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.link'))}</label>
+                    <input class="input" data-pk="link" data-vars="1" data-validate="url:optional" spellcheck="false" placeholder="https://…" value="${escAttr(params.link || '')}"></div>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.feed.gFile'))}</div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.path'))}</label>
+                    <input class="input" data-pk="path" data-validate="required" spellcheck="false" value="${escAttr(params.path || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.feedTitle'))}</label>
+                    <input class="input" data-pk="feedTitle" placeholder="${escAttr(t('sched.feed.feedTitlePh'))}" value="${escAttr(params.feedTitle || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.max'))}</label>
+                    <input class="input" type="number" min="1" max="500" data-pk="max" data-validate="int:1-500" placeholder="50" value="${escAttr(params.max || '')}" style="max-width:90px"></div>
+                <span class="sched-cmd-hint">${escHtml(t('sched.feed.hint'))}</span>
+                <button type="button" class="btn btn-xs btn-ghost sched-fw-open" style="align-self:flex-start;margin-top:6px">${escHtml(t('sched.fw.openOut'))}</button>
+            </div>
+        </div>`;
+    }
     else if (needs === 'http') {
         const m = String(params.method || 'GET').toUpperCase();
         const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
@@ -9393,6 +10317,35 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.exportDirLbl') || 'Destination folder (empty = ask each time)'}</label>
             <span style="display:flex;gap:6px"><input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'folder')}" value="${escAttr(params.dir || '')}" style="flex:1"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${t('sched.choose') || 'Choose…'}</button></span></div>`;
 
+    // Fields that name their parameter (`data-pk`) bind themselves. The notification forms use
+    // it; a checkbox is a boolean, anything else the text as typed.
+    host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-pk]').forEach((el) => {
+        const key = el.dataset.pk!;
+        const set = () => {
+            if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+                if (el.checked) params[key] = true; else delete params[key];
+            } else params[key] = el.value;
+            // The JSON rule only applies to a JSON body.
+            if (key === 'format') {
+                const body = host.querySelector('[data-pk="body"]') as HTMLElement | null;
+                if (body) { body.dataset.validate = el.value === 'text' ? '' : 'json'; body.dispatchEvent(new Event('input', { bubbles: true })); }
+            }
+        };
+        el.addEventListener('input', set);
+        el.addEventListener('change', set);
+    });
+    host.querySelectorAll<HTMLButtonElement>('.sched-secret-show').forEach((b) => b.addEventListener('click', () => {
+        const field = (b.parentElement?.querySelector('.sched-secret') || b.previousElementSibling) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (!field) return;
+        const on = b.getAttribute('aria-pressed') !== 'true';
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        field.classList.toggle('is-shown', on);
+        if (field instanceof HTMLInputElement) field.type = on ? 'text' : 'password';
+        b.textContent = on ? t('sched.wh.hide') : t('sched.wh.show');
+    }));
+    wireValidation(host);
+    wireVarPickers(host);
+
     const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
     if (sel) {
         const set = () => {
@@ -9665,6 +10618,113 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         if (d) { params.path = d; (host.querySelector('.sched-path') as HTMLInputElement).value = d; }
     });
     addBmmPathButtons(host, params);
+}
+
+/**
+ * Inline validation: every field with a `data-validate` rule says what is wrong with it under
+ * itself, as it is typed — in the blocks and in the flow's inspector alike (the inspector IS
+ * the block editor for one step). It never blocks typing; the runner still decides.
+ */
+function wireValidation(host: HTMLElement): void {
+    host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-validate]').forEach((el) => {
+        const paint = () => {
+            const rule = el.dataset.validate || '';
+            const key = rule ? fieldProblem(rule, el.value) : null;
+            // Under the field, and under its {x} button when it has one: never beside it, where
+            // it would squeeze the field it is talking about.
+            const anchor = (el.parentElement?.classList.contains('sched-varwrap') ? el.parentElement : el) as HTMLElement;
+            let err = anchor.nextElementSibling as HTMLElement | null;
+            if (!err || !err.classList.contains('sched-field-err')) {
+                if (!key) { el.removeAttribute('aria-invalid'); return; }
+                err = document.createElement('span');
+                err.className = 'sched-field-err';
+                err.setAttribute('role', 'status');
+                anchor.insertAdjacentElement('afterend', err);
+            }
+            err.hidden = !key;
+            err.textContent = key ? t(key) : '';
+            if (key) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
+        };
+        el.addEventListener('input', paint);
+        // A fresh step is not shouted at before anybody typed: an empty field is judged once
+        // somebody has typed in it, a filled one (a saved step) straight away.
+        if (el.value) paint();
+    });
+}
+
+/**
+ * A `{x}` button beside every field that takes `{variables}`: it lists the variables this task
+ * can name — what its steps write, what its trigger hands over, the shared store, the
+ * built-ins — and inserts the one picked at the caret.
+ */
+function wireVarPickers(host: HTMLElement): void {
+    const fields = host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        '[data-vars], .sched-p-url, .sched-p-headers, .sched-p-httpbody, .sched-p-fwtext, .sched-p-varvalue, input.sched-p:not([type])');
+    fields.forEach((el) => {
+        if (el.dataset.varPicker || (el instanceof HTMLInputElement && el.type === 'password')) return;
+        el.dataset.varPicker = '1';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sched-varbtn';
+        b.textContent = '{x}';
+        b.setAttribute('aria-label', t('sched.vp.open'));
+        b.setAttribute('data-tooltip', t('sched.vp.open'));
+        b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openVarPicker(b, el); });
+        const wrap = document.createElement('span');
+        wrap.className = 'sched-varwrap';
+        el.insertAdjacentElement('beforebegin', wrap);
+        wrap.appendChild(el);
+        wrap.appendChild(b);
+    });
+}
+
+function openVarPicker(anchor: HTMLElement, field: HTMLInputElement | HTMLTextAreaElement): void {
+    document.querySelector('.sched-varpop')?.remove();
+    const vars: KnownVar[] = variablesOf(_draft?.steps || [], _draft?.trigger, Object.keys(readSharedVars()));
+    const pop = document.createElement('div');
+    pop.className = 'sched-varpop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', t('sched.vp.title'));
+    pop.innerHTML = `
+        <input type="search" class="input sched-varpop-q" placeholder="${escAttr(t('sched.vp.search'))}" spellcheck="false">
+        <div class="sched-varpop-list" role="listbox"></div>
+        <p class="sched-varpop-foot">${escHtml(t('sched.vp.foot'))}</p>`;
+    const list = pop.querySelector('.sched-varpop-list') as HTMLElement;
+    const paint = (q: string) => {
+        const needle = q.trim().toLowerCase();
+        const rows = vars.filter((v) => !needle || v.name.toLowerCase().includes(needle));
+        list.innerHTML = rows.length ? rows.map((v, i) => `<button type="button" role="option" class="sched-varpop-row${i === 0 ? ' is-on' : ''}" data-v="${escAttr(v.name)}">
+                <code>{${escHtml(v.name)}}</code><span>${escHtml(t('sched.vp.from.' + v.from))}</span></button>`).join('')
+            : `<p class="sched-varpop-none">${escHtml(t('sched.vp.none'))}</p>`;
+    };
+    paint('');
+    const pick = (name: string) => {
+        const r = insertVar(field.value, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, name);
+        field.value = r.value;
+        field.focus();
+        field.setSelectionRange(r.caret, r.caret);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        close();
+    };
+    const close = () => { pop.remove(); document.removeEventListener('pointerdown', outside, true); };
+    const outside = (e: Event) => { if (!pop.contains(e.target as Node) && e.target !== anchor) close(); };
+    list.addEventListener('click', (e) => {
+        const row = (e.target as HTMLElement).closest('[data-v]') as HTMLElement | null;
+        if (row) pick(row.dataset.v!);
+    });
+    const q = pop.querySelector('.sched-varpop-q') as HTMLInputElement;
+    q.addEventListener('input', () => paint(q.value));
+    q.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); field.focus(); }
+        if (e.key === 'Enter') { e.preventDefault(); const first = list.querySelector('[data-v]') as HTMLElement | null; if (first) pick(first.dataset.v!); }
+    });
+    (document.getElementById('app-window-outer') || document.body).appendChild(pop);
+    raiseAboveAll(pop, 12000);
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.right - 260))}px`;
+    pop.style.top = `${Math.min(window.innerHeight - 300, r.bottom + 4)}px`;
+    q.focus();
+    setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
 }
 
 function diskOptions(selected: string): string {

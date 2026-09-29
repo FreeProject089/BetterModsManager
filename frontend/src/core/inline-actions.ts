@@ -35,6 +35,8 @@ export const UNTRUSTED_DROP_ATTRS: readonly string[] = [
     'data-url', 'data-no-submit', 'data-hover', 'data-focus', 'data-blur', 'data-press',
     'data-onerror', 'data-tasky', 'data-bcweb-url', 'data-sched-act', 'data-sched-runlog',
     'data-plug-act', 'data-prevent-close', 'data-open-theme-editor', 'data-nav',
+    // core/learn-more.ts: opens the docs AND closes the modal the link sits in.
+    'data-learn-more',
 ];
 /** Families: every attribute starting with one of these (`data-act-args`, `data-press-out`…). */
 const UNTRUSTED_DROP_PREFIXES: readonly string[] = [

@@ -5,6 +5,7 @@
 
 Open it from **Settings → Storage → Open Storage Manager**. It answers three questions: how
 much room is left, how fast each disk is, and how hard BMM is allowed to push your drives.
+It is organised in [tabs](#tabs).
 
 
 
@@ -24,22 +25,79 @@ only when that disk's last measurement is more than 30 days old, a couple of sec
 It no longer measures every disk at every start. Leave it on unless you want to set limits by hand.
 :::
 
-## How hard BMM works
+<a id="tabs"></a>
+## The tabs
+The Storage Manager is split into five tabs. The line at the top, above the tabs, always says which
+preset is in force and whether a game is running. Every tab opens with one sentence saying what it
+is for and a **Learn more** link to the matching part of this documentation; every control has a
+tooltip. The first time you open it, a short card explains the window; **Got it** hides it for good.
 
-The card at the top of the Storage Manager is the
-[resource governor](doc-page:how-it-works/resources): the one place that decides how many heavy
-operations run at once, on how many threads, and how fast they may write.
-
-| Part of the card | What it does |
+| Tab | What it is for |
 |---|---|
-| **Quiet · Balanced · Everything for BMM** | The preset. **Balanced** is the default and is exactly how BMM always worked. **Quiet** does one thing at a time, gently, for while you play. **Everything for BMM** goes as fast as the disks allow |
-| **In force** | The preset actually applied right now, which game mode or a scheduled task can change for a while |
-| **BMM CPU · PC CPU · Read · Write** | Live curves, once a second, only while the card is on screen |
-| **Game mode** | **Detect it**, **Force on**, **Force off**. While it is on, BMM works as if on Quiet, and background hashing and maintenance wait until it ends. **Detect it** looks every 5 seconds for a game running from one of your profiles' game folders, one you list under **Games BMM watches for**, or any game in exclusive full screen, and ends game mode 30 seconds after it closes ([how](doc-page:how-it-works/resources#how-detection-works)) |
-| **What BMM is doing** | Every operation running, paused or waiting, with **Pause**, **Resume** and **Cancel**, plus **Pause all** and **Resume all** |
-| **Advanced: per disk and operation** | Rules for one disk and one kind of work (MB/s, how many at once, buffer, priority). An empty cell inherits, and its grey text says the value in force and where it comes from |
+| **Disks & space** | How full each disk is, which [profiles](doc-page:features/profiles) live on it, the low-space alerts, **Auto Performance Calibration**, and a **speed cap** per disk with its benchmark ([below](#per-disk-cards)) |
+| **Work intensity** | How much of your PC BMM may use for heavy work: the three presets, each with what it means for you, and **Smart I/O** |
+| **Game mode** | Whether BMM steps aside while you play, and the games it watches for |
+| **Live activity** | Four live curves and everything BMM is doing, with **Pause**, **Resume** and **Cancel** |
+| **Rules per disk** | Optional fine rules for one disk and one kind of work, with a legend of every column |
 
-!!! warning "Read what each advanced column acts on"
+The tab you used last opens next time.
+
+### Work intensity: the presets
+
+The tab is the [resource governor](doc-page:how-it-works/resources): the one place that decides how many
+heavy operations run at once, on how many threads, and how fast they may write.
+
+| Preset | What it means for you |
+|---|---|
+| **Quiet** | BMM stays out of your way while you play or work. Deploys and installs take longer |
+| **Balanced** (the default, recommended) | The usual BMM: quick, and your PC stays usable. Exactly how BMM always worked |
+| **Everything for BMM** | Everything finishes as fast as your disks allow. Your PC may feel slow meanwhile |
+
+**In force** says the preset applied right now: game mode or a scheduled task can switch to another
+one for a while, and your choice comes back by itself afterwards. The exact numbers behind each
+preset are in [Presets](doc-page:how-it-works/resources#presets).
+
+### Game mode
+
+**Detect it** (the default), **Force on**, **Force off**. The tab says, in words, what is
+happening: which game turned game mode on (*A game is running: SkyrimSE.exe*), where BMM found it
+(*in the game folder of your profile "Skyrim SE"*, *in your list of games*, *in exclusive full
+screen*), for how long, what is held right now, and, once the game has closed, how long before BMM
+goes back to normal.
+
+- **Pause everything until I quit the game** holds every operation, deploys included, and lets
+  them go by themselves when game mode ends (or when you press **Resume all**).
+- **While you play**: tick what waits until you stop playing: file checks (hashing), maintenance
+  and disk benchmarks (both ticked by default), downloads, folder scans, unpacking and packing
+  archives, image processing. Enabling mods, installs and backups are slowed, never held.
+- **Back to normal after**: the cooldown after the game closes, 5 to 600 seconds (30 by default).
+- **Tell me when game mode turns on or off**: a notice each time it changes by itself (on by
+  default).
+- **Also count any full-screen window**: catches borderless games that are in no list, but a
+  full-screen video counts too, so it is off by default.
+- **Games BMM watches for**: every profile's game folder is watched by itself, each with a switch
+  to ignore it (a whole drive is never watched); below, the programs you added, each with a
+  remove button, added by name, with **Browse…** (the game's `.exe`) or with **Pick a running
+  program…** (start the game, then pick it in the list).
+
+The details and what one look costs are in
+[How detection works](doc-page:how-it-works/resources#how-detection-works).
+
+### Live activity
+
+Four curves (BMM's CPU, the whole PC's CPU, BMM's reads and writes in MB/s) and every operation
+running, paused or waiting, with **Pause**, **Resume** and **Cancel**, plus **Pause all** and
+**Resume all**. The values are measured once a second, and only while it is worth it: the Storage
+Manager is open, one of the **Work intensity**, **Game mode** or **Live activity** tabs is shown,
+and BMM's window is not hidden. Otherwise BMM does not measure itself at all.
+
+### Rules per disk
+
+Rules for one disk and one kind of work (MB/s, how many at once, buffer, priority). A legend above
+the table says what each column does. An empty cell inherits, and its grey text says the value in
+force and where it comes from; a greyed-out cell does not apply to its operation.
+
+!!! warning "Read what each column acts on"
 
     MB/s acts on BMM's own copies, on extraction, on the zips BMM writes and on repository and
     modpack downloads; the buffer and a *low* priority act on BMM's own copies and on zip
@@ -47,8 +105,13 @@ operations run at once, on how many threads, and how fast they may write.
     and **Hash** rows, for instance. A mod downloaded from a link is not paced yet. Details in
     [the governor page](doc-page:how-it-works/resources#what-each-column-acts-on).
 
-## Per-disk cards
+!!! note "Graphics moved"
 
+    Which graphics card draws BMM's window is an app-wide setting: **Settings → Graphics &
+    display** ([details](doc-page:features/settings#graphics)).
+
+<a id="per-disk-cards"></a>
+## Per-disk cards
 Each disk on your system gets a card:
 
 | Element | What it tells you |

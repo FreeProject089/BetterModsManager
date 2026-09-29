@@ -40,7 +40,7 @@ function kofiUrl(): string {
 
 /**
  * Does the reminder want to show this launch? The opt-out and the month-long snooze, and
- * nothing about timing — WHEN is the start-up queue's decision (ui/nudge-queue.ts), so this
+ * nothing about timing — WHEN is the launch deck's decision (ui/launch-steps.ts), so this
  * can never land on top of another card.
  */
 export function kofiWanted(): boolean {
@@ -52,6 +52,19 @@ export function kofiWanted(): boolean {
         return !(until > Date.now());
     } catch { return false; }
 }
+
+/** The launch deck's copy of this card writes the same two answers the card's buttons do. */
+export function kofiOptedOut(): boolean {
+    try { return localStorage.getItem(OPTOUT_KEY) === '1'; } catch { return false; }
+}
+export function setKofiOptOut(on: boolean): void {
+    try { if (on) localStorage.setItem(OPTOUT_KEY, '1'); else localStorage.removeItem(OPTOUT_KEY); } catch { /* private mode */ }
+}
+/** "Maybe later": a month, exactly as the card's own button. */
+export function snoozeKofi(): void {
+    try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 86400_000)); } catch { /* private mode: it just asks again */ }
+}
+export function kofiLink(): string { return kofiUrl(); }
 
 /** Show the reminder on each start, unless the user opted out or onboarding is up. */
 export function maybeShowKofiReminder(): void {

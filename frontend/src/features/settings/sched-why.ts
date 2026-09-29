@@ -39,6 +39,8 @@ export interface FiredState {
     cond?: Set<string>;
     /** Script probes whose clock has been armed. */
     probe?: Set<string>;
+    /** Feed triggers that have read their feed at least once this launch. */
+    rss?: Set<string>;
 }
 
 /**
@@ -53,6 +55,8 @@ export interface Env {
     nameOf?: (id: string) => string | null;
     /** Whether this task holds the `script` grant its probe needs. */
     mayRunScripts?: boolean;
+    /** Whether this task holds the `network` grant its feed trigger needs. */
+    mayUseNetwork?: boolean;
 }
 
 /** A reason, as a key and something to put in it. Never a finished sentence. */
@@ -132,6 +136,18 @@ export function reasonNotRunning(
             : { key: 'sched.why.probeArming' };
     }
 
+    if (tr.type === 'rss') {
+        const url = String(tr.url || '').trim();
+        if (!url) return { key: 'sched.why.rssNone' };
+        // The grant before the clock, like the probe: without it the feed is never read.
+        if (!env.mayUseNetwork) return { key: 'sched.why.rssNoPerm' };
+        let host = url;
+        try { host = new URL(url).host; } catch { /* shown as typed */ }
+        return fired.rss?.has(task.id)
+            ? { key: 'sched.why.rssIdle', v: host }
+            : { key: 'sched.why.rssArming', v: host };
+    }
+
     if (tr.type === 'appStart') {
         return fired.appStart.has(task.id)
             ? { key: 'sched.why.appStartDone' }
@@ -147,4 +163,13 @@ export function reasonNotRunning(
 
     if (next === null) return { key: 'sched.why.noNext' };
     return { key: 'sched.why.dueAt', v: new Date(next).toLocaleString() };
+}
+
+/**
+ * Does game mode hold scheduled tasks right now? Read from `resources_status`: game mode is on
+ * and the user ticked "Hold scheduled tasks" in its options. Off when the status is missing —
+ * a scheduler that cannot read the governor must not stop running tasks.
+ */
+export function gameHoldsTasks(status: { game_active?: unknown; game_options?: { hold_scheduler?: unknown } | null } | null | undefined): boolean {
+    return !!status && status.game_active === true && status.game_options?.hold_scheduler === true;
 }

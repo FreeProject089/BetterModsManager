@@ -1035,6 +1035,11 @@ export async function renderProfiles() {
             <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
           </svg>
         </button>
+        <button class="btn btn-secondary btn-sm btn-load-order" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}" data-tasky="order.openTip" data-tasky-icon="list" aria-label="${escAttr(t('order.title'))}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="m3 8 3-3 3 3"/><path d="M6 5v14"/><path d="m3 16 3 3 3-3"/>
+          </svg>
+        </button>
         <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" data-tasky="prof.editTip" data-tasky-icon="edit">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -1232,6 +1237,17 @@ export async function renderProfiles() {
             catch {
                 toast(id, 'info');
             }
+        });
+    });
+    // The activation order of THIS profile (which mod wins a shared file) — load-order.ts,
+    // loaded on first use.
+    grid.querySelectorAll('.btn-load-order').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const el = e.currentTarget;
+            const m = await import('./load-order.js');
+            if (await m.openLoadOrder(el.dataset.id, el.dataset.name, toast))
+                renderProfiles();
         });
     });
     grid.querySelectorAll('.btn-edit-profile').forEach(btn => {
@@ -1947,8 +1963,10 @@ window.bmmOpenStorageManager = () => {
     document.querySelector('.nav-item[data-view=settings]')?.classList.add('active');
     document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
     document.getElementById('view-settings')?.classList.add('active');
-    // The button only exists once the settings view has rendered.
-    setTimeout(() => { document.getElementById('btn-storage-manager')?.click(); }, 150);
+    // The modal's own opener (settings/storage-modal.ts). This used to click
+    // #btn-storage-manager, an id nothing has, so the shortcut and bmm://resources/open
+    // switched to Settings and opened nothing.
+    window.openStorageManager?.();
 };
 // "New profile" from the empty state has to show the Profiles view before the modal, or the
 // modal opens over whatever view happened to be up. The delay is the render.

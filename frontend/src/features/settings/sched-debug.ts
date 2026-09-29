@@ -19,6 +19,66 @@ import { escHtml } from '../../core/utils.js';
 import { t } from '../../core/i18n.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import type { RunCtx } from './sched-vars.js';
+import { stopsAt } from './sched-debug-map.js';
+
+/** One entry of the walk: what ran, where it sits in the task, and when it started. */
+export interface LogEntry { label: string; done: boolean; at?: number; path?: string }
+
+/**
+ * What the editors are told on every step, so each can show it its own way (the flow lights the
+ * node, the blocks the brick, the code the line — sched-debug-map.ts). `rows` are the variables
+ * at that moment, for the flow's hover.
+ */
+export interface DebugEvent {
+    taskId: string;
+    phase: 'paused' | 'running' | 'done' | 'failed' | 'closed';
+    path: string | null;
+    label: string;
+    rows: [string, string, string][];
+    error?: string;
+}
+
+/** What the scheduler lends the panel: jumping to a step in whichever editor is showing. */
+export interface DebugHost {
+    jump(path: string): void;
+    /** A line saying how THIS mode shows the run ("the running node glows"). */
+    modeHint(): string;
+}
+
+let _host: DebugHost | null = null;
+export function setDebugHost(h: DebugHost | null): void { _host = h; }
+
+const _listeners = new Set<(e: DebugEvent) => void>();
+/** Be told about every step of a debug run. Returns the unsubscribe. */
+export function subscribeDebug(fn: (e: DebugEvent) => void): () => void {
+    _listeners.add(fn);
+    return () => { _listeners.delete(fn); };
+}
+let _lastEvent: DebugEvent | null = null;
+/** The last thing the debugger said — for an editor that is (re)drawn mid-run. */
+export function lastDebugEvent(): DebugEvent | null { return _lastEvent; }
+function emit(e: DebugEvent): void {
+    _lastEvent = e.phase === 'closed' ? null : e;
+    for (const fn of [..._listeners]) { try { fn(e); } catch { /* a painter must not stop the run */ } }
+}
+
+/**
+ * Breakpoints, by the PATH of the step they sit on. Set from a node, a brick or a gutter line —
+ * all three name the same step, so a breakpoint set in the flow is there in the code too.
+ * Module-level and not per session: they are placed BEFORE the run starts.
+ */
+const _bps = new Set<string>();
+export function toggleBreakpoint(path: string): boolean {
+    if (!path) return false;
+    if (_bps.has(path)) { _bps.delete(path); } else { _bps.add(path); }
+    emitBps();
+    return _bps.has(path);
+}
+export function breakpointPaths(): ReadonlySet<string> { return _bps; }
+export function clearBreakpoints(): void { if (_bps.size) { _bps.clear(); emitBps(); } }
+const _bpListeners = new Set<() => void>();
+export function subscribeBreakpoints(fn: () => void): () => void { _bpListeners.add(fn); return () => { _bpListeners.delete(fn); }; }
+function emitBps(): void { for (const fn of [..._bpListeners]) { try { fn(); } catch { /* ignore */ } } }
 
 /** What the person watching last pressed. */
 type DebugMode = 'step' | 'run';
@@ -39,7 +99,7 @@ interface Session {
      * and not "how did I get here" — and the second is the question you have when a task
      * took a branch you did not expect. Kept in memory only; it goes with the session.
      */
-    log: { label: string; done: boolean }[];
+    log: LogEntry[];
     /** The run's own context, so a value can be changed at a breakpoint. */
     ctx: RunCtx | null;
     /** Substring filter over the variable names. */
@@ -192,14 +252,20 @@ export function failLine(err: unknown): string {
  */
 export function debugReport(
     taskName: string,
-    log: { label: string; done: boolean }[],
+    log: LogEntry[],
     rows: [string, string, string][],
     failed = '',
 ): string {
     // The mark says which step the run is standing on, which is the first thing anybody
-    // reading a pasted report wants to know.
+    // reading a pasted report wants to know. The time is from the first step, and the path
+    // says which step of the task it was when two steps have the same label.
+    const t0 = log.find((l) => typeof l.at === 'number')?.at;
     const steps = log.length
-        ? log.map((l, i) => `${String(i + 1).padStart(3)}. ${l.done ? ' ' : '>'} ${l.label}`).join('\n')
+        ? log.map((l, i) => {
+            const when = t0 !== undefined && typeof l.at === 'number' ? ` +${stamp(l.at - t0)}` : '';
+            const where = l.path ? `  [${l.path}]` : '';
+            return `${String(i + 1).padStart(3)}. ${l.done ? ' ' : '>'} ${l.label}${where}${when}`;
+        }).join('\n')
         : '(nothing ran)';
     const vars = rows.length
         ? rows.map(([k, kind, v]) => `${k} (${kind}) = ${v}`).join('\n')
@@ -208,6 +274,14 @@ export function debugReport(
     // has to scroll past two hundred steps to find out whether it failed will not.
     const head = failed ? `BMM debug — ${taskName}\nFAILED: ${failed}\n` : `BMM debug — ${taskName}\n`;
     return `${head}\nSteps\n${steps}\n\nVariables\n${vars}\n`;
+}
+
+/** A duration as the log shows it: "0.4s", "12.0s", "2m05s". */
+export function stamp(ms: number): string {
+    const s = Math.max(0, ms) / 1000;
+    if (s < 60) return `${s.toFixed(1)}s`;
+    const m = Math.floor(s / 60);
+    return `${m}m${String(Math.floor(s % 60)).padStart(2, '0')}s`;
 }
 
 /**
@@ -228,6 +302,8 @@ export function failDebug(err: unknown): void {
     // The step it was standing on is the one that threw. It is already the only entry
     // without a tick, which is now also what the red mark hangs on.
     paintFailure(s);
+    const at = s.log[s.log.length - 1];
+    emit({ taskId: s.taskId, phase: 'failed', path: at?.path || null, label: at?.label || '', rows: _lastRows, error: s.failed });
 }
 
 /**
@@ -245,12 +321,13 @@ export function endDebug(): void {
         _session = null;   // detached: `debugging()` is false, the panel is just a document
         return;
     }
+    _session.mode = 'step';
     // The panel STAYS. It used to be removed the moment the run finished, which threw away
     // the log, the variables and anything that had gone wrong on the way — after pressing
     // "run to the end", the answer to "so what happened" was an empty screen. It is an
     // inspector, and an inspector outlives the run it inspected; the × puts it away.
     finishPanel(_session, t('sched.dbg.finished'));
-    detachKeys();
+    emit({ taskId: _session.taskId, phase: 'done', path: null, label: '', rows: _lastRows });
     _session = null;
 }
 
@@ -284,7 +361,7 @@ function finishPanel(s: Session, word: string): void {
  * Returns immediately when nothing is watching, so the cost on an ordinary run is one map
  * lookup — a debugger that slows down every task to be available for one is not worth having.
  */
-export async function gate(taskId: string, label: string, ctx: RunCtx): Promise<void> {
+export async function gate(taskId: string, label: string, ctx: RunCtx, path?: string): Promise<void> {
     const s = _session;
     if (!s || s.taskId !== taskId) return;
     if (s.stopped) throw new DebugStopped();
@@ -295,22 +372,28 @@ export async function gate(taskId: string, label: string, ctx: RunCtx): Promise<
     if (s.log.length) s.log[s.log.length - 1].done = true;
     // A cap, because a `repeat 10000 times` would otherwise grow this without bound and the
     // interesting part of a long run is the end of it.
-    s.log.push({ label, done: false });
+    s.log.push({ label, done: false, at: Date.now(), path });
     if (s.log.length > 500) s.log.splice(0, s.log.length - 500);
     s.ctx = ctx;
     s.steps++;
     s.lastStepAt = Date.now();
     paint(s, label, ctx);
     if (s.mode === 'run') {
-        if (!hitsBreakpoint(label, s.breakOn)) return;
+        // A breakpoint is a step (set on a node, a brick or a line) or a word in the box.
+        if (!stopsAt(_bps, path, hitsBreakpoint(label, s.breakOn))) {
+            emit({ taskId, phase: 'running', path: path || null, label, rows: _lastRows });
+            return;
+        }
         // Reached what we were running to: back to stepping, and say so.
         s.mode = 'step';
         markMode(s);
     }
+    emit({ taskId, phase: 'paused', path: path || null, label, rows: _lastRows });
     await new Promise<void>((resolve) => {
         s.release = () => { s.release = null; resolve(); };
     });
     if (s.stopped) throw new DebugStopped();
+    emit({ taskId, phase: 'running', path: path || null, label, rows: _lastRows });
 }
 
 /** Everything the run is holding, flattened for showing. */
@@ -349,9 +432,13 @@ function openPanel(taskName: string): void {
             <span class="dbg-count" id="dbg-count" title="${escHtml(t('sched.dbg.countTip'))}">0</span>
             <button type="button" class="dbg-x" id="dbg-close" title="${escHtml(t('sched.dbg.close'))}">&times;</button>
         </div>
-        <div class="dbg-fail" id="dbg-fail" hidden></div>
+        <div class="dbg-fail" id="dbg-fail" hidden>
+            <span class="dbg-fail-text" id="dbg-fail-text"></span>
+            <button type="button" class="btn btn-xs btn-ghost dbg-jump" id="dbg-fail-jump" hidden>${escHtml(t('sched.dbg.jump'))}</button>
+        </div>
         <div class="dbg-step" id="dbg-step">${escHtml(t('sched.dbg.waiting'))}</div>
-        <details class="dbg-logwrap" id="dbg-logwrap">
+        <div class="dbg-where" id="dbg-where">${escHtml(_host?.modeHint() || '')}</div>
+        <details class="dbg-logwrap" id="dbg-logwrap" open>
             <summary>${escHtml(t('sched.dbg.log'))} <span id="dbg-logn">0</span></summary>
             <ol class="dbg-log" id="dbg-log"></ol>
         </details>
@@ -377,7 +464,8 @@ function openPanel(taskName: string): void {
                 title="${escHtml(t('sched.dbg.copyTip'))}">${escHtml(t('sched.dbg.copy'))}</button>
             <button type="button" class="btn btn-xs btn-ghost dbg-danger" id="dbg-stop-btn"
                 title="${escHtml(t('sched.dbg.stopTip'))}">${escHtml(t('sched.dbg.stop'))}</button>
-        </div>`;
+        </div>
+        <div class="dbg-keys">${escHtml(t('sched.dbg.keys'))}</div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(el);
     raiseAboveAll(el, 11800);
     s.panel = el;
@@ -416,6 +504,14 @@ function openPanel(taskName: string): void {
     el.querySelector('#dbg-vars')?.addEventListener('click', (e) => {
         const k = (e.target as HTMLElement).closest('.dbg-k') as HTMLElement | null;
         if (k) { showTrail(s, k.textContent || ''); return; }
+    });
+    el.querySelector('#dbg-log')?.addEventListener('click', (e) => {
+        const li = (e.target as HTMLElement).closest('[data-path]') as HTMLElement | null;
+        if (li?.dataset.path) _host?.jump(li.dataset.path);
+    });
+    el.querySelector('#dbg-fail-jump')?.addEventListener('click', () => {
+        const at = s.log[s.log.length - 1];
+        if (at?.path) _host?.jump(at.path);
     });
     el.querySelector('#dbg-trail')?.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('.dbg-trail-x')) hideTrail(s);
@@ -479,51 +575,41 @@ function openPanel(taskName: string): void {
     el.querySelector('#dbg-close')?.addEventListener('click', () => {
         s.stopped = true;
         s.release?.();
-        detachKeys();
         el.remove();
+        emit({ taskId: s.taskId, phase: 'closed', path: null, label: '', rows: [] });
     });
     dragBy(el, el.querySelector('#dbg-head') as HTMLElement);
-    attachKeys(s);
 }
 
 /**
- * F10 steps, F5 continues.
- *
- * The two most-pressed buttons in the panel were the two that required moving a hand off
- * the keyboard, on a screen whose whole purpose is pressing one of them a hundred times.
- * The same keys every debugger has used for thirty years, so nobody has to learn them.
- *
- * Nothing is bound to Escape: it closes modals all over BMM, and a key that sometimes stops
- * a debug run and sometimes shuts a dialog behind it is worse than no key.
+ * The three buttons, callable from the command registry (F10, F5, Shift+F5 — sched-flow-keys.ts).
+ * They used to be a private keydown listener here, which meant they could not be found in
+ * Ctrl+K, could not be rebound, and silently won over anything else bound to those keys.
  */
-let _keyHandler: ((e: KeyboardEvent) => void) | null = null;
-
-function attachKeys(s: Session): void {
-    detachKeys();
-    _keyHandler = (e: KeyboardEvent) => {
-        if (!_session || _session !== s || s.failed) return;
-        // Never while somebody is typing — the filter and the breakpoint box are inputs, and
-        // a debugger that steps when you type an F in a search field is a broken one.
-        const el = document.activeElement as HTMLElement | null;
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-        if (e.key === 'F10') {
-            e.preventDefault();
-            s.mode = 'step';
-            markMode(s);
-            s.release?.();
-        } else if (e.key === 'F5') {
-            e.preventDefault();
-            s.mode = 'run';
-            markMode(s);
-            s.release?.();
-        }
-    };
-    document.addEventListener('keydown', _keyHandler, true);
+export function debugStep(): void {
+    const s = _session;
+    if (!s || s.failed) return;
+    s.mode = 'step';
+    markMode(s);
+    s.release?.();
 }
-
-function detachKeys(): void {
-    if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
-    _keyHandler = null;
+export function debugContinue(): void {
+    const s = _session;
+    if (!s || s.failed) return;
+    s.mode = 'run';
+    markMode(s);
+    s.release?.();
+}
+export function debugStop(): void {
+    const s = _session;
+    if (!s) return;
+    s.stopped = true;
+    s.release?.();
+    if (!s.release) finishPanel(s, t('sched.dbg.endedShort'));
+}
+/** Is a debug run in progress (and not a post-mortem)? The keys' scope. */
+export function debugActive(): boolean {
+    return !!_session && !_session.stopped && !_session.failed;
 }
 
 /** Show one variable's whole trail: every value, and the step that left it there. */
@@ -561,11 +647,15 @@ function hideTrail(s: Session): void {
 function paintFailure(s: Session): void {
     const el = s.panel;
     if (!el) return;
-    detachKeys();
     const fail = el.querySelector('#dbg-fail') as HTMLElement | null;
     if (fail) {
         fail.hidden = false;
-        fail.textContent = `${t('sched.dbg.failed')} — ${s.failed}`;
+        const at = s.log[s.log.length - 1];
+        const text = fail.querySelector('#dbg-fail-text') as HTMLElement | null;
+        // Where it broke, not only what it said: the step's label and its place in the task.
+        if (text) text.textContent = `${t('sched.dbg.failed')} — ${s.failed}${at ? ` (${at.label}${at.path ? ` · ${t('sched.dbg.stepPath')} ${at.path}` : ''})` : ''}`;
+        const jump = fail.querySelector('#dbg-fail-jump') as HTMLElement | null;
+        if (jump) jump.hidden = !at?.path;
     }
     el.classList.add('is-failed');
     const mode = el.querySelector('#dbg-mode') as HTMLElement | null;
@@ -652,7 +742,9 @@ function paint(s: Session, label: string, ctx: RunCtx): void {
     if (logEl && (s.panel?.querySelector('#dbg-logwrap') as HTMLDetailsElement | null)?.open) {
         // The one without a tick is where the run is standing — or where it stopped.
         logEl.innerHTML = s.log.map((l) =>
-            `<li class="${l.done ? 'is-done' : 'is-here'}">${escHtml(l.label)}</li>`).join('');
+            `<li class="${l.done ? 'is-done' : 'is-here'}"${l.path ? ` data-path="${escHtml(l.path)}" title="${escHtml(t('sched.dbg.jumpTip'))}"` : ''}>
+                <span class="dbg-log-t">+${escHtml(stamp((l.at || s.startedAt) - s.startedAt))}</span>
+                <span class="dbg-log-l">${escHtml(l.label)}</span></li>`).join('');
         logEl.scrollTop = logEl.scrollHeight;
     }
 

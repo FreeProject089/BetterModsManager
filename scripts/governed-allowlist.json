@@ -77,8 +77,8 @@
   },
   "src/commands/disk.rs": {
     "spawn_blocking": {
-      "count": 2,
-      "why": "governed (G3b): benchmark_disk holds a Maintenance ticket (background: waits for deploys and game mode; checkpoints only BETWEEN the timed phases); get_folder_size, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per directory"
+      "count": 3,
+      "why": "governed (G3b): benchmark_disk holds a Maintenance ticket (background: waits for deploys and game mode; checkpoints only BETWEEN the timed phases); get_folder_size, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per directory; exempt: get_system_disks enumerates volumes (size and free space per volume, no bulk I/O) off the main thread, where a spinning-up disk or a dead network drive froze the window"
     }
   },
   "src/commands/format_check.rs": {
@@ -215,6 +215,12 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
+  "src/commands/sched_net.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "task_feed_append: one small Atom file (at most 500 entries) read and rewritten per call; the same shape as task_output's write, off the UI thread and not heavy work"
+    }
+  },
   "src/commands/task_output.rs": {
     "spawn_blocking": {
       "count": 1,
@@ -285,6 +291,24 @@
     "spawn_blocking": {
       "count": 1,
       "why": "governed (G3b): game_find_logs, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per entry"
+    }
+  },
+  "src/commands/ai.rs": {
+    "spawn_blocking": {
+      "count": 3,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+    }
+  },
+  "src/extra_tools/mcp_server.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+    }
+  },
+  "src/mcp/server.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
     }
   }
 }

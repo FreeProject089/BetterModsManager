@@ -26,7 +26,7 @@ yield en a récupéré l'essentiel tout en gardant la fenêtre réactive.
 Avant, chaque copie cadençait la limite de son côté, si bien que deux threads de copie écrivaient un
 disque limité à 40 Mo/s à 80 Mo/s. Le budget par disque, c'est ce qui fait que le chiffre veut dire
 ce qu'il dit. Les autres presets changent le tampon, la pause et le parallélisme : voir
-[Les presets](doc-page:how-it-works/resources#les-presets).
+[Les presets](doc-page:how-it-works/resources#presets).
 
 !!! warning "BMM ne fait jamais de hard-link ni de lien symbolique"
 

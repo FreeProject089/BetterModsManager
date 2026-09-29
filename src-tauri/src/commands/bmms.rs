@@ -429,6 +429,10 @@ struct P {
     i: usize,
     /// The original text, so `set x = …` can take its right-hand side verbatim.
     src: Vec<char>,
+    /// Stamp each statement with the line it starts on (`__line`). Only `bmms_line_map` asks
+    /// for it — the debugger's code mode — and it strips the stamps before answering, so no
+    /// step that is saved or run ever carries one.
+    lines: bool,
 }
 
 impl P {
@@ -777,6 +781,16 @@ impl P {
     }
 
     fn stmt(&mut self) -> PResult<Value> {
+        let line = self.peek().line;
+        let mut v = self.stmt_inner()?;
+        if self.lines {
+            if let Some(o) = v.as_object_mut() {
+                o.insert("__line".into(), json!(line));
+            }
+        }
+        Ok(v)
+    }
+    fn stmt_inner(&mut self) -> PResult<Value> {
         let head = self.peek().clone();
         let w = match &head.tok {
             Tok::Word(w) => w.to_lowercase(),
@@ -1250,11 +1264,11 @@ impl P {
                     let tok = self.peek().clone();
                     let p = self.word("a permission")?;
                     match p.as_str() {
-                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" => { perms.insert(p, Value::Bool(true)); }
+                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" | "network" => { perms.insert(p, Value::Bool(true)); }
                         other => {
                             return Err(Diagnostic::at(
                                 &tok,
-                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks.", other),
+                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks, network.", other),
                             ))
                         }
                     }
@@ -1316,10 +1330,38 @@ impl P {
                 let event = self.string("the event name")?;
                 return Ok(json!({ "type": "onEvent", "event": event }));
             }
+            // `on feed "https://…/feed.xml" every 15m`, and `lan` after it for a feed served on
+            // the local network — which the network rules otherwise refuse.
+            if self.eat_word("feed") {
+                let url = self.string("the address of the feed")?;
+                if !self.eat_word("every") {
+                    let got = self.peek().clone();
+                    return Err(Diagnostic::at(
+                        &got,
+                        "A feed needs how often to check it, like `on feed \"https://…/feed.xml\" every 15m`.",
+                    ));
+                }
+                let dtok = self.peek().clone();
+                let secs = self.duration("how often to check the feed")?;
+                if secs <= 0.0 {
+                    return Err(Diagnostic::at(&dtok, "An interval has to be more than zero."));
+                }
+                let mut o = json!({
+                    "type": "rss",
+                    "url": url,
+                    // Five minutes at the least: a feed polled every few seconds is a feed
+                    // whose server starts refusing BMM.
+                    "everyMinutes": num((secs / 60.0).max(5.0)),
+                });
+                if self.eat_word("lan") {
+                    o["allowLan"] = Value::Bool(true);
+                }
+                return Ok(o);
+            }
             let got = self.peek().clone();
             return Err(Diagnostic::at(
                 &got,
-                "After `on`, expected `app start`, `file \"…\"` or `event \"…\"`.",
+                "After `on`, expected `app start`, `file \"…\"`, `event \"…\"` or `feed \"…\"`.",
             ));
         }
         // `after task "…"`, and optionally only when it worked or only when it did not
@@ -1541,6 +1583,10 @@ pub struct CompileOut {
 }
 
 fn compile_inner(source: &str, snippet: bool) -> CompileOut {
+    compile_with(source, snippet, false)
+}
+
+fn compile_with(source: &str, snippet: bool, lines: bool) -> CompileOut {
     let toks = match lex(source) {
         Ok(t) => t,
         Err(e) => {
@@ -1557,6 +1603,7 @@ fn compile_inner(source: &str, snippet: bool) -> CompileOut {
         toks,
         i: 0,
         src: source.chars().collect(),
+        lines,
     };
 
     if snippet {
@@ -1647,6 +1694,77 @@ pub fn bmms_compile(source: String) -> CompileOut {
 #[tauri::command]
 pub fn bmms_compile_steps(source: String) -> CompileOut {
     compile_inner(&source, true)
+}
+
+/// One statement of a body: the path of the step it compiles to, and the line it starts on.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct LineRow {
+    pub path: String,
+    pub line: usize,
+}
+
+/// The bodies a step carries, as the flow and the run log name them (sched-flow-model.ts
+/// `lanesOf`): the path of a step inside is `<step>.<lane>.<index>`.
+fn lanes_of(step: &Value) -> Vec<(String, &Vec<Value>)> {
+    let mut out = Vec::new();
+    let arr = |k: &str| step.get(k).and_then(|x| x.as_array());
+    match step.get("kind").and_then(|x| x.as_str()).unwrap_or("") {
+        "if" => {
+            for k in ["then", "else"] {
+                if let Some(a) = arr(k) { out.push((k.to_string(), a)); }
+            }
+        }
+        "repeat" | "forEach" | "retry" | "ensure" => {
+            if let Some(a) = arr("steps") { out.push(("steps".into(), a)); }
+        }
+        "try" => {
+            for k in ["steps", "onError"] {
+                if let Some(a) = arr(k) { out.push((k.to_string(), a)); }
+            }
+        }
+        "switch" => {
+            if let Some(cases) = arr("cases") {
+                for (i, c) in cases.iter().enumerate() {
+                    if let Some(a) = c.get("steps").and_then(|x| x.as_array()) { out.push((format!("cases.{i}.steps"), a)); }
+                }
+            }
+            if let Some(a) = arr("default") { out.push(("default".into(), a)); }
+        }
+        "parallel" => {
+            if let Some(br) = arr("branches") {
+                for (i, b) in br.iter().enumerate() {
+                    if let Some(a) = b.as_array() { out.push((format!("branches.{i}"), a)); }
+                }
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+fn walk_lines(steps: &[Value], base: &str, out: &mut Vec<LineRow>) {
+    for (i, st) in steps.iter().enumerate() {
+        let path = if base.is_empty() { i.to_string() } else { format!("{base}.{i}") };
+        if let Some(line) = st.get("__line").and_then(|x| x.as_u64()) {
+            out.push(LineRow { path: path.clone(), line: line as usize });
+        }
+        for (lane, body) in lanes_of(st) {
+            walk_lines(body, &format!("{path}.{lane}"), out);
+        }
+    }
+}
+
+/// Which line each step of a body starts on — the debugger's code mode: the line to light
+/// while the run stands on a step, and the step a click in the gutter sets a breakpoint on.
+/// Empty when the text does not compile (the editor already says why).
+#[tauri::command]
+pub fn bmms_line_map(source: String) -> Vec<LineRow> {
+    let out = compile_with(&source, true, true);
+    let mut rows = Vec::new();
+    if let Some(steps) = out.steps.as_ref() {
+        walk_lines(steps, "", &mut rows);
+    }
+    rows
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2141,6 +2259,12 @@ fn trigger_str(tr: &Value) -> String {
         // trigger, so nothing errored and nothing looked wrong.
         "watchFile" => format!("on file {}", quote(&s("path"))),
         "onEvent" => format!("on event {}", quote(&s("event"))),
+        "rss" => format!(
+            "on feed {} every {}m{}",
+            quote(&s("url")),
+            (n("everyMinutes") as i64).max(5),
+            if tr.get("allowLan") == Some(&Value::Bool(true)) { " lan" } else { "" }
+        ),
         "afterTask" => {
             let suffix = match tr.get("outcome").and_then(|x| x.as_str()).unwrap_or("any") {
                 "ok" => " ok",
@@ -2203,7 +2327,7 @@ pub fn bmms_decompile(task: Value) -> String {
     // `perms` would silently drop permissions it really has.
     let mut granted: Vec<&str> = Vec::new();
     if let Some(p) = task.get("perms").and_then(|x| x.as_object()) {
-        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks"] {
+        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network"] {
             if p.get(k) == Some(&Value::Bool(true)) {
                 granted.push(k);
             }
@@ -2439,6 +2563,29 @@ mod tests {
     }
 
     #[test]
+    fn the_line_map_names_every_step_by_the_path_the_runner_uses() {
+        let src = "do mods.scan()
+if online {
+    do notify(message: \"a\")
+} else {
+    wait 5s
+}
+print \"done\"
+";
+        let rows = bmms_line_map(src.to_string());
+        let got: Vec<(String, usize)> = rows.into_iter().map(|r| (r.path, r.line)).collect();
+        assert_eq!(got, vec![
+            ("0".to_string(), 1), ("1".to_string(), 2), ("1.then.0".to_string(), 3),
+            ("1.else.0".to_string(), 5), ("2".to_string(), 7),
+        ]);
+        // The stamps never reach a compiled step.
+        let plain = compile_inner(src, true);
+        assert!(!serde_json::to_string(&plain.steps).unwrap().contains("__line"));
+        // A body that does not compile maps to nothing, rather than to a guess.
+        assert!(bmms_line_map("if {".to_string()).is_empty());
+    }
+
+    #[test]
     fn every_trigger_survives_being_printed_and_read_back() {
         let cases: &[(&str, serde_json::Value)] = &[
             ("manual", json!({ "type": "manual" })),
@@ -2451,6 +2598,7 @@ mod tests {
             ("once", json!({ "type": "once", "at": "2026-01-01T09:00" })),
             ("watchFile", json!({ "type": "watchFile", "path": "C:/games/dcs.log" })),
             ("onEvent", json!({ "type": "onEvent", "event": "bmm.mod.missing" })),
+            ("rss", json!({ "type": "rss", "url": "https://example.com/feed.xml", "everyMinutes": 15, "allowLan": true })),
             ("afterTask", json!({ "type": "afterTask", "taskId": "t-42", "outcome": "fail" })),
             (
                 "condition",
@@ -2474,7 +2622,7 @@ mod tests {
             // still a task that watches nothing.
             for key in [
                 "path", "event", "time", "at", "everyMinutes", "everyHours", "day", "taskId",
-                "outcome", "engine", "code",
+                "outcome", "engine", "code", "url", "allowLan",
             ] {
                 if let Some(want) = trigger.get(key) {
                     assert_eq!(&back["trigger"][key], want, "{} lost its {}", name, key);

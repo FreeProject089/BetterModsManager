@@ -56,6 +56,7 @@ organigramme.
 | `afterTask` | Une autre tâche s'est terminée. Éventuellement seulement si elle a réussi, ou seulement si elle a échoué. |
 | `condition` | L'une des 34 conditions est devenue vraie. |
 | `script` | Un script que tu as écrit est sorti avec le code 0. |
+| `rss` | Un flux (RSS ou Atom) a un élément qu'il n'avait pas — [plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux). |
 | `manual` | Jamais tout seul — seulement le bouton ▶ **Lancer maintenant** ou `bmm://schedule/run`. |
 
 !!! warning "Les déclencheurs horaires ne partent que si BMM est éveillé"
@@ -173,7 +174,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~106 actions réparties en huit groupes :
+Il y a ~110 actions réparties en neuf groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -233,7 +234,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde sept choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde huit choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -244,8 +245,9 @@ Chaque tâche accorde sept choses séparément, et chacune dit ce qu'elle déblo
 | **Supprimer des choses** | Supprimer un profil, un modpack, ou le dossier d'un mod |
 | **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
 | **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
+| **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
 
-Les sept sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les huit sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
@@ -463,6 +465,19 @@ sorte, puis exporte mes données* ».
 
 ## Trois façons de modifier une tâche
 
+**La première fois que vous créez une tâche**, BMM demande laquelle des trois vous préférez —
+**Flux** (recommandé : toute la tâche d'un coup d'œil, un test par nœud, le débogueur qui la
+parcourt), **BMMScript** ou **Blocs**, une ligne chacune. La réponse est un réglage :
+**Paramètres → Planification → Les tâches s'ouvrent en**, et le sélecteur en haut de l'éditeur le
+change aussi.
+
+**L'en-tête de l'éditeur** porte ce sur quoi on agit : le nom de la tâche, si elle est **Activée**
+ou **Désactivée** (cliquez pour basculer), *Modifications non enregistrées* quand il y en a, le
+sélecteur de mode, **Aperçu** (une exécution à blanc qui ne change rien), **Déboguer**, **Test** et
+**Enregistrer** — qui garde l'éditeur ouvert (:kbd[Ctrl+S]). Le pied garde **Annuler** et
+**Enregistrer et fermer**.
+
+
 Le constructeur a un sélecteur au-dessus des étapes : **Blocs**, **Code** et **Flux**. Ce sont trois
 vues de la même tâche. Il n'y a qu'un arbre d'étapes ; chaque mode le lit et l'écrit, donc une tâche
 construite dans l'un s'ouvre à l'identique dans les deux autres, et le constructeur rouvre dans le
@@ -524,10 +539,94 @@ flux n'agissent que quand le canevas a le focus : taper dans un champ n'est jama
 | Ajuster toute la tâche à la vue | :kbd[F] |
 | Disposition automatique (oublier les positions manuelles) | :kbd[Maj+L] |
 | Mode Blocs · Mode Code · Mode Flux | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
+| Enregistrer la tâche (et continuer) | :kbd[Ctrl+S] |
+| Tester une fois l’étape sélectionnée | :kbd[T] |
+| Point d’arrêt sur l’étape sélectionnée | :kbd[F9] |
+| Pas à pas (exécuter l’étape suivante, puis s’arrêter) · Continuer jusqu’au prochain point d’arrêt · Arrêter l’exécution | :kbd[F10] · :kbd[F5] · :kbd[Maj+F5] |
+
+Dans le panneau d'un nœud, les réglages sont groupés et disent ce qui ne va pas **pendant la
+frappe** (une adresse qui serait refusée, un corps JSON illisible, une expression régulière qui
+reviendrait en arrière pendant des minutes) ; chaque champ qui accepte des `{variables}` a un
+bouton **{x}** qui liste les variables que la tâche peut nommer. Le panneau montre aussi une
+section **Tester** et une section **Débogage** (point d'arrêt, et les valeurs que l'étape nomme
+pendant une pause).
 
 À la souris : glisse le fond, maintiens :kbd[Espace] en glissant, ou fais défiler, pour te déplacer ;
 :kbd[Ctrl] + molette (ou un pincement) pour zoomer ; :kbd[Maj] + glisser pour sélectionner plusieurs
 nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection.
+
+## Prévenir le monde extérieur — webhooks, Discord, Slack, flux
+
+Quatre étapes dans le groupe **Notifications et web**, et un déclencheur.
+
+| Étape | Envoie | Permission |
+|---|---|---|
+| **Envoyer un webhook** (`webhook.send`) | POST, PUT ou PATCH vers n'importe quelle adresse, avec un corps JSON (ou texte), des en-têtes, des **en-têtes secrets** et de nouvelles tentatives | **Réseau** |
+| **Envoyer un message Discord** (`discord.send`) | Un message dans un salon, par son adresse de webhook | **Réseau** |
+| **Envoyer un message Slack** (`slack.send`) | Un message dans un salon, par un webhook entrant | **Réseau** |
+| **Ajouter une entrée à un flux** (`feed.publish`) | Rien sur le réseau : une entrée en tête d'un fichier Atom que la tâche tient à jour | aucune |
+
+Le corps d'un webhook est un modèle : les `{variables}` sont remplies avant l'envoi et, dans un
+corps JSON, elles sont **échappées comme du texte JSON** — un titre de flux avec un guillemet ou
+une ligne de journal avec un retour à la ligne ne cassent pas le document. Un corps JSON qui ne
+se lit pas est refusé avant tout envoi.
+
+**Ce qui reste secret.** Mettez les jetons dans les **En-têtes secrets** : ils partent comme les
+autres et n'apparaissent jamais dans un journal, une erreur, le débogueur ou le résumé d'une
+étape. Une adresse de webhook Discord ou Slack *est* le mot de passe : elle se tape dans un champ
+masqué et un nœud n'en montre que l'hôte. Les erreurs ne citent jamais l'adresse.
+
+**Ce qui est refusé, quoi que dise la tâche** (vérifié par le backend de BMM) :
+
+- tout ce qui n'est pas `http://` ou `https://`, et une adresse contenant `user:motdepasse@` ;
+- une **adresse privée** — ce PC (`localhost`, `127.0.0.1`, `::1`), votre réseau (`10.x`,
+  `192.168.x`, `172.16–31.x`), le lien local (`169.254.x`, l'adresse de métadonnées du cloud), le
+  CGNAT (`100.64.x`), les plages locales IPv6 et l'IPv4 cachée dans l'IPv6 — sauf si l'**étape**
+  coche *Autoriser le réseau local*. La vérification porte sur les adresses **résolues**, et la
+  connexion est épinglée à exactement celles-là : un nom qui répond une chose à la vérification et
+  une autre à la connexion n'atteint rien de nouveau. Aucun proxy système n'est utilisé ici ;
+- une étape Discord dont l'adresse n'est pas `https://discord.com/api/webhooks/…`, une étape Slack
+  dont l'adresse n'est pas `https://hooks.slack.com/…` ;
+- les redirections d'un webhook (le 3xx est signalé ; le corps n'est pas renvoyé ailleurs). La
+  lecture d'un flux suit jusqu'à cinq redirections et revérifie chaque saut.
+
+Chaque requête a un **délai** (15 s par défaut, 60 s au plus) et une **taille maximale** de réponse
+(256 Ko pour un webhook, 4 Mo pour un flux). Un webhook est retenté sur erreur réseau, `429` ou
+`5xx` — jusqu'à quatre fois de plus — et jamais sur un autre `4xx`. `{http.status}` et
+`{http.body}` (les premières lignes de la réponse) sont lisibles ensuite ; un non-2xx arrête
+l'étape sauf si *Considérer 4xx et 5xx comme un succès* est coché.
+
+**« RSS » veut dire deux choses, et BMM fait les deux.**
+
+- **Un flux comme déclencheur** — *Quand un flux a un nouvel élément* (`rss`). Donnez l'adresse
+  d'un flux RSS ou Atom et la fréquence de vérification (toutes les 5 minutes au plus souvent). La
+  première vérification **apprend** seulement ce qui s'y trouve. Ensuite, les nouveaux éléments
+  lancent la tâche **une fois**, avec le plus récent dans `{event.title}`, `{event.link}`,
+  `{event.id}`, `{event.published}`, et leur nombre dans `{event.count}`. Ce qui a été vu est
+  mémorisé d'un lancement à l'autre. Il faut **Réseau** ; sans elle le flux n'est jamais lu, et la
+  ligne « pourquoi elle ne tourne pas » le dit. *Lire le flux maintenant* montre ce que verrait le
+  déclencheur sans rien mémoriser.
+- **Un flux propre à la tâche** — *Ajouter une entrée à un flux* écrit un fichier Atom (le plus
+  récent en premier, 50 entrées gardées par défaut) dans le dossier de sortie de la tâche, ou là où
+  vous l'indiquez. N'importe quel lecteur de flux peut le suivre. Avec un déclencheur *après une
+  tâche*, c'est un flux des résultats d'une autre tâche. BMM ne réécrit jamais un fichier qui n'est
+  pas un flux qu'il tient.
+
+L'e-mail n'est pas proposé : BMM n'a pas de chemin d'envoi de courrier, et en ajouter un voudrait
+dire stocker un mot de passe SMTP.
+
+## Tester une étape
+
+Chaque étape a un bouton **Tester** — ▶ sur un bloc, une section *Tester cette étape* dans le
+panneau du flux, :kbd[T] sur un nœud sélectionné. Il exécute cette étape une fois, seule, avec les
+permissions de la tâche et des variables neuves, et montre ce qui est revenu **sur l'étape même** :
+une pulsation pendant l'exécution, puis un contour vert ou rouge et une ligne avec le verdict, le
+statut HTTP et les premiers mots de la réponse. En *mouvement réduit*, la pulsation devient un
+contour fixe.
+
+Une étape qui ne fait que calculer, lire ou envoyer un message est testée tout de suite. Une étape
+qui modifie quelque chose — active un mod, supprime un profil, lance un programme — demande
+d'abord.
 
 ## Contrôles au quotidien
 
@@ -1023,6 +1122,25 @@ utile des trois réponses : une permission qu'elle n'a pas, un chemin qu'elle ne
     regardé dedans » vaut mieux que de laisser la moitié d'une tâche hors de la réponse.
 
 ## Parcourir une tâche pas à pas
+
+### Dans chaque éditeur
+
+L'exécution est montrée là où vous regardez, et les trois éditeurs sont d'accord parce que le
+débogueur indique **sur quelle étape** il se trouve (son chemin dans la tâche — le même que celui
+du journal d'exécution) :
+
+| Mode | Pendant l'exécution | Points d'arrêt |
+|---|---|---|
+| **Flux** | Le nœud en cours s'illumine ; un nœud qui s'exécute pulse ; un nœud en échec devient rouge. Survolez un nœud pendant une pause pour voir les valeurs que **cette étape** lit ou écrit. | Le point au bord gauche d'un nœud, ou *S'arrêter ici* dans son panneau |
+| **Blocs** | Le bloc en cours est entouré et amené à l'écran. | Le bouton ● d'un bloc |
+| **Code** | La ligne en cours est surlignée. | Cliquez dans la marge à côté d'une ligne |
+
+Un point d'arrêt posé dans un mode est présent dans les deux autres. **Continuer** va jusqu'au
+prochain point d'arrêt. Le journal donne pour chaque étape le temps depuis le début (`+1.2s`) ;
+cliquez une ligne pour montrer l'étape dans l'éditeur. Quand une étape échoue, le message dit
+**laquelle** et *Montrer l'étape* vous y mène. Les touches ++f10++, ++f5++, ++shift+f5++ et ++f9++
+sont des commandes comme les autres (Ctrl+K, Paramètres → Raccourcis clavier).
+
 
 **Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes
 permissions, et s'arrête avant chacune pour te montrer ce que la tâche tient.

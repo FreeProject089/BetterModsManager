@@ -50,12 +50,13 @@ restart.
 
 ---
 
-## Who wins: the last mod you enable
+## Who wins: the last mod in the activation order
 
-There is **no per-file winner picker and no priority list**. The rule is: **whichever mod you enable
-last wins.** A profile's `active_mods` is an *ordered* list, deployment walks it in order, and a later
-mod overwrites an earlier one on any shared path. Your only control is the order you enable in —
-enable the one that should win last.
+There is **no per-file winner picker**. The rule is: **the mod applied last wins.** A profile's
+`active_mods` is an *ordered* list — the [activation order](doc-page:how-it-works/load-order) — deployment walks it in
+order, and a later mod overwrites an earlier one on any shared path. A newly enabled mod goes to the
+end, so by default the one you enabled last wins; the order view lets you move any mod up or down,
+and re-copies only the files that change hands.
 
 ```mermaid
 flowchart LR
@@ -65,7 +66,7 @@ flowchart LR
 ```
 
 This is a genuine simplification compared to managers with priority trees. It buys you one thing:
-there is never a hidden rule to reverse-engineer. What is on disk is what you enabled last.
+there is never a hidden rule to reverse-engineer. What is on disk is the last mod in one visible list.
 
 ---
 
@@ -102,15 +103,17 @@ three questions in order:
 ```mermaid
 flowchart TB
     REM(["file to remove"]) --> OTHER{"does another enabled mod<br/>also ship this file?"}
-    OTHER -- yes --> FROMMOD["restore from the MOST RECENTLY<br/>enabled one that has it"]
+    OTHER -- yes --> FROMMOD["restore from the LAST one<br/>in the activation order that has it"]
     OTHER -- no --> ORIG{"is it in _original/ ?"}
     ORIG -- yes --> FROMORIG["restore the game file,<br/>then delete the backup copy"]
     ORIG -- no --> DEL["the mod added this file —<br/>delete it"]
 ```
 
-1. **Another enabled mod ships it** → restore from that mod. The search walks the active list
-   **in reverse**, so the most recently enabled mod wins — the same rule as deployment, applied
-   backwards. Disabling the top mod correctly reveals the one underneath.
+1. **Another enabled mod ships it** → restore from that mod: the **last** one in the activation
+   order that has the file — the same rule as deployment. Disabling the top mod reveals the one
+   directly underneath, archived (zipped) mods included: their copy is read from the extracted
+   cache. (It used to restore the *oldest* copy, and to skip archived mods; both are fixed and
+   tested — see [Activation order](doc-page:how-it-works/load-order).)
 2. **Otherwise, `_original/` has it** → restore the game's own file, and then **delete the backup
    copy**: *"Space optimization: remove the backup file as it has been safely restored."* The backup
    folder shrinks as you disable, instead of growing forever.
@@ -131,7 +134,7 @@ Two safety details in that cleanup:
 
 | You want | Do this |
 |---|---|
-| Mod B's version of a shared file | Enable B **after** A |
+| Mod B's version of a shared file | Put B **below** A in the [activation order](doc-page:how-it-works/load-order) (or enable it after A) |
 | To see what actually overlaps | Open the conflict view — the file list is exact, and free to compute |
 | To undo everything | Disable in any order; each file falls back to the next mod that has it, then to the game's original |
 | Per-file cherry-picking | Not supported — use the [Mapper](doc-page:how-it-works/mapper) to change what a mod ships, or edit the mod folder |

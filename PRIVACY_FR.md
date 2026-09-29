@@ -1,6 +1,6 @@
 # Politique de confidentialité — Better Mods Manager (BMM)
 
-_Dernière mise à jour : 2026-09-24_
+_Dernière mise à jour : 2026-09-29_
 
 Better Mods Manager est une application de bureau open‑source (GPL‑3.0) qui fonctionne sur votre
 ordinateur. Vos profils, mods, modpacks, plugins et réglages sont stockés **localement**, dans le
@@ -26,6 +26,7 @@ relative aux données, c'est ce document qui fait référence.
 | Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, et l'installateur pose désormais la question comme une option distincte | **Désactivé** — décoché dans la section « Personnaliser » de l'écran de consentement |
 | **Discord Rich Presence** (§4) | **Désactivé** : la case de l'installateur est décochée | Désactivé |
 | Rapports de bug, de plantage et retours (§5) | Seulement quand vous cliquez sur Envoyer | Seulement quand vous cliquez sur Envoyer |
+| **IA optionnelle** (§6.10) | **Désactivée** : la case de l'installateur est décochée ; la cocher allume l'interrupteur **sans fournisseur**, donc rien n'est envoyé pour autant | Désactivée |
 
 Chacun de ces éléments peut être désactivé dans les paramètres de BMM (Paramètres → Confidentialité
 pour la télémétrie et ses options, les interrupteurs Discord et mises à jour dans les Paramètres).
@@ -313,7 +314,17 @@ avant que vous cliquiez sur Envoyer.** BMM transmet alors :
 Une petite preuve de travail anti‑spam s'exécute avant l'envoi ; elle n'envoie aucune donnée
 supplémentaire. Si le site est injoignable, le rapport est gardé localement et renvoyé 15 secondes
 après le lancement suivant, et nulle part ailleurs. BMM garde une liste locale de vos 50 derniers
-envois. Une fois reçu, un rapport est conservé selon les conditions de la plateforme BetterCommunity.
+envois (avec la liste des mots significatifs de chaque rapport, utilisée seulement pour vous
+signaler, sur ce PC, que vous en avez déjà envoyé un semblable). Une fois reçu, un rapport est
+conservé selon les conditions de la plateforme BetterCommunity.
+
+Avant l'envoi d'un rapport, BMM vérifie son texte **sur votre PC** : il repère les secrets, les
+chemins de dossier contenant votre nom d'utilisateur, les adresses e‑mail et IP et les noms de votre
+compte Windows et de votre PC, vous indique combien il en a trouvé et propose de les masquer (case
+cochée par défaut), et signale un rapport semblable envoyé ces 30 derniers jours. Rien de cela
+n'envoie quoi que ce soit. Seulement si vous avez activé l'IA optionnelle (§6.10) et cliquez sur
+*Obtenir un indice IA*, le texte **déjà masqué** est envoyé au fournisseur choisi, pour un indice de
+catégorie / gravité ; le rapport lui‑même ne part toujours que quand vous cliquez sur Envoyer.
 
 ### 5.2 Contenu d'un zip de rapport de plantage
 Quand BMM plante, il écrit un `.zip` de rapport **sur votre disque**. Il contient les journaux de
@@ -414,6 +425,33 @@ jeton d'API restent sur votre ordinateur ; ils ne sont pas envoyés à l'équipe
 Tout ce que vous configurez vous‑même (webhook Discord, tunnel Cloudflare, …) envoie des données à ce
 service, selon ses propres conditions.
 
+### 6.10 IA optionnelle (Laya)
+**Désactivée par défaut**, dans BMM comme dans l'installateur. BMM n'embarque aucun modèle d'IA.
+L'action *Suggérer des infos* du panneau d'un mod lit toujours d'abord les fichiers du mod sur votre
+PC ; rien n'en sort tant que vous n'activez pas Réglages → IA **et** ne choisissez pas un
+fournisseur, et alors seulement quand vous cliquez sur *Suggérer*, *demander un brouillon de
+description* ou *Obtenir un indice IA* :
+
+- **Ce qui est envoyé** pour un mod : son nom, son auteur, sa description, des extraits de son
+  readme ou manifeste, jusqu'à 40 noms de fichiers et les noms de vos tags, après que BMM a masqué
+  les noms d'utilisateur dans les chemins, les adresses e‑mail et IP ; 4 000 caractères au plus.
+  Pour un indice de rapport : le texte du rapport, après masquage. La fenêtre montre le texte exact
+  envoyé.
+- **À qui** : *BetterCommunity* — `bettercommunity.ch`, avec votre Creator ID, sa preuve signée
+  (§2.4) et, si vous en avez enregistré une, votre clé d'API BetterCommunity, seulement après avoir
+  coché la case de consentement ; traité là‑bas par le classifieur Laya. *Votre propre serveur Laya*
+  — l'adresse que vous indiquez, sur ce PC par défaut (une autre machine demande une case explicite).
+  *Une API externe* que vous configurez (pour les brouillons de description seulement) — ce service,
+  avec votre clé, selon ses propres conditions.
+- **Les clés** saisies pour votre serveur Laya ou votre API externe sont stockées par le système
+  (DPAPI sous Windows, le trousseau macOS/Linux) et ne sont envoyées nulle part ailleurs ; sans l'un
+  ni l'autre, elles ne sont gardées que pour la session.
+- **Rien n'est écrit** dans un mod tant que vous ne cochez pas une suggestion puis cliquez sur
+  Appliquer.
+- Désactivez‑la dans Réglages → IA, avec la case *Fonctionnalités IA optionnelles* de l'installateur
+  (ou `--set=ai_features=false`), ou pour une session avec `--no-ai` / `BMM_NO_AI=1`. Interrupteur
+  éteint, BMM ne fait aucune requête d'IA.
+
 ---
 
 ## 7. Récapitulatif
@@ -433,6 +471,7 @@ service, selon ses propres conditions.
 | Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID avec preuve signée et empreinte hachée de l'appareil (§2.4), détails de l'application et du système | Centre de retours BetterCommunity |
 | Lier un compte BetterCommunity (et une fois par clé tant qu'il est lié) | Oui | Creator ID, preuve signée, empreinte hachée de l'appareil (§2.4) | bettercommunity.ch |
 | Notifications BetterCommunity (seulement avec une clé d'API enregistrée) | Oui, toutes les 10 min | La clé d'API, limitée à `notifications:read` | bettercommunity.ch |
+| IA optionnelle — *Suggérer* / *brouillon* / *indice IA* (**désactivée** par défaut ; seulement à votre clic) | Oui | Nom, auteur, description, extraits du readme, noms de fichiers d'un mod et noms de vos tags, ou le texte d'un rapport — masqués d'abord (§6.10) | Le fournisseur choisi : bettercommunity.ch (avec Creator ID et preuve), votre propre serveur Laya, ou votre API externe |
 
 ---
 

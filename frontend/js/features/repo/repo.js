@@ -12,6 +12,8 @@ import { mountSshAction } from './ssh-action.js';
 import { credsFoldHtml, wireCredsFold, readCredsFold, exportOrigins } from '../../core/creds-fold.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
+import { initRepoPage, onRepoTabChanged } from './repo-page.js';
+import { learnMore } from '../../core/learn-more.js';
 import { initRepoSync, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
@@ -556,7 +558,8 @@ export const loadProfilesForExport = async (profilesListEl) => {
             profilesListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
                 <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
                 <p class="empty-title" style="font-size:13px;">${escHtml(t('repo.noProfiles'))}</p>
-                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noProfilesHint') || 'This repo ships no profile yet — the host adds them from Generate → profiles to include.')}</p>
+                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.export.noProfilesHint'))}</p>
+                <div class="rp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-rp-go="profiles">${escHtml(t('repo.export.goProfiles'))}</button>${learnMore('profiles')}</div>
             </div>`;
             return;
         }
@@ -598,7 +601,8 @@ export const loadModpacksForExport = async (modpacksListEl) => {
             modpacksListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
                 <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
                 <p class="empty-title" style="font-size:13px;">${escHtml(t('modpack.noMods') || 'No modpack available')}</p>
-                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noModpacksHint') || 'The host has not attached a modpack to this repo. Once they do, it appears here to apply in one click.')}</p>
+                <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.export.noModpacksHint'))}</p>
+                <div class="rp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-rp-go="modpacks">${escHtml(t('repo.export.goModpacks'))}</button>${learnMore('modpacks')}</div>
             </div>`;
             return;
         }
@@ -834,11 +838,15 @@ export function initRepo() {
         view.querySelectorAll('.repo-tab-panel').forEach(p => {
             p.classList.toggle('active', p.dataset.repoPanel === name);
         });
+        // aria-selected, the roving tabindex and the sticky header's actions follow.
+        onRepoTabChanged();
     };
     window.activateRepoTab = activateRepoTab;
     document.querySelectorAll('#view-repo .repo-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => activateRepoTab(btn.dataset.repoTab || 'sync'));
     });
+    // The page frame: sticky header (status + main actions), keyboard tabs, Learn more.
+    initRepoPage();
     // ── Method picker (the "produce repo.json" step) ─────────────────────
     // Pick ONE of the three ways; the group carries data-active-method and the CSS shows only
     // that method's form, so the two alternatives no longer sit in the way as dead scroll.

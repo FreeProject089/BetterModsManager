@@ -220,6 +220,32 @@ mod export_secret_tests {
         assert_eq!(v["app_data"]["profiles"].as_array().map(|a| a.len()), Some(1));
     }
 
+    /// The activation order is `Profile.active_mods`, and a modpack's order is its `mods`
+    /// list: both must come back from an export in the same order, or a restore would silently
+    /// change which mod wins every shared file.
+    #[test]
+    fn the_activation_order_and_a_modpack_order_survive_export_and_restore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut d = data();
+        d.profiles[0].active_mods = vec!["c".into(), "a".into(), "b".into()];
+        let refs: Vec<serde_json::Value> = ["z", "x", "y"].iter().map(|id| serde_json::json!({
+            "mod_id": id, "mod_name": id, "mod_version": "1", "profile_id": null, "profile_name": null,
+            "sha256": "", "file_manifest": [], "include_dependencies": false,
+            "download_link": null, "fallback_link": null, "fallback_type": null
+        })).collect();
+        let pack: crate::models::modpack::LocalModpack = serde_json::from_value(serde_json::json!({
+            "id": "pk", "name": "Pack", "description": null, "created_at": "", "updated_at": "",
+            "multi_profile": false, "dependency_mode": "none", "sr_link": null, "game_name": null,
+            "mods": refs
+        })).unwrap();
+        d.modpacks.push(pack);
+        let v = export_document(&d, &ExportOptions::everything(), None, tmp.path(), tmp.path()).unwrap();
+        let back: crate::state::AppData = serde_json::from_value(v["app_data"].clone()).unwrap();
+        assert_eq!(back.profiles[0].active_mods, vec!["c".to_string(), "a".into(), "b".into()]);
+        let ids: Vec<&str> = back.modpacks[0].mods.iter().map(|m| m.mod_id.as_str()).collect();
+        assert_eq!(ids, vec!["z", "x", "y"]);
+    }
+
     #[test]
     fn every_manual_export_drops_the_github_token() {
         let tmp = tempfile::tempdir().unwrap();

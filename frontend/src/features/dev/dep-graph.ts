@@ -162,8 +162,10 @@ export function stripComments(src: string): string {
  * resurrects a dependency somebody deliberately removed — the graph then says a module is
  * still reachable when nothing reaches it.
  *
- * Covers the four forms this codebase uses: `import x from`, bare `import 'x'`,
- * `export … from`, and dynamic `import('x')`. `require()` is not one of them and is not
+ * Covers the five forms this codebase uses: `import x from`, bare `import 'x'`,
+ * `export … from`, dynamic `import('x')`, and `new URL('./x.js', import.meta.url)` — how a
+ * WORKER is started (regex-budget.ts → regex-worker.ts): the page loads that module as surely
+ * as an import would, and without the edge it read as dead code. `require()` is not one of them and is not
  * matched, so a stray require shows up as a module with no dependencies rather than as a
  * confident wrong edge.
  */
@@ -180,6 +182,7 @@ export function parseImports(src: string): string[] {
     for (const m of text.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) push(m[1]);
     for (const m of text.matchAll(/\bexport\s+[^'"();]*?\bfrom\s*['"]([^'"]+)['"]/g)) push(m[1]);
     for (const m of text.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) push(m[1]);
+    for (const m of text.matchAll(/\bnew\s+URL\s*\(\s*['"](\.[^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g)) push(m[1]);
     return [...new Set(out)];
 }
 

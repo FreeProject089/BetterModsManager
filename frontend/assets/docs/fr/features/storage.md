@@ -5,7 +5,7 @@
 
 Ouvre-le depuis **Réglages → Stockage → Ouvrir le Gestionnaire de Stockage**. Il répond à trois
 questions : combien d'espace il reste, à quelle vitesse va chaque disque, et jusqu'où BMM a le droit
-de solliciter tes disques.
+de solliciter tes disques. Il est organisé en [onglets](#tabs).
 
 
 *Enregistrement provisoire — un clip ciblé de cet écran le remplacera.*
@@ -27,23 +27,86 @@ secondes après le démarrage. Il ne mesure plus chaque disque à chaque lanceme
 sauf si tu veux régler les limites à la main.
 :::
 
-## L'intensité de travail de BMM
+<a id="tabs"></a>
+## Les onglets
+Le Gestionnaire de Stockage est découpé en cinq onglets. La ligne du haut, au-dessus des onglets, dit
+toujours quel preset est en vigueur et si un jeu tourne. Chaque onglet s'ouvre sur une phrase qui dit
+à quoi il sert et un lien **En savoir plus** vers la partie correspondante de cette documentation ;
+chaque réglage a une infobulle. La première fois, une courte carte explique la fenêtre ; **Compris**
+la masque pour de bon.
 
-La carte en haut du Gestionnaire de Stockage, c'est le
-[gouverneur de ressources](doc-page:how-it-works/resources) : l'endroit unique qui décide combien
-d'opérations lourdes tournent en même temps, sur combien de threads, et à quelle vitesse elles
-peuvent écrire.
-
-| Partie de la carte | Ce qu'elle fait |
+| Onglet | À quoi il sert |
 |---|---|
-| **Silencieux · Équilibré · Tout pour BMM** | Le preset. **Équilibré** est celui par défaut, et c'est exactement le fonctionnement de toujours. **Silencieux** fait une chose à la fois, doucement, pour quand tu joues. **Tout pour BMM** va aussi vite que les disques le permettent |
-| **En vigueur** | Le preset réellement appliqué en ce moment, que le mode jeu ou une tâche planifiée peuvent changer un temps |
-| **CPU de BMM · CPU du PC · Lecture · Écriture** | Des courbes en direct, une fois par seconde, seulement tant que la carte est à l'écran |
-| **Mode jeu** | **Le détecter**, **Forcer**, **Arrêter**. Tant qu'il est actif, BMM travaille comme en Silencieux, et les empreintes et la maintenance de fond attendent qu'il se termine. **Le détecter** cherche toutes les 5 secondes un jeu lancé depuis le dossier de jeu d'un de tes profils, un jeu que tu listes sous **Jeux surveillés par BMM**, ou tout jeu en plein écran exclusif, et termine le mode jeu 30 secondes après sa fermeture ([comment](doc-page:how-it-works/resources#comment-marche-la-detection)) |
-| **Ce que fait BMM** | Chaque opération en cours, suspendue ou en attente, avec **Suspendre**, **Reprendre** et **Annuler**, plus **Tout suspendre** et **Tout reprendre** |
-| **Avancé : par disque et par opération** | Des règles pour un disque et une sorte de travail (Mo/s, en même temps, tampon, priorité). Une case vide hérite, et son texte gris dit la valeur en vigueur et d'où elle vient |
+| **Disques et espace** | Le remplissage de chaque disque, les [profils](doc-page:features/profiles) qui y vivent, les alertes d'espace faible, l'**auto-calibration**, et une **limite de vitesse** par disque avec son benchmark ([plus bas](#per-disk-cards)) |
+| **Intensité de travail** | Quelle part de ton PC BMM peut utiliser pour le travail lourd : les trois presets, chacun avec ce qu'il change pour toi, et **Smart I/O** |
+| **Mode jeu** | Si BMM s'efface pendant que tu joues, et les jeux qu'il surveille |
+| **Activité en direct** | Quatre courbes en direct et tout ce que fait BMM, avec **Suspendre**, **Reprendre** et **Annuler** |
+| **Règles par disque** | Des règles fines, facultatives, pour un disque et une sorte de travail, avec une légende de chaque colonne |
 
-!!! warning "Lis sur quoi agit chaque colonne avancée"
+L'onglet utilisé en dernier s'ouvre la fois suivante.
+
+### Intensité de travail : les presets
+
+L'onglet, c'est le [gouverneur de ressources](doc-page:how-it-works/resources) : l'endroit unique qui
+décide combien d'opérations lourdes tournent en même temps, sur combien de threads, et à quelle
+vitesse elles peuvent écrire.
+
+| Preset | Ce que ça change pour toi |
+|---|---|
+| **Silencieux** | BMM se fait oublier pendant que tu joues ou travailles. Les déploiements et installations prennent plus de temps |
+| **Équilibré** (par défaut, recommandé) | Le BMM habituel : rapide, et ton PC reste utilisable. Exactement le fonctionnement de toujours |
+| **Tout pour BMM** | Tout finit aussi vite que tes disques le permettent. Ton PC peut sembler lent pendant ce temps |
+
+**En vigueur** dit le preset appliqué en ce moment : le mode jeu ou une tâche planifiée peuvent en
+changer un temps, et ton choix revient tout seul ensuite. Les chiffres exacts de chaque preset sont
+dans [Les presets](doc-page:how-it-works/resources#presets).
+
+### Mode jeu
+
+**Le détecter** (par défaut), **Forcer**, **Arrêter**. L'onglet dit en clair ce qui se passe : quel
+jeu a allumé le mode jeu (*Un jeu tourne : SkyrimSE.exe*), où BMM l'a trouvé (*dans le dossier de
+jeu de ton profil « Skyrim SE »*, *dans ta liste de jeux*, *en plein écran exclusif*), depuis combien
+de temps, ce qui est retenu en ce moment et, une fois le jeu fermé, dans combien de temps BMM
+revient à la normale.
+
+- **Tout suspendre jusqu'à ce que je quitte le jeu** retient toutes les opérations, déploiements
+  compris, et les relâche toutes seules quand le mode jeu se termine (ou quand tu appuies sur
+  **Tout reprendre**).
+- **Pendant que tu joues** : coche ce qui attend que tu arrêtes de jouer : vérifications de
+  fichiers (empreintes), maintenance et benchmarks de disque (cochés par défaut), téléchargements,
+  analyses de dossiers, décompression et compression d'archives, traitement d'images. Activer des
+  mods, installer et sauvegarder sont ralentis, jamais retenus.
+- **Retour à la normale après** : le délai après la fermeture du jeu, de 5 à 600 secondes (30 par
+  défaut).
+- **Me prévenir quand le mode jeu s'allume ou s'éteint** : un avis à chaque changement automatique
+  (activé par défaut).
+- **Compter aussi toute fenêtre plein écran** : attrape les jeux en fenêtre sans bordure qui ne sont
+  dans aucune liste, mais une vidéo plein écran compte aussi, d'où le réglage désactivé par défaut.
+- **Jeux surveillés par BMM** : le dossier de jeu de chaque profil est surveillé tout seul, chacun
+  avec un interrupteur pour l'ignorer (un disque entier n'est jamais surveillé) ; en dessous, les
+  programmes que tu as ajoutés, chacun avec un bouton de retrait, ajoutés par leur nom, avec
+  **Parcourir…** (le `.exe` du jeu) ou avec **Choisir un programme lancé…** (lance le jeu, puis
+  choisis-le dans la liste).
+
+Les détails et le coût d'un coup d'œil sont dans
+[Comment marche la détection](doc-page:how-it-works/resources#comment-marche-la-detection).
+
+### Activité en direct
+
+Quatre courbes (le CPU de BMM, le CPU de tout le PC, les lectures et écritures de BMM en Mo/s) et
+chaque opération en cours, suspendue ou en attente, avec **Suspendre**, **Reprendre** et **Annuler**,
+plus **Tout suspendre** et **Tout reprendre**. Les valeurs sont mesurées une fois par seconde, et
+seulement quand ça sert : le Gestionnaire de Stockage est ouvert, un des onglets **Intensité de
+travail**, **Mode jeu** ou **Activité en direct** est affiché, et la fenêtre de BMM n'est pas cachée.
+Sinon BMM ne se mesure pas du tout.
+
+### Règles par disque
+
+Des règles pour un disque et une sorte de travail (Mo/s, en même temps, tampon, priorité). Une
+légende au-dessus du tableau dit ce que fait chaque colonne. Une case vide hérite, et son texte gris
+dit la valeur en vigueur et d'où elle vient ; une case grisée ne s'applique pas à son opération.
+
+!!! warning "Lis sur quoi agit chaque colonne"
 
     Les Mo/s agissent sur les copies de BMM, sur l'extraction, sur les zip que BMM écrit et sur les
     téléchargements de dépôt et de modpack ; le tampon et une priorité *basse* agissent sur les
@@ -52,8 +115,13 @@ peuvent écrire.
     depuis un lien n'est pas encore cadencé. Les détails sont sur
     [la page du gouverneur](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
-## Cartes par disque
+!!! note "Les graphismes ont déménagé"
 
+    Quelle carte graphique dessine la fenêtre de BMM est un réglage de toute l'application :
+    **Réglages → Graphismes et affichage** ([détails](doc-page:features/settings#graphics)).
+
+<a id="per-disk-cards"></a>
+## Cartes par disque
 Chaque disque du système a une carte :
 
 | Élément | Ce qu'il t'indique |

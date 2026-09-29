@@ -116,6 +116,10 @@ pub struct HandoffResult {
     /// already ships and ignores anything else, so the worst a tampered handoff can do is
     /// name a preset that does not exist.
     pub csp_preset: Option<String>,
+    /// The installer's "Fonctionnalités IA optionnelles (Laya)" box. Unlike the JS-side
+    /// preferences above it is APPLIED here (ai-settings.json, read by Rust), and surfaced only
+    /// so the frontend can mention it. `None` = not asked → AI stays at its default (off).
+    pub ai_features: Option<bool>,
 }
 
 #[tauri::command]
@@ -154,6 +158,12 @@ pub fn consume_installer_handoff(
         res = apply_settings(&parsed.settings, &mut data.settings);
     }
     let _ = state.save();
+
+    // Optional AI (off unless the box was ticked). Ticked turns the master switch on with no
+    // provider chosen, so still nothing is sent until the user picks one in Settings.
+    if let Some(on) = res.ai_features {
+        let _ = crate::commands::ai_core::apply_installer_choice(&dir, on);
+    }
 
     // Pre-import. The installer drops bundled content under <install>/presets/.
     let want = |k: &str| {
@@ -336,6 +346,9 @@ fn apply_settings(
         })
         .map(str::to_string);
 
+    // Optional AI features: a plain bool, applied by the caller to ai-settings.json.
+    res.ai_features = s.get("ai_features").and_then(|v| v.as_bool());
+
     let privacy = s.get("privacy_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
     let tos = s.get("tos_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
     res.legal_accepted = privacy && tos;
@@ -458,6 +471,25 @@ mod tests {
         assert!(!is_own_install_dir(&other.path().to_string_lossy(), Some(own.path())));
         assert!(!is_own_install_dir(r"\\attacker\share", Some(own.path())));
         assert!(!is_own_install_dir(&own.path().to_string_lossy(), None));
+    }
+
+    /// The installer's AI box: absent = not asked (AI stays off); present = surfaced for the
+    /// caller, which writes ai-settings.json.
+    #[test]
+    fn ai_features_box_is_surfaced_and_absent_means_off() {
+        let mut settings = crate::state::AppSettings::default();
+        let file: HandoffFile = serde_json::from_str(HANDOFF).unwrap();
+        assert_eq!(apply_settings(&file.settings, &mut settings).ai_features, None);
+        for v in [true, false] {
+            let json = format!(r#"{{ "source":"betterinstaller", "settings": {{ "ai_features": {} }} }}"#, v);
+            let file: HandoffFile = serde_json::from_str(&json).unwrap();
+            assert_eq!(apply_settings(&file.settings, &mut settings).ai_features, Some(v));
+        }
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!crate::commands::ai_core::load_settings(dir.path()).enabled);
+        crate::commands::ai_core::apply_installer_choice(dir.path(), true).unwrap();
+        let s = crate::commands::ai_core::load_settings(dir.path());
+        assert!(s.enabled && s.classifier == "off" && s.generative == "off");
     }
 
     #[test]

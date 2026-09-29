@@ -132,8 +132,9 @@ d'une seule opération interrompue, jamais de deux inachevées entrelacées.
 ## L'ordre d'activation, c'est toute l'histoire des conflits
 
 Parce que `active_mods` est une liste **ordonnée** et que le déploiement la parcourt dans l'ordre, le mod
-activé en dernier gagne tout fichier partagé. C'est tout le modèle de résolution de conflits — il n'y a
-pas d'arbre de priorités. Voir [Conflits](doc-page:how-it-works/conflicts).
+activé en dernier gagne tout fichier partagé — tant que tu ne le réordonnes pas dans l'[ordre
+d'activation](doc-page:how-it-works/load-order). C'est tout le modèle de résolution de conflits — il n'y a pas d'arbre de
+priorités. Voir [Conflits](doc-page:how-it-works/conflicts).
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Système de profils**, et le tutoriel **Profils**.

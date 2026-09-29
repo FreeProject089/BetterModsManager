@@ -18,6 +18,7 @@ import {
     isContrastEnforced, setContrastEnforced,
 } from './theme-engine.js';
 import type { BmmTheme, CustomElement, HtmlSwap } from './theme-engine.js';
+import { learnMore } from '../../core/learn-more.js';
 
 // ── Icons (lucide outline set, consistent across the editor) ────────────────────
 const ICON = {
@@ -327,6 +328,7 @@ function buildPanel(): void {
             <div class="bte-logo">${ICON.palette(17)}</div>
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
+                ${learnMore('making-themes', { compact: true, className: 'bte-tool' })}
                 <button class="bte-tool" id="bte-dock" data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg></button>
                 <button class="bte-tool" id="bte-pick-token" data-tooltip="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
                 <button class="bte-tool" id="bte-reset" data-tooltip="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>

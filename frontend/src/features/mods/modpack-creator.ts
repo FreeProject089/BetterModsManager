@@ -600,6 +600,16 @@ async function _openEditor(container, pack) {
     };
 }
 
+/** The order controls' styles live with the activation-order view (css/load-order.css). */
+function _ensureOrderCss() {
+    if (document.getElementById('load-order-css')) return;
+    const link = document.createElement('link');
+    link.id = 'load-order-css';
+    link.rel = 'stylesheet';
+    link.href = 'css/load-order.css';
+    document.head.appendChild(link);
+}
+
 function _renderPackModList(listEl) {
     listEl.innerHTML = '';
     if (_packMods.length === 0) {
@@ -615,6 +625,14 @@ function _renderPackModList(listEl) {
         return;
     }
 
+    // The pack's order is its activation order: applied, these mods go on top of the
+    // profile's order in this sequence (the last one wins a file they share).
+    _ensureOrderCss();
+    const hint = document.createElement('p');
+    hint.className = 'mp-order-hint';
+    hint.textContent = t('modpack.orderHint');
+    listEl.appendChild(hint);
+
     _packMods.forEach((pm, idx) => {
         const card = document.createElement('div');
         card.className = 'mod-item-card';
@@ -624,6 +642,11 @@ function _renderPackModList(listEl) {
 
         card.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px;">
+                <span class="mp-order-btns">
+                    <button type="button" class="btn btn-icon btn-ghost mp-up" title="${escHtml(t('order.moveUp'))}" aria-label="${escHtml(t('order.moveUp'))}" ${idx === 0 ? 'disabled' : ''}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6"/></svg></button>
+                    <button type="button" class="btn btn-icon btn-ghost mp-down" title="${escHtml(t('order.moveDown'))}" aria-label="${escHtml(t('order.moveDown'))}" ${idx === _packMods.length - 1 ? 'disabled' : ''}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+                </span>
+                <span class="mp-order-pos" title="${escHtml(t('order.position').replace('{n}', String(idx + 1)))}">${idx + 1}</span>
                 <div style="flex:1; min-width:0;">
                     <div style="font-size:13px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(pm.mod_name)}</div>
                     <div style="font-size:10px; color:var(--text-muted); display:flex; gap:6px;">
@@ -669,6 +692,15 @@ function _renderPackModList(listEl) {
             _packMods.splice(idx, 1);
             _renderPackModList(listEl);
         };
+        // Reorder: the pack's list IS the order its mods are applied in.
+        const swap = (j: number) => {
+            if (j < 0 || j >= _packMods.length) return;
+            [_packMods[idx], _packMods[j]] = [_packMods[j], _packMods[idx]];
+            _renderPackModList(listEl);
+            (listEl.querySelectorAll('.mod-item-card')[j]?.querySelector(j < idx ? '.mp-up' : '.mp-down') as HTMLElement | null)?.focus();
+        };
+        card.querySelector('.mp-up').onclick = () => swap(idx - 1);
+        card.querySelector('.mp-down').onclick = () => swap(idx + 1);
 
         const dlIn = card.querySelector('.dl-input');
         dlIn.oninput = () => { _packMods[idx].download_link = dlIn.value.trim(); };
@@ -1330,9 +1362,13 @@ async function _executeApplyModpack(container, pack, isApplying) {
         }
     };
 
+    // The pack's own order, as local ids: once its mods are on, they go on top of the profile's
+    // activation order in this sequence (mod_order_place), so the pack wins as it was built.
+    const packOrder: string[] = [];
     for (const mref of pack.mods) {
         // Find local mod by ID or SHA-256
         const local = _findLocalByMref(mref, shaIndex);
+        if (local) packOrder.push(local.id);
         if (local) {
             if (isApplying && !local.enabled) {
                 await toggle(local.id, true, local.name || local.id);
@@ -1365,6 +1401,10 @@ async function _executeApplyModpack(container, pack, isApplying) {
         toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
     } else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
+    }
+    if (isApplying && packOrder.length > 1) {
+        const { placeOnTop } = await import('../profiles/load-order.js');
+        await placeOnTop(packOrder, null, toast);
     }
     if (isApplying) dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
 

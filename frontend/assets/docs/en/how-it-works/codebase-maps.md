@@ -38,7 +38,7 @@ docs/docs-hub.ts
 ### The gate
 
 `node scripts/dep-graph.mjs --check` runs in `npm run ci`. It is a **ratchet against a
-committed baseline**, not a demand for zero: this codebase has 95 cycles and 6 unreachable
+committed baseline**, not a demand for zero: this codebase has 94 cycles and 6 unreachable
 modules today, and a gate insisting on zero on day one is a gate somebody switches off in
 week two. It fails when a number *grows*, and says so when it shrinks.
 
@@ -55,10 +55,10 @@ A typo compiles perfectly and fails at runtime as a rejected promise.
 `check-invoke-names.mjs` already gates one direction — every `invoke()` name must reach a
 registered command. This is the rest of the shape:
 
-- **510** commands registered, **426** called from the frontend, **87** modules calling at
-  least one. `features/settings/scheduler.ts` alone touches 101.
+- **529** commands registered, **470** called from the frontend, **102** modules calling at
+  least one. `features/settings/scheduler.ts` alone touches 114.
 - Per Rust module, how much of it the UI actually uses.
-- **57 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
+- **59 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
   the MCP server, the CLI and `bmm://` deeplinks all reach commands the UI never touches.
   This tool cannot tell an MCP-only command from a forgotten one and does not pretend to.
 - **Dynamic invokes** — `invoke(name)` rather than `invoke('name')`. There are 38, and the

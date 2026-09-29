@@ -43,6 +43,7 @@ export function pausedAllText(p: PausedAll, t: (k: string) => string): string {
     const name = rest.join(':');
     let who: string;
     if (by === 'user') who = t('res.pausedBy.user') || 'Paused by you, until you resume it.';
+    else if (by === 'game') who = t('stm.game.pausedByGame') || 'Paused by you until you quit the game: it resumes by itself when game mode ends.';
     else if (kind === 'task' && name) who = (t('res.pausedBy.task') || 'Paused by the task “{n}”.').replace('{n}', name);
     else if (kind === 'plugin' && name) who = (t('res.pausedBy.plugin') || 'Paused by the plugin {n}.').replace('{n}', name);
     else if (by === 'api') who = t('res.pausedBy.api') || 'Paused through the local API.';
@@ -50,4 +51,112 @@ export function pausedAllText(p: PausedAll, t: (k: string) => string): string {
     const left = p.remaining_ms == null ? ''
         : ' ' + (t('res.pausedLeft') || 'Resumes by itself in {m} min.').replace('{m}', String(Math.max(1, Math.ceil(p.remaining_ms / 60000))));
     return `${t('res.pausedAll') || 'Everything is paused: deploys and installs wait until it is resumed.'} ${who}${left}`;
+}
+
+/** What WebGL says draws the window, in words (the Storage Manager's Graphics tab). */
+export interface RendererInfo { name: string; api: string; software: boolean; raw: string; }
+
+/** ANGLE on Windows reports "ANGLE (AMD, AMD Radeon RX 7800 XT (0x0000747E) Direct3D11 vs_5_0
+ *  ps_5_0, D3D11)": the card is the second part, without its PCI id and shader models. An empty
+ *  string means no WebGL context at all, which only happens when nothing draws with a GPU. */
+export function describeRenderer(raw: string): RendererInfo {
+    const s = String(raw || '').trim();
+    const software = !s || /swiftshader|llvmpipe|softpipe|basic render|software rasteri|\bwarp\b/i.test(s);
+    let name = s;
+    let api = '';
+    const m = /^ANGLE \((.*)\)$/.exec(s);
+    if (m) {
+        const inner = m[1];
+        const parts = inner.split(', ');
+        const dev = parts.length >= 2 ? parts[1] : parts[0];
+        api = /Direct3D11|D3D11/.test(inner) ? 'Direct3D 11' : /Direct3D9|D3D9/.test(inner) ? 'Direct3D 9'
+            : /Vulkan/i.test(inner) ? 'Vulkan' : /OpenGL/i.test(inner) ? 'OpenGL' : '';
+        name = dev.replace(/\s*\(0x[0-9a-f]+\)/gi, '').replace(/\s+(Direct3D\S*|vs_\d\S*|OpenGL.*|Vulkan.*)(\s.*)?$/i, '').trim();
+    }
+    return { name: name || s, api, software, raw: s };
+}
+
+/** What to tell the user about the cards: how many real ones the PC has, and whether the window
+ *  is drawn by the processor although it has one and the user did not turn the GPU off (a
+ *  blocklisted or crashed driver, which an update usually fixes). */
+export function gpuAdvice(v: { renderer: RendererInfo; gpus: { name: string; software?: boolean }[]; activeMode: string }): { cards: number; softwareFallback: boolean } {
+    const cards = (v.gpus || []).filter((g) => !g.software).length;
+    return { cards, softwareFallback: v.renderer.software && cards > 0 && v.activeMode !== 'off' };
+}
+
+// ── Game mode, in words (the Game mode tab) ──────────────────────────────────────────────────
+
+export type GameSource = 'profile_folder' | 'listed' | 'exclusive_fullscreen' | 'fullscreen_window' | 'forced';
+export interface GameTrigger { exe: string; name: string; source: GameSource; dir?: string | null; }
+/** governor/game_mode.rs `GameView`. */
+export interface GameView {
+    active: boolean; manual: 'auto' | 'on' | 'off'; trigger: GameTrigger | null;
+    since_ms: number | null; leaving_in_ms: number | null;
+    watched_dirs: string[]; paused_kinds: string[]; leave_after_secs: number;
+}
+/** governor/config.rs `GameOptions`. */
+export interface GameOptions { pause: string[]; leave_after_secs: number; notify: boolean; fullscreen_window: boolean; ignored_dirs: string[]; hold_scheduler?: boolean; }
+
+type T = (k: string) => string;
+/** t() with the English text on a miss (t() answers a miss with the key, or '' in the tests). */
+const say = (t: T, k: string, en: string): string => { const v = t(k); return v && v !== k ? v : en; };
+
+/** A folder as game mode compares it (config.rs `norm_game_dir`): lower case, `\`, one trailing `\`. */
+export function normGameDir(p: string): string {
+    let s = String(p || '').trim().replace(/\//g, '\\').toLowerCase();
+    while (s.endsWith('\\\\')) s = s.slice(0, -1);
+    return s.endsWith('\\') ? s : s + '\\';
+}
+
+/** A drive root (`c:\`, `\`, `\\server\share\`): never watched, a whole drive is not a game. */
+export function isWholeDrive(dir: string): boolean {
+    if (dir === '\\' || /^[a-z]:\\$/i.test(dir)) return true;
+    if (dir.startsWith('\\\\')) return dir.slice(2).replace(/\\+$/, '').split('\\').length <= 2;
+    return false;
+}
+
+/** "4 s", "2 min", "1 h 5 min". */
+export function durationText(ms: number, t: T): string {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return say(t, 'stm.dur.s', '{n} s').replace('{n}', String(s));
+    const m = Math.floor(s / 60);
+    if (m < 60) return say(t, 'stm.dur.min', '{n} min').replace('{n}', String(m));
+    return say(t, 'stm.dur.h', '{h} h {m} min').replace('{h}', String(Math.floor(m / 60))).replace('{m}', String(m % 60));
+}
+
+/** The status line's headline. */
+export function gameHeadline(v: GameView, t: T): string {
+    if (v.manual === 'off') return say(t, 'stm.game.hOff', 'Game mode is off: BMM never steps aside');
+    if (v.manual === 'on') return say(t, 'stm.game.hForced', 'Game mode is forced on');
+    if (!v.active || !v.trigger) return say(t, 'stm.game.hNone', 'No game detected');
+    const src = v.trigger.source;
+    if (src === 'exclusive_fullscreen') return say(t, 'stm.game.hFullscreen', 'A game is running in full screen');
+    return say(t, 'stm.game.hGame', 'A game is running: {g}').replace('{g}', v.trigger.name || '?');
+}
+
+/** Where the game was found, since when, and the cooldown left once it closed. */
+export function gameDetail(v: GameView, profiles: { name: string; game_path: string }[], t: T): string {
+    if (!v.active || !v.trigger || v.manual !== 'auto') return '';
+    const tr = v.trigger;
+    let where: string;
+    if (tr.source === 'profile_folder') {
+        const p = profiles.find((x) => x.game_path && normGameDir(x.game_path) === tr.dir);
+        where = p ? say(t, 'stm.game.fromProfile', 'Found in the game folder of your profile “{p}”.').replace('{p}', p.name)
+            : say(t, 'stm.game.fromProfileAny', 'Found in one of your profiles\' game folders.');
+    } else if (tr.source === 'listed') where = say(t, 'stm.game.fromList', 'It is in your list of games.');
+    else if (tr.source === 'exclusive_fullscreen') where = say(t, 'stm.game.fromExclusive', 'Windows says a program runs in exclusive full screen.');
+    else where = say(t, 'stm.game.fromWindow', 'Its window covers the whole screen.');
+    const parts = [where];
+    if (v.since_ms != null) parts.push(say(t, 'stm.game.since', 'On for {d}.').replace('{d}', durationText(v.since_ms, t)));
+    if (v.leaving_in_ms != null) parts.push(say(t, 'stm.game.leaving', 'The game closed: back to normal in {d}.').replace('{d}', durationText(v.leaving_in_ms, t)));
+    return parts.join(' ');
+}
+
+/** Each profile's game folder, and whether it is watched (a profile with none is left out). */
+export function profileFolders(profiles: { name: string; game_path: string }[], ignored: string[]): { name: string; path: string; dir: string; ignored: boolean; wholeDrive: boolean }[] {
+    const ign = new Set((ignored || []).map(normGameDir));
+    return (profiles || []).filter((p) => String(p.game_path || '').trim()).map((p) => {
+        const dir = normGameDir(p.game_path);
+        return { name: p.name, path: p.game_path, dir, ignored: ign.has(dir), wholeDrive: isWholeDrive(dir) };
+    });
 }

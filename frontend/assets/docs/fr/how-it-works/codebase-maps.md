@@ -40,7 +40,7 @@ docs/docs-hub.ts
 ### La barrière
 
 `node scripts/dep-graph.mjs --check` tourne dans `npm run ci`. C'est un **cliquet contre une
-référence versionnée**, pas une exigence de zéro : ce code a aujourd'hui 95 cycles et 6
+référence versionnée**, pas une exigence de zéro : ce code a aujourd'hui 94 cycles et 6
 modules injoignables, et une barrière qui exige zéro dès le premier jour est une barrière
 que quelqu'un désactive la deuxième semaine. Elle échoue quand un nombre *augmente*, et le
 signale quand il diminue.
@@ -58,10 +58,10 @@ frappe compile parfaitement et échoue à l'exécution en promesse rejetée.
 `check-invoke-names.mjs` garde déjà un sens — tout nom passé à `invoke()` doit atteindre une
 commande enregistrée. Voici le reste de la forme :
 
-- **510** commandes enregistrées, **426** appelées depuis le frontend, **87** modules qui en
-  appellent au moins une. `features/settings/scheduler.ts` en touche 101 à lui seul.
+- **529** commandes enregistrées, **470** appelées depuis le frontend, **102** modules qui en
+  appellent au moins une. `features/settings/scheduler.ts` en touche 114 à lui seul.
 - Par module Rust, la part réellement utilisée par l'interface.
-- **57 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
+- **59 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
   « inutilisées » : le serveur MCP, la CLI et les deeplinks `bmm://` atteignent des commandes
   que l'UI ne touche jamais. L'outil ne sait pas distinguer une commande réservée au MCP
   d'une commande oubliée, et ne prétend pas le savoir.

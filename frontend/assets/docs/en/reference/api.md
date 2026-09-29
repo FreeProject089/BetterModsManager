@@ -372,7 +372,7 @@ Two shapes sit outside that rule:
 | `DELETE` | `/api/hook` | `hooks.write` | — · forget every ring. Answers how many were dropped | |
 | `DELETE` | `/api/hook/:name` | `hooks.write` | — · forget one name | |
 | `POST` | `/api/content-id` | token | `kind`*, `doc`* · the id that says what a document IS rather than what this machine calls it. Takes the document, so it discloses nothing this install holds — which is why it is token-level and not behind a per-kind read scope |
-| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
+| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId`, `reapply` · must be the same set of mods that are active; re-copies the files that change hands (`reapply: true`: every contested file) | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · links a mod to the repos that can update it | |
@@ -535,8 +535,8 @@ through. A note goes stale in silence; a check does not.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the 73 tools an AI client can call, and which ones need BMM open
-- [CLI reference](doc-page:reference/cli) — the same binary’s 66 subcommands, for a terminal or a `.bat`
+- [MCP server reference](doc-page:reference/mcp) — the 78 tools an AI client can call, and which ones need BMM open
+- [CLI reference](doc-page:reference/cli) — the same binary’s 70 subcommands, for a terminal or a `.bat`
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

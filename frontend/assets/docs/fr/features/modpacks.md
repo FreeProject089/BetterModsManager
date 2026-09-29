@@ -48,6 +48,14 @@ souvent ; laisse-la coupée quand la justesse compte.
     machine ; garde `Manuel`/`Aucune` pour les packs perso où tu gères les dépendances
     toi-même.
 
+## L'ordre dans un pack
+
+La liste d'un pack est un **ordre** : les flèches sur chaque mod de l'éditeur le montent ou le
+descendent. Quand le pack est appliqué, ses mods sont activés puis placés **en haut** de l'ordre
+d'activation du profil, dans la séquence du pack, en un seul bloc — là où deux mods du pack
+partagent un fichier, celui plus bas dans le pack gagne, et le pack gagne ce qu'il partage avec les
+mods que le profil avait déjà. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
+
 ## Le partager : tout repose sur le hash
 
 À l'export, BMM n'envoie pas les mods — il envoie une **signature** :

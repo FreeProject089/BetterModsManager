@@ -69,10 +69,11 @@ Tout ce qui précède la première instruction.
 | `every 30m` · `every 2h` | un intervalle. Un nombre entier d'heures devient un déclencheur horaire |
 | `once at "2026-01-01T09:00"` | un instant unique |
 | `on app start` | une fois par lancement de BMM |
+| `on feed "https://…/feed.xml" every 15m` | quand ce flux RSS ou Atom a un nouvel élément (au plus toutes les 5 minutes) ; ajoutez `lan` après pour un flux sur votre réseau local. Nécessite `allow network` |
 | `manual` | seulement sur le bouton Exécuter, ou via un deeplink |
 | `describe "…"` | la description affichée dans la liste |
 | `disabled` | garder la tâche sans l'exécuter |
-| `allow command, script, deeplink, stopProcess` | ce que la tâche peut faire hors de BMM (aussi `delete`, `resources`, `tasks`) |
+| `allow command, script, deeplink, stopProcess` | ce que la tâche peut faire hors de BMM (aussi `delete`, `resources`, `tasks`, `network`) |
 
 `allow` correspond aux quatre mêmes permissions que les cases de l'éditeur de briques, et
 elles sont exigées pour les mêmes étapes. Une tâche qui lance un script sans `allow script`

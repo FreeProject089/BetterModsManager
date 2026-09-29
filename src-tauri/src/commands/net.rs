@@ -121,6 +121,11 @@ pub async fn fetch_remote_json(
 pub struct HttpReply {
     pub status: u16,
     pub body: String,
+    /// The response's `ETag`, when it sent one. Lets a caller cache a feed and ask again with
+    /// `If-None-Match` (the launch deck's announcements do); absent from the JSON otherwise,
+    /// so the reply a scheduler step sees is unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
 }
 
 /// A general HTTP request for scheduler automations.
@@ -173,6 +178,11 @@ pub async fn http_request(
 
     let resp = req.send().await.map_err(|e| e.to_string())?;
     let status = resp.status().as_u16();
+    let etag = resp
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.chars().take(256).collect::<String>());
     let text = resp.text().await.map_err(|e| e.to_string())?;
     const MAX: usize = 1_048_576;
     let body = if text.len() > MAX {
@@ -183,7 +193,7 @@ pub async fn http_request(
     } else {
         text
     };
-    Ok(HttpReply { status, body })
+    Ok(HttpReply { status, body, etag })
 }
 
 #[cfg(test)]
@@ -317,6 +327,33 @@ mod http_request_tests {
         .await
         .expect_err("file:// must be refused");
         assert!(err.contains("http(s)"), "the reason is stated: {err}");
+    }
+
+    #[tokio::test]
+    async fn the_etag_comes_back_and_if_none_match_goes_out() {
+        // The launch deck caches BetterCommunity's announcement feed and asks again with
+        // If-None-Match. The status line carries the extra header: one_shot writes it verbatim.
+        let (port, seen) = one_shot("304 Not Modified\r\nETag: \"feed-v3\"", "");
+        let mut h = std::collections::HashMap::new();
+        h.insert("If-None-Match".to_string(), "\"feed-v2\"".to_string());
+        let r = http_request(format!("http://127.0.0.1:{port}/api/bmm/launch"), "GET".into(), h, None, Some(5_000))
+            .await
+            .expect("a 304 is an answer");
+        assert_eq!(r.status, 304);
+        assert_eq!(r.etag.as_deref(), Some("\"feed-v3\""));
+        let req = seen.join().unwrap().to_ascii_lowercase();
+        assert!(req.contains("if-none-match: \"feed-v2\""), "the validator is sent: {req}");
+    }
+
+    #[tokio::test]
+    async fn no_etag_means_no_etag_field() {
+        let (port, _seen) = one_shot("200 OK", "{}");
+        let r = http_request(format!("http://127.0.0.1:{port}/x"), "GET".into(), std::collections::HashMap::new(), None, Some(5_000))
+            .await
+            .expect("the request should succeed");
+        assert!(r.etag.is_none());
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(!json.contains("etag"), "absent from the JSON, so scheduler replies are unchanged: {json}");
     }
 
     #[tokio::test]

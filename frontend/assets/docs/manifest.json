@@ -20,9 +20,11 @@
     "features/feedback",
     "features/settings",
     "features/command-palette",
+    "features/launch-deck",
     "features/launch-packs",
     "features/storage",
     "features/privacy-telemetry",
+    "features/ai",
     "features/themes",
     "features/making-themes",
     "how-it-works/index",
@@ -31,6 +33,7 @@
     "how-it-works/scanning-cache",
     "how-it-works/integrity-hashing",
     "how-it-works/conflicts",
+    "how-it-works/load-order",
     "how-it-works/dependencies",
     "how-it-works/mapper",
     "how-it-works/sync-repos",
@@ -136,7 +139,7 @@
         "en": "The Library is where every mod you own lives — installed or not, from any source.",
         "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
       },
-      "words": 628,
+      "words": 681,
       "diagrams": 0,
       "fr": true
     },
@@ -166,7 +169,7 @@
         "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
         "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
       },
-      "words": 709,
+      "words": 795,
       "diagrams": 0,
       "fr": true
     },
@@ -181,7 +184,7 @@
         "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
         "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
       },
-      "words": 413,
+      "words": 499,
       "diagrams": 0,
       "fr": true
     },
@@ -226,7 +229,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 9360,
+      "words": 10538,
       "diagrams": 0,
       "fr": true
     },
@@ -253,10 +256,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "106 actions · 40 conditions · 36 values · 8 loop sources",
-        "fr": "106 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
+        "en": "110 actions · 40 conditions · 36 values · 8 loop sources",
+        "fr": "110 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
       },
-      "words": 845,
+      "words": 847,
       "diagrams": 0,
       "fr": true
     },
@@ -331,7 +334,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 2089,
+      "words": 2412,
       "diagrams": 0,
       "fr": true
     },
@@ -348,6 +351,21 @@
       },
       "words": 742,
       "diagrams": 1,
+      "fr": true
+    },
+    {
+      "path": "features/launch-deck",
+      "section": "features",
+      "title": {
+        "en": "Start-up screen & announcements",
+        "fr": "Écran de démarrage & annonces"
+      },
+      "summary": {
+        "en": "When BMM has something to tell you at launch, it says it in one window with Previous and Next — not in a string of dialogs that open one after the other.",
+        "fr": "Quand BMM a quelque chose à vous dire au lancement, il le dit dans une seule fenêtre avec Précédent et Suivant — pas dans une série de fenêtres qui s'ouvrent…"
+      },
+      "words": 671,
+      "diagrams": 0,
       "fr": true
     },
     {
@@ -376,7 +394,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 930,
+      "words": 1506,
       "diagrams": 0,
       "fr": true
     },
@@ -393,6 +411,21 @@
       },
       "words": 600,
       "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "features/ai",
+      "section": "features",
+      "title": {
+        "en": "Optional AI (Laya)",
+        "fr": "IA optionnelle (Laya)"
+      },
+      "summary": {
+        "en": "BMM can help you fill in a mod's details and check a bug report before you send it.",
+        "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer."
+      },
+      "words": 917,
+      "diagrams": 1,
       "fr": true
     },
     {
@@ -466,7 +499,7 @@
         "en": "A profile is a small record — a name, three folders, and an ordered list of which mods are on. It stores no mod files itself.",
         "fr": "Un profil est un petit enregistrement — un nom, trois dossiers, et une liste ordonnée des mods activés. Il ne stocke aucun fichier de mod."
       },
-      "words": 773,
+      "words": 784,
       "diagrams": 3,
       "fr": true
     },
@@ -511,8 +544,23 @@
         "en": "Two mods are in conflict when they ship the same file. Some managers let one silently overwrite the other.",
         "fr": "Deux mods sont en conflit quand ils livrent le même fichier. Certains gestionnaires laissent l'un écraser l'autre en silence."
       },
-      "words": 726,
+      "words": 781,
       "diagrams": 4,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/load-order",
+      "section": "how-it-works",
+      "title": {
+        "en": "Activation order",
+        "fr": "Ordre d'activation"
+      },
+      "summary": {
+        "en": "Two active mods that ship the same file do not merge: BMM copies files, so one of them is what the game reads.",
+        "fr": "Deux mods actifs qui fournissent le même fichier ne fusionnent pas : BMM copie des fichiers, donc l'un des deux est celui que le jeu lit."
+      },
+      "words": 661,
+      "diagrams": 1,
       "fr": true
     },
     {
@@ -586,7 +634,7 @@
         "en": "Every heavy thing BMM does (enabling mods, installing, backing up originals, extracting and compressing archives, scanning, hashing, downloading, cropping…",
         "fr": "Tout ce que BMM fait de lourd (activer des mods, installer, sauvegarder les originaux, extraire et compresser des archives, analyser, calculer des empreintes,…"
       },
-      "words": 2490,
+      "words": 2921,
       "diagrams": 7,
       "fr": true
     },
@@ -796,7 +844,7 @@
         "en": "Every action BMM can perform for you, in one place. There are two catalogues — they overlap in capability but are separate systems:",
         "fr": "Toutes les actions que BMM peut exécuter pour toi, au même endroit. Il y a deux catalogues — leurs capacités se recoupent mais ce sont deux systèmes distincts :"
       },
-      "words": 1193,
+      "words": 1245,
       "diagrams": 0,
       "fr": true
     },
@@ -811,7 +859,7 @@
         "en": "BMM ships an MCP server: the same capabilities the app has, exposed as Model Context Protocol tools so an AI assistant can drive BMM directly — list your…",
         "fr": "BMM embarque un serveur MCP : les mêmes capacités que l'application, exposées comme des outils Model Context Protocol pour qu'une IA puisse piloter BMM…"
       },
-      "words": 896,
+      "words": 926,
       "diagrams": 0,
       "fr": true
     },
@@ -826,7 +874,7 @@
         "en": "The executable that serves BMM's MCP tools is also a command-line tool. Same binary, same install folder — bmm-mcp-server.exe, next to BetterModsManager.exe —…",
         "fr": "L'exécutable qui sert les outils MCP de BMM est aussi un outil en ligne de commande."
       },
-      "words": 495,
+      "words": 499,
       "diagrams": 0,
       "fr": true
     },

@@ -5,42 +5,23 @@ import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { openFeedback } from '../features/feedback/feedback-modal.js';
+import { detectPreviousCrash, markCrashSeen } from './crash-detect.js';
+/**
+ * The stand-alone crash notice (the static #modal-crash-report). At start-up the launch deck
+ * shows the same finding as one of its steps instead; this stays for the fallback path. The
+ * decision itself lives in crash-detect.ts, shared by both.
+ */
 export async function checkPreviousCrash() {
-    try {
-        const startupStatus = await invoke('get_startup_status');
-        const { getSettings, updateSettings } = await import('../core/api.js');
-        const settings = await getSettings();
-        const backendCrashed = startupStatus.backend_crashed;
-        const reports = await invoke('get_crash_reports') || [];
-        const newest = reports.length > 0 ? reports[0] : null;
-        const lastSeen = settings.last_seen_crash;
-        let shouldShow = false;
-        if (backendCrashed) {
-            shouldShow = true;
-            invoke('log_frontend_line', { line: `Startup: Crash detected by backend.` });
-        }
-        else if (newest && newest !== lastSeen) {
-            const isCrashFile = newest.split(/[\\/]/).pop().startsWith('crash_');
-            if (isCrashFile) {
-                shouldShow = true;
-            }
-        }
-        if (shouldShow) {
-            const pathEl = document.getElementById('crash-zip-path');
-            if (pathEl && newest) {
-                pathEl.textContent = newest;
-                settings.last_seen_crash = newest;
-            }
-            const modal = document.getElementById('modal-crash-report');
-            if (modal) {
-                modal.classList.add('open');
-                await updateSettings(settings);
-                invoke('log_frontend_line', { line: `Crash modal displayed for: ${newest || 'unknown'}` });
-            }
-        }
-    }
-    catch (e) {
-        console.warn('Crash check failed:', e);
+    const finding = await detectPreviousCrash();
+    if (!finding)
+        return;
+    const pathEl = document.getElementById('crash-zip-path');
+    if (pathEl && finding.newest)
+        pathEl.textContent = finding.newest;
+    const modal = document.getElementById('modal-crash-report');
+    if (modal) {
+        modal.classList.add('open');
+        await markCrashSeen(finding);
     }
 }
 export function initCrashReportUI() {

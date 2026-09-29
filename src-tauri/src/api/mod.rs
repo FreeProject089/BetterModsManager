@@ -268,6 +268,10 @@ struct ModOrderBody {
     order: Vec<String>,
     #[serde(default)]
     profile_id: Option<String>,
+    /// After saving the order, re-copy the winner of EVERY contested file, not only the ones
+    /// that changed hands: the repair when the game folder and the order may disagree.
+    #[serde(default)]
+    reapply: bool,
 }
 
 /// `POST /api/schedules/enabled` — arm or disarm one saved task.
@@ -4786,7 +4790,10 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_ord_set))
         .and_then(|body: ModOrderBody, handle: tauri::AppHandle| async move {
             let state = handle.state::<crate::state::AppState>();
-            let out = crate::commands::mod_order::mod_order_set(state, body.profile_id, body.order).await;
+            let out = match crate::commands::mod_order::mod_order_set(state.clone(), body.profile_id.clone(), body.order).await {
+                Ok(n) if body.reapply => crate::commands::mod_order::mod_order_reapply(state, body.profile_id).await.map(|m| m.max(n)),
+                other => other,
+            };
             Ok::<_, std::convert::Infallible>(match out {
                 Ok(moved) => warp::reply::with_status(
                     warp::reply::json(&serde_json::json!({ "ok": true, "moved": moved })),
