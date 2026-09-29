@@ -418,3 +418,28 @@ Rien ne change pour écrire un document. Ceci concerne ceux que vous n'avez pas 
 Tous les blocs ci-dessus s'affichent des deux côtés. La liste complète avec tous les attributs
 est dans le dépôt BCWEB à `guides/reference/CUSTOM_MARKDOWN.md`, et sur le site sous
 **Docs → Rédaction → Blocs de documentation**.
+
+La même liste, avec un bac à sable en direct et un filtre sur toutes les directives, est sur
+[bettercommunity.ch/dev/bmd](https://bettercommunity.ch/dev/bmd).
+
+## Sur npm
+
+Le moteur de rendu du site est publié sur npm : un site à vous peut afficher du B.MD exactement
+comme BetterCommunity.
+
+- [`@bettercommunity/bmd`](https://www.npmjs.com/package/@bettercommunity/bmd) : le moteur de
+  rendu, un composant React (React 18 ou 19).
+- [`@bettercommunity/bmd-editor`](https://www.npmjs.com/package/@bettercommunity/bmd-editor) :
+  l'éditeur, un paquet séparé pour qu'un site qui ne fait que lire des documents ne l'embarque
+  jamais.
+
+```bash
+npm i @bettercommunity/bmd                                # ou pnpm add / yarn add / bun add
+npm i @bettercommunity/bmd @bettercommunity/bmd-editor    # avec l'éditeur
+```
+
+Les deux ont été publiés pour la première fois le 2026-09-29 (version 3.1.0) et sont versionnés
+ensemble. Chaque version est construite et publiée par GitHub Actions avec **provenance** : la
+page npm de chaque paquet indique le run du workflow et le commit dont il est issu.
+Installation, branchement dans votre framework et modèle de sécurité :
+[bettercommunity.ch/dev/bmd](https://bettercommunity.ch/dev/bmd).

@@ -412,3 +412,26 @@ Nothing about writing a document changes. This is what happens to one you did no
 Every block above renders in both places. The complete list with every attribute is in the
 BCWEB repository at `guides/reference/CUSTOM_MARKDOWN.md`, and on the site itself under
 **Docs → Authoring → Documentation blocks**.
+
+The same list, with a live playground and a filter over every directive, is at
+[bettercommunity.ch/dev/bmd](https://bettercommunity.ch/dev/bmd).
+
+## On npm
+
+The website's renderer is published on npm, so a site of your own can render B.MD exactly as
+BetterCommunity does:
+
+- [`@bettercommunity/bmd`](https://www.npmjs.com/package/@bettercommunity/bmd): the renderer,
+  one React component (React 18 or 19).
+- [`@bettercommunity/bmd-editor`](https://www.npmjs.com/package/@bettercommunity/bmd-editor):
+  the editor, a separate package so a site that only reads documents never ships it.
+
+```bash
+npm i @bettercommunity/bmd                                # or pnpm add / yarn add / bun add
+npm i @bettercommunity/bmd @bettercommunity/bmd-editor    # with the editor
+```
+
+Both were first published on 2026-09-29 (version 3.1.0) and are versioned together. Every
+version is built and published by GitHub Actions with **provenance**: the npm page of each
+package shows the workflow run and the commit it was built from. Install, framework wiring and
+the security model are on [bettercommunity.ch/dev/bmd](https://bettercommunity.ch/dev/bmd).
