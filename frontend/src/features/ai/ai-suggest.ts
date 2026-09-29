@@ -10,6 +10,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { rowsFromSuggestions, toggleRow, buildFields, pct, providerBlock, type SuggestionRow, type AiSuggestion, type ModView } from './ai-model.js';
 import { ensureAiCss, loadAiView, sourceLabel, fieldLabel, reasonText, bcAuthArgs, openAiDocs } from './ai-shared.js';
+import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 
 interface OpenOpts {
     /** Called with the updated mod once fields were applied. */
@@ -19,6 +20,8 @@ interface OpenOpts {
 }
 
 let _overlay: HTMLElement | null = null;
+/** Where the focus was when the dialog opened: it goes back there on close. */
+let _opener: HTMLElement | null = null;
 
 function overlay(): HTMLElement {
     if (_overlay && _overlay.isConnected) return _overlay;
@@ -27,11 +30,18 @@ function overlay(): HTMLElement {
     o.id = 'modal-ai-suggest';
     (document.getElementById('app-window-outer') || document.body).appendChild(o);
     o.addEventListener('click', (e) => { if (e.target === o) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && o.classList.contains('open')) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented && o.classList.contains('open') && ownsFocus(o)) close(); });
+    // A modal dialog: Tab stays in it.
+    installFocusTrap(o, () => o.classList.contains('open') && ownsFocus(o));
     _overlay = o;
     return o;
 }
-function close(): void { _overlay?.classList.remove('open'); }
+function close(): void {
+    if (!_overlay?.classList.contains('open')) return;
+    _overlay.classList.remove('open');
+    const back = _opener; _opener = null;
+    try { if (back?.isConnected) back.focus(); } catch { /* nothing to return to */ }
+}
 
 const IC_SPARK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
 
@@ -61,6 +71,11 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
     };
 
     const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; error?: string; offline?: boolean } = {}) => {
+        // The dialog is redrawn whole on every tick of a row. What had the focus gets it back
+        // afterwards: without this, Space on a row's checkbox dropped the focus to the page
+        // behind, and a keyboard user had to Tab in from the top for every row.
+        const had = document.activeElement as HTMLElement | null;
+        const keep = had && o.contains(had) ? (had.dataset.row ? `input[data-row="${CSS.escape(had.dataset.row)}"]` : had.id ? `#${CSS.escape(had.id)}` : '') : '';
         const applicable = rows.filter((r) => r.applicable);
         const hints = rows.filter((r) => !r.applicable);
         const nChecked = rows.filter((r) => r.checked).length;
@@ -75,7 +90,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
                    ${extra.offline && !extra.sent ? `<div class="ai-muted">${escHtml(t('ai.emb.offline'))}</div>` : ''}
                    ${extra.sent ? `<details class="ai-sent"><summary>${escHtml(t('ai.suggest.sentSummary'))}</summary><pre>${escHtml(extra.sent)}</pre></details>` : ''}`;
         o.innerHTML = `
-        <div class="modal ai-modal" role="dialog" aria-labelledby="ais-title">
+        <div class="modal ai-modal" role="dialog" aria-modal="true" aria-labelledby="ais-title">
           ${head}
           <div class="modal-body ai-body">
             <p class="ai-lead">${escHtml(t('ai.suggest.lead'))}</p>
@@ -105,6 +120,9 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             });
         });
         o.querySelector('#ais-apply')?.addEventListener('click', () => void apply());
+        const again = keep ? o.querySelector<HTMLElement>(keep) : null;
+        if (again && !(again as HTMLButtonElement).disabled) again.focus();
+        else if (keep || !o.contains(document.activeElement)) o.querySelector<HTMLElement>('#ais-close')?.focus();
     };
 
     const rowHtml = (r: SuggestionRow): string => {
@@ -177,6 +195,10 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         }
     };
 
+    if (!o.classList.contains('open')) {
+        const a = document.activeElement as HTMLElement | null;
+        _opener = a && a !== document.body && !o.contains(a) ? a : null;
+    }
     o.classList.add('open');
     await run();
 }

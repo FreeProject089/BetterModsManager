@@ -88,42 +88,42 @@ export function mountGraphicsCard(): HTMLElement | null {
     card.className = 'glass-card';
     card.id = CARD_ID;
     card.innerHTML = `
-        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">${ICON}<span>${esc(tr('gfx.cardTitle', 'Graphics & display'))}</span>${learnMore('graphics', { compact: true, className: 'lm-end' })}</h3>
+        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">${ICON}<span data-i18n="gfx.cardTitle">${esc(tr('gfx.cardTitle', 'Graphics & display'))}</span>${learnMore('graphics', { compact: true, className: 'lm-end' })}</h3>
         <div class="stm stm-gfx-card">
-            <div class="stm-lead"><span>${esc(tr('stm.lead.graphics', 'Which graphics card draws BMM\'s window. It only concerns the interface, never your games or your mods.'))}</span></div>
+            <div class="stm-lead"><span data-i18n="stm.lead.graphics">${esc(tr('stm.lead.graphics', 'Which graphics card draws BMM\'s window. It only concerns the interface, never your games or your mods.'))}</span></div>
             <div class="stm-card">
                 <div class="stm-row">
                     <div class="stm-grow">
-                        <label class="stm-card-title" for="stm-gfx-mode">${esc(tr('stm.gfx.title', 'Graphics card for the interface'))}</label>
+                        <label class="stm-card-title" for="stm-gfx-mode" data-i18n="stm.gfx.title">${esc(tr('stm.gfx.title', 'Graphics card for the interface'))}</label>
                         <div class="stm-help stm-gfx-help"></div>
                     </div>
-                    <select id="stm-gfx-mode" class="input" data-tooltip="${escAttr(tr('stm.gfx.tip', 'Applies the next time BMM starts.'))}"></select>
+                    <select id="stm-gfx-mode" class="input" data-i18n-tooltip="stm.gfx.tip" data-tooltip="${escAttr(tr('stm.gfx.tip', 'Applies the next time BMM starts.'))}"></select>
                 </div>
                 <div class="stm-note stm-gfx-note" role="status" hidden>
                     <span class="stm-gfx-note-text"></span>
-                    <button type="button" class="btn btn-sm stm-gfx-restart" hidden>${esc(tr('stm.gfx.restart', 'Restart BMM now'))}</button>
+                    <button type="button" class="btn btn-sm stm-gfx-restart" data-i18n="stm.gfx.restart" hidden>${esc(tr('stm.gfx.restart', 'Restart BMM now'))}</button>
                 </div>
-                <div class="stm-card-title">${esc(tr('stm.gfx.now', 'Drawing the window right now'))}</div>
+                <div class="stm-card-title" data-i18n="stm.gfx.now">${esc(tr('stm.gfx.now', 'Drawing the window right now'))}</div>
                 <div class="stm-gfx-renderer"></div>
                 <div class="stm-help stm-gfx-cards"></div>
-                <div class="stm-alert is-warn stm-gfx-fallback" hidden>${esc(tr('stm.gfx.fallback', 'BMM is drawn by the processor although this PC has a graphics card and you did not turn it off. The driver may be blocked or may have crashed: updating it usually fixes this.'))}</div>
+                <div class="stm-alert is-warn stm-gfx-fallback" data-i18n="stm.gfx.fallback" hidden>${esc(tr('stm.gfx.fallback', 'BMM is drawn by the processor although this PC has a graphics card and you did not turn it off. The driver may be blocked or may have crashed: updating it usually fixes this.'))}</div>
             </div>
             <div class="stm-card">
                 <div class="stm-row">
                     <div class="stm-grow">
-                        <label class="stm-card-title" for="gfx-reduce-anim">${esc(tr('gfx.reduceAnim', 'Reduce animations'))}</label>
-                        <div class="stm-help">${esc(tr('gfx.reduceAnimHint', 'Transitions and effects end at once, whatever the theme. Progress spinners keep turning, slowly. Applies immediately.'))}</div>
+                        <label class="stm-card-title" for="gfx-reduce-anim" data-i18n="gfx.reduceAnim">${esc(tr('gfx.reduceAnim', 'Reduce animations'))}</label>
+                        <div class="stm-help" data-i18n="gfx.reduceAnimHint">${esc(tr('gfx.reduceAnimHint', 'Transitions and effects end at once, whatever the theme. Progress spinners keep turning, slowly. Applies immediately.'))}</div>
                     </div>
-                    <label class="bmm-switch" data-tooltip="${escAttr(tr('gfx.reduceAnimTip', 'Also on by itself when Windows asks apps to show fewer animations.'))}">
+                    <label class="bmm-switch" data-i18n-tooltip="gfx.reduceAnimTip" data-tooltip="${escAttr(tr('gfx.reduceAnimTip', 'Also on by itself when Windows asks apps to show fewer animations.'))}">
                         <input type="checkbox" id="gfx-reduce-anim"${reducesAnimations() ? ' checked' : ''}>
                         <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                     </label>
                 </div>
             </div>
             <details class="stm-card stm-gfx-hw" id="hw-card">
-                <summary class="stm-card-title">${esc(t('storage.hwTitle'))}</summary>
+                <summary class="stm-card-title" data-i18n="storage.hwTitle">${esc(t('storage.hwTitle'))}</summary>
                 <div id="hw-body" class="stm-help"></div>
-                <div class="stm-help">${esc(t('storage.hwNote'))}</div>
+                <div class="stm-help" data-i18n="storage.hwNote">${esc(t('storage.hwNote'))}</div>
             </details>
         </div>`;
     anchor.insertAdjacentElement('afterend', card);
@@ -162,6 +162,21 @@ async function fillGraphics(host: HTMLElement): Promise<void> {
         if (restart) restart.hidden = !pending;
     };
     show(state);
+    // The static labels carry data-i18n and follow a language switch by themselves; these are
+    // written from code, so they are written again. Without this the card stayed in the
+    // language BMM started in (seen: switch FR → EN, the whole card still French).
+    const relabel = () => {
+        if (!host.isConnected) { document.removeEventListener('langChanged', relabel); return; }
+        if (sel) {
+            const v = sel.value;
+            sel.innerHTML = GPU_MODES.map((m) => `<option value="${m}"${v === m ? ' selected' : ''}>${esc(tr(GPU_LABEL[m][0], GPU_LABEL[m][1]))}</option>`).join('');
+            sel.value = v;
+        }
+        show(state);
+        paintRenderer();
+        paintCards();
+    };
+    document.addEventListener('langChanged', relabel);
     sel?.addEventListener('change', async () => {
         showHelp(sel.value);
         try {
@@ -180,12 +195,23 @@ async function fillGraphics(host: HTMLElement): Promise<void> {
 
     // What draws the window now, from the page itself.
     const renderer = describeRenderer(webglRenderer());
-    const rEl = host.querySelector<HTMLElement>('.stm-gfx-renderer');
-    if (rEl) {
+    function paintRenderer(): void {
+        const rEl = host.querySelector<HTMLElement>('.stm-gfx-renderer');
+        if (!rEl) return;
         rEl.textContent = renderer.software
             ? tr('stm.gfx.software', 'The processor (software drawing, no graphics card)')
             : `${renderer.name}${renderer.api ? ` · ${renderer.api}` : ''}`;
         if (renderer.raw) rEl.setAttribute('data-tooltip', renderer.raw);
+    }
+    paintRenderer();
+    let cardCount = -1;
+    function paintCards(): void {
+        const cards = host.querySelector<HTMLElement>('.stm-gfx-cards');
+        if (!cards || cardCount < 0) return;
+        cards.textContent = cardCount >= 2
+            ? tr('stm.gfx.cards2', 'This PC has two graphics cards: Power saving and High performance choose between them.')
+            : cardCount === 1 ? tr('stm.gfx.cards1', 'This PC has one graphics card: Power saving and High performance both use it.')
+            : '';
     }
 
     // Detected hardware: text only, built with textContent (names come from drivers). The
@@ -206,13 +232,7 @@ async function fillGraphics(host: HTMLElement): Promise<void> {
             line(`${d.mount} ${String(d.bus || 'unknown').toUpperCase()}${kind ? ' · ' + kind : ''}`);
         }
         const advice = gpuAdvice({ renderer, gpus, activeMode: state?.active_mode || 'auto' });
-        const cards = host.querySelector<HTMLElement>('.stm-gfx-cards');
-        if (cards && !hw.gpu_timed_out) {
-            cards.textContent = advice.cards >= 2
-                ? tr('stm.gfx.cards2', 'This PC has two graphics cards: Power saving and High performance choose between them.')
-                : advice.cards === 1 ? tr('stm.gfx.cards1', 'This PC has one graphics card: Power saving and High performance both use it.')
-                : '';
-        }
+        if (!hw.gpu_timed_out) { cardCount = advice.cards; paintCards(); }
         const fb = host.querySelector<HTMLElement>('.stm-gfx-fallback');
         if (fb) fb.hidden = !advice.softwareFallback;
     }

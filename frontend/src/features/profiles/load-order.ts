@@ -15,8 +15,9 @@
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { learnMore } from '../../core/learn-more.js';
+import { learnMore, LEARN_MORE_EVENT } from '../../core/learn-more.js';
 import { raiseAboveAll } from '../../ui/layer.js';
+import { installFocusTrap } from '../../ui/focus-trap.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { bindOrderKeys } from './load-order-keys.js';
 import {
@@ -70,7 +71,14 @@ let _open: HTMLElement | null = null;
  */
 export async function openLoadOrder(profileId?: string | null, profileName?: string, notify?: Notify): Promise<boolean> {
     if (notify) _notify = notify;
-    if (_open) { _open.querySelector<HTMLElement>('.lo-list')?.focus(); return false; }
+    if (_open) {
+        // "Learn more" hides the view rather than closing it (core/learn-more.ts takes the
+        // `open` class off the overlay it sits in), so an unapplied draft survives the trip to
+        // the docs: opening the view again brings it back as it was left.
+        _open.classList.add('open');
+        _open.querySelector<HTMLElement>('.lo-list')?.focus();
+        return false;
+    }
     ensureCss();
 
     let mods: OrderedMod[] = [];
@@ -95,6 +103,8 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         let confirmClose = false;
         let flash = '';
 
+        // The focus goes back where it came from on close (the Storage Manager, a mod row…).
+        const opener = document.activeElement as HTMLElement | null;
         const ov = document.createElement('div');
         ov.className = 'modal-overlay open lo-overlay';
         raiseAboveAll(ov);
@@ -267,6 +277,9 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             }
         }
 
+        /** On screen — not merely in the DOM: "Learn more" hides the overlay without closing it. */
+        const shown = (): boolean => _open === ov && ov.isConnected && ov.classList.contains('open');
+
         function close(): void {
             if (busy) return;
             if (!sameOrder(saved, draft) && !confirmClose) {
@@ -281,12 +294,20 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             _open = null;
             _fallback = null;
             document.removeEventListener('keydown', onEsc, true);
+            untrap();
+            try { if (opener && opener !== document.body && opener.isConnected) opener.focus({ preventScroll: true }); } catch { /* gone */ }
             resolve(applied);
         }
         const onEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && _open === ov) { e.stopPropagation(); close(); }
+            // Only while on screen: hidden behind the docs, Escape belongs to the docs.
+            if (e.key === 'Escape' && shown()) { e.stopPropagation(); close(); }
         };
         document.addEventListener('keydown', onEsc, true);
+        // aria-modal="true" is a promise that Tab stays in here.
+        const untrap = installFocusTrap(ov, shown);
+        // Hidden by "Learn more": nothing to do but give the focus back to the page — the
+        // draft, the Escape handler and the shortcuts wait (all gated on `shown`).
+        ov.addEventListener(LEARN_MORE_EVENT, () => { (document.activeElement as HTMLElement | null)?.blur?.(); });
 
         // The shortcuts, as registry commands (load-order-keys.ts): live while this view is open.
         bindOrderKeys({
@@ -295,7 +316,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             'order.moveTop': () => move('top'),
             'order.moveBottom': () => move('bottom'),
             'order.apply': () => { void apply(); },
-        }, () => _open === ov && document.body.contains(ov));
+        }, shown);
 
         // Plain arrows move the SELECTION (listbox navigation); Alt+arrows, the registry
         // commands above, move the MOD.

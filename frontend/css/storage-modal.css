@@ -4,7 +4,11 @@
 
    Theme tokens only. The accent is a FILL or a ring; accent-coloured TEXT goes through
    --stm-accent-ink, the accent walked toward the theme's own ink so it stays readable on a
-   light theme as on a dark one. Surfaces take the --bmm-sNN ladder, never a neutral rgba(). */
+   light theme as on a dark one. Surfaces take the --bmm-sNN ladder, never a neutral rgba().
+
+   Text is --bmm-text-secondary, never -muted: muted (#475569) measured 1.9-2.3:1 on these
+   cards in the dark themes — the help lines, the disk paths, the queue states, the table
+   headers and the pill's remove button were all but invisible. */
 
 .stm {
     --stm-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
@@ -96,7 +100,7 @@
 /* ── Panels and cards ───────────────────────────────────────────────────────────────────── */
 .stm-panel { display: flex; flex-direction: column; gap: var(--stm-gap); min-width: 0; outline: none; }
 .stm-panel[hidden] { display: none; }
-.stm-loading { padding: 24px; text-align: center; font-size: 13px; color: var(--bmm-text-muted); }
+.stm-loading { padding: 24px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
 
 .stm-lead {
     display: flex;
@@ -120,7 +124,7 @@
 }
 .stm-card-flat { background: none; }
 .stm-card-title { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
-.stm-help { font-size: 12px; line-height: 1.5; color: var(--bmm-text-muted); }
+.stm-help { font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
 .stm-help.is-crit { color: var(--bmm-danger); }
 .stm-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
 .stm-grow { flex: 1 1 220px; min-width: 0; }
@@ -173,7 +177,7 @@
 .stm-preset:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
 .stm-preset-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .stm-preset-you { font-size: 12.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
-.stm-preset-detail { font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-muted); }
+.stm-preset-detail { font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
 .stm-badge {
     font-size: 10.5px;
     font-weight: 700;
@@ -193,7 +197,7 @@
 /* ── Live activity ──────────────────────────────────────────────────────────────────────── */
 .stm-meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .stm-meter { border: 1px solid var(--bmm-border); border-radius: 10px; padding: 8px 10px; min-width: 0; background: var(--bmm-s03); }
-.stm-meter-head { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--bmm-text-muted); }
+.stm-meter-head { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .stm-meter-v { font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); font-weight: 600; }
 .stm-meter svg { display: block; width: 100%; height: 28px; margin-top: 4px; }
 .stm-meter polyline { fill: none; stroke: var(--bmm-accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
@@ -210,21 +214,21 @@
     color: var(--bmm-text-primary);
 }
 .res-paused-all-text { flex: 1; min-width: 0; }
-.stm-queue-idle { font-size: 12px; color: var(--bmm-text-muted); }
+.stm-queue-idle { font-size: 12px; color: var(--bmm-text-secondary); }
 .stm-queue { display: flex; flex-direction: column; gap: 4px; }
 .stm-q-row { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
 .stm-q-kind { flex-shrink: 0; }
 .stm-q-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bmm-text-primary); }
-.stm-q-state { flex-shrink: 0; color: var(--bmm-text-muted); }
+.stm-q-state { flex-shrink: 0; color: var(--bmm-text-secondary); }
 
 /* ── Rules per disk: legend and table ───────────────────────────────────────────────────── */
 .stm-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 6px 16px; margin: 0; }
 .stm-legend > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .stm-legend dt { font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
-.stm-legend dd { margin: 0; font-size: 12px; line-height: 1.45; color: var(--bmm-text-muted); }
+.stm-legend dd { margin: 0; font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
 .stm-table-wrap { overflow-x: auto; }
 .stm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.stm-table th { text-align: left; padding: 6px 4px; color: var(--bmm-text-muted); font-weight: 600; border-bottom: 1px solid var(--bmm-border); white-space: nowrap; }
+.stm-table th { text-align: left; padding: 6px 4px; color: var(--bmm-text-secondary); font-weight: 600; border-bottom: 1px solid var(--bmm-border); white-space: nowrap; }
 .stm-table td { padding: 4px; }
 .stm-table tbody tr:nth-child(even) { background: var(--bmm-s02); }
 .stm-table-op { white-space: nowrap; color: var(--bmm-text-primary); }
@@ -243,13 +247,13 @@
     min-width: 0;
 }
 .stm-disk-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
-.stm-disk-path { font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-muted); overflow-wrap: anywhere; }
+.stm-disk-path { font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
 .stm-kind { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--bmm-border); color: var(--bmm-text-secondary); background: var(--bmm-s04); }
 .stm-kind.is-cloud { border-color: var(--bmm-info, var(--bmm-border)); }
 .stm-kind.is-fs { font-weight: 500; }
-.stm-limit { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--bmm-text-muted); }
+.stm-limit { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .stm-limit input { width: 84px; text-align: right; font-size: 12px; padding: 4px 8px; }
-.stm-bar-label { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-muted); }
+.stm-bar-label { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-secondary); }
 .stm-bar-label .is-ok { color: var(--bmm-text-secondary); }
 .stm-bar-label .is-warn { color: var(--bmm-warning); font-weight: 700; }
 .stm-bar-label .is-crit { color: var(--bmm-danger); font-weight: 700; }
@@ -278,7 +282,7 @@
 .stm-game-dir:last-child { border-bottom: 0; }
 .stm-game-dir-name { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
 .stm-game-exe { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.stm-pill-x { border: 0; background: none; color: var(--bmm-text-muted); font: inherit; font-size: 13px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.stm-pill-x { border: 0; background: none; color: var(--bmm-text-secondary); font: inherit; font-size: 13px; line-height: 1; cursor: pointer; padding: 0 2px; }
 .stm-pill-x:hover, .stm-pill-x:focus-visible { color: var(--bmm-danger); }
 .stm-game-picker { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; border: 1px solid var(--bmm-border); border-radius: 10px; padding: 6px; background: var(--bmm-s02); }
 .stm-game-picker[hidden], .stm-game-pause[hidden] { display: none; }
@@ -301,3 +305,8 @@
 @media (prefers-reduced-motion: reduce) {
     .stm-tab, .stm-preset, .stm-bar-fill { transition: none; }
 }
+
+/* The header's subtitle is static markup in index.html with an inline --text-muted (2.3:1 on
+   the dark header). Overridden here rather than there: that line of index.html belongs to a
+   change in flight. Owner: drop the inline colour in index.html and this rule can go. */
+#modal-storage [data-i18n="storage.modalSubtitle"] { color: var(--bmm-text-secondary) !important; }

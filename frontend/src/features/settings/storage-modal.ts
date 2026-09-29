@@ -21,6 +21,7 @@ import { t } from '../../core/i18n.js';
 import { learnMore } from '../../core/learn-more.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
+import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 import { bindLifecycle } from './storage-live.js';
 import { feed, readStatus, resetPainters, mountStatusStrip, mountIntensityPanel, mountGamePanel, mountLivePanel, type Status } from './resources-dash.js';
 import { renderResourcesMatrix } from './resources-matrix.js';
@@ -440,6 +441,20 @@ export function initStorageModal(h: Hooks): void {
     hooks = h;
     (window as any).openStorageManager = openStorageManager;
     (window as any)._renderStorageModal = refreshIfOpen;
+    // The keyboard of a modal dialog: Tab stays inside it, Escape closes it (the same close as
+    // the ✕ — taking `.open` off, which the live feed's lifecycle watches). A dialog opened
+    // over it (a confirmation, a picker) keeps its own keys: `ownsFocus`. A custom <select>
+    // closing its menu on Escape marks the event handled, so that Escape closes the menu only.
+    const ov = overlayEl();
+    if (ov && !ov.dataset.kbd) {
+        ov.dataset.kbd = '1';
+        installFocusTrap(ov, () => isOpen() && ownsFocus(ov));
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape' || e.defaultPrevented || !isOpen() || !ownsFocus(ov)) return;
+            e.preventDefault();
+            ov.classList.remove('open');
+        });
+    }
     // Game mode turned on or off by itself (procs.rs → main.rs): say so, unless the user turned
     // the notice off in the Game mode tab. One listener for the whole session, nothing polled.
     void listen('bmm://game-mode', (e: { payload?: { view?: GameView; notify?: boolean } }) => {

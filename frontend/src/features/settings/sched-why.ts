@@ -173,3 +173,16 @@ export function reasonNotRunning(
 export function gameHoldsTasks(status: { game_active?: unknown; game_options?: { hold_scheduler?: unknown } | null } | null | undefined): boolean {
     return !!status && status.game_active === true && status.game_options?.hold_scheduler === true;
 }
+
+/**
+ * The time the list shows in a task's "next run" slot, or null for "show the reason instead".
+ *
+ * A task game mode is holding (it fell due, it is owed, it waits for the game to end) shows the
+ * reason, whatever its trigger. Asking `nextDue` for it first — which is what the list did —
+ * answered a time for every clock trigger: an interval task that had never run said "in 1 min",
+ * rolling forward for as long as the game ran, while it was in fact overdue and waiting.
+ */
+export function listNextRun(task: { enabled: boolean; manual: boolean; owed: boolean }, nextDue: () => number | null): number | null {
+    if (!task.enabled || task.manual || task.owed) return null;
+    return nextDue();
+}

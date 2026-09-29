@@ -43,6 +43,8 @@ export function initCustomSelects(): void {
         // Esc from inside the menu (its search box) would otherwise leave the focus on a
         // detached node — i.e. nowhere. Hand it back to the control it came from.
         const back = _openCsel.hasFocus() ? _openCsel.trigger : null;
+        // Handled: the dialog the select sits in must not ALSO close on this Escape.
+        e.preventDefault();
         closeOpen();
         back?.focus({ preventScroll: true });
     }, true);

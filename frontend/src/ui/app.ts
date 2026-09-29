@@ -854,6 +854,13 @@ async function main() {
     initInlineActions();
     console.log('[BMM] App starting from generated TypeScript!');
 
+    // The bridge BEFORE the link registry. loadLinks() invokes (get_bc_config, then
+    // fetch_remote_json for BCWEB and GitHub), and invoke() waits up to 5 s for a bridge
+    // that only loadTauri() provides — so with the registry first, every launch sat through
+    // three 5-second timeouts (~15 s) and logged "[RPC ERROR] get_bc_config: Tauri bridge not
+    // initialized" before anything else could start. loadTauri() needs no links.
+    await loadTauri();
+
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
     patchHtmlLinks();
@@ -928,7 +935,7 @@ async function main() {
             console.error("[BMM] CRITICAL: Failed to init version display:", e);
         }
     };
-    await loadTauri();
+    // (loadTauri() already ran, at the top of main().)
     // Resolve the BetterCommunity test-mode/base from app.cfg (blog + account link).
     // MUST run AFTER loadTauri() — get_bc_config is a Tauri command, and calling it
     // before the bridge is ready threw "Tauri bridge not initialized".

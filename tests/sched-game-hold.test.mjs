@@ -35,3 +35,22 @@ describe('when game mode holds tasks', () => {
     assert.doesNotMatch(byId, /gameHoldsTasks|_owed/);
   });
 });
+
+describe('what the list shows for a held task', () => {
+  const soon = () => Date.now() + 60000;
+  test('a held (owed) task shows the reason, whatever its trigger', () => {
+    // An interval task that never ran used to show "in 1 min", rolling forward for as long as
+    // the game ran, while it was overdue and waiting (QA pass, 2026-09-29).
+    assert.equal(W.listNextRun({ enabled: true, manual: false, owed: true }, soon), null);
+  });
+  test('otherwise the next time, as before', () => {
+    const at = W.listNextRun({ enabled: true, manual: false, owed: false }, () => 42);
+    assert.equal(at, 42);
+    assert.equal(W.listNextRun({ enabled: false, manual: false, owed: false }, soon), null, 'disabled');
+    assert.equal(W.listNextRun({ enabled: true, manual: true, owed: false }, soon), null, 'manual');
+  });
+  test('the list asks it, with the owed set', () => {
+    const chip = SCHED_TS.slice(SCHED_TS.indexOf('function nextRunChip('), SCHED_TS.indexOf('function nextRunChip(') + 600);
+    assert.match(chip, /listNextRun\(\{ enabled: !!task\.enabled, manual: task\.trigger\.type === 'manual', owed: _owed\.has\(task\.id\) \}/);
+  });
+});

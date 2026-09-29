@@ -25,12 +25,15 @@
 }
 .lo-sort-label { font-size: 11px; font-weight: 600; color: var(--bmm-text-secondary); }
 .lo-sort { min-width: 190px; }
-.lo-hint { font-size: 10.5px; color: var(--bmm-text-muted); }
+/* Secondary, not muted, for every line the reader has to read here (hint, counts, the
+   first/last edges, "no conflict", the status): muted #475569 measured 2.2-2.4:1 on this
+   modal in the dark themes. Muted stays on the grip, which is decoration. */
+.lo-hint { font-size: 10.5px; color: var(--bmm-text-secondary); }
 .lo-count {
     margin-left: auto;
     font-size: 10.5px;
     font-family: var(--font-mono);
-    color: var(--bmm-text-muted);
+    color: var(--bmm-text-secondary);
 }
 
 /* Not .modal-body: that class forces a column flex with its own gap and padding. */
@@ -45,7 +48,7 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--bmm-text-muted);
+    color: var(--bmm-text-secondary);
     padding: 4px 2px;
 }
 .lo-edge-last { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); }
@@ -144,7 +147,7 @@
     background: color-mix(in srgb, var(--bmm-warning) 16%, transparent);
     color: color-mix(in srgb, var(--bmm-warning) 52%, var(--bmm-text-primary));
 }
-.lo-none { font-size: 10.5px; color: var(--bmm-text-muted); }
+.lo-none { font-size: 10.5px; color: var(--bmm-text-secondary); }
 
 .lo-moves { flex: none; display: flex; gap: 2px; }
 .lo-mv {
@@ -168,7 +171,7 @@
     padding: 22px 12px;
     text-align: center;
     font-size: 12px;
-    color: var(--bmm-text-muted);
+    color: var(--bmm-text-secondary);
     border: 1px dashed var(--bmm-s10);
     border-radius: var(--bmm-radius-card, 10px);
 }
@@ -176,7 +179,7 @@
 .lo-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .lo-foot { display: flex; align-items: center; gap: 8px; }
-.lo-status { flex: 1; min-width: 0; font-size: 11px; color: var(--bmm-text-muted); text-align: right; }
+.lo-status { flex: 1; min-width: 0; font-size: 11px; color: var(--bmm-text-secondary); text-align: right; }
 .lo-status.is-dirty { color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-text-primary)); font-weight: 600; }
 
 /* Motion only for those who have not asked for less of it. */
@@ -186,7 +189,7 @@
 }
 
 /* The modpack editor's order controls (modpack-creator.ts). */
-.mp-order-hint { font-size: 11px; line-height: 1.45; color: var(--bmm-text-muted); margin: 0 0 8px; }
+.mp-order-hint { font-size: 11px; line-height: 1.45; color: var(--bmm-text-secondary); margin: 0 0 8px; }
 .mp-order-btns { display: inline-flex; gap: 2px; margin-right: 4px; }
 .mp-order-pos {
     font-family: var(--font-mono);

@@ -24,7 +24,7 @@ import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type O
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
-import { reasonNotRunning, gameHoldsTasks } from './sched-why.js';
+import { reasonNotRunning, gameHoldsTasks, listNextRun } from './sched-why.js';
 import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
 import { planOf, previewAgainst } from './sched-preview.js';
 import {
@@ -55,7 +55,8 @@ import {
 import { readMode, writeMode, needsModePrompt, MODE_CHOICES, isMode } from './sched-modes.js';
 import { debugTargetFor, pathForLine, type LineRow } from './sched-debug-map.js';
 import { testNeedsConfirm, testOutcome } from './sched-test.js';
-import { learnMore } from '../../core/learn-more.js';
+import { learnMore, LEARN_MORE_EVENT } from '../../core/learn-more.js';
+import { installFocusTrap } from '../../ui/focus-trap.js';
 import { flowKeyActive, bindScopeKeys } from './sched-flow-keys.js';
 import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProblem, discordBody, slackBody, webhookBody, jsonTemplate, type FeedItem } from './sched-feed.js';
 import { regexWithBudget } from './regex-budget.js';
@@ -4460,7 +4461,7 @@ function runSparkline(task: Task): string {
  * A time is still a time. Everything else gets the reason, in the same slot.
  */
 function nextRunChip(task: Task): string {
-    const at = task.enabled && task.trigger.type !== 'manual' ? nextDue(task) : null;
+    const at = listNextRun({ enabled: !!task.enabled, manual: task.trigger.type === 'manual', owed: _owed.has(task.id) }, () => nextDue(task));
     if (at !== null) {
         return `<span class="sched-chip sched-chip-next" data-tooltip="${escAttr(new Date(at).toLocaleString())}">${escHtml(relTime(at))}</span>`;
     }
@@ -5558,6 +5559,8 @@ async function openTaskModal(task: Task | null): Promise<void> {
         try { store = localStorage; } catch { store = null; }
         if (needsModePrompt(store, { isNew: true, taskCount: _tasks.length })) {
             const m = await askEditorMode();
+            // Left for the docs from the question: the reader went to read, not to edit.
+            if (m === 'away') return;
             if (m) writeEditorMode(m);
         }
     }
@@ -7228,9 +7231,9 @@ function bindEditorKeys(): void {
 /**
  * Asked once, the first time somebody creates a task: Flux (recommended), BMMScript or Blocs,
  * one line each. Resolves with the choice, or null when the dialog is dismissed (asked again
- * next time, until answered).
+ * next time, until answered), or 'away' when its "Learn more" took the reader to the docs.
  */
-function askEditorMode(): Promise<EditorMode | null> {
+function askEditorMode(): Promise<EditorMode | null | 'away'> {
     return new Promise((resolve) => {
         const ov = document.createElement('div');
         ov.className = 'modal-overlay open sched-modeask';
@@ -7249,10 +7252,13 @@ function askEditorMode(): Promise<EditorMode | null> {
                 <p class="sched-modeask-foot">${escHtml(t('sched.modes.askFoot'))} ${learnMore('scheduler')}</p>
             </div>
         </div>`;
-        const done = (m: EditorMode | null) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(m); };
+        let untrap = (): void => { /* set once mounted */ };
+        const done = (m: EditorMode | null | 'away') => { ov.remove(); document.removeEventListener('keydown', onKey, true); untrap(); resolve(m); };
         const onKey = (e: KeyboardEvent) => {
+            // Only while the question is on screen and the focus is not in another dialog over it.
+            if (!ov.isConnected || !ov.classList.contains('open')) return;
             if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && ov.contains(document.activeElement)) {
                 const opts = [...ov.querySelectorAll<HTMLElement>('.sched-modeask-opt')];
                 const i = opts.indexOf(document.activeElement as HTMLElement);
                 opts[(i + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length]?.focus();
@@ -7264,7 +7270,13 @@ function askEditorMode(): Promise<EditorMode | null> {
             done(isMode(m) ? m : null);
         }));
         ov.querySelector('[data-x]')?.addEventListener('click', () => done(null));
+        // "Learn more" (the foot) takes `.open` off this overlay and opens the docs. Left in the
+        // DOM, hidden, this dialog kept its capture-phase keys: every ↑/↓ in the app was
+        // swallowed, and the next Escape — pressed in the docs — "dismissed" it and threw the
+        // task editor open over them. Leaving for the docs ends the question instead.
+        ov.addEventListener(LEARN_MORE_EVENT, () => done('away'));
         document.addEventListener('keydown', onKey, true);
+        untrap = installFocusTrap(ov, () => ov.isConnected && ov.classList.contains('open'));
         (document.getElementById('app-window-outer') || document.body).appendChild(ov);
         raiseAboveAll(ov);
         (ov.querySelector('.sched-modeask-opt') as HTMLElement | null)?.focus();

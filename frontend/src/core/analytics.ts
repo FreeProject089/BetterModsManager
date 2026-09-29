@@ -1050,7 +1050,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                 ${t('analytics.consentAuth') || 'By accepting, you authorize the use of this anonymous data to improve BMM and the other Better Community tools. Data is kept only for a limited time and you can request erasure of any sent packet at any moment.'}
             </p>
             <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:8px">${t('analytics.whatWeCollect') || 'What we collect'}</div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:8px">${t('analytics.whatWeCollect') || 'What we collect'}</div>
                 <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.8">
                     <li>${t('analytics.collect.specs') || 'PC specs (OS, CPU, RAM, GPU, disk) — to test on real hardware'}</li>
                     <li>${t('analytics.collect.bench') || 'Benchmark results — to track performance across versions'}</li>
@@ -1071,7 +1071,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
-                    <details style="margin:-2px 0 4px;font-size:11.5px;color:var(--text-muted)">
+                    <details style="margin:-2px 0 4px;font-size:11.5px;color:var(--text-secondary)">
                         <summary style="cursor:pointer;user-select:none">${t('analytics.extraWhat') || 'What the extra hardware report sends ▾'}</summary>
                         <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">
                             <li>${t('analytics.extra.board') || 'Motherboard (model + serial number)'}</li>
@@ -1102,7 +1102,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                 </div>
             </details>
 
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">
+            <p style="font-size:11px;color:var(--text-secondary);margin:0 0 8px">
                 ${t('analytics.consentFoot') || 'No personal data, no mod contents, no file paths. GDPR-friendly: opt-in, exportable and erasable from Settings → Privacy.'}
             </p>
         </div>

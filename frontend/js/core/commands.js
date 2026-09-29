@@ -246,6 +246,10 @@ export function openCommandPalette() {
     ensurePaletteStyles();
     refreshNavCommands(); // palette always shows the current navbar (custom pages included)
     paletteOpen = true;
+    {
+        const a = document.activeElement;
+        _paletteOpener = a && a !== document.body ? a : null;
+    }
     // Tutorial hook — lets the interactive tutorial gate a step on "open the palette".
     try {
         document.dispatchEvent(new CustomEvent('bmm:action:palette-opened', { detail: {} }));
@@ -293,13 +297,13 @@ export function openCommandPalette() {
         }
         else if (e.key === 'Escape') {
             e.preventDefault();
-            closePalette();
+            closePalette(true);
         }
     });
     overlay.addEventListener('click', (e) => {
         const el = e.target;
         if (el === overlay) {
-            closePalette();
+            closePalette(true);
             return;
         }
         const mode = el.closest('.cp-mode');
@@ -316,7 +320,23 @@ export function openCommandPalette() {
         }
     });
 }
-export function closePalette() { paletteOpen = false; overlay?.remove(); overlay = null; }
+/** Where the focus was when the palette opened. Dismissing the palette (Escape, a click
+ *  outside) gives it back — to the launch deck or a dialog it was opened over, which otherwise
+ *  lost the keyboard to the page behind. Running a command does not: the command decides. */
+let _paletteOpener = null;
+export function closePalette(restoreFocus = false) {
+    paletteOpen = false;
+    overlay?.remove();
+    overlay = null;
+    const back = _paletteOpener;
+    _paletteOpener = null;
+    if (restoreFocus && back?.isConnected) {
+        try {
+            back.focus({ preventScroll: true });
+        }
+        catch { /* gone */ }
+    }
+}
 // ── Settings: the rebindable shortcuts manager ────────────────────────────────────
 let recording = null;
 export function renderShortcutsManager(container) {

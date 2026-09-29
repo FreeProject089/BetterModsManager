@@ -96,3 +96,31 @@
 @media (max-width: 900px) {
     #view-repo .rp-head-slot { justify-content: flex-start; margin-left: 0; width: 100%; }
 }
+
+/* ── Readable secondary text ───────────────────────────────────────────────────────────
+   The page's hints, sub-titles, field labels and inactive pills come from main.css with
+   --text-muted: 2.3-2.6:1 on this page in the dark themes (measured), below what a label you
+   must read to fill the form can be. The light themes already lift them (main.css, the
+   body.bmm-theme-light block); this does the same for every theme, on this page only, with
+   the house rule: anything that must be READ gets --text-secondary. States keep their own
+   colours: the active pill and the active tab are excluded or already lighter. */
+#view-repo .view-subtitle,
+#view-repo .repo-tab-btn:not(.active) .repo-tab-sub,
+#view-repo .repo-group-sub,
+#view-repo .rp-chip--muted,
+#view-repo .repo-method-pill:not(.active):not(:hover),
+#view-repo .src-access-label,
+#view-repo .src-access-hint,
+#view-repo .ssh-src-label,
+#view-repo .ssh-src-hint,
+#view-repo .repo-host-lede-alt,
+#view-repo .repo-host-lede-x:not(:hover),
+#view-repo .mm-creds-note,
+#view-repo .ssh-action-empty { color: var(--bmm-text-secondary); }
+/* The rest of the page's hints are static markup in index.html with an INLINE
+   `color:var(--text-muted)` — only an !important rule reaches them from here. Scoped to this
+   page and to that exact inline colour. Owner: dropping those inline colours in index.html
+   (the file is part of a change in flight, so it was not edited) makes this block unnecessary. */
+#view-repo [style*="color:var(--text-muted)"],
+#view-repo [style*="color: var(--text-muted)"],
+#view-repo .badge-server-tag { color: var(--bmm-text-secondary) !important; }

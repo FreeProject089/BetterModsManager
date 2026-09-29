@@ -12,6 +12,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { fmtBytes, type AiSettings } from './ai-model.js';
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
+import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 
 const CARD_ID = 'settings-ai-section';
 
@@ -82,6 +83,7 @@ function render(card: HTMLElement, view: AiView | null): void {
     const st = view?.status || {};
     if (!s) {
         card.innerHTML = `<h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.settings.title'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
+        refold();
         return;
     }
     const killed = !!st.killSwitch;
@@ -169,6 +171,17 @@ function render(card: HTMLElement, view: AiView | null): void {
         <span class="ai-muted" id="ai-status" aria-live="polite"></span>
       </div>`;
     wire(card, s);
+    refold();
+}
+
+/**
+ * The card is redrawn whole (on Save, on a language switch, after an install). Settings folds
+ * its cards ONCE, by adding a header row with a chevron: redrawn, the card had lost it — no
+ * chevron, the header no longer folded, and a card that was folded at the time showed nothing
+ * at all (main.css hides every child but the header), with no way to unfold it. Fold again.
+ */
+function refold(): void {
+    try { initCollapsibleSettingsCards(); } catch { /* the page without a Settings view */ }
 }
 
 function read(card: HTMLElement, base: AiSettings): AiSettings {

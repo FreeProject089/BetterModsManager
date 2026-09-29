@@ -67,3 +67,20 @@ test('graphics is an app-wide Settings card, reachable from the palette, gone fr
   assert.match(theme, /bmm\.reduceAnimations/, 'the theme engine keeps the app-wide choice when a theme is applied');
   assert.match(card, /REDUCE_ANIM_KEY = 'bmm\.reduceAnimations'/);
 });
+
+// Seen in the QA pass (2026-09-29): switch the language and the whole card stayed in the one
+// BMM started in. Its fixed words carry data-i18n (every key present in both languages); the
+// ones written from code are written again on `langChanged`.
+test('the Graphics card follows a language switch', () => {
+  const card = readFileSync(join(ROOT, 'frontend/src/features/settings/graphics-settings.ts'), 'utf8');
+  const keys = [...card.matchAll(/data-i18n(?:-tooltip)?="([\w.]+)"/g)].map((m) => m[1]);
+  for (const k of ['gfx.cardTitle', 'stm.lead.graphics', 'stm.gfx.title', 'stm.gfx.now', 'gfx.reduceAnim', 'gfx.reduceAnimHint', 'storage.hwTitle']) {
+    assert.ok(keys.includes(k), `${k} is re-translated`);
+  }
+  const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? a : a[p]), o);
+  for (const lang of ['en', 'fr']) {
+    const L = JSON.parse(readFileSync(join(ROOT, `frontend/Lang/${lang}.json`), 'utf8'));
+    for (const k of keys) assert.ok(get(L, k) ?? L[k], `${lang}: ${k}`);
+  }
+  assert.match(card, /document\.addEventListener\('langChanged', relabel\)/);
+});

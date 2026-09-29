@@ -39,7 +39,7 @@
     font-weight: 750;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     margin-bottom: 4px;
 }
 .ld-title {
@@ -57,7 +57,7 @@
     font-size: 12px;
     font-weight: 650;
     font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     padding: 3px 9px;
     border-radius: 999px;
     background: var(--bmm-s05);
@@ -69,7 +69,7 @@
     border: none;
     border-radius: 9px;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -99,7 +99,7 @@
 .ld-pane[hidden] { display: none !important; }
 
 .ld-lede { margin: 0; font-size: 13.5px; line-height: 1.62; color: var(--text-secondary); }
-.ld-muted { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-muted); }
+.ld-muted { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
 .ld-error {
     margin: 0;
     font-size: 12.5px;
@@ -110,7 +110,7 @@
     background: var(--danger-dim);
 }
 .ld-error[hidden] { display: none; }
-.ld-hint-inline { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.ld-hint-inline { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 
 .ld-actions {
     display: flex;
@@ -234,7 +234,7 @@
     font-weight: 750;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--text-secondary);
 }
 .ld-file-path {
     font-family: var(--font-mono);
@@ -257,7 +257,7 @@
     border: 1px solid var(--border);
     background: var(--bmm-s03);
 }
-.ld-ann-date { margin: 0; font-size: 11.5px; color: var(--text-muted); }
+.ld-ann-date { margin: 0; font-size: 11.5px; color: var(--text-secondary); }
 .ld-ann-summary { margin: 0; font-size: 14px; line-height: 1.65; color: var(--text-secondary); white-space: pre-line; }
 
 /* A card borrowed from another dialog (the telemetry question): its own chrome goes, the deck
@@ -302,7 +302,7 @@
     align-items: center;
     gap: 7px;
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     cursor: pointer;
     min-width: 0;
 }
@@ -367,3 +367,9 @@ body.bmm-no-anim .ld-deck, body.bmm-no-anim .ld-pane { animation: none; }
     .ld-dots, .ld-nav { grid-column: 1; }
     .ld-nav .btn { flex: 1; }
 }
+
+/* The BetterCommunity card's headings and its "you need none of this" line are drawn in
+   main.css with --text-muted: 2.2:1 on the deck's dark surface, measured. Both are text the
+   step exists to show, so inside the deck they take the readable token (the rule the rest of
+   the app follows: anything that must be READ gets --text-secondary). */
+.ld-deck .bc-h, .ld-deck .bc-ok { color: var(--text-secondary); }
