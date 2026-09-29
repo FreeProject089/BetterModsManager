@@ -5275,7 +5275,10 @@ mod export_off_runtime_tests {
 
     #[test]
     fn the_export_command_does_its_work_on_a_blocking_thread() {
-        let src = include_str!("repo.rs");
+        // A Windows checkout (core.autocrlf, the CI runner's default) hands include_str! CRLF
+        // lines, so "\n}\n" and "\nfn " never match there; read the source with LF endings.
+        let src = include_str!("repo.rs").replace("\r\n", "\n");
+        let src = src.as_str();
         let cmd = body_of(src, "pub async fn export_server_repo(");
         assert!(cmd.contains("spawn_blocking("), "the async command must hand the export to spawn_blocking");
         for sync_work in ["fs::", ".begin(", "checkpoint()", "zip_dir_gated", "par_iter", "sign_message", ".lock()"] {

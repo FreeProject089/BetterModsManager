@@ -47,3 +47,19 @@ description = "Public telemetry ingest key (bmm_pk_ prefix)"
 targetRules = ["generic-api-key"]
 regexTarget = "match"
 regexes = ['''bmm_pk_[A-Za-z0-9_-]+''']
+
+# laya-model.lock.json pins the offline Laya pack by the SHA-256 of each model file. The file
+# NAMES "tokenizer/tokenizer.json" / "tokenizer_config.json" contain "token", so generic-api-key
+# reads the digest next to them as a key (commit fad97dfc, lines 10-11). A SHA-256 digest of a
+# public model file (Apache-2.0, pinned revision, re-verifiable from Hugging Face) is not a
+# credential. Narrow on purpose: this ONE file, this ONE rule, and only when the whole captured
+# value is 64 lowercase hex characters (a digest) — any other value in the lock file, or a
+# digest-shaped value in any other file, is still reported. Stays valid when the pack is re-pinned
+# (new digests, same shape), which a fingerprint in .gitleaksignore would not. Reviewed 2026-09-29.
+[[allowlists]]
+description = "SHA-256 digests of the Laya model files in laya-model.lock.json"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^laya-model\.lock\.json$''']
+regexTarget = "secret"
+regexes = ['''^[0-9a-f]{64}$''']
