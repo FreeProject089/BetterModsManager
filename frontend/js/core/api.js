@@ -141,6 +141,8 @@ export async function loadTauri() {
     }
     markBridgeReady();
 }
+let _onInvokeFailure = null;
+export function setInvokeFailureHook(fn) { _onInvokeFailure = fn; }
 export async function invoke(command, args = {}, opts) {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -190,6 +192,12 @@ export async function invoke(command, args = {}, opts) {
         }
         else {
             console.error(`[RPC ERROR] ${command}:`, err);
+        }
+        if (_onInvokeFailure) {
+            try {
+                _onInvokeFailure(command, err, opts?.quiet ? 'quiet' : isCancelled ? 'cancel' : isNetwork ? 'network' : isValidation ? 'validation' : 'error');
+            }
+            catch { /* never */ }
         }
         throw err;
     }

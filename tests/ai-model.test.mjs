@@ -143,3 +143,58 @@ describe('the AI screens never reach the network themselves', () => {
         assert.ok(/assert_eq!\(t\.calls\.get\(\), 0, "the master switch let a request through"\)/.test(core));
     });
 });
+
+describe('« Laya intégré »: one install state at a time', () => {
+    const base = { installed: false, loaded: false, partialBytes: 0, outdated: false, neededBytes: 800e6, freeBytes: 50e9 };
+    test('what Rust reports decides the resting state', () => {
+        assert.equal(M.embState(base), 'absent');
+        assert.equal(M.embState({ ...base, partialBytes: 1e6 }), 'partial');
+        assert.equal(M.embState({ ...base, outdated: true }), 'outdated');
+        assert.equal(M.embState({ ...base, installed: true }), 'installed');
+        assert.equal(M.embState({ ...base, installed: true, loaded: true }), 'loaded');
+        // Not enough room is said BEFORE the download starts, not at 99 %.
+        assert.equal(M.embState({ ...base, freeBytes: 100e6 }), 'no_space');
+        // Unknown free space never blocks.
+        assert.equal(M.embState({ ...base, freeBytes: null }), 'absent');
+    });
+    test('a running install wins over the resting state; --no-ai wins over everything', () => {
+        assert.equal(M.embState(base, { phase: 'download' }), 'downloading');
+        assert.equal(M.embState(base, { phase: 'verify' }), 'verifying');
+        assert.equal(M.embState(base, { phase: 'unpack' }), 'unpacking');
+        assert.equal(M.embState(base, { error: 'unreachable' }), 'error');
+        assert.equal(M.embState({ ...base, installed: true }, { phase: 'download' }, true), 'killed');
+    });
+    test('speed, time left and the no-space error read as people say them', () => {
+        assert.equal(M.fmtSpeed(2_500_000), '3 MB/s');
+        assert.equal(M.fmtSpeed(0), '');
+        assert.equal(M.fmtEta(65), '1:05');
+        assert.equal(M.fmtEta(3725), '1 h 02');
+        assert.equal(M.fmtEta(null), '');
+        assert.deepEqual(M.parseNoSpace('embedded:no_space:800000000:1000'), { needed: 800000000, free: 1000 });
+        assert.equal(M.parseNoSpace('unreachable'), null);
+    });
+});
+
+describe('« Ask Laya »: what the dialog shows', () => {
+    const hits = [
+        { kind: 'doc', id: 'doc:a', title: 'A', snippet: '', score: 1, action: { page: 'a' } },
+        { kind: 'mod', id: 'mod:m1', title: 'M1', snippet: '', score: 0.7, action: { mod: 'm1' } },
+        { kind: 'article', id: 'art:b', title: 'B', snippet: '', score: 0.6, action: { article: 'b' } },
+        { kind: 'command', id: 'cmd:c', title: 'C', snippet: '', score: 0.5, action: { command: 'c' } },
+    ];
+    test('hits are grouped by kind in the order the intent asks for', () => {
+        assert.deepEqual(M.groupHits({ intent: 'docs', hits }).map((g) => g.kind), ['doc', 'command', 'mod']);
+        assert.deepEqual(M.groupHits({ intent: 'mods', hits }).map((g) => g.kind), ['mod', 'doc', 'command']);
+        // Articles and doc pages are one group: both are documentation.
+        assert.equal(M.groupHits({ intent: 'docs', hits })[0].hits.length, 2);
+    });
+    test('a top pick only when it clearly leads, never when Laya said « none »', () => {
+        assert.equal(M.topPick({ hits, low_confidence: false })?.id, 'doc:a');
+        assert.equal(M.topPick({ hits, low_confidence: true }), null);
+        assert.equal(M.topPick({ hits: [hits[0], { ...hits[1], score: 0.95 }], low_confidence: false }), null);
+    });
+    test('smart search keeps the ranked mods only', () => {
+        assert.deepEqual(M.rankedModIds({ hits }), ['m1']);
+        assert.deepEqual(M.rankedModIds(null), []);
+    });
+});

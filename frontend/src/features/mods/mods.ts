@@ -35,6 +35,7 @@ import {
   renderModDetail 
 } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
+import { initLibOrder } from './lib-order.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -67,6 +68,7 @@ export async function initMods() {
     wireLangRerender();
   window._refreshModsFn = refreshMods;
   ensureModCancelContextMenu();
+  initLibOrder(toast);
 
   // --- Core Listeners ---
   document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
@@ -228,6 +230,8 @@ export async function initMods() {
     S.searchQuery = e.target.value.toLowerCase();
     renderModList(true);
   });
+  // « Smart » toggle beside the box (features/ai/ai-ask.ts), loaded after the list is up.
+  if (searchInput) setTimeout(() => { void import('../ai/ai-ask.js').then((m) => m.mountSmartSearch(searchInput as HTMLInputElement, () => renderModList(true))).catch(() => {}); }, 0);
 
   // Sort
   const sortSelect = document.getElementById('mod-sort');

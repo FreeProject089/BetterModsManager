@@ -81,6 +81,15 @@ fn runs_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub fn sched_run_append(app: AppHandle, task_id: String, record: Value) -> Result<(), String> {
+    // A failed run is a live issue (if the user sends errors live). Its error text only — the
+    // task id and step labels are the user's own names and stay here.
+    if record.get("ok").and_then(Value::as_bool) == Some(false) {
+        let err = record.get("steps").and_then(Value::as_array)
+            .and_then(|s| s.iter().find(|st| st.get("status").and_then(Value::as_str) == Some("error")))
+            .and_then(|st| st.get("error").and_then(Value::as_str))
+            .unwrap_or("task failed");
+        crate::commands::live_issues::record_rust("scheduler", "error", err, Some("task_failed"));
+    }
     append_in(&runs_dir(&app)?, &task_id, &record)
 }
 

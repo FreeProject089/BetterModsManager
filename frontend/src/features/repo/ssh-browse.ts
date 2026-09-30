@@ -90,7 +90,7 @@ export function browseRemoteFolder(
         // Above whatever opened it. See the note at the top of this file.
         raiseAboveAll(ov);
         ov.innerHTML = `
-      <div class="modal glass ssh-br" style="max-width:560px;width:96%;">
+      <div class="modal glass ssh-br modal--md">
         <div class="modal-header">
           <div style="min-width:0;">
             <h3 style="margin:0;font-size:15px;">${escHtml(t('sshbr.title'))}</h3>

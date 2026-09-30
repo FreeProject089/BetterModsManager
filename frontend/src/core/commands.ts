@@ -12,7 +12,7 @@ import { getLang, t, getSynonyms } from './i18n.js';
 import { registerSearchProvider, searchAll, type SearchHit, type HitKind } from './search.js';
 import { learnMore, LEARN_MORE_EVENT } from './learn-more.js';
 import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
-import { ORDER_KEYS, orderKeysActive, orderKeyRun } from '../features/profiles/load-order-keys.js';
+import { ORDER_KEYS, orderKeysActive, orderKeyRun, LIB_ORDER_KEYS, libOrderKeysActive, libOrderKeyRun } from '../features/profiles/load-order-keys.js';
 
 type L = { en: string; fr: string };
 const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
@@ -465,6 +465,19 @@ registerSearchProvider('settings', (q): SearchHit[] => {
 // item's job; the palette's is to find a page you are already looking for.
 //
 // The manifest is fetched once and cached by docs-hub, so this costs one request per session.
+// A typed QUESTION (three words or more, or a question mark) gets one extra row: « Ask Laya: … »,
+// which opens the Ask dialog on it. Its keywords are the query itself, so it always matches, and
+// its boost keeps it under a real title match.
+registerSearchProvider('ask', (q): SearchHit[] => {
+  const words = q.trim().split(/\s+/).filter(Boolean);
+  if (!q.includes('?') && words.length < 3) return [];
+  return [{
+    id: 'ask:laya', kind: 'command' as HitKind, title: tr({ en: `Ask Laya: “${q.trim()}”`, fr: `Demander à Laya : « ${q.trim()} »` }),
+    sub: tr({ en: 'Help', fr: 'Aide' }), keywords: q, boost: 0.6,
+    run: () => { void import('../features/ai/ai-ask.js').then((m) => m.openAskLaya(q.trim())); },
+  }];
+});
+
 registerSearchProvider('docs', async (q): Promise<SearchHit[]> => {
   if (!q) return [];
   try {
@@ -627,6 +640,13 @@ function registerCore() {
       run: () => orderKeyRun(k.id), defaultChord: k.chord, when: () => orderKeysActive(),
     });
   }
+  // The same moves from the Mod Library, on its selected mod (features/mods/lib-order.ts).
+  for (const k of LIB_ORDER_KEYS) {
+    registerCommand({
+      id: k.id, category: 'mods', title: k.title, keywords: `activation order ordre ${k.keywords}`,
+      run: () => libOrderKeyRun(k.id), defaultChord: k.chord, when: () => libOrderKeysActive(),
+    });
+  }
 
   registerCommand({
     id: 'mods.graph', category: 'mods',
@@ -764,6 +784,9 @@ function registerCore() {
 
   // ── Help ────────────────────────────────────────────────────────────────────
   registerCommand({ id: 'help.search', category: 'help', title: { en: 'Search the documentation', fr: 'Rechercher dans la documentation' }, keywords: 'docs help search find', run: () => { (window as any).openDocsHome?.(); (document.querySelector('.nav-item[data-view="docs"]') as HTMLElement)?.click(); setTimeout(() => (document.querySelector('#view-docs .dh-search') as HTMLInputElement)?.focus(), 80); }, defaultChord: null });
+  // « Ask Laya » (features/ai/ai-ask.ts): a question about BMM or your mods, answered from the docs,
+  // the settings, the commands and your mods' files — offline, never invented text.
+  registerCommand({ id: 'help.askLaya', category: 'help', title: { en: 'Ask Laya (offline)', fr: 'Demander à Laya (hors ligne)' }, keywords: 'ask laya question ai ia assistant help aide which mod file conflict rule demander question quel fichier conflit regle', run: () => { void import('../features/ai/ai-ask.js').then((m) => m.openAskLaya()); }, defaultChord: null });
   // Loaded on demand: the palette is core and this screen is not, so importing it here
   // would put an unused module in the boot path for a command most people never run.
   // The title says what it DOES, and the keywords carry both languages plus the words people
@@ -780,6 +803,13 @@ function registerCore() {
 export function initCommands() {
   registerCore();
   document.addEventListener('keydown', onKeydown, true);
+  // Run a command by id from a module that must not import this one (« Ask Laya » results:
+  // features/ai/ai-ask.ts is itself loaded from here, so an import back would be a cycle).
+  document.addEventListener('bmm:command:run', (e: Event) => {
+    const id = String((e as CustomEvent).detail?.id || '');
+    const c = _cmds.get(id);
+    if (c && (!c.when || c.when())) { try { c.run(); } catch { /* the command reports its own errors */ } }
+  });
 }
 
 // ── palette styles (self-contained, injected once) ────────────────────────────────

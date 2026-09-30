@@ -199,3 +199,74 @@
     min-width: 20px;
     text-align: center;
 }
+
+/* The order from the Mod Library (features/mods/lib-order.ts): the box at the top of a mod's
+   detail panel, and the right-click menu of a mod card. Same chips and move buttons as the view. */
+.lib-order-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-input);
+    background: var(--bmm-bg-hover);
+}
+.lob-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.lob-title { font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+.lob-pos {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--bmm-accent-dim);
+    color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary));
+}
+.lob-open { margin-left: auto; }
+.lob-note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.lob-rivals { display: flex; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
+.lob-moves { display: flex; gap: 2px; }
+
+.lom-backdrop { position: fixed; inset: 0; z-index: 99998; background: transparent; }
+.lom {
+    position: fixed;
+    min-width: 230px;
+    padding: var(--space-1);
+    border: 1px solid var(--bmm-border-hover);
+    border-radius: var(--bmm-radius-btn);
+    background: var(--bmm-bg-elevated);
+    box-shadow: var(--bmm-shadow-modal);
+    font-size: 12.5px;
+    user-select: none;
+}
+.lom-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3) var(--space-2);
+    margin-bottom: var(--space-1);
+    border-bottom: 1px solid var(--bmm-border);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.lom-note { padding: var(--space-1) var(--space-3) var(--space-2); font-size: 11.5px; color: var(--bmm-text-secondary); }
+.lom-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    border-radius: var(--bmm-radius-badge);
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.lom-item:hover:not(:disabled), .lom-item:focus-visible { background: var(--bmm-bg-active); outline: none; }
+.lom-item:disabled { opacity: 0.4; cursor: default; }
+.lom-sep { height: 1px; margin: var(--space-1) 0; background: var(--bmm-border); }

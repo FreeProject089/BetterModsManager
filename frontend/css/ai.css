@@ -112,6 +112,40 @@
 .ai-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 @media (max-width: 640px) { .ai-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* The settings card on the spacing tokens, so it breathes like the other Settings cards: one
+   rhythm (--space-2 inside a group, --space-3 between groups, --space-4 around a box), labels in
+   one column, every control the same height, and a footer set apart from the body. */
+.ai-card .ai-lead { margin: 0 0 var(--space-2); }
+.ai-card p.ai-muted { margin: 0 0 var(--space-2); }
+.ai-card > div.ai-muted { margin: 0 0 var(--space-3); }
+.ai-card .ai-warn { margin: 0 0 var(--space-3); }
+.ai-card .ai-switch {
+    gap: var(--space-3); margin: var(--space-3) 0; padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border); border-radius: var(--bmm-radius-input); background: var(--bmm-s05);
+}
+.ai-card .ai-switch span { gap: var(--space-1); }
+.ai-card .ai-settings-body { gap: var(--space-3); padding-left: 0; }
+.ai-card .ai-grid { grid-template-columns: minmax(140px, 200px) minmax(0, 1fr); gap: var(--space-2) var(--space-4); }
+.ai-card .ai-grid .form-input, .ai-card .ai-keyrow .form-input { min-height: 34px; }
+.ai-card .ai-keyrow { gap: var(--space-2); }
+.ai-card .ai-block {
+    display: flex; flex-direction: column; gap: var(--space-2);
+    margin: 0; padding: var(--space-3) var(--space-4); border-radius: var(--bmm-radius-input);
+}
+.ai-card .ai-block[hidden] { display: none; }
+.ai-card .ai-block > p.ai-muted, .ai-card .ai-block > .ai-muted { margin: 0; }
+.ai-card .ai-block > .ai-sub { margin: 0; }
+.ai-card .ai-block .ai-actions { margin-top: var(--space-1); gap: var(--space-2); }
+.ai-card .ai-sub { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0 0; }
+.ai-card .ai-check { gap: var(--space-2); margin: 0; padding: var(--space-1) 0; }
+.ai-card .ai-sent summary { margin-top: 0; padding: var(--space-1) 0; }
+.ai-card .ai-list { margin: var(--space-2) 0 0 var(--space-5); }
+.ai-card > .ai-actions {
+    gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+.ai-card > .ai-actions #ai-status { margin-left: auto; }
+
 /* ── Report pre-check (inside the feedback dialog) ───────────────────────── */
 .ai-precheck {
     margin: 0 18px 10px; padding: 10px 12px; border-radius: var(--bmm-radius-chip, 8px);
@@ -121,3 +155,44 @@
 }
 .ai-precheck .ai-sub { margin-top: 0; }
 .ai-precheck .btn { align-self: flex-start; }
+
+/* ── « Laya intégré »: the live install line (ai-settings.ts) ─────────────── */
+.ai-card #ai-emb-progress { width: 100%; height: 6px; accent-color: var(--bmm-accent); }
+.ai-card .ai-emb-live { font-variant-numeric: tabular-nums; }
+
+/* ── First use: « Laya is not installed — Install » inside a dialog ──────── */
+.ai-install-prompt {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 10px;
+    border-radius: var(--bmm-radius-chip, 8px); border: 1px dashed var(--border); background: var(--bmm-s05);
+    font-size: 12px; color: var(--text-secondary);
+}
+.ai-install-prompt .ai-install-text { flex: 1 1 220px; min-width: 0; }
+
+/* ── « Ask Laya » (ai-ask.ts) ─────────────────────────────────────────────── */
+.ai-ask .ai-ask-form { display: flex; gap: 8px; margin: 4px 0 10px; }
+.ai-ask .ai-ask-form .form-input { flex: 1 1 auto; min-width: 0; }
+.ai-ask .ai-ask-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ai-ask-list { display: flex; flex-direction: column; gap: 6px; }
+.ai-ask-hit {
+    display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: var(--bmm-radius-input, 8px); background: var(--bmm-s05);
+}
+.ai-ask-top .ai-ask-hit { border-color: color-mix(in srgb, var(--bmm-accent) 45%, var(--border)); }
+.ai-ask-hit-main { flex: 1 1 auto; min-width: 0; }
+.ai-ask-hit-title { font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ai-ask-snip { font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+.ai-ask-files { margin: 4px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--text-secondary); }
+.ai-ask-files code { overflow-wrap: anywhere; }
+.ai-ask-hit .btn { flex: none; }
+
+/* ── The library's « smart » search toggle (inside .search-box) ───────────── */
+.ai-smart-toggle {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+    border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; color: var(--text-secondary);
+}
+.ai-smart-toggle:hover { color: var(--text-primary); background: var(--bmm-s05); }
+.ai-smart-toggle[aria-pressed="true"] {
+    color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary));
+    border-color: color-mix(in srgb, var(--bmm-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent) 12%, transparent);
+}

@@ -139,7 +139,7 @@
         "en": "The Library is where every mod you own lives — installed or not, from any source.",
         "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
       },
-      "words": 681,
+      "words": 737,
       "diagrams": 0,
       "fr": true
     },
@@ -409,8 +409,8 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 600,
-      "diagrams": 2,
+      "words": 876,
+      "diagrams": 3,
       "fr": true
     },
     {
@@ -424,7 +424,7 @@
         "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
         "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 1265,
+      "words": 2007,
       "diagrams": 1,
       "fr": true
     },
@@ -559,7 +559,7 @@
         "en": "Two active mods that ship the same file do not merge: BMM copies files, so one of them is what the game reads.",
         "fr": "Deux mods actifs qui fournissent le même fichier ne fusionnent pas : BMM copie des fichiers, donc l'un des deux est celui que le jeu lit."
       },
-      "words": 661,
+      "words": 754,
       "diagrams": 1,
       "fr": true
     },

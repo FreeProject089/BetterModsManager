@@ -2,6 +2,7 @@
 import { appState } from '../../core/state.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { renderTagChip } from '../../ui/icon-pack.js';
+import { mountOrderSection } from './lib-order.js';
 import { invoke } from '../../core/api.js';
 import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
@@ -202,6 +203,9 @@ export async function renderModDetail(modId) {
 
   // The protected-source block: mounted HERE, beside its listeners, because markup with no
   // listeners looks exactly like markup nobody has clicked yet.
+  // Where this mod sits in the profile's activation order, and the moves (lib-order.ts).
+  mountOrderSection(panel, mod);
+
   const accessSlot = panel.querySelector('#detail-links-access');
   if (accessSlot) accessSlot.innerHTML = sourceAccessHtml('mdl');
 

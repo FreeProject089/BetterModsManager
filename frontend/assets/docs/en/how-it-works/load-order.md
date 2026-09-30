@@ -49,6 +49,24 @@ would change hands.
 
 ---
 
+## From the Mod Library
+
+You do not have to leave the library to see or change the order of the profile it shows:
+
+| Where | What you get |
+|---|---|
+| The list icon next to the sort menu | The full order view above, for the library's profile |
+| A mod's detail panel | An **Activation order** box: its position (*Position 3 of 12*), whom it overrides and who overrides it, and Top / Up / Down / Bottom |
+| Right-click on a mod card | The same four moves, and **Open the full order** |
+| `Alt+↑` / `Alt+↓` / `Alt+Home` / `Alt+End` | Move the selected mod (library commands, rebindable like the others) |
+
+A move made from the library is applied at once: there is no draft, the new order is saved and only
+the files that change hands are copied again, exactly as **Apply order** does. The `#N` badge on
+each active card is its position, and the **Activation Order** sort lists the library in that
+order. A disabled mod has no position: enable it first, it joins at the end.
+
+---
+
 ## What "Apply order" writes
 
 The new order is saved, then **only the files whose winner changed** are copied again, from their

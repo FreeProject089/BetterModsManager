@@ -295,20 +295,20 @@
   },
   "src/commands/ai.rs": {
     "spawn_blocking": {
-      "count": 5,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO"
+      "count": 7,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO"
     }
   },
   "src/extra_tools/mcp_server.rs": {
     "spawn_blocking": {
-      "count": 1,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+      "count": 5,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO"
     }
   },
   "src/mcp/server.rs": {
     "spawn_blocking": {
-      "count": 1,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap) or a depth-2/4000-entry metadata read; off the async runtime, not bulk IO"
+      "count": 5,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO"
     }
   },
   "src/commands/ai_embedded.rs": {

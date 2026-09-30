@@ -297,7 +297,7 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
         const list = [...rows.values()];
         const on = list.filter((r) => r.on).length;
         ov.innerHTML = `
-        <div class="modal glass" style="max-width:720px; width:94%; max-height:86vh; display:flex; flex-direction:column;">
+        <div class="modal glass modal--lg" style="max-height:86vh;">
             <div class="modal-header" style="flex-shrink:0;">
                 <h3>${escHtml(t('repo.cat.b.title') || 'Build a repo catalogue')}</h3>
                 <button class="modal-close" type="button" data-x>&times;</button>

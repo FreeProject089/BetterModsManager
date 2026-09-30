@@ -70,7 +70,7 @@ export function openSshServers(focus?: string): void {
     let dirty = false;
 
     ov.innerHTML = `
-      <div class="modal glass" style="max-width:720px;width:96%;">
+      <div class="modal glass modal--lg">
         <div class="modal-header">
           <h2 style="margin:0;font-size:16px;">${escHtml(t('sshsrv.title'))}</h2>
           <button class="modal-close" id="sshsrv-close" aria-label="${escAttr(t('common.close'))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>

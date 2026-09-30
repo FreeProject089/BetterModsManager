@@ -3,8 +3,8 @@
 //!
 //! Mounted twice, like `ai_core`: by the app (`commands::ai_embedded`) and by the CLI/MCP binary
 //! (`extra_tools/mcp_server.rs` mounts this file at the same path), so the MCP AI tools answer with
-//! the SAME engine as the in-app dialog. Only external crates and `crate::commands::ai_core` (which
-//! both binaries mount) are used here.
+//! the SAME engine as the in-app dialog. Only external crates, `crate::commands::ai_core` and
+//! `crate::commands::ai_laya` (which both binaries mount) are used here.
 //!
 //! ## What runs
 //!
@@ -715,6 +715,74 @@ pub struct Status {
     /// The user copy can be removed from Settings; the installed one is removed by the uninstaller.
     pub removable: bool,
     pub partial_bytes: u64,
+    /// A pack from an earlier pin sits where BMM looks (files present, sizes not the pinned
+    /// ones): Settings offers « Update » instead of « Install ».
+    pub outdated: bool,
+    /// Disk space the install needs (the rest of the download + the unpacked files + a margin),
+    /// and what the target volume has free (None: could not tell).
+    pub needed_bytes: u64,
+    pub free_bytes: Option<u64>,
+    /// Where the pack is fetched from, in order (the first that answers wins).
+    pub mirrors: Vec<String>,
+    /// Which packs this build can run, and which one is installed (see [`packs`]).
+    pub packs: Vec<PackInfo>,
+    /// A folder that exists, for « Open folder »: the pack's, else the nearest parent of where
+    /// it would be downloaded.
+    pub folder: String,
+}
+
+/// A model pack BMM knows how to run, for the router and the Settings list.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackInfo {
+    pub id: &'static str,
+    pub model: &'static str,
+    /// Languages it was trained for: "*" = multilingual.
+    pub languages: &'static str,
+    pub installed: bool,
+}
+
+/// The packs the router can choose between. ONE is shipped: measured on BMM's own eval set
+/// (laya-model.lock.json, `router`), the English checkpoint did not beat the multilingual one
+/// on the English texts and cannot read the others, and typed-decisions is trained for
+/// invoices and support tickets, not mods. The router (`ai_laya::route`) still takes a list,
+/// so a second pack is a new line here plus its pins — not a rewrite.
+pub fn packs() -> Vec<PackInfo> {
+    vec![PackInfo { id: "laya-multilingual", model: MODEL_ID, languages: "*", installed: installed() }]
+}
+
+/// Total size of the unpacked pack.
+pub fn unpacked_size() -> u64 {
+    PACK_FILES.iter().map(|p| p.size).sum()
+}
+
+/// Free bytes on the volume holding `path` (the longest mount point that prefixes it).
+pub fn free_space(path: &Path) -> Option<u64> {
+    let mut probe = path.to_path_buf();
+    while !probe.exists() {
+        probe = probe.parent()?.to_path_buf();
+    }
+    let full = std::fs::canonicalize(&probe).unwrap_or(probe).display().to_string();
+    let s = full.strip_prefix(r"\\?\").unwrap_or(&full).to_lowercase();
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    disks
+        .list()
+        .iter()
+        .filter(|d| s.starts_with(&d.mount_point().display().to_string().to_lowercase()))
+        .max_by_key(|d| d.mount_point().as_os_str().len())
+        .map(|d| d.available_space())
+}
+
+/// What an install still needs on disk: the rest of the download, the unpacked files (staged
+/// next to the old copy before the swap) and 64 MB of margin.
+pub fn space_needed(partial: u64) -> u64 {
+    PACK_SIZE.saturating_sub(partial) + unpacked_size() + 64 * 1024 * 1024
+}
+
+/// A folder holding a pack that is not the pinned one (an earlier release).
+fn looks_outdated(dir: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(dir.join(MODEL_FILE)) else { return false };
+    pinned(MODEL_FILE).map(|p| p.size != meta.len()).unwrap_or(false)
 }
 
 fn dir_size(dir: &Path) -> u64 {
@@ -727,6 +795,7 @@ fn partial_path() -> Option<PathBuf> {
 
 pub fn status() -> Status {
     let found = find_model_dir();
+    let partial = partial_path().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len()).unwrap_or(0);
     let (loaded, load_ms, runs) = slot().try_lock().map(|s| (s.eng.is_some(), s.eng.as_ref().map(|e| e.load_ms), s.runs)).unwrap_or((true, None, 0));
     Status {
         installed: found.is_some(),
@@ -742,7 +811,13 @@ pub fn status() -> Status {
         runtime: ORT_VERSION,
         download_bytes: PACK_SIZE,
         removable: found.as_ref().map(|(_, s)| *s == "user").unwrap_or(false),
-        partial_bytes: partial_path().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len()).unwrap_or(0),
+        partial_bytes: partial,
+        outdated: found.is_none() && [install_dir(), user_dir()].iter().flatten().any(|d| looks_outdated(d)),
+        needed_bytes: space_needed(partial),
+        free_bytes: user_dir().and_then(|d| free_space(&d)),
+        mirrors: PACK_URLS.iter().map(|u| u.to_string()).collect(),
+        packs: packs(),
+        folder: found.as_ref().map(|(d, _)| d.clone()).or_else(|| user_dir().and_then(|d| d.ancestors().find(|a| a.is_dir()).map(Path::to_path_buf))).map(|d| d.display().to_string()).unwrap_or_default(),
     }
 }
 
@@ -774,6 +849,49 @@ pub fn remove_user_copy() -> Result<Value, String> {
     Ok(json!({ "removed": true, "pendingRestart": left }))
 }
 
+/// « Cancel » (not « Pause »): forget what was downloaded so far.
+pub fn discard_partial() {
+    if let Some(p) = partial_path() {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+/// « Test Laya »: load the model if needed and classify a fixed sample (a French livery
+/// readme: which of four tags, adult content or not — the language comes from the detector), with the timings. It proves the model reads and
+/// answers, with none of the user's data.
+pub fn self_test() -> Result<Value, String> {
+    use crate::commands::ai_laya as L;
+    let text = "Name: Livrée Patrouille de France\nDescription: Livrée de la Patrouille de France pour l'Alpha Jet, avec les numéros de chaque avion.";
+    let names: Vec<String> = ["Weapons", "Liveries", "Maps", "Sound"].iter().map(|s| s.to_string()).collect();
+    let cands: Vec<usize> = (0..names.len()).collect();
+    let mut qs = L::tag_questions(&names, &cands);
+    qs.push(L::nsfw_question());
+    let was_loaded = slot().try_lock().map(|s| s.eng.is_some()).unwrap_or(false);
+    let t0 = Instant::now();
+    let resp = predict(text, &qs)?;
+    let total_ms = t0.elapsed().as_millis() as u64;
+    let load_ms = if was_loaded { 0 } else { slot().lock().ok().and_then(|s| s.eng.as_ref().map(|e| e.load_ms)).unwrap_or(0) };
+    let best = |v: Vec<(String, f64)>| v.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    let tag = best(L::choice_probs(&resp, "tags_choice"));
+    let tag_name = tag.as_ref().and_then(|(k, _)| k.strip_prefix('t')).and_then(|i| i.parse::<usize>().ok()).and_then(|i| names.get(i).cloned()).unwrap_or_else(|| "none".into());
+    let lang = L::language_hint(text).map(|(c, p)| (c.to_string(), p as f64));
+    let adult = L::noul_p(&resp, "nsfw").unwrap_or(1.0);
+    let ok = tag_name == "Liveries" && lang.as_ref().map(|l| l.0 == "fr").unwrap_or(false) && adult < 0.5;
+    Ok(json!({
+        "ok": ok,
+        "sample": text,
+        "tag": tag_name,
+        "tagP": tag.map(|t| t.1),
+        "language": lang.as_ref().map(|l| l.0.clone()),
+        "languageP": lang.map(|l| l.1),
+        "adultP": adult,
+        "questions": qs.len(),
+        "loadMs": load_ms,
+        "totalMs": total_ms,
+        "answerMs": total_ms.saturating_sub(load_ms),
+    }))
+}
+
 /// At start-up: finish a removal that a loaded DLL blocked last time.
 pub fn cleanup_pending() {
     if let Some(dir) = user_dir() {
@@ -783,11 +901,48 @@ pub fn cleanup_pending() {
     }
 }
 
-/// Download progress, for the Settings bar.
-#[derive(Debug, Clone, Copy, Serialize)]
+/// Install progress, for the Settings bar: the phase, the bytes, the speed (averaged over the
+/// last seconds), the time left, and which mirror is serving.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Progress {
+    /// "download" | "verify" | "unpack"
+    pub phase: &'static str,
     pub received: u64,
     pub total: u64,
+    pub bytes_per_sec: u64,
+    pub eta_secs: Option<u64>,
+    /// Index into [`PACK_URLS`], and its host.
+    pub mirror: usize,
+    pub host: String,
+}
+
+fn host_of(url: &str) -> String {
+    url.split("//").nth(1).and_then(|r| r.split('/').next()).unwrap_or("").to_string()
+}
+
+/// Speed over a sliding 5 s window: an average from the start still reads « 2 MB/s » minutes
+/// after the line got faster, an instant one jumps at every tick.
+struct Speed {
+    samples: std::collections::VecDeque<(Instant, u64)>,
+}
+impl Speed {
+    fn new() -> Speed {
+        Speed { samples: std::collections::VecDeque::new() }
+    }
+    fn push(&mut self, at: Instant, bytes: u64) -> u64 {
+        self.samples.push_back((at, bytes));
+        while self.samples.len() > 2 && at.duration_since(self.samples[0].0) > Duration::from_secs(5) {
+            self.samples.pop_front();
+        }
+        let (t0, b0) = self.samples[0];
+        let dt = at.duration_since(t0).as_secs_f64();
+        if dt < 0.2 {
+            0
+        } else {
+            (bytes.saturating_sub(b0) as f64 / dt) as u64
+        }
+    }
 }
 
 fn download_client() -> Result<reqwest::blocking::Client, String> {
@@ -817,7 +972,13 @@ fn hash_prefix(path: &Path, h: &mut Sha256) -> u64 {
 }
 
 /// Fetch the pinned pack into `part` (resuming what is there), verifying size and SHA-256.
-fn fetch_pack(url: &str, part: &Path, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Result<(), String> {
+fn fetch_pack(mirror: usize, url: &str, part: &Path, progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Result<(), String> {
+    let host = host_of(url);
+    let mut speed = Speed::new();
+    let report = |phase: &'static str, have: u64, bps: u64| {
+        let eta = if bps > 0 && phase == "download" { Some(PACK_SIZE.saturating_sub(have) / bps) } else { None };
+        progress(Progress { phase, received: have, total: PACK_SIZE, bytes_per_sec: bps, eta_secs: eta, mirror, host: host.clone() });
+    };
     let client = download_client()?;
     let mut hasher = Sha256::new();
     let mut have = hash_prefix(part, &mut hasher);
@@ -866,13 +1027,14 @@ fn fetch_pack(url: &str, part: &Path, progress: &dyn Fn(Progress), cancel: &Atom
             hasher.update(&buf[..n]);
             f.write_all(&buf[..n]).map_err(|e| e.to_string())?;
             if last.elapsed() >= Duration::from_millis(200) {
-                progress(Progress { received: have, total: PACK_SIZE });
                 last = Instant::now();
+                let bps = speed.push(last, have);
+                report("download", have, bps);
             }
         }
         f.flush().map_err(|e| e.to_string())?;
     }
-    progress(Progress { received: have, total: PACK_SIZE });
+    report("verify", have, 0);
     if have != PACK_SIZE {
         return Err("embedded:incomplete".into());
     }
@@ -938,10 +1100,19 @@ pub fn install_user_copy(progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Re
     if let Some(parent) = part.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+    let need = space_needed(have);
+    if let Some(free) = free_space(&dest) {
+        if free < need {
+            return Err(format!("embedded:no_space:{}:{}", need, free));
+        }
+    }
     let mut last_err = String::from("unreachable");
     let mut ok = false;
-    for url in PACK_URLS {
-        match fetch_pack(url, &part, progress, cancel) {
+    // The mirrors in order: a GitHub outage (or a network that blocks it) falls through to
+    // BetterCommunity. The pin is the same, so a mirror can serve a bad file, never install it.
+    for (i, url) in PACK_URLS.iter().enumerate() {
+        match fetch_pack(i, url, &part, progress, cancel) {
             Ok(()) => {
                 ok = true;
                 break;
@@ -954,6 +1125,7 @@ pub fn install_user_copy(progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Re
         return Err(last_err);
     }
     unload();
+    progress(Progress { phase: "unpack", received: PACK_SIZE, total: PACK_SIZE, bytes_per_sec: 0, eta_secs: None, mirror: 0, host: String::new() });
     unpack(&part, &dest)?;
     let _ = std::fs::remove_file(&part);
     Ok(json!({ "installed": true, "dir": dest.display().to_string() }))

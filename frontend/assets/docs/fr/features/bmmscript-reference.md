@@ -24,7 +24,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `modpack.delete` | Supprime un fichier de modpack. Les mods qu’il liste ne sont pas touchés. | `id` |
 | `mod.enable` | Active un mod | `id` |
 | `mod.disable` | Désactive un mod | `id` |
-| `mods.order` | Déplace un mod dans l'ordre de déploiement. Deux mods actifs qui livrent le même fichier ne fusionnent pas — celui déployé en dernier est celui sur le disque. | `order` · `id` · `mode` |
+| `mods.order` | Déplace un mod dans l'ordre de déploiement. Si deux mods livrent le même fichier, le dernier déployé gagne. | `order` · `id` · `mode` |
 | `modpack.enable` | Active tous les mods d'un modpack | `id` |
 | `modpack.disable` | Désactive tous les mods d'un modpack | `id` |
 | `modpack.create` | Crée un modpack depuis un profil | `name` · `profile` |
@@ -51,14 +51,14 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.connect` | Ajoute un repo distant | `url` · `name` · `password` |
 | `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` · `password` |
 | `repo.gen` | Ouvre la génération de repo | — |
-| `repo.genNow` | Génère le dépôt sur place, sans ouvrir la page — contrairement à « Générer un dépôt », qui ne fait que t’y emmener. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
+| `repo.genNow` | Génère le dépôt sur place, sans ouvrir la page. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
 | `repo.update` | Met à jour un repo exporté | `dir` |
 | `repo.host` | Sert un repo en HTTP | `dir` · `port` |
 | `repo.manifest` | Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante. | `dir` · `name` · `author` |
 | `repo.publishSsh` | Envoie le dossier exporté vers la cible SSH enregistrée dans Server Repo | `dir` · `target` · `into` |
 | `repo.fetchSsh` | Récupère le dépôt depuis la cible SSH enregistrée, dans un dossier local | `dir` · `target` · `into` |
-| `catalog.import` | Lit le document à cette adresse et décide : un index fait suivre tout ce qu'il liste, un catalogue seul est confronté aux huit types. Celui qui n'en suit aucun est refusé plutôt que deviné — le suivre mettrait une adresse dans une liste qui la récupère à chaque démarrage, pour toujours. | `url` · `catType` · `password` |
-| `catalog.entry` | Une entrée d'un catalogue que cette machine ÉCRIT, pas un qu'elle suit. L'id est ce sur quoi modifier et retirer s'appuient : une entrée sans id pourrait être écrite puis jamais retouchée — elle est refusée. | `mode` · `catType` · `id` · `json` |
+| `catalog.import` | Lit le document à cette adresse. Un index fait suivre tout ce qu'il liste ; un catalogue seul est associé à l'un des huit types. Le reste est refusé. | `url` · `catType` · `password` |
+| `catalog.entry` | Une entrée d'un catalogue que cette machine ÉCRIT, pas un qu'elle suit. Un id est obligatoire. | `mode` · `catType` · `id` · `json` |
 | `catalog.delete` | Jette tout le catalogue écrit d'un type. Demande confirmation, et exige la permission « supprimer » comme toute étape qui détruit quelque chose à toi. Ne touche pas aux catalogues que tu suis. | `catType` |
 | `repo.syncNow` | Synchronise un dépôt serveur dans un profil local, sans surveillance. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Génère une paire de clés sur le trousseau. Un nom déjà pris est laissé tel quel, jamais remplacé. | `name` · `kind` · `bindUrl` |
@@ -116,13 +116,13 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `var.ternary` | Définit une variable selon une condition (a si vrai, sinon b) | `condition` · `target` · `ifTrue` · `ifFalse` |
 | `rule.table` | Associe une variable à un résultat via une table de décision | `source` · `target` · `rows` |
 | `task.stop` | Arrête toute la tâche maintenant (dans un IF = garde) | `reason` |
-| `code.run` | Exécute un extrait BMMScript dans cette tâche — mêmes variables, mêmes permissions. | `code` |
+| `code.run` | Exécute un extrait BMMScript dans cette tâche (mêmes variables et permissions). | `code` |
 | `list.set` | Remplace toute la liste. Accepte un tableau JSON ou une simple ligne a, b, c. Relisez-la via {list.<nom>.length}, ou parcourez-la avec FOR EACH. | `name` · `value` · `sep` |
 | `list.push` | Ajoute un élément à la fin. Contrairement à « la définir », exécuter deux fois ajoute deux fois. | `name` · `value` |
 | `list.clear` | Vide la liste sans supprimer son nom : un ajout ultérieur repart de zéro. | `name` |
 | `map.set` | Enregistre une valeur sous une clé. Une liste répond « lesquels » ; une table répond « quoi va avec quoi ». | `name` · `key` · `value` |
-| `map.get` | Lit une clé dans une variable que vous nommez. Une clé absente enregistre une valeur vide — testez {map.hit} pour distinguer « absente » de « présente et vide ». | `name` · `key` · `into` |
-| `id.of` | Détermine ce qu'un modpack, un plugin ou une automatisation EST — l'id identique partout où le contenu l'est — et le range dans une variable. Comparez-le pour vérifier que vous avez ce que vous croyez, sans rien télécharger ni faire confiance à un nom. | `into` · `kind` · `id` |
+| `map.get` | Lit une clé dans une variable. Une clé absente donne une valeur vide ; {map.hit} indique si elle existait. | `name` · `key` · `into` |
+| `id.of` | Range l'id de contenu d'un modpack, d'un plugin ou d'une automatisation dans une variable. Comparez-le pour vérifier que c'est le bon, sans rien télécharger. | `into` · `kind` · `id` |
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
 | `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
@@ -146,14 +146,14 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `notify` | Affiche une notification | `message` |
 | `discord.rpc` | Bascule la présence Discord | `enabled` |
 | `data.exportAuto` | Sauvegarde automatique des données | `dir` · `name` · `increment` |
-| `data.backup` | La même archive que l'écran Export de données — les sections que tu choisis, verrouillée si tu donnes une phrase. | `dir` · `sections` · `passphrase` · `name` · `increment` |
+| `data.backup` | L'archive de l'Export de données : les sections choisies, verrouillée si tu donnes une phrase. | `dir` · `sections` · `passphrase` · `name` · `increment` |
 | `app.checkUpdate` | Vérifie s’il existe une mise à jour de BMM. Renseigne update.available ; ne télécharge rien. | `enabled` |
 | `system.clearApiLog` | Vide le journal des requêtes API. | — |
 | `system.clearResourceRecords` | Vide les relevés CPU/mémoire enregistrés. | — |
 | `task.run` | Déclenche une autre tâche. Demande la permission « Autres tâches ». | `id` |
-| `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. Demande la permission « Autres tâches ». | `id` |
+| `task.spawn` | Lance l’autre tâche sans attendre. Pour attendre, prenez « Exécuter une autre tâche ». Demande la permission « Autres tâches ». | `id` |
 | `task.setEnabled` | Active ou désactive une autre tâche planifiée. Une tâche peut armer celle qui la suit ; elle ne peut ni s’armer ni se désarmer elle-même (c’est refusé). Demande la permission « Autres tâches ». | `taskId` · `armOn` |
-| `view.open` | Ouvre un écran ou une fenêtre de BMM — n’importe lequel, par son nom. | `place` · `id` · `arg` |
+| `view.open` | Ouvre n’importe quel écran ou fenêtre de BMM par son nom. | `place` · `id` · `arg` |
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
 | `custom.command` | Lance un programme avec arguments | `args` · `program` · `workingDir` · `into` |
@@ -161,7 +161,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `folder.create` | Crée un dossier dans le dossier de données de BMM. Il ne peut pas en sortir. | `path` · `into` |
 | `catalog.create` | Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `http.request` | Envoie une requête à n’importe quelle adresse et capture la réponse. Exige « Exécuter des programmes externes ». | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
-| `wait.http` | L'interroge jusqu'à ce qu'elle réponde — au statut, ou à ce que dit la réponse — ou abandonne et le dit. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
+| `wait.http` | L'interroge jusqu'à ce qu'elle réponde (statut ou contenu de la réponse), ou abandonne. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Dort jusqu'à ce que quelque chose poste sur /api/hook avec ce nom, ou que BMM elle-même lève cet événement. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Prend un fichier ou une adresse et le lit dans le format BMM qui est le sien. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
 

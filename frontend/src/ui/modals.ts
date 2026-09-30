@@ -5,6 +5,7 @@
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { askConfirm } from '../core/api.js';
+import { ensureModalShellCss, installGlobalModalKeys } from './modal-shell.js';
 
 interface ConfirmOptions {
     yesLabel?: string;
@@ -25,6 +26,11 @@ declare global {
 }
 
 export function initModals(): void {
+    // The shared modal look (css/modal-shell.css) and the keyboard behaviour every house
+    // overlay gets: Tab stays in the top one, a bare "×" gets a name.
+    ensureModalShellCss();
+    installGlobalModalKeys(() => t('common.close'));
+
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
             const id = (btn as HTMLElement).dataset.close!;

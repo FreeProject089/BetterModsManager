@@ -9,7 +9,7 @@ import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { rowsFromSuggestions, toggleRow, buildFields, pct, providerBlock, type SuggestionRow, type AiSuggestion, type ModView } from './ai-model.js';
-import { ensureAiCss, loadAiView, sourceLabel, fieldLabel, reasonText, bcAuthArgs, openAiDocs } from './ai-shared.js';
+import { ensureAiCss, loadAiView, sourceLabel, fieldLabel, reasonText, bcAuthArgs, openAiDocs, offerInstall, installPromptHtml, wireInstallPrompt } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 
 interface OpenOpts {
@@ -96,6 +96,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             <p class="ai-lead">${escHtml(t('ai.suggest.lead'))}</p>
             <div class="ai-provider">${providerLine()}
               <button type="button" class="ai-link" id="ais-docs">${escHtml(t('ai.docsLink'))}</button></div>
+            ${offerInstall(view) ? installPromptHtml(view) : ''}
             ${canDraft ? `<label class="ai-check"><input type="checkbox" id="ais-draft"> <span>${escHtml(t('ai.suggest.draft'))}</span></label>` : ''}
             ${body}
           </div>
@@ -108,6 +109,8 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         o.querySelector('#ais-close')?.addEventListener('click', close);
         o.querySelector('#ais-cancel')?.addEventListener('click', close);
         o.querySelector('#ais-docs')?.addEventListener('click', () => { close(); openAiDocs(); });
+        // First use: « Laya is not installed — Install ». Installed, the dialog starts over with it.
+        wireInstallPrompt(o, () => { close(); void openAiSuggest(mod, opts); });
         const draftBox = o.querySelector<HTMLInputElement>('#ais-draft');
         if (draftBox) {
             draftBox.checked = wantDraft;

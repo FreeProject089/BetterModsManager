@@ -76,9 +76,14 @@ pub mod themes;
 pub mod bmms;
 pub mod scheduler;
 pub mod analytics;
+pub mod live_issues;
 pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;
 pub mod ai_core;
 pub mod ai_embedded;
+pub mod ai_laya;
+pub mod ask_core;
+#[cfg(test)]
+mod ai_eval;
 pub mod ai;

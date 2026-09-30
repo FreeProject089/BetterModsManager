@@ -11,6 +11,7 @@ import { t } from './i18n.js';
 import { getLinks } from './links-config.js';
 import { escHtml } from './utils.js';
 import type { TelemetryLinkPlan } from './telemetry-link.js';
+import { initLiveIssues, refreshLiveIssues, mountLiveIssuesToggle, setLiveErrors } from './live-issues.js';
 
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
@@ -77,6 +78,8 @@ function baseProps(): Record<string, any> {
 export async function initAnalytics(): Promise<void> {
     try { _consent = (await invoke('get_analytics_consent')) as boolean | null; }
     catch { _consent = null; }
+    // Live errors: every launch, whatever the consent (Rust decides; off = nothing is sent).
+    void initLiveIssues(_sessionId);
     // NOTE: we no longer pop the consent modal on a timer here — the startup
     // sequence (app.ts) calls maybeShowConsentModal() AFTER the TOS + Privacy
     // modals so it appears last and in order.
@@ -146,6 +149,7 @@ export async function setConsent(enabled: boolean): Promise<void> {
     const wasOff = _consent !== true;
     _consent = enabled;
     try { await invoke('set_analytics_consent', { enabled }); } catch {}
+    void refreshLiveIssues();
     if (enabled) {
         await startCollection();
         // First opt-in: run one benchmark now so the team gets a baseline.
@@ -755,6 +759,7 @@ export function initPrivacySettings(): void {
     const toggle = document.getElementById('analytics-toggle') as HTMLInputElement | null;
     if (!toggle) return;
     refreshPrivacyUI();
+    mountLiveIssuesToggle();
     if ((toggle as any).dataset.wired) return;
     (toggle as any).dataset.wired = '1';
     toggle.addEventListener('change', async () => { await setConsent(toggle.checked); refreshPrivacyUI(); });
@@ -1058,6 +1063,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                     <li>${t('analytics.collect.network') || 'Network info (IP & approximate region, VM detection) — for abuse prevention & regional stats'}</li>
                     <li>${t('analytics.collect.id') || 'Your anonymous Creator ID — never your name or email'}</li>
                     <li>${t('analytics.collect.replay') || 'Visual session replay (masked by default) — to see where users get stuck'}</li>
+                    <li>${t('analytics.collect.errors')}</li>
                 </ul>
             </div>
             
@@ -1092,6 +1098,13 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
+                    ${link ? '' : `<label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                        <span>${t('analytics.liveToggle')}</span>
+                        <div class="plug-toggle">
+                            <input type="checkbox" id="modal-live-toggle">
+                            <span class="plug-toggle-slider"></span>
+                        </div>
+                    </label>`}
                     ${link ? '' : `<label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="modal-replay-full-container">
                         <span>${t('analytics.replayFullToggle') || 'Unmask Replay (capture text & images)'}</span>
                         <div class="plug-toggle">
@@ -1131,6 +1144,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
         const benchToggle = overlay.querySelector('#modal-bench-toggle') as HTMLInputElement | null;
         const replayToggle = overlay.querySelector('#modal-replay-toggle') as HTMLInputElement | null;
         const replayFullToggle = overlay.querySelector('#modal-replay-full-toggle') as HTMLInputElement | null;
+        const liveToggle = overlay.querySelector('#modal-live-toggle') as HTMLInputElement | null;
         
         if (replayToggle && replayFullToggle) {
             replayToggle.addEventListener('change', () => {
@@ -1168,7 +1182,8 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
                 if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
             }
             close();                  // instant feedback — the overlay is gone
-            void setConsent(enabled).then(() => refreshPrivacyUI()).catch(() => {});
+            const live = enabled && !!liveToggle?.checked;
+            void setConsent(enabled).then(() => (live ? setLiveErrors(true) : undefined)).then(() => refreshPrivacyUI()).catch(() => {});
         };
         overlay.querySelector('#analytics-accept')?.addEventListener('click', () => decide(true));
         overlay.querySelector('#analytics-decline')?.addEventListener('click', () => decide(false));

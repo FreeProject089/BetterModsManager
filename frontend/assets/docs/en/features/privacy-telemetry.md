@@ -75,10 +75,43 @@ it to throw history away.
     at 64 MB and **stops the take** when it gets there, telling you so — what it already has is
     complete and playable.
 
+## Errors sent live
+
+A separate switch, **Send errors live**, lets BMM tell the team about an error within seconds
+instead of waiting for a bug report. It only works while telemetry is on: turning telemetry off
+stops it and deletes what was waiting to be sent.
+
+- **Its first value.** If you had already accepted telemetry when this switch appeared, it starts
+  **on**. Otherwise it starts **off**, and the consent dialog shows it unticked.
+- **What is sent.** JavaScript errors, crashes of the Rust side, commands that failed with a real
+  error (a cancel, being offline or a message already shown to you are not reported), and failed
+  deploys, installs, backups and scheduled tasks. For each: the error message, where it happened
+  in BMM's own code (function and file, no line numbers), the BMM version and the OS. For a crash,
+  the *name* of the local crash report, never its content.
+- **Cleaned on your PC first.** Every secret BMM stores (tokens, keys, your BetterCommunity key),
+  your user-folder name, e-mail addresses, IP addresses and your PC name are removed before
+  anything leaves. The telemetry server removes them a second time on arrival.
+- **Grouped, not repeated.** The same error again within 10 minutes only adds 1 to a counter. At
+  most 60 new errors an hour are sent, the waiting list is capped at 200 lines, and it is kept on
+  disk so an offline PC sends it later.
+- **Not linked to your other telemetry.** The report carries a one-way hash of your install id,
+  which the dashboard cannot match to anything else. A data request or an erasure still covers it.
+
+```mermaid
+graph TD
+    ERR["Error, crash, failed command"] --> SWITCH{"Telemetry AND Send errors live?"}
+    SWITCH -- no --> DROP["Nothing"]
+    SWITCH -- yes --> CLEAN["Secrets, folder names, e-mails, IPs removed"]
+    CLEAN --> GROUP["Grouped by fingerprint, counted"]
+    GROUP --> DISK["Queue on disk, 200 lines max"]
+    DISK --> SEND["Sent within seconds, HTTPS"]
+    SEND --> SERVER["Telemetry server: Issues"]
+```
+
 ## Your controls (Settings → Privacy)
 
-- Master toggle, plus separate toggles for the 7-day benchmark / extra-hardware report and
-  session replay.
+- Master toggle, plus separate toggles for the 7-day benchmark / extra-hardware report,
+  session replay and **Send errors live**.
 - **Export** the raw buffer as JSON any time.
 - See every **sent packet** (event names and counts only) and request its **deletion** —
   honoured within 72 hours.

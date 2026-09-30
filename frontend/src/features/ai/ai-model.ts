@@ -30,6 +30,8 @@ export interface AiSettings {
     mod_suggest: boolean;
     report_triage: boolean;
     description_drafts: boolean;
+    /** « Ask Laya » and the library's smart search may let Laya route and rank (the search runs regardless). */
+    ask?: boolean;
     local_url: string;
     local_allow_remote: boolean;
     external_url: string;
@@ -202,4 +204,98 @@ export function providerBlock(s: Pick<AiSettings, 'enabled' | 'classifier' | 'bc
     if (s.classifier === 'local' || s.classifier === 'embedded') return '';
     if (s.classifier === 'bettercommunity') return s.bc_consent ? '' : 'no_consent';
     return 'no_provider';
+}
+
+// ── « Laya intégré »: the install state machine ─────────────────────────────
+//
+// One state, derived from what Rust reports (`ai_embedded_status`) and what the install is
+// doing right now (the `ai-embedded-progress` events). The Settings block draws exactly one
+// of these, so there is no « Install » button beside a progress bar, no « Remove » during a
+// download, and an error always comes with a way out (retry, open the folder).
+
+export type EmbState = 'killed' | 'absent' | 'partial' | 'outdated' | 'no_space' | 'downloading' | 'verifying' | 'unpacking' | 'installed' | 'loaded' | 'error';
+
+export interface EmbStatus {
+    installed?: boolean; loaded?: boolean; partialBytes?: number; outdated?: boolean;
+    neededBytes?: number; freeBytes?: number | null; downloadBytes?: number;
+}
+export interface EmbLive { phase?: 'download' | 'verify' | 'unpack' | ''; error?: string }
+
+export function embState(st: EmbStatus | null | undefined, live: EmbLive = {}, killed = false): EmbState {
+    if (killed) return 'killed';
+    if (live.phase === 'download') return 'downloading';
+    if (live.phase === 'verify') return 'verifying';
+    if (live.phase === 'unpack') return 'unpacking';
+    if (live.error) return 'error';
+    const s = st || {};
+    if (s.installed) return s.loaded ? 'loaded' : 'installed';
+    if (typeof s.freeBytes === 'number' && typeof s.neededBytes === 'number' && s.freeBytes < s.neededBytes) return 'no_space';
+    if (s.outdated) return 'outdated';
+    if ((s.partialBytes || 0) > 0) return 'partial';
+    return 'absent';
+}
+
+/** 1.5 MB/s-style speed (decimal units, like fmtBytes). */
+export function fmtSpeed(bytesPerSec: number): string {
+    const v = Math.max(0, Number(bytesPerSec) || 0);
+    if (v <= 0) return '';
+    return `${fmtBytes(v)}/s`;
+}
+
+/** Seconds → "1:05" / "12:00" / "1 h 02". Empty when unknown. */
+export function fmtEta(secs: number | null | undefined): string {
+    if (secs == null || !Number.isFinite(Number(secs)) || Number(secs) < 0) return '';
+    const s = Math.round(Number(secs));
+    if (s >= 3600) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** "embedded:no_space:<needed>:<free>" → the two numbers, else null. */
+export function parseNoSpace(err: string): { needed: number; free: number } | null {
+    const m = /embedded:no_space:(\d+):(\d+)/.exec(String(err || ''));
+    return m ? { needed: Number(m[1]), free: Number(m[2]) } : null;
+}
+
+// ── « Ask Laya »: shaping the answer for the dialog ─────────────────────────
+
+export interface AskHit { kind: string; id: string; title: string; snippet: string; score: number; laya?: number | null; action: any }
+export interface AskAnswer {
+    question: string; intent: string; intent_p: number; routed_by: string; hits: AskHit[];
+    files: Array<{ mod_id: string; mod_name: string; enabled: boolean; files: string[]; total: number }>;
+    conflicts: Array<{ a_id: string; a_name: string; b_id: string; b_name: string; both_enabled: boolean; count: number; sample: string[] }>;
+    laya: boolean; low_confidence: boolean; notes: string[]; ms: number;
+}
+
+/** Group hits by what they are, in the order the intent makes most useful. */
+export function groupHits(a: Pick<AskAnswer, 'intent' | 'hits'>): Array<{ kind: string; hits: AskHit[] }> {
+    const order: Record<string, string[]> = {
+        docs: ['doc', 'article', 'setting', 'command', 'mod', 'profile'],
+        setting: ['setting', 'doc', 'article', 'command', 'mod', 'profile'],
+        command: ['command', 'setting', 'doc', 'article', 'mod', 'profile'],
+        mods: ['mod', 'profile', 'doc', 'article', 'setting', 'command'],
+        files: ['mod', 'doc', 'article', 'setting', 'command', 'profile'],
+        conflicts: ['mod', 'doc', 'article', 'setting', 'command', 'profile'],
+    };
+    const ord = order[a.intent] || order.docs;
+    const by = new Map<string, AskHit[]>();
+    for (const h of a.hits || []) {
+        const k = h.kind === 'article' ? 'doc' : h.kind;
+        if (!by.has(k)) by.set(k, []);
+        by.get(k)!.push(h);
+    }
+    const kinds = [...new Set(ord.map((k) => (k === 'article' ? 'doc' : k)))];
+    return kinds.filter((k) => by.has(k)).map((k) => ({ kind: k, hits: by.get(k)! }));
+}
+
+/** The best hit is shown first, on its own, when it clearly leads (or Laya picked it). */
+export function topPick(a: Pick<AskAnswer, 'hits' | 'low_confidence'>): AskHit | null {
+    const h = a.hits || [];
+    if (!h.length || a.low_confidence) return null;
+    if (h.length === 1) return h[0];
+    return h[0].score - h[1].score >= 0.15 || (h[0].laya ?? 0) >= 0.5 ? h[0] : null;
+}
+
+/** Library « smart » search: the ids of the mods an answer ranked, best first. */
+export function rankedModIds(a: Pick<AskAnswer, 'hits'> | null | undefined): string[] {
+    return (a?.hits || []).filter((h) => h.kind === 'mod').map((h) => String(h.action?.mod || h.id.replace(/^mod:/, ''))).filter(Boolean);
 }

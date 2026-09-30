@@ -508,7 +508,7 @@ BMM v1.0.0 features a professional-grade JSON-RPC implementation for AI integrat
 | :--- | :--- |
 | **Protocol** | JSON-RPC 2.0 over standard I/O (stdio) streams. |
 | **Serialization** | Intensive use of `serde` and `serde_json` for type-safe tool definitions and result mapping. |
-| **Tool Surface** | 78 atomic tools exposed via the `mcp-server` binary, plus 70 CLI subcommands on the same binary, covering the entire BMM command surface. |
+| **Tool Surface** | 82 atomic tools exposed via the `mcp-server` binary, plus 74 CLI subcommands on the same binary, covering the entire BMM command surface. |
 | **State Bridge** | The MCP binary initializes a secondary instance of the `AppState` engine to access local data without requiring the main BMM UI to be running. |
 | **Async Handling** | Fully asynchronous request processing using `tokio` to handle concurrent tool calls from AI agents. |
 

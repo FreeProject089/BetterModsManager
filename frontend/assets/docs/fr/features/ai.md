@@ -47,8 +47,25 @@ qu'il travaille. C'est un **paquet de modèle** à part (327 Mo à télécharger
 est cochée par défaut : l'installation télécharge le paquet une fois, le refuse s'il ne
 correspond pas à son SHA-256 épinglé, et le décompresse dans `<dossier d'installation>\models\laya`.
 Si vous l'avez décochée, **Réglages → IA → Laya intégré → Installer le modèle** télécharge le même
-paquet dans `%LOCALAPPDATA%\com.bettermm.desktop\models\laya` (avec une barre de progression ; un
-téléchargement interrompu reprend). **Supprimer le modèle** efface cette copie ; celle de
+paquet dans `%LOCALAPPDATA%\com.bettermm.desktop\models\laya`. Le bloc montre toujours UN seul état :
+
+| État | Ce que vous voyez |
+|---|---|
+| Pas installé | la taille (327 Mo), l'espace disque nécessaire et l'espace libre, **Installer** |
+| Téléchargement | une barre, le débit, le temps restant et le serveur utilisé ; **Pause** garde ce qui est reçu, **Annuler** le supprime |
+| En pause | ce qui est déjà là, **Reprendre** ou **L'abandonner** |
+| Vérification, décompression | le SHA-256 du téléchargement, puis de chaque fichier, contre leurs empreintes épinglées |
+| Installé / chargé | où, quelle taille, **Tester Laya**, **Ouvrir le dossier**, **Supprimer le modèle** |
+| Mise à jour disponible | un paquet plus ancien est sur le disque (les empreintes ont changé) : **Mettre à jour** |
+| Espace insuffisant | vérifié **avant** le téléchargement, jamais à 99 % |
+| Erreur | la raison, **Réessayer** et **Ouvrir le dossier** |
+
+Le paquet vient de la release GitHub de BMM, et du miroir BetterCommunity quand GitHub ne répond
+pas : les deux servent le même fichier épinglé, un miroir peut donc servir un mauvais fichier mais
+jamais le faire installer. **Tester Laya** classe un exemple fixe (aucune donnée à vous) et affiche
+la réponse et le temps pris. Là où une fonction IA apparaît et que le modèle manque (la fenêtre
+*Suggérer des infos*, *Demander à Laya*), une ligne le dit avec un bouton **Installer Laya (327 Mo)**
+plutôt qu'un bouton qui fait moins sans le dire. **Supprimer le modèle** efface cette copie ; celle de
 l'installation part avec la désinstallation.
 
 **Ce que ça coûte.** Rien tant que vous ne cliquez pas : le modèle est chargé à la première
@@ -59,6 +76,85 @@ sans utilisation. Chargé, il occupe environ 0,5 à 0,75 Go de mémoire ; un mod
 Quand le paquet est installé et que vous n'avez pas choisi de fournisseur vous-même, le moteur
 intégré est le fournisseur. Chaque fonction attend toujours votre clic, et l'interrupteur
 principal coupe toujours tout.
+
+## Quelle précision
+
+Laya est un classifieur calibré : il choisit une option ou donne une probabilité. Ce que BMM lui
+**demande** décide de la qualité des réponses : les questions ont donc été refaites et mesurées sur
+un jeu de textes au format de BMM étiqueté à la main (manifestes et readmes de mods, rapports de
+bug, listes de rapports précédents, en dix langues) : 156 éléments sur lesquels les réglages ont été
+ajustés, et 68 éléments **à l'aveugle**, écrits après et jamais utilisés pour ajuster. La colonne à
+l'aveugle est la plus honnête.
+
+| | Avant | Après, jeu d'ajustement | Après, jeu à l'aveugle |
+|---|---|---|---|
+| Tags (F1) | 0,44 / 0,16 à l'aveugle | **0,90** | **0,36** (0,50 sur les tags que BMM connaît, 0,34 sur les autres) |
+| Indication de langue | 27 % justes | **91 %** (98 % des indications affichées justes) | **78 %** (100 % des indications affichées justes) |
+| Catégorie de rapport | 50 % / 35 % à l'aveugle | **65 %** | **55 %** |
+| Gravité de rapport | 29 % / 40 % à l'aveugle | **60 %** | **50 %** |
+| Rapport en double | 9 fausses alertes sur 24 | **0** fausse alerte, 19/24 justes | **0** fausse alerte, 8/12 justes |
+
+Ce qui a changé :
+
+- **Des critères descriptifs.** Un tag est demandé par ce qu'il signifie : *Armes : le mod ajoute
+  ou modifie des armes : canons, missiles, bombes*. BMM reconnaît le sens d'un tag en dix langues
+  (« Weapons », « Waffen », « Оружие »…) ; un tag inconnu garde son propre nom.
+- **Les mots-clés d'abord.** Le texte du mod est parcouru à la recherche d'indices pour chaque tag ;
+  Laya n'est interrogé que sur les quelques candidats restants (10 au plus), avec un oui/non chacun
+  et un choix entre eux.
+- **La bonne partie du texte.** Une liste de fichiers se lit comme de l'anglais quelle que soit la
+  langue du readme : l'indication de langue ne lit que la prose, et un long rapport est réduit à son
+  titre et à ses lignes d'erreur.
+- **Mesuré, puis gardé ou retiré.** Laya s'est révélé incapable d'identifier une langue (37 %) :
+  l'indication de langue vient d'un détecteur de mots outils et de lettres. Pour la gravité il
+  répondait « moyenne » presque partout : c'est le type de problème qui fixe la gravité (un
+  plantage est élevé, une faute de frappe faible, des données perdues critique) et Laya ne fait que
+  départager.
+- **L'abstention.** Sous une probabilité calibrée, rien n'est suggéré : une indication manquante
+  coûte moins qu'une fausse.
+
+Les tags que la liste de concepts ne connaît pas (une époque, *Multijoueur*, *Cosmétique*) restent le
+point faible : là, le modèle seul juge le nom du tag, et il a raison environ une fois sur trois.
+
+## Demander à Laya
+
+**Ctrl+K → Demander à Laya** (ou tapez une question dans la palette, ou **Demander à Laya** dans
+Aide & autres) prend une question en toutes lettres : *quel mod modifie engine.ogg ?*, *quels mods
+sont en conflit ?*, *c'est quoi le mode jeu ?*, *comment exporter ma liste de mods ?* La réponse est
+une liste de choses qui existent, chacune avec son action, jamais du texte rédigé :
+
+- les sections de documentation et les articles d'aide, cités, avec **Ouvrir** ;
+- les réglages et les commandes de la palette, avec **Y aller** / **Lancer** ;
+- pour un fichier, les mods qui le fournissent et les chemins correspondants, les mods activés
+  d'abord ;
+- pour les conflits, les paires de mods qui fournissent les mêmes fichiers (readmes ignorés), avec
+  un échantillon.
+
+La recherche porte sur la documentation embarquée, l'écran Réglages, vos mods (nom, description,
+tags, liste de fichiers scannée) et vos profils, avec des règles de mots-clés pour le type de
+question. Quand l'IA est activée et le modèle installé, Laya choisit le meilleur des premiers
+candidats (la bonne réponse dans les 3 premières pour 34 questions de test sur 36, 31 sans lui), et
+le dit quand aucun ne semble convenir. Tout tourne sur ce PC ; la question n'est pas conservée.
+
+La recherche de la bibliothèque a un bouton **recherche intelligente** (l'étincelle) : activé, la
+recherche porte aussi sur les descriptions et les tags, et la liste suit ce classement.
+
+## Plusieurs modèles, un seul pipeline
+
+Le travail est découpé en étapes, et chacune dit si elle peut passer par le réseau (`bmm ai-status`,
+`pipeline`) :
+
+1. **Lire** : les fichiers du mod, les indices par mots-clés, le détecteur de langue, le masquage
+   des rapports. Toujours, hors ligne.
+2. **Classer** : Laya décide et filtre, n'écrit jamais : le paquet intégré, votre laya-serve, ou le
+   serveur de BetterCommunity.
+3. **Rédiger** : un brouillon de description via votre API externe, seulement si vous en avez
+   configuré une, jamais appliqué sans votre clic.
+
+BMM livre **un** paquet de modèle, le multilingue. Un routeur choisit le paquet selon la langue et
+peut en moyenner deux ; le modèle anglais a été mesuré comme second paquet et n'a que peu aidé sur
+les textes anglais (F1 des tags +0,10 sur 22 mods à l'aveugle, en moyenne avec le multilingue) pour
+un second téléchargement de 450 Mo et deux fois plus de temps : il n'est donc pas livré.
 
 ## Fournisseurs
 
@@ -165,6 +261,10 @@ L'interrupteur est dans `ai-settings.json` à côté de `data.json` ; les clés 
 | `bmm_ai_status` | `ai-status` | Les réglages et ce qui peut passer par le réseau (jamais une clé) |
 | `bmm_ai_suggest_mod_metadata` | `ai-suggest <mod-id> [--offline] [--draft]` | Les mêmes suggestions que la fenêtre. **N'écrit rien** |
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Écrit les champs nommés, avec la validation de la fenêtre |
+| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--json]` | *Demander à Laya* : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent, en résultats structurés |
+| `bmm_ai_pack_install` | `ai-install` | Télécharge, vérifie et installe le paquet du modèle (progression en direct dans la CLI) |
+| `bmm_ai_pack_remove` | `ai-remove` | Supprime le paquet du modèle téléchargé |
+| `bmm_ai_test` | `ai-test` | Classe un exemple fixe, avec les durées |
 
 Un agent doit vous montrer les suggestions et n'appliquer que ce que vous choisissez. Voir la
 [référence MCP](doc-page:reference/mcp) et la [référence CLI](doc-page:reference/cli).

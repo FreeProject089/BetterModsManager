@@ -154,6 +154,13 @@ export async function loadTauri(): Promise<void> {
     markBridgeReady();
 }
 
+// Live error reporting (core/live-issues.ts) registers here: a failed command is reported with
+// its NAME and its error text, never its arguments. Set by the reporter, so this module imports
+// nothing of it (and cannot report the reporter's own calls: it skips its commands).
+export type InvokeFailureKind = 'error' | 'cancel' | 'network' | 'validation' | 'quiet';
+let _onInvokeFailure: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null = null;
+export function setInvokeFailureHook(fn: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null): void { _onInvokeFailure = fn; }
+
 export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -198,6 +205,9 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
             console.warn(`[RPC VALIDATION] ${command}: ${errStr}`);
         } else {
             console.error(`[RPC ERROR] ${command}:`, err);
+        }
+        if (_onInvokeFailure) {
+            try { _onInvokeFailure(command, err, opts?.quiet ? 'quiet' : isCancelled ? 'cancel' : isNetwork ? 'network' : isValidation ? 'validation' : 'error'); } catch { /* never */ }
         }
         throw err;
     }

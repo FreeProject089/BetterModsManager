@@ -2,6 +2,7 @@ import { invoke, listen, pickFile, pickFolder, saveFile } from '../../core/api.j
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { showTaskyHelp, hideTaskyHelp } from '../../docs/interactive-docs.js';
+import { bindModal, ensureModalShellCss } from '../../ui/modal-shell.js';
 let benchmarkData = [];
 let isAdvancedMode = false;
 let isLiveView = true;
@@ -176,250 +177,306 @@ function formatUnit(val, type) {
     const i = Math.floor(Math.log(val) / Math.log(base));
     return (val / Math.pow(base, i)).toFixed(2) + ' ' + units[i];
 }
+// ── Shared look + behaviour ──────────────────────────────────────────────────────────────
+// The modal shell (css/modal-shell.css, linked at boot) plus this feature's own file.
+function ensureBenchCss() {
+    ensureModalShellCss();
+    if (document.getElementById('bench-css'))
+        return;
+    const link = document.createElement('link');
+    link.id = 'bench-css';
+    link.rel = 'stylesheet';
+    link.href = 'css/bench.css';
+    document.head.appendChild(link);
+}
+const tt = (key, en, vars) => {
+    const v = vars ? t(key, vars) : t(key);
+    if (v && v !== key)
+        return v;
+    return vars ? en.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')) : en;
+};
+const escB = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// ── Live view: one render per frame, however many points arrive ──────────────────────────
+// Points come in bursts (a CSV import, the backend catching up after a stall). Redrawing two
+// canvases, four sparklines and the heatmap per point was the jank: now each point only
+// marks the view dirty and the next animation frame paints the latest state once.
+let perfRoot = null;
+let perfRebind = null;
+let renderQueued = false;
+function scheduleLiveRender() {
+    if (renderQueued)
+        return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+        renderQueued = false;
+        const root = perfRoot;
+        if (!root || !root.isConnected)
+            return;
+        const idx = isLiveView ? benchmarkData.length - 1 : (seekIndex ?? benchmarkData.length - 1);
+        const point = benchmarkData[idx];
+        if (point)
+            updateStatsView(root, point);
+        renderCharts(root, benchmarkData, isLiveView ? null : seekIndex);
+        renderActivityMap(root, benchmarkData);
+        renderSparklines(root, benchmarkData);
+        updateSeekHandle(root, isLiveView || benchmarkData.length < 2 ? 1 : (seekIndex ?? 0) / (benchmarkData.length - 1));
+        const n = root.querySelector('#perf-samples');
+        if (n)
+            n.textContent = tt('bench.ui.samples', '{n} samples', { n: benchmarkData.length });
+    });
+}
+/** The recording state, said the same way in the modal and the mini monitor. */
+function paintRecState() {
+    const chip = document.getElementById('perf-rec-chip');
+    const state = document.getElementById('perf-rec-state');
+    const txt = document.getElementById('rec-text');
+    const ic = document.getElementById('rec-dot');
+    if (chip)
+        chip.className = `bms-chip ${isRecording ? 'bms-chip--ok bms-chip--live' : 'bms-chip--warn'}`;
+    if (state)
+        state.textContent = isRecording ? tt('bench.ui.recording', 'Recording') : tt('bench.ui.paused', 'Paused');
+    if (txt)
+        txt.textContent = isRecording ? tt('bench.ui.pause', 'Pause') : tt('bench.ui.resume', 'Resume');
+    if (ic)
+        ic.className = `pf-rec-ic${isRecording ? '' : ' is-play'}`;
+    const mini = document.getElementById('mini-startstop');
+    if (mini) {
+        mini.textContent = isRecording ? (t('bench.stop') || 'STOP') : (t('bench.start') || 'START');
+        mini.className = `pf-mini-btn ${isRecording ? 'is-stop' : 'is-start'}`;
+    }
+}
+// ── Benchmark run: stages ─────────────────────────────────────────────────────────────────
+// The backend reports {step, total, label}. Each new label is a stage; the list shows what
+// is done, what runs now, and how far along the whole run is.
+let benchStages = [];
+let benchStep = 0;
+let benchTotal = 0;
+let benchStartedAt = 0;
+let benchTick = null;
+function fmtElapsed(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+function paintBenchProgress() {
+    const bar = document.getElementById('bench-progress-bar');
+    const pctEl = document.getElementById('bench-progress-pct');
+    const lblEl = document.getElementById('bench-progress-label');
+    const stepEl = document.getElementById('bench-progress-step');
+    const elEl = document.getElementById('bench-elapsed');
+    const list = document.getElementById('bench-stages');
+    if (bar)
+        bar.style.width = benchLastPct + '%';
+    if (pctEl)
+        pctEl.textContent = benchLastPct + '%';
+    if (lblEl)
+        lblEl.textContent = benchLastLabel ? benchLastLabel + '…' : tt('bench.ui.starting', 'Preparing the dataset…');
+    if (stepEl)
+        stepEl.textContent = benchTotal ? tt('bench.ui.stepOf', 'Step {n} of {total}', { n: benchStep, total: benchTotal }) : '';
+    if (elEl && benchStartedAt)
+        elEl.textContent = tt('bench.ui.elapsed', '{t} elapsed', { t: fmtElapsed(Date.now() - benchStartedAt) });
+    if (list) {
+        const html = benchStages.map((s, i) => {
+            const now = i === benchStages.length - 1 && benchLastPct < 100;
+            return `<li class="${now ? 'is-now' : 'is-done'}"><span class="pf-st-ic" aria-hidden="true"></span><span>${escB(s)}</span></li>`;
+        }).join('');
+        if (list.dataset.html !== html) {
+            list.dataset.html = html;
+            list.innerHTML = html;
+        }
+    }
+}
 export async function openAdvancedPerfModal() {
+    ensureBenchCss();
     const existing = document.getElementById('modal-advanced-perf-overlay');
     if (existing) {
         existing.classList.add('open');
         existing.style.display = 'flex';
         existing.style.opacity = '1';
+        perfRebind?.();
+        scheduleLiveRender();
         return;
     }
     const overlay = document.createElement('div');
     overlay.id = 'modal-advanced-perf-overlay';
     overlay.className = 'modal-overlay open';
-    overlay.style.zIndex = '100003';
-    overlay.style.backdropFilter = 'blur(16px)';
     const content = document.createElement('div');
-    content.className = 'modal glass';
-    content.style.width = '1200px';
-    content.style.maxWidth = '95vw';
-    content.style.borderRadius = '28px';
-    content.style.overflow = 'visible';
-    content.style.display = 'flex';
-    content.style.flexDirection = 'column';
-    content.style.maxHeight = '92vh';
-    content.style.border = '1px solid rgba(255,255,255,0.1)';
-    content.style.position = 'relative';
+    content.className = 'modal bms modal--xl';
+    const I = {
+        pulse: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+        x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        mini: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M13 13h6v6h-6z"/></svg>',
+        play: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+        stop: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+        up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+        down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+        plus: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+        dot: '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg>',
+    };
+    const stat = (key, label, swatch, valId, auxId, spark) => `
+        <div class="pf-stat glass-card" data-stat="${key}">
+            <div class="pf-stat-h"><span class="bms-label"><span class="pf-swatch" style="--c:${swatch}"></span>${escB(label)}</span></div>
+            <div class="pf-stat-v" id="${valId}">–</div>
+            <div class="pf-stat-aux" id="${auxId}"></div>
+            <canvas class="pf-spark" data-spark="${spark}" style="--c:${swatch}" aria-hidden="true"></canvas>
+        </div>`;
     content.innerHTML = `
-        <div class="modal-header" style="padding: 24px 32px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; border-radius: 28px 28px 0 0; z-index: 10;">
-            <div style="display: flex; align-items: center; gap: 16px;">
-                <div style="width: 44px; height: 44px; background: rgba(59, 130, 246, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                </div>
-                <div>
-                    <h2 style="margin:0; font-size: 1.25rem; font-weight: 800; color: var(--bmm-text-primary);">${t('bench.title') || 'Benchmark'}</h2>
-                    <p id="perf-subtitle" style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${t('bench.subtitle') || 'Live Diagnostics & Replay'}</p>
-                </div>
+        <div class="modal-header bms-head">
+            <div class="bms-icon">${I.pulse}</div>
+            <div class="bms-titles">
+                <h2 class="bms-title" id="perf-title">${escB(t('bench.title') || 'Benchmark')}</h2>
+                <p class="bms-sub" id="perf-subtitle">${escB(t('bench.subtitle') || 'Live Diagnostics & Replay')}</p>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div id="perf-tabs" style="display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:10px; margin-right:6px;">
-                    <button class="perf-tab active" data-mode="live">${t('bench.tabLive') || 'Live Monitor'}</button>
-                    <button class="perf-tab" data-mode="bench">${t('bench.tabBench') || 'Benchmark'}</button>
+            <div class="bms-head-end">
+                <div id="perf-tabs" class="bms-tabs" role="tablist" aria-label="${escB(tt('bench.ui.tabsAria', 'Benchmark views'))}">
+                    <button type="button" class="bms-tab perf-tab active" role="tab" id="perf-tab-live" aria-controls="perf-live-view" aria-selected="true" data-mode="live">${escB(t('bench.tabLive') || 'Live Monitor')}</button>
+                    <button type="button" class="bms-tab perf-tab" role="tab" id="perf-tab-bench" aria-controls="perf-bench-view" aria-selected="false" tabindex="-1" data-mode="bench">${escB(t('bench.tabBench') || 'Benchmark')}</button>
                 </div>
-                <div id="perf-live-controls" style="display: flex; align-items: center; gap: 12px;">
-                <button class="btn btn-ghost btn-sm" id="btn-perf-rec" style="gap:8px; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: var(--bmm-danger);">
-                    <div id="rec-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
-                    <span id="rec-text">${t('bench.stopRec') || 'Stop Recording'}</span>
-                </button>
-                <div style="width: 1px; height: 24px; background: var(--border); margin: 0 8px;"></div>
-                <button class="btn btn-ghost btn-sm" id="btn-perf-mini" style="gap:8px; color: var(--accent); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 15h4v4h-4z"/></svg>
-                    ${t('bench.miniMonitor') || 'Mini-Monitor'}
-                </button>
-                <div id="live-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 12px; border-left: 1px solid var(--border); padding-left: 12px;">
-                    <label class="bmm-switch" style="margin-right: 8px;">
-                        <input type="checkbox" id="perf-advanced-toggle">
-                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                    </label>
-                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">${t('bench.advanced') || 'Advanced'}</span>
-                </div>
-                </div>
-                <button class="modal-close" id="perf-modal-close" style="position: static; margin-left: 20px;">&times;</button>
+                <button type="button" class="modal-close" id="perf-modal-close" aria-label="${escB(t('common.close') || 'Close')}">${I.x}</button>
             </div>
         </div>
 
-        <div class="modal-body" style="padding: 32px; overflow-y: auto; overflow-x: visible; flex: 1; display: flex; flex-direction: column; gap: 24px; z-index: 1;">
-            <div id="perf-live-view" style="display:flex; flex-direction:column; gap:24px;">
+        <div class="modal-body bms-body">
+            <section id="perf-live-view" class="pf-view" role="tabpanel" aria-labelledby="perf-tab-live">
+                <div class="bms-toolbar pf-toolbar" id="perf-live-controls">
+                    <span id="perf-rec-chip" class="bms-chip bms-chip--ok bms-chip--live" role="status"><span class="bms-dot" aria-hidden="true"></span><span id="perf-rec-state"></span></span>
+                    <span class="bms-chip pf-num" id="perf-samples"></span>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-perf-live" hidden>${escB(t('bench.liveMode') || 'Back to live')}</button>
+                    <span class="bms-spacer"></span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-perf-rec"><span id="rec-dot" class="pf-rec-ic" aria-hidden="true"></span><span id="rec-text"></span></button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-perf-mini">${I.mini}<span>${escB(t('bench.miniMonitor') || 'Mini-Monitor')}</span></button>
+                    <span class="bms-sep" aria-hidden="true"></span>
+                    <label class="pf-adv" id="live-controls">
+                        <span class="bmm-switch"><input type="checkbox" id="perf-advanced-toggle"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></span>
+                        <span>${escB(t('bench.advanced') || 'Advanced')}</span>
+                    </label>
+                </div>
 
-            <!-- Real-time Stats + Averages -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px; position: relative; overflow: hidden;">
-                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.cpuAvg') || 'CPU Usage (Avg)'}</span>
-                    <div style="display: flex; align-items: baseline; gap: 8px;">
-                        <span id="perf-cpu-val" style="font-size: 32px; font-weight: 900; color: var(--accent); font-family: var(--font-mono);">0.0%</span>
-                        <span id="perf-cpu-avg" style="font-size: 14px; color: var(--text-muted); font-weight: 600;">avg: 0%</span>
+                <div class="pf-stats">
+                    ${stat('cpu', tt('bench.ui.cpu', 'CPU (BMM)'), 'var(--bmm-chart-cpu)', 'perf-cpu-val', 'perf-cpu-avg', 'cpu_usage')}
+                    ${stat('ram', tt('bench.ui.ram', 'Memory (BMM)'), 'var(--bmm-chart-ram)', 'perf-ram-val', 'perf-ram-peak', 'ram_usage')}
+                    ${stat('disk', t('bench.diskIo') || 'Disk I/O R/W', 'var(--bmm-chart-disk-read)', 'perf-disk-val', 'perf-disk-aux', 'disk_total')}
+                    ${stat('uptime', t('bench.uptime') || 'Process Uptime', 'var(--bmm-success)', 'perf-uptime-val', 'perf-uptime-aux', '')}
+                </div>
+
+                <div id="perf-advanced-section" class="pf-stats" hidden>
+                    <div class="pf-stat glass-card is-adv">
+                        <div class="pf-stat-h"><span class="bms-label">${escB(t('bench.globalCpu') || 'Global CPU Load')}</span><span class="pf-help tasky-info" data-help="global_cpu" tabindex="0" role="note" aria-label="${escB(t('bench.help.globalCpu') || '')}">?</span></div>
+                        <div class="pf-stat-v" id="perf-global-cpu-val">–</div>
                     </div>
-                    <div id="mini-activity-cpu" style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; opacity: 0.2;"></div>
-                </div>
-                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
-                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.ramPeak') || 'RAM Usage (Peak)'}</span>
-                    <div style="display: flex; align-items: baseline; gap: 8px;">
-                        <span id="perf-ram-val" style="font-size: 32px; font-weight: 900; color: var(--bmm-chart-ram); font-family: var(--font-mono);">0 MB</span>
-                        <span id="perf-ram-peak" style="font-size: 14px; color: var(--text-muted); font-weight: 600;">peak: 0</span>
+                    <div class="pf-stat glass-card is-adv">
+                        <div class="pf-stat-h"><span class="bms-label">${escB(t('bench.virtual') || 'Virtual Memory')}</span><span class="pf-help tasky-info" data-help="virtual" tabindex="0" role="note" aria-label="${escB(t('bench.help.virtual') || '')}">?</span></div>
+                        <div class="pf-stat-v" id="perf-vram-val">–</div>
                     </div>
-                </div>
-                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
-                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.diskIo') || 'Disk I/O R/W'}</span>
-                    <span id="perf-disk-val" style="font-size: 24px; font-weight: 900; color: var(--bmm-chart-disk-read); font-family: var(--font-mono);">0 / 0 KB/s</span>
-                </div>
-                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
-                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.uptime') || 'Process Uptime'}</span>
-                    <span id="perf-uptime-val" style="font-size: 24px; font-weight: 900; color: var(--bmm-success); font-family: var(--font-mono);">0s</span>
-                </div>
-            </div>
-
-            <!-- Charts -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
-                    <h3 style="margin: 0 0 20px; font-size: 13px; color: var(--bmm-text-primary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.sysHist') || 'System Resources History'}</h3>
-                    <canvas id="perf-chart-main" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
-                </div>
-
-                <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
-                    <h3 style="margin: 0 0 20px; font-size: 13px; color: var(--bmm-text-primary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.ioHist') || 'Disk Throughput History'}</h3>
-                    <canvas id="perf-chart-io" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
-                </div>
-            </div>
-
-            <!-- Seek Bar / Replay -->
-            <div class="glass-card" style="padding: 20px; background: rgba(0,0,0,0.4); border-radius: 16px; display: flex; flex-direction: column; gap: 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <button class="btn btn-primary btn-sm" id="btn-perf-live" style="background: var(--accent); border-radius: 6px; font-size: 10px; padding: 4px 10px; display: none;">${t('bench.liveMode') || 'BACK TO LIVE'}</button>
-                        <span id="replay-time" style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">${t('bench.replayTime') || 'Replay'}: 00:00:00</span>
-                    </div>
-                    <span style="font-size: 10px; color: var(--text-muted); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;">${t('bench.timelineActivity') || 'Timeline Activity Map'}</span>
-                </div>
-                <div style="position: relative; height: 36px; background: rgba(255,255,255,0.02); border-radius: 8px; cursor: pointer;" id="timeline-container">
-                    <canvas id="activity-heatmap" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none; opacity: 0.6;"></canvas>
-                    <div id="timeline-seek-handle" style="position: absolute; top: -4px; left: 0; width: 4px; height: 44px; background: var(--accent); box-shadow: 0 0 15px var(--accent); border-radius: 2px; transition: left 0.1s linear;"></div>
-                </div>
-            </div>
-
-            <!-- Advanced Metrics with Tasky Help -->
-            <div id="perf-advanced-section" style="display: none; flex-direction: column; gap: 20px;">
-                <div style="height: 1px; background: var(--border); margin: 8px 0;"></div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
-                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.globalCpu') || 'Global CPU Load'}</span>
-                            <span class="tasky-info" data-help="global_cpu" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
-                        </div>
-                        <span id="perf-global-cpu-val" style="font-size: 20px; font-weight: 900; color: var(--bmm-text-primary); font-family: var(--font-mono);">-- %</span>
-                    </div>
-                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.virtual') || 'Virtual Memory'}</span>
-                            <span class="tasky-info" data-help="virtual" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
-                        </div>
-                        <span id="perf-vram-val" style="font-size: 20px; font-weight: 900; color: var(--bmm-text-primary); font-family: var(--font-mono);">-- MB</span>
+                    <div class="pf-stat glass-card is-adv">
+                        <div class="pf-stat-h"><span class="bms-label">${escB(t('bench.swap') || 'Swap Memory')}</span><span class="pf-help tasky-info" data-help="swap" tabindex="0" role="note" aria-label="${escB(t('bench.help.swap') || '')}">?</span></div>
+                        <div class="pf-stat-v" id="perf-swap-val">–</div>
                     </div>
                 </div>
-            </div>
-            </div> <!-- /perf-live-view -->
 
-            <!-- ── Benchmark view ───────────────────────────────────────── -->
-            <div id="perf-bench-view" style="display:none; flex-direction:column; gap:20px;">
-                <div class="glass-card" style="padding:18px 22px; background:rgba(0,0,0,0.28); border-radius:16px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:22px;">
-                    <div style="display:flex; flex-direction:column; gap:6px;">
-                        <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.dataset') || 'Dataset'}</span>
-                        <div id="bench-mode-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
-                            <button class="bench-seg active" data-mode="sandbox">${t('bench.sandbox') || 'Sandbox'}</button>
-                            <button class="bench-seg" data-mode="real">${t('bench.myMods') || 'My mods'}</button>
+                <div class="pf-charts">
+                    <div class="bms-card chart-container">
+                        <div class="bms-card-h"><h3 class="bms-card-title">${escB(t('bench.sysHist') || 'System Resources History')}</h3><div class="pf-legend" id="perf-legend-main"></div></div>
+                        <div class="pf-canvas-wrap"><canvas id="perf-chart-main"></canvas><div class="pf-tip" hidden></div></div>
+                    </div>
+                    <div class="bms-card chart-container">
+                        <div class="bms-card-h"><h3 class="bms-card-title">${escB(t('bench.ioHist') || 'Disk Throughput History')}</h3><div class="pf-legend" id="perf-legend-io"></div></div>
+                        <div class="pf-canvas-wrap"><canvas id="perf-chart-io"></canvas><div class="pf-tip" hidden></div></div>
+                    </div>
+                </div>
+
+                <div class="bms-card">
+                    <div class="bms-card-h">
+                        <span class="bms-label">${escB(t('bench.timelineActivity') || 'Timeline Activity Map')}</span>
+                        <span id="replay-time" class="pf-mono bms-note"></span>
+                    </div>
+                    <div id="timeline-container" class="pf-track" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-label="${escB(tt('bench.ui.timelineAria', 'Timeline: click or use the arrow keys to replay a moment'))}">
+                        <canvas id="activity-heatmap" aria-hidden="true"></canvas>
+                        <div id="timeline-seek-handle" aria-hidden="true"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="perf-bench-view" class="pf-view" role="tabpanel" aria-labelledby="perf-tab-bench" hidden>
+                <div class="bms-card pf-setup">
+                    <div class="bms-field">
+                        <span class="bms-label" id="bench-mode-lbl">${escB(t('bench.dataset') || 'Dataset')}</span>
+                        <div id="bench-mode-seg" class="bms-seg" role="group" aria-labelledby="bench-mode-lbl">
+                            <button type="button" class="bms-seg-btn bench-seg active" data-mode="sandbox">${escB(t('bench.sandbox') || 'Sandbox')}</button>
+                            <button type="button" class="bms-seg-btn bench-seg" data-mode="real">${escB(t('bench.myMods') || 'My mods')}</button>
                         </div>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:6px;">
-                        <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.scale') || 'Size'}</span>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <div id="bench-scale-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
-                                <button class="bench-seg" data-scale="small" data-tooltip="${t('bench.sizeSmallTip') || '~6 MB'}">S</button>
-                                <button class="bench-seg active" data-scale="medium" data-tooltip="${t('bench.sizeMediumTip') || '~48 MB'}">M</button>
-                                <button class="bench-seg" data-scale="large" data-tooltip="${t('bench.sizeLargeTip') || '~160 MB'}">L</button>
-                                <button class="bench-seg" data-scale="xlarge" data-tooltip="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
-                                <button class="bench-seg" data-scale="custom" data-tooltip="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
+                    <div class="bms-field">
+                        <span class="bms-label" id="bench-scale-lbl">${escB(t('bench.scale') || 'Size')}</span>
+                        <div class="bms-toolbar">
+                            <div id="bench-scale-seg" class="bms-seg" role="group" aria-labelledby="bench-scale-lbl">
+                                <button type="button" class="bms-seg-btn bench-seg" data-scale="small" data-tooltip="${escB(t('bench.sizeSmallTip') || '~6 MB')}">S</button>
+                                <button type="button" class="bms-seg-btn bench-seg active" data-scale="medium" data-tooltip="${escB(t('bench.sizeMediumTip') || '~48 MB')}">M</button>
+                                <button type="button" class="bms-seg-btn bench-seg" data-scale="large" data-tooltip="${escB(t('bench.sizeLargeTip') || '~160 MB')}">L</button>
+                                <button type="button" class="bms-seg-btn bench-seg" data-scale="xlarge" data-tooltip="${escB(t('bench.xlargeTip') || '~400 MB')}">XL</button>
+                                <button type="button" class="bms-seg-btn bench-seg" data-scale="custom" data-tooltip="${escB(t('bench.sizeCustomTip') || 'Custom total size')}">${escB(t('bench.sizeCustom') || 'Custom')}</button>
                             </div>
-                            <div id="bench-custom-wrap" style="display:none; align-items:center; gap:5px;">
-                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" data-tooltip="${t('bench.sizeCustomMaxTip') || 'Total dataset size in MB (1–8192).'}" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
-                                <span style="font-size:11px; font-weight:700; color:var(--text-muted);">MB</span>
-                                <span style="font-size:11px; color:var(--text-muted); margin:0 1px;">×</span>
-                                <input id="bench-custom-files" type="number" min="1" max="200000" placeholder="auto" data-tooltip="${t('bench.filesCountTip') || 'Number of files (blank = auto from size). Raise it to stress-test scanning/hashing of many files.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
-                                <span style="font-size:11px; font-weight:700; color:var(--text-muted);">${t('bench.filesUnit') || 'files'}</span>
+                            <div id="bench-custom-wrap" class="pf-custom" style="display:none;">
+                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" aria-label="MB" data-tooltip="${escB(t('bench.sizeCustomMaxTip') || 'Total dataset size in MB (1–8192).')}" />
+                                <span>MB</span><span aria-hidden="true">×</span>
+                                <input id="bench-custom-files" type="number" min="1" max="200000" placeholder="auto" aria-label="${escB(t('bench.filesUnit') || 'files')}" data-tooltip="${escB(t('bench.filesCountTip') || 'Number of files (blank = auto from size).')}" />
+                                <span>${escB(t('bench.filesUnit') || 'files')}</span>
                             </div>
                         </div>
                     </div>
-                    <div style="flex:1 1 auto;"></div>
-                    <button class="btn btn-primary" id="btn-bench-run" style="height:42px; padding:0 28px; border-radius:11px; font-weight:800; gap:8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                        ${t('bench.run') || 'Run Benchmark'}
-                    </button>
-                    <button class="btn btn-danger" id="btn-bench-cancel" style="display:none; height:42px; padding:0 22px; border-radius:11px; font-weight:800; gap:8px;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                        ${t('bench.cancel') || 'Cancel'}
-                    </button>
+                    <span class="bms-spacer"></span>
+                    <button type="button" class="btn btn-primary btn-lg" id="btn-bench-run">${I.play}<span>${escB(t('bench.run') || 'Run Benchmark')}</span></button>
+                    <button type="button" class="btn btn-danger btn-lg" id="btn-bench-cancel" style="display:none;">${I.stop}<span>${escB(t('bench.cancel') || 'Cancel')}</span></button>
                 </div>
 
-                <div id="bench-realnote" style="display:none; font-size:12px; color:var(--bmm-warning); background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); border-radius:10px; padding:10px 14px;">
-                    ${t('bench.realNote') || '“My mods” uses the real mods of the selected profile(s) as test data — they are only read, never changed. Every operation (copy, activate, deactivate…) runs in a temporary workspace, so your game folder is never touched. Gives you numbers for your actual library instead of synthetic files.'}
-                </div>
+                <p id="bench-realnote" class="pf-callout" style="display:none;">${escB(t('bench.realNote') || '“My mods” uses the real mods of the selected profile(s) as test data — they are only read, never changed.')}</p>
 
-                <div id="bench-sources" style="display:none; flex-direction:column; gap:10px; background:rgba(0,0,0,0.22); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
-                            ${t('bench.chooseProfiles') || 'Profiles to benchmark'}
-                            <span id="bench-src-count" style="font-size:10px; font-weight:700; color:var(--accent); background:rgba(59,130,246,0.12); padding:2px 7px; border-radius:99px;"></span>
-                        </span>
-                        <div style="display:flex; gap:6px;">
-                            <button class="bench-seg" id="bench-src-all">${t('bench.selectAll') || 'All'}</button>
-                            <button class="bench-seg" id="bench-src-none">${t('bench.selectNone') || 'None'}</button>
-                            <button class="bench-seg" id="bench-src-custom" style="display:inline-flex; align-items:center; gap:5px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>${t('bench.customFolder') || 'Folder'}</button>
+                <div id="bench-sources" class="bms-card" style="display:none;">
+                    <div class="bms-card-h">
+                        <span class="bms-label" style="display:inline-flex;align-items:center;gap:8px;">${escB(t('bench.chooseProfiles') || 'Profiles to benchmark')}<span id="bench-src-count" class="pf-count"></span></span>
+                        <div class="bms-toolbar">
+                            <button type="button" class="btn btn-ghost btn-sm" id="bench-src-all">${escB(t('bench.selectAll') || 'All')}</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="bench-src-none">${escB(t('bench.selectNone') || 'None')}</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="bench-src-custom" style="display:inline-flex;align-items:center;gap:6px;">${I.plus}${escB(t('bench.customFolder') || 'Folder')}</button>
                         </div>
                     </div>
-                    <div id="bench-src-list" style="display:flex; flex-wrap:wrap; gap:8px; max-height:168px; overflow-y:auto; padding:2px;"></div>
+                    <div id="bench-src-list" class="pf-src-list"></div>
                 </div>
 
-                <div id="bench-progress-wrap" style="display:none; flex-direction:column; gap:8px;">
-                    <div style="display:flex; justify-content:space-between; font-size:12px;">
-                        <span id="bench-progress-label" style="color:var(--text-secondary); font-weight:600;"></span>
-                        <span id="bench-progress-pct" style="color:var(--accent); font-family:var(--font-mono); font-weight:700;">0%</span>
+                <div id="bench-progress-wrap" class="bms-card" style="display:none;" aria-live="polite">
+                    <div class="pf-run-h">
+                        <span><b id="bench-progress-label"></b></span>
+                        <span class="pf-run-pct" id="bench-progress-pct">0%</span>
                     </div>
-                    <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;">
-                        <div id="bench-progress-bar" style="height:100%; width:0%; background:var(--accent); transition:width .2s ease; box-shadow:0 0 10px var(--accent);"></div>
-                    </div>
+                    <div class="bms-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-labelledby="bench-progress-label"><span id="bench-progress-bar"></span></div>
+                    <div class="pf-run-h"><span id="bench-progress-step"></span><span id="bench-elapsed" class="pf-num"></span></div>
+                    <ol class="pf-stages" id="bench-stages" aria-label="${escB(tt('bench.ui.stages', 'Stages'))}"></ol>
                 </div>
 
-                <div id="bench-intro" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:16px; padding:28px 30px; color:var(--text-secondary); font-size:13px; line-height:1.7;">
-                    <h3 style="margin:0 0 12px; font-size:15px; color:var(--bmm-text-primary);">${t('bench.introTitle') || 'Full operation benchmark'}</h3>
-                    ${t('bench.introBody') || 'Runs BMM’s real hot-path operations on a controlled dataset and reports how fast each one is, with throughput. It covers everything BMM does to your mods:'}
-                    <ul style="margin:12px 0 0; padding-left:18px; columns:2; gap:24px;">
-                        <li>${t('bench.opScan') || 'Scanning mod files'}</li>
-                        <li>${t('bench.opHash') || 'SHA-256 integrity hashing'}</li>
-                        <li>${t('bench.opCopyFull') || 'Copy — full speed'}</li>
-                        <li>${t('bench.opCopySmart') || 'Copy — Smart I/O'}</li>
-                        <li>${t('bench.opArchive') || 'Extracting archived mods'}</li>
-                        <li>${t('bench.opActivate') || 'Activating a mod'}</li>
-                        <li>${t('bench.opDeactivate') || 'Deactivating a mod'}</li>
-                        <li>${t('bench.opCancel') || 'Cancelling an operation'}</li>
+                <div id="bench-intro" class="bms-card">
+                    <h3 class="bms-card-title">${escB(t('bench.introTitle') || 'Full operation benchmark')}</h3>
+                    <p class="bms-note">${escB(t('bench.introBody') || 'Runs BMM’s real hot-path operations on a controlled dataset and reports how fast each one is, with throughput.')}</p>
+                    <ul class="pf-ops-list">
+                        ${[['bench.opScan', 'Scanning mod files', 'purple'], ['bench.opHash', 'SHA-256 integrity hashing', 'cyan'], ['bench.opCopyFull', 'Copy — full speed', 'info'], ['bench.opCopySmart', 'Copy — Smart I/O', 'info'], ['bench.opArchive', 'Extracting archived mods', 'warning'], ['bench.opActivate', 'Activating a mod', 'success'], ['bench.opDeactivate', 'Deactivating a mod', 'success'], ['bench.opCancel', 'Cancelling an operation', 'success']]
+        .map(([k, en, c]) => `<li><span class="pf-swatch" style="--c:var(--bmm-${c})"></span>${escB(t(k) || en)}</li>`).join('')}
                     </ul>
                 </div>
 
-                <div id="bench-results" style="display:none; flex-direction:column; gap:18px;"></div>
-            </div>
+                <div id="bench-results" class="pf-view" style="display:none;"></div>
+            </section>
         </div>
 
-        <div class="modal-footer" style="padding: 24px 32px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; align-items: center; gap: 16px; border-radius: 0 0 28px 28px;">
-            <button class="btn btn-ghost" id="btn-perf-import" style="font-weight: 700; gap: 8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                ${t('bench.import') || 'Import Session'}
-            </button>
-            <button class="btn btn-ghost" id="btn-perf-clear" style="font-weight: 700;">${t('bench.clear') || 'Clear Session'}</button>
-            <button class="btn btn-primary" id="btn-perf-export" style="font-weight: 800; padding: 0 32px; height: 40px; border-radius: 10px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 10px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                ${t('bench.export') || 'Export Session'}
-            </button>
+        <div class="modal-footer bms-foot">
+            <div class="bms-foot-start">
+                <button type="button" class="btn btn-ghost" id="btn-perf-import">${I.up}<span>${escB(t('bench.import') || 'Import Session')}</span></button>
+                <button type="button" class="btn btn-ghost" id="btn-perf-clear">${escB(t('bench.clear') || 'Clear Session')}</button>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-perf-export">${I.down}<span>${escB(t('bench.export') || 'Export Session')}</span></button>
         </div>
     `;
     overlay.appendChild(content);
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    perfRoot = content;
+    paintRecState();
     // Elements
     const closeBtn = content.querySelector('#perf-modal-close');
     const recBtn = content.querySelector('#btn-perf-rec');
@@ -429,14 +486,6 @@ export async function openAdvancedPerfModal() {
     const timeline = content.querySelector('#timeline-container');
     const seekHandle = content.querySelector('#timeline-seek-handle');
     const taskyElements = content.querySelectorAll('.tasky-info');
-    // Create Tooltips directly on body to avoid backdrop-filter coordinate issues
-    let globalTooltip = document.getElementById('perf-global-tooltip');
-    if (!globalTooltip) {
-        globalTooltip = document.createElement('div');
-        globalTooltip.id = 'perf-global-tooltip';
-        globalTooltip.style.cssText = 'display:none; position: fixed; pointer-events: none; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--accent); padding: 12px 16px; border-radius: 12px; z-index: 2000000; font-size: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); backdrop-filter: blur(12px);';
-        document.body.appendChild(globalTooltip);
-    }
     if (!closeBtn || !recBtn || !miniBtn || !advancedToggle || !liveBtn || !timeline || !seekHandle)
         return;
     // Tasky Help Tooltips
@@ -447,13 +496,15 @@ export async function openAdvancedPerfModal() {
         swap: t('bench.help.swap') || "Swap Memory: Data moved from RAM to your disk. If this is high, your PC is out of real RAM, which causes major slowdowns."
     };
     taskyElements.forEach(el => {
-        el.onmouseenter = (e) => {
-            const key = el.dataset.help;
-            showTaskyHelp(helpText[key], 'info', true);
-        };
+        const show = () => showTaskyHelp(helpText[el.dataset.help], 'info', true);
+        el.onmouseenter = show;
+        el.onfocus = show;
         el.onmouseleave = () => hideTaskyHelp();
+        el.onblur = () => hideTaskyHelp();
     });
+    let release = () => { };
     const cleanup = async () => {
+        release();
         if (benchmarkUnlisten) {
             benchmarkUnlisten();
             benchmarkUnlisten = null;
@@ -462,17 +513,19 @@ export async function openAdvancedPerfModal() {
             benchProgressUnlisten();
             benchProgressUnlisten = null;
         }
+        if (benchTick) {
+            clearInterval(benchTick);
+            benchTick = null;
+        }
         await invoke('stop_benchmark');
-        if (globalTooltip)
-            globalTooltip.style.display = 'none';
         hideTaskyHelp();
         overlay.classList.remove('open');
         overlay.style.opacity = '0';
-        setTimeout(() => {
-            overlay.remove();
-            if (globalTooltip)
-                globalTooltip.remove();
-        }, 250);
+        if (perfRoot === content) {
+            perfRoot = null;
+            perfRebind = null;
+        }
+        setTimeout(() => overlay.remove(), 250);
     };
     closeBtn.onclick = cleanup;
     // Clicking the backdrop (outside the modal card) closes it. A running benchmark
@@ -481,116 +534,132 @@ export async function openAdvancedPerfModal() {
         if (e.target === overlay)
             cleanup();
     });
+    // Escape closes it, Tab stays in it, the focus comes back where it was. Re-armed when the
+    // modal comes back from the mini monitor.
+    perfRebind = () => { release = bindModal(overlay, { onClose: () => { void cleanup(); }, initialFocus: content.querySelector('.perf-tab.active') }); };
+    perfRebind();
     recBtn.onclick = async () => {
         isRecording = !isRecording;
-        if (isRecording) {
-            await invoke('start_benchmark');
-            recBtn.style.color = '#ef4444';
-            recBtn.querySelector('#rec-text').textContent = t('bench.stopRecording') || 'Stop Recording';
-            recBtn.querySelector('#rec-dot').style.display = 'block';
-        }
-        else {
-            await invoke('stop_benchmark');
-            recBtn.style.color = '#fff';
-            recBtn.querySelector('#rec-text').textContent = t('bench.startMonitoring') || 'Start Monitoring';
-            recBtn.querySelector('#rec-dot').style.display = 'none';
-        }
+        paintRecState();
+        await invoke(isRecording ? 'start_benchmark' : 'stop_benchmark');
     };
     miniBtn.onclick = () => {
         overlay.classList.remove('open');
         overlay.style.display = 'none';
+        release();
         toggleMiniMonitor(true);
     };
     advancedToggle.onchange = async () => {
         isAdvancedMode = advancedToggle.checked;
         const section = content.querySelector('#perf-advanced-section');
         if (section)
-            section.style.display = isAdvancedMode ? 'flex' : 'none';
+            section.hidden = !isAdvancedMode;
         await invoke('set_advanced_benchmark_mode', { enabled: isAdvancedMode });
     };
     // Replay Logic
-    timeline.onclick = (e) => {
-        const rect = timeline.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const ratio = x / rect.width;
+    const seekTo = (ratio) => {
+        if (benchmarkData.length < 2)
+            return;
+        ratio = Math.min(1, Math.max(0, ratio));
         seekIndex = Math.round(ratio * (benchmarkData.length - 1));
         isLiveView = false;
-        liveBtn.style.display = 'block';
-        updateStatsView(content, benchmarkData[seekIndex]);
-        renderCharts(content, benchmarkData, seekIndex);
-        updateSeekHandle(content, ratio);
+        liveBtn.hidden = false;
+        timeline.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+        scheduleLiveRender();
+    };
+    timeline.onclick = (e) => {
+        const rect = timeline.getBoundingClientRect();
+        seekTo((e.clientX - rect.left) / rect.width);
+    };
+    timeline.onkeydown = (e) => {
+        if (benchmarkData.length < 2)
+            return;
+        const last = benchmarkData.length - 1;
+        const cur = isLiveView ? last : (seekIndex ?? last);
+        const to = e.key === 'ArrowLeft' ? cur - 1 : e.key === 'ArrowRight' ? cur + 1 : e.key === 'Home' ? 0 : e.key === 'End' ? last : null;
+        if (to == null)
+            return;
+        e.preventDefault();
+        if (to >= last && e.key !== 'ArrowLeft') {
+            liveBtn.click();
+            return;
+        }
+        seekTo(to / last);
     };
     liveBtn.onclick = () => {
         isLiveView = true;
         seekIndex = null;
-        liveBtn.style.display = 'none';
-        renderCharts(content, benchmarkData);
+        liveBtn.hidden = true;
+        timeline.setAttribute('aria-valuenow', '100');
+        scheduleLiveRender();
     };
-    // Global Tooltip Polish
-    const setupCanvasHover = (canvas, type) => {
+    // Hover: a tooltip inside the chart card (so it follows the theme and never escapes the
+    // modal), with the time and every series' value in its own unit.
+    const setupCanvasHover = (canvas) => {
+        const tip = canvas.parentElement?.querySelector('.pf-tip');
+        let raf = 0;
         canvas.onmousemove = (e) => {
             if (benchmarkData.length < 2)
                 return;
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const ratio = x / rect.width;
+            const plotL = CHART_PAD.l, plotW = Math.max(1, rect.width - CHART_PAD.l - CHART_PAD.r);
+            const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left - plotL) / plotW));
             hoverIndex = Math.round(ratio * (benchmarkData.length - 1));
             const point = benchmarkData[hoverIndex];
-            globalTooltip.style.display = 'block';
-            // Fixed: Position closer and flip if needed
-            let tx = e.clientX + 10;
-            if (tx + 180 > window.innerWidth)
-                tx = e.clientX - 190;
-            globalTooltip.style.left = tx + 'px';
-            globalTooltip.style.top = (e.clientY - 10) + 'px';
-            globalTooltip.innerHTML = `
-                <div style="color:var(--accent); font-weight:900; margin-bottom:6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${new Date(point.timestamp * 1000).toLocaleTimeString()}</div>
-                <div style="color:var(--bmm-text-primary); margin: 4px 0;">CPU: <span style="color:var(--accent); font-weight:700">${point.cpu_usage.toFixed(1)}%</span></div>
-                <div style="color:var(--bmm-text-primary); margin: 4px 0;">RAM: <span style="color:var(--bmm-chart-ram); font-weight:700">${formatUnit(point.ram_usage, 'MB')}</span></div>
-                ${point.network_latency ? `<div style="color:var(--bmm-info); margin: 4px 0;">Ping: <span style="font-weight:700">${point.network_latency}ms</span></div>` : ''}
-            `;
-            renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
+            if (tip && point) {
+                const series = canvas.id === 'perf-chart-io' ? ioSeries() : mainSeries();
+                tip.innerHTML = `<div class="pf-tip-t">${escB(new Date(point.timestamp * 1000).toLocaleTimeString())}</div>`
+                    + series.map(s => `<div class="pf-tip-r"><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)}<b>${escB(s.fmt(point[s.key] || 0))}</b></div>`).join('');
+                tip.hidden = false;
+                const x = e.clientX - rect.left;
+                const w = tip.offsetWidth || 160;
+                tip.style.left = (x + 14 + w > rect.width ? Math.max(0, x - 14 - w) : x + 14) + 'px';
+            }
+            if (!raf)
+                raf = requestAnimationFrame(() => { raf = 0; renderCharts(content, benchmarkData, isLiveView ? null : seekIndex); });
         };
         canvas.onmouseleave = () => {
             hoverIndex = null;
-            globalTooltip.style.display = 'none';
+            if (tip)
+                tip.hidden = true;
             renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
         };
     };
-    setupCanvasHover(content.querySelector('#perf-chart-main'), 'main');
-    setupCanvasHover(content.querySelector('#perf-chart-io'), 'io');
+    setupCanvasHover(content.querySelector('#perf-chart-main'));
+    setupCanvasHover(content.querySelector('#perf-chart-io'));
     // ── Benchmark view wiring ───────────────────────────────────────────────
-    injectBenchStyle();
     let benchMode = 'sandbox';
     let benchScale = 'medium';
     const subtitle = content.querySelector('#perf-subtitle');
-    const liveControls = content.querySelector('#perf-live-controls');
     const liveView = content.querySelector('#perf-live-view');
     const benchView = content.querySelector('#perf-bench-view');
     const setSeg = (segId, key, val) => content.querySelectorAll(`#${segId} .bench-seg`).forEach(b => {
         const el = b;
-        el.classList.toggle('active', el.dataset[key] === val);
+        const on = el.dataset[key] === val;
+        el.classList.toggle('active', on);
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    setSeg('bench-mode-seg', 'mode', 'sandbox');
+    setSeg('bench-scale-seg', 'scale', 'medium');
     // ── Real-mode source selection (which profile(s) / folders to benchmark) ──
     let benchProfiles = [];
     const benchSelected = new Set();
     const benchCustom = [];
     const sourcesPanel = content.querySelector('#bench-sources');
     const srcList = content.querySelector('#bench-src-list');
-    const escA = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const shortPath = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2).join('/');
-    const folderIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-    const xIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;opacity:.7;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    const checkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>';
+    const folderIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+    const xIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const checkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="flex-shrink:0;" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
     const renderSrcChips = () => {
         if (!srcList)
             return;
         const prof = benchProfiles.map(p => {
             const on = benchSelected.has(p.id);
-            return `<button class="bench-chip ${on ? 'active' : ''}" data-pid="${escA(p.id)}" data-tooltip="${escA(p.mods_path || '')}" style="display:inline-flex;align-items:center;gap:6px;">${on ? checkIcon : ''}${escA(p.name || p.id)}</button>`;
+            return `<button type="button" class="bench-chip ${on ? 'active' : ''}" aria-pressed="${on}" data-pid="${escB(p.id)}" data-tooltip="${escB(p.mods_path || '')}">${on ? checkIcon : ''}${escB(p.name || p.id)}</button>`;
         }).join('');
-        const custom = benchCustom.map((f, i) => `<button class="bench-chip active" data-custom="${i}" data-tooltip="${escA(f)}" style="display:inline-flex;align-items:center;gap:6px;">${folderIcon}${escA(shortPath(f))}${xIcon}</button>`).join('');
-        srcList.innerHTML = (prof + custom) || `<span style="font-size:12px;color:var(--text-muted);">${t('bench.noProfilesFound') || 'No profiles found — use the Folder button.'}</span>`;
+        const custom = benchCustom.map((f, i) => `<button type="button" class="bench-chip active" data-custom="${i}" data-tooltip="${escB(f)}">${folderIcon}${escB(shortPath(f))}${xIcon}</button>`).join('');
+        srcList.innerHTML = (prof + custom) || `<span class="bms-note">${escB(t('bench.noProfilesFound') || 'No profiles found — use the Folder button.')}</span>`;
         srcList.querySelectorAll('.bench-chip[data-pid]').forEach(c => (c.onclick = () => {
             const id = c.dataset.pid;
             if (benchSelected.has(id))
@@ -627,21 +696,39 @@ export async function openAdvancedPerfModal() {
         }
         renderSrcChips();
     };
+    const tabs = [...content.querySelectorAll('.perf-tab')];
     const switchPerfMode = (mode) => {
-        content.querySelectorAll('.perf-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+        tabs.forEach(b => {
+            const on = b.dataset.mode === mode;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.tabIndex = on ? 0 : -1;
+        });
         const isBench = mode === 'bench';
         if (liveView)
-            liveView.style.display = isBench ? 'none' : 'flex';
+            liveView.hidden = isBench;
         if (benchView)
-            benchView.style.display = isBench ? 'flex' : 'none';
-        if (liveControls)
-            liveControls.style.display = isBench ? 'none' : 'flex';
+            benchView.hidden = !isBench;
         if (subtitle)
             subtitle.textContent = isBench
                 ? (t('bench.subtitleBench') || 'Operation Benchmark')
                 : (t('bench.subtitle') || 'Live Diagnostics & Replay');
+        if (!isBench)
+            scheduleLiveRender();
     };
-    content.querySelectorAll('.perf-tab').forEach(b => (b.onclick = () => switchPerfMode(b.dataset.mode)));
+    tabs.forEach(b => (b.onclick = () => switchPerfMode(b.dataset.mode)));
+    // The tabs pattern: arrows, Home and End move between the tabs and show them.
+    content.querySelector('#perf-tabs')?.addEventListener('keydown', (e) => {
+        const ev = e;
+        const i = tabs.findIndex(b => b.getAttribute('aria-selected') === 'true');
+        const n = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 : ev.key === 'End' ? tabs.length - 1 : null;
+        if (n == null)
+            return;
+        ev.preventDefault();
+        const to = tabs[(n + tabs.length) % tabs.length];
+        switchPerfMode(to.dataset.mode);
+        to.focus();
+    });
     content.querySelectorAll('#bench-mode-seg .bench-seg').forEach(b => (b.onclick = () => {
         benchMode = b.dataset.mode;
         setSeg('bench-mode-seg', 'mode', benchMode);
@@ -675,27 +762,20 @@ export async function openAdvancedPerfModal() {
         } };
     const runBtn = content.querySelector('#btn-bench-run');
     const progWrap = content.querySelector('#bench-progress-wrap');
-    const progBar = content.querySelector('#bench-progress-bar');
-    const progLabel = content.querySelector('#bench-progress-label');
-    const progPct = content.querySelector('#bench-progress-pct');
     const introEl = content.querySelector('#bench-intro');
     const resultsEl = content.querySelector('#bench-results');
     benchProgressUnlisten = await listen('app-benchmark-progress', (event) => {
         const p = event.payload;
-        const pct = Math.round((p.step / p.total) * 100);
+        const pct = p.total ? Math.round((p.step / p.total) * 100) : 0;
         benchLastPct = pct;
         benchLastLabel = p.label;
-        // Re-query by id so progress lands in whatever modal instance is open now
+        benchStep = p.step;
+        benchTotal = p.total;
+        if (p.label && benchStages[benchStages.length - 1] !== p.label)
+            benchStages.push(p.label);
+        // By id, so progress lands in whatever modal instance is open now
         // (the run keeps going in the background across close/reopen).
-        const bar = document.getElementById('bench-progress-bar');
-        const pctEl = document.getElementById('bench-progress-pct');
-        const lblEl = document.getElementById('bench-progress-label');
-        if (bar)
-            bar.style.width = pct + '%';
-        if (pctEl)
-            pctEl.textContent = pct + '%';
-        if (lblEl)
-            lblEl.textContent = p.label + '…';
+        paintBenchProgress();
     });
     const cancelBtn = content.querySelector('#btn-bench-cancel');
     // Toggle the Run/Cancel/progress UI for a given running state.
@@ -709,6 +789,14 @@ export async function openAdvancedPerfModal() {
             progWrap.style.display = running ? 'flex' : 'none';
         if (running && introEl)
             introEl.style.display = 'none';
+        if (benchTick) {
+            clearInterval(benchTick);
+            benchTick = null;
+        }
+        if (running) {
+            paintBenchProgress();
+            benchTick = setInterval(paintBenchProgress, 1000);
+        }
     };
     if (cancelBtn)
         cancelBtn.onclick = async () => {
@@ -729,12 +817,6 @@ export async function openAdvancedPerfModal() {
     // already-finished run shows its results.
     if (benchRunning) {
         setRunningUI(true);
-        if (progBar)
-            progBar.style.width = benchLastPct + '%';
-        if (progPct)
-            progPct.textContent = benchLastPct + '%';
-        if (progLabel)
-            progLabel.textContent = benchLastLabel ? benchLastLabel + '…' : '';
     }
     else if (lastBenchReport) {
         renderBenchResults(resultsEl, lastBenchReport);
@@ -763,13 +845,13 @@ export async function openAdvancedPerfModal() {
             benchRunning = true;
             benchLastPct = 0;
             benchLastLabel = '';
+            benchStages = [];
+            benchStep = 0;
+            benchTotal = 0;
+            benchStartedAt = Date.now();
             setRunningUI(true);
             if (resultsEl)
                 resultsEl.style.display = 'none';
-            if (progBar)
-                progBar.style.width = '0%';
-            if (progPct)
-                progPct.textContent = '0%';
             // For a custom size, send "custom:<MB>[:<files>]".
             let scaleArg = benchScale;
             if (benchScale === 'custom') {
@@ -846,7 +928,7 @@ export async function openAdvancedPerfModal() {
                     toast((t('bench.failed') || 'Benchmark failed') + ': ' + e, 'error');
                 }
                 if (liveIntro)
-                    liveIntro.style.display = 'block';
+                    liveIntro.style.display = 'flex';
             }
             finally {
                 // Only the current run owns the shared UI state.
@@ -857,7 +939,7 @@ export async function openAdvancedPerfModal() {
             }
         };
     // ── Footer buttons (context-aware: Benchmark report vs Live session) ─────
-    const inBenchMode = () => !!benchView && benchView.style.display !== 'none';
+    const inBenchMode = () => !!benchView && !benchView.hidden;
     const footExport = content.querySelector('#btn-perf-export');
     const footClear = content.querySelector('#btn-perf-clear');
     const footImport = content.querySelector('#btn-perf-import');
@@ -916,12 +998,11 @@ export async function openAdvancedPerfModal() {
                     resultsEl.innerHTML = '';
                 }
                 if (introEl)
-                    introEl.style.display = 'block';
+                    introEl.style.display = 'flex';
             }
             else {
                 benchmarkData = [];
-                renderCharts(content, benchmarkData);
-                renderActivityMap(content, benchmarkData);
+                scheduleLiveRender();
             }
             toast(t('bench.cleared') || 'Cleared', 'success');
         };
@@ -986,12 +1067,11 @@ export async function openAdvancedPerfModal() {
                 }
                 benchmarkData = pts;
                 isLiveView = false;
+                seekIndex = pts.length - 1;
                 if (liveBtn)
-                    liveBtn.style.display = 'block';
+                    liveBtn.hidden = false;
                 switchPerfMode('live');
-                updateStatsView(content, benchmarkData[benchmarkData.length - 1]);
-                renderCharts(content, benchmarkData);
-                renderActivityMap(content, benchmarkData);
+                scheduleLiveRender();
                 toast((t('bench.imported') || 'Session imported') + ` (${pts.length} pts)`, 'success');
             }
             catch (e) {
@@ -1042,90 +1122,147 @@ export async function openAdvancedPerfModal() {
         if (cfg.autoRun && runBtn)
             runBtn.click();
     }
-    // Live Monitoring
+    // Live Monitoring: store the point, paint on the next frame.
     benchmarkUnlisten = await listen('benchmark-point', (event) => {
         const point = event.payload;
         benchmarkData.push(point);
         if (benchmarkData.length > 500)
             benchmarkData.shift();
-        if (isLiveView) {
-            updateStatsView(content, point);
-            renderCharts(content, benchmarkData);
-            renderActivityMap(content, benchmarkData);
-            updateSeekHandle(content, 1);
-        }
+        if (isLiveView)
+            scheduleLiveRender();
         if (miniMonitorActive)
             updateMiniMonitor(point);
     });
+    scheduleLiveRender();
     await invoke('start_benchmark');
 }
 function updateStatsView(container, point) {
     if (!point)
         return;
-    const cpuVal = container.querySelector('#perf-cpu-val');
-    const cpuAvg = container.querySelector('#perf-cpu-avg');
-    const ramVal = container.querySelector('#perf-ram-val');
-    const ramPeak = container.querySelector('#perf-ram-peak');
-    const diskVal = container.querySelector('#perf-disk-val');
-    const uptimeVal = container.querySelector('#perf-uptime-val');
-    const replayTime = container.querySelector('#replay-time');
-    if (cpuVal)
-        cpuVal.textContent = point.cpu_usage.toFixed(1) + '%';
-    if (ramVal)
-        ramVal.textContent = formatUnit(point.ram_usage, 'MB');
-    if (diskVal)
-        diskVal.textContent = `${formatUnit(point.disk_read, 'KB/s')} / ${formatUnit(point.disk_write, 'KB/s')}`;
-    if (uptimeVal)
-        uptimeVal.textContent = formatUnit(point.process_uptime || 0, 's');
-    if (replayTime)
-        replayTime.textContent = t('bench.pointTime', { time: new Date(point.timestamp * 1000).toLocaleTimeString() });
-    // Averages/Peaks
+    const set = (sel, txt) => { const el = container.querySelector(sel); if (el && el.textContent !== txt)
+        el.textContent = txt; };
+    set('#perf-cpu-val', point.cpu_usage.toFixed(1) + ' %');
+    set('#perf-ram-val', formatUnit(point.ram_usage, 'MB'));
+    set('#perf-disk-val', formatUnit(point.disk_read + point.disk_write, 'KB/s'));
+    set('#perf-disk-aux', `R ${formatUnit(point.disk_read, 'KB/s')} · W ${formatUnit(point.disk_write, 'KB/s')}`);
+    set('#perf-uptime-val', formatUnit(point.process_uptime || 0, 's'));
+    set('#perf-uptime-aux', point.network_latency ? `${t('bench.network') || 'Net Latency'} ${point.network_latency} ms` : '');
+    set('#replay-time', (isLiveView ? '' : `${t('bench.replayTime') || 'Replay'} · `) + t('bench.pointTime', { time: new Date(point.timestamp * 1000).toLocaleTimeString() }));
+    // Averages/Peaks over the whole session.
     if (benchmarkData.length > 0) {
-        const avgCpu = benchmarkData.reduce((acc, p) => acc + p.cpu_usage, 0) / benchmarkData.length;
-        const peakRam = Math.max(...benchmarkData.map(p => p.ram_usage));
-        if (cpuAvg)
-            cpuAvg.textContent = `avg: ${avgCpu.toFixed(1)}%`;
-        if (ramPeak)
-            ramPeak.textContent = `peak: ${peakRam.toFixed(0)} MB`;
+        let sum = 0, peak = 0;
+        for (const p of benchmarkData) {
+            sum += p.cpu_usage;
+            if (p.ram_usage > peak)
+                peak = p.ram_usage;
+        }
+        set('#perf-cpu-avg', tt('bench.ui.avg', 'avg {v}', { v: (sum / benchmarkData.length).toFixed(1) + ' %' }));
+        set('#perf-ram-peak', tt('bench.ui.peak', 'peak {v}', { v: formatUnit(peak, 'MB') }));
     }
     if (isAdvancedMode) {
-        const gCpuVal = container.querySelector('#perf-global-cpu-val');
-        const vramVal = container.querySelector('#perf-vram-val');
-        const swapVal = container.querySelector('#perf-swap-val');
-        if (gCpuVal)
-            gCpuVal.textContent = point.global_cpu ? point.global_cpu.toFixed(1) + ' %' : '-- %';
-        if (vramVal)
-            vramVal.textContent = point.ram_virtual ? formatUnit(point.ram_virtual, 'MB') : '--';
-        if (swapVal)
-            swapVal.textContent = point.ram_swap ? formatUnit(point.ram_swap, 'MB') : '--';
+        set('#perf-global-cpu-val', point.global_cpu ? point.global_cpu.toFixed(1) + ' %' : '–');
+        set('#perf-vram-val', point.ram_virtual ? formatUnit(point.ram_virtual, 'MB') : '–');
+        set('#perf-swap-val', point.ram_swap ? formatUnit(point.ram_swap, 'MB') : '–');
     }
 }
 function updateSeekHandle(container, ratio) {
     const handle = container.querySelector('#timeline-seek-handle');
     if (handle) {
-        handle.style.left = `calc(${ratio * 100}% - 2px)`;
+        handle.style.left = `calc(${ratio * 100}% - 1.5px)`;
     }
+}
+/** A theme token's current value (custom properties resolve their own var()s). */
+function tok(name, fb, el = document.documentElement) {
+    return getComputedStyle(el).getPropertyValue(name).trim() || fb;
+}
+/** Size a canvas to its box at the device pixel ratio; returns the 2D context in CSS pixels. */
+function fitCanvas(canvas) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx)
+        return null;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (W < 2 || H < 2)
+        return null;
+    const bw = Math.round(W * dpr), bh = Math.round(H * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+        canvas.width = bw;
+        canvas.height = bh;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    return { ctx, W, H };
 }
 function renderActivityMap(container, data) {
     const canvas = container.querySelector('#activity-heatmap');
     if (!canvas)
         return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx)
+    const fit = fitCanvas(canvas);
+    if (!fit || data.length < 2)
         return;
-    const w = canvas.offsetWidth;
-    const h = canvas.offsetHeight;
-    canvas.width = w;
-    canvas.height = h;
-    if (data.length < 2)
-        return;
-    const maxCpu = Math.max(...data.map(p => p.cpu_usage)) || 1;
-    ctx.clearRect(0, 0, w, h);
+    const { ctx, W: w, H: h } = fit;
+    let maxCpu = 0;
+    for (const p of data)
+        if (p.cpu_usage > maxCpu)
+            maxCpu = p.cpu_usage;
+    maxCpu = maxCpu || 1;
+    ctx.fillStyle = tok('--bmm-accent', '#3b82f6');
+    const bw = Math.max(1.5, w / data.length - 1);
     data.forEach((p, i) => {
-        const x = (i / (data.length - 1)) * w;
+        const x = (i / (data.length - 1)) * (w - bw);
         const intensity = p.cpu_usage / maxCpu;
-        ctx.fillStyle = `rgba(59, 130, 246, ${0.1 + intensity * 0.9})`;
-        ctx.fillRect(x, h - (intensity * h), 2, intensity * h);
+        ctx.globalAlpha = 0.25 + intensity * 0.75;
+        const bh = Math.max(2, intensity * (h - 8));
+        ctx.fillRect(x, h - 4 - bh, bw, bh);
+    });
+    ctx.globalAlpha = 1;
+}
+/** The small trend line at the bottom of each stat card: the last minute or so. */
+function renderSparklines(container, data) {
+    container.querySelectorAll('canvas.pf-spark').forEach((canvas) => {
+        const key = canvas.dataset.spark;
+        if (!key)
+            return;
+        const fit = fitCanvas(canvas);
+        if (!fit)
+            return;
+        const { ctx, W, H } = fit;
+        const pts = data.slice(-90);
+        if (pts.length < 2)
+            return;
+        const val = (p) => key === 'disk_total' ? p.disk_read + p.disk_write : p[key] || 0;
+        let max = 0, min = Infinity;
+        for (const p of pts) {
+            const v = val(p);
+            if (v > max)
+                max = v;
+            if (v < min)
+                min = v;
+        }
+        // RAM barely moves in absolute terms; a floor at 0 would draw it flat.
+        const lo = key === 'ram_usage' ? min * 0.98 : 0;
+        const span = (max - lo) || 1;
+        const color = tok('--c', tok('--bmm-accent', '#3b82f6'), canvas);
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            const x = (i / (pts.length - 1)) * W;
+            const y = H - 2 - ((val(p) - lo) / span) * (H - 6);
+            if (i === 0)
+                ctx.moveTo(x, y);
+            else
+                ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = 1;
     });
 }
 function toggleMiniMonitor(active) {
@@ -1139,58 +1276,34 @@ function toggleMiniMonitor(active) {
         return;
     }
     if (!el) {
+        ensureBenchCss();
         el = document.createElement('div');
         el.id = 'bmm-mini-monitor';
-        el.className = 'glass';
-        el.style.cssText = `
-            position: fixed; top: 100px; right: 40px; width: 240px; 
-            padding: 20px; border-radius: 20px; z-index: 2000000;
-            border: 1px solid rgba(255,255,255,0.2); cursor: grab;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8); backdrop-filter: blur(24px);
-            background: rgba(15, 23, 42, 0.85); transition: opacity 0.3s, transform 0.3s;
-            display: flex; flex-direction: column; gap: 14px;
-            pointer-events: auto;
-        `;
+        el.className = 'pf-mini';
+        el.setAttribute('role', 'region');
+        el.setAttribute('aria-label', t('bench.miniMonitor') || 'Mini-Monitor');
+        const row = (lbl, bar, val, c) => `
+            <div class="pf-mini-row">
+                <span class="bms-label">${lbl}</span>
+                <div class="pf-bar" style="--c:${c}"><span id="${bar}" style="width:0%"></span></div>
+                <span class="pf-mini-val" id="${val}">–</span>
+            </div>`;
         el.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; pointer-events: none;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);"></div>
-                    <span style="font-size:11px; font-weight:900; letter-spacing:0.12em; color: var(--bmm-text-primary); text-transform: uppercase;">PERF MINI</span>
-                </div>
-                <div style="display: flex; gap: 4px; align-items: center; pointer-events: auto;">
-                    <button id="mini-startstop" style="background:none; border:1px solid rgba(239,68,68,0.3); color: var(--bmm-danger); cursor:pointer; font-size:10px; font-weight:700; padding:2px 6px; border-radius: 4px; text-transform:uppercase; transition:all 0.2s;">STOP</button>
-                    <button id="mini-back" style="background:none; border:none; color:var(--bmm-text-secondary); cursor:pointer; font-size:12px; padding:6px; border-radius: 8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
+            <div class="pf-mini-h">
+                <span class="bms-label"><span class="bms-dot" style="background:var(--bmm-accent)"></span>${escB(t('bench.miniMonitor') || 'Mini-Monitor')}</span>
+                <div class="pf-mini-btns">
+                    <button type="button" id="mini-startstop" class="pf-mini-btn is-stop"></button>
+                    <button type="button" id="mini-back" class="pf-mini-btn" aria-label="${escB(t('bench.title') || 'Benchmark')}" data-tooltip="${escB(t('bench.title') || 'Benchmark')}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
                     </button>
-                    <button id="mini-close" style="background:none; border:none; color:var(--bmm-text-secondary); cursor:pointer; font-size:22px; padding:0 6px; border-radius: 8px;">&times;</button>
+                    <button type="button" id="mini-close" class="pf-mini-btn" aria-label="${escB(t('common.close') || 'Close')}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                 </div>
             </div>
-            <div style="display:flex; flex-direction:column; gap:12px; pointer-events: none;">
-                <!-- CPU Gauge -->
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">CPU</span>
-                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
-                        <div id="mini-cpu-bar" style="width:0%; height:100%; background:var(--accent); transition: width 0.3s ease;"></div>
-                    </div>
-                    <span id="mini-cpu" style="font-size:11px; font-weight:900; color:var(--accent); width:35px; text-align:right;">0%</span>
-                </div>
-                <!-- RAM Gauge -->
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">RAM</span>
-                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
-                        <div id="mini-ram-bar" style="width:0%; height:100%; background:#fff; transition: width 0.3s ease;"></div>
-                    </div>
-                    <span id="mini-ram" style="font-size:11px; font-weight:900; color:var(--bmm-chart-ram); width:35px; text-align:right;">0M</span>
-                </div>
-                <!-- DISK Gauge -->
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">DISK</span>
-                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
-                        <div id="mini-disk-bar" style="width:0%; height:100%; background:#fbbf24; transition: width 0.3s ease;"></div>
-                    </div>
-                    <span id="mini-disk" style="font-size:11px; font-weight:900; color:var(--bmm-chart-disk-read); width:35px; text-align:right;">0K</span>
-                </div>
-            </div>
+            ${row('CPU', 'mini-cpu-bar', 'mini-cpu', 'var(--bmm-chart-cpu)')}
+            ${row('RAM', 'mini-ram-bar', 'mini-ram', 'var(--bmm-chart-ram)')}
+            ${row('DISK', 'mini-disk-bar', 'mini-disk', 'var(--bmm-chart-disk-read)')}
         `;
         document.body.appendChild(el);
         let isDragging = false;
@@ -1214,40 +1327,17 @@ function toggleMiniMonitor(active) {
         });
         document.addEventListener('mouseup', () => { isDragging = false; if (el) {
             el.style.cursor = 'grab';
-            el.style.transition = 'all 0.3s';
+            el.style.transition = '';
         } });
         el.querySelector('#mini-close').onclick = () => toggleMiniMonitor(false);
         el.querySelector('#mini-back').onclick = () => { toggleMiniMonitor(false); openAdvancedPerfModal(); };
         const startStopBtn = el.querySelector('#mini-startstop');
-        const updateMiniBtnVisuals = () => {
-            if (isRecording) {
-                startStopBtn.textContent = t('bench.stop') || 'STOP';
-                startStopBtn.style.color = '#ef4444';
-                startStopBtn.style.borderColor = 'rgba(239,68,68,0.3)';
-            }
-            else {
-                startStopBtn.textContent = t('bench.start') || 'START';
-                startStopBtn.style.color = '#10b981';
-                startStopBtn.style.borderColor = 'rgba(16,185,129,0.3)';
-            }
-        };
-        updateMiniBtnVisuals();
         startStopBtn.onclick = () => {
             isRecording = !isRecording;
-            if (isRecording) {
-                invoke('start_benchmark');
-            }
-            else {
-                invoke('stop_benchmark');
-            }
-            updateMiniBtnVisuals();
-            const recBtn = document.getElementById('btn-perf-rec');
-            if (recBtn) {
-                recBtn.style.color = isRecording ? '#ef4444' : '#fff';
-                recBtn.querySelector('#rec-text').textContent = isRecording ? (t('bench.stopRec') || 'Stop Recording') : (t('bench.startRec') || 'Start Monitoring');
-                recBtn.querySelector('#rec-dot').style.display = isRecording ? 'block' : 'none';
-            }
+            invoke(isRecording ? 'start_benchmark' : 'stop_benchmark');
+            paintRecState();
         };
+        paintRecState();
     }
 }
 function updateMiniMonitor(point) {
@@ -1267,54 +1357,68 @@ function updateMiniMonitor(point) {
     if (ram && ramBar) {
         // Estimate RAM percentage based on a 16GB baseline if total not known
         const ramMb = point.ram_usage;
-        ram.textContent = (ramMb > 1024 ? (ramMb / 1024).toFixed(1) + 'G' : ramMb.toFixed(0) + 'M');
+        ram.textContent = (ramMb > 1024 ? (ramMb / 1024).toFixed(1) + ' GB' : ramMb.toFixed(0) + ' MB');
         ramBar.style.width = Math.min(100, (ramMb / 16384) * 100) + '%';
     }
     if (disk && diskBar) {
         const totalIo = point.disk_read + point.disk_write;
-        disk.textContent = (totalIo > 1024 ? (totalIo / 1024).toFixed(1) + 'M' : totalIo.toFixed(0) + 'K');
+        disk.textContent = (totalIo > 1024 ? (totalIo / 1024).toFixed(1) + ' MB/s' : totalIo.toFixed(0) + ' KB/s');
         // Scale 50MB/s as 100% for the mini bar
         diskBar.style.width = Math.min(100, (totalIo / 51200) * 100) + '%';
     }
 }
+// The plot's margins: the left axis carries the first series' unit, the right axis the
+// second's. The hover handler reads the same numbers to map the mouse onto a sample.
+const CHART_PAD = { l: 64, r: 64, t: 10, b: 22 };
+const mainSeries = () => [
+    { key: 'cpu_usage', css: 'var(--bmm-chart-cpu)', color: tok('--bmm-chart-cpu', '#3b82f6'), label: 'CPU', fmt: v => `${v.toFixed(1)} %` },
+    { key: 'ram_usage', css: 'var(--bmm-chart-ram)', color: tok('--bmm-chart-ram', '#94a3b8'), label: 'RAM', fmt: v => formatUnit(v, 'MB') },
+];
+const ioSeries = () => [
+    { key: 'disk_read', css: 'var(--bmm-chart-disk-read)', color: tok('--bmm-chart-disk-read', '#fbbf24'), label: tt('bench.ui.read', 'Read'), fmt: v => formatUnit(v, 'KB/s') },
+    { key: 'disk_write', css: 'var(--bmm-chart-disk-write)', color: tok('--bmm-chart-disk-write', '#f87171'), label: tt('bench.ui.write', 'Write'), fmt: v => formatUnit(v, 'KB/s') },
+];
 function renderCharts(container, data, highlightIndex = null) {
     const mainCanvas = container.querySelector('#perf-chart-main');
     const ioCanvas = container.querySelector('#perf-chart-io');
     if (!mainCanvas || !ioCanvas)
         return;
-    // Resolve theme tokens so users can recolour the graphs from the theme editor.
-    const cv = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
-    drawChart(mainCanvas, data, [
-        { key: 'cpu_usage', color: cv('--bmm-chart-cpu', '#3b82f6'), label: 'CPU', fmt: v => `${v.toFixed(1)}%` },
-        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#94a3b8'), label: 'RAM', fmt: v => formatUnit(v, 'MB') }
-    ], highlightIndex);
-    drawChart(ioCanvas, data, [
-        { key: 'disk_read', color: cv('--bmm-chart-disk-read', '#fbbf24'), label: 'Read', fmt: v => formatUnit(v, 'KB/s') },
-        { key: 'disk_write', color: cv('--bmm-chart-disk-write', '#f87171'), label: 'Write', fmt: v => formatUnit(v, 'KB/s') }
-    ], highlightIndex);
+    const main = mainSeries(), io = ioSeries();
+    drawChart(mainCanvas, data, main, highlightIndex);
+    drawChart(ioCanvas, data, io, highlightIndex);
+    paintLegend(container.querySelector('#perf-legend-main'), data, main, highlightIndex);
+    paintLegend(container.querySelector('#perf-legend-io'), data, io, highlightIndex);
 }
-// Professional time-series chart: padded plot area, horizontal gridlines with
-// %-of-scale labels, an X time axis, a live-value legend (real units), and
-// per-series auto-scaling so every metric is readable regardless of magnitude.
-function drawChart(canvas, data, series, highlightIndex) {
-    const ctx = canvas.getContext('2d');
-    if (!ctx)
+/** The legend is HTML (readable, selectable, themed); only the values change per frame. */
+function paintLegend(el, data, series, highlightIndex) {
+    if (!el)
         return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    const W = rect.width, H = rect.height;
-    ctx.clearRect(0, 0, W, H);
-    ctx.font = '10px ui-monospace, monospace';
+    const index = highlightIndex !== null ? highlightIndex : hoverIndex;
+    const sample = (index !== null && data[index]) ? data[index] : data[data.length - 1];
+    if (el.childElementCount !== series.length) {
+        el.innerHTML = series.map((s, i) => `<span><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)} <b data-i="${i}">–</b></span>`).join('');
+    }
+    series.forEach((s, i) => {
+        const b = el.querySelector(`b[data-i="${i}"]`);
+        const txt = sample ? s.fmt(sample[s.key] || 0) : '–';
+        if (b && b.textContent !== txt)
+            b.textContent = txt;
+    });
+}
+// Time-series chart: a padded plot, three gridlines labelled in each series' OWN unit (left
+// axis = first series, right axis = second), a time axis, and a crosshair with markers on
+// hover or replay. Each series scales to its own peak so both stay readable.
+function drawChart(canvas, data, series, highlightIndex) {
+    const fit = fitCanvas(canvas);
+    if (!fit)
+        return;
+    const { ctx, W, H } = fit;
+    ctx.font = `10.5px ${tok('--bmm-font-mono', 'monospace')}`;
     ctx.textBaseline = 'middle';
-    // Plot area (leave room for axis labels + a legend strip on top).
-    const PADL = 40, PADR = 12, PADT = 26, PADB = 20;
-    const px = PADL, py = PADT, pw = Math.max(1, W - PADL - PADR), ph = Math.max(1, H - PADT - PADB);
-    const muted = 'rgba(148,163,184,0.55)';
-    const grid = 'rgba(148,163,184,0.12)';
-    // Per-series max (with 15% headroom) so each line uses the full height.
+    const px = CHART_PAD.l, py = CHART_PAD.t;
+    const pw = Math.max(1, W - CHART_PAD.l - CHART_PAD.r), ph = Math.max(1, H - CHART_PAD.t - CHART_PAD.b);
+    const ink = tok('--bmm-text-secondary', '#94a3b8');
+    const grid = tok('--bmm-border-hover', 'rgba(148,163,184,0.15)');
     const maxOf = (s) => {
         let m = 0;
         for (const p of data) {
@@ -1325,120 +1429,135 @@ function drawChart(canvas, data, series, highlightIndex) {
         return m * 1.15 || 1;
     };
     const maxes = series.map(maxOf);
-    // ── Horizontal gridlines + %-of-scale labels ──
     ctx.strokeStyle = grid;
-    ctx.fillStyle = muted;
     ctx.lineWidth = 1;
-    ctx.textAlign = 'right';
-    for (let i = 0; i <= 4; i++) {
-        const y = py + (ph * i) / 4;
+    ctx.fillStyle = ink;
+    for (let i = 0; i <= 2; i++) {
+        const y = Math.round(py + (ph * i) / 2) + 0.5;
         ctx.beginPath();
         ctx.moveTo(px, y);
         ctx.lineTo(px + pw, y);
         ctx.stroke();
-        ctx.fillText(`${100 - i * 25}%`, px - 6, y);
+        if (data.length >= 2) {
+            const frac = 1 - i / 2;
+            ctx.textAlign = 'right';
+            ctx.fillText(series[0].fmt(maxes[0] * frac), px - 8, y);
+            if (series[1]) {
+                ctx.textAlign = 'left';
+                ctx.fillText(series[1].fmt(maxes[1] * frac), px + pw + 8, y);
+            }
+        }
     }
     if (data.length < 2) {
         ctx.textAlign = 'center';
-        ctx.fillStyle = muted;
-        ctx.fillText('collecting samples…', px + pw / 2, py + ph / 2);
+        ctx.fillStyle = ink;
+        ctx.fillText(tt('bench.ui.collecting', 'Collecting samples…'), px + pw / 2, py + ph / 2);
         return;
     }
-    // ── X time axis (oldest → newest) ──
     ctx.textAlign = 'center';
-    ctx.fillStyle = muted;
+    ctx.fillStyle = ink;
     const tFmt = (ts) => new Date(ts * 1000).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
     for (let i = 0; i <= 3; i++) {
         const idx = Math.round(((data.length - 1) * i) / 3);
         const x = px + (pw * i) / 3;
+        ctx.textAlign = i === 0 ? 'left' : i === 3 ? 'right' : 'center';
         if (data[idx])
-            ctx.fillText(tFmt(data[idx].timestamp), x, py + ph + 11);
+            ctx.fillText(tFmt(data[idx].timestamp), x, py + ph + 13);
     }
-    // ── Series lines + gradient fill (each normalized to its own max) ──
+    const yOf = (v, max) => py + ph - Math.min(ph, (v / max) * ph);
     series.forEach((s, si) => {
         const max = maxes[si];
         ctx.beginPath();
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
         data.forEach((p, i) => {
             const x = px + (i / (data.length - 1)) * pw;
-            const y = py + ph - Math.min(ph, ((p[s.key] || 0) / max) * ph);
+            const y = yOf(p[s.key] || 0, max);
             if (i === 0)
                 ctx.moveTo(x, y);
             else
                 ctx.lineTo(x, y);
         });
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
         ctx.stroke();
         ctx.lineTo(px + pw, py + ph);
         ctx.lineTo(px, py + ph);
         ctx.closePath();
-        const grad = ctx.createLinearGradient(0, py, 0, py + ph);
-        grad.addColorStop(0, s.color + '2e');
-        grad.addColorStop(1, s.color + '00');
-        ctx.fillStyle = grad;
-        ctx.fill();
-    });
-    // ── Legend (top strip): colour chip + label + live/peak value in real units ──
-    const index = highlightIndex !== null ? highlightIndex : hoverIndex;
-    const sample = (index !== null && data[index]) ? data[index] : data[data.length - 1];
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    let lx = px;
-    series.forEach((s) => {
+        ctx.globalAlpha = 0.12;
         ctx.fillStyle = s.color;
-        ctx.fillRect(lx, PADT / 2 - 4, 9, 9);
-        lx += 13;
-        ctx.fillStyle = '#e2e8f0';
-        const txt = `${s.label} ${s.fmt(sample[s.key] || 0)}`;
-        ctx.fillText(txt, lx, PADT / 2);
-        lx += ctx.measureText(txt).width + 18;
+        ctx.fill();
+        ctx.globalAlpha = 1;
     });
-    // ── Hover / replay crosshair + markers ──
+    const index = highlightIndex !== null ? highlightIndex : hoverIndex;
     if (index !== null && data[index]) {
         const x = px + (index / (data.length - 1)) * pw;
         ctx.beginPath();
-        ctx.strokeStyle = highlightIndex !== null ? (cssAccent()) : 'rgba(255,255,255,0.4)';
+        ctx.strokeStyle = highlightIndex !== null ? tok('--bmm-accent', '#3b82f6') : ink;
         ctx.setLineDash([4, 4]);
         ctx.moveTo(x, py);
         ctx.lineTo(x, py + ph);
         ctx.stroke();
         ctx.setLineDash([]);
+        const ring = tok('--bmm-bg-elevated', '#111827');
         series.forEach((s, si) => {
-            const y = py + ph - Math.min(ph, ((data[index][s.key] || 0) / maxes[si]) * ph);
+            const y = yOf(data[index][s.key] || 0, maxes[si]);
             ctx.beginPath();
             ctx.fillStyle = s.color;
             ctx.arc(x, y, 4, 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = ring;
+            ctx.lineWidth = 2;
             ctx.stroke();
         });
     }
 }
-function cssAccent() {
-    return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
+const fmtMsU = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)} µs` : ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
+const fmtTputU = (v) => (v == null) ? '' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
+/** Category → the semantic token its bars and edges wear. */
+const CAT_TOKEN = { scan: '--bmm-purple', hash: '--bmm-cyan', io: '--bmm-info', archive: '--bmm-warning', activation: '--bmm-success' };
+const catVar = (cat) => `var(${CAT_TOKEN[cat] || '--bmm-info'})`;
+/** The run to compare against: the most recent OTHER report in the comparison set. */
+function previousReport(report) {
+    const other = benchCompare.find(r => r.report !== report);
+    return other ? other.report : null;
+}
+/** Change of one operation against the previous run: throughput when both have it (higher
+ *  is better), time otherwise (lower is better). The arrow is the direction of the number,
+ *  the colour (and the hidden word) whether that is good. Within ±2 % it is noise. */
+function opDelta(op, prev) {
+    if (!prev)
+        return '';
+    const p = (prev.results || []).find((o) => o.id === op.id);
+    if (!p)
+        return '';
+    const tput = op.throughput_mb_s != null && p.throughput_mb_s != null && p.throughput_mb_s > 0;
+    const cur = tput ? op.throughput_mb_s : op.ms, old = tput ? p.throughput_mb_s : p.ms;
+    if (!old)
+        return '';
+    const pct = ((cur - old) / old) * 100;
+    const title = escB(tt('bench.ui.vsPrev', 'vs previous run'));
+    if (Math.abs(pct) < 2)
+        return `<span class="pf-delta" title="${title}">≈ 0 %</span>`;
+    const better = tput ? pct > 0 : pct < 0;
+    const word = better ? tt('bench.ui.better', 'better') : tt('bench.ui.worse', 'worse');
+    return `<span class="pf-delta ${better ? 'pf-delta--better' : 'pf-delta--worse'}" title="${title}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)} % <span class="pf-sr">${escB(word)}</span></span>`;
 }
 /** Side-by-side comparison table across the runs in `benchCompare`. Per row,
- *  the best value (highest throughput, else lowest time) is highlighted green. */
+ *  the best value (highest throughput, else lowest time) is highlighted. */
 function benchCompareHtml() {
     if (benchCompare.length < 2)
         return '';
-    const esc = (s) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const runs = benchCompare;
     const order = [];
-    const labelById = {};
+    const opById = {};
     for (const r of runs)
         for (const o of (r.report.results || [])) {
-            if (!(o.id in labelById)) {
-                labelById[o.id] = o.label || o.id;
+            if (!(o.id in opById)) {
+                opById[o.id] = o;
                 order.push(o.id);
             }
         }
-    const fmtTput = (v) => v == null ? '—' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
-    const fmtMs = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)}µs` : ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`;
-    const th = `<th style="text-align:left; padding:6px 8px; color:var(--text-muted); font-weight:600;">${t('bench.cmpOp') || 'Operation'}</th>` +
-        runs.map(r => `<th style="text-align:right; padding:6px 8px; color:var(--bmm-text-primary); font-weight:700; white-space:nowrap;">${esc(r.label)}</th>`).join('');
+    const th = `<th scope="col">${escB(t('bench.cmpOp') || 'Operation')}</th>` + runs.map(r => `<th scope="col">${escB(r.label)}</th>`).join('');
     const body = order.map(id => {
         const cells = runs.map(r => (r.report.results || []).find((o) => o.id === id));
         const hasTput = cells.some(c => c && c.throughput_mb_s != null);
@@ -1450,20 +1569,19 @@ function benchCompareHtml() {
         } });
         const tds = cells.map((c, i) => {
             if (!c)
-                return `<td style="text-align:right; padding:6px 8px; color:var(--text-muted);">—</td>`;
-            const txt = hasTput ? fmtTput(c.throughput_mb_s) : fmtMs(c.ms);
-            const best = i === bestIdx && runs.length > 1;
-            return `<td style="text-align:right; padding:6px 8px; font-family:var(--font-mono); color:${best ? '#10b981' : '#cbd5e1'}; font-weight:${best ? '800' : '500'};">${txt}</td>`;
+                return `<td>—</td>`;
+            const txt = hasTput ? (fmtTputU(c.throughput_mb_s) || '—') : fmtMsU(c.ms);
+            return `<td${i === bestIdx ? ' class="pf-best"' : ''}>${txt}</td>`;
         }).join('');
-        return `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px; color:var(--bmm-text-primary); font-weight:600;">${esc(labelById[id])}</td>${tds}</tr>`;
+        return `<tr><td>${escB(opLabel(opById[id]))}</td>${tds}</tr>`;
     }).join('');
-    return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${(t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length))} <span style="color:var(--bmm-text-muted); text-transform:none; font-weight:400;">· ${runs.length} ${t('bench.cmpRuns') || 'runs'}</span></h4>
-            <button class="btn btn-ghost btn-sm" id="bench-clear-compare" style="font-weight:700;">${t('bench.cmpClear') || 'Clear comparison'}</button>
+    return `<div class="bms-card">
+        <div class="bms-card-h">
+            <h4 class="bms-card-title">${escB((t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length)))}<small>${runs.length} ${escB(t('bench.cmpRuns') || 'runs')}</small></h4>
+            <button type="button" class="btn btn-ghost btn-sm" id="bench-clear-compare">${escB(t('bench.cmpClear') || 'Clear comparison')}</button>
         </div>
-        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
-        <p style="margin:8px 0 0; font-size:11px; color:var(--text-muted);">${t('bench.cmpHint') || 'Green = best per row (highest throughput, or lowest time).'}</p>
+        <div class="pf-table-wrap"><table class="pf-table"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
+        <p class="bms-note">${escB(t('bench.cmpHint') || 'Green = best per row (highest throughput, or lowest time).')}</p>
     </div>`;
 }
 // ── Benchmark results rendering ──────────────────────────────────────────────
@@ -1472,51 +1590,60 @@ function renderBenchResults(container, report) {
         return;
     const ops = report.results || [];
     const env = report.env || {};
+    const prev = previousReport(report);
     const maxMs = Math.max(...ops.map(o => o.ms), 0.0001);
-    const fmtMs = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)} µs` : ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
-    const fmtTput = (v) => (v == null) ? '' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
-    const catColor = { scan: '#a78bfa', hash: '#22d3ee', io: '#3b82f6', archive: '#fbbf24', activation: '#10b981' };
     const rows = ops.map(op => {
-        const col = catColor[op.category] || '#3b82f6';
-        const w = Math.max(3, (op.ms / maxMs) * 100);
-        const tp = fmtTput(op.throughput_mb_s);
-        const range = (op.max_ms > op.min_ms) ? `<span style="color:var(--text-muted); font-weight:400; font-size:11px; font-family:var(--font-mono);"> ${fmtMs(op.min_ms)}–${fmtMs(op.max_ms)}</span>` : '';
+        const w = Math.max(2, (op.ms / maxMs) * 100);
+        const tp = fmtTputU(op.throughput_mb_s);
+        const range = (op.max_ms > op.min_ms) ? `<span class="pf-mono">${fmtMsU(op.min_ms)} – ${fmtMsU(op.max_ms)}</span>` : '';
         const note = opNote(op);
-        return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
-                <span style="font-weight:700; color:var(--bmm-text-primary); font-size:13px;">${opLabel(op)}</span>
-                <span style="font-family:var(--font-mono); font-weight:800; color:${col}; white-space:nowrap;">${fmtMs(op.ms)}${tp ? ` · ${tp}` : ''}${range}</span>
+        return `<article class="pf-op" style="--c:${catVar(op.category)}">
+            <div class="pf-op-h">
+                <span class="pf-op-name">${escB(opLabel(op))}</span>
+                <span class="pf-op-v">${fmtMsU(op.ms)}</span>
             </div>
-            <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; margin:9px 0 7px; overflow:hidden;">
-                <div style="height:100%; width:${w}%; background:${col}; border-radius:3px;"></div>
-            </div>
-            <div style="font-size:11.5px; color:var(--text-muted); line-height:1.55;">${opDesc(op)}${note ? ` <span style="color:${col}; font-weight:600;">(${note})</span>` : ''}</div>
-        </div>`;
+            <div class="pf-bar" aria-hidden="true"><span style="width:${w}%"></span></div>
+            <div class="pf-op-meta">${tp ? `<span class="bms-chip">${tp}</span>` : ''}${range}${note ? `<span>${escB(note)}</span>` : ''}${opDelta(op, prev)}</div>
+            <p class="pf-op-d">${escB(opDesc(op))}</p>
+        </article>`;
     }).join('');
     const dsMb = ((env.dataset_bytes || 0) / 1048576).toFixed(1);
-    const cardStyle = 'background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;';
-    const chartTitle = (txt, sub) => `<h4 style="margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${txt} <span style="color:var(--bmm-text-muted); text-transform:none; font-weight:400;">· ${sub}</span></h4>`;
-    const chartTput = benchSvgChart(ops, 'tput');
+    const best = ops.filter(o => o.throughput_mb_s != null).sort((a, b) => b.throughput_mb_s - a.throughput_mb_s)[0];
+    // Total time against the previous run: lower is better, said by colour AND by word.
+    let totalDelta = '';
+    if (prev?.total_ms && report.total_ms) {
+        const pct = ((report.total_ms - prev.total_ms) / prev.total_ms) * 100;
+        const cls = Math.abs(pct) < 2 ? '' : pct < 0 ? ' pf-delta--better' : ' pf-delta--worse';
+        const word = Math.abs(pct) < 2 ? '' : ` <span class="pf-sr">${escB(pct < 0 ? tt('bench.ui.better', 'better') : tt('bench.ui.worse', 'worse'))}</span>`;
+        totalDelta = `<span class="pf-delta${cls}">${Math.abs(pct) < 2 ? '≈ 0 %' : `${pct < 0 ? '▼' : '▲'} ${Math.abs(pct).toFixed(1)} %`}${word}</span> ${escB(tt('bench.ui.vsPrev', 'vs previous run'))}`;
+    }
+    const kpi = (label, value, sub, subHtml = '') => `<div class="pf-kpi"><span class="bms-label">${escB(label)}</span><span class="pf-kpi-v">${escB(value)}</span><span class="pf-kpi-s">${subHtml || escB(sub)}</span></div>`;
+    const chip = (label, value) => `<span class="bms-chip">${escB(label)} <b>${escB(value)}</b></span>`;
+    const chartTput = benchSvgChart(ops, 'tput', true);
     container.innerHTML = `
-        <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; padding:4px 2px;">
-            <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
-                <span>${t('bench.colMode') || 'Mode'}: <b style="color:var(--bmm-text-primary);">${env.mode === 'real' ? (t('bench.real') || 'Real') : (t('bench.sandbox') || 'Sandbox')}</b></span>
-                <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:var(--bmm-text-primary);">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
-                <span>CPU: <b style="color:var(--bmm-text-primary);">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
-                ${env.disk ? `<span>${t('bench.disk') || 'Disk'}: <b style="color:var(--bmm-text-primary);">${env.disk}</b></span>` : ''}
-                ${env.reps ? `<span>${t('bench.samples') || 'Samples'}: <b style="color:var(--bmm-text-primary);">${env.reps}× ${t('bench.eachOp') || 'each op'}</b></span>` : ''}
-                <span>${t('bench.colTotal') || 'Total'}: <b style="color:var(--bmm-text-primary);">${fmtMs(report.total_ms || 0)}</b></span>
+        <div class="pf-res-head">
+            <div class="pf-env">
+                ${chip(t('bench.colMode') || 'Mode', env.mode === 'real' ? (t('bench.real') || 'Real') : (t('bench.sandbox') || 'Sandbox'))}
+                ${chip('CPU', `${env.cores || '?'} ${t('bench.cores') || 'cores'}`)}
+                ${env.disk ? chip(t('bench.disk') || 'Disk', String(env.disk)) : ''}
+                ${env.reps ? chip(t('bench.samples') || 'Samples', `${env.reps}× ${t('bench.eachOp') || 'each op'}`) : ''}
             </div>
-            <div style="display:flex; gap:8px;">
-                <button class="btn btn-ghost btn-sm" id="bench-copy-json" style="font-weight:700;">${t('bench.copyJson') || 'Copy JSON'}</button>
-                <button class="btn btn-primary btn-sm" id="bench-export-html" style="font-weight:700;">${t('bench.exportReport') || 'Export report'}</button>
+            <div class="bms-toolbar">
+                <button type="button" class="btn btn-ghost btn-sm" id="bench-copy-json">${escB(t('bench.copyJson') || 'Copy JSON')}</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="bench-export-html">${escB(t('bench.exportReport') || 'Export report')}</button>
             </div>
         </div>
-        <div style="display:grid; grid-template-columns:${chartTput ? '1fr 1fr' : '1fr'}; gap:14px;">
-            <div style="${cardStyle}">${chartTitle(t('bench.chartTime') || 'Operation time', t('bench.lowerBetter') || 'lower is better')}${benchSvgChart(ops, 'time')}</div>
-            ${chartTput ? `<div style="${cardStyle}">${chartTitle(t('bench.chartTput') || 'Throughput', t('bench.higherBetter') || 'higher is better')}${chartTput}</div>` : ''}
+        <div class="pf-kpis">
+            ${kpi(tt('bench.ui.totalTime', 'Total time'), fmtMsU(report.total_ms || 0), prev ? '' : tt('bench.ui.noPrev', 'Run again to compare with this run.'), totalDelta)}
+            ${kpi(t('bench.colDataset') || 'Dataset', `${dsMb} MB`, `${env.dataset_files || 0} ${t('bench.files') || 'files'}`)}
+            ${best ? kpi(tt('bench.ui.bestTput', 'Best throughput'), fmtTputU(best.throughput_mb_s), opLabel(best)) : ''}
+            ${kpi(tt('bench.ui.opsCount', 'Operations'), String(ops.length), benchCompare.length > 1 ? `${benchCompare.length} ${t('bench.cmpRuns') || 'runs'}` : '')}
         </div>
-        <div style="display:flex; flex-direction:column; gap:10px;">${rows}</div>
+        <div class="pf-res-charts">
+            <div class="bms-card"><h4 class="bms-card-title">${escB(t('bench.chartTime') || 'Operation time')}<small>${escB(t('bench.lowerBetter') || 'lower is better')}</small></h4>${benchSvgChart(ops, 'time', true)}</div>
+            ${chartTput ? `<div class="bms-card"><h4 class="bms-card-title">${escB(t('bench.chartTput') || 'Throughput')}<small>${escB(t('bench.higherBetter') || 'higher is better')}</small></h4>${chartTput}</div>` : ''}
+        </div>
+        <div class="pf-ops">${rows}</div>
         ${benchCompareHtml()}`;
     const copyBtn = container.querySelector('#bench-copy-json');
     if (copyBtn)
@@ -1572,8 +1699,9 @@ function opNote(op) {
     return op.note || '';
 }
 // Inline SVG horizontal bar chart for a metric — used both in the live results
-// panel and the exported HTML, so they look identical to the dev-suite deck.
-function benchSvgChart(ops, metric) {
+// panel (`themed`: colours from the theme tokens) and the exported HTML (a standalone
+// document with no BMM stylesheet, so it keeps fixed colours).
+function benchSvgChart(ops, metric, themed = false) {
     const catColor = { scan: '#a78bfa', hash: '#22d3ee', io: '#3b82f6', archive: '#fbbf24', activation: '#10b981' };
     const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const rows = metric === 'tput' ? ops.filter(o => o.throughput_mb_s != null) : ops.slice();
@@ -1583,24 +1711,34 @@ function benchSvgChart(ops, metric) {
     const fmt = metric === 'tput'
         ? (v) => v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`
         : (v) => v < 1 ? `${(v * 1000).toFixed(0)} µs` : v < 1000 ? `${v.toFixed(1)} ms` : `${(v / 1000).toFixed(2)} s`;
-    const max = Math.max(...rows.map(val), 1e-9);
-    const W = 460, rowH = 30, padL = 150, padR = 96, top = 6, barW = W - padL - padR;
+    // Paint: an attribute for the standalone report, a themed style for the app.
+    const paint = (lit, cssVar) => themed ? `style="fill:${cssVar}"` : `fill="${lit}"`;
+    const inkLabel = paint('#cbd5e1', 'var(--bmm-text-secondary)');
+    const inkValue = paint('#e2e8f0', 'var(--bmm-text-primary)');
+    const axis = themed ? 'style="stroke:var(--bmm-border-hover)"' : 'stroke="rgba(148,163,184,0.25)"';
+    // The time chart draws each op's min–max band too: the scale must hold the band's end.
+    const max = Math.max(...rows.map(o => metric === 'time' ? Math.max(o.ms, o.max_ms || 0) : val(o)), 1e-9);
+    // The label column grows with the longest label (a French one is longer) instead of
+    // pushing its first letters out of the viewBox.
+    const longest = Math.max(...rows.map(o => opLabel(o).length));
+    const rowH = 30, padL = Math.max(150, Math.round(longest * 6.2 + 14)), padR = 96, top = 6, barW = 214;
+    const W = padL + barW + padR;
     const H = top + rows.length * rowH + 6;
-    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">`;
-    s += `<line x1="${padL}" y1="${top}" x2="${padL}" y2="${H - 6}" stroke="rgba(148,163,184,0.25)" stroke-width="1"/>`;
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif" role="img" aria-label="${esc(metric === 'tput' ? (t('bench.chartTput') || 'Throughput') : (t('bench.chartTime') || 'Operation time'))}">`;
+    s += `<line x1="${padL}" y1="${top}" x2="${padL}" y2="${H - 6}" ${axis} stroke-width="1"/>`;
     rows.forEach((o, i) => {
         const y = top + i * rowH;
-        const col = catColor[o.category] || '#3b82f6';
+        const col = paint(catColor[o.category] || '#3b82f6', catVar(o.category));
         const med = Math.max(2, (val(o) / max) * barW);
-        s += `<text x="${padL - 8}" y="${y + 15}" text-anchor="end" font-size="11" fill="#cbd5e1">${esc(opLabel(o))}</text>`;
+        s += `<text x="${padL - 8}" y="${y + 15}" text-anchor="end" font-size="11" ${inkLabel}>${esc(opLabel(o))}</text>`;
         // For the time chart, draw the min–max sample range as a faint band behind
         // the median bar — a compact distribution view (like Criterion's spread).
         if (metric === 'time' && o.max_ms > o.min_ms) {
             const xMin = (o.min_ms / max) * barW, xMax = (o.max_ms / max) * barW;
-            s += `<rect x="${padL + xMin}" y="${y + 7}" width="${Math.max(1, xMax - xMin)}" height="11" rx="2" fill="${col}" opacity="0.28"/>`;
+            s += `<rect x="${padL + xMin}" y="${y + 7}" width="${Math.max(1, xMax - xMin)}" height="11" rx="2" ${col} opacity="0.28"/>`;
         }
-        s += `<rect x="${padL}" y="${y + 5}" width="${med}" height="15" rx="3" fill="${col}"/>`;
-        s += `<text x="${padL + Math.max(med, metric === 'time' && o.max_ms > o.min_ms ? (o.max_ms / max) * barW : med) + 6}" y="${y + 15}" font-size="10.5" fill="#e2e8f0" font-family="ui-monospace,monospace">${fmt(val(o))}</text>`;
+        s += `<rect x="${padL}" y="${y + 5}" width="${med}" height="15" rx="3" ${col}/>`;
+        s += `<text x="${padL + Math.max(med, metric === 'time' && o.max_ms > o.min_ms ? (o.max_ms / max) * barW : med) + 6}" y="${y + 15}" font-size="10.5" ${inkValue} font-family="ui-monospace,monospace">${fmt(val(o))}</text>`;
     });
     return s + '</svg>';
 }
@@ -1642,28 +1780,6 @@ ${charts}
 <div class="card"><table><thead><tr><th>Operation</th><th>Time</th><th>Throughput</th><th>What it measures</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
 <footer style="color:#64748b;font-size:12px">Generated by BMM's in-app benchmark. Operations run on a ${esc(env.mode)} dataset; writes occur only in a temporary workspace.</footer>
 </body></html>`;
-}
-// One-time styles for the perf tabs + benchmark segmented controls.
-function injectBenchStyle() {
-    if (document.getElementById('perf-bench-style'))
-        return;
-    const s = document.createElement('style');
-    s.id = 'perf-bench-style';
-    s.textContent = `
-        .perf-tab { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
-            padding:6px 14px; border-radius:8px; cursor:pointer; transition:all .15s; }
-        .perf-tab:hover { color:var(--text-secondary); }
-        .perf-tab.active { background:var(--accent); color:var(--bmm-text-on-accent); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
-        .bench-seg { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
-            min-width:38px; padding:7px 14px; border-radius:7px; cursor:pointer; transition:all .15s; }
-        .bench-seg:hover { color:var(--text-secondary); }
-        .bench-seg.active { background:rgba(255,255,255,0.10); color:var(--bmm-text-on-accent); }
-        .bench-chip { background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text-secondary);
-            font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer; transition:all .15s; }
-        .bench-chip:hover { border-color:var(--bmm-s15, rgba(255,255,255,0.15)); color:var(--bmm-text-primary); }
-        .bench-chip.active { background:var(--accent); border-color:var(--accent); color:var(--bmm-text-on-accent); }
-    `;
-    document.head.appendChild(s);
 }
 // Compatibility exports
 export function openBenchmarkModal() { openAdvancedPerfModal(); }

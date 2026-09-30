@@ -100,7 +100,9 @@ describe('load-order wiring', () => {
     assert.match(commands, /for \(const k of ORDER_KEYS\)/);
     assert.match(commands, /when: \(\) => orderKeysActive\(\)/);
     assert.match(commands, /id: 'profiles\.loadOrder'/);
-    const chords = [...keys.matchAll(/chord: (\{[^}]*\})/g)].map((m) => m[1].replace(/\s+/g, ''));
+    // The view's own five: the part of the file before the library's list.
+    const viewKeys = keys.slice(0, keys.indexOf('export const LIB_ORDER_KEYS'));
+    const chords = [...viewKeys.matchAll(/chord: (\{[^}]*\})/g)].map((m) => m[1].replace(/\s+/g, ''));
     assert.equal(chords.length, 5);
     assert.equal(new Set(chords).size, chords.length, 'two order shortcuts share a chord');
     for (const id of ['order.moveUp', 'order.moveDown', 'order.moveTop', 'order.moveBottom', 'order.apply']) {
@@ -124,5 +126,55 @@ describe('load-order wiring', () => {
   test('the profile card opens it, and the modpack apply places the pack on top', () => {
     assert.match(read('frontend/src/features/profiles/profiles.ts'), /btn-load-order/);
     assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /placeOnTop\(packOrder, null, toast/);
+  });
+});
+
+// The same order, reachable from the Mod Library (features/mods/lib-order.ts): a toolbar button,
+// a box in the detail panel, a right-click menu and four scoped shortcuts. It must REUSE the
+// model and the backend commands, not grow a second copy of either.
+describe('load-order from the Mod Library', () => {
+  const lib = read('frontend/src/features/mods/lib-order.ts');
+  const keys = read('frontend/src/features/profiles/load-order-keys.ts');
+  const commands = read('frontend/src/core/commands.ts');
+  const main = read('src-tauri/src/main.rs');
+  const en = JSON.parse(read('frontend/Lang/en.json'));
+  const fr = JSON.parse(read('frontend/Lang/fr.json'));
+
+  test('it moves with the model and applies with the backend', () => {
+    assert.match(lib, /from '\.\.\/profiles\/load-order-model\.js'/);
+    assert.match(lib, /moveId\(order, modId, where\)/);
+    assert.doesNotMatch(lib, /function (moveId|moveItem|dropAt|winnerUnder)\b/, 'a second copy of the model');
+    const invoked = [...lib.matchAll(/invoke\('([a-z_]+)'/g)].map((m) => m[1]);
+    assert.deepEqual([...new Set(invoked)].sort(), ['mod_order_get', 'mod_order_set']);
+    for (const name of invoked) assert.match(main, new RegExp(`commands::mod_order::${name}\\b`));
+  });
+
+  test('the library mounts it: toolbar, detail panel, init', () => {
+    assert.match(read('frontend/src/features/mods/mods.ts'), /initLibOrder\(toast\);/);
+    assert.match(read('frontend/src/features/mods/mods-details.ts'), /mountOrderSection\(panel, mod\);/);
+    assert.match(lib, /btn-lib-order/);
+    assert.match(lib, /openLoadOrder\(null, name \|\| undefined, toast\)/, 'the full view opens for the library profile');
+  });
+
+  test('its shortcuts are registry commands, never live together with the view\'s', () => {
+    assert.match(commands, /for \(const k of LIB_ORDER_KEYS\)/);
+    assert.match(commands, /when: \(\) => libOrderKeysActive\(\)/);
+    assert.match(keys, /export function libOrderKeysActive\(\): boolean \{\s*if \(orderKeysActive\(\)\) return false;/);
+    const libPart = keys.slice(keys.indexOf('export const LIB_ORDER_KEYS'));
+    const ids = [...libPart.matchAll(/id: '(library\.order\.[A-Za-z]+)'/g)].map((m) => m[1]);
+    assert.deepEqual(ids, ['library.order.moveUp', 'library.order.moveDown', 'library.order.moveTop', 'library.order.moveBottom']);
+    const chords = [...libPart.matchAll(/chord: (\{[^}]*\})/g)].map((m) => m[1].replace(/\s+/g, ''));
+    assert.equal(new Set(chords).size, 4, 'two library shortcuts share a chord');
+    for (const id of ids) assert.ok(lib.includes(`'${id}':`), `lib-order.ts binds no handler for ${id}`);
+  });
+
+  test('every order.* key it names is translated, placeholders kept', () => {
+    const used = new Set([...lib.matchAll(/'(order\.[A-Za-z.]+)'/g)].map((m) => m[1]));
+    assert.ok(used.size >= 10, `read only ${used.size} keys`);
+    for (const k of used) {
+      assert.ok(en[k], `${k} missing from en.json`);
+      assert.ok(fr[k], `${k} missing from fr.json`);
+      for (const ph of (en[k].match(/\{[a-z]\}/g) || [])) assert.ok(fr[k].includes(ph), `${k}: fr lost ${ph}`);
+    }
   });
 });

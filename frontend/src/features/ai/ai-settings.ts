@@ -10,7 +10,7 @@
 import { invoke, listen, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { fmtBytes, type AiSettings } from './ai-model.js';
+import { fmtBytes, embState, fmtSpeed, fmtEta, parseNoSpace, type AiSettings, type EmbLive, type EmbState } from './ai-model.js';
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
 import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 
@@ -22,29 +22,96 @@ function container(): HTMLElement | null {
     return document.querySelector('#view-settings .settings-sections');
 }
 
-/** The « Laya intégré » box: installed / absent, where, and the install / remove buttons. */
+/**
+ * The « Laya intégré » box. ONE state at a time (ai-model.ts `embState`): absent → downloading
+ * (speed, time left, mirror, Pause / Cancel) → verifying → unpacking → installed / loaded; a
+ * partial download offers Resume; a pack from an older pin offers Update; not enough disk says
+ * so before anything is fetched; an error keeps Retry and Open folder next to its reason.
+ */
+let _live: EmbLive = {};
+let _prog: any = null;
+
+function embState0(st: any): EmbState {
+    return embState(st?.embedded || {}, _live, !!st?.killSwitch);
+}
+
 function embeddedHtml(st: any): string {
     const e = st?.embedded || {};
-    const installed = !!e.installed;
-    const host = 'github.com';
-    const pill = `<span class="ai-pill${installed ? ' ai-pill-on' : ''}" id="ai-emb-pill">${escHtml(installed ? t('ai.emb.installed') : t('ai.emb.absent'))}</span>`;
-    const where = installed
-        ? `<div class="ai-muted">${escHtml(t('ai.emb.where', { size: fmtBytes(e.sizeBytes), dir: String(e.dir || '') }))} · ${escHtml(e.source === 'install' ? t('ai.emb.fromInstaller') : t('ai.emb.fromUser'))}</div>
-           ${e.loaded ? `<div class="ai-muted">${escHtml(t('ai.emb.loaded'))}</div>` : ''}`
-        : `<div class="ai-muted">${escHtml(t('ai.emb.installHint', { host }))}</div>
-           ${e.partialBytes > 0 ? `<div class="ai-muted">${escHtml(t('ai.emb.resume', { got: fmtBytes(e.partialBytes) }))}</div>` : ''}`;
-    const buttons = installed
-        ? (e.removable ? `<button type="button" class="btn btn-ghost btn-sm" id="ai-emb-remove">${escHtml(t('ai.emb.remove'))}</button>` : '')
-        : `<button type="button" class="btn btn-primary btn-sm" id="ai-emb-install">${escHtml(t('ai.emb.install', { size: fmtBytes(e.downloadBytes) }))}</button>
-           <button type="button" class="btn btn-ghost btn-sm" id="ai-emb-cancel" hidden>${escHtml(t('common.cancel'))}</button>`;
+    const state = embState0(st);
+    const host = (() => { try { return new URL(String((e.mirrors || [])[0] || 'https://github.com')).host; } catch { return 'github.com'; } })();
+    const on = state === 'installed' || state === 'loaded';
+    const pillText: Record<EmbState, string> = {
+        killed: t('ai.emb.stKilled'), absent: t('ai.emb.absent'), partial: t('ai.emb.stPaused'), outdated: t('ai.emb.stOutdated'),
+        no_space: t('ai.emb.stNoSpace'), downloading: t('ai.emb.stDownloading'), verifying: t('ai.emb.stVerifying'),
+        unpacking: t('ai.emb.stUnpacking'), installed: t('ai.emb.installed'), loaded: t('ai.emb.stLoaded'), error: t('ai.emb.stError'),
+    };
+    const pill = `<span class="ai-pill${on ? ' ai-pill-on' : ''}" id="ai-emb-pill" data-state="${escAttr(state)}">${escHtml(pillText[state])}</span>`;
+    const size = fmtBytes(e.downloadBytes);
+    const disk = e.freeBytes != null ? t('ai.emb.disk', { need: fmtBytes(e.neededBytes), free: fmtBytes(e.freeBytes) }) : t('ai.emb.diskNeed', { need: fmtBytes(e.neededBytes) });
+    const lines: string[] = [];
+    const btn = (id: string, label: string, primary = false) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-ghost'} btn-sm" id="${id}">${escHtml(label)}</button>`;
+    const buttons: string[] = [];
+    switch (state) {
+        case 'killed':
+            lines.push(t('ai.settings.killedNote'));
+            break;
+        case 'absent':
+            lines.push(t('ai.emb.installHint', { host }), disk);
+            buttons.push(btn('ai-emb-install', t('ai.emb.install', { size }), true));
+            break;
+        case 'partial':
+            lines.push(t('ai.emb.resume', { got: fmtBytes(e.partialBytes) }), disk);
+            buttons.push(btn('ai-emb-install', t('ai.emb.resumeBtn'), true), btn('ai-emb-discard', t('ai.emb.discard')));
+            break;
+        case 'outdated':
+            lines.push(t('ai.emb.outdatedHint', { size }), disk);
+            buttons.push(btn('ai-emb-install', t('ai.emb.update', { size }), true));
+            break;
+        case 'no_space':
+            lines.push(t('ai.emb.noSpace', { need: fmtBytes(e.neededBytes), free: fmtBytes(e.freeBytes) }));
+            buttons.push(btn('ai-emb-recheck', t('ai.emb.recheck')), btn('ai-emb-folder', t('ai.emb.openFolder')));
+            break;
+        case 'downloading':
+        case 'verifying':
+        case 'unpacking':
+            buttons.push(state === 'downloading' ? btn('ai-emb-pause', t('ai.emb.pause')) : '', btn('ai-emb-cancel', t('common.cancel')));
+            break;
+        case 'error':
+            lines.push(_live.error || '');
+            buttons.push(btn('ai-emb-install', t('ai.emb.retry'), true), btn('ai-emb-folder', t('ai.emb.openFolder')));
+            break;
+        case 'installed':
+        case 'loaded':
+            lines.push(t('ai.emb.where', { size: fmtBytes(e.sizeBytes), dir: String(e.dir || '') }) + ' · ' + (e.source === 'install' ? t('ai.emb.fromInstaller') : t('ai.emb.fromUser')));
+            if (state === 'loaded') lines.push(t('ai.emb.loaded'));
+            buttons.push(btn('ai-emb-test', t('ai.emb.test'), true), btn('ai-emb-folder', t('ai.emb.openFolder')));
+            if (e.removable) buttons.push(btn('ai-emb-remove', t('ai.emb.remove')));
+            break;
+    }
+    const busy = state === 'downloading' || state === 'verifying' || state === 'unpacking';
     return `
-      <div class="ai-block" id="ai-emb-block">
+      <div class="ai-block" id="ai-emb-block" data-state="${escAttr(state)}">
         <div class="ai-sub">${escHtml(t('ai.emb.title'))} ${pill}</div>
         <p class="ai-muted">${escHtml(t('ai.emb.what'))}</p>
-        ${where}
-        <progress id="ai-emb-progress" max="1" value="0" hidden></progress>
-        <div class="ai-actions">${buttons}<span class="ai-muted" id="ai-emb-status" aria-live="polite"></span></div>
+        ${lines.filter(Boolean).map((l) => `<div class="ai-muted${state === 'error' || state === 'no_space' ? ' ai-err' : ''}">${escHtml(l)}</div>`).join('')}
+        <progress id="ai-emb-progress" max="1" value="0" ${busy ? '' : 'hidden'}></progress>
+        <div class="ai-muted ai-emb-live" id="ai-emb-live" aria-live="polite" ${busy ? '' : 'hidden'}></div>
+        <div class="ai-actions">${buttons.join('')}<span class="ai-muted" id="ai-emb-status" aria-live="polite"></span></div>
       </div>`;
+}
+
+/** The live line under the bar: « 120 MB / 327 MB · 8 MB/s · 0:26 left · github.com ». */
+function liveText(p: any): string {
+    if (!p) return '';
+    if (p.phase === 'verify') return t('ai.emb.checking');
+    if (p.phase === 'unpack') return t('ai.emb.unpacking');
+    const parts = [t('ai.emb.progress', { got: fmtBytes(p.received), total: fmtBytes(p.total) })];
+    const sp = fmtSpeed(p.bytesPerSec);
+    if (sp) parts.push(sp);
+    const eta = fmtEta(p.etaSecs);
+    if (eta) parts.push(t('ai.emb.eta', { eta }));
+    if (p.host) parts.push(p.mirror > 0 ? t('ai.emb.mirror', { host: p.host }) : p.host);
+    return parts.join(' · ');
 }
 
 function keyWhere(where: string): string {
@@ -153,6 +220,7 @@ function render(card: HTMLElement, view: AiView | null): void {
         <label class="ai-check"><input type="checkbox" id="ai-f-mod" ${s.mod_suggest ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fMod'))}</span></label>
         <label class="ai-check"><input type="checkbox" id="ai-f-report" ${s.report_triage ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fReport'))}</span></label>
         <label class="ai-check"><input type="checkbox" id="ai-f-draft" ${s.description_drafts ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fDraft'))}</span></label>
+        <label class="ai-check"><input type="checkbox" id="ai-f-ask" ${s.ask !== false ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fAsk'))}</span></label>
         <details class="ai-sent">
           <summary>${escHtml(t('ai.settings.whatSent'))}</summary>
           <ul class="ai-list">
@@ -170,7 +238,7 @@ function render(card: HTMLElement, view: AiView | null): void {
         <button type="button" class="ai-link" id="ai-docs">${escHtml(t('ai.docsLink'))}</button>
         <span class="ai-muted" id="ai-status" aria-live="polite"></span>
       </div>`;
-    wire(card, s);
+    wire(card, s, st);
     refold();
 }
 
@@ -201,10 +269,11 @@ function read(card: HTMLElement, base: AiSettings): AiSettings {
         mod_suggest: checked('ai-f-mod'),
         report_triage: checked('ai-f-report'),
         description_drafts: checked('ai-f-draft'),
+        ask: checked('ai-f-ask'),
     };
 }
 
-function wire(card: HTMLElement, s: AiSettings): void {
+function wire(card: HTMLElement, s: AiSettings, st: any): void {
     const q = <T extends HTMLElement>(id: string) => card.querySelector<T>('#' + id);
     const status = q('ai-status');
     const say = (msg: string, tone: '' | 'ok' | 'err' = '') => { if (status) { status.textContent = msg; status.className = `ai-muted${tone ? ` ai-${tone}` : ''}`; } };
@@ -258,7 +327,7 @@ function wire(card: HTMLElement, s: AiSettings): void {
         });
     });
     q('ai-save')?.addEventListener('click', () => { void save(); });
-    wireEmbedded(card);
+    wireEmbedded(card, st);
     q('ai-docs')?.addEventListener('click', () => openAiDocs());
     q('ai-test')?.addEventListener('click', async () => {
         const cur = read(card, s);
@@ -282,46 +351,90 @@ function wire(card: HTMLElement, s: AiSettings): void {
     });
 }
 
-/** Install (download, verify, unpack) and remove the built-in model. Rust does the work. */
-function wireEmbedded(card: HTMLElement): void {
+/** Install (download, verify, unpack), pause, cancel, test and remove the built-in model. Rust does the work. */
+function wireEmbedded(card: HTMLElement, st: any): void {
     const q = <T extends HTMLElement>(id: string) => card.querySelector<T>('#' + id);
-    const out = q('ai-emb-status');
-    const say = (msg: string) => { if (out) out.textContent = msg; };
+    const say = (msg: string, tone: '' | 'ok' | 'err' = '') => { const o = q('ai-emb-status'); if (o) { o.textContent = msg; o.className = `ai-muted${tone ? ` ai-${tone}` : ''}`; } };
+    const repaint = (status: any) => {
+        const block = q('ai-emb-block');
+        if (!block) return;
+        block.outerHTML = embeddedHtml(status);
+        wireEmbedded(card, status);
+        paintLive(card);
+    };
     const refresh = async () => { const v = await loadAiView(); if (card.isConnected) render(card, v); };
     q('ai-emb-install')?.addEventListener('click', async () => {
-        const btn = q<HTMLButtonElement>('ai-emb-install');
-        const cancel = q<HTMLButtonElement>('ai-emb-cancel');
-        const bar = q<HTMLProgressElement>('ai-emb-progress');
-        if (btn) btn.disabled = true;
-        if (cancel) cancel.hidden = false;
-        if (bar) bar.hidden = false;
+        _live = { phase: 'download' };
+        _prog = null;
+        repaint(st);
         const stop = await listen('ai-embedded-progress', (p: any) => {
-            const total = Number(p?.total) || 0;
-            const got = Number(p?.received) || 0;
-            if (bar && total > 0) { bar.max = total; bar.value = got; }
-            say(got >= total && total > 0 ? t('ai.emb.checking') : t('ai.emb.progress', { got: fmtBytes(got), total: fmtBytes(total) }));
+            const phase = p?.phase === 'verify' || p?.phase === 'unpack' ? p.phase : 'download';
+            const changed = phase !== _live.phase;
+            _live = { phase };
+            _prog = p;
+            if (changed) repaint(st); else paintLive(card);
         });
         try {
             await invoke('ai_embedded_install');
             stop();
+            _live = {}; _prog = null;
             await refresh();
-            const st = card.querySelector('#ai-emb-status');
-            if (st) st.textContent = t('ai.emb.done');
+            const o = card.querySelector('#ai-emb-status');
+            if (o) { o.textContent = t('ai.emb.done'); o.className = 'ai-muted ai-ok'; }
         } catch (e) {
             stop();
-            if (btn) btn.disabled = false;
-            if (cancel) cancel.hidden = true;
-            say(reasonText(String((e as Error)?.message || e)));
+            const raw = String((e as Error)?.message || e);
+            _prog = null;
+            if (raw === 'cancelled') { _live = {}; await refresh(); return; }
+            const ns = parseNoSpace(raw);
+            _live = { error: ns ? t('ai.emb.noSpace', { need: fmtBytes(ns.needed), free: fmtBytes(ns.free) }) : reasonText(raw) };
+            const v = await loadAiView();
+            if (card.isConnected) render(card, v);
         }
     });
-    q('ai-emb-cancel')?.addEventListener('click', () => { void invoke('ai_embedded_cancel'); });
+    q('ai-emb-pause')?.addEventListener('click', () => { void invoke('ai_embedded_cancel', { discard: false }); });
+    q('ai-emb-cancel')?.addEventListener('click', () => { void invoke('ai_embedded_cancel', { discard: true }); });
+    q('ai-emb-discard')?.addEventListener('click', async () => { await invoke('ai_embedded_cancel', { discard: true }); await refresh(); });
+    q('ai-emb-recheck')?.addEventListener('click', () => { _live = {}; void refresh(); });
+    q('ai-emb-folder')?.addEventListener('click', () => {
+        const e = st?.embedded || {};
+        const dir = String(e.folder || e.dir || "");
+        if (dir) void invoke("open_folder", { path: dir }).catch(() => say(dir));
+    });
+    q('ai-emb-test')?.addEventListener('click', async () => {
+        const b = q<HTMLButtonElement>('ai-emb-test');
+        if (b) b.disabled = true;
+        say(t('ai.emb.testing'));
+        try {
+            const r: any = await invoke('ai_embedded_test');
+            const vars = {
+                tag: String(r?.tag || '?'), tagP: String(Math.round((Number(r?.tagP) || 0) * 100)),
+                lang: String(r?.language || '?'), ms: String(r?.answerMs ?? '?'), load: String(r?.loadMs ?? 0),
+            };
+            const line = r?.ok ? t('ai.emb.testOk', vars) : t('ai.emb.testOdd', vars);
+            say(line, r?.ok ? 'ok' : 'err');
+        } catch (e) { say(reasonText(String((e as Error)?.message || e)), 'err'); }
+        if (b) b.disabled = false;
+    });
     q('ai-emb-remove')?.addEventListener('click', async () => {
         if (!(await askConfirm(t('ai.emb.removeConfirm')))) return;
         try {
             const r: any = await invoke('ai_embedded_remove');
             await refresh();
-            const st = card.querySelector('#ai-emb-status');
-            if (st) st.textContent = (r?.pendingRestart || []).length ? t('ai.emb.pending') : t('ai.emb.removed');
-        } catch (e) { say(reasonText(String((e as Error)?.message || e))); }
+            const o = card.querySelector('#ai-emb-status');
+            if (o) o.textContent = (r?.pendingRestart || []).length ? t('ai.emb.pending') : t('ai.emb.removed');
+        } catch (e) { say(reasonText(String((e as Error)?.message || e)), 'err'); }
     });
+}
+
+/** Bar + live line, without redrawing the buttons (so a click on Pause is never lost). */
+function paintLive(card: HTMLElement): void {
+    const bar = card.querySelector<HTMLProgressElement>('#ai-emb-progress');
+    const line = card.querySelector<HTMLElement>('#ai-emb-live');
+    if (!_prog) return;
+    const total = Number(_prog.total) || 0;
+    if (bar && total > 0) {
+        if (_prog.phase === 'download') { bar.max = total; bar.value = Number(_prog.received) || 0; } else bar.removeAttribute('value');
+    }
+    if (line) line.textContent = liveText(_prog);
 }

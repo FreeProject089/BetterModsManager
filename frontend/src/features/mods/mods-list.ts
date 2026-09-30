@@ -11,6 +11,7 @@ import { refreshMods, selectMod, closeModDetail } from './mods.js';
 import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-actions.js';
 import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { smartRank } from '../ai/ai-smart-state.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -73,6 +74,9 @@ export function getFilteredMods() {
   const tagById = new Map<string, any>((S.userTags || []).map((t: any) => [t.id, t]));
   const cmp = (a: string, b: string) => NAME_COLLATOR.compare(a, b);
 
+  // « Smart » search (features/ai/ai-ask.ts): the mods that answer the query by description
+  // and tags too, ranked (by Laya when AI is on). Null when the toggle is off.
+  const smart = smartRank(S.searchQuery);
   let filtered = S.allMods.filter((m:any) => {
     const matchFilter =
       S.currentFilter === 'all' ||
@@ -81,7 +85,7 @@ export function getFilteredMods() {
 
     const matchTag = !S.currentTagFilter || S.currentTagFilter === 'all' || (m.tags && m.tags.includes(S.currentTagFilter));
 
-    let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery);
+    let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery) || !!smart?.has(m.id);
     if (!matchSearch && S.searchQuery && m.tags && m.tags.length > 0) {
       matchSearch = m.tags.some((tid:string) => {
         const tDef = tagById.get(tid);
@@ -92,6 +96,7 @@ export function getFilteredMods() {
   });
 
   filtered.sort((a, b) => {
+    if (smart) { const d = (smart.get(a.id) ?? 1e9) - (smart.get(b.id) ?? 1e9); if (d) return d; }
     if (S.currentSort === 'name_asc') return cmp(a.name, b.name);
     if (S.currentSort === 'name_desc') return cmp(b.name, a.name);
     if (S.currentSort === 'status') {

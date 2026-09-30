@@ -126,3 +126,24 @@
 }
 .srv-switch:hover { border-color: var(--accent); }
 .srv-export { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+
+/* ── Readable at a glance (design pass) ────────────────────────────────────────────────────
+   The rail's idle tabs, the stat labels, the table headers and the empty-state line were
+   --text-muted: 2.2-2.5:1 on this card in the dark themes. Anything read goes to
+   --text-secondary; the selected tab's ink is the accent walked toward the theme ink, so it
+   stays legible on BMM White too. */
+#modal-server .srv-tab { color: var(--bmm-text-secondary); }
+#modal-server .srv-tab:hover { color: var(--bmm-text-primary); background: var(--bmm-s04); }
+#modal-server .srv-tab[aria-selected="true"] { color: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary)); }
+#modal-server .srv-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+#modal-server .srv-tab-count:empty { display: none; }
+#modal-server .srv-close { color: var(--bmm-text-secondary); }
+#modal-server .srv-actions-note,
+#modal-server .monitoring-stat-label,
+#modal-server .monitoring-table thead th,
+#modal-server [style*="color:var(--text-muted)"],
+#modal-server [style*="color: var(--text-muted)"] { color: var(--bmm-text-secondary) !important; }
+#modal-server .srv-header { background: var(--bmm-s02); }
+/* The live numbers were the cyan/accent themselves as text: 3.3:1 on BMM White. The numbers
+   are read, so they take the ink; the label beside each says what it is. */
+#modal-server .monitoring-stat-value { color: var(--bmm-text-primary) !important; }

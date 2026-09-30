@@ -540,7 +540,9 @@ pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
         let reason = format!("{}", info);
         log_line(format!("[PANIC DETECTED] {}", reason));
-        generate_report(true, &reason, None, None, None);
+        let report = generate_report(true, &reason, None, None, None);
+        // Live errors (if on): redacted, queued to disk now, sent on this or the next launch.
+        crate::commands::live_issues::record_panic(&reason, report.and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())));
     }));
 }
 

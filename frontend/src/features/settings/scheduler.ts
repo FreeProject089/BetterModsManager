@@ -6108,7 +6108,7 @@ function renderModal(modal: HTMLElement): void {
             <main class="modal-body sched-body sched-flow">
                 <div class="sched-flow-head">
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
-                    <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
+                    <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} · <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
                     <!-- The legend must list what the language actually has. It still
                          showed four blocks after For-Each, Switch, Try and the loop
                          signals were added — a legend that omits half the vocabulary
@@ -7294,6 +7294,9 @@ function modeIcon(m: EditorMode): string {
 function renderModePref(): void {
     const section = document.getElementById('settings-scheduler-section');
     if (!section) return;
+    // The row's styles live in sched-editor.css, which is otherwise linked only when the editor
+    // opens: drawn in Settings before that, the row was unstyled and glued to the card's edges.
+    ensureSchedCss();
     let row = document.getElementById('sched-mode-pref-row');
     if (!row) {
         row = document.createElement('div');

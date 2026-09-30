@@ -19,7 +19,9 @@ export function initRepoMonitoring(elements) {
             clearInterval(monitoringInterval);
             monitoringInterval = null;
         }
-        modalMonitoring?.classList.remove('open');
+        // Only the polling stops. This used to also remove `open` from the modal — right when
+        // Monitoring was its own overlay, wrong since it is one tab of #modal-server: picking
+        // Whitelist or Bans closed the whole server panel. Closing is server-modal.ts's job.
     };
     const _updateStatBar = (clientCount, totalSpeed, activeFiles) => {
         const elClients = document.getElementById('monitoring-stat-clients');

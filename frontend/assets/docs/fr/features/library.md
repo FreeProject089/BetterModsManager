@@ -58,6 +58,11 @@ Pour le changer, ouvre l'**ordre d'activation** du profil (l'icône de liste sur
 et lesquels des siens sont écrasés, et **Appliquer l'ordre** ne recopie que les fichiers qui changent
 de main. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
 
+Depuis la bibliothèque elle-même : le panneau de détail d'un mod montre sa **position** et qui il
+écrase, avec les boutons En haut / Monter / Descendre / En bas ; clic droit sur une carte pour les
+mêmes déplacements ; `Alt+↑` / `Alt+↓` déplacent le mod sélectionné ; et l'icône de liste à côté du
+menu de tri ouvre l'ordre complet. Un déplacement depuis la bibliothèque s'applique tout de suite.
+
 ### Vue globale des conflits
 
 Plutôt que de découvrir les conflits un par un, la vue globale montre d'un coup tous les

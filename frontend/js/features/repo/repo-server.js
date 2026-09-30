@@ -85,6 +85,31 @@ export function initRepoServer(elements) {
         updateStats();
         statsInterval = setInterval(updateStats, 2000);
     }
+    // The start/stop button and the status dot say the state through classes (repo-page.css,
+    // theme tokens), not through inline hex colours that ignored every theme. The inline
+    // style the markup ships with is cleared once, here, so the class is the only source.
+    const paintServerState = (running) => {
+        if (btnToggleServer) {
+            btnToggleServer.style.removeProperty('background');
+            btnToggleServer.style.removeProperty('color');
+            btnToggleServer.style.removeProperty('border-color');
+            btnToggleServer.classList.add('rp-srv-toggle');
+            btnToggleServer.classList.toggle('is-running', running);
+        }
+        if (serverStatusDot) {
+            serverStatusDot.style.removeProperty('background');
+            serverStatusDot.style.removeProperty('box-shadow');
+            serverStatusDot.classList.add('rp-srv-dot');
+            serverStatusDot.classList.toggle('is-running', running);
+        }
+    };
+    const paintUpnp = (ok) => {
+        if (!upnpBadgeStatus)
+            return;
+        upnpBadgeStatus.style.background = ok ? 'var(--bmm-success-dim)' : 'var(--bmm-danger-dim)';
+        upnpBadgeStatus.style.color = ok ? 'var(--bmm-success)' : 'var(--bmm-danger)';
+    };
+    paintServerState(false);
     // --- Host Server toggle ---
     if (btnToggleServer) {
         btnToggleServer.addEventListener('click', async () => {
@@ -96,14 +121,8 @@ export function initRepoServer(elements) {
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const txt = btnToggleServer.querySelector('#repo-server-btn-text');
                     txt.textContent = t('repo.hostStart');
-                    btnToggleServer.style.background = "rgba(46, 204, 113, 0.1)";
-                    btnToggleServer.style.color = "#2ecc71";
-                    btnToggleServer.style.borderColor = "rgba(46, 204, 113, 0.2)";
+                    paintServerState(false);
                     urlContainerServer.style.display = "none";
-                    if (serverStatusDot) {
-                        serverStatusDot.style.background = '#555';
-                        serverStatusDot.style.boxShadow = 'none';
-                    }
                     if (serverStatusLabel)
                         serverStatusLabel.textContent = t('repo.serverOffline') || 'Serveur hors ligne';
                     if (inputServerPort)
@@ -165,13 +184,7 @@ export function initRepoServer(elements) {
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
                     newTextEl.textContent = t('repo.hostStop');
-                    btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
-                    btnToggleServer.style.color = "#e74c3c";
-                    btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
-                    if (serverStatusDot) {
-                        serverStatusDot.style.background = '#2ecc71';
-                        serverStatusDot.style.boxShadow = '0 0 8px #2ecc71';
-                    }
+                    paintServerState(true);
                     if (serverStatusLabel)
                         serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
                     urlInputServer.value = result.lan_url;
@@ -194,16 +207,8 @@ export function initRepoServer(elements) {
                         if (publicHintBox)
                             publicHintBox.style.display = 'none';
                         if (upnpBadgeStatus) {
-                            if (result.upnp_success) {
-                                upnpBadgeStatus.style.background = 'rgba(46, 204, 113, 0.2)';
-                                upnpBadgeStatus.style.color = '#2ecc71';
-                                upnpBadgeStatus.textContent = t('repo.upnpOk') || 'UPnP OK';
-                            }
-                            else {
-                                upnpBadgeStatus.style.background = 'rgba(231, 76, 60, 0.2)';
-                                upnpBadgeStatus.style.color = '#e74c3c';
-                                upnpBadgeStatus.textContent = t('repo.upnpFail') || 'UPnP FAIL';
-                            }
+                            paintUpnp(!!result.upnp_success);
+                            upnpBadgeStatus.textContent = result.upnp_success ? (t('repo.upnpOk') || 'UPnP OK') : (t('repo.upnpFail') || 'UPnP FAIL');
                         }
                     }
                     else {
@@ -280,13 +285,7 @@ export function initRepoServer(elements) {
                 const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
                 if (btnTxt)
                     btnTxt.textContent = t('repo.hostStop');
-                btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
-                btnToggleServer.style.color = "#e74c3c";
-                btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
-                if (serverStatusDot) {
-                    serverStatusDot.style.background = '#2ecc71';
-                    serverStatusDot.style.boxShadow = '0 0 8px #2ecc71';
-                }
+                paintServerState(true);
                 if (serverStatusLabel)
                     serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
                 urlInputServer.value = status.lan_url;
@@ -296,8 +295,7 @@ export function initRepoServer(elements) {
                     if (publicHintBox)
                         publicHintBox.style.display = 'none';
                     if (upnpBadgeStatus) {
-                        upnpBadgeStatus.style.background = status.upnp_success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
-                        upnpBadgeStatus.style.color = status.upnp_success ? '#2ecc71' : '#e74c3c';
+                        paintUpnp(!!status.upnp_success);
                         upnpBadgeStatus.textContent = status.upnp_success ? (t('repo.upnpOk') || 'UPnP OK') : (t('repo.upnpFail') || 'UPnP FAIL');
                     }
                 }

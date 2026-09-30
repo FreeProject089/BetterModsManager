@@ -1,0 +1,261 @@
+/* ═══ The modal shell (ui/modal-shell.ts links this file at boot, from initModals) ══════════
+   Two layers, both theme tokens only.
+
+   1. A POLISH LAYER over the house modal (.modal-overlay > .modal > .modal-header /
+      .modal-body / .modal-footer). It is linked after main.css, so these single-class rules
+      win over main.css's own and lose to every feature rule that is more specific: a feature
+      that styled its modal keeps what it chose. What it fixes, for every modal at once:
+        · the close button was --text-muted (2.2:1 on the dark card): now --text-secondary;
+        · the footer painted a square black wash past the modal's rounded corners;
+        · no keyboard focus ring on the dialog's buttons;
+        · the pop-in animation ignored prefers-reduced-motion.
+   2. SHELL COMPONENTS (.bms-*) for dialogs built in TypeScript: a header with an icon tile,
+      a title and a subtitle; tabs and segmented controls; status chips; section cards; empty
+      states; a progress bar; size modifiers. One vocabulary, so a new dialog looks like the
+      others without copying a page of inline styles.
+
+   The accent is a FILL (tabs, chips, the icon tile). Accent-coloured TEXT goes through
+   --bms-accent-ink, the accent walked toward the theme's ink so it stays readable on BMM White
+   as on the dark themes. Anything that must be read is --text-secondary, never -muted. */
+
+:root {
+    --bms-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
+    --bms-radius: 16px;
+    --bms-pad-x: 24px;
+    --bms-pad-y: 18px;
+}
+
+/* ── 1. Polish layer ─────────────────────────────────────────────────────────────────────── */
+:where(.modal-overlay) .modal {
+    border-radius: var(--bms-radius);
+    box-shadow: var(--bmm-shadow-modal), 0 0 0 1px var(--bmm-s05);
+}
+.modal-header { gap: 12px; min-width: 0; }
+.modal-title { color: var(--bmm-text-primary); line-height: 1.3; min-width: 0; }
+.modal-close {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+    line-height: 1;
+    color: var(--bmm-text-secondary);
+}
+.modal-close:hover { color: var(--bmm-text-primary); background: var(--bmm-s08); }
+.modal-footer {
+    flex-wrap: wrap;
+    align-items: center;
+    background: var(--bmm-s02);
+}
+/* The modal does not clip (dropdowns and tooltips escape it on purpose), so its first and
+   last bands round their own corners instead of painting a square wash past the edge. */
+.modal > .modal-header:first-child { border-radius: var(--bms-radius) var(--bms-radius) 0 0; }
+.modal > .modal-footer:last-child { border-radius: 0 0 var(--bms-radius) var(--bms-radius); }
+
+.modal-overlay .modal :is(button, [role="tab"], a, summary, input, select, textarea):focus-visible {
+    outline: 2px solid var(--bmm-accent);
+    outline-offset: 2px;
+}
+
+/* Size scale. `min()` keeps a phone-width window from getting a horizontal scroll. */
+.modal.modal--sm { width: min(100%, 420px); max-width: 420px; }
+.modal.modal--md { width: min(100%, 560px); max-width: 560px; }
+.modal.modal--lg { width: min(100%, 760px); max-width: 760px; }
+.modal.modal--xl { width: min(100%, 1120px); max-width: 1120px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay,
+    .modal-overlay .modal,
+    .modal-generic-overlay.open .modal { animation: none !important; transition: none !important; }
+}
+body.bmm-no-anim .modal-overlay .modal { animation: none !important; }
+
+/* ── 2. Shell components ─────────────────────────────────────────────────────────────────── */
+.modal.bms {
+    display: flex;
+    flex-direction: column;
+    max-height: min(92vh, 980px);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border-hover);
+}
+.bms > .modal-header,
+.bms-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: var(--bms-pad-y) var(--bms-pad-x);
+    border-bottom: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    flex-wrap: wrap;
+}
+.bms-icon {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    background: var(--bmm-accent-dim);
+    color: var(--bms-accent-ink);
+    border: 1px solid var(--bmm-border-accent);
+}
+.bms-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.bms-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--bmm-text-primary); letter-spacing: -0.01em; line-height: 1.25; }
+.bms-sub { margin: 0; font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.4; }
+.bms-head-end { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; min-width: 0; }
+
+.bms > .modal-body,
+.bms-body {
+    padding: 20px var(--bms-pad-x);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+/* Sticky footer: the body scrolls, the actions never do. Secondary actions sit left
+   (.bms-foot-start), the primary one ends the row on the right. */
+.bms > .modal-footer,
+.bms-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px var(--bms-pad-x);
+    border-top: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    flex: none;
+}
+.bms-foot-start { display: flex; align-items: center; gap: 8px; margin-right: auto; flex-wrap: wrap; }
+.bms > .modal-footer .btn { min-width: 0; }
+
+/* Tabs (role="tablist"): a segmented rail. The selected tab is an accent FILL with the
+   theme's on-accent ink. */
+.bms-tabs, .bms-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.bms-tab, .bms-seg-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
+}
+.bms-seg-btn { font-size: 12px; padding: 6px 12px; min-width: 36px; justify-content: center; }
+.bms-tab:hover, .bms-seg-btn:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+.bms-tab[aria-selected="true"],
+.bms-seg-btn[aria-pressed="true"],
+.bms-seg-btn.active {
+    background: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--bmm-bg-base) 45%, transparent);
+}
+
+/* Status chips. A dot says the state, the text says what it is. */
+.bms-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    min-width: 0;
+}
+.bms-chip b { color: var(--bmm-text-primary); font-weight: 700; }
+.bms-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--bmm-text-secondary); }
+.bms-chip--ok { border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-success) 10%, transparent); color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); }
+.bms-chip--ok .bms-dot { background: var(--bmm-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-success) 22%, transparent); }
+.bms-chip--live .bms-dot { animation: bms-pulse 1.6s ease-in-out infinite; }
+.bms-chip--warn { border-color: color-mix(in srgb, var(--bmm-warning) 45%, var(--bmm-border)); background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 50%, var(--bmm-text-primary)); }
+.bms-chip--warn .bms-dot { background: var(--bmm-warning); }
+.bms-chip--danger { border-color: color-mix(in srgb, var(--bmm-danger) 45%, var(--bmm-border)); background: var(--bmm-danger-dim); color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-text-primary)); }
+.bms-chip--danger .bms-dot { background: var(--bmm-danger); }
+.bms-chip--accent { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); color: var(--bms-accent-ink); }
+.bms-chip--accent .bms-dot { background: var(--bmm-accent); }
+@keyframes bms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .bms-chip--live .bms-dot { animation: none; } }
+
+/* Section card + the small uppercase label that heads a field or a card. */
+.bms-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-card);
+    background: var(--bmm-s02);
+    min-width: 0;
+}
+.bms-card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.bms-card-title { margin: 0; font-size: 13px; font-weight: 800; color: var(--bmm-text-primary); }
+.bms-card-title small { font-size: 11.5px; font-weight: 500; color: var(--bmm-text-secondary); margin-left: 6px; }
+.bms-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.bms-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bms-toolbar { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.bms-sep { width: 1px; align-self: stretch; min-height: 22px; background: var(--bmm-border-hover); }
+.bms-spacer { flex: 1 1 auto; }
+.bms-note { font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); margin: 0; }
+
+/* Empty state: an icon, one line that says what is missing, one that says what to do. */
+.bms-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 28px 20px;
+    text-align: center;
+    color: var(--bmm-text-secondary);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+.bms-empty-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--bmm-s05); color: var(--bmm-text-secondary); }
+.bms-empty-t { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+
+/* Progress. */
+.bms-progress { height: 8px; border-radius: 999px; background: var(--bmm-s08); overflow: hidden; }
+.bms-progress > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--bmm-accent); transition: width 0.25s ease; }
+@media (prefers-reduced-motion: reduce) { .bms-progress > span { transition: none; } }
+
+/* Narrow windows: the header wraps under the title, paddings tighten. */
+@media (max-width: 720px) {
+    :root { --bms-pad-x: 16px; --bms-pad-y: 14px; }
+    .bms-head-end { margin-left: 0; width: 100%; }
+}
+
+/* ── A button variant the markup uses and no stylesheet defined ─────────────────────────────
+   `.btn-outline-danger` is on seven buttons in index.html (Unban all, the ban/whitelist
+   clears…) and had no rule: they rendered as the UA's light button face, a white slab inside
+   a dark dialog. It is the danger outline the name says. */
+.btn.btn-outline-danger {
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--bmm-danger) 45%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 62%, var(--bmm-text-primary));
+}
+.btn.btn-outline-danger:hover { background: var(--bmm-danger-dim); border-color: var(--bmm-danger); }

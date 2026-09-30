@@ -909,3 +909,12 @@ button.doc-card-title:hover { color: var(--bmm-accent, #3b82f6); }
 .doc-space-md   { margin-bottom: 22px !important; }
 .doc-space-lg   { margin-bottom: 38px !important; }
 .doc-space-xl   { margin-bottom: 64px !important; }
+
+/* « Ask Laya » beside the docs search (features/ai/ai-ask.ts opens the dialog). */
+.dh-ask {
+  flex-shrink: 0; font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--bmm-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--bmm-accent) 10%, transparent);
+  color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary));
+}
+.dh-ask:hover { background: color-mix(in srgb, var(--bmm-accent) 18%, transparent); }

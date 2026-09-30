@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-78 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+82 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -211,6 +211,10 @@ n'écrit jamais rien ; appliquer n'écrit que les champs nommés. Voir [IA optio
 | `bmm_ai_status` | — |  | Si l'interrupteur principal est allumé, le fournisseur choisi, quelles fonctions peuvent passer par le réseau et pourquoi pas, où les clés sont stockées (jamais les clés). Fonctionne hors ligne |
 | `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Nom, version, auteur, description, tags et liens lus dans les fichiers du mod ; puis, seulement si l'IA est activée avec un fournisseur, des tags classés par Laya parmi les tags EXISTANTS de l'utilisateur, des indications de langue et de contenu adulte, et un brouillon de description optionnel via l'API externe de l'utilisateur. Chaque suggestion porte sa source et sa confiance. **N'écrit rien** |
 | `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Écrit dans data.json les champs choisis par l'utilisateur (nom, version, auteur, description, ids de tags existants jusqu'à 3 par mod, liens http(s)) ; toute autre clé est refusée |
+| `bmm_ai_ask` | `question`\*, `lang` en/fr, `scope` all/docs/mods, `limit`, `use_laya` |  | « Demander à Laya », hors ligne : répond à une question sur BMM ou les mods de l'utilisateur à partir de ce qui EXISTE — la documentation embarquée, les articles d'aide, les commandes de la palette, les mods, les profils et leurs listes de fichiers scannées. Renvoie `intent` (docs, setting, files, conflicts, mods, command), `hits` (type, titre, extrait cité de la source, score, action), `files` (quel mod fournit un fichier) et `conflicts` (paires de mods qui fournissent les mêmes fichiers). Jamais de texte généré. Laya n'oriente et ne classe que si l'IA est activée et le modèle installé (`laya`, `laya_off` le disent). Fonctionne BMM fermé |
+| `bmm_ai_pack_install` | — |  | Télécharge, vérifie (SHA-256 épinglé, miroirs dans l'ordre) et installe le paquet du modèle Laya intégré (environ 327 Mo à télécharger) dans les données locales de l'utilisateur, après une vérification de l'espace libre ; reprend un téléchargement partiel. Refusé sous `--no-ai`. Demander d'abord à l'utilisateur |
+| `bmm_ai_pack_remove` | — |  | Supprime le paquet du modèle téléchargé (jamais la copie de l'installateur) ; le classifieur repasse sur « désactivé » s'il s'agissait du modèle intégré |
+| `bmm_ai_test` | — |  | Classe un exemple fixe avec le modèle installé et renvoie les réponses, `ok` et les durées. Aucune donnée de l'utilisateur, aucun réseau |
 
 ### Diagnostic
 
@@ -270,19 +274,19 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 78 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 82 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 78 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 82 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---
 
 ## Voir aussi
 
-- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 70 sous-commandes CLI pour un terminal ou un `.bat`
+- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 74 sous-commandes CLI pour un terminal ou un `.bat`
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — la surface REST, ses jetons et ses permissions
 - [Référence des actions](doc-page:reference/actions) — ce que les plugins et le planificateur peuvent déclencher
 - [Étendre BMM](doc-page:how-it-works/extending) — la place du serveur MCP dans la conception

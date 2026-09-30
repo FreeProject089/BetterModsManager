@@ -8,6 +8,7 @@ import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileO
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
+import { bindModal } from '../../ui/modal-shell.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
 
 let selectedModId: string | null = null;
@@ -30,6 +31,8 @@ let pendingNewFolders = new Map<string, { parent: string, name: string }>();
 
 // Input Modal State
 let currentInputCallback: ((value: string) => void) | null = null;
+// Undoes the input dialog's keyboard binding (Escape, Tab trap) and returns the focus.
+let inputRelease: (() => void) | null = null;
 
 // Cache guards — avoid re-loading trees if nothing changed
 let lastGamePath: string | null = null;
@@ -1395,6 +1398,7 @@ function openConfirmModal(title: string, message: string, onOk: () => void) {
 
     const close = () => {
         modal.classList.remove('open');
+        release();
         okBtn.removeEventListener('click', handleOk);
         cancelBtn.removeEventListener('click', close);
         modal.removeEventListener('click', handleOverlayClick);
@@ -1414,6 +1418,8 @@ function openConfirmModal(title: string, message: string, onOk: () => void) {
     modal.addEventListener('click', handleOverlayClick);
 
     modal.classList.add('open');
+    // Escape cancels, Tab stays in the dialog, and a destructive question starts on Cancel.
+    const release = bindModal(modal, { onClose: close, initialFocus: cancelBtn });
 }
 
 function showContextMenu(x: number, y: number, path: string, isDir: boolean, isModSide: boolean) {
@@ -1478,10 +1484,12 @@ function setupInputModal() {
     confirmBtn?.addEventListener('click', () => {
         if (currentInputCallback) currentInputCallback(field.value);
         modal?.classList.remove('open');
+        inputRelease?.(); inputRelease = null;
     });
 
     cancelBtn?.addEventListener('click', () => {
         modal?.classList.remove('open');
+        inputRelease?.(); inputRelease = null;
     });
 
     field?.addEventListener('keypress', (e) => {
@@ -1504,6 +1512,7 @@ function openInputModal(title: string, label: string, defaultValue: string, call
 
     currentInputCallback = callback;
     modal?.classList.add('open');
+    if (modal) inputRelease = bindModal(modal, { onClose: () => (document.getElementById('btn-mapper-input-cancel') as HTMLElement | null)?.click(), initialFocus: field });
 }
 
 /**

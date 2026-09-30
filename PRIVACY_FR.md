@@ -24,6 +24,7 @@ relative aux données, c'est ce document qui fait référence.
 | **Télémétrie** (§3) | Désactivée. La case de l'installateur est **décochée** ; la cocher ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM, qui doit encore être accepté | Désactivée jusqu'à votre réponse à l'écran de consentement du premier lancement |
 | Replay de session envoyé avec la télémétrie (§3.2) | Désactivé tant que la télémétrie n'est pas acceptée ; actif ensuite, sauf si vous le décochez | Pré‑coché dans la section « Personnaliser » de l'écran de consentement |
 | Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, et l'installateur pose désormais la question comme une option distincte | **Désactivé** — décoché dans la section « Personnaliser » de l'écran de consentement |
+| Erreurs envoyées en direct (§3.6) | **Désactivé** sauf si coché (case à part) ; sans effet sans télémétrie | Désactivé, décoché sur l'écran de consentement. Si vous aviez **déjà** accepté la télémétrie avant l'arrivée de cette option, il démarre **activé** (Paramètres → Confidentialité le coupe) |
 | **Discord Rich Presence** (§4) | **Désactivé** : la case de l'installateur est décochée | Désactivé |
 | Rapports de bug, de plantage et retours (§5) | Seulement quand vous cliquez sur Envoyer | Seulement quand vous cliquez sur Envoyer |
 | **IA optionnelle** (§6.10) | **Désactivée** : la case de l'installateur est décochée ; la cocher allume l'interrupteur **sans fournisseur**, donc rien n'est envoyé pour autant | Désactivée |
@@ -271,6 +272,42 @@ dans les champs (sauf si vous activez le mode non masqué du §3.2) ; votre nom 
   Confidentialité.
 - Le serveur limite le nombre de lots qu'une même adresse peut envoyer par minute.
 
+### 3.6 Erreurs envoyées en direct
+Un interrupteur à part, **« Envoyer les erreurs en direct »** (Paramètres → Confidentialité, la
+section « Personnaliser » de l'écran de consentement, et sa propre case dans BetterInstaller),
+envoie un court rapport en quelques secondes quand BMM rencontre une erreur. Il ne fonctionne
+**que si la télémétrie est activée** ; couper la télémétrie l'arrête et efface les rapports qui
+attendaient encore sur votre PC.
+
+- **Par défaut :** désactivé, et décoché partout où il est proposé. Une exception, décidée une seule
+  fois : si vous aviez déjà accepté la télémétrie quand cette option est apparue, il démarre activé,
+  car c'est une forme plus étroite des journaux d'erreurs que la télémétrie envoyait déjà (§3.1).
+- **Ce qui est envoyé :** les erreurs JavaScript, les plantages côté Rust, les commandes en échec sur
+  une vraie erreur (pas une annulation, pas une absence de réseau, pas un message déjà affiché), et
+  les déploiements, installations, sauvegardes et tâches planifiées en échec. Pour chacun : le
+  message d'erreur, l'endroit du code de BMM concerné (noms de fonction et de fichier, sans numéro de
+  ligne), une gravité, combien de fois et quand (première et dernière fois), la version de BMM, le
+  nom et l'architecture du système, l'identifiant de session de télémétrie et, pour un plantage, le
+  **nom de fichier** du rapport de plantage local (jamais son contenu). Jamais les arguments d'une
+  commande, le contenu d'un fichier ni ce que vous avez saisi.
+- **Retiré sur votre PC avant l'envoi :** tous les secrets que BMM stocke (la même passe que pour les
+  rapports de plantage : jetons, mots de passe, clés, votre clé d'API BetterCommunity, identifiants
+  dans les adresses), le nom de votre dossier utilisateur Windows, les adresses e‑mail, les adresses
+  IP et les noms de votre PC et de votre compte. Le serveur retire ces formes une seconde fois à
+  l'arrivée.
+- **Identité :** chaque rapport porte une **empreinte à sens unique** de votre Creator ID, pas le
+  Creator ID. Le tableau de bord ne peut pas la rapprocher de votre autre télémétrie, mais une
+  demande de copie ou d'effacement pour votre Creator ID atteint quand même ces rapports (le serveur
+  calcule la même empreinte).
+- **Combien :** la même erreur dans les 10 minutes n'augmente qu'un compteur ; au plus 60 nouvelles
+  erreurs par heure ; une file d'au plus 200 lignes, gardée sur disque pour qu'un PC hors ligne
+  l'envoie plus tard.
+- **Qui le lit :** l'équipe BMM, dans l'écran « Issues » du tableau de bord de télémétrie. Chaque
+  nouveau groupe d'erreurs est classé par **Laya**, le classifieur de BetterCommunity qui tourne sur
+  les mêmes serveurs (catégorie, gravité, « votre configuration ou un bug de BMM ») ; le texte n'est
+  jamais envoyé à un fournisseur d'IA extérieur. Même durée de conservation que le reste de la
+  télémétrie (§3.5).
+
 ---
 
 ## 4. Discord Rich Presence
@@ -436,6 +473,14 @@ Runtime qu'il utilise (les versions de Microsoft émettent par défaut des évé
 Windows ; selon Microsoft, un événement minimal de démarrage peut encore être écrit dans le traçage
 local de Windows, que Windows ne transmet que selon vos propres réglages de données de diagnostic).
 
+**Demander à Laya** (*Demander à Laya* dans la palette, le centre d'aide, la *recherche
+intelligente* de la bibliothèque) répond à partir de ce qui est déjà sur votre PC : la
+documentation embarquée de BMM, l'écran Réglages, les noms, descriptions, tags et listes de
+fichiers scannées de vos mods, et vos profils. La question n'est **jamais envoyée** nulle part et
+**n'est pas conservée** (aucun historique). La recherche elle-même fonctionne même avec l'IA
+désactivée ; le modèle intégré ne classe les résultats que si l'interrupteur principal est activé et
+le modèle installé.
+
 Les autres fournisseurs sont **désactivés par défaut**. L'action *Suggérer des infos* du panneau
 d'un mod lit toujours d'abord les fichiers du mod sur votre PC ; rien n'en sort tant que vous
 n'activez pas Réglages → IA **et** ne choisissez pas un fournisseur réseau, et alors seulement quand
@@ -475,6 +520,7 @@ vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir
 | **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système avec IP publique et locale, utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts — le serveur ne conserve l'adresse publique que tronquée à son réseau et supprime l'adresse locale | Serveur de télémétrie BetterCommunity ; votre IP à ipify.org, votre réseau tronqué à ipwho.is |
 | Replay de session (avec la télémétrie, actif sauf si décoché) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
 | Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
+| Erreurs envoyées en direct (**désactivé** sauf si coché, nécessite la télémétrie) | Oui, en quelques secondes | Message d'erreur et emplacement dans le code, sans secrets, noms de dossiers, e‑mails ni IP, version de BMM, système, empreinte à sens unique du Creator ID | Serveur de télémétrie BetterCommunity (classé par Laya sur les mêmes serveurs) |
 | **Discord Rich Presence** (**désactivé** par défaut, dans BMM comme dans l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
 | Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
 | Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |

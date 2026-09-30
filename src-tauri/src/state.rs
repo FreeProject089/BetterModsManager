@@ -192,6 +192,11 @@ pub struct AppSettings {
     /// unless this is explicitly `Some(true)`.
     #[serde(default)]
     pub analytics_consent: Option<bool>,
+    /// "Send errors live" (commands/live_issues.rs). Only ever acts with analytics_consent ==
+    /// Some(true). `None` = not decided yet: the first boot sets it ON if telemetry was
+    /// already accepted, OFF otherwise (live_issues::migrate_setting).
+    #[serde(default)]
+    pub live_errors: Option<bool>,
 }
 
 impl Default for AppSettings {
@@ -234,6 +239,7 @@ impl Default for AppSettings {
             api_cors_origins: Vec::new(),
             api_allowed_hosts: Vec::new(),
             analytics_consent: None,
+            live_errors: None,
         }
     }
 }

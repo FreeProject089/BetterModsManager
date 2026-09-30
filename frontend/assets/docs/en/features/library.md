@@ -52,6 +52,11 @@ To change it, open the profile's **activation order** (the list icon on its card
 own are overridden, and **Apply order** re-copies only the files that change hands. See
 [Activation order](doc-page:how-it-works/load-order).
 
+From the library itself: a mod's detail panel shows its **position** and whom it overrides, with
+Top / Up / Down / Bottom buttons; right-click a card for the same moves; `Alt+↑` / `Alt+↓` move the
+selected mod; and the list icon next to the sort menu opens the full order. A move from the library
+is applied at once.
+
 ### Global Conflict View
 
 Rather than discovering conflicts one at a time, the global view shows every overlap in the

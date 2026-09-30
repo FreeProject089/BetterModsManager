@@ -1163,6 +1163,36 @@ impl ServerHandler for BmmMcpServer {
                     "required": ["mod_id", "fields"]
                 })).unwrap()),
             ),
+            Tool::new(
+                "bmm_ai_ask",
+                "« Ask Laya », offline: answer a question about BMM or the user's own mods from what exists — BMM's documentation (bundled pages, help articles), its commands, and the user's mods, profiles and their scanned file lists. Returns structured results, never generated text: `intent` (docs | setting | files | conflicts | mods | command), `hits` (kind doc|article|command|setting|mod|profile, id, title, snippet quoted from the source, score 0..1, action), `files` (for « which mod modifies X? »: mod_id, mod_name, enabled, matching files), `conflicts` (pairs of mods that provide the same files, both_enabled first, sample files). Retrieval (BM25 + exact file matching) always runs; the embedded Laya model also routes the intent and ranks the top candidates only when the user turned AI on in BMM and the model pack is installed (`laya` says whether it did, `laya_off` why not). Nothing leaves the machine. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "question": { "type": "string", "description": "The user's question, in any language, e.g. \"which mod modifies engine.ogg?\", \"quels mods sont en conflit ?\", \"what is game mode?\" (max 300 characters)." },
+                        "lang": { "type": "string", "enum": ["en", "fr"], "description": "Language to show bilingual results in (both are searched). Default en." },
+                        "scope": { "type": "string", "enum": ["all", "docs", "mods"], "description": "all (default), docs = documentation only, mods = the user's mods and profiles only." },
+                        "limit": { "type": "integer", "description": "Results to return, 1-30. Default 8." },
+                        "use_laya": { "type": "boolean", "description": "Default true: let the embedded model rank when the user's settings allow it. false = retrieval only." }
+                    },
+                    "required": ["question"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_pack_install",
+                "Download, verify and install the embedded Laya model pack (« Laya intégré », about 327 MB download, 404 MB on disk) into the user's local app data — the same pinned file (SHA-256 checked, mirrors tried in order) as Settings → Install. Checks free disk space first; resumes a partial download. Refused under --no-ai / BMM_NO_AI. The only network request is to the pinned pack URLs and carries nothing about the user. Ask the user before calling: it is a large download.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_pack_remove",
+                "Remove the embedded Laya model pack downloaded from Settings (or bmm_ai_pack_install). The copy installed by the BMM installer is left to the uninstaller. If the embedded model was the classifier, the classifier goes back to off. Ask the user before calling.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_test",
+                "Test the installed embedded Laya model: classify a fixed sample (a French livery readme: which of four tags, which language) and report the answers, whether they are the expected ones (`ok`) and the timings (load, answer). None of the user's data is used; no network.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
 
             // ── Live app bridge ────────────────────────────────────────
             Tool::new(
@@ -1635,6 +1665,33 @@ impl ServerHandler for BmmMcpServer {
                         Err(e) => err_result(&e),
                     }
                 }
+                "bmm_ai_ask" => {
+                    let question = args.get("question").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing question", None))?.to_string();
+                    let lang = args.get("lang").and_then(|v| v.as_str()).unwrap_or("en").to_string();
+                    let scope = args.get("scope").and_then(|v| v.as_str()).unwrap_or("all").to_string();
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
+                    let use_laya = args.get("use_laya").and_then(|v| v.as_bool()).unwrap_or(true);
+                    match tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, use_laya)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_pack_install" => match tokio::task::spawn_blocking(|| ai_tools::pack_install(&|_| {})).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_pack_remove" => match tokio::task::spawn_blocking(ai_tools::pack_remove).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_test" => match tokio::task::spawn_blocking(ai_tools::self_test).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
 
                 // Live app bridge
                 "bmm_api_call" => {

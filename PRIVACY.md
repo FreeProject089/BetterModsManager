@@ -22,6 +22,7 @@ do not repeat any of this: on questions about data, this document is the referen
 | **Telemetry** (§3) | Off. The installer's box is **unticked**; ticking it only pre‑selects the answer in BMM's own consent screen, which still has to be accepted | Off until you answer the first‑run consent screen |
 | Session replay sent with telemetry (§3.2) | Off until telemetry is accepted; then on unless you untick it | Pre‑ticked in the consent screen's "Customize" section |
 | Weekly benchmark + detailed hardware report (§3.3) | **Off**, and the installer now asks about it as its own option | **Off** — unticked in the consent screen's "Customize" section |
+| Errors sent live (§3.6) | **Off** unless ticked (its own box); does nothing without telemetry | Off, unticked in the consent screen. If you had **already** accepted telemetry before this option existed, it starts **on** (Settings → Privacy turns it off) |
 | **Discord Rich Presence** (§4) | **Off**: the installer's box is unticked | Off |
 | Bug, crash and feedback reports (§5) | Only when you press Send | Only when you press Send |
 | **Optional AI** (§6.10) | **Off**: the installer's box is unticked; ticking it turns the switch on with **no provider**, so still nothing is sent | Off |
@@ -239,6 +240,36 @@ turn on the unmasked replay mode in §3.2); your name or e‑mail.
 - You can export or clear BMM's local buffer at any time in the Privacy panel.
 - The server limits how many batches one address may send per minute.
 
+### 3.6 Errors sent live
+A separate switch, **"Send errors live"** (Settings → Privacy, the consent screen's "Customize"
+section, and its own BetterInstaller box), sends a short report within seconds when BMM hits an
+error. It works **only while telemetry is on**; turning telemetry off stops it and deletes the
+reports still waiting on your PC.
+
+- **Default:** off, and unticked everywhere it is offered. One exception, decided once: if you had
+  already accepted telemetry when this option appeared, it starts on, because it is a narrower
+  form of the error logs telemetry already sent (§3.1).
+- **What is sent:** JavaScript errors, crashes of the Rust side, commands that failed with a real
+  error (not a cancel, not being offline, not a message already shown to you), and failed
+  deploys, installs, backups and scheduled tasks. For each: the error message, where it happened in
+  BMM's own code (function and file names, no line numbers), a severity, how many times and when
+  (first and last), the BMM version, the OS name and architecture, the telemetry session id and,
+  for a crash, the **file name** of the local crash report (never its content). Never the
+  arguments of a command, the contents of a file or anything you typed.
+- **Removed on your PC before sending:** every secret BMM stores (the same pass as crash reports:
+  tokens, passwords, keys, your BetterCommunity API key, credentials in addresses), your Windows
+  user‑folder name, e‑mail addresses, IP addresses and your PC and account names. The server
+  removes those shapes a second time on arrival.
+- **Identity:** each report carries a **one‑way hash** of your Creator ID, not the Creator ID. The
+  dashboard cannot match it to your other telemetry, but a copy or erasure request for your
+  Creator ID still reaches these reports (the server computes the same hash).
+- **How much:** the same error within 10 minutes only increases a counter; at most 60 new errors an
+  hour; a waiting list of at most 200 lines, kept on disk so an offline PC sends it later.
+- **Who reads it:** the BMM team, in the "Issues" screen of the telemetry dashboard. Each new
+  group of errors is classified by **Laya**, the BetterCommunity classifier running on the same
+  servers (category, severity, "your setup or a BMM bug"); the text is never sent to an outside AI
+  provider. Same retention as the rest of telemetry (§3.5).
+
 ---
 
 ## 4. Discord Rich Presence
@@ -386,6 +417,12 @@ events of the ONNX Runtime library it uses (Microsoft's builds emit Windows even
 default; per Microsoft, a minimal start‑up event may still be written to Windows' local event
 tracing, which Windows only forwards under your own Windows diagnostic‑data settings).
 
+**Ask Laya** (the palette's *Ask Laya*, the docs hub, the library's *smart search*) answers from
+what is already on your PC: BMM's bundled documentation, the Settings screen, your mods' names,
+descriptions, tags and scanned file lists, and your profiles. The question is **never sent**
+anywhere and **not stored** (no history). The search itself runs even with AI off; the built-in
+model only ranks the results when the master switch is on and the model is installed.
+
 The other providers are **off by default**. The mod-detail *Suggest details* action always reads
 the mod's own files on your PC first; nothing leaves it unless you turn on Settings → AI **and**
 choose a network provider, and then only when you click *Suggest*, *ask for a description draft*
@@ -422,6 +459,7 @@ or *Get an AI hint*:
 | **Telemetry** (**off** unless you accept it in BMM) | Yes | Creator ID, system profile with public and local IP, usage, clicked button text, external link addresses, logs, performance, game names, repo addresses — the server keeps the public address truncated to its network and discards the local one | BetterCommunity telemetry server; your IP to ipify.org, your truncated network to ipwho.is |
 | Session replay (with telemetry, on unless unticked) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
 | Weekly benchmark + hardware report (**off**, its own question) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |
+| Errors sent live (**off** unless ticked, needs telemetry) | Yes, within seconds | Error message and code location with secrets, folder names, e‑mails and IPs removed, BMM version, OS, a one‑way hash of the Creator ID | BetterCommunity telemetry server (classified by Laya on the same servers) |
 | **Discord Rich Presence** (**off** by default, in BMM and in the installer) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
 | Connect or sync a Server Repo | Yes | IP address, Creator ID | That repo's owner |
 | Host a Server Repo | Yes (incoming) | Visitors' IP and Creator ID, stored on your PC | You |

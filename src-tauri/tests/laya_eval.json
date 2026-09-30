@@ -1,0 +1,2461 @@
+{
+ "note": "Hand-labelled BMM-shaped evaluation set for the Laya pipeline. Built by scripts/laya/eval_set.py; scored by measure_pipeline in src-tauri/src/commands/ai_embedded.rs.",
+ "vocab": {
+  "en": [
+   "Aircraft",
+   "Maps",
+   "Weapons",
+   "Sound",
+   "Graphics",
+   "Interface",
+   "Liveries",
+   "Missions",
+   "Utilities",
+   "Vehicles",
+   "Characters",
+   "Gameplay",
+   "Fixes",
+   "Adult"
+  ],
+  "fr": [
+   "Avions",
+   "Cartes",
+   "Armes",
+   "Son",
+   "Graphismes",
+   "Interface",
+   "Livrées",
+   "Missions",
+   "Utilitaires",
+   "Véhicules",
+   "Personnages",
+   "Gameplay",
+   "Correctifs",
+   "Adulte"
+  ],
+  "era": [
+   "WWII",
+   "Cold War",
+   "Modern",
+   "Helicopters",
+   "Naval",
+   "Multiplayer",
+   "Training",
+   "Realism",
+   "Cosmetic",
+   "Performance"
+  ]
+ },
+ "items": [
+  {
+   "id": "m01",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: F-4E Improved Cockpit\nAuthor: GaugeWorks\nDescription: Reworked cockpit textures and fixed gauges for the F-4E Phantom.\nExcerpt: Fixes the fuel flow gauge and the misaligned HSI needle. Adds 4K cockpit textures.\nFiles: Mods/aircraft/F-4E/Cockpit/Textures/panel.dds, entry.lua, README.txt",
+   "tags": [
+    "Aircraft",
+    "Fixes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m02",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Caucasus Winter\nAuthor: SnowTeam\nDescription: Winter terrain textures for the Caucasus map: snow on the ground, frozen lakes and bare trees.\nFiles: Bazar/Terrain/Caucasus/winter/snow_01.dds, textures.lua",
+   "tags": [
+    "Maps",
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m03",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: GBU-39 Small Diameter Bomb\nAuthor: OrdnanceLab\nDescription: Adds the GBU-39 SDB with a correct 3D model, launcher rack and guidance logic.\nFiles: Mods/weapons/GBU-39/shape/gbu39.edm, entry.lua",
+   "tags": [
+    "Weapons"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m04",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Real Engine Sounds\nAuthor: AudioCraft\nDescription: Recorded jet engine sounds for startup, idle and afterburner. Replaces the stock engine audio.\nFiles: Sounds/Effects/Aircrafts/Engines/ab_loop.ogg, sdef/engine.sdef",
+   "tags": [
+    "Sound"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m05",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Reshade Cinematic Preset\nAuthor: PixelPusher\nDescription: A ReShade preset with sharper image, better contrast and subtle film grain for screenshots.\nFiles: reshade-shaders/Shaders/LumaSharpen.fx, CinematicPreset.ini",
+   "tags": [
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m06",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Kneeboard Pages Pack\nAuthor: Nav\nDescription: Printable kneeboard pages: airfield charts, radio frequencies and TACAN channels shown in the cockpit.\nFiles: Kneeboard/charts_01.png, Kneeboard/freqs.png",
+   "tags": [
+    "Interface",
+    "Utilities"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m07",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: 494th Squadron Livery\nAuthor: Painter\nDescription: Squadron paint scheme for the F-15E with correct tail codes and nose art.\nFiles: Liveries/F-15ESE/494th/description.lua, 494th_fuselage.dds",
+   "tags": [
+    "Liveries",
+    "Aircraft"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m08",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Operation Red Dawn\nAuthor: MissionMaker\nDescription: A 12-mission single-player campaign with briefings, voice-overs and dynamic weather.\nFiles: Missions/Campaigns/RedDawn/RD01.miz, RD02.miz, briefing.pdf",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m09",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Mod Load Order Tool\nAuthor: Toolsmith\nDescription: A small utility that checks which files each mod replaces and exports a load order report.\nFiles: tools/loadorder.exe, config.ini",
+   "tags": [
+    "Utilities"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m10",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: M1A2 Abrams Tank\nAuthor: ArmorWorks\nDescription: Adds a drivable M1A2 main battle tank with a detailed interior and tracks physics.\nFiles: Mods/tech/M1A2/shapes/m1a2.edm, entry.lua",
+   "tags": [
+    "Vehicles"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m11",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Better Pilot Models\nAuthor: CharacterLab\nDescription: New high-detail pilot and ground crew models with better faces and animations.\nFiles: Bazar/World/Shapes/pilot_new.edm",
+   "tags": [
+    "Characters"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m12",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Realistic Damage Model\nAuthor: Physics\nDescription: Changes how aircraft take damage: fuel leaks, hydraulic failures and wing loss are more realistic.\nFiles: Scripts/Aircrafts/_Common/Damage.lua",
+   "tags": [
+    "Gameplay",
+    "Aircraft"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m13",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Night Vision Fix\nAuthor: Fixer\nDescription: Corrects the too-bright night vision goggles and the green tint after the 2.9 update.\nFiles: Bazar/shaders/nvg.fx",
+   "tags": [
+    "Fixes",
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m14",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Pinup Nose Art (18+)\nAuthor: Anon\nDescription: Nude pinup nose art for bombers. Contains explicit nudity, adults only.\nFiles: Liveries/B-17G/pinup/nose.dds",
+   "tags": [
+    "Adult",
+    "Liveries"
+   ],
+   "nsfw": true
+  },
+  {
+   "id": "m15",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Syria Airfields Update\nAuthor: MapFix\nDescription: Adds missing taxiway signs and fixes runway lights on five Syrian airfields.\nFiles: Mods/terrains/Syria/Airfields/signs.lua",
+   "tags": [
+    "Maps",
+    "Fixes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m16",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Radio Chatter Overhaul\nAuthor: VoiceActors\nDescription: More than 400 new ATC and wingman voice lines recorded by real pilots.\nFiles: Sounds/Speech/ATC/en/*.ogg",
+   "tags": [
+    "Sound"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m17",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Minimal HUD\nAuthor: CleanUI\nDescription: Hides the labels, shrinks the message box and moves the radio menu to the side.\nFiles: Config/View/Server.lua, UI/ui_theme.lua",
+   "tags": [
+    "Interface"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m18",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Humvee Pack\nAuthor: Motorpool\nDescription: Five Humvee variants with working lights, doors and a mounted machine gun.\nFiles: Mods/tech/Humvee/entry.lua",
+   "tags": [
+    "Vehicles",
+    "Weapons"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m19",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Dynamic Campaign Generator\nAuthor: DCG\nDescription: Generates random missions and a persistent front line between sorties.\nFiles: Scripts/DCG/generator.lua, Missions/DCG_template.miz",
+   "tags": [
+    "Missions",
+    "Gameplay"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m20",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Texture Compression Fix\nAuthor: Perf\nDescription: Recompresses oversized textures to BC7 to cut VRAM use and fix stutter on 8 GB cards.\nFiles: Bazar/Textures/*.dds",
+   "tags": [
+    "Fixes",
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m21",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Spitfire Mk IX Invasion Stripes\nAuthor: WWIIPaint\nDescription: D-Day invasion stripes livery for the Spitfire, historically accurate squadron letters.\nFiles: Liveries/SpitfireLFMkIX/DDay/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m22",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Hot Babes Pilots\nAuthor: xx\nDescription: Replaces pilots with sexy half naked women. NSFW content, 18+.\nFiles: Bazar/World/Shapes/pilot_girl.edm",
+   "tags": [
+    "Adult",
+    "Characters"
+   ],
+   "nsfw": true
+  },
+  {
+   "id": "m23",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Carrier Deck Crew\nAuthor: NavalOps\nDescription: Animated deck crew on the aircraft carrier: shooters, handlers and the landing signal officer.\nFiles: Mods/tech/DeckCrew/entry.lua",
+   "tags": [
+    "Characters",
+    "Vehicles"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m24",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Smoke and Fire Effects\nAuthor: FXLab\nDescription: New particle effects for explosions, burning wrecks and smoke trails.\nFiles: Bazar/Effects/ParticleSystem2/explosion.lua",
+   "tags": [
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m25",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Cockpit Mirage 2000C HD\nAuthor: Rafale\nDescription: Textures du cockpit du Mirage 2000C refaites en 4K, instruments plus lisibles.\nFiles: Mods/aircraft/M-2000C/Cockpit/Textures/tableau.dds, entry.lua",
+   "tags": [
+    "Avions",
+    "Graphismes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m26",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Carte Normandie Été\nAuthor: Bocage\nDescription: Nouvelles textures de terrain pour la carte Normandie : champs, haies et villages en été.\nFiles: Mods/terrains/Normandy/summer/champs.dds",
+   "tags": [
+    "Cartes",
+    "Graphismes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m27",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Missiles MICA améliorés\nAuthor: Armurier\nDescription: Corrige la portée et le guidage des missiles MICA IR et EM, nouveaux modèles 3D.\nFiles: Mods/weapons/MICA/entry.lua",
+   "tags": [
+    "Armes",
+    "Correctifs"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m28",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Sons de moteur réalistes\nAuthor: Audio\nDescription: Remplace les sons des moteurs à réaction par des enregistrements réels : démarrage, ralenti et postcombustion.\nFiles: Sounds/Effects/Aircrafts/Engines/pc.ogg",
+   "tags": [
+    "Son"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m29",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Livrée Patrouille de France\nAuthor: PAF\nDescription: Livrée de la Patrouille de France pour l'Alpha Jet, avec les numéros de chaque avion.\nFiles: Liveries/AJS37/PAF/description.lua",
+   "tags": [
+    "Livrées"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m30",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Campagne Opération Serval\nAuthor: Mali\nDescription: Une campagne de 10 missions solo au Sahel, briefings en français et météo dynamique.\nFiles: Missions/Campaigns/Serval/S01.miz",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m31",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Outil de sauvegarde des profils\nAuthor: Outils\nDescription: Petit utilitaire qui sauvegarde vos profils et vos réglages de contrôles avant une mise à jour.\nFiles: backup.exe, backup.ini",
+   "tags": [
+    "Utilitaires"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m32",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: VAB Mk3\nAuthor: Blindés\nDescription: Ajoute le véhicule blindé VAB Mk3 avec tourelle téléopérée et intérieur détaillé.\nFiles: Mods/tech/VAB/entry.lua",
+   "tags": [
+    "Véhicules"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m33",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Interface épurée\nAuthor: UIFR\nDescription: Menus plus clairs, HUD réduit et messages radio déplacés sur le côté de l'écran.\nFiles: UI/theme.lua, Config/View/Server.lua",
+   "tags": [
+    "Interface"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m34",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Correctif vision nocturne\nAuthor: Fix\nDescription: Corrige les JVN trop lumineuses depuis la mise à jour 2.9 et la teinte verte excessive.\nFiles: Bazar/shaders/nvg.fx",
+   "tags": [
+    "Correctifs",
+    "Graphismes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m35",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "fr",
+   "text": "Name: Ground Crew Voices\nAuthor: Voices\nDescription: New voice lines for the ground crew: refuel, rearm and startup calls.\nFiles: Sounds/Speech/GroundCrew/*.ogg",
+   "tags": [
+    "Son"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m36",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "fr",
+   "text": "Name: F-16 Tiger Meet Livery\nAuthor: Tiger\nDescription: NATO Tiger Meet special paint for the F-16C Viper.\nFiles: Liveries/F-16C_50/TigerMeet/description.lua",
+   "tags": [
+    "Livrées",
+    "Avions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m37",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "fr",
+   "text": "Name: Realistic Radar\nAuthor: Sensors\nDescription: Changes radar detection ranges and clutter so that low-flying targets are harder to see.\nFiles: Scripts/Database/Sensors/radar.lua",
+   "tags": [
+    "Gameplay"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m38",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "fr",
+   "text": "Name: Tanker Mission Pack\nAuthor: AAR\nDescription: Eight air-to-air refueling training missions, from basic to night refueling in turbulence.\nFiles: Missions/Training/AAR_01.miz",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m39",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Personnages féminins (adultes)\nAuthor: x\nDescription: Remplace les pilotes par des personnages féminins dénudés. Contenu explicite, réservé aux adultes.\nFiles: Bazar/World/Shapes/pilote_f.edm",
+   "tags": [
+    "Adulte",
+    "Personnages"
+   ],
+   "nsfw": true
+  },
+  {
+   "id": "m40",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Effets d'explosion\nAuthor: FX\nDescription: Nouvelles explosions, fumées et incendies plus réalistes, particules plus détaillées.\nFiles: Bazar/Effects/ParticleSystem2/explosion.lua",
+   "tags": [
+    "Graphismes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m41",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Porte-avions Charles de Gaulle\nAuthor: Marine\nDescription: Ajoute le porte-avions Charles de Gaulle avec pont animé et catapultes fonctionnelles.\nFiles: Mods/tech/CdG/entry.lua",
+   "tags": [
+    "Véhicules"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m42",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Gameplay hélicoptère réaliste\nAuthor: Rotor\nDescription: Modifie l'effet de sol, l'anneau tourbillonnaire et la consommation de carburant des hélicoptères.\nFiles: Scripts/Aircrafts/Helicopters/flight.lua",
+   "tags": [
+    "Gameplay",
+    "Avions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m43",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Tornado IDS Cockpit Fix\nAuthor: Luftwaffe\nDescription: Behebt falsche Anzeigen im Cockpit des Tornado und fügt fehlende Schalter hinzu.\nFiles: Mods/aircraft/Tornado/Cockpit/Scripts/devices.lua",
+   "tags": [
+    "Aircraft",
+    "Fixes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m44",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Deutschland Karte\nAuthor: Karten\nDescription: Eine große Karte von Norddeutschland mit Städten, Autobahnen und Flugplätzen aus dem Kalten Krieg.\nFiles: Mods/terrains/Germany/terrain.cfg.lua",
+   "tags": [
+    "Maps"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m45",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Leopard 2A6\nAuthor: Panzer\nDescription: Fügt den Kampfpanzer Leopard 2A6 mit detailliertem Modell und Ketten hinzu.\nFiles: Mods/tech/Leopard2/entry.lua",
+   "tags": [
+    "Vehicles"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m46",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Funkverkehr Deutsch\nAuthor: Stimmen\nDescription: Deutsche Sprachausgabe für Tower, AWACS und Flügelmann.\nFiles: Sounds/Speech/de/*.ogg",
+   "tags": [
+    "Sound"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m47",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Bessere Wolken\nAuthor: Wetter\nDescription: Neue Wolkentexturen und schönere Sonnenuntergänge, weniger Flackern.\nFiles: Bazar/shaders/clouds.fx",
+   "tags": [
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m48",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "en",
+   "text": "Name: Einsatzpaket Kalter Krieg\nAuthor: Missionen\nDescription: Sechs Einsätze über der Fulda-Lücke mit Briefings auf Deutsch.\nFiles: Missions/ColdWar/Fulda_01.miz",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m49",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "en",
+   "text": "Name: Pintura Ejército del Aire\nAuthor: Pintor\nDescription: Esquema de pintura del Ejército del Aire para el F/A-18C Hornet.\nFiles: Liveries/FA-18C_hornet/EdA/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m50",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "en",
+   "text": "Name: Sonidos de armas\nAuthor: Audio\nDescription: Reemplaza los sonidos de cañones, cohetes y misiles con grabaciones reales.\nFiles: Sounds/Effects/Weapons/gun.ogg",
+   "tags": [
+    "Sound",
+    "Weapons"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m51",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "en",
+   "text": "Name: Herramienta de copia\nAuthor: Util\nDescription: Utilidad para copiar y restaurar tus configuraciones de mandos entre instalaciones.\nFiles: copia.exe",
+   "tags": [
+    "Utilities"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m52",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "en",
+   "text": "Name: Mapa Islas Malvinas\nAuthor: Sur\nDescription: Un mapa con las islas, sus bases aéreas y el mar del sur.\nFiles: Mods/terrains/Falklands/terrain.cfg.lua",
+   "tags": [
+    "Maps"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m53",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "en",
+   "text": "Name: Misiles corregidos\nAuthor: Fix\nDescription: Corrige el alcance y la guía de los misiles AIM-120 tras la última actualización.\nFiles: Mods/weapons/AIM120/entry.lua",
+   "tags": [
+    "Weapons",
+    "Fixes"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m54",
+   "task": "mod",
+   "lang": "it",
+   "vocab": "en",
+   "text": "Name: Livrea Frecce Tricolori\nAuthor: PAN\nDescription: Livrea delle Frecce Tricolori per l'MB-339 con i numeri di ogni aereo.\nFiles: Liveries/MB-339/PAN/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m55",
+   "task": "mod",
+   "lang": "it",
+   "vocab": "en",
+   "text": "Name: Carta Sardegna\nAuthor: Mappe\nDescription: Una nuova mappa della Sardegna con aeroporti, città e montagne.\nFiles: Mods/terrains/Sardinia/terrain.cfg.lua",
+   "tags": [
+    "Maps"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m56",
+   "task": "mod",
+   "lang": "it",
+   "vocab": "en",
+   "text": "Name: Suoni motore Eurofighter\nAuthor: Audio\nDescription: Nuovi suoni registrati per il motore dell'Eurofighter, avvio e postbruciatore.\nFiles: Sounds/Effects/Aircrafts/EF2000/engine.ogg",
+   "tags": [
+    "Sound",
+    "Aircraft"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m57",
+   "task": "mod",
+   "lang": "pt",
+   "vocab": "en",
+   "text": "Name: Pintura FAB\nAuthor: Brasil\nDescription: Pintura da Força Aérea Brasileira para o F-5E Tiger II.\nFiles: Liveries/F-5E-3/FAB/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m58",
+   "task": "mod",
+   "lang": "pt",
+   "vocab": "en",
+   "text": "Name: Interface limpa\nAuthor: UI\nDescription: Menus mais simples e um HUD menor e mais legível.\nFiles: UI/theme.lua",
+   "tags": [
+    "Interface"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m59",
+   "task": "mod",
+   "lang": "ru",
+   "vocab": "en",
+   "text": "Name: Су-27 кабина HD\nAuthor: Сухой\nDescription: Новые текстуры кабины Су-27 в 4K и исправленные приборы.\nFiles: Mods/aircraft/Su-27/Cockpit/Textures/panel.dds",
+   "tags": [
+    "Aircraft",
+    "Graphics"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m60",
+   "task": "mod",
+   "lang": "ru",
+   "vocab": "en",
+   "text": "Name: Звуки двигателей\nAuthor: Звук\nDescription: Заменяет звуки двигателей реальными записями.\nFiles: Sounds/Effects/Engines/al31.ogg",
+   "tags": [
+    "Sound"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m61",
+   "task": "mod",
+   "lang": "ru",
+   "vocab": "en",
+   "text": "Name: Т-90 танк\nAuthor: Броня\nDescription: Добавляет танк Т-90 с детальной моделью и гусеницами.\nFiles: Mods/tech/T90/entry.lua",
+   "tags": [
+    "Vehicles"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m62",
+   "task": "mod",
+   "lang": "pl",
+   "vocab": "en",
+   "text": "Name: Malowanie Polskich Sił Powietrznych\nAuthor: Malarz\nDescription: Malowanie dla F-16C w barwach polskiej eskadry.\nFiles: Liveries/F-16C_50/PL/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m63",
+   "task": "mod",
+   "lang": "pl",
+   "vocab": "en",
+   "text": "Name: Kampania Bałtycka\nAuthor: Misje\nDescription: Kampania ośmiu misji nad Morzem Bałtyckim z odprawami po polsku.\nFiles: Missions/Campaigns/Baltic/B01.miz",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "m64",
+   "task": "mod",
+   "lang": "ja",
+   "vocab": "en",
+   "text": "Name: 零戦 塗装パック\nAuthor: 塗装\nDescription: 零戦のための歴史的な塗装を十種類追加します。\nFiles: Liveries/A6M/zero/description.lua",
+   "tags": [
+    "Liveries"
+   ],
+   "nsfw": false
+  },
+  {
+   "id": "r01",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: BMM closes when I enable a mod\nThe app disappears without any message as soon as I click the toggle of a big mod. Crash log says: thread 'main' panicked at 'index out of bounds'.",
+   "category": "crash",
+   "severity": "high"
+  },
+  {
+   "id": "r02",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Game crashes to desktop after installing the F-4E mod\nDCS starts, I get to the menu, then it closes with 'Access violation' in dcs.log. Removing the mod fixes it.",
+   "category": "crash",
+   "severity": "high"
+  },
+  {
+   "id": "r03",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Typo in the settings page\nThe label says 'Compresion' instead of 'Compression' under Storage.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r04",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Library takes a minute to open\nWith 900 mods the library view needs about 60 seconds to show anything and the fan spins up.",
+   "category": "performance",
+   "severity": "medium"
+  },
+  {
+   "id": "r05",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Installer fails with error 1603\nThe MSI stops at 80% with error 1603 and rolls back. Cannot install BMM at all.",
+   "category": "install",
+   "severity": "high"
+  },
+  {
+   "id": "r06",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Two mods overwrite the same cockpit file\nWhen both the F-16 HUD mod and the cockpit texture pack are enabled, one of them silently loses: the HUD is back to default.",
+   "category": "mod_conflict",
+   "severity": "medium"
+  },
+  {
+   "id": "r07",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Profile switch forgets enabled mods\nAfter switching profiles and back, three mods that were enabled are shown as disabled although the files are still deployed.",
+   "category": "bug",
+   "severity": "medium"
+  },
+  {
+   "id": "r08",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: All my mods were deleted from the game folder\nAfter the last update every mod file disappeared from Saved Games and the backups folder is empty too. Weeks of work lost.",
+   "category": "bug",
+   "severity": "critical"
+  },
+  {
+   "id": "r09",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Dark theme button text is unreadable\nOn the dark theme the buttons in the repo tab are dark grey on black, I can barely read them.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r10",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Hashing uses 100% CPU for hours\nThe integrity check never finishes on my 200 GB mod folder and the whole PC becomes sluggish.",
+   "category": "performance",
+   "severity": "high"
+  },
+  {
+   "id": "r11",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Cannot install: missing WebView2\nSetup says WebView2 runtime is missing and the download link in the dialog does nothing.",
+   "category": "install",
+   "severity": "medium"
+  },
+  {
+   "id": "r12",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Tooltip overlaps the close button\nIn the mod details panel the tooltip covers the X button so I have to move the mouse away first.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r13",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Load order ignored for texture mods\nI moved the livery pack above the texture pack but the game still shows the textures from the lower mod.",
+   "category": "mod_conflict",
+   "severity": "medium"
+  },
+  {
+   "id": "r14",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Sync from repo downloads everything again\nEvery sync re-downloads 40 GB even though nothing changed on the server.",
+   "category": "bug",
+   "severity": "medium"
+  },
+  {
+   "id": "r15",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Freeze when dragging a mod\nBMM freezes (not responding) for 20 seconds each time I drag a mod in the list, then it recovers.",
+   "category": "performance",
+   "severity": "medium"
+  },
+  {
+   "id": "r16",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Suggestion: dark mode for the docs\nIt would be nice if the documentation pages followed the app theme.",
+   "category": "other",
+   "severity": "low"
+  },
+  {
+   "id": "r17",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Uninstaller left files behind\nAfter uninstalling, C:\\Program Files\\BetterModsManager still has 300 MB of files and a service.",
+   "category": "install",
+   "severity": "low"
+  },
+  {
+   "id": "r18",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Crash on startup after update 3.2\nBMM shows the splash screen and exits. Every start. Log: 'failed to parse data.json: EOF while parsing'.",
+   "category": "crash",
+   "severity": "critical"
+  },
+  {
+   "id": "r19",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Question about repo passwords\nHow do I share a repo with only my squadron? Is there a way to set a password?",
+   "category": "other",
+   "severity": "low"
+  },
+  {
+   "id": "r20",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Mods from two profiles fight over the same files\nProfile A and B share the game folder and enabling a mod in B breaks a mod in A.",
+   "category": "mod_conflict",
+   "severity": "high"
+  },
+  {
+   "id": "r21",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : BMM plante au démarrage\nDepuis la mise à jour, BMM se ferme tout seul juste après l'écran de chargement. Le journal indique « panicked at called Option::unwrap() on a None value ».",
+   "category": "crash",
+   "severity": "critical"
+  },
+  {
+   "id": "r22",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Le jeu plante quand j'active le mod Mirage\nDCS se ferme sur le bureau pendant le chargement de la mission, seulement avec le mod activé.",
+   "category": "crash",
+   "severity": "high"
+  },
+  {
+   "id": "r23",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Faute d'orthographe dans le menu\nIl est écrit « Paramêtres » au lieu de « Paramètres » dans la barre latérale.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r24",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : La bibliothèque est très lente\nAvec 1200 mods, le défilement de la liste saccade et chaque clic met deux secondes à répondre.",
+   "category": "performance",
+   "severity": "medium"
+  },
+  {
+   "id": "r25",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Impossible d'installer BMM\nL'installateur s'arrête avec « erreur 2503 » et annule tout. Même en administrateur.",
+   "category": "install",
+   "severity": "high"
+  },
+  {
+   "id": "r26",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Deux mods modifient le même fichier\nLe mod de livrées et le mod de textures remplacent tous les deux fuselage.dds, et c'est le mauvais qui gagne.",
+   "category": "mod_conflict",
+   "severity": "medium"
+  },
+  {
+   "id": "r27",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Le bouton Exporter ne fait rien\nDans Listes .MM, cliquer sur Exporter n'ouvre aucune fenêtre et rien n'est écrit.",
+   "category": "bug",
+   "severity": "medium"
+  },
+  {
+   "id": "r28",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Tous mes profils ont disparu\nAprès un redémarrage du PC, BMM s'ouvre sans aucun profil ni mod. data.json fait 0 octet.",
+   "category": "bug",
+   "severity": "critical"
+  },
+  {
+   "id": "r29",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Texte blanc sur fond blanc\nAvec le thème clair, les titres des cartes dans Paramètres sont illisibles.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r30",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Le calcul des empreintes bloque le PC\nLa vérification d'intégrité occupe tout le disque pendant une heure et le jeu rame.",
+   "category": "performance",
+   "severity": "high"
+  },
+  {
+   "id": "r31",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Demande : pouvoir trier par auteur\nCe serait pratique de trier la bibliothèque par auteur de mod.",
+   "category": "other",
+   "severity": "low"
+  },
+  {
+   "id": "r32",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : La désinstallation a laissé des fichiers\nAprès désinstallation il reste un dossier de 200 Mo dans AppData et une entrée dans le menu démarrer.",
+   "category": "install",
+   "severity": "low"
+  },
+  {
+   "id": "r33",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Ordre de chargement ignoré\nJ'ai mis le pack de sons au-dessus mais c'est toujours l'autre mod qui fournit engine.ogg.",
+   "category": "mod_conflict",
+   "severity": "medium"
+  },
+  {
+   "id": "r34",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : La synchro retélécharge tout\nChaque synchronisation du dépôt retélécharge 30 Go alors que rien n'a changé.",
+   "category": "bug",
+   "severity": "medium"
+  },
+  {
+   "id": "r35",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Fenêtre figée pendant l'analyse\nPendant le scan du dossier de mods, BMM ne répond plus pendant une minute.",
+   "category": "performance",
+   "severity": "medium"
+  },
+  {
+   "id": "r36",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Question sur le mode jeu\nC'est quoi exactement le mode jeu ? Est-ce que ça ferme BMM quand je lance DCS ?",
+   "category": "other",
+   "severity": "low"
+  },
+  {
+   "id": "r37",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Crash en ouvrant le planificateur\nL'application se ferme d'un coup dès que j'ouvre l'onglet Planificateur. Erreur « stack overflow » dans le journal.",
+   "category": "crash",
+   "severity": "high"
+  },
+  {
+   "id": "r38",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Le menu déroulant sort de l'écran\nSur un écran 1366x768 la liste des profils dépasse en bas et on ne peut pas choisir les derniers.",
+   "category": "ui",
+   "severity": "medium"
+  },
+  {
+   "id": "r39",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Conflit entre deux profils\nLes profils A et B partagent le même dossier de jeu et activer un mod dans B casse un mod de A.",
+   "category": "mod_conflict",
+   "severity": "high"
+  },
+  {
+   "id": "r40",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Les mods activés sont perdus\nAprès avoir changé de profil, trois mods activés apparaissent désactivés alors que les fichiers sont toujours là.",
+   "category": "bug",
+   "severity": "medium"
+  },
+  {
+   "id": "r41",
+   "task": "report",
+   "lang": "de",
+   "text": "Titel: BMM stürzt beim Start ab\nNach dem Update schließt sich BMM sofort nach dem Ladebildschirm. Im Log steht 'panicked at index out of bounds'.",
+   "category": "crash",
+   "severity": "critical"
+  },
+  {
+   "id": "r42",
+   "task": "report",
+   "lang": "de",
+   "text": "Titel: Bibliothek sehr langsam\nMit 800 Mods braucht die Liste 40 Sekunden zum Laden.",
+   "category": "performance",
+   "severity": "medium"
+  },
+  {
+   "id": "r43",
+   "task": "report",
+   "lang": "de",
+   "text": "Titel: Installation schlägt fehl\nDas Setup bricht mit Fehler 1603 ab und macht alles rückgängig.",
+   "category": "install",
+   "severity": "high"
+  },
+  {
+   "id": "r44",
+   "task": "report",
+   "lang": "de",
+   "text": "Titel: Tippfehler in den Einstellungen\nDort steht 'Speicherplaz' statt 'Speicherplatz'.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "r45",
+   "task": "report",
+   "lang": "es",
+   "text": "Título: BMM se cierra al activar un mod\nLa aplicación desaparece sin mensaje al pulsar el interruptor de un mod grande.",
+   "category": "crash",
+   "severity": "high"
+  },
+  {
+   "id": "r46",
+   "task": "report",
+   "lang": "es",
+   "text": "Título: Dos mods sobrescriben el mismo archivo\nEl pack de texturas y la librea reemplazan el mismo archivo y gana el equivocado.",
+   "category": "mod_conflict",
+   "severity": "medium"
+  },
+  {
+   "id": "r47",
+   "task": "report",
+   "lang": "es",
+   "text": "Título: El instalador no funciona\nEl instalador dice que falta WebView2 y el enlace no hace nada.",
+   "category": "install",
+   "severity": "medium"
+  },
+  {
+   "id": "r48",
+   "task": "report",
+   "lang": "es",
+   "text": "Título: Texto ilegible en el tema oscuro\nLos botones de la pestaña de repositorio son grises sobre negro.",
+   "category": "ui",
+   "severity": "low"
+  },
+  {
+   "id": "d01",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: App closes when I toggle a big mod\nAs soon as I switch on a 5 GB mod, BMM vanishes. No error dialog.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 0
+  },
+  {
+   "id": "d02",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Scrolling the mod list is very slow\nWith 700 mods, the library needs ages to render and scrolling stutters.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 1
+  },
+  {
+   "id": "d03",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Setup rolls back with 1603\nThe MSI fails near the end with error 1603.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 2
+  },
+  {
+   "id": "d04",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Can't read buttons on the dark theme\nIn Server Repo, button text is almost black on black.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 3
+  },
+  {
+   "id": "d05",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Every sync re-downloads the whole repo\nNothing changed on the server but 30 GB are fetched again.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 4
+  },
+  {
+   "id": "d06",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Mods get disabled after changing profile\nI switch profile and come back: my enabled mods show as disabled.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 5
+  },
+  {
+   "id": "d07",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Tooltip hides the close button\nIn mod details the tooltip covers the X.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d08",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Scheduler task never runs at night\nMy nightly backup task did not fire for a week.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d09",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Hashing never finishes\nIntegrity check runs for hours on 200 GB.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d10",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Uninstall leaves 300 MB behind\nProgram Files still has BMM files after uninstall.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d11",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Crash right after enabling the Harrier pack\nToggling the pack on makes BMM exit immediately.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": 0
+  },
+  {
+   "id": "d12",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Wrong mod wins a file conflict\nTwo mods replace the same texture and the lower one wins.",
+   "known": [
+    "BMM crashes when enabling a large mod",
+    "Library view is slow with hundreds of mods",
+    "Installer error 1603 during setup",
+    "Dark theme buttons are unreadable in the repo tab",
+    "Repo sync downloads everything every time",
+    "Profile switch loses the enabled mods"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d13",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : BMM se ferme dès l'ouverture\nDepuis la dernière version, l'application quitte juste après le logo.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 0
+  },
+  {
+   "id": "d14",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Liste des mods très lente\nAvec 900 mods, afficher la bibliothèque prend une minute.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 1
+  },
+  {
+   "id": "d15",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Erreur 2503 à l'installation\nImpossible d'installer : erreur 2503 puis annulation.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 2
+  },
+  {
+   "id": "d16",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Thème clair illisible\nLes titres des cartes des paramètres sont blancs sur blanc.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 3
+  },
+  {
+   "id": "d17",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Le dépôt se retélécharge en entier\nChaque synchro reprend les 40 Go depuis zéro.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 4
+  },
+  {
+   "id": "d18",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Exporter la liste ne marche pas\nLe bouton Exporter dans Listes .MM n'ouvre rien.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 5
+  },
+  {
+   "id": "d19",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Le planificateur ne lance rien\nMa tâche de 3 h du matin ne s'exécute jamais.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d20",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Question sur le mode jeu\nQue fait le mode jeu exactement ?",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d21",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Conflit de fichiers entre deux mods\nLe mauvais mod gagne sur fuselage.dds.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d22",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Le disque tourne à fond pendant la vérification\nLa vérification d'intégrité bloque le PC.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": null
+  },
+  {
+   "id": "d23",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Crash au lancement depuis la 3.2\nBMM s'arrête tout de suite au démarrage.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": 0
+  },
+  {
+   "id": "d24",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Faute dans la barre latérale\nIl est écrit Paramêtres.",
+   "known": [
+    "BMM plante au démarrage après la mise à jour",
+    "La bibliothèque est lente avec beaucoup de mods",
+    "L'installateur échoue avec l'erreur 2503",
+    "Texte illisible avec le thème clair dans Paramètres",
+    "La synchronisation du dépôt retélécharge tout",
+    "Le bouton Exporter des listes .MM ne fait rien"
+   ],
+   "dup": null
+  },
+  {
+   "id": "l01",
+   "task": "lang",
+   "lang": "en",
+   "text": "Unpack the archive into your Saved Games folder and enable the mod in the manager."
+  },
+  {
+   "id": "l02",
+   "task": "lang",
+   "lang": "fr",
+   "text": "Décompressez l'archive dans le dossier Saved Games puis activez le mod dans le gestionnaire."
+  },
+  {
+   "id": "l03",
+   "task": "lang",
+   "lang": "de",
+   "text": "Entpacke das Archiv in den Ordner Saved Games und aktiviere die Mod im Manager."
+  },
+  {
+   "id": "l04",
+   "task": "lang",
+   "lang": "es",
+   "text": "Descomprime el archivo en la carpeta Saved Games y activa el mod en el gestor."
+  },
+  {
+   "id": "l05",
+   "task": "lang",
+   "lang": "it",
+   "text": "Estrai l'archivio nella cartella Saved Games e attiva la mod nel gestore."
+  },
+  {
+   "id": "l06",
+   "task": "lang",
+   "lang": "pt",
+   "text": "Extraia o arquivo na pasta Saved Games e ative o mod no gerenciador."
+  },
+  {
+   "id": "l07",
+   "task": "lang",
+   "lang": "ru",
+   "text": "Распакуйте архив в папку Saved Games и включите мод в менеджере."
+  },
+  {
+   "id": "l08",
+   "task": "lang",
+   "lang": "pl",
+   "text": "Rozpakuj archiwum do folderu Saved Games i włącz moda w menedżerze."
+  },
+  {
+   "id": "l09",
+   "task": "lang",
+   "lang": "ja",
+   "text": "アーカイブをSaved Gamesフォルダーに展開し、マネージャーでMODを有効にしてください。"
+  },
+  {
+   "id": "l10",
+   "task": "lang",
+   "lang": "zh",
+   "text": "将压缩包解压到 Saved Games 文件夹，然后在管理器中启用该模组。"
+  },
+  {
+   "id": "l11",
+   "task": "lang",
+   "lang": "en",
+   "text": "Requires the latest open beta. Known issue: the left MFD flickers at night."
+  },
+  {
+   "id": "l12",
+   "task": "lang",
+   "lang": "fr",
+   "text": "Nécessite la dernière bêta ouverte. Problème connu : l'écran gauche clignote la nuit."
+  },
+  {
+   "id": "l13",
+   "task": "lang",
+   "lang": "de",
+   "text": "Benötigt die neueste offene Beta. Bekanntes Problem: das linke MFD flackert nachts."
+  },
+  {
+   "id": "l14",
+   "task": "lang",
+   "lang": "es",
+   "text": "Requiere la última beta abierta. Problema conocido: la pantalla izquierda parpadea de noche."
+  },
+  {
+   "id": "l15",
+   "task": "lang",
+   "lang": "it",
+   "text": "Richiede l'ultima beta aperta. Problema noto: il display sinistro sfarfalla di notte."
+  },
+  {
+   "id": "l16",
+   "task": "lang",
+   "lang": "pt",
+   "text": "Requer a última beta aberta. Problema conhecido: a tela esquerda pisca à noite."
+  },
+  {
+   "id": "l17",
+   "task": "lang",
+   "lang": "ru",
+   "text": "Требуется последняя открытая бета. Известная проблема: левый дисплей мерцает ночью."
+  },
+  {
+   "id": "l18",
+   "task": "lang",
+   "lang": "pl",
+   "text": "Wymaga najnowszej otwartej bety. Znany problem: lewy wyświetlacz migocze w nocy."
+  },
+  {
+   "id": "l19",
+   "task": "lang",
+   "lang": "fr",
+   "text": "Livrée 4K"
+  },
+  {
+   "id": "l20",
+   "task": "lang",
+   "lang": "en",
+   "text": "v1.2 changelog: fixed textures"
+  },
+  {
+   "id": "bm01",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: P-51D Mustang Sound Overhaul\nDescription: Merlin engine recordings for the P-51D, taken from a restored warbird.\nFiles: Sounds/Effects/Aircrafts/P-51D/merlin.ogg",
+   "tags": [
+    "WWII"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm02",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: MiG-21 Fishbed Upgrade\nDescription: Improves the 1970s MiG-21bis: RSBN navigation, better radar scope and period-correct cockpit labels.\nFiles: Mods/aircraft/MiG-21bis/Cockpit/labels.lua",
+   "tags": [
+    "Cold War"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm03",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: F-35A Lightning II\nDescription: A fifth-generation stealth fighter with sensor fusion and a modern glass cockpit.\nFiles: Mods/aircraft/F-35A/entry.lua",
+   "tags": [
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm04",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: UH-1H Door Gunner AI\nDescription: The Huey's door gunners now pick targets on their own and call them out.\nFiles: Mods/aircraft/UH-1H/Scripts/gunner.lua",
+   "tags": [
+    "Helicopters",
+    "Realism"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm05",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Arleigh Burke Destroyer\nDescription: Adds a guided-missile destroyer with working SAM launchers and a helicopter deck.\nFiles: Mods/tech/DDG-51/entry.lua",
+   "tags": [
+    "Naval",
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm06",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Server Slot Blocker\nDescription: For dedicated server admins: reserves slots for squadron members and kicks players with the wrong mods.\nFiles: Scripts/Hooks/slotblock.lua",
+   "tags": [
+    "Multiplayer"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm07",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Carrier Landing School\nDescription: Twelve lessons with an instructor voice that teach case I and case III recoveries step by step.\nFiles: Missions/Training/CV_01.miz",
+   "tags": [
+    "Training",
+    "Naval"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm08",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Real G-Effects\nDescription: Stronger blackouts and redouts, pilot fatigue after sustained high-G turns.\nFiles: Config/G-effects.lua",
+   "tags": [
+    "Realism"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm09",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Shiny Canopy Reflections\nDescription: Purely visual: nicer reflections on the canopy glass. No effect on gameplay.\nFiles: Bazar/shaders/canopy.fx",
+   "tags": [
+    "Cosmetic"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm10",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: FPS Booster Config\nDescription: Tuned graphics.lua that raises frame rates on mid-range PCs by trimming draw distance and shadow cascades.\nFiles: Config/graphics.lua",
+   "tags": [
+    "Performance"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm11",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Bf 109 K-4 Luftwaffe Skins\nDescription: Twenty historical paint schemes of JG 27 and JG 53 from 1944-45.\nFiles: Liveries/Bf-109K-4/JG27/description.lua",
+   "tags": [
+    "WWII",
+    "Cosmetic"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm12",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Mi-24P Hind Checklist Trainer\nDescription: Interactive startup checklist for the Hind gunship, with hints for every switch.\nFiles: Missions/Training/Mi24_start.miz",
+   "tags": [
+    "Helicopters",
+    "Training"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm13",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Fulda Gap 1985\nDescription: A dynamic NATO vs Warsaw Pact campaign on the inner German border, 1985.\nFiles: Missions/Campaigns/Fulda85/F01.miz",
+   "tags": [
+    "Cold War"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm14",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Kiowa Warrior\nDescription: Adds the OH-58D scout helicopter with its mast-mounted sight.\nFiles: Mods/aircraft/OH58D/entry.lua",
+   "tags": [
+    "Helicopters",
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm15",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Coop Mission Pack 4 Players\nDescription: Six missions built for four human pilots flying together online.\nFiles: Missions/MP/coop_01.miz",
+   "tags": [
+    "Multiplayer"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm16",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Low VRAM Textures\nDescription: Half-resolution terrain textures so the game fits into 4 GB video cards without stutters.\nFiles: Bazar/Terrain/lowres/*.dds",
+   "tags": [
+    "Performance"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm17",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Battleship Yamato\nDescription: The Imperial Japanese Navy battleship, with 46 cm guns and AA batteries, for Pacific missions.\nFiles: Mods/tech/Yamato/entry.lua",
+   "tags": [
+    "Naval",
+    "WWII"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm18",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "era",
+   "text": "Name: Realistic Radio Range\nDescription: Radios now fade with distance and terrain blocks line of sight.\nFiles: Scripts/radio.lua",
+   "tags": [
+    "Realism"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm19",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Spitfire - Sons Merlin\nDescription: Enregistrements du moteur Merlin d'un Spitfire restauré de 1943.\nFiles: Sounds/Effects/Spitfire/merlin.ogg",
+   "tags": [
+    "WWII"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm20",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Frégate FREMM\nDescription: Ajoute la frégate multi-missions FREMM de la Marine nationale avec son hélicoptère.\nFiles: Mods/tech/FREMM/entry.lua",
+   "tags": [
+    "Naval",
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm21",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: École de voltige\nDescription: Leçons guidées de voltige : tonneau, boucle, renversement, avec un moniteur.\nFiles: Missions/Training/voltige_01.miz",
+   "tags": [
+    "Training"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm22",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Gazelle - panne réaliste\nDescription: Pannes moteur et hydrauliques réalistes pour la Gazelle, selon l'usure.\nFiles: Mods/aircraft/SA342/failures.lua",
+   "tags": [
+    "Helicopters",
+    "Realism"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm23",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Serveur - messages de bienvenue\nDescription: Affiche un message de bienvenue et les règles du serveur aux joueurs qui se connectent.\nFiles: Scripts/Hooks/welcome.lua",
+   "tags": [
+    "Multiplayer"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm24",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Mirage III - années 60\nDescription: Le Mirage IIIE tel qu'en 1964, avec ses instruments d'époque.\nFiles: Mods/aircraft/MirageIII/entry.lua",
+   "tags": [
+    "Cold War"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm25",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Ombres allégées\nDescription: Réduit la qualité des ombres lointaines pour gagner 15 images par seconde.\nFiles: Config/shadows.lua",
+   "tags": [
+    "Performance"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm26",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "era",
+   "text": "Name: Casques colorés\nDescription: Change seulement la couleur des casques des pilotes. Aucun effet sur le jeu.\nFiles: Bazar/World/Shapes/helmet.dds",
+   "tags": [
+    "Cosmetic"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm27",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "era",
+   "text": "Name: Stuka Sirenen\nDescription: Die Jericho-Trompete der Ju 87 mit originalen Aufnahmen aus dem Zweiten Weltkrieg.\nFiles: Sounds/Effects/Ju87/siren.ogg",
+   "tags": [
+    "WWII"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm28",
+   "task": "mod",
+   "lang": "de",
+   "vocab": "era",
+   "text": "Name: Tiger Hubschrauber\nDescription: Fügt den Eurocopter Tiger mit Visier und Raketen hinzu.\nFiles: Mods/aircraft/Tiger/entry.lua",
+   "tags": [
+    "Helicopters",
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm29",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "era",
+   "text": "Name: Portaaviones Juan Carlos I\nDescription: Buque de asalto anfibio de la Armada con cubierta para Harrier y helicópteros.\nFiles: Mods/tech/JCI/entry.lua",
+   "tags": [
+    "Naval",
+    "Modern"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm30",
+   "task": "mod",
+   "lang": "es",
+   "vocab": "era",
+   "text": "Name: Más FPS\nDescription: Configuración para ganar rendimiento en ordenadores modestos.\nFiles: Config/graphics.lua",
+   "tags": [
+    "Performance"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm31",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: A-10C Warthog Sharkmouth\nDescription: The famous shark mouth paint for the 23rd Fighter Group Warthogs.\nFiles: Liveries/A-10C/Shark/description.lua",
+   "tags": [
+    "Liveries",
+    "Aircraft"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm32",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Persian Gulf Night Lights\nDescription: Brighter city lights and highways at night over the Strait of Hormuz.\nFiles: Mods/terrains/PersianGulf/night.lua",
+   "tags": [
+    "Maps",
+    "Graphics"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm33",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Laser Guided Rockets\nDescription: APKWS rockets with laser guidance for the AH-64 and the A-10.\nFiles: Mods/weapons/APKWS/entry.lua",
+   "tags": [
+    "Weapons"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm34",
+   "task": "mod",
+   "lang": "en",
+   "vocab": "en",
+   "text": "Name: Trackir Profile Pack\nDescription: Head tracking curves for twelve modules, plus a small launcher that switches them.\nFiles: tools/profiles.exe",
+   "tags": [
+    "Utilities"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm35",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Hélico Puma - sons\nDescription: Nouveaux bruits de rotor et de turbine pour le Puma.\nFiles: Sounds/Effects/Puma/rotor.ogg",
+   "tags": [
+    "Sound"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "bm36",
+   "task": "mod",
+   "lang": "fr",
+   "vocab": "fr",
+   "text": "Name: Scénarios Balkans\nDescription: Huit missions d'interdiction au-dessus des Balkans, briefings en français.\nFiles: Missions/Balkans/B01.miz",
+   "tags": [
+    "Missions"
+   ],
+   "nsfw": false,
+   "blind": true
+  },
+  {
+   "id": "br01",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Crash when opening Modpacks\nBMM closes instantly each time I click Modpacks in the sidebar.",
+   "category": "crash",
+   "severity": "high",
+   "blind": true
+  },
+  {
+   "id": "br02",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Search box ignores accents\nTyping 'theme' does not find 'thème' in the palette.",
+   "category": "bug",
+   "severity": "low",
+   "blind": true
+  },
+  {
+   "id": "br03",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Activation of a 30 GB profile takes 25 minutes\nThe disk is at 100 % the whole time.",
+   "category": "performance",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "br04",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Update installer asks for admin every time\nEach update pops UAC twice and then fails with error 5.",
+   "category": "install",
+   "severity": "high",
+   "blind": true
+  },
+  {
+   "id": "br05",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Terrain mod and texture mod replace terrain.cfg.lua\nThe last enabled one always wins and breaks the other.",
+   "category": "mod_conflict",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "br06",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Close button hidden behind the title bar\nOn a 125 % scaled screen the X of the settings dialog is cut off.",
+   "category": "ui",
+   "severity": "low",
+   "blind": true
+  },
+  {
+   "id": "br07",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: My backup folder was wiped\nAfter restoring a snapshot, the Backups folder is empty and the originals are gone.",
+   "category": "bug",
+   "severity": "critical",
+   "blind": true
+  },
+  {
+   "id": "br08",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Could you add a portable mode?\nI would like to run BMM from a USB stick.",
+   "category": "other",
+   "severity": "low",
+   "blind": true
+  },
+  {
+   "id": "br09",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: BMM will not start after Windows update\nDouble-clicking does nothing; the log says 'WebView2 failed to initialize'.",
+   "category": "crash",
+   "severity": "critical",
+   "blind": true
+  },
+  {
+   "id": "br10",
+   "task": "report",
+   "lang": "en",
+   "text": "Title: Modlist export writes an empty file\nThe .mm file is 0 KB although I have 40 mods.",
+   "category": "bug",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "br11",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Plantage en ouvrant les Modpacks\nBMM se ferme d'un coup quand je clique sur Modpacks.",
+   "category": "crash",
+   "severity": "high",
+   "blind": true
+  },
+  {
+   "id": "br12",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : L'activation est très lente\nActiver un profil de 20 Go prend 15 minutes et le PC rame.",
+   "category": "performance",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "br13",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : La mise à jour demande les droits admin puis échoue\nErreur 5 après la fenêtre UAC.",
+   "category": "install",
+   "severity": "high",
+   "blind": true
+  },
+  {
+   "id": "br14",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Deux mods de terrain se remplacent\nLe dernier activé écrase terrain.cfg.lua de l'autre.",
+   "category": "mod_conflict",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "br15",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Texte coupé dans la barre latérale\nLe mot « Planificateur » est tronqué.",
+   "category": "ui",
+   "severity": "low",
+   "blind": true
+  },
+  {
+   "id": "br16",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Mes sauvegardes ont été effacées\nAprès une restauration, le dossier Backups est vide.",
+   "category": "bug",
+   "severity": "critical",
+   "blind": true
+  },
+  {
+   "id": "br17",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : Idée : un mode portable\nPouvoir lancer BMM depuis une clé USB.",
+   "category": "other",
+   "severity": "low",
+   "blind": true
+  },
+  {
+   "id": "br18",
+   "task": "report",
+   "lang": "fr",
+   "text": "Titre : BMM ne démarre plus\nDepuis la mise à jour de Windows, rien ne se passe au lancement.",
+   "category": "crash",
+   "severity": "critical",
+   "blind": true
+  },
+  {
+   "id": "br19",
+   "task": "report",
+   "lang": "de",
+   "text": "Titel: Absturz beim Öffnen der Modpacks\nBMM schließt sich sofort.",
+   "category": "crash",
+   "severity": "high",
+   "blind": true
+  },
+  {
+   "id": "br20",
+   "task": "report",
+   "lang": "es",
+   "text": "Título: La activación es muy lenta\nActivar un perfil de 20 GB tarda 15 minutos.",
+   "category": "performance",
+   "severity": "medium",
+   "blind": true
+  },
+  {
+   "id": "bd01",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Modpacks tab closes the app\nClicking Modpacks makes BMM disappear.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 0,
+   "blind": true
+  },
+  {
+   "id": "bd02",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Enabling a 40 GB profile takes forever\nHalf an hour of disk at 100 %.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 1,
+   "blind": true
+  },
+  {
+   "id": "bd03",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Error 5 when updating\nThe updater fails right after the admin prompt.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 2,
+   "blind": true
+  },
+  {
+   "id": "bd04",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Settings dialog X is not visible at 150 % scaling\nI cannot close it.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 3,
+   "blind": true
+  },
+  {
+   "id": "bd05",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Scheduler ignores my weekly task\nNothing ran on Sunday.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": null,
+   "blind": true
+  },
+  {
+   "id": "bd06",
+   "task": "dup",
+   "lang": "en",
+   "text": "Title: Dark theme too dark\nCould the background be lighter?",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": null,
+   "blind": true
+  },
+  {
+   "id": "bd07",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : L'onglet Modpacks fait planter BMM\nUn clic et l'application se ferme.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 0,
+   "blind": true
+  },
+  {
+   "id": "bd08",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Sauvegardes disparues après restauration\nLe dossier Backups est vide.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 4,
+   "blind": true
+  },
+  {
+   "id": "bd09",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Deux terrains se marchent dessus\nterrain.cfg.lua est remplacé par le dernier.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": 5,
+   "blind": true
+  },
+  {
+   "id": "bd10",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Le planificateur ne lance pas ma tâche\nRien ne s'est exécuté dimanche.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": null,
+   "blind": true
+  },
+  {
+   "id": "bd11",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Faute dans les réglages\nIl manque un accent.",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": null,
+   "blind": true
+  },
+  {
+   "id": "bd12",
+   "task": "dup",
+   "lang": "fr",
+   "text": "Titre : Question sur les dépôts\nComment partager un dépôt avec mon escadron ?",
+   "known": [
+    "Crash when opening the Modpacks screen",
+    "Profile activation is very slow on big profiles",
+    "Update fails with error 5 after UAC",
+    "Close button cut off on scaled screens",
+    "Backups folder emptied after a restore",
+    "Terrain mods overwrite each other"
+   ],
+   "dup": null,
+   "blind": true
+  }
+ ]
+}

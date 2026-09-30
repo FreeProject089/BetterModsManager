@@ -285,6 +285,11 @@ fn apply_settings(
     // A JS-side setting (localStorage bmm_telemetry_bench), so it is surfaced, not applied.
     // It only ever matters once telemetry consent has actually been given.
     res.telemetry_bench = s.get("telemetry_bench").and_then(|v| v.as_bool());
+    // "Send errors live" (live_issues.rs). An explicit answer, stored as is: it sends nothing
+    // on its own, only once telemetry consent is given in BMM's own dialog.
+    if let Some(v) = s.get("telemetry_live_errors").and_then(|v| v.as_bool()) {
+        settings.live_errors = Some(v);
+    }
     // Optional preferences the installer can pre-set (each a plain bool the user picked on
     // the Configuration page; absent key → BMM's own default is left untouched). Keys are
     // the flat form of the installer.toml `maps_to` (the `settings.` prefix is stripped).
@@ -442,6 +447,21 @@ mod tests {
         assert!(!settings.discord_rpc_enabled);
         assert_eq!(res.telemetry_preselect, None);
         assert_eq!(res.telemetry_bench, None);
+        assert_eq!(settings.live_errors, None, "undecided: BMM decides from the consent at first boot");
+    }
+
+    /// The live-errors box is an explicit answer either way, and never consent by itself.
+    #[test]
+    fn live_errors_box_is_stored_but_not_consent() {
+        for v in [true, false] {
+            let json = format!(r#"{{ "source":"betterinstaller", "settings": {{ "telemetry_live_errors": {v} }} }}"#);
+            let file: HandoffFile = serde_json::from_str(&json).unwrap();
+            let mut settings = crate::state::AppSettings::default();
+            apply_settings(&file.settings, &mut settings);
+            assert_eq!(settings.live_errors, Some(v));
+            assert_eq!(settings.analytics_consent, None);
+            assert!(!crate::commands::live_issues::effective(settings.analytics_consent, settings.live_errors));
+        }
     }
 
     #[test]

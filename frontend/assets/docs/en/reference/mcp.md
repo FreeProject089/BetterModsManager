@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-78 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+82 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -208,6 +208,10 @@ writes only the fields named. See [Optional AI](doc-page:features/ai).
 | `bmm_ai_status` | — |  | Whether the master switch is on, the chosen provider, which features may reach the network and why not, where keys are stored (never the keys). Works offline |
 | `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Name, version, author, description, tags and links read from the mod's own files; then, only if AI is on with a provider, tags ranked from the user's EXISTING tags by Laya, language and adult-content hints, and an optional description draft from the user's external API. Each suggestion carries its source and confidence. **Writes nothing** |
 | `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Writes the fields the user chose (name, version, author, description, existing tag ids up to 3 per mod, http(s) links) to data.json; any other key is refused |
+| `bmm_ai_ask` | `question`\*, `lang` en/fr, `scope` all/docs/mods, `limit`, `use_laya` |  | « Ask Laya », offline: answers a question about BMM or the user's mods from what EXISTS — the bundled documentation, help articles, palette commands, the user's mods, profiles and their scanned file lists. Returns `intent` (docs, setting, files, conflicts, mods, command), `hits` (kind, title, a snippet quoted from the source, score, action), `files` (which mod provides a file) and `conflicts` (pairs of mods providing the same files). Never generated text. Laya routes and ranks only when AI is on and the model is installed (`laya`, `laya_off` say which). Works with BMM closed |
+| `bmm_ai_pack_install` | — |  | Downloads, verifies (pinned SHA-256, mirrors in order) and installs the built-in Laya model pack (about 327 MB download) into the user's local app data, after a free-space check; resumes a partial download. Refused under `--no-ai`. Ask the user first |
+| `bmm_ai_pack_remove` | — |  | Removes the downloaded model pack (never the installer's copy); the classifier goes back to off if it was the built-in one |
+| `bmm_ai_test` | — |  | Classifies a fixed sample with the installed model and returns the answers, `ok` and the timings. None of the user's data, no network |
 
 ### Diagnostics
 
@@ -267,19 +271,19 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 78 tools with their parameters is exactly the list that rots the
+written by hand, because 82 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 78 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 82 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---
 
 ## See also
 
-- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 70 CLI subcommands for a terminal or a `.bat`
+- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 74 CLI subcommands for a terminal or a `.bat`
 - [Local API &amp; deeplinks](doc-page:reference/api) — the REST surface, its tokens and permissions
 - [Action reference](doc-page:reference/actions) — what plugins and the scheduler can trigger
 - [Extending BMM](doc-page:how-it-works/extending) — where the MCP server sits in the design

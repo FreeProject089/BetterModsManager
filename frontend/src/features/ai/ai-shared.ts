@@ -7,6 +7,7 @@
 // page asks for. That is on purpose — a rule enforced in the webview is a rule a page can skip.
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { escHtml } from '../../core/utils.js';
 import { bcRoot } from '../../core/links-config.js';
 import type { AiSettings } from './ai-model.js';
 
@@ -69,6 +70,7 @@ export function reasonText(note: string): string {
             in_use: t('ai.reason.embInUse'),
             busy: t('ai.reason.embInUse'),
             question_too_long: t('ai.reason.embTooLong'),
+            no_space: t('ai.reason.embNoSpace'),
         };
         return `${t('ai.src.embedded')} — ${emb[why] || t('ai.reason.embFailed', { why })}`;
     }
@@ -136,4 +138,57 @@ export function openAiDocs(): void {
     if (typeof w.openDocsPage === 'function') { w.openDocsPage('features/ai'); return; }
     if (typeof w.openDocsArticleById === 'function') { w.openDocsArticleById('ai-optional'); return; }
     (document.querySelector('.nav-item[data-view="docs"]') as HTMLElement | null)?.click();
+}
+
+// ── First use: « Laya is not installed — Install (327 MB) » where an AI feature appears ───────
+//
+// A dead button (« Suggest » that only ever says « files only ») teaches people the feature
+// does not work. Where the built-in model is the classifier (or none was picked yet) and it is
+// not installed, the dialog shows this instead: what it is, its size, one click — the same
+// Rust install as Settings (pinned SHA-256, resumable), with its progress inline.
+
+/** Should a dialog offer the install? Not when the user chose a server provider. */
+export function offerInstall(view: AiView | null): boolean {
+    const s = view?.settings;
+    const e = view?.status?.embedded || {};
+    if (!view || view.status?.killSwitch || e.installed) return false;
+    return !s || s.classifier === 'embedded' || s.classifier === 'off' || !s.classifier_chosen;
+}
+
+export function installPromptHtml(view: AiView | null): string {
+    const e = view?.status?.embedded || {};
+    const size = Number(e.downloadBytes) || 0;
+    const mb = size >= 1e6 ? `${Math.round(size / 1e6)} MB` : '';
+    return `<div class="ai-install-prompt" data-ai-install>
+        <span class="ai-install-text">${escHtml(t('ai.first.absent'))}</span>
+        <button type="button" class="btn btn-primary btn-sm" data-ai-install-go>${escHtml(t('ai.first.install', { size: mb }))}</button>
+        <span class="ai-muted" data-ai-install-status aria-live="polite"></span>
+      </div>`;
+}
+
+/** Wire the prompt(s) inside `root`. `onDone` runs once the model is installed. */
+export function wireInstallPrompt(root: HTMLElement, onDone: () => void): void {
+    root.querySelectorAll<HTMLElement>('[data-ai-install]').forEach((box) => {
+        const go = box.querySelector<HTMLButtonElement>('[data-ai-install-go]');
+        const out = box.querySelector<HTMLElement>('[data-ai-install-status]');
+        go?.addEventListener('click', async () => {
+            if (go) go.disabled = true;
+            const { listen } = await import('../../core/api.js');
+            const stop = await listen('ai-embedded-progress', (p: any) => {
+                const total = Number(p?.total) || 0;
+                const got = Number(p?.received) || 0;
+                if (out) out.textContent = p?.phase === 'download' && total ? `${Math.floor((got * 100) / total)} %` : t('ai.emb.checking');
+            });
+            try {
+                await invoke('ai_embedded_install');
+                stop();
+                if (out) out.textContent = t('ai.first.done');
+                onDone();
+            } catch (e) {
+                stop();
+                if (go) go.disabled = false;
+                if (out) out.textContent = reasonText(String((e as Error)?.message || e));
+            }
+        });
+    });
 }

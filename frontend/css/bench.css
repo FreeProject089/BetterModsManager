@@ -1,0 +1,169 @@
+/* ═══ Benchmark + Live monitor (features/bench/benchmark.ts links this file on first open) ══
+   Built on the modal shell (modal-shell.css: .bms, .bms-head, .bms-tabs, .bms-chip, .bms-card).
+   Theme tokens only. Chart series colours are the --bmm-chart-* tokens the theme editor
+   exposes; operation categories use the semantic tokens (purple, cyan, info, warning,
+   success) passed in as --c. Numbers are tabular so a live value never makes its line jump. */
+
+#modal-advanced-perf-overlay { z-index: 100003; }
+#modal-advanced-perf-overlay .modal.bms { width: min(100%, 1180px); max-width: 1180px; }
+.pf-view { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pf-view[hidden] { display: none !important; }
+.pf-mono, .pf-num { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; }
+
+/* ── Live: toolbar ───────────────────────────────────────────────────────────────────────── */
+.pf-toolbar { padding: 2px 0; }
+.pf-toolbar .btn { display: inline-flex; align-items: center; gap: 7px; }
+.pf-adv { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); cursor: pointer; user-select: none; }
+.pf-rec-ic { width: 9px; height: 9px; border-radius: 2px; background: currentColor; flex: none; }
+.pf-rec-ic.is-play { width: 0; height: 0; border-radius: 0; background: none; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; }
+
+/* ── Live: stat cards with a sparkline ──────────────────────────────────────────────────── */
+.pf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 158px), 1fr)); gap: 12px; }
+.pf-stats[hidden] { display: none; }
+.pf-stat.glass-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px 0;
+    min-height: 112px;
+    border-radius: var(--bmm-radius-card);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    overflow: hidden;
+    backdrop-filter: none;
+    box-shadow: none;
+}
+.pf-stat-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pf-stat-h .bms-label { display: inline-flex; align-items: center; gap: 6px; }
+.pf-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--bmm-accent)); flex: none; }
+.pf-stat-v { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 800; color: var(--bmm-text-primary); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-stat-v small { font-size: 13px; font-weight: 600; color: var(--bmm-text-secondary); margin-left: 2px; }
+.pf-stat-aux { min-height: 16px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-spark { display: block; width: calc(100% + 32px); height: 34px; margin: auto -16px 0; }
+.pf-stat.is-adv { min-height: 0; padding-bottom: 14px; }
+.pf-help { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; font-weight: 800; color: var(--bmm-text-secondary); border: 1px solid var(--bmm-border-hover); cursor: help; }
+
+/* ── Live: charts ───────────────────────────────────────────────────────────────────────── */
+.pf-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 12px; }
+.pf-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--bmm-text-secondary); }
+.pf-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pf-legend b { color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
+.pf-canvas-wrap { position: relative; height: 240px; min-width: 0; }
+.pf-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+.pf-tip {
+    position: absolute;
+    top: 8px;
+    z-index: 2;
+    pointer-events: none;
+    min-width: 150px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    box-shadow: var(--bmm-shadow-card);
+    font-size: 12px;
+    color: var(--bmm-text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.pf-tip[hidden] { display: none; }
+.pf-tip-t { font-weight: 700; color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); padding-bottom: 3px; border-bottom: 1px solid var(--bmm-border); margin-bottom: 2px; }
+.pf-tip-r { display: flex; align-items: center; gap: 6px; }
+.pf-tip-r b { margin-left: auto; padding-left: 12px; color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; }
+
+/* ── Live: timeline / replay ────────────────────────────────────────────────────────────── */
+.pf-track { position: relative; height: 40px; border-radius: 9px; background: var(--bmm-s04); border: 1px solid var(--bmm-border); cursor: pointer; overflow: hidden; }
+.pf-track canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#timeline-seek-handle { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; border-radius: 2px; background: var(--bmm-accent); box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+.pf-track:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+
+/* ── Benchmark: setup ───────────────────────────────────────────────────────────────────── */
+.pf-setup { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 16px 22px; }
+.pf-setup .btn-lg { height: 40px; padding: 0 22px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
+.pf-custom { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); }
+.pf-custom input { width: 80px; height: 32px; padding: 0 8px; text-align: right; font: inherit; font-weight: 700; color: var(--bmm-text-primary); background: var(--bmm-s04); border: 1px solid var(--bmm-border-hover); border-radius: var(--bmm-radius-input); }
+.pf-callout { margin: 0; padding: 10px 14px; border-radius: 10px; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-primary); background: var(--bmm-warning-dim); border: 1px solid color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); }
+.pf-src-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 168px; overflow-y: auto; padding: 2px; }
+.bench-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bmm-s04); border: 1px solid var(--bmm-border-hover); color: var(--bmm-text-secondary); font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: var(--bmm-transition-fast); }
+.bench-chip:hover { color: var(--bmm-text-primary); border-color: var(--bmm-s20); }
+.bench-chip.active { background: var(--bmm-accent); border-color: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+.pf-count { font-size: 10.5px; font-weight: 700; color: var(--bms-accent-ink); background: var(--bmm-accent-dim); padding: 2px 8px; border-radius: 99px; text-transform: none; letter-spacing: 0; }
+
+/* ── Benchmark: running (stages) ────────────────────────────────────────────────────────── */
+.pf-run-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--bmm-text-secondary); }
+.pf-run-h b { color: var(--bmm-text-primary); font-size: 13.5px; }
+.pf-run-pct { font-family: var(--bmm-font-mono); font-weight: 800; color: var(--bmm-text-primary); font-size: 15px; }
+.pf-stages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; }
+.pf-stages li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--bmm-text-secondary); min-width: 0; }
+.pf-stages li span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-st-ic { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; border: 1.5px solid var(--bmm-border-hover); }
+.pf-stages li.is-done .pf-st-ic { background: var(--bmm-success); border-color: var(--bmm-success); color: var(--bmm-text-on-accent); }
+.pf-stages li.is-done .pf-st-ic::after { content: ''; width: 7px; height: 4px; border: solid currentColor; border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
+.pf-stages li.is-now { color: var(--bmm-text-primary); font-weight: 700; }
+.pf-stages li.is-now .pf-st-ic { border-color: var(--bmm-accent); border-top-color: transparent; animation: spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .pf-stages li.is-now .pf-st-ic { animation-duration: 2.4s; } }
+
+/* ── Benchmark: intro ───────────────────────────────────────────────────────────────────── */
+.pf-ops-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pf-ops-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; background: var(--bmm-s03); border: 1px solid var(--bmm-border); font-size: 12.5px; color: var(--bmm-text-primary); }
+
+/* ── Benchmark: results ─────────────────────────────────────────────────────────────────── */
+.pf-res-head { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; }
+.pf-env { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 158px), 1fr)); gap: 12px; }
+.pf-kpi { padding: 12px 14px; border-radius: var(--bmm-radius-card); border: 1px solid var(--bmm-border); background: var(--bmm-s02); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pf-kpi-v { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 800; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-kpi-s { font-size: 11.5px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-res-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px; }
+.pf-res-charts svg { display: block; width: 100%; height: auto; }
+.pf-ops { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 10px; }
+.pf-op { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); min-width: 0; border-left: 3px solid var(--c, var(--bmm-accent)); }
+.pf-op-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.pf-op-name { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); min-width: 0; }
+.pf-op-v { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-weight: 800; font-size: 15px; color: var(--bmm-text-primary); white-space: nowrap; }
+.pf-op-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 11.5px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+.pf-op-meta .pf-mono { color: var(--bmm-text-secondary); }
+.pf-bar { height: 6px; border-radius: 999px; background: var(--bmm-s08); overflow: hidden; }
+.pf-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--c, var(--bmm-accent)); }
+.pf-op-d { font-size: 12px; line-height: 1.55; color: var(--bmm-text-secondary); margin: 0; }
+.pf-delta { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid var(--bmm-border-hover); color: var(--bmm-text-secondary); background: var(--bmm-s04); }
+.pf-delta--better { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); background: var(--bmm-success-dim); border-color: color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border)); }
+.pf-delta--worse { color: color-mix(in srgb, var(--bmm-danger) 55%, var(--bmm-text-primary)); background: var(--bmm-danger-dim); border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); }
+
+.pf-table-wrap { overflow-x: auto; }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pf-table th { text-align: right; padding: 7px 10px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bmm-text-secondary); white-space: nowrap; border-bottom: 1px solid var(--bmm-border-hover); }
+.pf-table th:first-child, .pf-table td:first-child { text-align: left; }
+.pf-table td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--bmm-border); color: var(--bmm-text-secondary); font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; }
+.pf-table td:first-child { font-family: inherit; font-weight: 600; color: var(--bmm-text-primary); }
+.pf-table td.pf-best { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); font-weight: 800; }
+.pf-table tr:hover td { background: var(--bmm-s03); }
+
+/* ── Mini monitor (floats over the app, outside any modal) ──────────────────────────────── */
+#bmm-mini-monitor.pf-mini {
+    position: fixed; top: 100px; right: 40px; z-index: 2000000;
+    width: 280px; padding: 14px 16px; border-radius: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--bmm-border-hover);
+    box-shadow: var(--bmm-shadow-modal);
+    cursor: grab; transition: opacity 0.3s;
+}
+.pf-mini-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pf-mini-h .bms-label { display: inline-flex; align-items: center; gap: 7px; pointer-events: none; white-space: nowrap; }
+.pf-mini-btns { display: flex; align-items: center; gap: 2px; }
+.pf-mini-btn { display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--bmm-text-secondary); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.pf-mini-btn:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+.pf-mini-btn.is-stop { border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary)); }
+.pf-mini-btn.is-start { border-color: color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border)); color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary)); }
+.pf-mini-row { display: grid; grid-template-columns: 38px 1fr 52px; align-items: center; gap: 10px; pointer-events: none; }
+.pf-mini-row .bms-label { font-size: 10px; }
+.pf-mini-row .pf-bar > span { transition: width 0.3s ease; }
+.pf-mini-val { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-size: 11.5px; font-weight: 800; color: var(--bmm-text-primary); text-align: right; }
+
+@media (max-width: 720px) {
+    .pf-charts, .pf-res-charts, .pf-ops { grid-template-columns: 1fr; }
+    .pf-canvas-wrap { height: 200px; }
+}
+.pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -62,6 +62,9 @@ pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enab
     let _ = state.save();
     // Declining wipes anything we'd buffered (right to erasure).
     if !enabled { let _ = std::fs::remove_file(queue_path(&app_handle)); }
+    // Live errors ride on the same consent: off stops them and wipes their queue too.
+    let live = state.data.lock().ok().and_then(|d| d.settings.live_errors);
+    crate::commands::live_issues::on_consent_changed(Some(enabled), live);
     log_line(format!("[ANALYTICS] consent set to {}", enabled));
     Ok(())
 }
@@ -425,7 +428,7 @@ pub fn analytics_track(
 /// http to LOOPBACK (localhost / 127.0.0.1 / *.localhost) so the desktop app can post
 /// to a local BCWEB/telemetry stack without an HTTPS tunnel. Never plaintext to a
 /// non-loopback host (that would leak telemetry in the clear over the network).
-fn endpoint_allowed(e: &str) -> bool {
+pub(crate) fn endpoint_allowed(e: &str) -> bool {
     let e = e.trim();
     e.starts_with("https://")
         || e.starts_with("http://localhost")

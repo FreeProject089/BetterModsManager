@@ -52,6 +52,25 @@ fenêtre compte les fichiers qui changeraient de main.
 
 ---
 
+## Depuis la Bibliothèque de mods
+
+Pas besoin de quitter la bibliothèque pour voir ou changer l'ordre du profil qu'elle affiche :
+
+| Où | Ce que tu obtiens |
+|---|---|
+| L'icône de liste à côté du menu de tri | La vue complète de l'ordre ci-dessus, pour le profil de la bibliothèque |
+| Le panneau de détail d'un mod | Un encadré **Ordre d'activation** : sa position (*Position 3 sur 12*), qui il écrase et qui l'écrase, et En haut / Monter / Descendre / En bas |
+| Clic droit sur la carte d'un mod | Les mêmes quatre déplacements, et **Ouvrir l'ordre complet** |
+| `Alt+↑` / `Alt+↓` / `Alt+Début` / `Alt+Fin` | Déplacer le mod sélectionné (commandes de la bibliothèque, réassignables comme les autres) |
+
+Un déplacement fait depuis la bibliothèque s'applique tout de suite : pas de brouillon, le nouvel
+ordre est enregistré et seuls les fichiers qui changent de main sont recopiés, exactement comme
+**Appliquer l'ordre**. Le badge `#N` de chaque carte active est sa position, et le tri **Ordre
+d'Activation** range la bibliothèque dans cet ordre. Un mod désactivé n'a pas de position : active-le
+d'abord, il rejoint la fin.
+
+---
+
 ## Ce qu'écrit « Appliquer l'ordre »
 
 Le nouvel ordre est enregistré, puis **seuls les fichiers dont le gagnant a changé** sont recopiés,

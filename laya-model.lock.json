@@ -68,5 +68,46 @@
       "8-bit MatMul + fp16 embedding": "548 MB, 98.92%",
       "fp32 export": "1291 MB, 100%"
     }
+  },
+  "pipeline": {
+    "note": "« Laya v2 » (src-tauri/src/commands/ai_laya.rs): what BMM asks and how the answers are combined. Measured by measure_pipeline (src-tauri/src/commands/ai_eval.rs) on src-tauri/tests/laya_eval.json (scripts/laya/eval_set.py): 156 tuning items (weights fitted on the even ids) + 68 BLIND items written after the freeze and never tuned on. Int8 pack, CPU, 2 threads, Sept 2026.",
+    "tuning_before_after": {
+      "tags_f1": "0.438 -> 0.903 (P 0.561 -> 0.919, R 0.360 -> 0.888); first tag right 25/64 -> 58/64",
+      "language_mods": "26.6 % -> 90.6 % right (precision 98.3 %, coverage 92.2 %): the stop-word/letter detector; Laya is not asked (37 % right on prose)",
+      "language_snippets": "15.0 % -> 90.0 % right (precision 100 %)",
+      "adult": "62/64 -> 64/64",
+      "report_category": "50.0 % -> 64.6 %",
+      "report_severity": "29.2 % -> 60.4 % (category prior + escalation words, Laya as tie-breaker)",
+      "duplicates": "14/24 right, 9 false duplicates -> 19/24, 0 false duplicates"
+    },
+    "blind_before_after": {
+      "tags_f1": "0.161 -> 0.364 (P 0.385 -> 0.500); 30 of the 36 mods use tags BMM has no concept for (eras, Multiplayer, Cosmetic): 0.154 -> 0.338 on those, 0.200 -> 0.500 on known tags",
+      "language_mods": "22.2 % -> 77.8 % right (precision 100 %, coverage 77.8 %)",
+      "report_category": "35 % -> 55 %",
+      "report_severity": "40 % -> 50 %",
+      "duplicates": "10/12 right, 2 false -> 8/12, 0 false (missed 4)"
+    },
+    "latency": "per item, int8 pack, 2 threads: median 732 ms, p90 1033 ms (tuning) / median 725 ms (blind); was median 470 ms, p90 2755 ms: fewer, better-targeted questions per mod (at most 10 candidates + 1 choice + adult content, against 16 yes/no + 2 before)",
+    "honesty": "The keyword evidence lists in ai_laya.rs were written knowing the tuning items: the tuning figures are optimistic; the blind figures are the ones to quote."
+  },
+  "router": {
+    "note": "Should BMM ship a second pack? The same questions re-asked (scripts/laya/compare_packs.py) with fp32 PyTorch checkpoints and scored by the bench's own rules (BMM_LAYA_EVAL_REPLAY), on the ENGLISH items only (28 mods, 20 reports, 12 dups tuning; 22 mods, 10 reports, 6 dups blind).",
+    "checkpoints": {
+      "convaiinnovations/laya": {
+        "revision": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+        "model.safetensors": "891102d372688fc2a094dac56a384bc537b87c63f21f9f3dac0be2b7cbc8d86c",
+        "size": 842609210,
+        "encoder": "ModernBERT-large, 421 M, 512 tokens, English"
+      },
+      "convaiinnovations/laya-typed-decisions": "not measured: trained for invoices, security incidents, customer service and agent traces (its model card); nothing BMM asks"
+    },
+    "english_items_v2": {
+      "multilingual_int8_shipped": "tuning tags F1 0.850, category 65 %, severity 65 %, dups 10/12 | blind tags F1 0.408, category 60 %, severity 50 %, dups 4/6",
+      "multilingual_fp32": "tuning tags F1 0.850, category 60 %, severity 60 %, dups 9/12 | blind tags F1 0.400, category 60 %, severity 50 %, dups 4/6",
+      "english_fp32": "tuning tags F1 0.875, category 65 %, severity 60 %, dups 11/12 | blind tags F1 0.431, category 70 %, severity 80 %, dups 3/6",
+      "ensemble_mean(english_fp32, multilingual_int8)": "tuning tags F1 0.872, category 65 %, severity 60 %, dups 10/12 | blind tags F1 0.511 (P 0.750), category 70 %, severity 70 %, dups 3/6",
+      "latency": "english fp32 took 1.9x the time of multilingual fp32 on the same calls (569 s vs 294 s, 10 threads)"
+    },
+    "decision": "ONE pack shipped. The English checkpoint helps a little on English text (blind tag F1 +0.10 in an ensemble, on 22 mods) and nothing on the nine other languages, for a second ~450 MB download, ~2x the latency and the RAM of two models. The router (ai_laya::route, ai_embedded::packs) is in place: adding it = export + quantize with scripts/laya/build_pack.py, publish the zip as a release asset, pin it here and in ai_embedded.rs."
   }
 }

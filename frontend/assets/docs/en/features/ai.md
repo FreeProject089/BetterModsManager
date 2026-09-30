@@ -44,8 +44,26 @@ works. It is a separate **model pack** (327 MB to download, 404 MB on disk):
 ticked by default: setup downloads the pack once, refuses it unless it matches its pinned
 SHA-256, and unpacks it into `<install folder>\models\laya`. If you unticked it, **Settings → AI
 → Laya built in → Install the model** downloads the same pack into
-`%LOCALAPPDATA%\com.bettermm.desktop\models\laya` (with a progress bar; an interrupted download
-resumes). **Remove the model** deletes that copy; the installed one goes with the uninstaller.
+`%LOCALAPPDATA%\com.bettermm.desktop\models\laya`. The block always shows ONE state:
+
+| State | What you see |
+|---|---|
+| Not installed | the size (327 MB), the disk space it needs and what is free, **Install** |
+| Downloading | a bar, the speed, the time left and the server in use; **Pause** keeps what was received, **Cancel** deletes it |
+| Paused | how much is already there, **Resume** or **Discard** |
+| Verifying, unpacking | the SHA-256 of the download, then of every file, against their pins |
+| Installed / loaded | where, how big, **Test Laya**, **Open the folder**, **Remove the model** |
+| Update available | an older pack is on disk (the pins changed): **Update** |
+| Not enough space | checked **before** the download, never at 99 % |
+| Error | the reason, **Try again** and **Open the folder** |
+
+The pack comes from BMM's GitHub release, and from the BetterCommunity mirror when GitHub does not
+answer: both serve the same pinned file, so a mirror can serve a bad file but never get it
+installed. **Test Laya** classifies a fixed sample (no data of yours) and shows the answer and the
+time it took. Where an AI feature appears and the model is missing (the *Suggest details* dialog,
+*Ask Laya*), a line says so with an **Install Laya (327 MB)** button instead of a button that
+silently does less. **Remove the model** deletes the downloaded copy; the installed one goes with
+the uninstaller.
 
 **What it costs.** Nothing until you click: the model is loaded on the first question (about
 1.5 s), off the interface thread, with two CPU threads, and released after 5 minutes without
@@ -54,6 +72,79 @@ Each file is checked against its pin before it is loaded.
 
 When the pack is installed and you have not picked a provider yourself, the built-in engine is
 the provider. Every feature still waits for your click, and the master switch still turns it all off.
+
+## How precise it is
+
+Laya is a calibrated classifier: it picks an option or gives a probability. What BMM **asks** it
+decides how good the answers are, so the questions were rebuilt and measured on a hand-labelled
+set of BMM-shaped texts (mod manifests and readmes, bug reports, earlier-report lists, in ten
+languages): 156 items the settings were tuned on, and 68 **blind** items written afterwards and
+never tuned on. The blind column is the honest one.
+
+| | Before | After, tuning set | After, blind set |
+|---|---|---|---|
+| Tags (F1) | 0.44 / 0.16 blind | **0.90** | **0.36** (0.50 on tags BMM knows, 0.34 on others) |
+| Language hint | 27 % right | **91 %** (98 % of shown hints right) | **78 %** (100 % of shown hints right) |
+| Report category | 50 % / 35 % blind | **65 %** | **55 %** |
+| Report severity | 29 % / 40 % blind | **60 %** | **50 %** |
+| Duplicate report | 9 false alarms on 24 | **0** false alarms, 19/24 right | **0** false alarms, 8/12 right |
+
+What changed:
+
+- **Descriptive criteria.** A tag is asked as what it means: *Weapons: the mod adds or changes
+  weapons: guns, missiles, bombs*. BMM recognises a tag's meaning in ten languages (« Armes »,
+  « Waffen », « Оружие »…); a tag it does not know keeps its own name.
+- **Keywords first.** The mod's text is searched for evidence of each tag; Laya is asked about
+  the few candidates left (at most 10), with one yes/no each and one choice among them.
+- **The right part of the text.** File lists read as English whatever the readme's language: the
+  language hint reads the prose only, and a long report is cut to its title and error lines.
+- **Measured, then kept or dropped.** Laya turned out to be no language identifier (37 % right):
+  the language hint is a stop-word and letter detector. For severity it answered « medium » to
+  almost everything: the kind of problem sets the severity (a crash is high, a typo low, lost data
+  critical) and Laya only breaks ties.
+- **Abstention.** Under a calibrated probability, nothing is suggested: a missing hint costs less
+  than a wrong one.
+
+Tags the concept list does not know (an era, *Multiplayer*, *Cosmetic*) stay the weak spot: there
+the model alone judges the tag's name, and it is right about a third of the time.
+
+## Ask Laya
+
+**Ctrl+K → Ask Laya** (or type a question in the palette, or **Ask Laya** in Help & other) takes a
+question in plain words: *which mod modifies engine.ogg?*, *which mods conflict?*, *what is game
+mode?*, *how do I export my mod list?* The answer is a list of things that exist, each with its
+action, never written text:
+
+- the documentation sections and help articles, quoted, with **Open**;
+- the settings and the palette commands, with **Go to** / **Run**;
+- for a file, the mods that provide it and the matching paths, enabled ones first;
+- for conflicts, the pairs of mods that provide the same files (readmes ignored), with a sample.
+
+It searches the bundled documentation, the Settings screen, your mods (name, description, tags,
+scanned file list) and profiles, with keyword rules for the kind of question. When AI is on and the
+model is installed, Laya picks the best of the top candidates (right answer in the top 3 for 34 of
+36 benchmark questions, 31 without it), and says so when none of them seems to fit. Everything
+runs on this PC; the question is not stored.
+
+The library's search box has a **smart search** toggle (the spark icon): on, the query also matches
+descriptions and tags, and the list follows that ranking.
+
+## Several models, one pipeline
+
+The work is split in stages, and each one says whether it can reach the network (`bmm ai-status`,
+`pipeline`):
+
+1. **Read** — the mod's files, keyword evidence, the language detector, the report masking.
+   Always, offline.
+2. **Classify** — Laya decides and filters, never writes: the built-in pack, your own laya-serve, or
+   BetterCommunity's server.
+3. **Draft** — a description draft from your external API, only if you configured one, never
+   applied without your click.
+
+BMM ships **one** model pack, the multilingual one. A router picks the pack per language and can
+average two; the English checkpoint was measured as a second pack and only helped a little on
+English text (tag F1 +0.10 on 22 blind mods, in an average with the multilingual one) for a second
+450 MB download and twice the time, so it is not shipped.
 
 ## Providers
 
@@ -152,6 +243,10 @@ The switch lives in `ai-settings.json` beside `data.json`; keys are in `ai-secre
 | `bmm_ai_status` | `ai-status` | The settings and what may reach the network (never a key) |
 | `bmm_ai_suggest_mod_metadata` | `ai-suggest <mod-id> [--offline] [--draft]` | The same suggestions as the dialog. **Writes nothing** |
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Writes the fields named, with the dialog's validation |
+| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--json]` | *Ask Laya*: the docs, settings, commands, mods, files and conflicts that answer, as structured results |
+| `bmm_ai_pack_install` | `ai-install` | Downloads, checks and installs the model pack (live progress in the CLI) |
+| `bmm_ai_pack_remove` | `ai-remove` | Removes the downloaded model pack |
+| `bmm_ai_test` | `ai-test` | Classifies a fixed sample, with the timings |
 
 The CLI and the MCP server use the same built-in engine as the app when the model pack is
 installed (the same files, the same caps), so they work offline too. An agent must show the

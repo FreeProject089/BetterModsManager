@@ -952,3 +952,172 @@
 .mapper-arch-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mapper-arch-opt-t { font-weight: 700; color: var(--text-primary); }
 .mapper-arch-opt-d { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+/* ═══ Mapper page: hierarchy, toolbar, density, empty states (design pass) ═══════════════════
+   Scoped to #view-mapper (and the mapper's own dialogs) so it outranks the older rules above
+   and main.css's #view-mapper block without touching them. Tokens only; accent is a FILL or a
+   ring, and accent-coloured text goes through --mp-accent-ink (readable on BMM White too).
+   Text that must be read is --text-secondary, never -muted (2.3:1 on these panels). */
+#view-mapper {
+    --mp-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
+}
+#view-mapper .view-subtitle { color: var(--bmm-text-secondary); }
+
+/* Header: the title, then ONE toolbar row under it: where you work (profile, refresh, new
+   folder) on the left, what you do with the result (preview, apply, learn more) on the right.
+   It was a 440px boxed card of two rows beside the title, taller than the tree headers. */
+#view-mapper > .view-header { align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 16px; }
+#view-mapper .view-actions.mapper-actions {
+    width: auto;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-left: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    backdrop-filter: none;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+#view-mapper .mapper-profile-wrap { flex: 0 1 260px; max-width: 260px; height: 36px; background: var(--bmm-s04); border-color: var(--bmm-border-hover); }
+#view-mapper .mapper-profile-wrap:focus-within { box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+#view-mapper .mapper-profile-ic { color: var(--bmm-text-secondary); }
+#view-mapper .view-actions .btn { height: 36px; }
+#view-mapper .mapper-icon-btn { width: 36px; height: 36px; }
+#view-mapper .mapper-actions-sep { margin: 0 0 0 auto; width: 0; background: none; }
+
+/* Two panels, one gutter. The markup keeps a 20px spacer <div> between them; the container
+   gap already spaces them, so the spacer goes. */
+#view-mapper .mapper-container { gap: 16px; margin-top: 0; min-height: 420px; }
+#view-mapper .mapper-container > div:not(.mapper-panel) { display: none; }
+
+/* Panel = one card: a full-bleed header band, the tree, a footer. It was a card with padding
+   holding a second rounded box (the header), which read as a card inside a card. */
+#view-mapper .mapper-panel.glass-card {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    border-radius: var(--bmm-radius-card);
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    backdrop-filter: none;
+}
+#view-mapper .panel-header {
+    padding: 14px 16px;
+    gap: 10px;
+    border-radius: var(--bmm-radius-card) var(--bmm-radius-card) 0 0;
+    border-bottom: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+#view-mapper .panel-title { font-size: 13.5px; font-weight: 800; color: var(--bmm-text-primary); letter-spacing: -0.005em; }
+#view-mapper .panel-header > .panel-header-sub { min-height: 34px; }
+#view-mapper .game-path-display {
+    margin: 0;
+    padding: 0 10px;
+    height: 34px;
+    line-height: 32px;
+    display: block;
+    font-family: var(--bmm-font-mono);
+    font-size: 11.5px;
+    color: var(--bmm-text-secondary);
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-input);
+}
+#view-mapper .bmm-input-small {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    color: var(--bmm-text-primary);
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border-hover);
+    border-radius: var(--bmm-radius-input);
+}
+#view-mapper .bmm-input-small::placeholder { color: var(--bmm-text-secondary); opacity: 0.85; }
+#view-mapper .bmm-input-small:focus { background: var(--bmm-s06); border-color: var(--bmm-accent); box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+
+#view-mapper .btn-icon-small {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    color: var(--bmm-text-secondary);
+    background: transparent;
+    border-color: var(--bmm-border-hover);
+}
+#view-mapper .btn-icon-small:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); border-color: var(--bmm-border-accent); }
+#view-mapper .btn-icon-small:focus-visible,
+#view-mapper .tree-item:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+
+/* The tree: UI font (names read faster than in mono), 30px rows, folders in the accent INK. */
+#view-mapper .panel-content { padding: 8px; }
+#view-mapper .file-tree { font-family: var(--bmm-font-sans); font-size: 12.5px; }
+#view-mapper .tree-item { padding: 5px 10px; min-height: 30px; border-radius: 7px; transition: background var(--bmm-transition-fast); }
+#view-mapper .tree-item:hover { background: var(--bmm-s05); }
+#view-mapper .tree-item.folder { color: var(--mp-accent-ink); font-weight: 600; }
+#view-mapper .tree-item.file { color: var(--bmm-text-secondary); }
+#view-mapper .tree-item.selected { color: var(--bmm-text-primary); }
+#view-mapper .tree-children { margin-left: 16px; border-left-color: var(--bmm-border-hover); }
+
+/* Empty and "no results" states: an icon tile, then the sentence, in reading colours. It was
+   italic monospace at 2.3:1, which read as a disabled placeholder rather than as guidance.
+   The icon is a MASK filled with --text-secondary, so it follows the theme; tile and icon
+   share the first grid cell and the sentence falls into the second. */
+#view-mapper .empty-hint {
+    display: grid;
+    justify-items: center;
+    align-items: center;
+    row-gap: 12px;
+    padding: 44px 20px;
+    font-family: var(--bmm-font-sans);
+    font-style: normal;
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--bmm-text-secondary);
+}
+#view-mapper .empty-hint::before,
+#view-mapper .empty-hint::after { content: ''; grid-area: 1 / 1; }
+#view-mapper .empty-hint::before { width: 42px; height: 42px; border-radius: 12px; background: var(--bmm-s05); border: 1px solid var(--bmm-border); }
+#view-mapper .empty-hint::after {
+    width: 20px;
+    height: 20px;
+    background: var(--bmm-text-secondary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#view-mapper .empty-hint.error { color: var(--bmm-danger); }
+
+#view-mapper .panel-foot-hint { color: var(--bmm-text-secondary); padding: 9px 16px; }
+#view-mapper .panel-legend { opacity: 1; padding: 9px 16px; border-top-color: var(--bmm-border); }
+#view-mapper .panel-legend .legend-item { color: var(--bmm-text-secondary); }
+
+
+/* ── The mapper's dialogs. Their markup in index.html carries inline styles; these rules
+      restate the parts that broke: a hard-coded white title on BMM White, muted body text, a
+      footer wash that was the page background, an all-caps confirm button. Owner: dropping
+      those inline styles from index.html makes the !important below unnecessary. ────────── */
+#modal-mapper-input .modal,
+#modal-mapper-confirm .modal { border-radius: 16px !important; border-color: var(--bmm-border-hover) !important; }
+#modal-mapper-input .modal-header,
+#modal-mapper-confirm .modal-header { padding: 18px 22px !important; background: var(--bmm-s02) !important; border-bottom-color: var(--bmm-border) !important; }
+#mapper-confirm-title,
+#mapper-input-title { color: var(--bmm-text-primary) !important; font-size: 16px !important; }
+#modal-mapper-input .modal-header p,
+#modal-mapper-confirm .modal-header p { color: var(--bmm-text-secondary) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; font-size: 12px !important; }
+#modal-mapper-input .modal-body,
+#modal-mapper-confirm .modal-body { padding: 20px 22px !important; }
+#mapper-input-label,
+#mapper-confirm-message { color: var(--bmm-text-secondary) !important; }
+#mapper-input-field { background: var(--bmm-s04) !important; border-color: var(--bmm-border-hover) !important; height: 40px !important; border-radius: var(--bmm-radius-input) !important; }
+#modal-mapper-input .modal-footer,
+#modal-mapper-confirm .modal-footer { padding: 14px 22px !important; background: var(--bmm-s02) !important; border-top: 1px solid var(--bmm-border); }
+#modal-mapper-input .modal-footer .btn,
+#modal-mapper-confirm .modal-footer .btn { text-transform: none !important; letter-spacing: 0 !important; min-height: 36px; }
+#btn-mapper-input-cancel,
+#btn-mapper-confirm-cancel { color: var(--bmm-text-secondary) !important; }
+
+/* Context menu: reading colours and a tighter row. */
+#mapper-context-menu .menu-item { color: var(--bmm-text-secondary); padding: 8px 12px; font-size: 13px; }
+#mapper-context-menu .menu-item:hover { color: var(--bmm-text-primary); }
+#mapper-context-menu .menu-item.danger:hover { color: var(--bmm-danger); background: var(--bmm-danger-dim); }

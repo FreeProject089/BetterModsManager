@@ -12,6 +12,7 @@ import { checkAllConflicts, restoreConflictCache } from './mods-conflicts.js';
 import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity, requestCancelModOps, requestCancelCurrentOnly } from './mods-actions.js';
 import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
+import { initLibOrder } from './lib-order.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -48,6 +49,7 @@ export async function initMods() {
     wireLangRerender();
     window._refreshModsFn = refreshMods;
     ensureModCancelContextMenu();
+    initLibOrder(toast);
     // --- Core Listeners ---
     document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
     document.getElementById('btn-quick-apply-modpack')?.addEventListener('click', openQuickApplyModal);
@@ -207,6 +209,9 @@ export async function initMods() {
         S.searchQuery = e.target.value.toLowerCase();
         renderModList(true);
     });
+    // « Smart » toggle beside the box (features/ai/ai-ask.ts), loaded after the list is up.
+    if (searchInput)
+        setTimeout(() => { void import('../ai/ai-ask.js').then((m) => m.mountSmartSearch(searchInput, () => renderModList(true))).catch(() => { }); }, 0);
     // Sort
     const sortSelect = document.getElementById('mod-sort');
     sortSelect?.addEventListener('change', async (e) => {

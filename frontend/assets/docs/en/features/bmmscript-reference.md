@@ -24,7 +24,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `modpack.delete` | Deletes a modpack file. The mods it lists are left alone. | `id` |
 | `mod.enable` | Activate one mod | `id` |
 | `mod.disable` | Deactivate one mod | `id` |
-| `mods.order` | Move a mod in the deployment order. Two active mods that ship the same file do not merge — the one deployed last is the one on disk. | `order` · `id` · `mode` |
+| `mods.order` | Move a mod in the deployment order. When two mods ship the same file, the last deployed wins. | `order` · `id` · `mode` |
 | `modpack.enable` | Enable all mods in a modpack | `id` |
 | `modpack.disable` | Disable all mods in a modpack | `id` |
 | `modpack.create` | Create a modpack from a profile | `name` · `profile` |
@@ -51,14 +51,14 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.connect` | Add a remote repo | `url` · `name` · `password` |
 | `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
 | `repo.gen` | Open repo generation | — |
-| `repo.genNow` | Generates the repo where it stands, without opening the page — unlike “Generate a repo”, which only takes you there. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
+| `repo.genNow` | Generates the repo in place, without opening the page. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |
 | `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` · `target` · `into` |
 | `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` · `into` |
-| `catalog.import` | Reads the document at that address and decides: an index makes it follow everything it lists, a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at — following it would put an address in a list that fetches it on every start for ever. | `url` · `catType` · `password` |
-| `catalog.entry` | One entry of a catalogue this machine AUTHORS, not one it follows. The id is what change and remove match on, so an entry without one could be written and never touched again — it is refused. | `mode` · `catType` · `id` · `json` |
+| `catalog.import` | Reads the document at that address. An index follows everything it lists; a single catalogue is matched to one of the eight kinds. Anything else is refused. | `url` · `catType` · `password` |
+| `catalog.entry` | One entry of a catalogue this machine AUTHORS, not one it follows. An id is required. | `mode` · `catType` · `id` · `json` |
 | `catalog.delete` | Throws away the whole authored catalogue of one kind. Asks first, and needs the delete permission like every other step that destroys something of yours. Does not touch the catalogues you follow. | `catType` |
 | `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
@@ -116,13 +116,13 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `var.ternary` | Set a variable from a condition (a if true, else b) | `condition` · `target` · `ifTrue` · `ifFalse` |
 | `rule.table` | Map a variable to a result via a decision table | `source` · `target` · `rows` |
 | `task.stop` | Stop the whole task now (use inside an IF as a guard) | `reason` |
-| `code.run` | Run a BMMScript snippet as part of this task — same variables, same permissions. | `code` |
+| `code.run` | Run a BMMScript snippet in this task (same variables and permissions). | `code` |
 | `list.set` | Replaces the whole list. Accepts a JSON array or a plain a, b, c line. Read it back with {list.<name>.length}, or walk it with FOR EACH. | `name` · `value` · `sep` |
 | `list.push` | Adds one item to the end. Unlike “set it”, running twice appends twice. | `name` · `value` |
 | `list.clear` | Empties the list without deleting its name, so a later push starts from nothing. | `name` |
 | `map.set` | Stores one value under one key. A list answers “which ones”; a map answers “what goes with what”. | `name` · `key` · `value` |
-| `map.get` | Reads one key into a variable you name. A missing key stores an empty value — check {map.hit} to tell “not there” from “there and blank”. | `name` · `key` · `into` |
-| `id.of` | Works out what a modpack, plugin or automation IS — the id that is the same wherever the content is the same — and stores it in a variable. Compare it to check you have what you expect, without downloading anything or trusting a name. | `into` · `kind` · `id` |
+| `map.get` | Reads one key into a variable. A missing key gives an empty value; {map.hit} tells if it existed. | `name` · `key` · `into` |
+| `id.of` | Stores the content id of a modpack, plugin or automation in a variable. Compare it to check you have the right thing, without downloading. | `into` · `kind` · `id` |
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
@@ -146,14 +146,14 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `notify` | Show a toast notification | `message` |
 | `discord.rpc` | Toggle Discord Rich Presence | `enabled` |
 | `data.exportAuto` | Unattended data backup | `dir` · `name` · `increment` |
-| `data.backup` | The same archive the Export data screen writes — sections you pick, locked with a passphrase if you give one. | `dir` · `sections` · `passphrase` · `name` · `increment` |
+| `data.backup` | The Export data archive: sections you pick, locked if you give a passphrase. | `dir` · `sections` · `passphrase` · `name` · `increment` |
 | `app.checkUpdate` | Asks whether a BMM update exists. Sets update.available; downloads nothing. | `enabled` |
 | `system.clearApiLog` | Empties the API request log. | — |
 | `system.clearResourceRecords` | Empties the recorded CPU/memory samples. | — |
 | `task.run` | Trigger another scheduled task. Needs the “Other tasks” permission. | `id` |
-| `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. Needs the “Other tasks” permission. | `id` |
+| `task.spawn` | Starts the other task without waiting. To wait, use “Run another task”. Needs the “Other tasks” permission. | `id` |
 | `task.setEnabled` | Turns another scheduled task on or off. A task can arm the one that follows it; it cannot arm or disarm itself (that is refused). Needs the “Other tasks” permission. | `taskId` · `armOn` |
-| `view.open` | Opens a BMM screen or window — any of them, by name. | `place` · `id` · `arg` |
+| `view.open` | Opens any BMM screen or window by name. | `place` · `id` · `arg` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
 | `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |
@@ -161,7 +161,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` · `into` |
 | `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
-| `wait.http` | Polls it until it answers — by status, or by what the reply says — or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
+| `wait.http` | Polls it until it answers (by status or reply content), or gives up. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
 

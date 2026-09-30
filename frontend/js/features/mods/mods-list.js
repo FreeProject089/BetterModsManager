@@ -11,6 +11,7 @@ import { refreshMods, selectMod, closeModDetail } from './mods.js';
 import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-actions.js';
 import { escHtml, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { smartRank } from '../ai/ai-smart-state.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -68,12 +69,15 @@ export function getFilteredMods() {
     // can never go stale when the user edits tags.
     const tagById = new Map((S.userTags || []).map((t) => [t.id, t]));
     const cmp = (a, b) => NAME_COLLATOR.compare(a, b);
+    // « Smart » search (features/ai/ai-ask.ts): the mods that answer the query by description
+    // and tags too, ranked (by Laya when AI is on). Null when the toggle is off.
+    const smart = smartRank(S.searchQuery);
     let filtered = S.allMods.filter((m) => {
         const matchFilter = S.currentFilter === 'all' ||
             (S.currentFilter === 'enabled' && m.enabled) ||
             (S.currentFilter === 'disabled' && !m.enabled);
         const matchTag = !S.currentTagFilter || S.currentTagFilter === 'all' || (m.tags && m.tags.includes(S.currentTagFilter));
-        let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery);
+        let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery) || !!smart?.has(m.id);
         if (!matchSearch && S.searchQuery && m.tags && m.tags.length > 0) {
             matchSearch = m.tags.some((tid) => {
                 const tDef = tagById.get(tid);
@@ -83,6 +87,11 @@ export function getFilteredMods() {
         return matchFilter && matchSearch && matchTag;
     });
     filtered.sort((a, b) => {
+        if (smart) {
+            const d = (smart.get(a.id) ?? 1e9) - (smart.get(b.id) ?? 1e9);
+            if (d)
+                return d;
+        }
         if (S.currentSort === 'name_asc')
             return cmp(a.name, b.name);
         if (S.currentSort === 'name_desc')

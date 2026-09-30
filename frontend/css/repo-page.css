@@ -124,3 +124,58 @@
 #view-repo [style*="color:var(--text-muted)"],
 #view-repo [style*="color: var(--text-muted)"],
 #view-repo .badge-server-tag { color: var(--bmm-text-secondary) !important; }
+
+/* ── Tab panels fill their column ─────────────────────────────────────────────────────────
+   The panel is a flex column (main.css forces display:flex on the active one) whose children
+   shrink-wrapped: on the Host tab the intro was 708px, "Produce the repo.json" 599px and
+   "Serve it" 868px, three left edges and a ragged right side. One width for every block. */
+#view-repo .repo-tab-body .repo-tab-panel.active { align-items: stretch; }
+#view-repo .repo-tab-body .repo-tab-panel.active > * { max-width: 100%; }
+
+/* ── The local server: start/stop button and status dot (repo-server.ts toggles the classes) ──
+   They were painted with inline hex colours (#2ecc71, #e74c3c, #555) that no theme could
+   reach, and a green dot glowed next to the words "Server offline" when the state and the
+   label drifted apart. Stopped = a green START (the thing to do), a neutral dot; running = a
+   red STOP and a green dot. Tokens only. */
+#view-repo .rp-srv-toggle {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+    background: var(--bmm-success-dim);
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-srv-toggle:hover { background: color-mix(in srgb, var(--bmm-success) 22%, transparent); }
+#view-repo .rp-srv-toggle.is-running {
+    background: var(--bmm-danger-dim);
+    border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-srv-toggle.is-running:hover { background: color-mix(in srgb, var(--bmm-danger) 22%, transparent); }
+#view-repo .rp-srv-dot { background: var(--bmm-text-secondary); opacity: 0.6; }
+#view-repo .rp-srv-dot.is-running { background: var(--bmm-success); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-success) 25%, transparent); }
+#view-repo .repo-status-bar { gap: 10px; }
+
+/* A bare `.btn btn-sm` (Show, Browse in the Remote card) has no variant and painted the UA's
+   light button face: a white slab in a dark card. It gets the secondary look of its
+   neighbours. */
+#view-repo .btn.btn-sm:not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-outline):not(.btn-icon) {
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border-hover);
+    color: var(--bmm-text-primary);
+}
+#view-repo .btn.btn-sm:not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-outline):not(.btn-icon):hover { background: var(--bmm-s08); }
+
+/* Cards: one rhythm. The step cards had 13px/16px padding and a header wash nearly the colour
+   of the body; the header is now a distinct band and the body breathes a little more. */
+#view-repo .repo-card { border-color: var(--bmm-border-hover); background: var(--bmm-s02); }
+#view-repo .repo-card-header { padding: 14px 18px; background: var(--bmm-s03); border-bottom-color: var(--bmm-border); }
+#view-repo .repo-card-body { padding: 18px; }
+#view-repo .repo-card-header h3 { font-size: 14px; }
+#view-repo .repo-method-tabs { background: var(--bmm-s04); border-color: var(--bmm-border); }
+#view-repo .repo-method-pill.active {
+    background: var(--bmm-accent);
+    border-color: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+}
+#view-repo .repo-host-group + .repo-host-group { margin-top: 32px; }

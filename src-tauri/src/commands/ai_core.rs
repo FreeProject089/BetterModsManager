@@ -2,7 +2,8 @@
 //!
 //! Mounted twice: by the app (`commands::ai_core`) and by the CLI/MCP binary
 //! (`extra_tools/mcp_server.rs` mounts this file at the same path), so it may only use external
-//! crates — no `crate::` item. Everything that touches `AppState` lives in `commands::ai`.
+//! crates and `crate::commands::ai_laya` (mounted beside it in both) — no other `crate::` item.
+//! Everything that touches `AppState` lives in `commands::ai`.
 //!
 //! ## What this is, and what it is not
 //!
@@ -71,6 +72,9 @@ pub struct AiSettings {
     pub mod_suggest: bool,
     pub report_triage: bool,
     pub description_drafts: bool,
+    /// « Ask Laya » and the library's smart search may use the embedded model to route and rank
+    /// (retrieval alone runs whatever this says: it is a local search, no AI involved).
+    pub ask: bool,
     /// The user's own `laya-serve`. Loopback only unless `local_allow_remote`.
     pub local_url: String,
     pub local_allow_remote: bool,
@@ -95,6 +99,7 @@ impl Default for AiSettings {
             mod_suggest: true,
             report_triage: true,
             description_drafts: true,
+            ask: true,
             local_url: DEFAULT_LOCAL_URL.into(),
             local_allow_remote: false,
             external_url: String::new(),
@@ -940,36 +945,52 @@ pub fn detect_language(text: &str) -> Option<(&'static str, f32)> {
     if cyr * 3 > letters {
         return Some(("ru", 0.7));
     }
+    // Stop-words, and words or letters that belong to ONE of the languages (« la » is French
+    // and Spanish and Italian; « ñ », « ł », « ß », « não » are not). Measured on the eval set:
+    // the Laya checkpoint is NOT a language identifier (37 % right on mods' prose, about chance
+    // over ten languages), so this detector is the language hint — Laya is not asked.
     const SW: &[(&str, &[&str])] = &[
-        ("en", &["the", "and", "is", "this", "with", "for", "you", "of", "to", "it"]),
-        ("fr", &["le", "la", "les", "et", "est", "une", "des", "pour", "avec", "ce", "du", "vous"]),
-        ("de", &["der", "die", "und", "ist", "das", "mit", "für", "nicht", "ein", "eine", "sie"]),
-        ("es", &["el", "los", "las", "y", "es", "una", "para", "con", "por", "que", "del"]),
-        ("it", &["il", "gli", "e", "è", "una", "per", "con", "che", "della", "non", "sono"]),
-        ("pt", &["o", "os", "as", "e", "é", "uma", "para", "com", "que", "não", "do"]),
+        ("en", &["the", "and", "is", "this", "with", "for", "you", "of", "to", "it", "adds", "new", "your", "from", "requires", "known", "into", "at", "night"]),
+        ("fr", &["le", "la", "les", "et", "est", "une", "des", "pour", "avec", "ce", "du", "vous", "dans", "sur", "au", "aux", "nouvelles", "nouveaux", "puis", "nuit", "clignote", "nécessite", "problème"]),
+        ("de", &["der", "die", "und", "ist", "das", "mit", "für", "nicht", "ein", "eine", "sie", "den", "im", "zu", "auf", "neue", "nachts"]),
+        ("es", &["el", "los", "las", "y", "es", "una", "para", "con", "por", "que", "del", "en", "requiere", "última", "noche", "nuevo", "nuevos"]),
+        ("it", &["il", "gli", "e", "è", "una", "per", "con", "che", "della", "non", "sono", "di", "nella", "nel", "richiede", "notte", "nuovi", "nuove"]),
+        ("pt", &["o", "os", "as", "e", "é", "uma", "para", "com", "que", "não", "do", "da", "na", "requer", "noite", "novos"]),
+        ("pl", &["i", "w", "z", "na", "się", "nie", "do", "jest", "dla", "oraz", "wymaga", "nocy", "włącz", "po"]),
+    ];
+    const LETTERS: &[(&str, &[char])] = &[
+        ("es", &['ñ', '¿', '¡']),
+        ("pt", &['ã', 'õ']),
+        ("pl", &['ł', 'ś', 'ż', 'ź', 'ą', 'ę', 'ń', 'ć']),
+        ("de", &['ß']),
+        ("fr", &['ê', 'œ', 'û']),
     ];
     let words: Vec<String> = text
         .split(|c: char| !c.is_alphabetic())
         .filter(|w| !w.is_empty())
         .map(|w| w.to_lowercase())
         .collect();
-    if words.len() < 6 {
-        return None;
-    }
-    let mut best: Option<(&'static str, usize)> = None;
-    let mut total = 0usize;
-    for (code, list) in SW {
-        let n = words.iter().filter(|w| list.contains(&w.as_str())).count();
-        total += n;
-        if best.map(|(_, b)| n > b).unwrap_or(true) {
-            best = Some((code, n));
+    let lower = text.to_lowercase();
+    let mut score: Vec<(&'static str, f32)> = SW.iter().map(|(c, list)| (*c, words.iter().filter(|w| list.contains(&w.as_str())).count() as f32)).collect();
+    for (code, chars) in LETTERS {
+        let n = lower.chars().filter(|c| chars.contains(c)).count() as f32;
+        if let Some(s) = score.iter_mut().find(|(c, _)| c == code) {
+            s.1 += (n * 1.5).min(4.5);
         }
     }
-    let (code, n) = best?;
-    if n < 2 || total == 0 {
+    let total: f32 = score.iter().map(|(_, n)| n).sum();
+    let (code, n) = score.iter().cloned().fold(("", 0.0f32), |a, b| if b.1 > a.1 { b } else { a });
+    // Enough evidence: two points, or one point in a text of four words or fewer.
+    let enough = n >= 2.0 || (n >= 1.0 && words.len() <= 4 && words.len() >= 2);
+    if code.is_empty() || !enough || total <= 0.0 || words.len() < 2 {
         return None;
     }
-    Some((code, (n as f32 / total as f32).clamp(0.3, 0.9)))
+    let share = n / total;
+    // A near-tie between two languages is no hint at all.
+    if share < 0.45 {
+        return None;
+    }
+    Some((code, share.clamp(0.3, 0.9)))
 }
 
 fn push(out: &mut Vec<Suggestion>, field: &str, value: Value, source: &str, origin: &str, confidence: f32) {
@@ -1443,31 +1464,25 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
                 }
             }
             let (source, origin) = if provider == Provider::Embedded { ("laya", "Laya (embedded)") } else { ("laya", "laya (local)") };
-            let mut qs: Vec<LayaQuestion> = Vec::new();
-            for (i, (_, name)) in asked.iter().enumerate() {
-                qs.push((format!("tag_{}", i), "noul", format!("Is this game mod about \"{}\"? Answer yes only if the text clearly says so.", name), Vec::new()));
-            }
-            qs.push(("language".into(), "choice", "In which language is this text written?".into(), LANGS.iter().map(|(c, n)| (c.to_string(), n.to_string())).collect()));
-            qs.push(("nsfw".into(), "noul", "Does this game mod contain sexual or adult-only content?".into(), Vec::new()));
+            // « Laya v2 » (commands/ai_laya.rs): keyword evidence picks the candidates, each is
+            // asked with a descriptive criterion (a yes/no each + one choice among them), the
+            // votes are combined and nothing under the calibrated threshold is suggested.
+            let names: Vec<String> = asked.iter().map(|(_, n)| n.clone()).collect();
+            let lex = crate::commands::ai_laya::lexical_tag_scores(text, &names);
+            let cands = crate::commands::ai_laya::tag_candidates(&names, &lex, crate::commands::ai_laya::MAX_CHOICE);
+            let mut qs: Vec<LayaQuestion> = crate::commands::ai_laya::tag_questions(&names, &cands);
+            qs.push(crate::commands::ai_laya::nsfw_question());
             match ask_laya(ctx, provider, text, &qs) {
                 Ok(resp) => {
-                    let mut ranked: Vec<(f64, &String, &String)> = Vec::new();
-                    for (i, (id, name)) in asked.iter().enumerate() {
-                        if let (_, Some(p), _) = laya_answer(&resp, &format!("tag_{}", i)) {
-                            if p >= 0.5 {
-                                ranked.push((p, id, name));
-                            }
-                        }
+                    let choice = crate::commands::ai_laya::choice_probs(&resp, "tags_choice");
+                    let noul: Vec<Option<f64>> = cands.iter().map(|i| crate::commands::ai_laya::noul_p(&resp, &format!("tag_{}", i))).collect();
+                    let combined = crate::commands::ai_laya::combine_tag_votes(&names, &cands, &lex, &noul, &choice);
+                    for (i, p) in crate::commands::ai_laya::pick_tags(&combined, MAX_TAGS_PER_MOD) {
+                        let (id, name) = asked[i];
+                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: p.min(1.0) as f32, applicable: true, note: name.clone() });
                     }
-                    ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-                    for (p, id, name) in ranked.into_iter().take(MAX_TAGS_PER_MOD) {
-                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: p as f32, applicable: true, note: name.clone() });
-                    }
-                    if let (Some(code), _, c) = laya_answer(&resp, "language") {
-                        if LANGS.iter().any(|(k, _)| *k == code) {
-                            out.push(Suggestion { field: "language".into(), value: json!(code), source: source.into(), origin: origin.into(), confidence: c.unwrap_or(0.6) as f32, applicable: false, note: String::new() });
-                        }
-                    }
+                    // The language hint is the detector's (`extract` already adds it): the model
+                    // is no language identifier (measured, see ai_laya::language_hint).
                     if let (_, Some(p), _) = laya_answer(&resp, "nsfw") {
                         out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: source.into(), origin: origin.into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p) });
                     }
@@ -1597,33 +1612,32 @@ pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, 
     match provider {
         Provider::Local | Provider::Embedded => {
             t.provider = if provider == Provider::Embedded { "embedded".into() } else { "laya".into() };
-            let mut qs: Vec<LayaQuestion> = vec![
-                ("category".into(), "choice", "What kind of problem does this report describe?".into(), REPORT_CATEGORIES.iter().map(|c| (c.to_string(), c.replace('_', " "))).collect()),
-                ("severity".into(), "choice", "How severe is the problem for the user?".into(), REPORT_SEVERITIES.iter().map(|c| (c.to_string(), c.to_string())).collect()),
-            ];
-            if !known.is_empty() {
-                let mut crit: Vec<(String, String)> = known.iter().enumerate().map(|(i, k)| (format!("r{}", i), k.chars().take(200).collect())).collect();
-                crit.push(("none".into(), "None of these: a new problem".into()));
-                qs.push(("duplicate".into(), "choice", "Which earlier report describes the same problem?".into(), crit));
-            }
-            let resp = ask_laya(ctx, provider, text, &qs).map_err(|e| laya_note(provider, &e))?;
-            if let (Some(c), _, p) = laya_answer(&resp, "category") {
-                if REPORT_CATEGORIES.contains(&c.as_str()) {
+            // « Laya v2 »: descriptive criteria per category and severity, the report cut to its
+            // most telling lines, severity from the kind of problem with Laya as tie-breaker,
+            // and a duplicate only among the closest earlier reports, confirmed by a yes/no.
+            use crate::commands::ai_laya as lv;
+            let body = lv::informative_chunks(text, 1500);
+            let known_owned: Vec<String> = known.iter().map(|k| k.to_string()).collect();
+            let dup_cands = lv::dup_candidates(text, &known_owned, lv::DUP_CANDIDATES);
+            let mut qs: Vec<LayaQuestion> = lv::report_questions();
+            qs.extend(lv::dup_questions(&known_owned, &dup_cands));
+            let resp = ask_laya(ctx, provider, &body, &qs).map_err(|e| laya_note(provider, &e))?;
+            let cat = lv::choice_probs(&resp, "category");
+            if let Some((c, p)) = cat.iter().cloned().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)) {
+                if REPORT_CATEGORIES.contains(&c.as_str()) && p >= lv::CATEGORY_THRESHOLD {
+                    let (sev, sp) = lv::combine_severity(&c, text, &lv::choice_probs(&resp, "severity"));
+                    if REPORT_SEVERITIES.contains(&sev.as_str()) {
+                        t.severity = Some(sev);
+                        t.severity_p = Some(sp);
+                    }
                     t.category = Some(c);
-                    t.category_p = p;
+                    t.category_p = Some(p);
                 }
             }
-            if let (Some(c), _, p) = laya_answer(&resp, "severity") {
-                if REPORT_SEVERITIES.contains(&c.as_str()) {
-                    t.severity = Some(c);
-                    t.severity_p = p;
-                }
-            }
-            if let (Some(c), _, p) = laya_answer(&resp, "duplicate") {
-                if let Some(i) = c.strip_prefix('r').and_then(|n| n.parse::<usize>().ok()).filter(|i| *i < known.len()) {
-                    t.duplicate_of = Some(i);
-                    t.duplicate_p = p;
-                }
+            let noul: Vec<Option<f64>> = dup_cands.iter().map(|(i, _)| lv::noul_p(&resp, &format!("dup_{}", i))).collect();
+            if let Some((i, p)) = lv::combine_dup(&dup_cands, &noul) {
+                t.duplicate_of = Some(i);
+                t.duplicate_p = Some(p);
             }
         }
         Provider::BetterCommunity => {
@@ -1790,7 +1804,7 @@ pub fn status_with(dir: &Path, embedded: Value, embedded_installed: bool) -> Val
         "classifier": s.classifier,
         "classifierChosen": s.classifier_chosen,
         "generative": s.generative,
-        "features": { "modSuggest": s.mod_suggest, "reportTriage": s.report_triage, "descriptionDrafts": s.description_drafts },
+        "features": { "modSuggest": s.mod_suggest, "reportTriage": s.report_triage, "descriptionDrafts": s.description_drafts, "ask": s.ask },
         "localUrl": s.local_url,
         "localAllowRemote": s.local_allow_remote,
         "externalUrl": s.external_url,
@@ -1800,6 +1814,11 @@ pub fn status_with(dir: &Path, embedded: Value, embedded_installed: bool) -> Val
         "keys": { "local": secret_storage(dir, "local_key"), "external": secret_storage(dir, "external_key") },
         "network": { "modSuggest": can(Feature::ModSuggest), "reportTriage": can(Feature::ReportTriage), "descriptionDrafts": can(Feature::DescriptionDraft) },
         "bundledModel": embedded_installed,
+        "pipeline": crate::commands::ai_laya::pipeline(&s, killed, &embedded.get("packs").and_then(|v| v.as_array()).map(|a| a.iter().map(|p| crate::commands::ai_laya::PackRef {
+            id: p.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            languages: p.get("languages").and_then(|x| x.as_str()).unwrap_or("*").to_string(),
+            installed: p.get("installed").and_then(|x| x.as_bool()).unwrap_or(false),
+        }).collect::<Vec<_>>()).unwrap_or_default()),
         "embedded": embedded,
         // True when nothing an enabled feature does can leave this PC.
         "offline": !s.enabled || killed || (matches!(s.classifier.as_str(), "off" | "embedded") && s.generative == "off"),
@@ -1897,8 +1916,8 @@ mod tests {
         assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(m.calls.get(), 1);
         assert!(sugg.iter().any(|x| x.field == "tags" && x.value == json!("t-weap") && x.origin == "Laya (embedded)"));
-        let lang = sugg.iter().find(|x| x.field == "language").expect("language hint");
-        assert!((lang.confidence - 0.77).abs() < 1e-6, "answer_confidence is the calibrated one");
+        // The language hint is the detector's, never the model's (measured: no language identifier).
+        assert!(sugg.iter().all(|x| x.field != "language"));
         let tr = triage_report(&c, "it crashed", &["old".into()]).unwrap();
         assert_eq!(tr.provider, "embedded");
         assert_eq!(tr.category.as_deref(), Some("crash"));
@@ -2170,19 +2189,22 @@ mod tests {
     fn laya_classifier_ranks_existing_tags_only() {
         let s = all_on();
         let t = Counting::new(json!({
-            "answers": { "tag_0": 0.91, "tag_1": 0.2, "tag_2": { "p": 0.66 }, "language": "fr", "nsfw": 0.05 },
-            "answer_confidence": { "language": 0.8 }
+            "answers": { "tags_choice": { "choice": "t0", "probabilities": { "t0": 0.8, "none": 0.2 } }, "tag_0": 0.91, "tag_1": 0.95, "nsfw": 0.05 }
         }));
         let (sugg, notes) = classify_mod(&ctx(&s, &t), "Ce mod ajoute des armes", &vocab());
         assert!(notes.is_empty(), "{notes:?}");
         assert_eq!(t.calls.get(), 1, "one request for the whole pass");
         assert!(t.last_url.borrow().ends_with("/v1/systemone"));
         let body = t.last_body.borrow();
+        // Only the tag with keyword evidence is asked about (« armes » → Weapons), with its
+        // descriptive criterion; no language question (the detector gives that hint).
         assert_eq!(body["questions"]["tag_0"]["type"], "noul");
-        assert_eq!(body["questions"]["language"]["type"], "choice");
+        assert!(body["questions"]["tag_0"]["instructions"].as_str().unwrap().contains("adds or changes weapons"));
+        assert!(body["questions"].get("tag_1").is_none(), "a known tag without evidence is not asked");
+        assert_eq!(body["questions"]["tags_choice"]["type"], "choice");
+        assert!(body["questions"].get("language").is_none());
         let tags: Vec<&Value> = sugg.iter().filter(|s| s.field == "tags").map(|s| &s.value).collect();
-        assert_eq!(tags, vec![&json!("t-weap"), &json!("t-snd")]);
-        assert!(sugg.iter().any(|s| s.field == "language" && s.value == json!("fr") && !s.applicable));
+        assert_eq!(tags, vec![&json!("t-weap")]);
         assert!(sugg.iter().any(|s| s.field == "nsfw" && s.value == json!(false)));
     }
 
@@ -2233,12 +2255,18 @@ mod tests {
     #[test]
     fn triage_is_a_hint_with_a_duplicate_pick() {
         let s = all_on();
-        let t = Counting::new(json!({ "answers": { "category": "crash", "severity": { "choice": "high", "confidence": 0.7 }, "duplicate": "r1" } }));
+        let t = Counting::new(json!({ "answers": { "category": "crash", "severity": { "choice": "medium", "confidence": 0.7 }, "dup_1": 0.9 } }));
         let tr = triage_report(&ctx(&s, &t), "BMM crashes on start", &["UI glitch".into(), "Crash at startup".into()]).unwrap();
         assert_eq!(tr.category.as_deref(), Some("crash"));
+        // A crash is « high » unless the text says more: Laya's « medium » only breaks ties.
         assert_eq!(tr.severity.as_deref(), Some("high"));
         assert_eq!(tr.duplicate_of, Some(1));
-        // An invented category is ignored.
+        // Only the closest earlier report was asked about, as a yes/no.
+        let body = t.last_body.borrow();
+        assert_eq!(body["questions"]["dup_1"]["type"], "noul");
+        assert!(body["questions"]["category"]["criteria"]["crash"].as_str().unwrap().contains("closes"));
+        drop(body);
+        // An invented category is ignored; a duplicate needs words in common AND a yes.
         let t = Counting::new(json!({ "answers": { "category": "alien", "duplicate": "r9" } }));
         let tr = triage_report(&ctx(&s, &t), "x", &["a".into()]).unwrap();
         assert_eq!(tr.category, None);

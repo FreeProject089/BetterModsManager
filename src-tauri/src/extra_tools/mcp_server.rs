@@ -72,6 +72,12 @@ mod commands {
     // the same model, the same caps and the same idle unload — and, like the app, offline.
     #[path = "../../commands/ai_embedded.rs"]
     pub mod ai_embedded;
+    // « Laya v2 »: the questions, the criteria and how the answers are combined — and the
+    // offline « Ask Laya » index. Mounted so the CLI asks exactly what the app asks.
+    #[path = "../../commands/ai_laya.rs"]
+    pub mod ai_laya;
+    #[path = "../../commands/ask_core.rs"]
+    pub mod ask_core;
 }
 
 // What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI
@@ -714,6 +720,64 @@ enum Commands {
         #[arg(long)]
         fields: String,
     },
+
+    /// Ask Laya a question about BMM or your mods (offline): docs, settings, commands, mods, files, conflicts
+    AiAsk {
+        /// The question, e.g. "which mod modifies engine.ogg?" or "c'est quoi le mode jeu ?"
+        question: String,
+        /// Show bilingual results in this language (en | fr)
+        #[arg(long, default_value = "en")]
+        lang: String,
+        /// all | docs | mods
+        #[arg(long, default_value = "all")]
+        scope: String,
+        /// How many results
+        #[arg(long, default_value_t = 8)]
+        limit: usize,
+        /// Retrieval only: do not let the embedded model rank, whatever the settings say
+        #[arg(long, default_value_t = false)]
+        no_laya: bool,
+        /// Print the JSON instead of the readable list
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+
+    /// Download, verify and install the embedded Laya model pack (about 327 MB)
+    AiInstall,
+
+    /// Remove the downloaded embedded Laya model pack
+    AiRemove,
+
+    /// Test the embedded Laya model on a fixed sample, with timings
+    AiTest,
+}
+
+/// `bmm ai-ask` as a readable list: the intent, then the files / conflicts / results.
+fn print_ask(v: &serde_json::Value) {
+    let s = |x: &serde_json::Value| x.as_str().unwrap_or("").to_string();
+    println!("{} {} ({}{})", "Intent:".bold(), s(&v["intent"]), s(&v["routed_by"]), if v["laya"].as_bool() == Some(true) { ", ranked by Laya" } else { ", retrieval only" });
+    for f in v["files"].as_array().into_iter().flatten() {
+        println!("  {} {} — {} file(s){}", "mod".cyan(), s(&f["mod_name"]), f["total"], if f["enabled"].as_bool() == Some(true) { " · enabled" } else { "" });
+        for p in f["files"].as_array().into_iter().flatten().take(5) {
+            println!("      {}", s(p).dimmed());
+        }
+    }
+    for c in v["conflicts"].as_array().into_iter().flatten() {
+        println!("  {} {} ↔ {} — {} file(s){}", "conflict".yellow(), s(&c["a_name"]), s(&c["b_name"]), c["count"], if c["both_enabled"].as_bool() == Some(true) { " · both enabled" } else { "" });
+        for p in c["sample"].as_array().into_iter().flatten().take(3) {
+            println!("      {}", s(p).dimmed());
+        }
+    }
+    for h in v["hits"].as_array().into_iter().flatten() {
+        println!("  {:<8} {}  {}", s(&h["kind"]).cyan(), s(&h["title"]).bold(), format!("{:.2}", h["score"].as_f64().unwrap_or(0.0)).dimmed());
+        let snip = s(&h["snippet"]);
+        if !snip.is_empty() {
+            println!("           {}", snip.dimmed());
+        }
+    }
+    if v["low_confidence"].as_bool() == Some(true) {
+        println!("  {}", "Laya: none of these seems to answer the question exactly.".yellow());
+    }
 }
 
 // ─── Fancy banner ─────────────────────────────────────────────────────────
@@ -1515,6 +1579,40 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 .map_err(|e| anyhow::anyhow!("--fields is not JSON: {e}"))?;
             let v = ai_tools::apply(&mod_id, &f).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiAsk { question, lang, scope, limit, no_laya, json } => {
+            let v = tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, !no_laya))
+                .await?
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&v)?);
+            } else {
+                print_ask(&v);
+            }
+        }
+        Commands::AiInstall => {
+            let v = tokio::task::spawn_blocking(|| {
+                ai_tools::pack_install(&|p| {
+                    let pct = if p.total > 0 { p.received * 100 / p.total } else { 0 };
+                    let eta = p.eta_secs.map(|s| format!(", {}:{:02} left", s / 60, s % 60)).unwrap_or_default();
+                    eprint!("\r{:<8} {:>3}% {:>6.1} MB/s{} {}      ", p.phase, pct, p.bytes_per_sec as f64 / 1e6, eta, p.host);
+                })
+            })
+            .await?
+            .map_err(|e| anyhow::anyhow!(e))?;
+            eprintln!();
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiRemove => {
+            let v = tokio::task::spawn_blocking(ai_tools::pack_remove).await?.map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiTest => {
+            let v = tokio::task::spawn_blocking(ai_tools::self_test).await?.map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+            if v.get("ok").and_then(|o| o.as_bool()) != Some(true) {
+                anyhow::bail!("the model answered, but not what the sample expects");
+            }
         }
 
         // ── Profiles ─────────────────────────────────────────────────

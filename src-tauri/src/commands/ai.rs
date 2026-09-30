@@ -389,6 +389,7 @@ pub async fn ai_embedded_install(window: tauri::Window, state: State<'_, AppStat
         return Err("busy".into());
     }
     embedded_cancel().store(false, Ordering::SeqCst);
+    embedded_discard().store(false, Ordering::SeqCst);
     let dir = data_dir(&state);
     let r = tauri::async_runtime::spawn_blocking(move || {
         let w = window.clone();
@@ -396,6 +397,9 @@ pub async fn ai_embedded_install(window: tauri::Window, state: State<'_, AppStat
             let _ = w.emit("ai-embedded-progress", p);
         };
         let out = ai_embedded::install_user_copy(&progress, embedded_cancel());
+        if matches!(&out, Err(e) if e == "cancelled") && embedded_discard().swap(false, Ordering::SeqCst) {
+            ai_embedded::discard_partial();
+        }
         if out.is_ok() {
             let mut s = ai_core::load_settings(&dir);
             if !s.classifier_chosen || s.classifier == "off" {
@@ -412,10 +416,96 @@ pub async fn ai_embedded_install(window: tauri::Window, state: State<'_, AppStat
     r?
 }
 
-/// Stop a download in progress; what was received stays on disk and the next click resumes it.
+fn embedded_discard() -> &'static std::sync::atomic::AtomicBool {
+    static D: std::sync::OnceLock<std::sync::atomic::AtomicBool> = std::sync::OnceLock::new();
+    D.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
+}
+
+/// Stop a download in progress. `discard: false` (« Pause »): what was received stays on disk
+/// and the next click resumes it. `discard: true` (« Cancel »): it is deleted as well.
 #[tauri::command]
-pub fn ai_embedded_cancel() {
-    embedded_cancel().store(true, std::sync::atomic::Ordering::SeqCst);
+pub fn ai_embedded_cancel(discard: Option<bool>) {
+    use std::sync::atomic::Ordering;
+    let discard = discard.unwrap_or(false);
+    embedded_discard().store(discard, Ordering::SeqCst);
+    embedded_cancel().store(true, Ordering::SeqCst);
+    // Nothing running: a cancel is just « forget the partial download ».
+    if discard && !embedded_busy().load(Ordering::SeqCst) {
+        ai_embedded::discard_partial();
+    }
+}
+
+/// Settings → « Test Laya »: a fixed sample classified by the installed model, with timings.
+/// Local only (no network, none of the user's data); refused under `--no-ai`.
+#[tauri::command(async)]
+pub async fn ai_embedded_test() -> Result<Value, String> {
+    if ai_core::kill_switch() {
+        return Err("killed".into());
+    }
+    if !ai_embedded::installed() {
+        return Err("embedded:absent".into());
+    }
+    tauri::async_runtime::spawn_blocking(ai_embedded::self_test).await.map_err(|e| e.to_string())?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// « Ask Laya » — offline questions about BMM and the user's own mods
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The library as Ask sees it: mods (tag NAMES, enabled in the active profile, their scanned
+/// file lists) and profiles.
+fn ask_library(state: &AppState) -> Result<crate::commands::ask_core::Library, String> {
+    use crate::commands::ask_core::{Library, ModInfo, ProfileInfo};
+    let data = state.data.lock().map_err(|_| "state lock".to_string())?;
+    let active: std::collections::HashSet<&String> = data
+        .active_profile_id
+        .as_ref()
+        .and_then(|id| data.profiles.iter().find(|p| &p.id == id))
+        .map(|p| p.active_mods.iter().collect())
+        .unwrap_or_default();
+    let tag_name: HashMap<&String, &String> = data.custom_tags.iter().map(|t| (&t.id, &t.name)).collect();
+    let mods = data
+        .mods
+        .iter()
+        .map(|m| ModInfo {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            description: m.description.clone().unwrap_or_default(),
+            tags: m.tags.iter().map(|t| tag_name.get(t).map(|n| n.to_string()).unwrap_or_else(|| t.clone())).collect(),
+            enabled: active.contains(&m.id),
+            files: m.cached_files.clone().filter(|f| !f.is_empty()).unwrap_or_else(|| m.installed_files.clone()),
+        })
+        .collect();
+    let profiles = data.profiles.iter().map(|p| ProfileInfo { id: p.id.clone(), name: p.name.clone(), game: p.game_name.clone(), active_count: p.active_mods.len() }).collect();
+    Ok(Library { mods, profiles })
+}
+
+/// Why Laya did not rank (the retrieval answer stands on its own): "" when it did.
+fn ask_model(dir: &std::path::Path) -> (Option<&'static ai_embedded::Embedded>, &'static str) {
+    static E: ai_embedded::Embedded = ai_embedded::Embedded;
+    let s = effective(dir);
+    match crate::commands::ask_core::usable_model(&s, ai_core::kill_switch(), &E) {
+        Ok(_) => (Some(&E), ""),
+        Err(why) => (None, why),
+    }
+}
+
+/// « Ask Laya »: the question in, the documentation / settings / commands / mods / files that
+/// answer it out. `request` = { question, lang, scope: "all"|"docs"|"mods", limit, extra: [the
+/// app's Settings cards as index entries] }. Nothing leaves the machine; with AI off (or no
+/// model) the answer is the retrieval alone and `layaOff` says why.
+#[tauri::command(async)]
+pub async fn ai_ask(state: State<'_, AppState>, request: crate::commands::ask_core::Request) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let lib = ask_library(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (model, why) = ask_model(&dir);
+        let a = crate::commands::ask_core::answer(&request, &lib, model.map(|m| m as &dyn ai_core::LocalModel));
+        crate::commands::crash::log_line(format!("[AI] ask intent={} hits={} files={} conflicts={} laya={} ms={}", a.intent, a.hits.len(), a.files.len(), a.conflicts.len(), a.laya, a.ms));
+        Ok(json!({ "answer": a, "layaOff": why }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Settings → « Supprimer le modèle »: the downloaded copy only (the installed one belongs to

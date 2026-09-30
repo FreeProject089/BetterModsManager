@@ -77,10 +77,47 @@ la forçait à jeter son historique.
     trim. Il est borné à 64 Mo et **arrête la prise** quand il y arrive, en te le disant — ce qu'il a
     déjà est complet et lisible.
 
+## Erreurs envoyées en direct
+
+Un interrupteur à part, **Envoyer les erreurs en direct**, permet à BMM de signaler une erreur à
+l'équipe en quelques secondes, sans attendre un rapport de bug. Il ne marche que si la télémétrie
+est activée : couper la télémétrie l'arrête et efface ce qui attendait d'être envoyé.
+
+- **Sa première valeur.** Si tu avais déjà accepté la télémétrie quand cet interrupteur est
+  apparu, il démarre **activé**. Sinon il démarre **désactivé**, et la fenêtre de consentement
+  l'affiche décoché.
+- **Ce qui est envoyé.** Les erreurs JavaScript, les plantages côté Rust, les commandes en échec
+  sur une vraie erreur (une annulation, une absence de réseau ou un message déjà affiché ne sont pas
+  signalés), et les déploiements, installations, sauvegardes et tâches planifiées en échec. Pour
+  chacun : le message d'erreur, l'endroit du code de BMM concerné (fonction et fichier, sans numéro
+  de ligne), la version de BMM et le système. Pour un plantage, le *nom* du rapport de plantage
+  local, jamais son contenu.
+- **Nettoyé sur ton PC d'abord.** Tous les secrets que BMM stocke (jetons, clés, ta clé
+  BetterCommunity), le nom de ton dossier utilisateur, les adresses e-mail, les adresses IP et le
+  nom de ton PC sont retirés avant tout envoi. Le serveur de télémétrie les retire une seconde fois
+  à l'arrivée.
+- **Regroupé, pas répété.** La même erreur dans les 10 minutes ajoute seulement 1 à un compteur.
+  Au plus 60 nouvelles erreurs par heure sont envoyées, la file d'attente est limitée à 200 lignes
+  et gardée sur disque, pour qu'un PC hors ligne l'envoie plus tard.
+- **Pas relié à ta télémétrie.** Le rapport porte une empreinte à sens unique de ton identifiant
+  d'installation, que le tableau de bord ne peut rapprocher de rien d'autre. Une demande d'accès
+  ou d'effacement le couvre quand même.
+
+```mermaid
+graph TD
+    ERR["Erreur, plantage, commande en échec"] --> SWITCH{"Télémétrie ET Envoyer les erreurs en direct ?"}
+    SWITCH -- non --> DROP["Rien"]
+    SWITCH -- oui --> CLEAN["Secrets, noms de dossiers, e-mails, IP retirés"]
+    CLEAN --> GROUP["Regroupé par empreinte, compté"]
+    GROUP --> DISK["File sur disque, 200 lignes max"]
+    DISK --> SEND["Envoyé en quelques secondes, HTTPS"]
+    SEND --> SERVER["Serveur de télémétrie : Issues"]
+```
+
 ## Tes contrôles (Paramètres → Confidentialité)
 
 - Interrupteur principal, plus des interrupteurs séparés pour le rapport benchmark / matériel
-  étendu (7 jours) et le replay de session.
+  étendu (7 jours), le replay de session et **Envoyer les erreurs en direct**.
 - **Exporte** le tampon brut en JSON à tout moment.
 - Consulte chaque **paquet envoyé** (noms et comptes d'événements seulement) et demande sa
   **suppression** — honorée sous 72 heures.
