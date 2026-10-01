@@ -19087,7 +19087,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    opens collapsed like the shipped policy above it: a reader who wants the list can have it,
    and a reader who just wants the button is not handed a table first. */
 .csp-conns .csp-conn-note {
-    margin: 6px 0 10px;
+    margin: 16px 10px;
     font-size: 12px;
     line-height: 1.5;
     color: var(--bmm-text-muted, var(--text-muted));
@@ -21267,7 +21267,7 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 /* ── Settings › Security (2026-09): the mode in force is named in the header, the active row
    carries an accent rail and a lit icon tile — styled by class, not by inline colours. ─── */
 .sec-current-pill { margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-    padding: 3px 10px; border-radius: 999px; color: var(--success);
+    padding: 3px 10px; border-radius: 7px; color: var(--success);
     background: color-mix(in srgb, var(--success) 14%, transparent); border: 1px solid color-mix(in srgb, var(--success) 40%, transparent); }
 .sec-current-pill:empty { display: none; }
 .sec-current-pill.is-limited { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }

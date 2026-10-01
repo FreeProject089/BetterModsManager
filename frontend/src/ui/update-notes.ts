@@ -608,7 +608,7 @@ if (typeof document !== 'undefined') {
         .md-body .md-toc-item:hover { color: var(--bmm-accent, #f97316); }
         .md-body .md-toc-l3 { padding-left: 14px; font-size: 12.5px; opacity: 0.85; }
         .md-body .community-inline-card-title { display: inline-flex; align-items: center; gap: 6px; }
-        .md-body .community-inline-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+        .md-body .community-inline-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 8px; font-size: 11px; font-weight: 700;
             color: var(--bc, var(--bmm-accent, #f97316)); background: color-mix(in srgb, var(--bc, #f97316) 15%, transparent);
             border: 1px solid color-mix(in srgb, var(--bc, #f97316) 40%, transparent); vertical-align: 1px; }
         .md-body .community-inline-card { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; padding: 12px 14px; margin: 10px 0;
