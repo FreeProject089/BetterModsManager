@@ -7,6 +7,15 @@ Until you explicitly accept the consent dialog, **nothing is collected at all** 
 is a no-op. Declining (or never answering) collects zero data, and declining also wipes
 anything previously buffered.
 
+The dialog has four buttons and nothing else counts as an answer (a click beside it does nothing):
+
+| Button | What it does |
+|---|---|
+| **Turn all on** (recommended) | The five categories below |
+| **Choose** | A switch per category, then *Save* |
+| **No thanks** | Off, remembered |
+| **Later** (or Escape) | Nothing saved, nothing sent; asked again at the next launch |
+
 ```mermaid
 graph TD
     CONSENT{Opt-in consent?} -- "declined / not asked" --> NOTHING["Nothing collected"]
@@ -26,10 +35,21 @@ graph TD
 
 ## If you opt in
 
-- **What's sent:** pages visited, clicks (**labels only — never what you type**), performance
-  samples, errors, and an anonymous hardware profile. No file paths, no mod contents, no name
-  or e-mail; your identity is an anonymous id.
-- **Session replay** (optional, on by default when telemetry is on) records the UI **masked**:
+Telemetry is split into categories, each with one line of what it sends:
+
+| Category | What is sent |
+|---|---|
+| Usage statistics | Pages and features used, clicks, session length. Never what you type |
+| Performance | FPS, memory use and load times |
+| Errors, live | Errors and crashes as they happen ([below](#errors-sent-live)) |
+| Laya usage statistics | Which Laya feature, provider, speed, fields kept or rejected; never any text ([below](#laya-usage-statistics)) |
+| Session replay (masked) | The BMM window only, typed text masked |
+
+Two options are never part of *Turn all on*: the **weekly hardware report** (precise hardware
+IDs) and **unmasked replay**. The full list, with what each one contains, is in the
+[privacy policy](https://github.com/FreeProject089/BetterModsManager/blob/main/PRIVACY.md).
+
+- **Session replay** (on by default when telemetry is on) records the UI **masked**:
   mod names, profile names and paths appear as `••••`. Unmasking is a separate, explicit toggle.
 - Everything buffers to a **local file (10 MB cap)** first and is only uploaded as gzip batches
   over **HTTPS** — if no endpoint is configured, data never leaves your machine.
@@ -81,8 +101,8 @@ A separate switch, **Send errors live**, lets BMM tell the team about an error w
 instead of waiting for a bug report. It only works while telemetry is on: turning telemetry off
 stops it and deletes what was waiting to be sent.
 
-- **Its first value.** If you had already accepted telemetry when this switch appeared, it starts
-  **on**. Otherwise it starts **off**, and the consent dialog shows it unticked.
+- **On with telemetry.** Accepting telemetry turns it on (*Turn all on*, or the master toggle in
+  Settings). *Choose* lets you leave it off, and Settings → Privacy turns it off on its own.
 - **What is sent.** JavaScript errors, crashes of the Rust side, commands that failed with a real
   error (a cancel, being offline or a message already shown to you are not reported), and failed
   deploys, installs, backups and scheduled tasks. For each: the error message, where it happened
@@ -108,10 +128,22 @@ graph TD
     SEND --> SERVER["Telemetry server: Issues"]
 ```
 
+## Laya usage statistics
+
+A category of its own, so the team can see whether Laya actually helps. Content-free: for each use
+of a Laya feature, BMM sends the feature, where it ran (built in, BetterCommunity server, your own
+server, an external API, or rules), a latency range, whether it answered or declined, the **names**
+of the fields it suggested and which ones you kept, how many Ask Laya results there were and the
+*kind* of result you opened, model install / removal, and errors as short codes.
+
+Never your question, a suggestion's value, a mod, file or profile name, an id or an error message.
+The team reads it on the telemetry dashboard's **Laya** page (adoption, acceptance per field,
+latency, providers, errors).
+
 ## Your controls (Settings → Privacy)
 
-- Master toggle, plus separate toggles for the 7-day benchmark / extra-hardware report,
-  session replay and **Send errors live**.
+- Master toggle, then one switch per category (with **Turn all on** while one is off), plus the
+  weekly hardware report and unmasked replay.
 - **Export** the raw buffer as JSON any time.
 - See every **sent packet** (event names and counts only) and request its **deletion** —
   honoured within 72 hours.

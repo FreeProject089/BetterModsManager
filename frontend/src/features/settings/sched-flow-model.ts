@@ -489,7 +489,7 @@ export function marksForDraft(saved: AnyStep[] | null | undefined, record: Param
 // runAction and evalConditionRaw to prove the two lists are the same list. The executor still
 // decides; this only lets the flow say so before the run does.
 
-export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network';
+export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network' | 'ai';
 interface PermRule { perm: PermKey; label: string; when?: (p: Record<string, any>) => boolean }
 
 const DL: PermRule = { perm: 'deeplink', label: 'sched.permDeeplink' };
@@ -497,6 +497,7 @@ const DEL: PermRule = { perm: 'delete', label: 'sched.permDelete' };
 const RES: PermRule = { perm: 'resources', label: 'sched.permResources' };
 const TASKS: PermRule = { perm: 'tasks', label: 'sched.permTasks' };
 const NET: PermRule = { perm: 'network', label: 'sched.permNetwork' };
+const AI: PermRule = { perm: 'ai', label: 'sched.permAi' };
 
 export const ACTION_PERMS: Record<string, PermRule> = {
     'app.stop': { perm: 'stopProcess', label: 'sched.permStopProcess' },
@@ -521,6 +522,8 @@ export const ACTION_PERMS: Record<string, PermRule> = {
     'data.exportAuto': DL, 'restart': DL,
     // The notification steps reach the network (sched_net.rs holds the address rules).
     'webhook.send': NET, 'discord.send': NET, 'slack.send': NET,
+    // Laya on this PC (commands/ai_ops.rs).
+    'ai.classify': AI, 'ai.ask': AI, 'ai.suggest_mod_metadata': AI,
 };
 
 export const CONDITION_PERMS: Record<string, PermRule> = {

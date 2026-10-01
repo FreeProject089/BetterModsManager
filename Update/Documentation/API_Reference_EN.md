@@ -50,6 +50,10 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mods/disable` | yes | `{ mod_id }` | Disables a mod. |
 | `/api/mods/order` | yes | — (GET) | The deployment order, every contested file, and who wins it. |
 | `/api/mods/order` | yes | `{ order[], profileId?, reapply? }` | Reorders the active mods and re-copies the files that change hands (`reapply: true` re-copies the winner of every contested file). `order` must be a permutation of what is active; last in the list wins a shared file. |
+| `/api/mods/order/export` | yes | — (GET, `?profileId=`) | The order as a portable document to share: `doc`, `code` (`BMMORDER1.`), `link` (`bmm://order`), `text`. Mods are named by fingerprint, repo id and name. |
+| `/api/mods/order/import` | yes | `{ text, profileId?, dryRun? }` | Import a shared order (code, link, JSON or names). The active mods it names take its order in their slots; nothing is enabled or disabled. |
+| `/api/mods/order/arrange` | yes | `{ ids[], mode?, profileId? }` | Place a block of active mods: `top` (they win), `bottom` (the rest wins), `keep`. No mode = the setting. |
+| `/api/mods/order/mode` | yes | — (GET) or `{ mode }` (POST) | Read or set where a bulk enable places its mods by default. |
 | `/api/schedules` | yes | — (GET) | id, name, enabled and trigger for every saved task. **Not** its steps. |
 | `/api/schedules/enabled` | yes | `{ id, enabled }` | Arms or disarms one task. Only `enabled` is writable — a route that could write a whole task could install one with a script step in it. |
 | `/api/schedules/:id/runs` | yes | — (GET) | A task’s run log, newest first: the last 50 runs with each step’s duration, status and error. Secrets are removed before a run is written. `schedules.read`. |

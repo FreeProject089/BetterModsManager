@@ -82,35 +82,26 @@
 .stm-tab[aria-selected="true"] svg { color: var(--stm-accent-ink); }
 .stm-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
 
-/* ── First-use card ─────────────────────────────────────────────────────────────────────── */
+/* ── First-use line (shown once) ────────────────────────────────────────────────────────── */
 .stm-intro {
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    padding: 12px 14px;
-    border: 1px solid var(--bmm-border-accent, var(--bmm-border));
-    border-radius: 12px;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 8px 8px 14px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 10px;
     background: var(--bmm-accent-dim);
+    font-size: 12.5px;
+    color: var(--bmm-text-primary);
 }
-.stm-intro-body { flex: 1 1 320px; min-width: 0; }
-.stm-intro-body p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
-.stm-intro-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.stm-intro-body { flex: 1; min-width: 0; }
 
 /* ── Panels and cards ───────────────────────────────────────────────────────────────────── */
 .stm-panel { display: flex; flex-direction: column; gap: var(--stm-gap); min-width: 0; outline: none; }
 .stm-panel[hidden] { display: none; }
 .stm-loading { padding: 24px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
 
-.stm-lead {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--bmm-text-secondary);
-}
-.stm-lead > span { flex: 1; min-width: 0; }
+.stm-lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--bmm-text-secondary); }
 
 .stm-card {
     display: flex;
@@ -154,30 +145,40 @@
 .stm-alert.is-warn { border-color: var(--bmm-warning); background: var(--bmm-warning-dim); }
 .stm-alert.is-crit { border-color: var(--bmm-danger); background: var(--bmm-danger-dim); }
 
-/* ── Work intensity: the three presets ──────────────────────────────────────────────────── */
-.stm-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
-.stm-preset {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
-    text-align: left;
-    padding: 14px;
+/* ── Segmented choices (Work intensity, Game mode) ────────────────────────────────────────── */
+.stm-seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
     border: 1px solid var(--bmm-border);
-    border-radius: 12px;
-    background: var(--bmm-s03);
-    color: var(--bmm-text-primary);
-    font: inherit;
-    cursor: pointer;
-    min-width: 0;
-    transition: border-color var(--bmm-transition-fast, .15s), background var(--bmm-transition-fast, .15s);
+    border-radius: 10px;
+    background: var(--bmm-s04);
+    align-self: flex-start;
+    max-width: 100%;
 }
-.stm-preset:hover { border-color: var(--bmm-border-hover, var(--bmm-border)); background: var(--bmm-s05); }
-.stm-preset[aria-checked="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
-.stm-preset:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
-.stm-preset-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.stm-preset-you { font-size: 12.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
-.stm-preset-detail { font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.stm-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--bmm-transition-fast, .15s), color var(--bmm-transition-fast, .15s);
+}
+.stm-seg-btn:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+.stm-seg-btn[aria-checked="true"] { color: var(--bmm-text-on-accent, var(--bmm-text-primary)); background: var(--bmm-accent); }
+.stm-seg-btn:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.stm-seg-btn[aria-checked="true"] .stm-badge { border-color: currentColor; color: inherit; }
+.stm-preset-hint { font-size: 12.5px; color: var(--bmm-text-primary); }
+.stm-in-force:has(.res-effective:empty) { display: none; }
 .stm-badge {
     font-size: 10.5px;
     font-weight: 700;
@@ -186,6 +187,45 @@
     border: 1px solid var(--bmm-accent);
     color: var(--stm-accent-ink);
 }
+
+/* ── Folded details ("Learn more", "What it changes", the game options) ─────────────────── */
+.stm-more { border: 1px solid var(--bmm-border); border-radius: 12px; background: var(--bmm-s02); min-width: 0; }
+.stm-more > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+    border-radius: 12px;
+}
+.stm-more > summary::-webkit-details-marker { display: none; }
+.stm-more > summary::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border: solid var(--bmm-text-secondary);
+    border-width: 0 2px 2px 0;
+    transform: rotate(-45deg);
+    transition: transform var(--bmm-transition-fast, .15s);
+}
+.stm-more[open] > summary::before { transform: rotate(45deg); }
+.stm-more > summary:hover { background: var(--bmm-s04); }
+.stm-more > summary:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+.stm-more-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; min-width: 0; }
+.stm-more-body p { margin: 0; }
+.stm-more-body .lm-link { align-self: flex-start; }
+
+/* One option = one line: its label, then its control. The explanation is the tooltip. */
+.stm-opt { min-height: 32px; }
+.stm-opt + .stm-opt { border-top: 1px solid var(--bmm-border); padding-top: 8px; }
+.stm-opt-label { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); cursor: pointer; }
+.stm-opt-label .stm-help { font-weight: 400; margin-left: 6px; }
+.stm-opt input[type="number"] { width: 84px; text-align: right; }
 
 /* ── Game mode ──────────────────────────────────────────────────────────────────────────── */
 .stm-state { font-size: 13px; font-weight: 600; color: var(--bmm-text-secondary); }
@@ -233,27 +273,42 @@
 .stm-table tbody tr:nth-child(even) { background: var(--bmm-s02); }
 .stm-table-op { white-space: nowrap; color: var(--bmm-text-primary); }
 .stm-table input:disabled, .stm-table select:disabled { opacity: .45; }
+.stm-table .res-m-in { border-style: dashed; background: transparent; }
+.stm-table .res-m-in:hover, .stm-table .res-m-in:focus { border-style: solid; border-color: var(--bmm-accent); }
+.stm-table .res-m-in.is-set { border-style: solid; border-color: var(--bmm-accent); background: var(--bmm-accent-dim); color: var(--bmm-text-primary); font-weight: 700; }
+.stm-table tr.has-rule .stm-table-op { font-weight: 700; }
+.stm-table tr.has-rule .stm-table-op::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--bmm-accent); vertical-align: middle; }
+.stm-cell-off { display: inline-block; min-width: 24px; text-align: center; color: var(--bmm-text-secondary); opacity: .6; cursor: help; }
 
 /* ── Disks & space ──────────────────────────────────────────────────────────────────────── */
 .stm-disks { display: flex; flex-direction: column; gap: 10px; }
 .stm-disk {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px;
+    gap: 6px;
+    padding: 12px 14px;
     border: 1px solid var(--bmm-border);
     border-radius: 12px;
     background: var(--bmm-s03);
     min-width: 0;
 }
-.stm-disk-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
+.stm-disk-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.stm-disk-name { flex: 1 1 200px; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
+.stm-disk .stm-more { border: 0; background: none; }
+.stm-disk .stm-more > summary { padding: 2px 0; font-size: 12px; font-weight: 500; color: var(--bmm-text-secondary); }
+.stm-disk .stm-more > summary:hover { background: none; color: var(--bmm-text-primary); }
+.stm-disk .stm-more-body { padding: 4px 0 0; }
+.disk-bench-result:empty { display: none; }
+.stm-thresh { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bmm-text-secondary); }
+.stm-thresh input { width: 64px; text-align: right; font-size: 12px; padding: 4px 8px; }
+.stm-thresh.is-crit > span:first-child { color: var(--bmm-danger); }
 .stm-disk-path { font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
 .stm-kind { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--bmm-border); color: var(--bmm-text-secondary); background: var(--bmm-s04); }
 .stm-kind.is-cloud { border-color: var(--bmm-info, var(--bmm-border)); }
 .stm-kind.is-fs { font-weight: 500; }
 .stm-limit { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .stm-limit input { width: 84px; text-align: right; font-size: 12px; padding: 4px 8px; }
-.stm-bar-label { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-family: var(--bmm-font-mono, monospace); color: var(--bmm-text-secondary); }
+.stm-bar-label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bmm-text-secondary); }
 .stm-bar-label .is-ok { color: var(--bmm-text-secondary); }
 .stm-bar-label .is-warn { color: var(--bmm-warning); font-weight: 700; }
 .stm-bar-label .is-crit { color: var(--bmm-danger); font-weight: 700; }
@@ -277,7 +332,7 @@
 .stm-check input { accent-color: var(--bmm-accent); flex-shrink: 0; }
 .stm-inline { font-size: 12.5px; color: var(--bmm-text-secondary); }
 .stm-inline input { width: 90px; text-align: right; }
-.stm-sub { margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.stm-sub { margin-top: 4px; font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); }
 .stm-game-dir { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--bmm-border); min-width: 0; }
 .stm-game-dir:last-child { border-bottom: 0; }
 .stm-game-dir-name { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
@@ -303,10 +358,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .stm-tab, .stm-preset, .stm-bar-fill { transition: none; }
+    .stm-tab, .stm-seg-btn, .stm-bar-fill, .stm-more > summary::before { transition: none; }
 }
 
 /* The header's subtitle is static markup in index.html with an inline --text-muted (2.3:1 on
    the dark header). Overridden here rather than there: that line of index.html belongs to a
    change in flight. Owner: drop the inline colour in index.html and this rule can go. */
 #modal-storage [data-i18n="storage.modalSubtitle"] { color: var(--bmm-text-secondary) !important; }
+
+/* An action row with nothing to show (no pause offered, no message) takes no room. */
+.stm-game-now .stm-row:has(> .stm-game-pause[hidden]):has(> .stm-msg:empty) { display: none; }

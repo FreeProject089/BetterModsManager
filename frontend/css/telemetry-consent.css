@@ -1,0 +1,123 @@
+/**
+ * telemetry-consent.css: the telemetry consent dialog (core/analytics.ts showConsentModal)
+ * and the category rows of Settings → Privacy. Loaded on demand by ensureConsentCss().
+ *
+ * The dialog has two modes, set on the list (`#tc-cats[data-mode]`):
+ *   · all    : the categories as a plain list, one line each (what « Tout activer » turns on);
+ *   · choose : the same list with a switch per row, plus the two extras that are never part
+ *              of "all" (the detailed hardware report, unmasked replay).
+ */
+
+.modal.tc-modal {
+    width: min(620px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+.tc-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.05rem; }
+.tc-body { padding: 14px 20px 6px; overflow-y: auto; gap: 10px; }
+
+.tc-lede { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
+.tc-note {
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--bmm-text-primary);
+    border: 1px solid var(--bmm-border);
+    border-inline-start: 3px solid var(--bmm-accent);
+    border-radius: 8px;
+    background: var(--bmm-bg-elevated);
+}
+
+/* ── The categories ─────────────────────────────────────────────────────────── */
+.tc-cats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--bmm-border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.tc-cat + .tc-cat { border-top: 1px solid var(--bmm-border); }
+.tc-cat-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    cursor: default;
+}
+.tc-cat-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.tc-cat-txt b { font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); }
+.tc-cat-txt span { font-size: 11.5px; line-height: 1.4; color: var(--bmm-text-secondary); }
+.tc-sw { flex: none; }
+
+.tc-cats[data-mode="all"] .tc-sw,
+.tc-cats[data-mode="all"] .tc-extra { display: none; }
+.tc-cats[data-mode="choose"] .tc-cat-row { cursor: pointer; }
+.tc-cats[data-mode="choose"] .tc-cat-row:hover { background: var(--bmm-bg-hover); }
+.tc-extra .tc-cat-txt b { font-weight: 500; }
+.tc-cat:has(input:disabled) .tc-cat-row { opacity: .55; cursor: default; }
+
+/* ── "En savoir plus" ───────────────────────────────────────────────────────── */
+.tc-more { font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.tc-more > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+    padding: 2px 0;
+}
+.tc-more ul { margin: 6px 0; padding-inline-start: 18px; }
+.tc-more p { margin: 6px 0; }
+.tc-more-inner { margin: 4px 0 6px; }
+.tc-more-inner > summary { font-weight: 500; color: var(--bmm-text-secondary); }
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+.tc-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--bmm-border);
+}
+.tc-later { margin-inline-end: auto; }
+.tc-foot > .btn { white-space: nowrap; }
+.tc-hint { margin: 0; flex-basis: 100%; order: 10; font-size: 11.5px; color: var(--bmm-warning); min-height: 0; }
+.tc-hint:empty { display: none; }
+.tc-rec {
+    margin-inline-start: 8px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bmm-text-on-accent) 22%, transparent);
+    color: var(--bmm-text-on-accent);
+}
+
+@media (max-width: 560px) {
+    .tc-foot > .btn { flex: 1 1 auto; }
+    .tc-later { flex-basis: 100%; order: 11; }
+}
+
+/* ── Settings → Privacy: the category rows ──────────────────────────────────── */
+.tc-settings { display: flex; flex-direction: column; margin: 12px 0; }
+.tc-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.tc-settings-head .tc-settings-title { font-size: 12px; font-weight: 600; color: var(--bmm-text-primary); }
+.tc-settings-head .btn[hidden] { display: none; }
+.tc-settings .tc-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 !important;
+    padding: 8px 0;
+}
+.tc-settings .tc-setting + .tc-setting { border-top: 1px solid var(--bmm-border); }
+.tc-setting-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tc-setting-txt > span:first-child { font-size: 12px !important; color: var(--bmm-text-primary) !important; }
+.tc-setting-hint { font-size: 11px; line-height: 1.4; color: var(--bmm-text-secondary); }

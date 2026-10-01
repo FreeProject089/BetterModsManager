@@ -161,6 +161,17 @@ export type InvokeFailureKind = 'error' | 'cancel' | 'network' | 'validation' | 
 let _onInvokeFailure: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null = null;
 export function setInvokeFailureHook(fn: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null): void { _onInvokeFailure = fn; }
 
+// Content-free usage statistics (core/laya-telemetry.ts) watch the commands of one family by
+// PREFIX: name, arguments, outcome and duration are handed over, and the observer keeps only
+// counts and enum values. One prefix, one observer; commands outside it cost a string compare.
+export type InvokeObserver = (command: string, args: Record<string, unknown>, ok: boolean, result: unknown, ms: number) => void;
+let _observer: { prefix: string; fn: InvokeObserver } | null = null;
+export function setInvokeObserver(prefix: string, fn: InvokeObserver | null): void { _observer = fn ? { prefix, fn } : null; }
+function observe(command: string, args: Record<string, unknown>, ok: boolean, result: unknown, ms: number): void {
+    if (!_observer || !command.startsWith(_observer.prefix)) return;
+    try { _observer.fn(command, args, ok, result, ms); } catch { /* statistics never break a call */ }
+}
+
 export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -178,10 +189,12 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
         const res = await _invoke(command, args);
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
+        observe(command, args, true, res, duration);
         return res;
     } catch (err) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'error', err, duration);
+        observe(command, args, false, err, duration);
         // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
         const errStr = String(err);
         const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel'

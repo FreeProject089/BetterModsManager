@@ -1,6 +1,6 @@
 # Politique de confidentialité — Better Mods Manager (BMM)
 
-_Dernière mise à jour : 2026-09-29_
+_Dernière mise à jour : 2026-09-30_
 
 Better Mods Manager est une application de bureau open‑source (GPL‑3.0) qui fonctionne sur votre
 ordinateur. Vos profils, mods, modpacks, plugins et réglages sont stockés **localement**, dans le
@@ -22,9 +22,8 @@ relative aux données, c'est ce document qui fait référence.
 | Vérification des mises à jour (§2.2) | Actif | Actif |
 | Tests de connectivité et polices web (§2.3) | Actif, toujours | Actif, toujours |
 | **Télémétrie** (§3) | Désactivée. La case de l'installateur est **décochée** ; la cocher ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM, qui doit encore être accepté | Désactivée jusqu'à votre réponse à l'écran de consentement du premier lancement |
-| Replay de session envoyé avec la télémétrie (§3.2) | Désactivé tant que la télémétrie n'est pas acceptée ; actif ensuite, sauf si vous le décochez | Pré‑coché dans la section « Personnaliser » de l'écran de consentement |
-| Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, et l'installateur pose désormais la question comme une option distincte | **Désactivé** — décoché dans la section « Personnaliser » de l'écran de consentement |
-| Erreurs envoyées en direct (§3.6) | **Désactivé** sauf si coché (case à part) ; sans effet sans télémétrie | Désactivé, décoché sur l'écran de consentement. Si vous aviez **déjà** accepté la télémétrie avant l'arrivée de cette option, il démarre **activé** (Paramètres → Confidentialité le coupe) |
+| Catégories de télémétrie : utilisation, performance, erreurs en direct, statistiques Laya, replay de session (§3.0) | Désactivées avec la télémétrie. Cocher la télémétrie les coche toutes ; son lien *Choisir* permet d'en décocher | Comprises dans *Tout activer* sur l'écran de consentement ; *Choisir* affiche un interrupteur pour chacune |
+| Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, même quand la télémétrie est cochée (sa propre case sous *Choisir*) | **Désactivé** : hors de *Tout activer*, un interrupteur à part sous *Choisir* |
 | **Discord Rich Presence** (§4) | **Désactivé** : la case de l'installateur est décochée | Désactivé |
 | Rapports de bug, de plantage et retours (§5) | Seulement quand vous cliquez sur Envoyer | Seulement quand vous cliquez sur Envoyer |
 | **IA optionnelle** (§6.10) | **Désactivée** : la case de l'installateur est décochée ; la cocher allume l'interrupteur **sans fournisseur**, donc rien n'est envoyé pour autant | Désactivée |
@@ -161,12 +160,35 @@ l'installateur :
 - **Si vous installez sans l'installateur**, la télémétrie est désactivée jusqu'à votre réponse à ce
   même écran.
 
+L'écran de consentement a quatre réponses, toutes des boutons : **Tout activer** (recommandé : les
+cinq catégories du §3.0), **Choisir** (un interrupteur par catégorie, puis *Valider*), **Non merci**
+(désactivée, enregistré) et **Plus tard** (aussi la touche Échap) : *Plus tard* n'enregistre rien,
+ne démarre rien, et l'écran revient au prochain lancement. Un clic à côté de l'écran n'est pas une
+réponse et ne change rien.
+
 Paramètres → Confidentialité la désactive à tout moment ; désactivée, rien du §3 n'est collecté ni
 envoyé.
 
 Un lien `bmm://telemetry/…` (que n'importe quelle page web peut ouvrir) ne peut pas modifier ces
 réglages à lui seul : il ouvre l'écran de consentement de BMM, ou une confirmation s'il ne fait que
 désactiver quelque chose, et rien ne change si vous n'acceptez pas à cet endroit.
+
+### 3.0 Catégories
+La télémétrie, c'est un consentement et cinq catégories en dessous. Chacune se désactive seule, sur
+l'écran de consentement (*Choisir*) et dans Paramètres → Confidentialité ; *Tout activer* active les
+cinq.
+
+| Catégorie | Ce qu'elle couvre |
+|---|---|
+| Statistiques d'utilisation | Pages, fenêtres, clics, parcours, début et fin de session (§3.1 *Utilisation*, *Interactions*) |
+| Performance | Images par seconde, temps d'image, mémoire de l'interface, temps de chargement (§3.1 *Performances*) |
+| Erreurs en direct | Erreurs et plantages au moment où ils arrivent (§3.6), et les journaux d'avertissements et d'erreurs du §3.1 |
+| Statistiques Laya | L'usage de Laya, sans aucun contenu (§3.7) |
+| Replay de session | L'enregistrement masqué de la fenêtre de BMM (§3.2) |
+
+L'identité et le profil système du §3.1 accompagnent toute catégorie active : ce sont eux qui
+rendent les autres lisibles. Deux options ne font jamais partie de *Tout activer* : le rapport
+matériel hebdomadaire (§3.3) et le replay non masqué (§3.2).
 
 ### 3.1 Ce qui est envoyé
 - **Identité :** votre Creator ID (§2.1) et un identifiant aléatoire propre à l'installation.
@@ -202,10 +224,11 @@ mise en page, les clics, le défilement et la navigation. **Le texte saisi dans 
 masqué**, de même que les éléments marqués comme noms ou chemins. Les autres fenêtres et le reste de
 votre écran ne sont jamais enregistrés.
 
-- **Par défaut :** actif **tant que la télémétrie l'est** — et la télémétrie est désactivée si vous
-  ne l'avez pas acceptée (§3), donc cette case seule n'envoie rien. Dans BetterInstaller, c'est la
-  case « Replay de session dans la télémétrie », pré‑cochée ; dans BMM, c'est une option de
-  Paramètres → Confidentialité et de la section « Personnaliser » de l'écran de consentement.
+- **Par défaut :** actif **tant que la télémétrie l'est**, comme l'une de ses catégories (§3.0) ;
+  la télémétrie est désactivée si vous ne l'avez pas acceptée (§3), donc seul il n'envoie rien. Dans
+  BetterInstaller, c'est la case « Replay de session (masqué) » sous le lien *Choisir* de la case
+  télémétrie ; dans BMM, un interrupteur de Paramètres → Confidentialité et du *Choisir* de l'écran
+  de consentement.
 - Un mode distinct **« complet (non masqué) »** existe pour votre propre débogage. Il reste
   désactivé sauf si vous l'activez ; activé, le texte saisi n'est pas masqué et les images locales
   affichées dans la fenêtre sont intégrées à l'enregistrement. Il ne s'active qu'à la main, dans
@@ -221,12 +244,12 @@ version, date et fabricant du BIOS, UUID de la machine, détails du cache et des
 processeur, modèle, numéro de série, taille et interface de chaque disque, **adresse MAC de chaque
 carte réseau physique**, build du système, démarrage UEFI ou legacy, état de Secure Boot et du TPM.
 
-- **Par défaut : désactivé**, partout et à part. BetterInstaller pose désormais la question comme
-  une case distincte « Rapport matériel hebdomadaire et benchmark », décochée ; dans BMM, c'est
-  l'interrupteur « Benchmark automatique (tous les 7 jours) + rapport matériel supplémentaire » de
-  Paramètres → Confidentialité et de la section « Personnaliser » de l'écran de consentement,
-  décoché lui aussi. **Accepter la télémétrie ne l'active pas** — les identifiants matériels
-  ci‑dessus ne sont collectés que si vous cochez cette case vous‑même.
+- **Par défaut : désactivé**, partout et à part. BetterInstaller pose la question avec une case
+  distincte « Rapport matériel hebdomadaire » sous le lien *Choisir* de la case télémétrie, décochée
+  même quand la télémétrie est cochée ; dans BMM, c'est l'interrupteur « Rapport matériel
+  hebdomadaire » de Paramètres → Confidentialité et du *Choisir* de l'écran de consentement,
+  désactivé lui aussi. **Accepter la télémétrie, même avec *Tout activer*, ne l'active pas** : les
+  identifiants matériels ci‑dessus ne sont collectés que si vous le cochez vous‑même.
 
 ### 3.4 Ce que la télémétrie n'envoie jamais
 Le contenu de vos mods, de vos fichiers de jeu ou d'autres fichiers ; les valeurs que vous saisissez
@@ -273,15 +296,16 @@ dans les champs (sauf si vous activez le mode non masqué du §3.2) ; votre nom 
 - Le serveur limite le nombre de lots qu'une même adresse peut envoyer par minute.
 
 ### 3.6 Erreurs envoyées en direct
-Un interrupteur à part, **« Envoyer les erreurs en direct »** (Paramètres → Confidentialité, la
-section « Personnaliser » de l'écran de consentement, et sa propre case dans BetterInstaller),
-envoie un court rapport en quelques secondes quand BMM rencontre une erreur. Il ne fonctionne
-**que si la télémétrie est activée** ; couper la télémétrie l'arrête et efface les rapports qui
-attendaient encore sur votre PC.
+La catégorie **« Erreurs en direct »** (Paramètres → Confidentialité, le *Choisir* de l'écran de
+consentement, et une case sous la case télémétrie de l'installateur) envoie un court rapport en
+quelques secondes quand BMM rencontre une erreur. Elle ne fonctionne **que si la télémétrie est
+activée** ; couper la télémétrie l'arrête et efface les rapports qui attendaient encore sur votre
+PC. Le même interrupteur couvre aussi les journaux d'avertissements et d'erreurs du §3.1.
 
-- **Par défaut :** désactivé, et décoché partout où il est proposé. Une exception, décidée une seule
-  fois : si vous aviez déjà accepté la télémétrie quand cette option est apparue, il démarre activé,
-  car c'est une forme plus étroite des journaux d'erreurs que la télémétrie envoyait déjà (§3.1).
+- **Par défaut :** **activée avec la télémétrie**. Accepter la télémétrie (avec *Tout activer*, ou
+  en activant la télémétrie dans Paramètres → Confidentialité) l'active ; *Choisir* permet de la
+  laisser désactivée, et Paramètres → Confidentialité la coupe seule à tout moment. Réactiver la
+  télémétrie après l'avoir coupée la réactive.
 - **Ce qui est envoyé :** les erreurs JavaScript, les plantages côté Rust, les commandes en échec sur
   une vraie erreur (pas une annulation, pas une absence de réseau, pas un message déjà affiché), et
   les déploiements, installations, sauvegardes et tâches planifiées en échec. Pour chacun : le
@@ -307,6 +331,28 @@ attendaient encore sur votre PC.
   les mêmes serveurs (catégorie, gravité, « votre configuration ou un bug de BMM ») ; le texte n'est
   jamais envoyé à un fournisseur d'IA extérieur. Même durée de conservation que le reste de la
   télémétrie (§3.5).
+
+### 3.7 Statistiques d'usage de Laya
+Une catégorie à part entière (§3.0), activée par *Tout activer*. Elle dit à l'équipe si Laya (§6.10)
+est utile, sans rien envoyer de ce que Laya a lu ou écrit. Pour chaque utilisation d'une fonction
+de Laya, BMM envoie :
+
+- **quelle fonction** (suggestions pour un mod, brouillon de description, Demander à Laya, recherche
+  intelligente, tri d'un rapport, test de connexion) et **où elle a tourné** : intégrée à BMM, le
+  serveur BetterCommunity, votre propre serveur Laya, une API externe, ou de simples règles ;
+- **combien de temps** (arrondi à 10 ms, et une tranche comme « 1 à 3 s »), si elle a répondu, et
+  si elle **s'est abstenue** (rien d'assez sûr) ;
+- pour les suggestions, **le nom des champs** suggérés (tags, catégorie, auteur…) et, quand vous
+  appliquez, les champs **gardés ou refusés** ;
+- pour Demander à Laya, **combien de résultats**, s'ils étaient peu sûrs, et quand vous en ouvrez
+  un, **son type** (un mod, une page, un réglage…) ;
+- l'**installation, la suppression ou l'annulation** du modèle intégré, et si elle a réussi ;
+- une erreur sous forme de **code court** (`timeout`, `no_model`…), jamais son message.
+
+**Jamais envoyé :** votre question, le texte que Laya a lu ou écrit, la valeur d'une suggestion, un
+nom de mod, de fichier ou de profil, un identifiant, un chemin ou un message d'erreur. Ces
+statistiques vont au serveur de télémétrie avec le reste, avec la même conservation et le même
+effacement (§3.5).
 
 ---
 
@@ -518,9 +564,10 @@ vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir
 | Vérification des mises à jour | Oui, par défaut | Adresse IP, user‑agent du programme | GitHub, bettercommunity.ch |
 | Tests de connectivité, polices, catalogue d'applications | Oui, toujours | Adresse IP | Google, Cloudflare, GitHub |
 | **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système avec IP publique et locale, utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts — le serveur ne conserve l'adresse publique que tronquée à son réseau et supprime l'adresse locale | Serveur de télémétrie BetterCommunity ; votre IP à ipify.org, votre réseau tronqué à ipwho.is |
-| Replay de session (avec la télémétrie, actif sauf si décoché) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
-| Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
-| Erreurs envoyées en direct (**désactivé** sauf si coché, nécessite la télémétrie) | Oui, en quelques secondes | Message d'erreur et emplacement dans le code, sans secrets, noms de dossiers, e‑mails ni IP, version de BMM, système, empreinte à sens unique du Creator ID | Serveur de télémétrie BetterCommunity (classé par Laya sur les mêmes serveurs) |
+| Replay de session (catégorie de télémétrie, actif avec elle sauf si désactivé) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
+| Statistiques Laya (catégorie de télémétrie, actives avec elle sauf si désactivées) | Oui | Fonction, où elle a tourné, durée, champs suggérés puis gardés ou refusés, nombre de résultats, codes d'erreur ; jamais de texte (§3.7) | Serveur de télémétrie BetterCommunity |
+| Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part, hors de *Tout activer*) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
+| Erreurs envoyées en direct (catégorie de télémétrie, **active avec elle** sauf si désactivée) | Oui, en quelques secondes | Message d'erreur et emplacement dans le code, sans secrets, noms de dossiers, e‑mails ni IP, version de BMM, système, empreinte à sens unique du Creator ID | Serveur de télémétrie BetterCommunity (classé par Laya sur les mêmes serveurs) |
 | **Discord Rich Presence** (**désactivé** par défaut, dans BMM comme dans l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
 | Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
 | Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |
@@ -535,9 +582,10 @@ vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir
 
 - La télémétrie, le rapport matériel hebdomadaire et Discord Rich Presence sont **désactivés sauf si
   vous les activez** : les cases de l'installateur sont décochées, et cocher celle de la télémétrie
-  ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM. Décochez le replay de
-  session dans l'installateur ou dans Paramètres → Confidentialité ; activez ou désactivez chacun
-  plus tard dans les Paramètres ; désactivez la vérification automatique des mises à jour dans les
+  ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM. Chaque catégorie de
+  télémétrie (§3.0) se désactive seule, dans l'installateur (*Choisir*), sur l'écran de consentement
+  (*Choisir*) ou dans Paramètres → Confidentialité ; activez ou désactivez chacun plus tard dans les
+  Paramètres ; désactivez la vérification automatique des mises à jour dans les
   Paramètres.
 - Exportez ou videz le tampon local de télémétrie, demandez l'effacement par paquet, ou demandez une
   copie de vos données (§3.5).

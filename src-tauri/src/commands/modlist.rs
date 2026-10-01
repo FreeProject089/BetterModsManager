@@ -39,6 +39,133 @@ struct ModSnapshot {
 // implementation that will be a version behind.
 pub use crate::commands::creds::{seal_credentials, CredsRequest};
 
+/// Cancel tokens for the .mm list operations (export, install).
+///
+/// Both used ONE flag in AppState. A run reset it on start, so a Cancel that arrived while the
+/// previous run was still unwinding was lost, or cancelled the next one; the install flag is
+/// also the repo installs' flag, so cancelling a list stopped a repo sync. And a flag is only
+/// seen between steps: a 4 GB copy or a single big file in an archive ran to its end after
+/// Cancel. Now each run has its own token (the id the screen sent), and the governor tickets
+/// doing its work are attached to it: cancelling the run cancels them, so the copy stops at
+/// its next block.
+pub mod runs {
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+
+    struct Run { flag: Arc<AtomicBool>, tickets: Vec<u64> }
+
+    fn table() -> MutexGuard<'static, HashMap<String, Run>> {
+        static T: OnceLock<Mutex<HashMap<String, Run>>> = OnceLock::new();
+        T.get_or_init(Default::default).lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    fn cancel_ticket(id: u64) { crate::governor::runtime::global().queue().cancel(id); }
+
+    /// A running operation. Dropping it forgets the token.
+    pub struct Guard { key: String, pub flag: Arc<AtomicBool> }
+    impl Guard {
+        pub fn cancelled(&self) -> bool { self.flag.load(Ordering::SeqCst) }
+        /// Stop this run from inside (a ticket cancelled from the dashboard).
+        pub fn cancel(&self) { cancel_key(&self.key); }
+        pub fn key(&self) -> String { self.key.clone() }
+    }
+    impl Drop for Guard {
+        fn drop(&mut self) { table().remove(&self.key); }
+    }
+
+    /// `kind` is "export" or "install"; `id` the screen's token (a fresh one when absent).
+    pub fn begin(kind: &str, id: Option<String>) -> Guard {
+        let id = id
+            .map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(64).collect::<String>())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let key = format!("{}:{}", kind, id);
+        let flag = Arc::new(AtomicBool::new(false));
+        table().insert(key.clone(), Run { flag: flag.clone(), tickets: Vec::new() });
+        Guard { key, flag }
+    }
+
+    /// Tie a governor ticket to a run. Already cancelled: the ticket is cancelled at once.
+    pub fn attach(key: &str, ticket: u64) {
+        let mut t = table();
+        if let Some(r) = t.get_mut(key) {
+            if r.flag.load(Ordering::SeqCst) { drop(t); cancel_ticket(ticket); return; }
+            r.tickets.push(ticket);
+        }
+    }
+    pub fn detach(key: &str, ticket: u64) {
+        if let Some(r) = table().get_mut(key) { r.tickets.retain(|&x| x != ticket); }
+    }
+
+    fn cancel_key(key: &str) -> bool {
+        let tickets = {
+            let mut t = table();
+            let Some(r) = t.get_mut(key) else { return false };
+            r.flag.store(true, Ordering::SeqCst);
+            std::mem::take(&mut r.tickets)
+        };
+        for id in tickets { cancel_ticket(id); }
+        true
+    }
+
+    /// Cancel one run of `kind`, or every run of it when `id` is None (an older screen).
+    /// Returns how many runs were stopped.
+    pub fn cancel(kind: &str, id: Option<&str>) -> usize {
+        let prefix = format!("{}:", kind);
+        let keys: Vec<String> = table().keys()
+            .filter(|k| k.starts_with(&prefix) && id.is_none_or(|i| k[prefix.len()..] == *i))
+            .cloned().collect();
+        keys.iter().filter(|k| cancel_key(k)).count()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn a_cancel_reaches_its_own_run_only() {
+            let a = begin("export", Some("t-a".into()));
+            let b = begin("export", Some("t-b".into()));
+            let c = begin("install", Some("t-a".into()));
+            assert_eq!(cancel("export", Some("t-a")), 1);
+            assert!(a.cancelled());
+            assert!(!b.cancelled(), "another export was cancelled");
+            assert!(!c.cancelled(), "an install with the same id was cancelled");
+        }
+
+        #[test]
+        fn no_id_cancels_every_run_of_the_kind() {
+            let a = begin("install", Some("n-a".into()));
+            let b = begin("install", Some("n-b".into()));
+            assert!(cancel("install", None) >= 2);
+            assert!(a.cancelled() && b.cancelled());
+        }
+
+        #[test]
+        fn a_finished_run_is_forgotten() {
+            let key = { let g = begin("export", Some("gone".into())); g.key() };
+            assert!(!table().contains_key(&key));
+            assert_eq!(cancel("export", Some("gone")), 0);
+        }
+
+        #[test]
+        fn cancelling_the_run_cancels_its_tickets() {
+            let g = begin("install", Some("tk".into()));
+            let q = crate::governor::runtime::global().queue();
+            let t = q.begin_unslotted(crate::governor::config::OpKind::Scan, "test");
+            attach(&g.key(), t.id());
+            assert!(!t.is_cancelled());
+            cancel("install", Some("tk"));
+            assert!(t.is_cancelled(), "the copy would have run to its end");
+            // A ticket attached after the cancel is cancelled on arrival.
+            let t2 = q.begin_unslotted(crate::governor::config::OpKind::Scan, "test2");
+            attach(&g.key(), t2.id());
+            assert!(t2.is_cancelled());
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn export_modlist(
     state: tauri::State<'_, AppState>,
@@ -49,11 +176,13 @@ pub async fn export_modlist(
     author: String,
     output_path: String,
     include_hashes: bool,
+    // The screen's cancel token (runs above). None from older callers: the shared flag only.
+    run_id: Option<String>,
     // Credentials for the protected sources this list names — see seal_credentials.
     creds: Option<CredsRequest>,
 ) -> Result<(), AppError> {
     // ── Phase 1: hold lock only long enough to read in-memory state ──────────
-    let (game_name, game_path_hint, snapshots, tag_defs, packs) = {
+    let (game_name, game_path_hint, snapshots, tag_defs, packs, load_order) = {
         let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
         let active_profile = if let Some(ref id) = data.active_profile_id {
@@ -124,7 +253,18 @@ pub async fn export_modlist(
             .cloned()
             .collect();
 
-        (game_name, game_path_hint, snapshots, tag_defs, packs)
+        // The profile's activation order, limited to the mods this list carries: whoever
+        // applies the list gets them in the order they were on the author's machine.
+        let carried: std::collections::HashSet<&String> = snapshots.iter().map(|s| &s.id).collect();
+        let load_order = active_profile.and_then(|p| {
+            let order: Vec<String> = p.active_mods.iter().filter(|id| carried.contains(id)).cloned().collect();
+            if order.is_empty() { return None; }
+            let lib: Vec<crate::commands::order_share::LibMod> =
+                data.mods.iter().map(crate::commands::order_share::LibMod::from_entry).collect();
+            Some(crate::commands::order_share::build_doc(&order, &lib, Some(p.name.clone()), Some(p.game_name.clone()).filter(|g| !g.is_empty())))
+        });
+
+        (game_name, game_path_hint, snapshots, tag_defs, packs, load_order)
         // lock dropped here
     };
 
@@ -140,19 +280,23 @@ pub async fn export_modlist(
         modlist.credentials = seal_credentials(&state, req)?;
     }
     modlist.modpacks = packs;
+    modlist.load_order = load_order;
 
     // Reset the cancel flag before starting
     state.export_cancelled.store(false, Ordering::SeqCst);
+    let run = runs::begin("export", run_id);
+    let stop = || state.export_cancelled.load(Ordering::SeqCst) || run.cancelled();
 
     // One governor ticket for the walk (G3b): Hash when every file is read and hashed, Scan
     // when only names and sizes are listed. Its checkpoint runs per file; a cancel from the
     // dashboard lands on the same flag as the export's own Cancel button.
     let kind = if include_hashes { crate::governor::config::OpKind::Hash } else { crate::governor::config::OpKind::Scan };
     let ticket = std::sync::Arc::new(crate::governor::runtime::global().begin_async(kind, "export mod list".to_string()).await);
+    runs::attach(&run.key(), ticket.id());
 
     for (i, snap) in snapshots.into_iter().enumerate() {
         // Check for cancellation before each mod
-        if state.export_cancelled.load(Ordering::SeqCst) {
+        if stop() {
             state.export_cancelled.store(false, Ordering::SeqCst);
             let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
                 "current": i, "total": total, "cancelled": true,
@@ -169,8 +313,9 @@ pub async fn export_modlist(
         // spawn_blocking keeps the file walk off the async runtime thread
         let folder = snap.folder.clone();
         let cancel_flag = std::sync::Arc::clone(&state.export_cancelled);
+        let run_flag = std::sync::Arc::clone(&run.flag);
         let t = std::sync::Arc::clone(&ticket);
-        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes, &cancel_flag, &t))
+        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes, &[&*cancel_flag, &*run_flag], &t))
             .await
             .unwrap_or_default();
 
@@ -196,10 +341,11 @@ pub async fn export_modlist(
         });
     }
 
+    runs::detach(&run.key(), ticket.id());
     drop(ticket);
     // A cancel that landed during the LAST mod's walk: the loop above only looks before each
     // mod, so without this the list was written with that mod's file tree cut short.
-    if state.export_cancelled.load(Ordering::SeqCst) {
+    if stop() {
         state.export_cancelled.store(false, Ordering::SeqCst);
         let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
             "current": total, "total": total, "cancelled": true,
@@ -289,21 +435,27 @@ pub async fn export_modlist(
     Ok(())
 }
 
-/// Cancel an in-progress export — sets the atomic flag checked each iteration.
+/// Cancel an in-progress export. With the run's token, that run only; without (an older
+/// caller), every export and the shared flag, as before.
 #[tauri::command]
-pub fn cancel_export_modlist(state: State<'_, AppState>) {
-    state.export_cancelled.store(true, Ordering::SeqCst);
+pub fn cancel_export_modlist(state: State<'_, AppState>, run_id: Option<String>) {
+    let n = runs::cancel("export", run_id.as_deref());
+    if run_id.is_none() || n == 0 {
+        state.export_cancelled.store(true, Ordering::SeqCst);
+    }
 }
 
 /// Walk a mod folder and record each file's relative path, size, and optional SHA-256.
-/// Checks the cancellation flag after each file when hashing is enabled, and the governor
-/// ticket's checkpoint before every file (a cancelled ticket sets the flag).
+/// Checks the cancel flags before every file and inside every hash (a big file stops within
+/// a block, not at its end), and the governor ticket's checkpoint before every file (a
+/// cancelled ticket sets the first flag).
 fn build_file_tree(
     folder: &PathBuf,
     include_hashes: bool,
-    cancel_flag: &std::sync::atomic::AtomicBool,
+    flags: &[&std::sync::atomic::AtomicBool],
     ticket: &crate::governor::queue::Ticket,
 ) -> Vec<ModFileEntry> {
+    let stop = || flags.iter().any(|f| f.load(Ordering::Relaxed));
     let mut entries = Vec::new();
     // An archived mod is a .zip, and a .zip has to be read as what is INSIDE it or the
     // exported list describes a single file called "" with the size of the archive. Every
@@ -312,17 +464,14 @@ fn build_file_tree(
     let folder = &crate::archive::mod_read_root(folder);
     if let Ok(files) = fs_utils::list_mod_files(folder) {
         for rel in files {
-            // Check cancellation before each file when SHA-256 is active
-            if include_hashes && cancel_flag.load(Ordering::Relaxed) {
-                break;
-            }
+            if stop() { break; }
             if ticket.checkpoint().is_err() {
-                cancel_flag.store(true, Ordering::SeqCst);
+                if let Some(f) = flags.first() { f.store(true, Ordering::SeqCst); }
                 break;
             }
             let full = folder.join(&rel);
             let size = std::fs::metadata(&full).map(|md| md.len()).unwrap_or(0);
-            let sha256 = if include_hashes { hash_file_streaming(&full) } else { None };
+            let sha256 = if include_hashes { hash_file_streaming(&full, &stop) } else { None };
             entries.push(ModFileEntry {
                 relative_path: rel.to_string_lossy().to_string(),
                 is_directory: false,
@@ -334,13 +483,15 @@ fn build_file_tree(
     entries
 }
 
-/// SHA-256 of a file read in 64 KiB chunks — safe for large files.
-fn hash_file_streaming(path: &PathBuf) -> Option<String> {
+/// SHA-256 of a file read in 64 KiB chunks — safe for large files. `None` when `stop` turns
+/// true part-way (the export is being cancelled and the value is never written).
+fn hash_file_streaming(path: &PathBuf, stop: &dyn Fn() -> bool) -> Option<String> {
     let file = std::fs::File::open(path).ok()?;
     let mut reader = std::io::BufReader::with_capacity(65536, file);
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 65536];
     loop {
+        if stop() { return None; }
         let n = reader.read(&mut buf).ok()?;
         if n == 0 { break; }
         hasher.update(&buf[..n]);

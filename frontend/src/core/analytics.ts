@@ -9,9 +9,11 @@
 import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { getLinks } from './links-config.js';
-import { escHtml } from './utils.js';
+import { escHtml, escAttr } from './utils.js';
 import type { TelemetryLinkPlan } from './telemetry-link.js';
-import { initLiveIssues, refreshLiveIssues, mountLiveIssuesToggle, setLiveErrors } from './live-issues.js';
+import { initLiveIssues, refreshLiveIssues, mountLiveIssuesToggle, liveErrorsSetting, liveErrorsStored, setLiveErrors } from './live-issues.js';
+import { initLayaTelemetry } from './laya-telemetry.js';
+import { categoryOf, parseStoredCategories, allOn, anyOn, TELEMETRY_CATEGORIES, type CategoryChoice, type TelemetryCategory } from './telemetry-model.js';
 
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
@@ -80,6 +82,8 @@ export async function initAnalytics(): Promise<void> {
     catch { _consent = null; }
     // Live errors: every launch, whatever the consent (Rust decides; off = nothing is sent).
     void initLiveIssues(_sessionId);
+    // Laya usage statistics: watches the ai_* commands; track() drops them unless allowed.
+    initLayaTelemetry((event, props) => track(event, props as Record<string, any>));
     // NOTE: we no longer pop the consent modal on a timer here — the startup
     // sequence (app.ts) calls maybeShowConsentModal() AFTER the TOS + Privacy
     // modals so it appears last and in order.
@@ -97,9 +101,36 @@ export async function maybeShowConsentModal(): Promise<void> {
     await showConsentModal();
 }
 
-/** Track an event (no-op unless the user opted in). */
+// ── Categories ────────────────────────────────────────────────────────────────
+// Telemetry is one consent and five categories under it (telemetry-model.ts). Three are kept
+// here (usage, perf, laya: localStorage bmm_telemetry_cats, absent = on); "errors" is the live
+// errors switch Rust keeps (AppSettings.live_errors) and "replay" the replay switch below.
+const CATS_KEY = 'bmm_telemetry_cats';
+function storedCats(): { usage: boolean; perf: boolean; laya: boolean } {
+    try { return parseStoredCategories(localStorage.getItem(CATS_KEY)); } catch { return parseStoredCategories(null); }
+}
+function storeCats(c: { usage: boolean; perf: boolean; laya: boolean }): void {
+    try { localStorage.setItem(CATS_KEY, JSON.stringify({ usage: c.usage, perf: c.perf, laya: c.laya })); } catch { }
+}
+/** The five categories as they stand (whatever the consent). */
+export function currentCategories(): CategoryChoice {
+    const c = storedCats();
+    return { ...c, errors: liveErrorsSetting(), replay: replayEnabled() };
+}
+function categoryAllowed(event: string): boolean {
+    // The anonymous profile (OS, CPU, RAM, GPU, app version) goes with any category: it is
+    // what makes the others readable, and it is listed under "En savoir plus".
+    if (event === '$identify') return true;
+    const cat: TelemetryCategory = categoryOf(event);
+    if (cat === 'errors') return liveErrorsSetting();
+    if (cat === 'replay') return replayEnabled();
+    return storedCats()[cat];
+}
+
+/** Track an event (no-op unless the user opted in, and its category is on). */
 export function track(event: string, props: Record<string, any> = {}): void {
     if (_consent !== true) return;
+    if (!categoryAllowed(event)) return;
     invoke('analytics_track', { event, properties: { ...baseProps(), ...props }, distinctId: _distinctId }).catch(() => {});
 }
 
@@ -145,11 +176,14 @@ export function trackView(view: string): void {
 
 export function getConsent(): boolean | null { return _consent; }
 
-export async function setConsent(enabled: boolean): Promise<void> {
+/** `liveErrors`: the errors category, when the caller knows it (the consent dialog). Left out,
+ *  Rust turns live errors ON whenever telemetry goes from off to on (owner's rule: live errors
+ *  follow telemetry by default, and can still be turned off on their own). */
+export async function setConsent(enabled: boolean, opts: { liveErrors?: boolean } = {}): Promise<void> {
     const wasOff = _consent !== true;
     _consent = enabled;
-    try { await invoke('set_analytics_consent', { enabled }); } catch {}
-    void refreshLiveIssues();
+    try { await invoke('set_analytics_consent', { enabled, liveErrors: opts.liveErrors ?? null }); } catch {}
+    await refreshLiveIssues();
     if (enabled) {
         await startCollection();
         // First opt-in: run one benchmark now so the team gets a baseline.
@@ -671,8 +705,14 @@ export function setTelemetryBenchAllowed(on: boolean): void { localStorage.setIt
 // It now only PRE-SELECTS the choice: this flag makes the dialog appear with the
 // installer's answers filled in, and nothing is collected until Accept is clicked here.
 const PRESELECT_KEY = 'bmm_telemetry_installer_optin';   // '1' = ticked in the installer
-export function setInstallerTelemetryPreselect(on: boolean): void {
+export function setInstallerTelemetryPreselect(on: boolean, cats: { usage?: unknown; perf?: unknown; laya?: unknown } = {}): void {
     try { localStorage.setItem(PRESELECT_KEY, on ? '1' : '0'); } catch { }
+    // The installer's per-category boxes ("Choisir"), when it sent them. Stored as the
+    // categories themselves: they act only once consent is given, in BMM's own dialog, which
+    // starts from them.
+    const cur = storedCats();
+    const pick = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
+    if (on) storeCats({ usage: pick(cats.usage, cur.usage), perf: pick(cats.perf, cur.perf), laya: pick(cats.laya, cur.laya) });
 }
 function installerPreselect(): boolean {
     try { return localStorage.getItem(PRESELECT_KEY) === '1'; } catch { return false; }
@@ -754,12 +794,25 @@ function flush(): void {
     invoke('analytics_flush', { endpoint: links.analytics_endpoint || '', apiKey: links.analytics_key || '' }).catch(() => {});
 }
 
+/** Stop and restart the replay recorder with the switches as they are now (on/off, masking). */
+function rearmReplay(): void {
+    import('./replay-recorder.js').then((m) => {
+        if (_telemetryReplay) _telemetryReplay.stop();
+        if (_consent === true && replayEnabled()) {
+            if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
+            _telemetryReplay.listener.requiresMasking = !replayFull();
+            _telemetryReplay.start();
+        }
+    }).catch(() => {});
+}
+
 // ── Settings → Privacy card wiring ──────────────────────────────────────────────
 export function initPrivacySettings(): void {
     const toggle = document.getElementById('analytics-toggle') as HTMLInputElement | null;
     if (!toggle) return;
     refreshPrivacyUI();
     mountLiveIssuesToggle();
+    mountCategoryRows();
     if ((toggle as any).dataset.wired) return;
     (toggle as any).dataset.wired = '1';
     toggle.addEventListener('change', async () => { await setConsent(toggle.checked); refreshPrivacyUI(); });
@@ -774,16 +827,7 @@ export function initPrivacySettings(): void {
     // changing the masking mode re-arms rrweb so the new setting takes effect now.
     const replayToggle = document.getElementById('analytics-replay-toggle') as HTMLInputElement | null;
     const replayFullToggle = document.getElementById('analytics-replay-full-toggle') as HTMLInputElement | null;
-    const restartReplay = () => {
-        import('./replay-recorder.js').then((m) => {
-            if (_telemetryReplay) _telemetryReplay.stop();
-            if (_consent === true && replayEnabled()) {
-                if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
-                _telemetryReplay.listener.requiresMasking = !replayFull();
-                _telemetryReplay.start();
-            }
-        }).catch(() => {});
-    };
+    const restartReplay = rearmReplay;
     if (replayToggle) {
         replayToggle.checked = replayEnabled();
         replayToggle.addEventListener('change', () => {
@@ -874,6 +918,101 @@ export function initPrivacySettings(): void {
     });
 }
 
+// The categories in the Privacy card, in the consent dialog's order. usage / perf / laya are
+// built here; "errors" is the live-errors row (live-issues.ts builds it); replay, unmasked
+// replay and the hardware report are the static rows of index.html, moved into the list.
+function mountCategoryRows(): void {
+    const detail = document.getElementById('analytics-detail');
+    if (!detail) return;
+    ensureConsentCss();
+    let wrap = document.getElementById('analytics-cats');
+    const made = !wrap;
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'analytics-cats';
+        wrap.className = 'tc-settings';
+        detail.prepend(wrap);
+    }
+    const catRow = (id: 'usage' | 'perf' | 'laya', nameKey: string, descKey: string): HTMLElement => {
+        let row = document.getElementById(`analytics-cat-${id}-row`);
+        if (row) return row;
+        row = document.createElement('div');
+        row.className = 'setting-row tc-setting';
+        row.id = `analytics-cat-${id}-row`;
+        row.innerHTML = `<div class="tc-setting-txt"><span data-i18n="${nameKey}">${escHtml(t(nameKey))}</span><span class="tc-setting-hint" data-i18n="${descKey}">${escHtml(t(descKey))}</span></div>
+            <label class="plug-toggle"><input type="checkbox" id="analytics-cat-${id}" aria-label="${escAttr(t(nameKey))}"><span class="plug-toggle-slider"></span></label>`;
+        const input = row.querySelector('input') as HTMLInputElement;
+        input.addEventListener('change', () => { storeCats({ ...storedCats(), [id]: input.checked }); });
+        return row;
+    };
+    // A one-line "what is sent" under the static rows, like the built ones.
+    // The static rows keep their switch; their long label becomes the category's short name.
+    const addHint = (rowId: string, nameKey: string, descKey: string) => {
+        const row = document.getElementById(rowId);
+        if (!row || row.querySelector('.tc-setting-hint')) return;
+        row.classList.add('tc-setting');
+        const label = row.querySelector(':scope > span');
+        if (!label) return;
+        label.setAttribute('data-i18n', nameKey);
+        label.textContent = t(nameKey);
+        const txt = document.createElement('div');
+        txt.className = 'tc-setting-txt';
+        label.replaceWith(txt);
+        const hint = document.createElement('span');
+        hint.className = 'tc-setting-hint';
+        hint.setAttribute('data-i18n', descKey);
+        hint.textContent = t(descKey);
+        txt.append(label, hint);
+    };
+    addHint('analytics-replay-row', 'analytics.category.replay', 'analytics.category.replayDesc');
+    addHint('analytics-replay-full-row', 'analytics.category.replayFull', 'analytics.category.replayFullDesc');
+    addHint('analytics-bench-row', 'analytics.category.bench', 'analytics.category.benchDesc');
+    // « Tout activer »: the five categories on, the two extras left as they are. Shown only
+    // while one of the five is off.
+    let head = document.getElementById('analytics-cats-head');
+    if (!head) {
+        head = document.createElement('div');
+        head.id = 'analytics-cats-head';
+        head.className = 'tc-settings-head';
+        head.innerHTML = `<span class="tc-settings-title" data-i18n="analytics.categories">${escHtml(t('analytics.categories'))}</span>
+            <button type="button" class="btn btn-ghost btn-xs" id="analytics-cats-all" data-i18n="analytics.allOn">${escHtml(t('analytics.allOn'))}</button>`;
+        head.querySelector('button')?.addEventListener('click', async () => {
+            storeCats({ usage: true, perf: true, laya: true });
+            try { localStorage.setItem(REPLAY_KEY, '1'); } catch { }
+            await setLiveErrors(true);
+            rearmReplay();
+            refreshPrivacyUI();
+        });
+        wrap.prepend(head);
+        wrap.addEventListener('change', syncAllOnButton);
+        wrap.addEventListener('bmm:cats-sync', syncAllOnButton);
+    }
+    const order = [
+        catRow('usage', 'analytics.category.usage', 'analytics.category.usageDesc'),
+        catRow('perf', 'analytics.category.perf', 'analytics.category.perfDesc'),
+        document.getElementById('analytics-live-row'),
+        catRow('laya', 'analytics.category.laya', 'analytics.category.layaDesc'),
+        document.getElementById('analytics-replay-row'),
+        document.getElementById('analytics-replay-full-row'),
+        document.getElementById('analytics-bench-row'),
+    ].filter(Boolean) as HTMLElement[];
+    if (made || order.some((el) => el.parentElement !== wrap)) wrap.append(...order);
+    const c = storedCats();
+    for (const id of ['usage', 'perf', 'laya'] as const) {
+        const input = document.getElementById(`analytics-cat-${id}`) as HTMLInputElement | null;
+        if (input) input.checked = c[id];
+    }
+    syncAllOnButton();
+}
+
+// Read from the switches themselves: the errors one is saved asynchronously (Rust).
+const CATEGORY_INPUTS = ['analytics-cat-usage', 'analytics-cat-perf', 'analytics-live-toggle', 'analytics-cat-laya', 'analytics-replay-toggle'];
+function syncAllOnButton(): void {
+    const allBtn = document.getElementById('analytics-cats-all') as HTMLButtonElement | null;
+    if (!allBtn) return;
+    allBtn.hidden = CATEGORY_INPUTS.every((id) => (document.getElementById(id) as HTMLInputElement | null)?.checked !== false);
+}
+
 // Minimal themed e-mail prompt (no native prompt — it doesn't block in the Tauri
 // webview). Resolves to the trimmed value, or null on cancel.
 function promptEmail(title: string, desc: string): Promise<string | null> {
@@ -914,6 +1053,12 @@ function refreshPrivacyUI(): void {
                                   : (t('analytics.statusOff') || "Off — nothing is collected.");
     const detail = document.getElementById('analytics-detail');
     if (detail) detail.classList.toggle('collapsed', !on);
+    // Turning telemetry on turns live errors on (Rust): the rows show what is stored now.
+    if (detail) { mountLiveIssuesToggle(); mountCategoryRows(); }
+    const replayToggle = document.getElementById('analytics-replay-toggle') as HTMLInputElement | null;
+    if (replayToggle) replayToggle.checked = replayEnabled();
+    const benchToggle = document.getElementById('analytics-bench-toggle') as HTMLInputElement | null;
+    if (benchToggle) benchToggle.checked = telemetryBenchAllowed();
     if (on) renderSentPackets();
 }
 
@@ -1023,169 +1168,227 @@ export async function confirmTelemetryFromLink(plan: TelemetryLinkPlan): Promise
 }
 
 // ── Consent modal ──────────────────────────────────────────────────────────────
-/** `fromLink`: the modal was opened by a bmm:// link. Its toggles start from what the link
- *  asked for, the unmask toggle is not offered at all, and Decline leaves every setting as it
- *  was (it does not record a refusal the user never made). Resolves true on Accept, false on
- *  Decline, null when another consent modal was already open. */
+//
+// Three answers, all of them buttons, none of them a click on the backdrop:
+//   · « Tout activer » (recommended): the five categories on;
+//   · « Choisir »: the same list grows a switch per category (+ the two extras that are never
+//     part of "all": the detailed hardware report and unmasked replay), then « Valider »;
+//   · « Non merci »: telemetry off, recorded.
+// And « Plus tard » (also Escape): NOTHING is recorded, collection does not start, the question
+// comes back at the next launch. It exists so that closing the dialog is a visible, named
+// choice instead of a backdrop click nobody can read: a click that misses the card is not a
+// decision, so the backdrop does nothing but point at the buttons.
+
+const TC_CSS_ID = 'telemetry-consent-css';
+function ensureConsentCss(): void {
+    if (document.getElementById(TC_CSS_ID)) return;
+    const link = document.createElement('link');
+    link.id = TC_CSS_ID;
+    link.rel = 'stylesheet';
+    link.href = 'css/telemetry-consent.css';
+    document.head.appendChild(link);
+}
+
+/** One line per category: its name and what it sends. Keys written out for the i18n gate. */
+function catName(c: TelemetryCategory): string {
+    switch (c) {
+        case 'usage': return t('analytics.category.usage');
+        case 'perf': return t('analytics.category.perf');
+        case 'errors': return t('analytics.category.errors');
+        case 'laya': return t('analytics.category.laya');
+        case 'replay': return t('analytics.category.replay');
+    }
+}
+function catDesc(c: TelemetryCategory): string {
+    switch (c) {
+        case 'usage': return t('analytics.category.usageDesc');
+        case 'perf': return t('analytics.category.perfDesc');
+        case 'errors': return t('analytics.category.errorsDesc');
+        case 'laya': return t('analytics.category.layaDesc');
+        case 'replay': return t('analytics.category.replayDesc');
+    }
+}
+
+function switchRow(id: string, name: string, desc: string, checked: boolean, cls = ''): string {
+    return `<li class="tc-cat${cls ? ' ' + cls : ''}">
+        <label class="tc-cat-row">
+            <span class="tc-cat-txt"><b>${escHtml(name)}</b><span>${escHtml(desc)}</span></span>
+            <span class="plug-toggle tc-sw"><input type="checkbox" data-tc="${id}"${checked ? ' checked' : ''}><span class="plug-toggle-slider"></span></span>
+        </label>
+    </li>`;
+}
+
+/** Everything a decision writes, in one place (the dialog and nothing else calls it). */
+async function applyConsentChoice(c: CategoryChoice & { bench?: boolean; replayFull?: boolean }): Promise<boolean> {
+    storeCats({ usage: c.usage, perf: c.perf, laya: c.laya });
+    try { localStorage.setItem(REPLAY_KEY, c.replay ? '1' : '0'); } catch { }
+    if (c.replayFull !== undefined) { try { localStorage.setItem(REPLAY_FULL_KEY, c.replayFull ? '1' : '0'); } catch { } }
+    if (c.bench !== undefined) setTelemetryBenchAllowed(c.bench);
+    const on = anyOn(c);
+    if (on === (_consent === true)) {
+        // Same answer as before (the dialog opened from Settings): setConsent would start a
+        // second collection on top of the running one. Apply the switches that changed.
+        if (on) { await setLiveErrors(c.errors); rearmReplay(); }
+    } else {
+        await setConsent(on, { liveErrors: on ? c.errors : undefined });
+    }
+    refreshPrivacyUI();
+    return on;
+}
+
+/** `fromLink`: the modal was opened by a bmm:// link. It opens on the switches, starting from
+ *  what the link asked for; the unmask switch is not offered at all, and « Plus tard » leaves
+ *  every setting as it was (it does not record a refusal the user never made). Resolves true
+ *  when telemetry ends up on, false on « Non merci » (or a choice with every category off),
+ *  null on « Plus tard » / Escape, or when another consent dialog was already open. */
 export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: boolean } } = {}): Promise<boolean | null> {
     if (document.getElementById('analytics-consent-overlay')) return Promise.resolve(null);
+    ensureConsentCss();
     const link = opts.fromLink;
+    const decided = _consent !== null;
     // Ticked in the installer → the answer is pre-selected here, not applied behind the user's back.
     const preselected = !link && installerPreselect();
+    // Starting values: what is stored when the question was already answered (the dialog is
+    // then the "what is collected" view of Settings), the installer's boxes when it sent
+    // them, else everything on (« Tout activer » is the recommendation).
+    const cur = currentCategories();
+    const start: CategoryChoice = decided || preselected
+        ? { ...cur, errors: decided ? cur.errors : (liveErrorsStored() ?? true), replay: link?.replay ?? cur.replay }
+        : { ...allOn(), replay: link?.replay ?? true };
+    const benchStart = link ? (link.bench ?? telemetryBenchAllowed()) : telemetryBenchAllowed();
+    // Choose mode from the start when there is something to adjust rather than to accept.
+    const chooseFirst = !!link || decided;
+
     const overlay = document.createElement('div');
     overlay.id = 'analytics-consent-overlay';
     overlay.className = 'modal-overlay open';
-    overlay.setAttribute('data-prevent-close', 'true');   // cannot be dismissed by clicking the backdrop
+    overlay.setAttribute('data-prevent-close', 'true');   // the backdrop is not an answer
     overlay.style.zIndex = '2100000';
+    const cats = TELEMETRY_CATEGORIES.map((c) => switchRow(c, catName(c), catDesc(c), start[c])).join('');
     overlay.innerHTML = `
-      <div class="modal glass" style="max-width:560px;width:94%">
+      <div class="modal glass tc-modal" role="dialog" aria-modal="true" aria-labelledby="tc-title">
         <div class="modal-header">
-            <h2 class="modal-title" style="margin:0;display:flex;align-items:center;gap:10px;font-size:1.15rem">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                ${t('analytics.consentTitle') || 'Help improve BMM'}
+            <h2 class="modal-title tc-title" id="tc-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                ${escHtml(t('analytics.consentTitle'))}
             </h2>
         </div>
-        <div class="modal-body" style="padding:18px 22px;display:block">
-            ${link ? `<p style="font-size:12px;line-height:1.6;margin:0 0 12px;padding:9px 11px;border:1px solid var(--warning, var(--border));border-radius:9px">${t('analytics.linkRequest') || 'A link asked BMM to turn on telemetry. Nothing changes unless you accept here. Unmasked replay can only be turned on in Settings → Privacy.'}</p>` : ''}
-            ${preselected ? `<p style="font-size:12px;line-height:1.6;margin:0 0 12px;padding:9px 11px;border:1px solid var(--border);border-radius:9px">${t('analytics.installerPreselect') || 'You ticked telemetry during installation, so it is pre-selected below. Nothing has been collected yet — collection starts only if you accept here.'}</p>` : ''}
-            <p style="font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0 0 12px">
-                ${t('analytics.consentIntro') || 'BMM is built by a tiny team. Anonymous usage data helps us see which features matter, fix what\'s slow on real hardware, and decide what to build next. It is 100% optional and you can turn it off anytime.'}
-            </p>
-            <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:0 0 12px;padding:9px 11px;background:rgba(91,140,255,0.06);border:1px solid var(--border);border-radius:9px">
-                ${t('analytics.consentAuth') || 'By accepting, you authorize the use of this anonymous data to improve BMM and the other Better Community tools. Data is kept only for a limited time and you can request erasure of any sent packet at any moment.'}
-            </p>
-            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:8px">${t('analytics.whatWeCollect') || 'What we collect'}</div>
-                <ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.8">
-                    <li>${t('analytics.collect.specs') || 'PC specs (OS, CPU, RAM, GPU, disk) — to test on real hardware'}</li>
-                    <li>${t('analytics.collect.bench') || 'Benchmark results — to track performance across versions'}</li>
-                    <li>${t('analytics.collect.usage') || 'Feature usage & in-app navigation — most/least used features'}</li>
-                    <li>${t('analytics.collect.network') || 'Network info (IP & approximate region, VM detection) — for abuse prevention & regional stats'}</li>
-                    <li>${t('analytics.collect.id') || 'Your anonymous Creator ID — never your name or email'}</li>
-                    <li>${t('analytics.collect.replay') || 'Visual session replay (masked by default) — to see where users get stuck'}</li>
-                    <li>${t('analytics.collect.errors')}</li>
+        <div class="modal-body tc-body">
+            ${link ? `<p class="tc-note">${escHtml(t('analytics.linkRequest'))}</p>` : ''}
+            ${preselected ? `<p class="tc-note">${escHtml(t('analytics.installerPreselect'))}</p>` : ''}
+            <p class="tc-lede">${escHtml(t('analytics.consentLede'))}</p>
+            <ul class="tc-cats" id="tc-cats" data-mode="${chooseFirst ? 'choose' : 'all'}">
+                ${cats}
+                ${switchRow('bench', t('analytics.category.bench'), t('analytics.category.benchDesc'), benchStart, 'tc-extra')}
+                ${link ? '' : switchRow('replayFull', t('analytics.category.replayFull'), t('analytics.category.replayFullDesc'), replayFull(), 'tc-extra')}
+            </ul>
+            <details class="tc-more">
+                <summary>${escHtml(t('analytics.moreInfo'))}</summary>
+                <ul>
+                    <li>${escHtml(t('analytics.collect.specs'))}</li>
+                    <li>${escHtml(t('analytics.collect.network'))}</li>
+                    <li>${escHtml(t('analytics.collect.id'))}</li>
                 </ul>
-            </div>
-            
-            <details style="margin-bottom:12px; font-size:12px; color:var(--text-secondary);"${link ? ' open' : ''}>
-                <summary style="cursor:pointer; font-weight:600; outline:none; user-select:none;">${t('analytics.customize') || 'Customize data collection...'}</summary>
-                <div style="padding: 12px; margin-top: 8px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
-                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                        <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days) + extra hardware report'}</span>
-                        <div class="plug-toggle">
-                            <input type="checkbox" id="modal-bench-toggle"${(link ? (link.bench ?? telemetryBenchAllowed()) : telemetryBenchAllowed()) ? ' checked' : ''}>
-                            <span class="plug-toggle-slider"></span>
-                        </div>
-                    </label>
-                    <details style="margin:-2px 0 4px;font-size:11.5px;color:var(--text-secondary)">
-                        <summary style="cursor:pointer;user-select:none">${t('analytics.extraWhat') || 'What the extra hardware report sends ▾'}</summary>
-                        <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">
-                            <li>${t('analytics.extra.board') || 'Motherboard (model + serial number)'}</li>
-                            <li>${t('analytics.extra.bios') || 'BIOS version, date & vendor'}</li>
-                            <li>${t('analytics.extra.uuid') || 'Machine UUID'}</li>
-                            <li>${t('analytics.extra.cpu') || 'Logical processors, cores/threads, L2/L3 cache'}</li>
-                            <li>${t('analytics.extra.disks') || 'Disks: model, serial, size, interface'}</li>
-                            <li>${t('analytics.extra.mac') || 'Physical network MAC address(es)'}</li>
-                            <li>${t('analytics.extra.os') || 'OS version + build, kernel'}</li>
-                            <li>${t('analytics.extra.boot') || 'UEFI/Legacy, Secure Boot & TPM state (if available)'}</li>
-                        </ul>
-                        <p style="margin:6px 0 0">${t('analytics.extraNote') || 'These are precise hardware identifiers. They are sent ONLY while this toggle is on, and only to the BMM dashboard. Turn it off to send the basic profile only.'}</p>
-                    </details>
-                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                        <span>${t('analytics.replayToggle') || 'Visual Session Replay (masked)'}</span>
-                        <div class="plug-toggle">
-                            <input type="checkbox" id="modal-replay-toggle"${(link ? (link.replay ?? replayEnabled()) : true) ? ' checked' : ''}>
-                            <span class="plug-toggle-slider"></span>
-                        </div>
-                    </label>
-                    ${link ? '' : `<label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                        <span>${t('analytics.liveToggle')}</span>
-                        <div class="plug-toggle">
-                            <input type="checkbox" id="modal-live-toggle">
-                            <span class="plug-toggle-slider"></span>
-                        </div>
-                    </label>`}
-                    ${link ? '' : `<label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="modal-replay-full-container">
-                        <span>${t('analytics.replayFullToggle') || 'Unmask Replay (capture text & images)'}</span>
-                        <div class="plug-toggle">
-                            <input type="checkbox" id="modal-replay-full-toggle">
-                            <span class="plug-toggle-slider"></span>
-                        </div>
-                    </label>`}
-                </div>
+                <details class="tc-more tc-more-inner">
+                    <summary>${escHtml(t('analytics.extraWhat'))}</summary>
+                    <ul>
+                        <li>${escHtml(t('analytics.extra.board'))}</li>
+                        <li>${escHtml(t('analytics.extra.bios'))}</li>
+                        <li>${escHtml(t('analytics.extra.uuid'))}</li>
+                        <li>${escHtml(t('analytics.extra.cpu'))}</li>
+                        <li>${escHtml(t('analytics.extra.disks'))}</li>
+                        <li>${escHtml(t('analytics.extra.mac'))}</li>
+                        <li>${escHtml(t('analytics.extra.os'))}</li>
+                        <li>${escHtml(t('analytics.extra.boot'))}</li>
+                    </ul>
+                    <p>${escHtml(t('analytics.extraNote'))}</p>
+                </details>
+                <p>${escHtml(t('analytics.consentAuth'))}</p>
+                <p>${escHtml(t('analytics.consentFoot'))}</p>
             </details>
-
-            <p style="font-size:11px;color:var(--text-secondary);margin:0 0 8px">
-                ${t('analytics.consentFoot') || 'No personal data, no mod contents, no file paths. GDPR-friendly: opt-in, exportable and erasable from Settings → Privacy.'}
-            </p>
         </div>
-        <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)">
-            <button class="btn btn-ghost" id="analytics-decline">${t('analytics.decline') || 'No thanks'}</button>
-            <button class="btn btn-primary" id="analytics-accept">${t('analytics.accept') || 'Share anonymous data'}</button>
+        <div class="modal-footer tc-foot">
+            <button type="button" class="btn btn-ghost btn-sm tc-later" id="analytics-later" title="${escAttr(t('analytics.laterHint'))}">${escHtml(decided ? t('common.close') : t('analytics.later'))}</button>
+            <p class="tc-hint" id="tc-hint" role="status" aria-live="polite"></p>
+            ${link ? '' : `<button type="button" class="btn btn-ghost" id="analytics-decline">${escHtml(t('analytics.decline'))}</button>`}
+            <button type="button" class="btn btn-secondary" id="analytics-choose">${escHtml(chooseFirst ? t('analytics.saveChoice') : t('analytics.choose'))}</button>
+            <button type="button" class="btn btn-primary" id="analytics-accept">${escHtml(t('analytics.allOn'))}<span class="tc-rec">${escHtml(t('analytics.recommended'))}</span></button>
         </div>
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
-    // Block backdrop clicks from closing it (belt-and-suspenders alongside data-prevent-close).
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) e.stopPropagation(); }, true);
+    const list = overlay.querySelector('#tc-cats') as HTMLElement;
+    const hint = overlay.querySelector('#tc-hint') as HTMLElement;
+    const box = (id: string) => overlay.querySelector(`input[data-tc="${id}"]`) as HTMLInputElement | null;
+    const read = (): CategoryChoice => {
+        const c = {} as CategoryChoice;
+        for (const k of TELEMETRY_CATEGORIES) c[k] = !!box(k)?.checked;
+        return c;
+    };
+    // Unmasked replay means nothing without replay.
+    const syncFull = () => { const f = box('replayFull'); const r = box('replay'); if (f && r) { f.disabled = !r.checked; if (!r.checked) f.checked = false; } };
+    box('replay')?.addEventListener('change', syncFull);
+    syncFull();
+
+    // The backdrop: not an answer. Say which buttons are (the card may be hosted in the
+    // launch deck, whose own backdrop already does nothing).
+    overlay.addEventListener('click', (e) => {
+        if (e.target !== overlay) return;
+        e.stopPropagation();
+        hint.textContent = t('analytics.pickOne');
+    }, true);
 
     return new Promise<boolean | null>((resolve) => {
-        let answer = false;
-        const close = () => {
-            // The pre-selection is spent the moment the user answers, either way: it must
-            // never survive to re-tick a box on a later dialog.
-            if (preselected) { try { localStorage.removeItem(PRESELECT_KEY); } catch { } }
+        let done = false;
+        const onKey = (e: KeyboardEvent) => {
+            // Escape = « Plus tard », only while this dialog is the one on screen (hosted in
+            // the deck, the deck owns Escape and brings the reader back to this step).
+            if (e.key !== 'Escape' || !overlay.isConnected || overlay.style.display === 'none') return;
+            e.preventDefault(); e.stopPropagation();
+            finish(null);
+        };
+        document.addEventListener('keydown', onKey, true);
+        const finish = (answer: boolean | null, work?: () => Promise<unknown>) => {
+            if (done) return;         // a second click must not re-run anything
+            done = true;
+            document.removeEventListener('keydown', onKey, true);
+            // The pre-selection is spent once the user answers (not on « Plus tard »: the
+            // question comes back, and it should come back as the installer left it).
+            if (preselected && answer !== null) { try { localStorage.removeItem(PRESELECT_KEY); } catch { } }
+            overlay.querySelectorAll('button').forEach((b) => { (b as HTMLButtonElement).disabled = true; });
+            // The modal closes on the CLICK, not on the work: accepting starts collection,
+            // whose first hardware profile can take seconds (WMI) on Windows.
             overlay.remove();
             resolve(answer);
+            if (work) void work().catch(() => { });
         };
-        // Pre-selected = the Accept button is the focused, ready-to-confirm choice.
-        if (preselected) setTimeout(() => (overlay.querySelector('#analytics-accept') as HTMLElement | null)?.focus(), 40);
-        
-        const benchToggle = overlay.querySelector('#modal-bench-toggle') as HTMLInputElement | null;
-        const replayToggle = overlay.querySelector('#modal-replay-toggle') as HTMLInputElement | null;
-        const replayFullToggle = overlay.querySelector('#modal-replay-full-toggle') as HTMLInputElement | null;
-        const liveToggle = overlay.querySelector('#modal-live-toggle') as HTMLInputElement | null;
-        
-        if (replayToggle && replayFullToggle) {
-            replayToggle.addEventListener('change', () => {
-                replayFullToggle.disabled = !replayToggle.checked;
-            });
-        }
 
-        // The modal closes on the CLICK, not on the work. Accept used to await
-        // setConsent(true) → startCollection() → analytics_system_profile with the
-        // extra hardware report — WMI queries (motherboard serial, BIOS, disks) that
-        // take seconds on Windows. The button looked dead, so people hammered it.
-        // The user's decision is the click; recording and acting on it can follow.
-        let decided = false;
-        const decide = (enabled: boolean) => {
-            if (decided) return;      // a second click must not re-run anything
-            decided = true;
-            answer = enabled;
-            if (link) {
-                // Opened by a link: Decline means "do not do what the link asked", not "I
-                // refuse telemetry" — nothing is recorded. Accept applies the toggles as the
-                // user left them; unmasked replay is not among them, so it stays as it was.
-                close();
-                if (enabled) {
-                    void applyTelemetrySettings({
-                        consent: true,
-                        replay: replayToggle ? replayToggle.checked : undefined,
-                        bench: benchToggle ? benchToggle.checked : undefined,
-                    }).then(() => refreshPrivacyUI()).catch(() => {});
-                }
+        overlay.querySelector('#analytics-later')?.addEventListener('click', () => finish(null));
+        overlay.querySelector('#analytics-decline')?.addEventListener('click', () => {
+            finish(false, () => setConsent(false).then(() => refreshPrivacyUI()));
+        });
+        overlay.querySelector('#analytics-accept')?.addEventListener('click', () => {
+            // « Tout activer »: the five categories. The two extras keep what they were (off
+            // unless the user turned them on), since neither is part of "all".
+            const extra = link ? { bench: box('bench')?.checked } : {};
+            finish(true, () => applyConsentChoice({ ...allOn(), ...extra }));
+        });
+        const chooseBtn = overlay.querySelector('#analytics-choose') as HTMLButtonElement;
+        chooseBtn.addEventListener('click', () => {
+            if (list.dataset.mode !== 'choose') {
+                list.dataset.mode = 'choose';
+                chooseBtn.textContent = t('analytics.saveChoice');
+                box(TELEMETRY_CATEGORIES[0])?.focus();
                 return;
             }
-            if (enabled) {
-                if (benchToggle) localStorage.setItem(BENCH_ALLOW_KEY, benchToggle.checked ? '1' : '0');
-                if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
-                if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
-            }
-            close();                  // instant feedback — the overlay is gone
-            const live = enabled && !!liveToggle?.checked;
-            void setConsent(enabled).then(() => (live ? setLiveErrors(true) : undefined)).then(() => refreshPrivacyUI()).catch(() => {});
-        };
-        overlay.querySelector('#analytics-accept')?.addEventListener('click', () => decide(true));
-        overlay.querySelector('#analytics-decline')?.addEventListener('click', () => decide(false));
+            const c = read();
+            const bench = !!box('bench')?.checked;
+            const full = box('replayFull');
+            const on = anyOn(c);
+            if (link && !on) { finish(null); return; }   // a link can't be used to record a refusal
+            finish(on, () => applyConsentChoice({ ...c, bench, replayFull: full ? full.checked : undefined }));
+        });
+        // Pre-selected = the recommended button is the focused, ready-to-confirm choice.
+        setTimeout(() => (overlay.querySelector(chooseFirst ? '#analytics-choose' : '#analytics-accept') as HTMLElement | null)?.focus(), 40);
     });
 }

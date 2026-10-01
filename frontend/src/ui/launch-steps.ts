@@ -445,6 +445,9 @@ function hostConsent(host: HTMLElement, api: LaunchStepApi, step: LaunchStep, ho
     // If the card could not be moved, the dialog stays where it was built — above the deck —
     // and is answered there; the step completes either way.
     step.onClosed = () => { overlay?.remove(); };
+    // Every button is an answer, « Plus tard » included: it records nothing (telemetry stays
+    // undecided, so `when` asks again next launch) but it lets the deck go on. Escape here is
+    // the deck's own (back to this step), and the backdrop answers nothing.
     void answered.then(() => {
         // Answered: the card stays readable if the reader steps back to it, but its buttons are
         // spent (the dialog ignores a second click anyway) and should look it.

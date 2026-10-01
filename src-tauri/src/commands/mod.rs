@@ -7,6 +7,7 @@ pub mod resources;
 pub mod resources_live;
 pub mod resources_rules;
 pub mod mod_order;
+pub mod order_share;
 pub mod bmm_paths;
 pub mod bmm_paths_core;
 pub mod doc_sign;
@@ -83,6 +84,11 @@ pub mod installer_handoff;
 pub mod ai_core;
 pub mod ai_embedded;
 pub mod ai_laya;
+pub mod ai_hybrid;
+// The local Laya API (off by default) and Laya in scheduled tasks.
+pub mod ai_api_core;
+pub mod ai_api;
+pub mod ai_ops;
 pub mod ask_core;
 #[cfg(test)]
 mod ai_eval;

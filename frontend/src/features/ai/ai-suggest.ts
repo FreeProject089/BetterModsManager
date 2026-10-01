@@ -52,7 +52,8 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
     const view = await loadAiView();
     const settings = view?.settings || null;
     const block = providerBlock(settings as any, 'mod');
-    const canDraft = !!settings?.enabled && settings.generative === 'external' && settings.description_drafts !== false;
+    // « Rédaction »: a local server (nothing leaves this PC) or the user's remote API.
+    const canDraft = !!settings?.enabled && (settings.generative === 'external' || settings.generative === 'local') && settings.description_drafts !== false;
     let rows: SuggestionRow[] = [];
     let busy = false;
 
@@ -70,7 +71,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         return `<span class="ai-pill">${escHtml(t('ai.suggest.filesOnly'))}</span> <span class="ai-muted">${escHtml(reasonText(block))}</span>`;
     };
 
-    const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; error?: string; offline?: boolean } = {}) => {
+    const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; sources?: any[]; error?: string; offline?: boolean } = {}) => {
         // The dialog is redrawn whole on every tick of a row. What had the focus gets it back
         // afterwards: without this, Space on a row's checkbox dropped the focus to the page
         // behind, and a keyboard user had to Tab in from the top for every row.
@@ -79,25 +80,30 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         const applicable = rows.filter((r) => r.applicable);
         const hints = rows.filter((r) => !r.applicable);
         const nChecked = rows.filter((r) => r.checked).length;
+        const details: string[] = [];
+        if ((extra.notes || []).length) details.push(`<ul class="ai-notes">${(extra.notes || []).map((n) => `<li>${escHtml(reasonText(n))}</li>`).join('')}</ul>`);
+        const srcs = (extra.sources || []).slice(0, 12);
+        if (srcs.length) details.push(`<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))}</div><ul class="ai-srclist">${srcs.map((x: any) => `<li><code>${escHtml(String(x.file || ''))}</code> <span class="ai-muted">${escHtml(x.listed_only ? t('ai.sug2.listed') : [String(x.kind || ''), String(x.encoding || '')].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>`);
+        else if ((extra.read || []).length) details.push(`<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))} ${escHtml((extra.read || []).slice(0, 8).join(', '))}</div>`);
+        if (extra.sent) details.push(`<div class="ai-muted">${escHtml(t('ai.suggest.sentSummary'))}</div><pre>${escHtml(extra.sent)}</pre>`);
+        else if (extra.offline) details.push(`<div class="ai-muted">${escHtml(t('ai.emb.offline'))}</div>`);
+        details.push(`<button type="button" class="ai-link" id="ais-docs">${escHtml(t('ai.docsLink'))}</button>`);
+        const hasDraft = rows.some((r) => r.note === 'draft');
         const body = state === 'loading'
-            ? `<div class="ai-loading"><span class="ai-dot"></span>${escHtml(t('ai.suggest.loading'))}</div>`
+            ? `<div class="ai-loading"><span class="ai-dot"></span>${escHtml(wantDraft ? t('ai.sug2.drafting') : t('ai.suggest.loading'))}</div>`
             : state === 'error'
                 ? `<div class="ai-error">${escHtml(extra.error || '')}</div>`
                 : `${applicable.length ? `<div class="ai-rows" role="list">${applicable.map(rowHtml).join('')}</div>` : `<div class="ai-empty">${escHtml(t('ai.suggest.none'))}</div>`}
                    ${hints.length ? `<div class="ai-hints"><div class="ai-sub">${escHtml(t('ai.suggest.hints'))}</div>${hints.map(hintHtml).join('')}</div>` : ''}
-                   ${(extra.notes || []).length ? `<ul class="ai-notes">${(extra.notes || []).map((n) => `<li>${escHtml(reasonText(n))}</li>`).join('')}</ul>` : ''}
-                   ${(extra.read || []).length ? `<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))} ${escHtml((extra.read || []).slice(0, 8).join(', '))}</div>` : ''}
-                   ${extra.offline && !extra.sent ? `<div class="ai-muted">${escHtml(t('ai.emb.offline'))}</div>` : ''}
-                   ${extra.sent ? `<details class="ai-sent"><summary>${escHtml(t('ai.suggest.sentSummary'))}</summary><pre>${escHtml(extra.sent)}</pre></details>` : ''}`;
+                   ${hasDraft ? `<div class="ai-muted ai-draftnote">${escHtml(t('ai.sug2.draftNote'))}</div>` : ''}
+                   <details class="ai-sent ai-more"><summary>${escHtml(t('ai.sug2.details'))}</summary>${details.join('')}</details>`;
         o.innerHTML = `
         <div class="modal ai-modal" role="dialog" aria-modal="true" aria-labelledby="ais-title">
           ${head}
           <div class="modal-body ai-body">
-            <p class="ai-lead">${escHtml(t('ai.suggest.lead'))}</p>
             <div class="ai-provider">${providerLine()}
-              <button type="button" class="ai-link" id="ais-docs">${escHtml(t('ai.docsLink'))}</button></div>
+              ${canDraft && state !== 'loading' && !wantDraft ? `<button type="button" class="btn btn-ghost btn-sm" id="ais-draft">${IC_SPARK}<span>${escHtml(t('ai.sug2.draftBtn'))}</span></button>` : ''}</div>
             ${offerInstall(view) ? installPromptHtml(view) : ''}
-            ${canDraft ? `<label class="ai-check"><input type="checkbox" id="ais-draft"> <span>${escHtml(t('ai.suggest.draft'))}</span></label>` : ''}
             ${body}
           </div>
           <div class="modal-footer ai-foot">
@@ -111,11 +117,8 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         o.querySelector('#ais-docs')?.addEventListener('click', () => { close(); openAiDocs(); });
         // First use: « Laya is not installed — Install ». Installed, the dialog starts over with it.
         wireInstallPrompt(o, () => { close(); void openAiSuggest(mod, opts); });
-        const draftBox = o.querySelector<HTMLInputElement>('#ais-draft');
-        if (draftBox) {
-            draftBox.checked = wantDraft;
-            draftBox.addEventListener('change', () => { wantDraft = draftBox.checked; if (wantDraft) void run(); });
-        }
+        // « Rédiger une description »: one click, one request to the user's generator.
+        o.querySelector('#ais-draft')?.addEventListener('click', () => { wantDraft = true; void run(); });
         o.querySelectorAll<HTMLInputElement>('input[data-row]').forEach((cb) => {
             cb.addEventListener('change', () => {
                 rows = toggleRow(rows, cb.dataset.row || '', cb.checked);
@@ -154,7 +157,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
           <span class="ai-conf">${pct(r.confidence)}%</span></div>`;
 
     let wantDraft = false;
-    let last: { notes?: string[]; sent?: string | null; read?: string[]; offline?: boolean } = {};
+    let last: { notes?: string[]; sent?: string | null; read?: string[]; sources?: any[]; offline?: boolean } = {};
 
     const run = async (): Promise<void> => {
         if (busy) return;
@@ -170,7 +173,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             });
             const view: ModView = mod;
             rows = rowsFromSuggestions((res?.suggestions || []) as AiSuggestion[], view, tagName);
-            last = { notes: res?.notes || [], sent: res?.sentText || null, read: res?.sourcesRead || [], offline: !!res?.offline };
+            last = { notes: res?.notes || [], sent: res?.sentText || null, read: res?.sourcesRead || [], sources: res?.sources || [], offline: !!res?.offline };
             busy = false;
             render('ready', last);
         } catch (e) {

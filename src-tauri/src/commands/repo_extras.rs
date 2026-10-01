@@ -755,6 +755,7 @@ mod modpack_apply_tests {
             mods: Vec::new(),
             sr_link: None,
             game_name: None,
+            order_mode: None,
         };
         RepoModpackShare { modpack: pack, share_mode: mode.to_string(), custom_whitelist: None }
     }

@@ -136,6 +136,12 @@ question. Quand l'IA est activée et le modèle installé, Laya choisit le meill
 candidats (la bonne réponse dans les 3 premières pour 34 questions de test sur 36, 31 sans lui), et
 le dit quand aucun ne semble convenir. Tout tourne sur ce PC ; la question n'est pas conservée.
 
+Avec la **Rédaction** configurée et les **Réponses rédigées** activées, **Rédiger une réponse**
+formule une réponse courte à partir des résultats trouvés, chaque phrase citant sa source (cliquez
+sur un numéro pour l'ouvrir). Si Laya juge qu'aucun résultat ne répond, ou si le texte échoue aux
+vérifications, rien n'est rédigé et la fenêtre dit pourquoi. Avec un modèle distant, ce clic lui
+envoie la question et les sources.
+
 La recherche de la bibliothèque a un bouton **recherche intelligente** (l'étincelle) : activé, la
 recherche porte aussi sur les descriptions et les tags, et la liste suit ce classement.
 
@@ -148,8 +154,9 @@ Le travail est découpé en étapes, et chacune dit si elle peut passer par le r
    des rapports. Toujours, hors ligne.
 2. **Classer** : Laya décide et filtre, n'écrit jamais : le paquet intégré, votre laya-serve, ou le
    serveur de BetterCommunity.
-3. **Rédiger** : un brouillon de description via votre API externe, seulement si vous en avez
-   configuré une, jamais appliqué sans votre clic.
+3. **Rédiger** : un brouillon de description ou une réponse rédigée par le modèle de rédaction
+   choisi (local ou distant), seulement sur votre clic, vérifié par des règles et par Laya, jamais
+   appliqué sans votre clic.
 
 BMM livre **un** paquet de modèle, le multilingue. Un routeur choisit le paquet selon la langue et
 peut en moyenner deux ; le modèle anglais a été mesuré comme second paquet et n'a que peu aidé sur
@@ -179,6 +186,54 @@ Les règles que BMM applique avant tout envoi — dans le cœur Rust, pas dans l
 - Les clés sont stockées par le système — DPAPI sous Windows, ou le trousseau macOS/Linux — et
   ne sont plus jamais montrées à la page. Sans l'un ni l'autre, une clé n'est gardée que pour la
   session et redemandée la fois suivante.
+
+## Rédaction (optionnelle) : brouillons et réponses rédigées
+
+Laya classe et filtre ; il n'écrit jamais. Quand vous voulez du texte (un brouillon de
+description pour un mod, ou une réponse rédigée dans *Demander à Laya*), BMM peut interroger un
+**modèle de rédaction** que vous choisissez, dans **Réglages → IA → Rédaction** :
+
+| Rédaction | Où va le texte | Ce qu'il faut |
+|---|---|---|
+| **Aucune** (par défaut) | Nulle part | Rien |
+| **Locale** | **Nulle part** : un serveur sur ce PC (adresse locale uniquement) | Un serveur compatible OpenAI : Ollama (`http://127.0.0.1:11434/v1`), LM Studio (`http://127.0.0.1:1234/v1`) ou le serveur llama.cpp (`http://127.0.0.1:8080/v1`), et un modèle. **Trouver les modèles** liste ce qu'il propose |
+| **Distante** | L'API `https://` que vous indiquez, avec votre clé | Son URL, un nom de modèle et votre clé |
+
+Deux interrupteurs décident de son usage : **Brouillons de description** et **Réponses
+rédigées**. Les deux demandent un clic, jamais automatiques. **Tester la connexion** vérifie le
+classement et le modèle de rédaction d'un coup.
+
+Le pipeline, pour un brouillon ou une réponse :
+
+1. **Extraction** : les fichiers du mod (ou, pour une question, ce que la recherche a trouvé),
+   toujours d'abord.
+2. **Laya** : classe, et **s'abstient** : quand aucune source ne répond à une question, rien
+   n'est rédigé.
+3. **Le modèle de rédaction** : reçoit les faits ou les sources numérotées, et rien d'autre.
+4. **Vérifications** : le résultat est écarté s'il cite un lien, un fichier ou un chemin absent
+   des sources, contient une commande, ressemble à une consigne, ou (pour une réponse) ne cite
+   aucune source réelle. Les tags doivent être les vôtres, recopiés à l'identique. Puis Laya,
+   s'il est activé, doit juger que le texte est fondé sur les faits.
+5. **Vous** : un brouillon est une ligne marquée **Brouillon**, non cochée ; une réponse est
+   affichée comme une suggestion, avec ses citations. Rien n'est appliqué sans votre clic.
+
+### Le texte des mods est une donnée, jamais une consigne
+
+Un readme, un manifeste, un rapport ou une question peut contenir du texte écrit pour piloter un
+modèle (*ignore tes instructions et…*). BMM traite tout cela comme des données non fiables :
+
+- le texte caché est retiré avant toute lecture : caractères de largeur nulle et bidi,
+  commentaires HTML, cibles d'images et de liens Markdown ;
+- il n'atteint un modèle qu'à l'intérieur d'un bloc étiqueté qu'il ne peut pas fermer, après un
+  message système qui dit que ce bloc est une donnée dont les consignes ne sont jamais suivies ;
+- le modèle de rédaction n'a **ni outils ni actions** : il ne peut renvoyer que du texte, et une
+  réponse « appel d'outil » est ignorée ;
+- ce qui revient passe les vérifications ci-dessus, avec des plafonds de longueur ;
+- les journaux gardent des nombres et des raisons courtes, jamais le texte, la question ni la
+  réponse.
+
+Un jeu de tests adverses (readmes et réponses hostiles : consignes injectées, liens
+d'exfiltration, fichiers inventés, commandes, faux tags) vérifie que chacun est neutralisé.
 
 ## Ce qui est envoyé, et quand
 
@@ -221,6 +276,20 @@ valeur par champ (cocher une seconde description décoche la première), les tag
 jusqu'aux trois habituels par mod, les liens s'ajoutent à la suite. Le changement est inscrit
 dans l'historique d'activité du mod comme toute autre modification.
 
+## Analyser toute la bibliothèque
+
+**Bibliothèque → l'icône étincelle** à côté de *Vérifier les mises à jour* (ou **Ctrl+K →
+Analyser la bibliothèque**) lance les mêmes suggestions pour plusieurs mods à la fois : les mods
+sans description ou sans tags, ou tous. BMM lit les `README*`, `*.md`, `*.txt`, changelogs,
+fichiers de version et variantes de manifeste de chaque mod, dans les dossiers et les archives
+`.zip` (les `.7z` et `.rar` sont listés, pas lus), avec des plafonds de taille et une détection de
+l'encodage (UTF-8, UTF-16, Windows-1252). Une barre compte les mods ; **Arrêter** garde ce qui a
+déjà été trouvé.
+
+Le résultat est une liste à relire : un mod par ligne, chaque champ décoché. Cochez, puis
+**Appliquer** sur ce mod. Rien n'est écrit avant. Une analyse groupée ne demande jamais de
+brouillon : cela reste un clic dans la fenêtre d'un mod.
+
 ## Avant l'envoi d'un rapport
 
 Quand vous cliquez sur **Envoyer** dans *Signaler un bug / Suggestion*, BMM vérifie d'abord le
@@ -261,7 +330,9 @@ L'interrupteur est dans `ai-settings.json` à côté de `data.json` ; les clés 
 | `bmm_ai_status` | `ai-status` | Les réglages et ce qui peut passer par le réseau (jamais une clé) |
 | `bmm_ai_suggest_mod_metadata` | `ai-suggest <mod-id> [--offline] [--draft]` | Les mêmes suggestions que la fenêtre. **N'écrit rien** |
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Écrit les champs nommés, avec la validation de la fenêtre |
-| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--json]` | *Demander à Laya* : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent, en résultats structurés |
+| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--write] [--json]` | *Demander à Laya* : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent, en résultats structurés ; `write` ajoute une réponse rédigée et citée |
+| `bmm_ai_analyze_library` | `ai-analyze [mod-ids] [--laya] [--limit 200]` | Des suggestions pour plusieurs mods à la fois. **N'écrit rien** |
+| `bmm_ai_classify` | `ai-classify "<texte>" --label id=sens …` | Lequel de vos libellés convient à un texte (Laya, hors ligne), plus *aucun* |
 | `bmm_ai_pack_install` | `ai-install` | Télécharge, vérifie et installe le paquet du modèle (progression en direct dans la CLI) |
 | `bmm_ai_pack_remove` | `ai-remove` | Supprime le paquet du modèle téléchargé |
 | `bmm_ai_test` | `ai-test` | Classe un exemple fixe, avec les durées |

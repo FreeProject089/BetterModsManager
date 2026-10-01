@@ -402,23 +402,6 @@
     height: 100%;
 }
 
-.mapper-preview-container {
-    /* ONE gutter for the whole panel. The header and the destination bar used to sit at
-       28px while the list sat at 16px + a 14px row padding — so the title, the destination
-       path and the first filename each started at a different x. Everything now derives
-       from this single value, and the rows subtract their own padding so their TEXT lands
-       on the gutter rather than their hover background. */
-    --mpv-gutter: 26px;
-
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    background: var(--bmm-bg-base);
-}
-
 /* Tree Item Color Coding (Main Page) */
 .tree-item.root-item {
     border-left: 3px solid #f59e0b !important;
@@ -796,123 +779,81 @@
     box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8) !important;
 }
 
-/* ── FINAL PREVIEW modal — redesigned (.mpv-*) ─────────────────────────────── */
-.mpv-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;      /* was flex-start, which left the pills floating above a
-                                 one-line description now that the <h3> is gone */
-    gap: 16px;
-    padding: 16px var(--mpv-gutter);
-    border-bottom: 1px solid var(--bmm-s08);
-    flex-wrap: wrap;
+/* ── FINAL PREVIEW dialog (.mpv2-*, features/mapper/mapper-preview.ts) ──────────────
+   Summary tiles, warnings, a tree/list toggle with search and filters, a virtualised file
+   list (rows are absolutely positioned at 32px), and Back / Apply in the footer. */
+.mpv2-overlay { pointer-events: auto; z-index: 10060; }
+.mpv2-overlay .modal.mpv2 {
+    width: min(1040px, 96%); max-width: none; height: min(820px, calc(100vh - 64px));
+    padding: 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px;
 }
-.mpv-heading { min-width: 0; }
-.mpv-desc { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
-.mpv-stats { display: flex; gap: 8px; flex-shrink: 0; }
-.mpv-stat {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    background: var(--bmm-s05);
-    border: 1px solid var(--bmm-s08);
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    white-space: nowrap;
-}
-.mpv-stat b { color: var(--text-primary); font-weight: 800; }
-.mpv-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
-.mpv-stat-root .mpv-dot { background: var(--bmm-warning); }
-.mpv-stat-sub .mpv-dot  { background: var(--bmm-success); }
+.mpv2-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px 10px; }
+.mpv2-head-text { min-width: 0; flex: 1; }
+.mpv2-head .modal-title { margin: 0; font-size: 15px; }
+.mpv2-dest { display: flex; align-items: center; gap: 7px; margin-top: 6px; color: var(--text-secondary); min-width: 0; }
+.mpv2-dest > svg { color: var(--accent); flex: none; }
+.mpv2-dest code { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpv2-x { width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; flex: none; }
+.mpv2-x:hover { background: var(--bmm-s05); color: var(--text-primary); border-color: var(--border); }
 
-/* Destination base — the game-path prefix shown ONCE, not repeated per row. */
-.mpv-base {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 11px var(--mpv-gutter);
-    background: var(--bmm-s02);
-    border-bottom: 1px solid var(--bmm-s06);
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    min-width: 0;
-}
-.mpv-base > svg { color: var(--accent); flex: none; }
-.mpv-base-label {
-    font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
-    font-size: 0.66rem; color: var(--text-muted); flex: none;
-}
-.mpv-base-path {
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    background: var(--bmm-s04);
-    padding: 3px 9px;
-    border-radius: 7px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+.mpv2-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 4px 20px 12px; }
+.mpv2-tile { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 10px; background: var(--bmm-s03); border: 1px solid var(--bmm-s06); min-width: 0; }
+.mpv2-tile b { font-size: 17px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpv2-tile span { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpv2-tile.is-ok b { color: var(--bmm-success); }
+.mpv2-tile.is-warn b { color: var(--bmm-warning); }
 
-.mpv-list {
-    flex: 1;
-    overflow-y: auto;
-    /* gutter minus the row's own 12px inset, so the first badge lines up with the
-       destination label and the description above it. Never negative. */
-    padding: 10px max(0px, calc(var(--mpv-gutter) - 12px)) 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-.mpv-row {
-    display: grid;
-    /* FOUR tracks, not five. The 5th (`auto`, for .mpv-chip) was declared on every row,
-       and an empty track still renders the 12px gap beside it — so every unchanged row
-       carried 12px of dead space on its right that the changed rows did not, and the two
-       kinds of row never lined up. The chip now creates an implicit column only when it
-       actually exists. */
-    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid transparent;
-    font-family: var(--font-mono);
-    font-size: 0.82rem;
-    transition: background 0.12s ease, border-color 0.12s ease;
-}
-.mpv-row:hover { background: var(--bmm-s04); border-color: var(--bmm-s08); }
-.mpv-badge {
-    display: inline-grid; place-items: center;
-    width: 26px; height: 26px; border-radius: 8px; flex: none;
-}
-.mpv-badge svg { width: 14px; height: 14px; }
-.mpv-row-pending .mpv-badge { background: var(--accent-dim); color: var(--accent); }
-.mpv-row-root .mpv-badge    { background: var(--bmm-warning-dim); color: var(--bmm-warning); }
-.mpv-row-ok .mpv-badge      { background: var(--bmm-success-dim); color: var(--bmm-success); }
-.mpv-src {
-    color: var(--text-muted);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.mpv-arrow { width: 15px; height: 15px; color: var(--text-muted); opacity: 0.55; flex: none; }
-.mpv-dst {
-    color: var(--text-primary); font-weight: 500;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.mpv-row-pending .mpv-dst { color: var(--accent); font-weight: 600; }
-.mpv-chip {
-    justify-self: end;
-    font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em;
-    padding: 2px 8px; border-radius: 999px;
-    background: var(--accent-dim); color: var(--accent); flex: none;
-}
-.mpv-empty { padding: 44px; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+.mpv2-warns { list-style: none; margin: 0 20px 10px; padding: 6px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, transparent); background: color-mix(in srgb, var(--bmm-warning) 8%, transparent); }
+.mpv2-warn { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; color: var(--text-secondary); }
+.mpv2-warn > span:first-child { color: var(--bmm-warning); display: grid; place-items: center; flex: none; }
+.mpv2-warn > span:nth-child(2) { flex: 1; min-width: 0; }
+.mpv2-link { background: none; border: 0; padding: 2px 4px; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; border-radius: 6px; flex: none; }
+.mpv2-link:hover { text-decoration: underline; }
 
-/* JS/Tasky tooltip replaces the CSS ::after inside the preview modal */
-.mapper-preview-container [data-tooltip]::after,
-.mapper-preview-container [data-tooltip]::before { display: none !important; }
+.mpv2-bar { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-top: 1px solid var(--bmm-s06); border-bottom: 1px solid var(--bmm-s06); flex-wrap: wrap; }
+.mpv2-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bmm-s04); border: 1px solid var(--bmm-s06); }
+.mpv2-seg button, .mpv2-filters button { background: transparent; border: 0; color: var(--text-secondary); font: inherit; font-size: 12px; padding: 5px 11px; border-radius: 7px; cursor: pointer; }
+.mpv2-seg button.is-on { background: var(--bmm-bg-elevated); color: var(--text-primary); box-shadow: 0 1px 2px var(--bmm-s12); }
+.mpv2-search { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bmm-s02); color: var(--text-muted); }
+.mpv2-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12.5px; }
+.mpv2-search:focus-within { border-color: var(--accent); }
+.mpv2-filters { display: inline-flex; gap: 2px; }
+.mpv2-filters button:hover { color: var(--text-primary); background: var(--bmm-s04); }
+.mpv2-filters button.is-on { color: var(--accent); background: var(--accent-dim); }
+
+.mpv2-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; padding: 0 12px; }
+.mpv2-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mpv2-spacer { position: relative; }
+.mpv2-row {
+    position: absolute; left: 0; right: 0; height: 32px;
+    display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px;
+    font-size: 12.5px; color: var(--text-secondary);
+}
+.mpv2-row:hover { background: var(--bmm-s04); }
+.mpv2-group { border: 0; background: transparent; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; color: var(--text-primary); font-weight: 600; }
+.mpv2-chev { display: grid; place-items: center; color: var(--text-muted); transition: transform .15s; flex: none; }
+.mpv2-group.is-open .mpv2-chev { transform: rotate(90deg); }
+.mpv2-gico { display: grid; place-items: center; color: var(--accent); flex: none; }
+.mpv2-group.is-root .mpv2-gico { color: var(--bmm-warning); }
+.mpv2-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.mpv2-group .mpv2-path { font-family: inherit; }
+.mpv2-count { color: var(--text-secondary); font-weight: 400; font-size: 12px; white-space: nowrap; }
+.mpv2-count em { font-style: normal; color: var(--bmm-warning); margin-left: 6px; }
+.mpv2-size { color: var(--text-secondary); font-size: 11.5px; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; white-space: nowrap; font-weight: 400; }
+.mpv2-file.is-indent { padding-left: 40px; }
+.mpv2-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--bmm-success); }
+.mpv2-file.is-overwrite .mpv2-dot { background: var(--bmm-warning); }
+.mpv2-tag { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 999px; flex: none; }
+.mpv2-empty { flex: 1; display: grid; place-items: center; color: var(--text-secondary); font-size: 13px; padding: 40px; }
+
+.mpv2-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px 14px; border-top: 1px solid var(--bmm-s06); }
+.mpv2-foot-note { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+
+@media (max-width: 980px) {
+    .mpv2-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mpv2-filters { width: 100%; }
+}
 
 /* Tasky tooltip replaces the CSS ::after tooltip everywhere in the mapper
    (the tree panels clip ::after via overflow; Tasky follows the mouse, never cut) */

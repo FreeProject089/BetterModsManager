@@ -81,3 +81,8 @@ Et à côté des mods, la liste porte :
     celui activé en dernier gagne (voir [conflits](doc-page:features/library#conflicts)). Reproduire « à
     l'identique » la config de quelqu'un, c'est reproduire son ordre — ce que fait justement
     l'import d'un `.MM`.
+
+    La liste porte aussi l'**ordre d'activation** de son auteur (`load_order`), par empreinte et
+    nom plutôt que par chemin local. Appliquer la liste met les mods qu'elle nomme dans cet ordre,
+    et vous pouvez coller un `.MM` dans **Importer** de la vue de l'ordre pour le prévisualiser
+    d'abord. Voir [Ordre d'activation](doc-page:how-it-works/load-order#partager-un-ordre).

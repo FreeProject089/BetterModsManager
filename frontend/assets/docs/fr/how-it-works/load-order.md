@@ -106,12 +106,79 @@ leurs fichiers sont lus depuis le cache extrait quand ils doivent revenir.
 
 ---
 
-## Modpacks
+## Quand plusieurs mods s'activent d'un coup
 
-La liste d'un modpack est aussi un ordre — les flèches de l'éditeur de modpack le changent. Quand un
-pack est appliqué, ses mods sont activés puis placés **en haut** de l'ordre du profil, en un seul bloc
-dans la séquence du pack : le pack gagne les fichiers qu'il partage avec ce que le profil avait déjà,
-tel qu'il a été construit. Rien d'autre du profil ne bouge.
+Un modpack, **Tout activer**, une liste de mods `.mm`, une tâche planifiée, un BMMScript et un lien
+`bmm://modpack/enable` finissent tous de la même façon : une fois leurs mods activés, un seul moteur
+les place dans l'ordre. Il a trois modes.
+
+| Mode | Dans l'app | Ce qui se passe |
+|---|---|---|
+| `top` | **Ils gagnent (placés en dernier)** | Le bloc passe après tout ce qui est déjà actif, dans son propre ordre : il gagne ce qu'il partage. Le défaut, et ce que les modpacks ont toujours fait. |
+| `bottom` | **Les vôtres gagnent (placés en premier)** | Le bloc passe avant tout ce qui est déjà actif : les mods que vous aviez continuent de gagner. |
+| `keep` | **Rien ne bouge** | Les mods déjà actifs gardent leur place ; les nouveaux restent là où l'activation les a mis, à la fin. |
+
+Ce qui forme le bloc dépend de qui le demande :
+
+- un **modpack** place tous ses mods, dans la séquence du pack (les flèches de son éditeur) ;
+- **Tout activer** et une **liste de mods** ne placent que les mods qu'ils ont activés, pour qu'un
+  ordre soigné ne soit jamais bousculé par un bouton qui voulait dire « active le reste ».
+
+Quel mode s'applique :
+
+1. celui que l'appelant nomme : le champ **Ordre d'activation** d'une étape de tâche, `placement:`
+   en BMMScript, `order=` sur un lien `bmm://modpack/enable`, `order_mode` dans l'API ;
+2. sinon l'**Ordre d'activation** propre au modpack (éditeur de modpack), qui voyage avec le pack
+   (export `.bmp`, listes `.mm`, dépôts) ;
+3. sinon le réglage par défaut, **Activation groupée** dans la vue de l'ordre (réglage
+   `order_bulk_mode`, `top` s'il n'a jamais été choisi).
+
+Seuls les fichiers qui changent de gagnant sont recopiés, comme avec **Appliquer l'ordre**.
+
+---
+
+## Partager un ordre
+
+Un id, c'est le nom que *cette* machine donne à un mod, et un chemin n'est vrai qu'ici. Un ordre
+partagé désigne chaque mod par ce qui survit au voyage : son empreinte de contenu, son id de dépôt,
+son nom et sa version (et l'id local, pour un aller-retour sur le même PC).
+
+**Partager** dans la vue de l'ordre donne le même ordre sous quatre formes :
+
+| Forme | Ressemble à | Pour |
+|---|---|---|
+| Code | `BMMORDER1.eyJmb3Jt…` | un message de chat : une ligne |
+| Lien | `bmm://order?d=BMMORDER1.…` | un clic ouvre l'aperçu d'import dans BMM |
+| Liste | `1. Enhanced Textures`, `2. Weather Overhaul` | un post de forum ; lisible par tous |
+| Fichier | `activation-order.json` | le garder à côté d'un pack |
+
+**Importer** lit chacune de ces formes, une liste `.mm` collée en entier, ou une simple liste de
+noms (un par ligne ; les puces `1.` et `-` sont acceptées). Chaque entrée est reliée par l'identité
+la plus forte qu'elle porte : id local, puis empreinte, puis id de dépôt, puis le nom quand un seul
+mod le porte (la version départage deux mods du même nom). L'aperçu indique ensuite :
+
+- où chaque mod actif atterrit, et de combien de places il bouge ;
+- combien de fichiers changeraient de gagnant ;
+- ce qui est **non installé** et ce qui est **installé mais inactif** : un import n'active ni ne
+  désactive rien, activez-les d'abord si vous voulez qu'ils soient placés ;
+- quels mods actifs la liste ne connaît pas : ils **gardent leur place**.
+
+Le résultat devient le brouillon de la vue. Rien n'est écrit avant **Appliquer l'ordre**. Un lien
+`bmm://order` venu d'une page web est sans risque pour la même raison : il ne fait que remplir
+l'aperçu.
+
+Une liste `.mm` transporte l'ordre de son auteur (`load_order`, les mods qu'elle nomme). Appliquer
+la liste (tâche **Appliquer une liste de mods**, **Importer un fichier** avec application) place les
+mods qu'elle a activés selon le mode, puis met ceux qu'elle nomme dans l'ordre de l'auteur, sauf en
+mode `keep`.
+
+---
+
+## Gardé avec vos données
+
+L'ordre, c'est le `active_mods` du profil : un export des données, un export automatique et une
+sauvegarde complète (`.databmm`) gardent l'ordre de chaque profil, et les restaurer le ramène.
+Changer de profil ne change rien : chaque profil a son propre ordre.
 
 ---
 
@@ -119,9 +186,11 @@ tel qu'il a été construit. Rien d'autre du profil ne bouge.
 
 | Surface | Lire | Écrire |
 |---|---|---|
-| API locale | `GET /api/mods/order` | `POST /api/mods/order` avec `order[]`, `profileId`, `reapply` |
-| MCP | `bmm_get_mod_order` | `bmm_set_mod_order` |
-| CLI | `bmm mod-order` | `bmm mod-order --set a,b,c`, `bmm mod-order --reapply` |
+| API locale | `GET /api/mods/order`, `GET /api/mods/order/export`, `GET /api/mods/order/mode` | `POST /api/mods/order` (`order[]`, `profileId`, `reapply`), `POST /api/mods/order/import` (`text`, `dryRun`), `POST /api/mods/order/arrange` (`ids[]`, `mode`), `POST /api/mods/order/mode` |
+| MCP | `bmm_get_mod_order`, `bmm_export_mod_order` | `bmm_set_mod_order`, `bmm_import_mod_order`, `bmm_arrange_mod_order`, `bmm_order_bulk_mode` |
+| CLI | `bmm mod-order`, `bmm mod-order --export [code, link, text ou json]`, `bmm mod-order --bulk-mode` | `bmm mod-order --set a,b,c`, `--reapply`, `--import <code, lien, fichier ou ->` (`--dry-run`), `--arrange a,b --mode bottom`, `--mode keep` |
+| Tâches, BMMScript | | `mods.order`, et `placement` sur `modpack.enable`, `mods.enableAll`, `modlist.apply` |
 
 Un nouvel ordre doit contenir exactement les mods actifs : une liste avec un mod en moins ou en trop
-est refusée, parce que l'appliquer laisserait dans le jeu des fichiers que rien ne revendique.
+est refusée, parce que l'appliquer laisserait dans le jeu des fichiers que rien ne revendique. Import
+et placement ne peuvent pas enfreindre cette règle : ils ne déplacent que des mods déjà actifs.

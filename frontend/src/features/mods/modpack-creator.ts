@@ -528,6 +528,18 @@ async function _openEditor(container, pack) {
         </select>
     `));
 
+    // Where the pack's mods go in the profile's activation order when it is applied
+    // (commands/order_share.rs). Empty = the setting "Bulk enable" in Settings.
+    const om = _editingPack.order_mode || '';
+    metaForm.appendChild(_formField(t('modpack.orderMode'), `
+        <select id="mp-ordermode" class="form-input" style="width:100%;" title="${escAttr(t('modpack.orderModeTip'))}">
+            <option value="" ${om === '' ? 'selected' : ''}>${escHtml(t('order.mode.default'))}</option>
+            <option value="top" ${om === 'top' ? 'selected' : ''}>${escHtml(t('order.mode.top'))}</option>
+            <option value="bottom" ${om === 'bottom' ? 'selected' : ''}>${escHtml(t('order.mode.bottom'))}</option>
+            <option value="keep" ${om === 'keep' ? 'selected' : ''}>${escHtml(t('order.mode.keep'))}</option>
+        </select>
+    `));
+
     metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${t('modpack.srLinkPlaceholder')}" value="${_editingPack.sr_link || ''}" style="width:100%;">`));
 
     leftCol.appendChild(metaForm);
@@ -577,6 +589,7 @@ async function _openEditor(container, pack) {
             skip_integrity_check: document.getElementById('mp-skip-integrity')?.checked || false,
             dependency_mode: document.getElementById('mp-depmode')?.value || 'manual',
             sr_link: document.getElementById('mp-srlink')?.value.trim() || null,
+            order_mode: (document.getElementById('mp-ordermode') as HTMLSelectElement | null)?.value || null,
             mods: _packMods,
         };
 
@@ -1362,8 +1375,9 @@ async function _executeApplyModpack(container, pack, isApplying) {
         }
     };
 
-    // The pack's own order, as local ids: once its mods are on, they go on top of the profile's
-    // activation order in this sequence (mod_order_place), so the pack wins as it was built.
+    // The pack's own order, as local ids: once its mods are on, the block is placed in the
+    // profile's activation order by the pack's mode (or the setting): on top in this sequence
+    // by default, so the pack wins as it was built (commands/order_share.rs).
     const packOrder: string[] = [];
     for (const mref of pack.mods) {
         // Find local mod by ID or SHA-256
@@ -1402,9 +1416,9 @@ async function _executeApplyModpack(container, pack, isApplying) {
     } else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
     }
-    if (isApplying && packOrder.length > 1) {
-        const { placeOnTop } = await import('../profiles/load-order.js');
-        await placeOnTop(packOrder, null, toast);
+    if (isApplying && packOrder.length > 0) {
+        const { arrangeBlock } = await import('../profiles/load-order.js');
+        await arrangeBlock(packOrder, pack.order_mode || null, null, toast);
     }
     if (isApplying) dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
 

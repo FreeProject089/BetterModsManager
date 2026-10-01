@@ -2220,6 +2220,8 @@ export async function initSettings() {
     // Optional AI card (features/ai/ai-settings.ts) — slotted in after Privacy, BEFORE the
     // reorder pass so it gets its handle and its saved place like every other card.
     try { await (await import('../ai/ai-settings.js')).mountAiSettings(); } catch (e) {}
+    // « API Laya locale » (off by default), right after the AI card.
+    try { await (await import('./ai-api-card.js')).mountAiApiCard(); } catch (e) {}
     try { initCardReorder(); } catch (e) {}
     try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
     initSecurityInfoCard().catch(() => {});

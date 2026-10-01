@@ -35,6 +35,7 @@ export function sourceLabel(src: string): string {
         case 'embedded': return t('ai.src.embedded');
         case 'bettercommunity': return t('ai.src.bettercommunity');
         case 'api': return t('ai.src.api');
+        case 'local': return t('ai.src.local');
         default: return src;
     }
 }
@@ -77,7 +78,8 @@ export function reasonText(note: string): string {
     if (raw === 'cancelled') return t('ai.reason.cancelled');
     const reason = raw.includes(':') ? raw.slice(raw.lastIndexOf(':') + 1) : raw;
     const who = raw.includes(':') ? raw.slice(0, raw.indexOf(':')) : '';
-    const whoLabel = who === 'bettercommunity' ? t('ai.src.bettercommunity') : who === 'laya' ? t('ai.src.laya') : who === 'api' || who === 'generative' ? t('ai.src.api') : '';
+    const whoLabel = who === 'bettercommunity' ? t('ai.src.bettercommunity') : who === 'laya' ? t('ai.src.laya') : who === 'api' ? t('ai.src.api')
+        : who === 'local' ? t('ai.src.local') : who === 'generative' || who === 'gen' ? t('ai.src.gen') : '';
     const words: Record<string, string> = {
         ai_off: t('ai.reason.aiOff'),
         killed: t('ai.reason.killed'),
@@ -95,6 +97,19 @@ export function reasonText(note: string): string {
         no_model: t('ai.reason.noModel'),
         bad_response: t('ai.reason.badResponse'),
         bad_json: t('ai.reason.badResponse'),
+        // The hybrid pipeline (commands/ai_hybrid.rs): why a draft or a written answer is not shown.
+        injection: t('ai.reason.genInjection'),
+        invented_link: t('ai.reason.genInvented'),
+        invented_file: t('ai.reason.genInvented'),
+        command: t('ai.reason.genCommand'),
+        empty: t('ai.reason.insufficient'),
+        no_citation: t('ai.reason.genNoCitation'),
+        tags_outside_vocabulary: t('ai.reason.genTagsOutside'),
+        draft_rejected: t('ai.reason.layaRejected'),
+        unsupported: t('ai.reason.layaRejected'),
+        unchecked: t('ai.reason.layaUnchecked'),
+        abstain: t('ai.reason.layaAbstain'),
+        nothing_found: t('ai.reason.nothingFound'),
     };
     const url: Record<string, string> = {
         'ai.url.invalid': t('ai.url.invalid'),
@@ -104,9 +119,13 @@ export function reasonText(note: string): string {
         'ai.url.httpsRequired': t('ai.url.httpsRequired'),
         'ai.url.privateHost': t('ai.url.privateHost'),
         'ai.url.notBetterCommunity': t('ai.url.notBetterCommunity'),
+        'ai.key.httpRefused': t('ai.key.httpRefused'),
     };
     const key = Object.keys(url).find((k) => raw.includes(k));
     const text = key ? url[key] : (words[reason] || (/^http_\d+$/.test(reason) ? t('ai.reason.http', { code: reason.slice(5) }) : reason));
+    // The hybrid pipeline's own reasons read as sentences about the draft: no « Laya — » prefix.
+    const own = ['draft_rejected', 'unsupported', 'unchecked', 'abstain', 'injection', 'invented_link', 'invented_file', 'command', 'no_citation', 'tags_outside_vocabulary', 'nothing_found'];
+    if (own.includes(reason)) return text.charAt(0).toUpperCase() + text.slice(1);
     return whoLabel ? `${whoLabel} — ${text}` : text;
 }
 

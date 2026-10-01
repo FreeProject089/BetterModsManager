@@ -17,7 +17,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { learnMore, LEARN_MORE_EVENT } from '../../core/learn-more.js';
 import { raiseAboveAll } from '../../ui/layer.js';
-import { installFocusTrap } from '../../ui/focus-trap.js';
+import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { bindOrderKeys } from './load-order-keys.js';
 import {
@@ -69,7 +69,7 @@ let _open: HTMLElement | null = null;
  * Open the activation order of a profile (default: the active one). Resolves when the view
  * closes, with whether an order was applied.
  */
-export async function openLoadOrder(profileId?: string | null, profileName?: string, notify?: Notify): Promise<boolean> {
+export async function openLoadOrder(profileId?: string | null, profileName?: string, notify?: Notify, opts: { importText?: string } = {}): Promise<boolean> {
     if (notify) _notify = notify;
     if (_open) {
         // "Learn more" hides the view rather than closing it (core/learn-more.ts takes the
@@ -77,6 +77,8 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         // the docs: opening the view again brings it back as it was left.
         _open.classList.add('open');
         _open.querySelector<HTMLElement>('.lo-list')?.focus();
+        // A shared order arriving while the view is open (a bmm://order link): its preview.
+        if (opts.importText) _open.dispatchEvent(new CustomEvent('lo-import', { detail: opts.importText }));
         return false;
     }
     ensureCss();
@@ -91,6 +93,9 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         toast(fill('order.loadFailed', { e: t(String(e)) }), 'error', 7000);
         return false;
     }
+    // The default placement of a bulk enable, read before the markup so the select is born
+    // with it (the themed select mirrors the native one when it is built).
+    const bulkMode = String(await invoke('order_bulk_mode_get').catch(() => 'top') || 'top');
 
     return new Promise<boolean>((resolve) => {
         const byId = new Map(mods.map((m) => [m.id, m]));
@@ -129,6 +134,12 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
           </select>
           <span class="lo-hint">${escHtml(t('order.dragHint'))}</span>
           <span class="lo-count" id="lo-count"></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="lo-share" title="${escAttr(t('order.share.tip'))}">${escHtml(t('order.share.btn'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="lo-import" title="${escAttr(t('order.import.tip'))}">${escHtml(t('order.import.btn'))}</button>
+          <label class="lo-bulk-label" for="lo-bulk" title="${escAttr(t('order.mode.tip'))}">${escHtml(t('order.mode.label'))}</label>
+          <select id="lo-bulk" class="lo-bulk" title="${escAttr(t('order.mode.tip'))}">
+            ${(['top', 'bottom', 'keep'] as const).map((m) => `<option value="${m}"${bulkMode === m ? ' selected' : ''}>${escHtml(t(`order.mode.${m}`))}</option>`).join('')}
+          </select>
         </div>
         <div class="lo-body">
           <div class="lo-edge lo-edge-first">${escHtml(t('order.first'))}</div>
@@ -277,8 +288,10 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             }
         }
 
-        /** On screen — not merely in the DOM: "Learn more" hides the overlay without closing it. */
-        const shown = (): boolean => _open === ov && ov.isConnected && ov.classList.contains('open');
+        /** On screen — not merely in the DOM: "Learn more" hides the overlay without closing it.
+         *  And holding the keyboard: a dialog opened over it (Share, Import) owns Tab, Escape
+         *  and the arrows until it closes. */
+        const shown = (): boolean => _open === ov && ov.isConnected && ov.classList.contains('open') && ownsFocus(ov);
 
         function close(): void {
             if (busy) return;
@@ -391,6 +404,35 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             const next = sortOrder(draft, byId, key, saved);
             if (!sameOrder(next, draft)) { draft = next; render(); }
         });
+        // Share: the SAVED order (what is on disk), not an unapplied draft.
+        ov.querySelector('#lo-share')?.addEventListener('click', () => {
+            void import('./order-share.js').then((m) => m.openOrderShare(profileId ?? null, toast));
+        });
+        // Import: the shared order becomes the DRAFT; "Apply order" is still the one step that
+        // touches the game, with the usual count of files changing hands.
+        const importInto = (prefill = '') => {
+            if (busy) return;
+            void import('./order-share.js').then(async (m) => {
+                const next = await m.openOrderImport(profileId ?? null, prefill);
+                if (!next || next.length !== draft.length) return;
+                sortSel.value = 'current';
+                draft = next;
+                live.textContent = t('order.import.drafted');
+                render();
+            });
+        };
+        ov.querySelector('#lo-import')?.addEventListener('click', () => importInto());
+        // The default placement of a bulk enable (modpack, "Enable all", a list, a task, a
+        // script): a setting, saved at once. It never moves anything by itself.
+        const bulkSel = ov.querySelector('#lo-bulk') as HTMLSelectElement | null;
+        if (bulkSel) {
+            bulkSel.addEventListener('change', () => {
+                void invoke('order_bulk_mode_set', { mode: bulkSel.value })
+                    .then(() => { live.textContent = t('order.mode.saved'); })
+                    .catch((e) => toast(t(String(e)), 'error', 6000));
+            });
+        }
+        ov.addEventListener('lo-import', (e) => importInto(String((e as CustomEvent).detail || '')));
         applyBtn.addEventListener('click', () => { void apply(); });
         resetBtn.addEventListener('click', () => { draft = saved.slice(); sortSel.value = 'current'; render(); });
         reapplyBtn.addEventListener('click', () => { void reapply(); });
@@ -400,6 +442,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         render();
         list.focus();
         dispatchBmmAction(BMM_ACTIONS.ORDER_OPENED, { profileId: profileId ?? null });
+        if (opts.importText) importInto(opts.importText);
     });
 }
 
@@ -411,17 +454,24 @@ function refreshMods(): void {
 }
 
 /**
- * Put some active mods on top of a profile's order, as one block in the given order — what a
- * modpack does when it is applied. Returns how many files changed hands, or null on failure.
+ * Place a block of active mods after a bulk enable — the one engine every bulk path ends with
+ * (src-tauri/src/commands/order_share.rs): `top` the block wins, in its own order; `bottom` it
+ * goes under what was already active; `keep` nothing moves. `mode` null = the setting.
+ * Returns how many files changed hands, or null on failure.
  */
-export async function placeOnTop(ids: string[], profileId?: string | null, notify?: Notify): Promise<number | null> {
+export async function arrangeBlock(ids: string[], mode: string | null, profileId?: string | null, notify?: Notify): Promise<number | null> {
     if (notify) _notify = notify;
     if (!ids.length) return 0;
     try {
-        return Number(await invoke('mod_order_place', { profileId: profileId ?? null, ids, position: null })) || 0;
+        return Number(await invoke('mod_order_arrange', { profileId: profileId ?? null, ids, mode: mode || null })) || 0;
     } catch (e) {
         toast(fill('order.applyFailed', { e: t(String(e)) }), 'error', 8000);
         return null;
     }
+}
+
+/** A block on top, whatever the setting says ("Move to top" of several mods at once). */
+export async function placeOnTop(ids: string[], profileId?: string | null, notify?: Notify): Promise<number | null> {
+    return arrangeBlock(ids, 'top', profileId, notify);
 }
 

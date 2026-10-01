@@ -160,3 +160,81 @@ export function profileFolders(profiles: { name: string; game_path: string }[], 
         return { name: p.name, path: p.game_path, dir, ignored: ign.has(dir), wholeDrive: isWholeDrive(dir) };
     });
 }
+
+// ── Words for the Storage Manager's rows (sizes, what a queued operation is about) ──────────────
+
+/** "1,5 To", "820 Go": a size in the user's language (Intl number, the unit word from `t`). */
+export function sizeText(bytes: number, t: T, lang = 'en'): string {
+    const units: [string, string][] = [['stm.unit.b', 'B'], ['stm.unit.kb', 'KB'], ['stm.unit.mb', 'MB'], ['stm.unit.gb', 'GB'], ['stm.unit.tb', 'TB']];
+    let v = Math.max(0, Number(bytes) || 0), i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    let num: string;
+    try { num = new Intl.NumberFormat(lang, { maximumFractionDigits: v < 10 && i > 0 ? 1 : 0 }).format(v); } catch { num = (v < 10 && i > 0 ? v.toFixed(1) : Math.round(v).toString()); }
+    return `${num} ${say(t, units[i][0], units[i][1])}`;
+}
+
+/** "1,5 To sur 1,8 To". */
+export function usedOfText(used: number, total: number, t: T, lang = 'en'): string {
+    return say(t, 'stm.space.usedOf', '{u} of {t}').replace('{u}', sizeText(used, t, lang)).replace('{t}', sizeText(total, t, lang));
+}
+
+/** What the backend's ticket subjects start with (the `begin(kind, subject)` calls), in words. */
+const SUBJECTS: [prefix: string, key: string, en: string][] = [
+    ['content id ', 'stm.subj.contentId', 'Identifying'],
+    ['rehash ', 'stm.subj.rehash', 'Re-checking files'],
+    ['hash ', 'stm.subj.hash', 'Checking files'],
+    ['integrity ', 'stm.subj.integrity', 'Verifying'],
+    ['verify integrity (profile)', 'stm.subj.verifyProfile', 'Verifying the profile'],
+    ['disk benchmark ', 'stm.subj.diskBench', 'Testing the disk'],
+    ['size ', 'stm.subj.size', 'Measuring'],
+    ['scan ', 'stm.subj.scan', 'Scanning'],
+    ['find logs ', 'stm.subj.findLogs', 'Looking for logs'],
+    ['mapper ', 'stm.subj.mapper', 'Mapping'],
+    ['redact old reports', 'stm.subj.redact', 'Cleaning old reports'],
+    ['load order', 'stm.subj.loadOrder', 'Applying the load order'],
+    ['export mod list', 'stm.subj.exportList', 'Exporting the mod list'],
+    ['repo export → ', 'stm.subj.repoExport', 'Exporting a repository'],
+    ['repo update → ', 'stm.subj.repoUpdate', 'Updating a repository'],
+    ['repo manifest ← ', 'stm.subj.repoManifest', 'Building a manifest'],
+    ['direct update → ', 'stm.subj.directUpdate', 'Updating'],
+    ['catalog bundle → ', 'stm.subj.catalogBundle', 'Packing a catalog'],
+    ['crop → ', 'stm.subj.crop', 'Cropping an image'],
+    ['icon → ', 'stm.subj.icon', 'Making an icon'],
+    ['launch pack icon <- ', 'stm.subj.icon', 'Making an icon'],
+];
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+
+/** A queued operation's subject as a person reads it: the action in words, then the file or
+ *  folder by its last name only ("Checking files: SkyUI"), never an internal id. */
+export function humanSubject(subject: string, t: T): string {
+    const s = String(subject || '').trim();
+    const low = s.toLowerCase();
+    const hit = SUBJECTS.find(([p]) => low.startsWith(p));
+    let rest = hit ? s.slice(hit[0].length) : s;
+    rest = rest.replace(UUID, '').trim();
+    if (/[\\/]/.test(rest)) rest = rest.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || rest;
+    if (!hit) return rest || s;
+    const verb = say(t, hit[1], hit[2]);
+    return rest ? say(t, 'stm.subj.join', '{v}: {s}').replace('{v}', verb).replace('{s}', rest) : verb;
+}
+
+// ── Game detection: what is never a game ────────────────────────────────────────────────────
+
+/** Programs that are never a game by themselves (governor/game_mode.rs NOT_GAMES, the same
+ *  list; a test compares the two): browsers, players, chat, launchers, editors. The Game mode
+ *  tab leaves them out of "pick a running program" and warns when one is added by hand. */
+export const NOT_GAMES: readonly string[] = [
+    'firefox.exe', 'chrome.exe', 'msedge.exe', 'opera.exe', 'brave.exe', 'vivaldi.exe', 'iexplore.exe',
+    'waterfox.exe', 'librewolf.exe', 'zen.exe', 'arc.exe', 'floorp.exe',
+    'vlc.exe', 'mpv.exe', 'mpc-hc.exe', 'mpc-hc64.exe', 'mpc-be64.exe', 'potplayermini64.exe', 'wmplayer.exe',
+    'discord.exe', 'spotify.exe', 'obs64.exe', 'teams.exe', 'ms-teams.exe', 'slack.exe', 'zoom.exe',
+    'steam.exe', 'steamwebhelper.exe', 'epicgameslauncher.exe', 'galaxyclient.exe', 'eadesktop.exe',
+    'ubisoftconnect.exe', 'upc.exe', 'battle.net.exe',
+    'code.exe', 'explorer.exe', 'powerpnt.exe',
+];
+
+/** Is this executable (a name or a full path) one of NOT_GAMES? */
+export function isKnownNonGame(exe: string): boolean {
+    const name = String(exe || '').split(/[\\/]/).pop()!.toLowerCase();
+    return NOT_GAMES.includes(name);
+}

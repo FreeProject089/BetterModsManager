@@ -1,8 +1,10 @@
-import { invoke, listen, pickFile, pickFolder, saveFile } from '../../core/api.js';
+import { invoke, listen, pickFile, pickFolder, saveFile, isTauri } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { showTaskyHelp, hideTaskyHelp } from '../../docs/interactive-docs.js';
 import { bindModal, ensureModalShellCss } from '../../ui/modal-shell.js';
+import { BOOT_KEY, REC_EVENT, EXPAND_EVENT, CLOSED_EVENT } from './mini-window.js';
+import { viewBounds } from './bench-view.js';
 let benchmarkData = [];
 let isAdvancedMode = false;
 let isLiveView = true;
@@ -134,6 +136,18 @@ function parseBenchReportText(text) {
 let hoverIndex = null;
 let miniMonitorActive = false;
 let seekIndex = null;
+/** How many samples the live monitor keeps: an hour at one a second. */
+const MAX_POINTS = 3600;
+/** The time window shown (seconds back from the last sample), or null for everything. */
+let rangeSecs = 300;
+/** A drag-selected time range (timestamps, inclusive), inside the window above. */
+let zoom = null;
+/** Series the user switched off by clicking their legend entry (BenchmarkPoint keys). */
+const hiddenSeries = new Set();
+/** The run the results compare against (a label in benchCompare), or null for the previous one. */
+let compareBase = null;
+/** The mini monitor lives in its own window (Tauri) while this is true. */
+let miniWindowOpen = false;
 // Initialization
 export async function initBenchmark() {
     const isEnabled = await invoke('is_benchmark_enabled');
@@ -143,6 +157,23 @@ export async function initBenchmark() {
             btn.style.display = 'none';
         return;
     }
+    // The mini monitor window asks for the full monitor back, says it closed, or paused.
+    void listen(EXPAND_EVENT, () => {
+        miniWindowOpen = false;
+        void openAdvancedPerfModal();
+        try {
+            void window.__TAURI__?.window?.getCurrentWindow?.()?.setFocus?.();
+        }
+        catch { /* focus is a nicety */ }
+    });
+    void listen(CLOSED_EVENT, () => {
+        miniWindowOpen = false;
+        // Nothing on screen draws the samples any more (the monitor is closed or hidden): stop
+        // sampling. Showing the monitor again starts it again.
+        if (!perfRoot?.closest('.modal-overlay')?.classList.contains('open'))
+            void invoke('stop_benchmark');
+    });
+    void listen(REC_EVENT, (e) => { isRecording = !!e?.payload; paintRecState(); });
     if (btn) {
         btn.style.display = 'flex';
         btn.onclick = () => {
@@ -220,10 +251,33 @@ function scheduleLiveRender() {
         renderActivityMap(root, benchmarkData);
         renderSparklines(root, benchmarkData);
         updateSeekHandle(root, isLiveView || benchmarkData.length < 2 ? 1 : (seekIndex ?? 0) / (benchmarkData.length - 1));
+        paintInspect(root);
         const n = root.querySelector('#perf-samples');
         if (n)
             n.textContent = tt('bench.ui.samples', '{n} samples', { n: benchmarkData.length });
+        const zr = root.querySelector('#btn-perf-zoom-reset');
+        if (zr)
+            zr.hidden = !zoom;
     });
+}
+/** Replaying a moment: its time and every value in one line under the timeline. */
+function paintInspect(root) {
+    const box = root.querySelector('#perf-inspect');
+    if (!box)
+        return;
+    const p = !isLiveView && seekIndex != null ? benchmarkData[seekIndex] : null;
+    if (!p) {
+        box.hidden = true;
+        return;
+    }
+    const all = [...mainSeries(), ...ioSeries()];
+    const html = `<b class="pf-mono">${escB(new Date(p.timestamp * 1000).toLocaleTimeString())}</b>`
+        + all.map(s => `<span><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)} <b>${escB(s.fmt(p[s.key] || 0))}</b></span>`).join('');
+    if (box.dataset.html !== html) {
+        box.dataset.html = html;
+        box.innerHTML = html;
+    }
+    box.hidden = false;
 }
 /** The recording state, said the same way in the modal and the mini monitor. */
 function paintRecState() {
@@ -241,7 +295,7 @@ function paintRecState() {
         ic.className = `pf-rec-ic${isRecording ? '' : ' is-play'}`;
     const mini = document.getElementById('mini-startstop');
     if (mini) {
-        mini.textContent = isRecording ? (t('bench.stop') || 'STOP') : (t('bench.start') || 'START');
+        mini.textContent = isRecording ? tt('bench.ui.pause', 'Pause') : tt('bench.ui.resume', 'Resume');
         mini.className = `pf-mini-btn ${isRecording ? 'is-stop' : 'is-start'}`;
     }
 }
@@ -257,6 +311,24 @@ function fmtElapsed(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
+/** The backend names its steps in English (commands/benchmark.rs `emit`): said in the user's
+ *  language here, by label, with the backend's words for a step this list does not know. */
+const STEP_KEY = {
+    'Scanning mod files': 'bench.step.scan',
+    'Hashing files (BLAKE3)': 'bench.step.hash',
+    'Copying (full speed)': 'bench.step.copyFull',
+    'Copying (Smart I/O)': 'bench.step.copySmart',
+    'Extracting archive (.zip)': 'bench.step.extract',
+    'Activating mod': 'bench.step.activate',
+    'Activating archived mod (.zip)': 'bench.step.activateZip',
+    'Deactivating mod': 'bench.step.deactivate',
+    'Testing cancel responsiveness': 'bench.step.cancel',
+    'Verifying (BLAKE3 compare)': 'bench.step.verify',
+};
+export function stepLabel(label) {
+    const k = STEP_KEY[label];
+    return k ? tt(k, label) : label;
+}
 function paintBenchProgress() {
     const bar = document.getElementById('bench-progress-bar');
     const pctEl = document.getElementById('bench-progress-pct');
@@ -269,7 +341,7 @@ function paintBenchProgress() {
     if (pctEl)
         pctEl.textContent = benchLastPct + '%';
     if (lblEl)
-        lblEl.textContent = benchLastLabel ? benchLastLabel + '…' : tt('bench.ui.starting', 'Preparing the dataset…');
+        lblEl.textContent = benchLastLabel ? stepLabel(benchLastLabel) + '…' : tt('bench.ui.starting', 'Preparing the dataset…');
     if (stepEl)
         stepEl.textContent = benchTotal ? tt('bench.ui.stepOf', 'Step {n} of {total}', { n: benchStep, total: benchTotal }) : '';
     if (elEl && benchStartedAt)
@@ -277,7 +349,7 @@ function paintBenchProgress() {
     if (list) {
         const html = benchStages.map((s, i) => {
             const now = i === benchStages.length - 1 && benchLastPct < 100;
-            return `<li class="${now ? 'is-now' : 'is-done'}"><span class="pf-st-ic" aria-hidden="true"></span><span>${escB(s)}</span></li>`;
+            return `<li class="${now ? 'is-now' : 'is-done'}"><span class="pf-st-ic" aria-hidden="true"></span><span>${escB(stepLabel(s))}</span></li>`;
         }).join('');
         if (list.dataset.html !== html) {
             list.dataset.html = html;
@@ -294,6 +366,8 @@ export async function openAdvancedPerfModal() {
         existing.style.opacity = '1';
         perfRebind?.();
         scheduleLiveRender();
+        if (isRecording)
+            void invoke('start_benchmark');
         return;
     }
     const overlay = document.createElement('div');
@@ -342,6 +416,11 @@ export async function openAdvancedPerfModal() {
                     <span class="bms-chip pf-num" id="perf-samples"></span>
                     <button type="button" class="btn btn-primary btn-sm" id="btn-perf-live" hidden>${escB(t('bench.liveMode') || 'Back to live')}</button>
                     <span class="bms-spacer"></span>
+                    <div id="perf-range" class="bms-seg" role="group" aria-label="${escB(tt('bench.ui.rangeAria', 'Time shown'))}">
+                        ${[['60', tt('bench.ui.range1m', '1 min')], ['300', tt('bench.ui.range5m', '5 min')], ['900', tt('bench.ui.range15m', '15 min')], ['all', tt('bench.ui.rangeAll', 'All')]]
+        .map(([v, l]) => `<button type="button" class="bms-seg-btn" data-range="${v}" aria-pressed="${String(rangeSecs == null ? v === 'all' : String(rangeSecs) === v)}">${escB(l)}</button>`).join('')}
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-perf-zoom-reset" hidden data-tooltip="${escB(tt('bench.ui.zoomResetTip', 'Show the whole time range again (or double-click a chart).'))}">${escB(tt('bench.ui.zoomReset', 'Reset zoom'))}</button>
                     <button type="button" class="btn btn-secondary btn-sm" id="btn-perf-rec"><span id="rec-dot" class="pf-rec-ic" aria-hidden="true"></span><span id="rec-text"></span></button>
                     <button type="button" class="btn btn-secondary btn-sm" id="btn-perf-mini">${I.mini}<span>${escB(t('bench.miniMonitor') || 'Mini-Monitor')}</span></button>
                     <span class="bms-sep" aria-hidden="true"></span>
@@ -376,11 +455,11 @@ export async function openAdvancedPerfModal() {
                 <div class="pf-charts">
                     <div class="bms-card chart-container">
                         <div class="bms-card-h"><h3 class="bms-card-title">${escB(t('bench.sysHist') || 'System Resources History')}</h3><div class="pf-legend" id="perf-legend-main"></div></div>
-                        <div class="pf-canvas-wrap"><canvas id="perf-chart-main"></canvas><div class="pf-tip" hidden></div></div>
+                        <div class="pf-canvas-wrap"><canvas id="perf-chart-main"></canvas><div class="pf-sel" hidden></div><div class="pf-tip" hidden></div></div>
                     </div>
                     <div class="bms-card chart-container">
                         <div class="bms-card-h"><h3 class="bms-card-title">${escB(t('bench.ioHist') || 'Disk Throughput History')}</h3><div class="pf-legend" id="perf-legend-io"></div></div>
-                        <div class="pf-canvas-wrap"><canvas id="perf-chart-io"></canvas><div class="pf-tip" hidden></div></div>
+                        <div class="pf-canvas-wrap"><canvas id="perf-chart-io"></canvas><div class="pf-sel" hidden></div><div class="pf-tip" hidden></div></div>
                     </div>
                 </div>
 
@@ -393,6 +472,8 @@ export async function openAdvancedPerfModal() {
                         <canvas id="activity-heatmap" aria-hidden="true"></canvas>
                         <div id="timeline-seek-handle" aria-hidden="true"></div>
                     </div>
+                    <div id="perf-inspect" class="pf-inspect" role="status" hidden></div>
+                    <p class="bms-note pf-hint">${escB(tt('bench.ui.chartHint', 'Drag across a chart to zoom. Click to inspect a moment. Click a legend entry to hide its curve.'))}</p>
                 </div>
             </section>
 
@@ -517,7 +598,10 @@ export async function openAdvancedPerfModal() {
             clearInterval(benchTick);
             benchTick = null;
         }
-        await invoke('stop_benchmark');
+        overlay.dispatchEvent(new Event('bmm:perf-gone'));
+        // The mini monitor window still draws the samples: the sampler keeps running for it.
+        if (!miniWindowOpen)
+            await invoke('stop_benchmark');
         hideTaskyHelp();
         overlay.classList.remove('open');
         overlay.style.opacity = '0';
@@ -542,12 +626,23 @@ export async function openAdvancedPerfModal() {
         isRecording = !isRecording;
         paintRecState();
         await invoke(isRecording ? 'start_benchmark' : 'stop_benchmark');
+        // The mini monitor window shows the same state.
+        if (miniWindowOpen) {
+            try {
+                await window.__TAURI__?.event?.emit?.(REC_EVENT, isRecording);
+            }
+            catch { /* it shows its own state */ }
+        }
     };
-    miniBtn.onclick = () => {
+    // The mini monitor: its own always-on-top window in the app (it stays over a game), the
+    // floating panel inside BMM's window in a browser (the mock) or when the window can't open.
+    miniBtn.onclick = async () => {
+        const own = await openMiniWindow();
         overlay.classList.remove('open');
         overlay.style.display = 'none';
         release();
-        toggleMiniMonitor(true);
+        if (!own)
+            toggleMiniMonitor(true);
     };
     advancedToggle.onchange = async () => {
         isAdvancedMode = advancedToggle.checked;
@@ -593,40 +688,119 @@ export async function openAdvancedPerfModal() {
         timeline.setAttribute('aria-valuenow', '100');
         scheduleLiveRender();
     };
-    // Hover: a tooltip inside the chart card (so it follows the theme and never escapes the
-    // modal), with the time and every series' value in its own unit.
-    const setupCanvasHover = (canvas) => {
-        const tip = canvas.parentElement?.querySelector('.pf-tip');
-        let raf = 0;
+    // Charts: one crosshair shared by both charts, each with its values in a tooltip; drag
+    // across a chart to zoom on that stretch, click it to replay that moment, double-click to
+    // zoom back out. Everything maps the mouse onto the samples on screen (viewBounds).
+    const canvases = [content.querySelector('#perf-chart-main'), content.querySelector('#perf-chart-io')];
+    const tipOf = (c) => c.parentElement?.querySelector('.pf-tip');
+    const indexAt = (canvas, clientX) => {
+        const [a, b] = viewBounds(benchmarkData, rangeSecs, zoom, isLiveView ? null : seekIndex);
+        if (b - a < 1)
+            return null;
+        const rect = canvas.getBoundingClientRect();
+        const plotW = Math.max(1, rect.width - CHART_PAD.l - CHART_PAD.r);
+        const ratio = Math.min(1, Math.max(0, (clientX - rect.left - CHART_PAD.l) / plotW));
+        return a + Math.round(ratio * (b - a));
+    };
+    const paintTips = (clientX) => {
+        const point = hoverIndex != null ? benchmarkData[hoverIndex] : null;
+        for (const c of canvases) {
+            const tip = tipOf(c);
+            if (!tip)
+                continue;
+            if (!point || clientX == null) {
+                tip.hidden = true;
+                continue;
+            }
+            const series = (c.id === 'perf-chart-io' ? ioSeries() : mainSeries()).filter(s => !hiddenSeries.has(s.key));
+            tip.innerHTML = `<div class="pf-tip-t">${escB(new Date(point.timestamp * 1000).toLocaleTimeString())}</div>`
+                + series.map(s => `<div class="pf-tip-r"><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)}<b>${escB(s.fmt(point[s.key] || 0))}</b></div>`).join('');
+            tip.hidden = !series.length;
+            const rect = c.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const w = tip.offsetWidth || 160;
+            tip.style.left = (x + 14 + w > rect.width ? Math.max(0, x - 14 - w) : x + 14) + 'px';
+        }
+    };
+    let drag = null;
+    let raf = 0;
+    const redraw = () => { if (!raf)
+        raf = requestAnimationFrame(() => { raf = 0; renderCharts(content, benchmarkData, isLiveView ? null : seekIndex); }); };
+    for (const canvas of canvases) {
+        const sel = canvas.parentElement?.querySelector('.pf-sel');
         canvas.onmousemove = (e) => {
             if (benchmarkData.length < 2)
                 return;
-            const rect = canvas.getBoundingClientRect();
-            const plotL = CHART_PAD.l, plotW = Math.max(1, rect.width - CHART_PAD.l - CHART_PAD.r);
-            const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left - plotL) / plotW));
-            hoverIndex = Math.round(ratio * (benchmarkData.length - 1));
-            const point = benchmarkData[hoverIndex];
-            if (tip && point) {
-                const series = canvas.id === 'perf-chart-io' ? ioSeries() : mainSeries();
-                tip.innerHTML = `<div class="pf-tip-t">${escB(new Date(point.timestamp * 1000).toLocaleTimeString())}</div>`
-                    + series.map(s => `<div class="pf-tip-r"><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)}<b>${escB(s.fmt(point[s.key] || 0))}</b></div>`).join('');
-                tip.hidden = false;
-                const x = e.clientX - rect.left;
-                const w = tip.offsetWidth || 160;
-                tip.style.left = (x + 14 + w > rect.width ? Math.max(0, x - 14 - w) : x + 14) + 'px';
+            hoverIndex = indexAt(canvas, e.clientX);
+            paintTips(e.clientX);
+            if (drag && drag.canvas === canvas && sel) {
+                const rect = canvas.getBoundingClientRect();
+                const x1 = Math.min(rect.width - CHART_PAD.r, Math.max(CHART_PAD.l, e.clientX - rect.left));
+                const x0 = drag.x0 - rect.left;
+                sel.style.left = Math.min(x0, x1) + 'px';
+                sel.style.width = Math.abs(x1 - x0) + 'px';
+                sel.hidden = Math.abs(x1 - x0) < 4;
             }
-            if (!raf)
-                raf = requestAnimationFrame(() => { raf = 0; renderCharts(content, benchmarkData, isLiveView ? null : seekIndex); });
+            redraw();
         };
-        canvas.onmouseleave = () => {
-            hoverIndex = null;
-            if (tip)
-                tip.hidden = true;
-            renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
-        };
+        canvas.onmouseleave = () => { hoverIndex = null; paintTips(null); redraw(); };
+        canvas.onmousedown = (e) => { if (e.button === 0 && benchmarkData.length >= 2) {
+            drag = { canvas, x0: e.clientX };
+            e.preventDefault();
+        } };
+        canvas.ondblclick = () => { zoom = null; scheduleLiveRender(); };
+    }
+    const onUp = (e) => {
+        if (!drag)
+            return;
+        const { canvas, x0 } = drag;
+        drag = null;
+        const sel = canvas.parentElement?.querySelector('.pf-sel');
+        if (sel)
+            sel.hidden = true;
+        const i0 = indexAt(canvas, x0), i1 = indexAt(canvas, e.clientX);
+        if (i0 == null || i1 == null)
+            return;
+        if (Math.abs(e.clientX - x0) >= 6 && Math.abs(i1 - i0) >= 1) {
+            const [lo, hi] = i0 < i1 ? [i0, i1] : [i1, i0];
+            zoom = { from: benchmarkData[lo].timestamp, to: benchmarkData[hi].timestamp };
+            scheduleLiveRender();
+        }
+        else {
+            seekTo(i1 / Math.max(1, benchmarkData.length - 1));
+        }
     };
-    setupCanvasHover(content.querySelector('#perf-chart-main'));
-    setupCanvasHover(content.querySelector('#perf-chart-io'));
+    window.addEventListener('mouseup', onUp);
+    const prevRelease = () => window.removeEventListener('mouseup', onUp);
+    overlay.addEventListener('bmm:perf-gone', prevRelease, { once: true });
+    // A click on a legend entry hides or shows that curve (both charts rescale to what is left).
+    for (const id of ['#perf-legend-main', '#perf-legend-io']) {
+        content.querySelector(id)?.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-key]');
+            if (!b)
+                return;
+            const k = b.dataset.key;
+            if (hiddenSeries.has(k))
+                hiddenSeries.delete(k);
+            else
+                hiddenSeries.add(k);
+            scheduleLiveRender();
+        });
+    }
+    // The time window: 1, 5, 15 minutes or the whole session. Choosing one drops the zoom.
+    const rangeSeg = content.querySelector('#perf-range');
+    rangeSeg?.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-range]');
+        if (!b)
+            return;
+        rangeSecs = b.dataset.range === 'all' ? null : Number(b.dataset.range);
+        zoom = null;
+        rangeSeg.querySelectorAll('[data-range]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        scheduleLiveRender();
+    });
+    const zoomReset = content.querySelector('#btn-perf-zoom-reset');
+    if (zoomReset)
+        zoomReset.onclick = () => { zoom = null; scheduleLiveRender(); };
     // ── Benchmark view wiring ───────────────────────────────────────────────
     let benchMode = 'sandbox';
     let benchScale = 'medium';
@@ -1126,8 +1300,14 @@ export async function openAdvancedPerfModal() {
     benchmarkUnlisten = await listen('benchmark-point', (event) => {
         const point = event.payload;
         benchmarkData.push(point);
-        if (benchmarkData.length > 500)
+        if (benchmarkData.length > MAX_POINTS) {
             benchmarkData.shift();
+            // Indices point at samples: keep them on the same ones.
+            if (seekIndex != null)
+                seekIndex = Math.max(0, seekIndex - 1);
+            if (hoverIndex != null)
+                hoverIndex = Math.max(0, hoverIndex - 1);
+        }
         if (isLiveView)
             scheduleLiveRender();
         if (miniMonitorActive)
@@ -1215,6 +1395,15 @@ function renderActivityMap(container, data) {
         const bh = Math.max(2, intensity * (h - 8));
         ctx.fillRect(x, h - 4 - bh, bw, bh);
     });
+    // The stretch the charts show stays bright; the rest of the session is dimmed.
+    const [a, b] = viewBounds(data, rangeSecs, zoom, isLiveView ? null : seekIndex);
+    if (a > 0 || b < data.length - 1) {
+        const xa = (a / (data.length - 1)) * w, xb = (b / (data.length - 1)) * w;
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = tok('--bmm-bg-elevated', '#111827');
+        ctx.fillRect(0, 0, xa, h);
+        ctx.fillRect(xb, 0, w - xb, h);
+    }
     ctx.globalAlpha = 1;
 }
 /** The small trend line at the bottom of each stat card: the last minute or so. */
@@ -1265,6 +1454,42 @@ function renderSparklines(container, data) {
         ctx.globalAlpha = 1;
     });
 }
+/** Theme tokens the mini monitor window paints with (it loads no BMM stylesheet). */
+const MINI_TOKENS = ['--bmm-text-primary', '--bmm-text-secondary', '--bmm-border-hover', '--bmm-bg-elevated', '--bmm-success',
+    '--bmm-s06', '--bmm-accent', '--bmm-chart-cpu', '--bmm-chart-ram', '--bmm-chart-disk-read', '--font-sans', '--bmm-font-mono'];
+/** Open the mini monitor in its own always-on-top window. False when there is no such window
+ *  here (a browser) or it could not open: the caller shows the in-app panel instead. */
+async function openMiniWindow() {
+    if (!isTauri())
+        return false;
+    const cs = getComputedStyle(document.documentElement);
+    const boot = {
+        tokens: Object.fromEntries(MINI_TOKENS.map(k => [k, cs.getPropertyValue(k).trim()])),
+        labels: {
+            title: t('bench.miniMonitor') || 'Mini-Monitor', cpu: 'CPU', ram: 'RAM', disk: tt('bench.ui.disk', 'Disk'),
+            expand: tt('bench.ui.miniExpand', 'Open the full monitor'), close: t('common.close') || 'Close',
+            pause: tt('bench.ui.pause', 'Pause'), resume: tt('bench.ui.resume', 'Resume'), paused: tt('bench.ui.paused', 'Paused'),
+            waiting: tt('bench.ui.miniWaiting', 'Waiting for the first sample…'), updated: tt('bench.ui.miniUpdated', 'Updated'),
+            mb: 'MB', gb: 'GB', kbs: 'KB/s', mbs: 'MB/s',
+        },
+        recording: isRecording,
+    };
+    try {
+        localStorage.setItem(BOOT_KEY, JSON.stringify(boot));
+    }
+    catch { /* the window falls back to bare labels */ }
+    try {
+        await invoke('open_mini_monitor', {}, { quiet: true });
+        miniWindowOpen = true;
+        if (isRecording)
+            await invoke('start_benchmark');
+        return true;
+    }
+    catch (e) {
+        console.warn('[bench] mini monitor window:', e);
+        return false;
+    }
+}
 function toggleMiniMonitor(active) {
     miniMonitorActive = active;
     let el = document.getElementById('bmm-mini-monitor');
@@ -1303,7 +1528,7 @@ function toggleMiniMonitor(active) {
             </div>
             ${row('CPU', 'mini-cpu-bar', 'mini-cpu', 'var(--bmm-chart-cpu)')}
             ${row('RAM', 'mini-ram-bar', 'mini-ram', 'var(--bmm-chart-ram)')}
-            ${row('DISK', 'mini-disk-bar', 'mini-disk', 'var(--bmm-chart-disk-read)')}
+            ${row(escB(tt('bench.ui.disk', 'Disk')), 'mini-disk-bar', 'mini-disk', 'var(--bmm-chart-disk-read)')}
         `;
         document.body.appendChild(el);
         let isDragging = false;
@@ -1384,31 +1609,41 @@ function renderCharts(container, data, highlightIndex = null) {
     if (!mainCanvas || !ioCanvas)
         return;
     const main = mainSeries(), io = ioSeries();
-    drawChart(mainCanvas, data, main, highlightIndex);
-    drawChart(ioCanvas, data, io, highlightIndex);
+    // Only the samples on screen (time window or zoom); indices move into that slice.
+    const [a, b] = viewBounds(data, rangeSecs, zoom, highlightIndex);
+    const view = data.slice(a, b + 1);
+    const rel = (i) => (i != null && i >= a && i <= b ? i - a : null);
+    const hl = rel(highlightIndex), hv = rel(hoverIndex);
+    drawChart(mainCanvas, view, main.filter(s => !hiddenSeries.has(s.key)), hl, hv);
+    drawChart(ioCanvas, view, io.filter(s => !hiddenSeries.has(s.key)), hl, hv);
     paintLegend(container.querySelector('#perf-legend-main'), data, main, highlightIndex);
     paintLegend(container.querySelector('#perf-legend-io'), data, io, highlightIndex);
 }
-/** The legend is HTML (readable, selectable, themed); only the values change per frame. */
+/** The legend is HTML (readable, themed): one button per curve that hides or shows it; only
+ *  the values change per frame. */
 function paintLegend(el, data, series, highlightIndex) {
     if (!el)
         return;
     const index = highlightIndex !== null ? highlightIndex : hoverIndex;
     const sample = (index !== null && data[index]) ? data[index] : data[data.length - 1];
     if (el.childElementCount !== series.length) {
-        el.innerHTML = series.map((s, i) => `<span><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)} <b data-i="${i}">–</b></span>`).join('');
+        el.innerHTML = series.map((s, i) => `<button type="button" class="pf-leg" data-key="${escB(s.key)}" aria-pressed="true" data-tooltip="${escB(tt('bench.ui.legendTip', 'Show or hide this curve'))}"><span class="pf-swatch" style="--c:${s.css}"></span>${escB(s.label)} <b data-i="${i}">–</b></button>`).join('');
     }
     series.forEach((s, i) => {
         const b = el.querySelector(`b[data-i="${i}"]`);
         const txt = sample ? s.fmt(sample[s.key] || 0) : '–';
         if (b && b.textContent !== txt)
             b.textContent = txt;
+        const btn = b?.parentElement;
+        const on = String(!hiddenSeries.has(s.key));
+        if (btn && btn.getAttribute('aria-pressed') !== on)
+            btn.setAttribute('aria-pressed', on);
     });
 }
 // Time-series chart: a padded plot, three gridlines labelled in each series' OWN unit (left
 // axis = first series, right axis = second), a time axis, and a crosshair with markers on
 // hover or replay. Each series scales to its own peak so both stay readable.
-function drawChart(canvas, data, series, highlightIndex) {
+function drawChart(canvas, data, series, highlightIndex, hoverAt = null) {
     const fit = fitCanvas(canvas);
     if (!fit)
         return;
@@ -1438,7 +1673,7 @@ function drawChart(canvas, data, series, highlightIndex) {
         ctx.moveTo(px, y);
         ctx.lineTo(px + pw, y);
         ctx.stroke();
-        if (data.length >= 2) {
+        if (data.length >= 2 && series[0]) {
             const frac = 1 - i / 2;
             ctx.textAlign = 'right';
             ctx.fillText(series[0].fmt(maxes[0] * frac), px - 8, y);
@@ -1448,10 +1683,10 @@ function drawChart(canvas, data, series, highlightIndex) {
             }
         }
     }
-    if (data.length < 2) {
+    if (data.length < 2 || !series.length) {
         ctx.textAlign = 'center';
         ctx.fillStyle = ink;
-        ctx.fillText(tt('bench.ui.collecting', 'Collecting samples…'), px + pw / 2, py + ph / 2);
+        ctx.fillText(data.length < 2 ? tt('bench.ui.collecting', 'Collecting samples…') : tt('bench.ui.allHidden', 'Every curve is hidden: click the legend to show one.'), px + pw / 2, py + ph / 2);
         return;
     }
     ctx.textAlign = 'center';
@@ -1488,11 +1723,11 @@ function drawChart(canvas, data, series, highlightIndex) {
         ctx.fill();
         ctx.globalAlpha = 1;
     });
-    const index = highlightIndex !== null ? highlightIndex : hoverIndex;
+    const index = hoverAt !== null ? hoverAt : highlightIndex;
     if (index !== null && data[index]) {
         const x = px + (index / (data.length - 1)) * pw;
         ctx.beginPath();
-        ctx.strokeStyle = highlightIndex !== null ? tok('--bmm-accent', '#3b82f6') : ink;
+        ctx.strokeStyle = hoverAt === null ? tok('--bmm-accent', '#3b82f6') : ink;
         ctx.setLineDash([4, 4]);
         ctx.moveTo(x, py);
         ctx.lineTo(x, py + ph);
@@ -1516,10 +1751,20 @@ const fmtTputU = (v) => (v == null) ? '' : (v >= 1000 ? `${(v / 1000).toFixed(2)
 /** Category → the semantic token its bars and edges wear. */
 const CAT_TOKEN = { scan: '--bmm-purple', hash: '--bmm-cyan', io: '--bmm-info', archive: '--bmm-warning', activation: '--bmm-success' };
 const catVar = (cat) => `var(${CAT_TOKEN[cat] || '--bmm-info'})`;
-/** The run to compare against: the most recent OTHER report in the comparison set. */
+/** The run to compare against: the one picked in "Compare with", else the most recent OTHER
+ *  report in the comparison set. */
 function previousReport(report) {
-    const other = benchCompare.find(r => r.report !== report);
+    const picked = compareBase != null ? benchCompare.find(r => r.label === compareBase && r.report !== report) : null;
+    const other = picked || benchCompare.find(r => r.report !== report);
     return other ? other.report : null;
+}
+/** "Compare with [run]": which earlier run the arrows and the total time are measured against. */
+function comparePickHtml(report) {
+    const others = benchCompare.filter(r => r.report !== report);
+    if (!others.length)
+        return '';
+    const base = previousReport(report);
+    return `<label class="pf-cmp-pick"><span>${escB(tt('bench.ui.compareWith', 'Compare with'))}</span><select id="bench-compare-base">${others.map(r => `<option value="${escB(r.label)}"${r.report === base ? ' selected' : ''}>${escB(r.label)}</option>`).join('')}</select></label>`;
 }
 /** Change of one operation against the previous run: throughput when both have it (higher
  *  is better), time otherwise (lower is better). The arrow is the direction of the number,
@@ -1535,7 +1780,7 @@ function opDelta(op, prev) {
     if (!old)
         return '';
     const pct = ((cur - old) / old) * 100;
-    const title = escB(tt('bench.ui.vsPrev', 'vs previous run'));
+    const title = escB(tt('bench.ui.vsBase', 'vs the compared run'));
     if (Math.abs(pct) < 2)
         return `<span class="pf-delta" title="${title}">≈ 0 %</span>`;
     const better = tput ? pct > 0 : pct < 0;
@@ -1615,7 +1860,7 @@ function renderBenchResults(container, report) {
         const pct = ((report.total_ms - prev.total_ms) / prev.total_ms) * 100;
         const cls = Math.abs(pct) < 2 ? '' : pct < 0 ? ' pf-delta--better' : ' pf-delta--worse';
         const word = Math.abs(pct) < 2 ? '' : ` <span class="pf-sr">${escB(pct < 0 ? tt('bench.ui.better', 'better') : tt('bench.ui.worse', 'worse'))}</span>`;
-        totalDelta = `<span class="pf-delta${cls}">${Math.abs(pct) < 2 ? '≈ 0 %' : `${pct < 0 ? '▼' : '▲'} ${Math.abs(pct).toFixed(1)} %`}${word}</span> ${escB(tt('bench.ui.vsPrev', 'vs previous run'))}`;
+        totalDelta = `<span class="pf-delta${cls}">${Math.abs(pct) < 2 ? '≈ 0 %' : `${pct < 0 ? '▼' : '▲'} ${Math.abs(pct).toFixed(1)} %`}${word}</span> ${escB(tt('bench.ui.vsBase', 'vs the compared run'))}`;
     }
     const kpi = (label, value, sub, subHtml = '') => `<div class="pf-kpi"><span class="bms-label">${escB(label)}</span><span class="pf-kpi-v">${escB(value)}</span><span class="pf-kpi-s">${subHtml || escB(sub)}</span></div>`;
     const chip = (label, value) => `<span class="bms-chip">${escB(label)} <b>${escB(value)}</b></span>`;
@@ -1629,6 +1874,7 @@ function renderBenchResults(container, report) {
                 ${env.reps ? chip(t('bench.samples') || 'Samples', `${env.reps}× ${t('bench.eachOp') || 'each op'}`) : ''}
             </div>
             <div class="bms-toolbar">
+                ${comparePickHtml(report)}
                 <button type="button" class="btn btn-ghost btn-sm" id="bench-copy-json">${escB(t('bench.copyJson') || 'Copy JSON')}</button>
                 <button type="button" class="btn btn-secondary btn-sm" id="bench-export-html">${escB(t('bench.exportReport') || 'Export report')}</button>
             </div>
@@ -1670,6 +1916,9 @@ function renderBenchResults(container, report) {
                 toast((t('bench.reportFailed') || 'Could not save report') + ': ' + e, 'error');
             }
         };
+    const basePick = container.querySelector('#bench-compare-base');
+    if (basePick)
+        basePick.onchange = () => { compareBase = basePick.value; renderBenchResults(container, report); };
     const clearCmpBtn = container.querySelector('#bench-clear-compare');
     if (clearCmpBtn)
         clearCmpBtn.onclick = () => {
@@ -1683,7 +1932,8 @@ function renderBenchResults(container, report) {
 // (falling back to the backend text) so the whole results view is localised.
 const OP_LABEL_KEY = {
     scan: 'bench.opScan', hash: 'bench.opHash', copy_full: 'bench.opCopyFull', copy_smart: 'bench.opCopySmart',
-    archive_extract: 'bench.opArchive', activate: 'bench.opActivate', deactivate: 'bench.opDeactivate', cancel: 'bench.opCancel',
+    archive_extract: 'bench.opArchive', activate: 'bench.opActivate', activate_zip: 'bench.opActivateZip', deactivate: 'bench.opDeactivate', cancel: 'bench.opCancel',
+    verify: 'bench.opVerify',
 };
 const OP_DESC_KEY = {
     scan: 'bench.d.scan', hash: 'bench.d.hash', copy_full: 'bench.d.copyFull', copy_smart: 'bench.d.copySmart',

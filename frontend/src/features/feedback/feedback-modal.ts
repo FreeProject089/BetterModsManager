@@ -7,7 +7,9 @@
 import { invoke, pickFiles, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, attachLimits, fitsBudget, decodedLen, anonLimits, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
+import { usesBetterCommunity, submitFeedback, fetchFeedbackConfig, testFeedbackEndpoint, textToBase64, explainFeedbackError, feedbackWebUrl, feedbackEndpoint, attachLimits, fitsBudget, decodedLen, anonLimits, FeedbackError, type FeedbackKind, type FeedbackAttachment } from './bc-feedback.js';
+import { contactPolicy, sameOrigin, looksLikeEmail } from './feedback-contact.js';
+import { bcRoot } from '../../core/links-config.js';
 import { bcLinkState, openAccountLinkFlow, forgetBcLinkState, type BcLinkState } from '../../core/bc-link.js';
 import { reportSig } from '../ai/ai-model.js';
 
@@ -37,6 +39,9 @@ let _shots: string[] = [];
 let _zips: string[] = [];
 let _steps: string[] = [''];
 let _busy = false;
+/** The account identifies the sender (feedback-contact.ts). Set by render, cleared when the
+ *  server answers contact_required anyway. */
+let _account = false;
 /**
  * Measured size of each picked file, in DECODED bytes, keyed by path.
  *
@@ -102,11 +107,15 @@ function render(who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetc
     const disabled = cfg && !cfg.enabled;
     const maxMB = cfg?.maxAttachMB ?? 25;
     const maxN = cfg?.maxAttachments ?? 6;
-    const linked = who.state === 'linked';
     // `unknown` gets the contact fields too. Not because the sender is anonymous — we do not
     // know that — but because an address is the only way a reply reaches somebody we could
     // not confirm, and offering it costs nothing if it turns out to be unnecessary.
-    const needContact = !linked && !!cfg?.requireContact;
+    // "Linked" counts only when the server receiving the report is the one that said so and
+    // the key is not refused: see feedback-contact.ts.
+    const pol = contactPolicy({ state: who.state, pinProblem: who.pinProblem, sameServer: sameOrigin(feedbackEndpoint(), bcRoot()), requireContact: !!cfg?.requireContact });
+    const linked = pol.account;
+    _account = linked;
+    const needContact = pol.required;
     o.innerHTML = `
     <div class="modal fbm" role="dialog" aria-labelledby="fbm-heading">
         <div class="fbm-head">
@@ -181,10 +190,14 @@ function render(who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetc
                 <summary><span class="fbm-fold-t">${esc(t('fbm.contact'))}</span><span class="fbm-fold-sum" id="fbm-contact-sum"></span></summary>
                 <div class="fbm-fold-in">
                 ${linked
-                    ? `<div class="fbm-linked">${IC.check} <span>${esc(who.displayName
+                    ? `<div class="fbm-linked" id="fbm-linked">${IC.check} <span>${esc(who.displayName
                             ? t('fbm.contactLinkedAs').replace('{name}', who.displayName)
                             : t('fbm.contactLinked'))}</span></div>`
-                    : `${who.state === 'unknown'
+                    : who.state === 'linked'
+                          // Linked, but not in a way the receiving server will accept (a
+                          // refused key, or a different server): no link button, an address.
+                          ? `<div class="fbm-banner fbm-banner-warn">${esc(t('fbm.contactUnverified'))}</div>`
+                          : who.state === 'unknown'
                           // Said plainly rather than folded into "not linked". BMM works
                           // offline, and inviting somebody to link an account they already
                           // have is worse than admitting we could not ask.
@@ -196,11 +209,16 @@ function render(who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetc
                                </div>
                                <button type="button" class="btn btn-sm btn-accent" id="fbm-link">${IC.link} <span>${esc(t('fbm.anonLink'))}</span></button>
                              </div>`}
+                <!-- Always in the page, hidden while the account speaks for the sender: if the
+                     server answers contact_required anyway, revealContact() shows it in place
+                     instead of asking for an address with nowhere to type one. -->
+                <div id="fbm-contact-fields" ${linked ? 'hidden' : ''}>
                        <div class="fbm-grid2">
-                        <div><label class="fbm-lbl" for="fbm-email">${esc(t('fbm.email'))}${needContact ? ' *' : ''}</label><input class="form-input fbm-input" id="fbm-email" type="email" placeholder="you@example.com"></div>
+                        <div><label class="fbm-lbl" for="fbm-email">${esc(t('fbm.email'))}<span id="fbm-email-req">${needContact ? ' *' : ''}</span></label><input class="form-input fbm-input" id="fbm-email" type="email" maxlength="160" autocomplete="email" placeholder="you@example.com"></div>
                         <div><label class="fbm-lbl" for="fbm-discord">${esc(t('fbm.discord'))}</label><input class="form-input fbm-input" id="fbm-discord" placeholder="username"></div>
                        </div>
-                       <div class="fbm-hint">${esc(t('fbm.contactHint'))}</div>`}
+                       <div class="fbm-hint">${esc(t('fbm.contactHint'))}</div>
+                </div>
                 </div>
             </details>
         </div>
@@ -471,8 +489,30 @@ async function proofOfWork(challenge: string, targetBits = 13, maxMs = 2500): Pr
     return { ...best, ms: Date.now() - started };
 }
 
+/**
+ * Show the contact fields and mark the e-mail required. `unverified`: the server refused to
+ * recognise a sender the dialog thought was linked, so the "linked" line goes and says so.
+ */
+function revealContact(unverified: boolean): void {
+    const fields = document.getElementById('fbm-contact-fields');
+    if (fields) fields.hidden = false;
+    const wrap = document.getElementById('fbm-contact-wrap') as HTMLDetailsElement | null;
+    if (wrap) wrap.open = true;
+    const linkedEl = document.getElementById('fbm-linked');
+    if (unverified && linkedEl) {
+        const b = document.createElement('div');
+        b.className = 'fbm-banner fbm-banner-warn';
+        b.textContent = t('fbm.contactUnverified');
+        linkedEl.replaceWith(b);
+        _account = false;
+    }
+    const req = document.getElementById('fbm-email-req');
+    if (req && unverified) req.textContent = ' *';
+    updateQuality();
+}
+
 async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig>>): Promise<void> {
-    const linked = who.state === 'linked';
+    const linked = _account;
     if (_busy) return;
     const q = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
     const status = q('fbm-status');
@@ -482,7 +522,8 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
     const discord = q<HTMLInputElement>('fbm-discord')?.value.trim() || '';
     const say = (msg: string, tone: '' | 'err' | 'ok' = '') => { if (status) { status.textContent = msg; status.className = `fbm-status${tone ? ` fbm-status-${tone}` : ''}`; } };
     if (desc.length < 10) { say(t('fbm.tooShort'), 'err'); q('fbm-desc')?.focus(); return; }
-    if (!linked && cfg?.requireContact && !email) { say(t('feedback.contactRequired'), 'err'); q('fbm-email')?.focus(); return; }
+    if (!linked && cfg?.requireContact && !email) { revealContact(false); say(t('feedback.contactRequired'), 'err'); q('fbm-email')?.focus(); return; }
+    if (email && !looksLikeEmail(email)) { revealContact(false); say(t('fbm.emailInvalid'), 'err'); q('fbm-email')?.focus(); return; }
     // Before anything is packed: personal data masked, "already sent?", an optional AI hint
     // (features/ai/ai-report.ts). Local unless the user asks for the hint, and the user decides
     // what goes. The check is a help, never a gate: if it fails, the report sends as before.
@@ -554,6 +595,15 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
         close();
         toast(r.linked ? t('feedback.sentLinked') : t('fbm.sent'), 'success');
     } catch (e) {
+        // The server did not recognise the sender after all (refused proof, rotated key...).
+        // Show the address field right here and say why, rather than a toast pointing at a
+        // field this dialog never drew.
+        if (e instanceof FeedbackError && e.code === 'contact_required') {
+            revealContact(true);
+            say(t(linked ? 'fbm.contactUnverified' : 'feedback.contactRequired'), 'err');
+            q('fbm-email')?.focus();
+            return;
+        }
         const queued = explainFeedbackError(e);
         if (queued) close(); else say(String((e as Error)?.message || e), 'err');
     } finally {

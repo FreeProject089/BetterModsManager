@@ -82,6 +82,8 @@ revient à la normale.
   (activé par défaut).
 - **Compter aussi toute fenêtre plein écran** : attrape les jeux en fenêtre sans bordure qui ne sont
   dans aucune liste, mais une vidéo plein écran compte aussi, d'où le réglage désactivé par défaut.
+  Les navigateurs, lecteurs vidéo, messageries et lanceurs de jeux ne comptent jamais, en plein
+  écran ou dans le dossier d'un profil, sauf si tu les ajoutes toi-même à ta liste.
 - **Jeux surveillés par BMM** : le dossier de jeu de chaque profil est surveillé tout seul, chacun
   avec un interrupteur pour l'ignorer (un disque entier n'est jamais surveillé) ; en dessous, les
   programmes que tu as ajoutés, chacun avec un bouton de retrait, ajoutés par leur nom, avec

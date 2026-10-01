@@ -1987,9 +1987,13 @@ struct DownloadProgress {
     status: String,
 }
 
+/// Stop a list install. With the run's token (commands/modlist.rs `runs`), that run only, and
+/// the copy or download it is in stops at its next block. Without one (an older caller),
+/// every list install. It no longer sets `install_cancelled`: that flag belongs to the repo
+/// installs too, and cancelling a list used to stop a repo sync running beside it.
 #[tauri::command]
-pub fn cancel_install_from_modlist(state: State<AppState>) {
-    state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+pub fn cancel_install_from_modlist(run_id: Option<String>) -> usize {
+    crate::commands::modlist::runs::cancel("install", run_id.as_deref())
 }
 
 #[tauri::command]
@@ -1999,8 +2003,11 @@ pub async fn install_from_modlist(
     modlist_json: String,
     create_profile: bool,
     github_token: Option<String>,
+    // The screen's cancel token: see cancel_install_from_modlist.
+    run_id: Option<String>,
 ) -> Result<Vec<String>, String> {
-    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let run = crate::commands::modlist::runs::begin("install", run_id);
+    let run_key = run.key();
     let modlist: crate::models::modlist::ModList =
         serde_json::from_str(&modlist_json).map_err(|e| format!("Invalid modlist: {}", e))?;
 
@@ -2010,17 +2017,23 @@ pub async fn install_from_modlist(
     // the definitions those ids resolve to nothing and the screen draws no chip — a shared
     // list arrived with its tags silently gone. An id already known here WINS: the local
     // definition is the user's, and a list must not repaint somebody's tags.
+    let mut added_tag_ids: Vec<String> = Vec::new();
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         for def in &modlist.tag_defs {
             if !data.custom_tags.iter().any(|t| t.id == def.id) {
                 data.custom_tags.push(def.clone());
+                added_tag_ids.push(def.id.clone());
             }
         }
     }
 
     let mut newly_created_profile_id: Option<String> = None;
     let mut newly_added_mod_ids: Vec<String> = Vec::new();
+    // Library entries THIS run created, the ones a cancel takes back. `newly_added_mod_ids`
+    // also holds mods that were already in the library ("already present"): a cancel removed
+    // those from the library too, so cancelling a list could lose mods you had before it.
+    let mut created_mod_ids: Vec<String> = Vec::new();
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
 
     let (mods_path, _profile_id_for_mods) = {
@@ -2061,7 +2074,7 @@ pub async fn install_from_modlist(
     let total_mods = modlist.mods.len();
 
     for (idx, entry) in modlist.mods.iter().enumerate() {
-        if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+        if run.cancelled() {
             results.push("❌ Installation annulée par l'utilisateur".to_string());
             break;
         }
@@ -2104,6 +2117,7 @@ pub async fn install_from_modlist(
                 let mid = new_mod.id.clone();
                 let _mod_folder = new_mod.mod_folder_path.clone();
                 data.mods.push(new_mod.clone());
+                created_mod_ids.push(mid.clone());
                 newly_added_mod_ids.push(mid);
                 // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
             } else {
@@ -2132,6 +2146,7 @@ pub async fn install_from_modlist(
             let t_dir = target_dir.clone();
             let w = window.clone();
             let n = entry.name.clone();
+            let rk = run_key.clone();
             let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
                 let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
                     mod_index: idx,
@@ -2141,15 +2156,22 @@ pub async fn install_from_modlist(
                     status: "Copie locale...".to_string(),
                 });
                 // Install ticket; the governed folder copy (fs_extra's `content_only` semantics).
+                // Tied to the run: the list's Cancel cancels the ticket, and the copy stops at
+                // its next block instead of finishing the folder first.
                 let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Install, &t_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
-                std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
-                crate::fs_utils::copy_dir_governed(crate::governor::config::OpKind::Install, &src, &t_dir, &ticket)
-                    .map_err(|e| if e.to_string() == crate::fs_utils::CANCELLED { e.to_string() } else { format!("{:#}", e) })?;
-                Ok(())
+                crate::commands::modlist::runs::attach(&rk, ticket.id());
+                let r = (|| {
+                    std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
+                    crate::fs_utils::copy_dir_governed(crate::governor::config::OpKind::Install, &src, &t_dir, &ticket)
+                        .map_err(|e| if e.to_string() == crate::fs_utils::CANCELLED { e.to_string() } else { format!("{:#}", e) })
+                        .map(|_| ())
+                })();
+                crate::commands::modlist::runs::detach(&rk, ticket.id());
+                r
             }).await.map_err(|e| e.to_string())?;
             // A cancel from the governor stops the whole list, like the list's own Cancel.
             if matches!(&res, Err(e) if e == crate::fs_utils::CANCELLED) {
-                state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+                run.cancel();
             }
 
             if res.is_ok() {
@@ -2172,11 +2194,15 @@ pub async fn install_from_modlist(
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
 
+                created_mod_ids.push(mid.clone());
                 newly_added_mod_ids.push(mid);
                 results.push(format!("✅ {} — Copié localement", entry.name));
                 success = true;
             }
         }
+
+        // A cancel during the local copy: do not fall through to a download.
+        if run.cancelled() { break; }
 
         // If not copied, try download
         if !success {
@@ -2185,14 +2211,20 @@ pub async fn install_from_modlist(
                 let t_dir = target_dir.clone();
                 let w = window.clone();
                 let n = entry.name.clone();
-                let cancel_flag = state.install_cancelled.clone();
+                let cancel_flag = run.flag.clone();
                 let pat_clone = github_token.clone();
+                let rk = run_key.clone();
 
                 let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
                     let github_token = pat_clone;
                     // Download ticket, held through the transfer and the unpacking. Cancelling
-                    // it is the same as the list's Cancel button: "Cancelled".
+                    // it is the same as the list's Cancel button: "Cancelled". Tied to the run,
+                    // so that button also stops a big file mid-extraction.
                     let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Download, &n);
+                    crate::commands::modlist::runs::attach(&rk, ticket.id());
+                    struct Detach<'a>(&'a str, u64);
+                    impl Drop for Detach<'_> { fn drop(&mut self) { crate::commands::modlist::runs::detach(self.0, self.1); } }
+                    let _detach = Detach(&rk, ticket.id());
                     let cancelled = || cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || ticket.checkpoint().is_err();
                     if cancelled() { return Err("Cancelled".to_string()); }
                     // Build a client with optional GitHub auth header
@@ -2323,6 +2355,7 @@ pub async fn install_from_modlist(
                     let _mod_folder = new_mod.mod_folder_path.clone();
                     data.mods.push(new_mod.clone());
                     
+                    created_mod_ids.push(mid.clone());
                     newly_added_mod_ids.push(mid);
                     // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
                     results.push(format!("✅ {} — Téléchargé", entry.name));
@@ -2337,7 +2370,7 @@ pub async fn install_from_modlist(
                 } else if let Err(e) = res {
                     if e == "Cancelled" {
                         // Cancelled from the governor rather than the list's button: stop the list too.
-                        state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+                        run.cancel();
                         // Folder will be cleaned up by the main loop break
                     } else {
                         results.push(format!("❌ {} — {}", entry.name, e));
@@ -2350,9 +2383,12 @@ pub async fn install_from_modlist(
     }
 
     // --- CLEANUP IF CANCELLED ---
-    if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+    // Back to where the list found things: the library entries and folders this run created,
+    // the profile it created, the tag definitions it added. Mods that were already here stay.
+    if run.cancelled() {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.mods.retain(|m| !newly_added_mod_ids.contains(&m.id));
+        data.mods.retain(|m| !created_mod_ids.contains(&m.id));
+        data.custom_tags.retain(|t| !added_tag_ids.contains(&t.id));
         if let Some(pid) = newly_created_profile_id {
             if let Some(idx) = data.profiles.iter().position(|p| p.id == pid) {
                 data.profiles.remove(idx);
@@ -2553,15 +2589,24 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
     Ok(altered_list)
 }
 #[tauri::command]
-pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool, bypass_sha: Option<bool>) -> Result<(), String> {
+pub async fn toggle_all_mods(
+    window: Window,
+    state: State<'_, AppState>,
+    enable: bool,
+    bypass_sha: Option<bool>,
+    // Where the newly enabled mods go in the activation order: top | bottom | keep; None =
+    // the `order_bulk_mode` setting (commands/order_share.rs). Only the mods this call turned
+    // on move: an order the user built is never reshuffled by "turn the rest on".
+    order_mode: Option<String>,
+) -> Result<(), String> {
     crate::fs_utils::reset_mod_op_cancel();
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
-    let mod_ids = {
+    let (mod_ids, active_before) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
         let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
-        
-        data.mods.iter()
+        let before: HashSet<String> = active_profile.active_mods.iter().cloned().collect();
+        let ids = data.mods.iter()
             .filter(|m| {
                 let mod_p = &m.mod_folder_path;
                 let prof_p = &active_profile.mods_path;
@@ -2572,10 +2617,11 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
                 }
             })
             .map(|m| m.id.clone())
-            .collect::<Vec<String>>()
+            .collect::<Vec<String>>();
+        (ids, before)
     };
 
-    for id in mod_ids {
+    for id in mod_ids.iter().cloned() {
         if crate::fs_utils::is_mod_op_cancelled() {
             log_line("[MOD] toggle_all_mods aborted by cancel flag");
             break;
@@ -2588,6 +2634,21 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
             let _ = disable_mod(window.clone(), state.clone(), id).await;
         }
         if crate::fs_utils::is_mod_op_cancelled() { break; }
+    }
+    if enable && !crate::fs_utils::is_mod_op_cancelled() {
+        // Newly enabled = active now and not before, in the order they were enabled (plus the
+        // dependencies enable_mod pulled in along the way).
+        let now: Vec<String> = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let pid = data.active_profile_id.clone();
+            data.profiles.iter().find(|p| Some(&p.id) == pid.as_ref()).map(|p| p.active_mods.clone()).unwrap_or_default()
+        };
+        let newly: Vec<String> = now.into_iter().filter(|id| !active_before.contains(id)).collect();
+        if !newly.is_empty() {
+            if let Err(e) = crate::commands::order_share::arrange_for(&state, None, &newly, order_mode.as_deref()).await {
+                log_line(format!("[ORDER] enable all: placing the new mods failed: {}", e));
+            }
+        }
     }
     Ok(())
 }
@@ -2768,6 +2829,34 @@ pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String
 
     let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
     Ok(files.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
+}
+
+/// One file of a mod and its size in bytes, for the mapper's final preview (total size and
+/// per-folder sizes). A file that cannot be stat-ed counts as 0 rather than failing the list.
+#[derive(Serialize)]
+pub struct SizedModFile {
+    pub path: String,
+    pub size: u64,
+}
+
+/// `list_mod_files_recursive` with sizes. Same root resolution (archived mods are read from
+/// the extracted cache view), same order.
+#[tauri::command(async)]
+pub async fn list_mod_files_sized(state: State<'_, AppState>, mod_id: String) -> Result<Vec<SizedModFile>, String> {
+    let mod_folder = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+    let mod_folder = crate::archive::mod_read_root(&mod_folder);
+    let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
+    Ok(files
+        .into_iter()
+        .map(|p| {
+            let size = std::fs::metadata(mod_folder.join(&p)).map(|m| m.len()).unwrap_or(0);
+            SizedModFile { path: p.to_string_lossy().to_string(), size }
+        })
+        .collect())
 }
 
 
@@ -3541,9 +3630,12 @@ fn process_single_mod_hashing(
     log_line(format!("[SHA-CALC] Calculating hashes for mod: {} (manual: {})", id, is_manual));
     
     // Get mod path from managed state
-    let mod_path_opt = {
+    // The mod's name too: the Storage Manager's live queue shows the ticket's subject, and an
+    // id there ("hash 44105b94-…") told the user nothing.
+    let (mod_path_opt, mod_name) = {
         let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
-        data_lock.mods.iter().find(|m| m.id == id).map(|m| m.mod_folder_path.clone())
+        let m = data_lock.mods.iter().find(|m| m.id == id);
+        (m.map(|m| m.mod_folder_path.clone()), m.map(|m| m.name.clone()).unwrap_or_else(|| id.to_string()))
     };
     
     // One Hash ticket per MOD (G3b), never one for the background loop's whole life: the loop
@@ -3551,7 +3643,7 @@ fn process_single_mod_hashing(
     // pause). The first checkpoint comes before the archive extraction too, so held
     // background hashing does not unpack anything either.
     let gov = crate::governor::runtime::global();
-    let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("hash {}", id));
+    let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("hash {}", mod_name));
     let mod_path_opt = if fs_utils::checkpoint(&ticket).is_err() {
         log_line(format!("[SHA-CALC] Mod {} cancelled before it started; hashes unchanged", id));
         None
@@ -3710,7 +3802,7 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
                 let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
                 data.mods.iter()
                     .find(|m| m.content_id.is_none() && m.mod_folder_path.exists())
-                    .map(|m| (m.id.clone(), m.mod_folder_path.clone()))
+                    .map(|m| (m.id.clone(), m.mod_folder_path.clone(), m.name.clone()))
             };
 
             match target {
@@ -3718,12 +3810,12 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
                     // Nothing left to fill — check again in 60s in case new mods were added
                     std::thread::sleep(std::time::Duration::from_secs(60));
                 }
-                Some((id, folder_path)) => {
+                Some((id, folder_path, name)) => {
                     // One Maintenance ticket per mod (G3b), held for the walk and the save:
                     // it waits while a deploy runs or a game is being played, between mods.
                     // A cancel skips this round; the next one, a minute later, retries.
                     let ticket = crate::governor::runtime::global()
-                        .begin(crate::governor::config::OpKind::Maintenance, &format!("content id {}", id));
+                        .begin(crate::governor::config::OpKind::Maintenance, &format!("content id {}", name));
                     if fs_utils::checkpoint(&ticket).is_err() {
                         drop(ticket);
                         std::thread::sleep(std::time::Duration::from_secs(60));

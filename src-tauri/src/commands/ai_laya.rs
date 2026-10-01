@@ -563,7 +563,8 @@ pub fn pipeline(settings: &ai_core::AiSettings, killed: bool, packs: &[PackRef])
         { "stage": "classify", "what": "Laya: tags among the user's own, adult content, report category / severity / duplicate, Ask ranking", "provider": classifier,
           "packs": if classifier == "embedded" { serde_json::json!(local_packs) } else { serde_json::json!([]) },
           "network": on && matches!(settings.classifier.as_str(), "bettercommunity" | "local") },
-        { "stage": "draft", "what": "a description draft (never applied without a click)", "provider": if on && settings.generative == "external" { "external" } else { "off" }, "network": on && settings.generative == "external" },
+        { "stage": "draft", "what": "a description draft, checked (no invented link, file or command; tags only from the user's own) and gated by Laya; never applied without a click", "provider": if on && settings.description_drafts { settings.generative.as_str() } else { "off" }, "network": on && settings.description_drafts && settings.generative == "external" },
+        { "stage": "answer", "what": "« Ask Laya »: a written answer from the retrieved sources only, citing them; skipped when Laya abstains", "provider": if on && settings.ask_generate { settings.generative.as_str() } else { "off" }, "network": on && settings.ask_generate && settings.generative == "external" },
     ])
 }
 

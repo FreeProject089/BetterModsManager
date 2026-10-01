@@ -197,6 +197,11 @@ pub struct AppSettings {
     /// already accepted, OFF otherwise (live_issues::migrate_setting).
     #[serde(default)]
     pub live_errors: Option<bool>,
+    /// Where a bulk enable (modpack, "Enable all", .mm list, task, script) puts its mods in
+    /// the activation order when the caller does not say: `top` | `bottom` | `keep`
+    /// (commands/order_share.rs). `top` is what modpacks always did.
+    #[serde(default = "default_order_bulk_mode")]
+    pub order_bulk_mode: String,
 }
 
 impl Default for AppSettings {
@@ -240,11 +245,13 @@ impl Default for AppSettings {
             api_allowed_hosts: Vec::new(),
             analytics_consent: None,
             live_errors: None,
+            order_bulk_mode: default_order_bulk_mode(),
         }
     }
 }
 
 fn default_true() -> bool { true }
+fn default_order_bulk_mode() -> String { "top".to_string() }
 fn default_api_token() -> String { uuid::Uuid::new_v4().to_string() }
 fn default_api_port() -> u16 { 51274 }
 fn default_sound_volume() -> u32 { 70 }

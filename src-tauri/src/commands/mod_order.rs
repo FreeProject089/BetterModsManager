@@ -344,9 +344,9 @@ fn rivals(
 }
 
 /// Everything about one profile the order commands need, read under one lock.
-struct Snapshot {
-    pid: String,
-    order: Vec<String>,
+pub(crate) struct Snapshot {
+    pub(crate) pid: String,
+    pub(crate) order: Vec<String>,
     game_path: PathBuf,
     mods_path: PathBuf,
     smart_io: bool,
@@ -355,7 +355,7 @@ struct Snapshot {
     added: HashMap<String, String>,
 }
 
-fn snapshot(state: &State<'_, AppState>, profile_id: Option<String>) -> Result<Snapshot, String> {
+pub(crate) fn snapshot(state: &State<'_, AppState>, profile_id: Option<String>) -> Result<Snapshot, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let pid = profile_id.or_else(|| data.active_profile_id.clone());
     let prof = data
@@ -385,7 +385,7 @@ fn snapshot(state: &State<'_, AppState>, profile_id: Option<String>) -> Result<S
 
 /// The provider index of `ids`, from the in-memory file cache (built on first use: the order
 /// view can be the first screen to need it, and an empty cache would say "no conflicts").
-fn index_for(state: &State<'_, AppState>, ids: &[String]) -> Result<ProviderIndex, String> {
+pub(crate) fn index_for(state: &State<'_, AppState>, ids: &[String]) -> Result<ProviderIndex, String> {
     crate::commands::mods::ensure_cache_populated(state).map_err(|e| e.to_string())?;
     let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
     Ok(build_index(ids.iter().filter_map(|id| {
@@ -453,7 +453,7 @@ pub fn mod_order_preview(
 
 /// Save `after` as the profile's order, then make the disk agree: the files that changed hands
 /// (or, with `all`, every contested file) are re-copied from their winner. Returns how many.
-async fn commit(state: &State<'_, AppState>, snap: Snapshot, after: Vec<String>, all: bool) -> Result<usize, String> {
+pub(crate) async fn commit(state: &State<'_, AppState>, snap: Snapshot, after: Vec<String>, all: bool) -> Result<usize, String> {
     let index = index_for(state, &after)?;
     let moved: Vec<ContestedFile> = if all {
         contested(&index, &after)

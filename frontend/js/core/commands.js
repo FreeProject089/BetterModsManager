@@ -840,6 +840,7 @@ function registerCore() {
         defaultChord: { ctrl: true, alt: true, shift: true, key: 'z' },
     });
     registerCommand({ id: 'mods.checkUpdates', category: 'mods', title: { en: 'Check mods for updates', fr: 'Vérifier les mises à jour des mods' }, keywords: 'update updates check mods mise à jour', run: clickAfterNav('library', 'btn-lib-check-updates'), defaultChord: null });
+    registerCommand({ id: 'mods.aiAnalyze', category: 'mods', title: { en: 'Analyse the library (Laya)', fr: 'Analyser la bibliothèque (Laya)' }, keywords: 'ai ia laya analyse analyze library bibliotheque suggest suggestions tags description readme metadata', run: clickAfterNav('library', 'btn-lib-ai-analyze'), defaultChord: null });
     // ── Profiles ────────────────────────────────────────────────────────────────
     registerCommand({ id: 'profiles.import', category: 'profiles', title: { en: 'Import a profile (OvGME / OMM)', fr: 'Importer un profil (OvGME / OMM)' }, keywords: 'import ovgme omm migrate profile importer', run: clickAfterNav('profiles', 'btn-import-menu'), defaultChord: null });
     registerCommand({ id: 'profiles.disableAllGlobal', category: 'profiles', title: { en: 'Disable every profile', fr: 'Désactiver tous les profils' }, keywords: 'disable all profiles global clear tout désactiver', run: clickAfterNav('profiles', 'btn-disable-all-global'), defaultChord: null });

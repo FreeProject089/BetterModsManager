@@ -212,6 +212,21 @@ export async function initMods() {
     // « Smart » toggle beside the box (features/ai/ai-ask.ts), loaded after the list is up.
     if (searchInput)
         setTimeout(() => { void import('../ai/ai-ask.js').then((m) => m.mountSmartSearch(searchInput, () => renderModList(true))).catch(() => { }); }, 0);
+    // « Analyser la bibliothèque » (features/ai/ai-library.ts): an icon beside « Check for updates ».
+    // Suggestions for many mods at once; nothing is written until the user applies, mod by mod.
+    setTimeout(() => {
+        void import('../ai/ai-library.js').then((m) => m.mountAnalyzeButton({
+            getMods: () => appState.state.allMods || [],
+            tagName: (id) => (appState.state.userTags || []).find((x) => x.id === id)?.name || id,
+            onApplied: (u) => {
+                const mod = (appState.state.allMods || []).find((x) => x.id === u?.id);
+                if (mod && u)
+                    Object.assign(mod, { name: u.name, version: u.version, author: u.author, description: u.description, tags: u.tags, download_links: u.download_links });
+                appState.set('allMods', [...(appState.state.allMods || [])]);
+                renderModList(true);
+            },
+        })).catch(() => { });
+    }, 0);
     // Sort
     const sortSelect = document.getElementById('mod-sort');
     sortSelect?.addEventListener('change', async (e) => {

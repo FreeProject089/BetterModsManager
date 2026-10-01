@@ -155,15 +155,18 @@ console.log('\x1b[32m\u2713 security-guard: no handlers built at runtime\x1b[0m'
 // frontend/ is frontendDist: every file in it is copied into the installer. A test harness
 // and two animation previews were shipping inside the packaged app, reachable by anyone who
 // looked. They live in dev-pages/ now; this keeps them from drifting back.
+// The app's own windows are the exception: index.html, and the benchmark's always-on-top mini
+// monitor (commands/benchmark.rs open_mini_monitor, its capability capabilities/mini-monitor.json).
+const APP_PAGES = new Set(['index.html', 'mini-monitor.html']);
 const strayPages = readdirSync(join(ROOT, 'frontend'))
-    .filter((f) => f.endsWith('.html') && f !== 'index.html');
+    .filter((f) => f.endsWith('.html') && !APP_PAGES.has(f));
 if (strayPages.length) {
     console.error(`\n\x1b[31m\u2717 security-guard: ${strayPages.length} non-app page(s) in frontend/, which SHIPS.\x1b[0m`);
     for (const p of strayPages) console.error(`    frontend/${p}`);
     console.error('  Move development pages to dev-pages/ (see dev-pages/README.md).');
     process.exit(1);
 }
-console.log('\x1b[32m\u2713 security-guard: frontend/ ships index.html only\x1b[0m');
+console.log('\x1b[32m\u2713 security-guard: frontend/ ships the app pages only\x1b[0m');
 
 if (total === 0 && indexTotal === 0) {
     console.log("  both trees are clean -- script-src can drop 'unsafe-inline' in frontend/index.html.");

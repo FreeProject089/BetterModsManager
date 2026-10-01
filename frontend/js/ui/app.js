@@ -948,7 +948,7 @@ async function main() {
             // accepts there. An unticked box was recorded Rust-side as a refusal.
             if (ho.telemetry_preselect === true) {
                 const { setInstallerTelemetryPreselect } = await import('../core/analytics.js');
-                setInstallerTelemetryPreselect(true);
+                setInstallerTelemetryPreselect(true, { usage: ho.telemetry_usage, perf: ho.telemetry_perf, laya: ho.telemetry_laya });
             }
             // Weekly benchmark + extra hardware report — a JS-side setting, default OFF.
             if (typeof ho.telemetry_bench === 'boolean') {

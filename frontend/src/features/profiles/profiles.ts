@@ -984,21 +984,21 @@ export async function renderProfiles() {
       <div class="profile-card-ids">${copyIdButtons('profile', p.id, { compact: true, doc: { game_name: p.game_name, active_mods: p.active_mods || [] } })}</div>
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.gameDirLabel')}</span>
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:130px;flex-shrink:0">${t('prof.gameDirLabel')}</span>
           <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.game_path)}</span>
           <button class="btn-open-path" data-path="${escAttr(p.game_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <span class="clickable-label btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.modsDirLabel')}</span>
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-secondary);width:130px;flex-shrink:0">${t('prof.modsDirLabel')}</span>
           <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.mods_path)}</span>
           <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          <span class="clickable-label btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.backupDirLabel')}</span>
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-secondary);width:130px;flex-shrink:0">${t('prof.backupDirLabel')}</span>
           <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.backup_path)}</span>
           <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -1071,6 +1071,8 @@ export async function renderProfiles() {
             if (!p) { span.textContent = ''; return; }
             try {
                 const sz: number = await invoke('get_folder_size', { path: p });
+                // No number, no label: "NaN undefined" under a profile said nothing useful.
+                if (!Number.isFinite(sz)) { span.textContent = ''; return; }
                 sizeMap.set(p, sz);
                 span.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:2px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>${fmtBytes(sz)}`;
             } catch { span.textContent = ''; }

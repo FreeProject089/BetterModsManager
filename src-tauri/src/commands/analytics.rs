@@ -53,20 +53,33 @@ pub fn get_analytics_consent(state: State<AppState>) -> Option<bool> {
     state.data.lock().ok().and_then(|d| d.settings.analytics_consent)
 }
 
+/// `live_errors`: the "errors" category, when the caller says (the consent dialog does).
+/// When it does not, live errors FOLLOW telemetry on the way up: going from off (or never
+/// asked) to on turns them on, as the owner asked. They can still be turned off on their own
+/// afterwards (live_issues_set_enabled), and re-accepting while already on changes nothing.
 #[tauri::command]
-pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enabled: bool) -> Result<(), String> {
-    {
+pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enabled: bool, live_errors: Option<bool>) -> Result<(), String> {
+    let live = {
         let mut data = state.data.lock().map_err(|_| "lock".to_string())?;
+        let was = data.settings.analytics_consent;
         data.settings.analytics_consent = Some(enabled);
-    }
+        data.settings.live_errors = live_after_consent(was, enabled, data.settings.live_errors, live_errors);
+        data.settings.live_errors
+    };
     let _ = state.save();
     // Declining wipes anything we'd buffered (right to erasure).
     if !enabled { let _ = std::fs::remove_file(queue_path(&app_handle)); }
     // Live errors ride on the same consent: off stops them and wipes their queue too.
-    let live = state.data.lock().ok().and_then(|d| d.settings.live_errors);
     crate::commands::live_issues::on_consent_changed(Some(enabled), live);
     log_line(format!("[ANALYTICS] consent set to {}", enabled));
     Ok(())
+}
+
+/// The live-errors switch after a consent answer. Pure (tested below).
+pub fn live_after_consent(was: Option<bool>, enabled: bool, live: Option<bool>, asked: Option<bool>) -> Option<bool> {
+    if !enabled { return live; }               // off: the switch is kept, and inert
+    if let Some(v) = asked { return Some(v); } // the dialog said
+    if was == Some(true) { live } else { Some(true) }
 }
 
 // ── System profile (collected once, sent as a $set on the user) ───────────────
@@ -1078,5 +1091,19 @@ mod sampling_tests {
         assert!(!sampling_allows(Some(&s), "abc", "$replay"));
         assert!(sampling_allows(Some(&s), "abc", "page_enter"));
         assert!(!sampling_allows(Some(&json!({ "total": 0 })), "abc", "page_enter"));
+    }
+}
+
+#[cfg(test)]
+mod consent_tests {
+    use super::live_after_consent;
+    #[test]
+    fn live_errors_follow_telemetry_on_the_way_up() {
+        assert_eq!(live_after_consent(None, true, None, None), Some(true), "first yes turns them on");
+        assert_eq!(live_after_consent(Some(false), true, Some(false), None), Some(true), "off -> on turns them on again");
+        assert_eq!(live_after_consent(Some(true), true, Some(false), None), Some(false), "re-accepting keeps a separate 'off'");
+        assert_eq!(live_after_consent(None, true, None, Some(false)), Some(false), "the dialog's answer wins");
+        assert_eq!(live_after_consent(Some(true), false, Some(true), None), Some(true), "declining keeps the switch (inert without consent)");
+        assert!(!crate::commands::live_issues::effective(Some(false), live_after_consent(Some(true), false, Some(true), None)));
     }
 }

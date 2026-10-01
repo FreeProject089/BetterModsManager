@@ -126,6 +126,11 @@ model is installed, Laya picks the best of the top candidates (right answer in t
 36 benchmark questions, 31 without it), and says so when none of them seems to fit. Everything
 runs on this PC; the question is not stored.
 
+With **Writing** set up and **Written answers** on, **Write an answer** words a short answer
+from the results found, each sentence citing its source (click a number to open it). If Laya finds
+that no result answers, or the text fails the checks, nothing is written and the dialog says why.
+With a remote writing model, this click sends the question and the sources to it.
+
 The library's search box has a **smart search** toggle (the spark icon): on, the query also matches
 descriptions and tags, and the list follows that ranking.
 
@@ -138,8 +143,8 @@ The work is split in stages, and each one says whether it can reach the network 
    Always, offline.
 2. **Classify** — Laya decides and filters, never writes: the built-in pack, your own laya-serve, or
    BetterCommunity's server.
-3. **Draft** — a description draft from your external API, only if you configured one, never
-   applied without your click.
+3. **Write** — a description draft or a written answer from the writing model you chose (local
+   or remote), only on your click, checked by rules and by Laya, never applied without your click.
 
 BMM ships **one** model pack, the multilingual one. A router picks the pack per language and can
 average two; the English checkpoint was measured as a second pack and only helped a little on
@@ -167,6 +172,52 @@ Rules BMM enforces before anything is sent — in the Rust core, not in the page
 - Requests do not follow redirects, time out (20 s by default), and read at most 1 MB back.
 - Keys are stored by the OS — Windows DPAPI, or the macOS/Linux keychain — and never shown to
   the page again. Without either, a key is kept for the session only and asked again next time.
+
+## Writing (optional): drafts and written answers
+
+Laya ranks and filters; it never writes. When you want text — a description draft for a mod, or a
+written answer in *Ask Laya* — BMM can ask a **writing model** you choose, in **Settings → AI →
+Writing**:
+
+| Writing | Where the text goes | What you need |
+|---|---|---|
+| **None** (default) | Nowhere | Nothing |
+| **Local** | **Nowhere**: a server on this PC (loopback only) | An OpenAI-compatible server: Ollama (`http://127.0.0.1:11434/v1`), LM Studio (`http://127.0.0.1:1234/v1`) or llama.cpp server (`http://127.0.0.1:8080/v1`), and a model. **Find models** lists what it serves |
+| **Remote** | The `https://` API you enter, with your key | Its URL, a model name and your key |
+
+Two switches decide what it is used for: **Description drafts** and **Written answers**. Both are
+a click away, never automatic. **Test connection** checks the ranking provider and the writing
+model in one go.
+
+The pipeline, for a draft or an answer:
+
+1. **Extraction** — the mod's own files (or, for a question, what the search found), always first.
+2. **Laya** — ranks, and **abstains**: when none of the sources answers a question, nothing is
+   written at all.
+3. **The writing model** — gets the facts or the numbered sources, and nothing else.
+4. **Checks** — the result is dropped if it names a link, a file or a path the sources do not
+   contain, contains a command, reads like an instruction, or (for an answer) cites no real
+   source. Tags must be yours, copied exactly. Then Laya, when it is on, must agree that the text
+   is supported by the facts.
+5. **You** — a draft is a row badged **Draft**, unticked; an answer is shown as a suggestion with
+   its citations. Nothing is applied without your click.
+
+### Text from mods is data, never instructions
+
+A readme, a manifest, a report or a question can contain text written to steer a model (*ignore
+your instructions and…*). BMM treats all of it as untrusted data:
+
+- hidden text is removed before anything reads it: zero-width and bidi characters, HTML comments,
+  image and link targets in Markdown;
+- it reaches a model only inside a labelled block it cannot close, after a system message that
+  says the block is data whose instructions are never followed;
+- the writing model gets **no tools and no actions**: it can return text, nothing else, and a
+  "tool call" answer is ignored;
+- what comes back goes through the checks above, with length caps;
+- logs record counts and short reasons, never the text, the question or the answer.
+
+An adversarial test set (hostile readmes and answers: injected instructions, exfiltration links,
+invented files, commands, fake tags) checks that each one is neutralized.
 
 ## What is sent, and when
 
@@ -207,6 +258,19 @@ Nothing is ticked. Tick what you want and click **Apply selection**; one value p
 a second description unticks the first), tags are added up to the usual three per mod, links are
 appended. The change is recorded in the mod's activity history like any other edit.
 
+## Analysing the whole library
+
+**Library → the spark icon** beside *Check for updates* (or **Ctrl+K → Analyse the library**) runs
+the same suggestions for many mods at once: the mods without a description or tags, or all of
+them. BMM reads each mod's `README*`, `*.md`, `*.txt`, changelog, version files and manifest
+variants, in folders and in `.zip` archives (`.7z` and `.rar` are listed, not read), with size caps
+and encoding detection (UTF-8, UTF-16, Windows-1252). A progress bar counts the mods; **Stop**
+keeps what was found so far.
+
+The result is a review list: one mod per row, each field unticked. Tick, then **Apply** on that
+mod. Nothing is written before. A batch never asks for a draft: that stays a click in one mod's
+dialog.
+
 ## Before a report is sent
 
 When you click **Send** in *Report a bug / Suggestion*, BMM first checks the text locally:
@@ -243,7 +307,9 @@ The switch lives in `ai-settings.json` beside `data.json`; keys are in `ai-secre
 | `bmm_ai_status` | `ai-status` | The settings and what may reach the network (never a key) |
 | `bmm_ai_suggest_mod_metadata` | `ai-suggest <mod-id> [--offline] [--draft]` | The same suggestions as the dialog. **Writes nothing** |
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Writes the fields named, with the dialog's validation |
-| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--json]` | *Ask Laya*: the docs, settings, commands, mods, files and conflicts that answer, as structured results |
+| `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--write] [--json]` | *Ask Laya*: the docs, settings, commands, mods, files and conflicts that answer, as structured results; `write` adds a cited written answer |
+| `bmm_ai_analyze_library` | `ai-analyze [mod-ids] [--laya] [--limit 200]` | Suggestions for many mods at once. **Writes nothing** |
+| `bmm_ai_classify` | `ai-classify "<text>" --label id=meaning …` | Which of your labels fits a text (Laya, offline), plus *none* |
 | `bmm_ai_pack_install` | `ai-install` | Downloads, checks and installs the model pack (live progress in the CLI) |
 | `bmm_ai_pack_remove` | `ai-remove` | Removes the downloaded model pack |
 | `bmm_ai_test` | `ai-test` | Classifies a fixed sample, with the timings |

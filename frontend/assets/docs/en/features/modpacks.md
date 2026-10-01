@@ -50,9 +50,21 @@ matters.
 ## The order inside a pack
 
 A pack's list is an **order**: the arrows on each mod in the editor move it up or down. When the
-pack is applied, its mods are enabled and then placed **on top** of the profile's activation order,
-in the pack's sequence, as one block — so where two of the pack's mods share a file, the one lower
-in the pack wins, and the pack wins what it shares with mods the profile already had. See
+pack is applied, its mods are enabled and then placed in the profile's activation order as one
+block, in the pack's sequence: where two of the pack's mods share a file, the one lower in the pack
+wins.
+
+Where the block goes is the pack's **Activation order** field in the editor:
+
+| Choice | Effect |
+|---|---|
+| **Default (setting)** | The **Bulk enable** setting of the order view (they win, unless you changed it). |
+| **They win (placed last)** | The pack wins what it shares with mods the profile already had. |
+| **Yours win (placed first)** | The mods you already had keep winning. |
+| **Nothing moves** | Mods already active keep their place. |
+
+The choice travels with the pack (`.bmp` export, `.mm` lists, repos). A scheduled task or a
+`bmm://modpack/enable?order=` link can override it for one run. See
 [Activation order](doc-page:how-it-works/load-order).
 
 ## Sharing one: the hash is the point

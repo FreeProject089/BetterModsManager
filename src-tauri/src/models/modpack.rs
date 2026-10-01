@@ -61,4 +61,10 @@ pub struct LocalModpack {
     pub sr_link: Option<String>,
     /// Game name this pack targets
     pub game_name: Option<String>,
+    /// Where the pack's mods go in the profile's activation order when it is applied:
+    /// `top` (the pack wins, in its own order), `bottom` (what was active keeps winning),
+    /// `keep` (nothing already active moves). None = the `order_bulk_mode` setting.
+    /// Travels with the pack (.bmp export, .mm lists, repos); older packs have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order_mode: Option<String>,
 }

@@ -87,6 +87,20 @@ describe('apiBodyFor — the shapes that were wrong before', () => {
     assert.deepEqual(r.body, { order: ['m1', 'm2'], profileId: 'p1' });
   });
 
+  test('arrange_mod_order sends the block and the mode; an empty mode means the setting', () => {
+    const r = apiBodyFor(act('arrange_mod_order', { ids: ' a , b ', mode: 'bottom', profileId: '' }));
+    assert.equal(r.path, '/api/mods/order/arrange');
+    assert.deepEqual(r.body, { ids: ['a', 'b'], mode: 'bottom' });
+    assert.equal(apiBodyFor(act('arrange_mod_order', { ids: 'a', mode: '' })).body.mode, undefined);
+  });
+
+  test('import_mod_order sends the text as written', () => {
+    const r = apiBodyFor(act('import_mod_order', { text: 'BMMORDER1.abc', dryRun: true }));
+    assert.equal(r.path, '/api/mods/order/import');
+    assert.equal(r.body.text, 'BMMORDER1.abc');
+    assert.equal(r.body.dryRun, true);
+  });
+
   test('an import with no path sends NO path, which is what opens the picker', () => {
     const r = apiBodyFor(act('import_modlist', { path: '' }));
     assert.deepEqual(r.body, {});
@@ -157,7 +171,7 @@ describe('apiBodyFor — the shapes that were wrong before', () => {
       'import_modlist', 'export_modlist', 'import_modpack', 'export_modpack', 'import_plugin',
       'export_plugin', 'uninstall_plugin', 'import_data', 'import_language', 'list_schedules',
       'list_catalogs', 'list_keys', 'read_hook', 'clear_hooks', 'mod_config', 'update_mods',
-      'set_mod_order', 'api_call',
+      'set_mod_order', 'arrange_mod_order', 'import_mod_order', 'api_call',
     ];
     for (const id of ids) {
       const r = apiBodyFor(act(id));

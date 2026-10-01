@@ -5628,6 +5628,7 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/plugins/apply':     'bmm://plugin/activate?id=<plugin_id>',
         'POST /api/plugins/compare':   'bmm://plugin/compare?id=<plugin_id>',
         'POST /api/modpacks/enable':   'bmm://modpack/enable?id=<modpack_id>',
+        'POST /api/mods/order/import': 'bmm://order?d=<BMMORDER1 code>',
         'POST /api/modpacks/disable':  'bmm://modpack/disable?id=<modpack_id>',
         'POST /api/repo/connect':      'bmm://repo/connect?url=<repo_url>',
         'POST /api/repo/sync':         'bmm://repo/sync?url=<repo_url>&profile=<repo_profile_id>',
@@ -5779,7 +5780,10 @@ function getDeepLinkDefs(): DeepLinkDef[] {
         },
         {
             scheme: 'modpack/enable',
-            params: [{ name: 'id', required: true, desc: t('plugins.dl.modpack_enable.p.id') }],
+            params: [
+                { name: 'id', required: true, desc: t('plugins.dl.modpack_enable.p.id') },
+                { name: 'order', required: false, desc: t('plugins.dl.modpack_enable.p.order') },
+            ],
             desc: t('plugins.dl.modpack_enable.d'),
             about: t('plugins.dl.modpack_enable.a'),
             example: 'bmm://modpack/enable?id=modpack-uuid',
@@ -5790,6 +5794,13 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             desc: t('plugins.dl.modpack_disable.d'),
             about: t('plugins.dl.modpack_disable.a'),
             example: 'bmm://modpack/disable?id=modpack-uuid',
+        },
+        {
+            scheme: 'order',
+            params: [{ name: 'd', required: true, desc: t('plugins.dl.order.p.d') }],
+            desc: t('plugins.dl.order.d'),
+            about: t('plugins.dl.order.a'),
+            example: 'bmm://order?d=BMMORDER1.eyJmb3JtYXQiOiJibW0tb3JkZXIiLCJtb2RzIjpbXX0',
         },
         {
             scheme: 'install',
@@ -6579,6 +6590,7 @@ function getEndpointDefs(): EndpointDef[] {
             fields: [
                 { name: 'modpack_id', type: 'string', required: true,  desc: 'UUID du LocalModpack dont tous les mods seront activés.' },
                 { name: 'profile_id', type: 'string', required: false, desc: t('plugins.epF.mpProfileId') },
+                { name: 'order_mode', type: 'string', required: false, desc: t('plugins.epF.orderMode') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "enabled_count": 5 }' },
@@ -7354,12 +7366,74 @@ function getEndpointDefs(): EndpointDef[] {
             about: t('plugins.epAbout.orderSet'),
             fields: [
                 { name: 'order', type: 'array', required: true, desc: 'Every active mod id, in deployment order. Last wins a shared file.' },
-                { name: 'profileId', type: 'string', required: false, desc: 'Which profile. Default: the active one.' },
+                { name: 'profileId', type: 'string', required: false, desc: t('plugins.epF.orderProfile') },
                 { name: 'reapply', type: 'boolean', required: false, desc: t('order.reapplyTip') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "moved": 3 }' },
                 { code: 400, label: 'Bad Request', body: '{ "error": "order.errNotPermutation" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/mods/order/export', auth: true,
+            desc: t('plugins.ep.orderExport'),
+            about: t('plugins.epAbout.orderExport'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "doc": { "format": "bmm-order", "version": 1, "mods": [ { "name": "A", "content_id": "…" } ] }, "code": "BMMORDER1.…", "link": "bmm://order?d=BMMORDER1.…", "text": "1. A" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mods/order/import', auth: true,
+            desc: t('plugins.ep.orderImport'),
+            about: t('plugins.epAbout.orderImport'),
+            fields: [
+                { name: 'text', type: 'string', required: true, desc: t('order.import.paste') },
+                { name: 'profileId', type: 'string', required: false, desc: t('plugins.epF.orderProfile') },
+                { name: 'dryRun', type: 'boolean', required: false, desc: t('plugins.epAbout.orderImport') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "dryRun": false, "moved": 2, "plan": { "total": 4, "matched": [], "missing": ["X"], "result": ["b","a"], "changed": true } }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "order.errParse" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mods/order/arrange', auth: true,
+            desc: t('plugins.ep.orderArrange'),
+            about: t('plugins.epAbout.orderArrange'),
+            fields: [
+                { name: 'ids', type: 'array', required: true, desc: t('plugins.epF.orderIds') },
+                { name: 'mode', type: 'string', required: false, desc: t('plugins.epF.orderMode') },
+                { name: 'profileId', type: 'string', required: false, desc: t('plugins.epF.orderProfile') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "moved": 1 }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/mods/order/mode', auth: true,
+            desc: t('plugins.ep.orderModeGet'),
+            about: t('plugins.epAbout.orderModeGet'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mode": "top" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mods/order/mode', auth: true,
+            desc: t('plugins.ep.orderModeSet'),
+            about: t('plugins.epAbout.orderModeSet'),
+            fields: [
+                { name: 'mode', type: 'string', required: true, desc: t('plugins.epF.orderMode') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mode": "bottom" }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "order.errMode" }' },
                 e401,
             ],
         },
@@ -8733,6 +8807,25 @@ function _actionCatalog(): _ActionDef[] {
           iconSvg: sv('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/>'),
           fields: [
             { key: 'order',     label: d('fldModOrder', 'Mod ids, in order'), type: 'text', placeholder: 'mod-a, mod-b, mod-c' },
+            { key: 'profileId', label: d('fldProfileIdOpt', 'Profile (optional)'), type: 'text', placeholder: d('phActiveProfile', '(the active one)'), half: true },
+          ] },
+        { id: 'arrange_mod_order', cat: 'mods', label: d('actionArrangeModOrder', 'Place mods as one block'),
+          desc: d('actionArrangeModOrderDesc', 'What a modpack does after enabling its mods: top makes them win, bottom keeps the others winning, keep moves nothing.'),
+          iconSvg: sv('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><rect x="4" y="15" width="16" height="5" rx="1"/>'),
+          fields: [
+            { key: 'ids',       label: d('fldModIdsBlock', 'Active mod ids, in order'), type: 'text', placeholder: 'mod-a, mod-b' },
+            { key: 'mode', label: d('fldOrderMode', 'Placement'), type: 'select', default: '', half: true, options: [
+                { value: '', label: d('optOrderDefault', 'Default (setting)') },
+                { value: 'top', label: 'top' }, { value: 'bottom', label: 'bottom' }, { value: 'keep', label: 'keep' },
+            ] },
+            { key: 'profileId', label: d('fldProfileIdOpt', 'Profile (optional)'), type: 'text', placeholder: d('phActiveProfile', '(the active one)'), half: true },
+          ] },
+        { id: 'import_mod_order', cat: 'mods', label: d('actionImportModOrder', 'Import a shared order'),
+          desc: d('actionImportModOrderDesc', 'A BMMORDER1 code, a bmm://order link or a list of names. Only reorders active mods; enables nothing.'),
+          iconSvg: sv('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><line x1="4" y1="20" x2="20" y2="20"/>'),
+          fields: [
+            { key: 'text',      label: d('fldOrderText', 'Order (code, link or names)'), type: 'text', placeholder: 'BMMORDER1.…' },
+            { key: 'dryRun',    label: d('fldDryRun', 'Preview only'), type: 'switch', default: false, half: true },
             { key: 'profileId', label: d('fldProfileIdOpt', 'Profile (optional)'), type: 'text', placeholder: d('phActiveProfile', '(the active one)'), half: true },
           ] },
 

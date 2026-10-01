@@ -489,6 +489,14 @@ fn main() {
                 });
             }
 
+            // « API Laya locale »: off by default; this loop starts it only when the user turned
+            // it on AND AI is on, and stops it when either goes off (commands/ai_api.rs).
+            {
+                let st = app.state::<AppState>();
+                let dir = st.data_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+                commands::ai_api::spawn_watcher(dir);
+            }
+
             if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
                 let _ = app.emit("deep-link-received", link);
             }
@@ -504,6 +512,9 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Only the main window ends the app. The benchmark's mini monitor (label
+                // "mini-monitor") just closes.
+                if window.label() != "main" { return; }
                 if commands::crash::is_shutting_down() { return; }
                 api.prevent_close();
                 let window = window.clone();
@@ -598,6 +609,17 @@ fn main() {
             commands::ai::ai_embedded_remove,
             commands::ai::ai_embedded_test,
             commands::ai::ai_ask,
+            commands::ai_api::ai_api_status,
+            commands::ai_api::ai_api_configure,
+            commands::ai_api::ai_api_rotate_token,
+            commands::ai_api::ai_api_test,
+            commands::ai_ops::ai_task_classify,
+            commands::ai_ops::ai_task_ask,
+            commands::ai_ops::ai_task_suggest,
+            commands::ai::ai_ask_written,
+            commands::ai::ai_classify,
+            commands::ai::ai_analyze_library,
+            commands::ai::ai_analyze_cancel,
             commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
             commands::settings::is_dev_build,
@@ -687,6 +709,7 @@ fn main() {
             commands::dialog::dlg_confirm,
             commands::mods::get_conflict_file_tree,
             commands::mods::list_mod_files_recursive,
+            commands::mods::list_mod_files_sized,
             commands::mods::path_join,
             commands::mods::check_mod_metadata,
             commands::mods::open_mod_active_folder,
@@ -762,6 +785,8 @@ fn main() {
             commands::benchmark::export_benchmark_csv,
             commands::benchmark::run_app_benchmark,
             commands::benchmark::cancel_app_benchmark,
+            commands::benchmark::open_mini_monitor,
+            commands::benchmark::close_mini_monitor,
             commands::benchmark::read_file_text,
             commands::disk::get_system_disks,
             commands::hardware::get_hardware_info,
@@ -991,6 +1016,12 @@ fn main() {
             commands::mod_order::mod_order_preview,
             commands::mod_order::mod_order_place,
             commands::mod_order::mod_order_reapply,
+            commands::order_share::mod_order_export,
+            commands::order_share::mod_order_import_preview,
+            commands::order_share::mod_order_import,
+            commands::order_share::mod_order_arrange,
+            commands::order_share::order_bulk_mode_get,
+            commands::order_share::order_bulk_mode_set,
             commands::task_output::task_write_file,
             commands::task_output::task_output_dir,
             commands::sched_runs::sched_run_append,

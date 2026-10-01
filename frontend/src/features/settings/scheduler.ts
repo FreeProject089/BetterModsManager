@@ -12,7 +12,8 @@
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFiles } from '../../core/api.js';
-import { t } from '../../core/i18n.js';
+import { t, getLang } from '../../core/i18n.js';
+import { parseLabels, takeAiStep, chargeAiTime, taint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
@@ -207,6 +208,11 @@ interface TaskPerms {
      *  allows the local network, a timeout and a size cap on every request. Off for every
      *  existing task: none of them could do this when its consent was given. */
     network?: boolean;
+    /** Ask Laya: `ai.classify`, `ai.ask`, `ai.suggest_mod_metadata` and the `aiLabel` condition.
+     *  Its own key because a model run costs CPU and reads text the task hands it; what comes
+     *  back is DATA (sched-ai.ts marks the free text untrusted). Off for every existing task
+     *  and reset on import, like the others. */
+    ai?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -1076,7 +1082,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -1090,7 +1096,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -2039,7 +2045,19 @@ async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0
     if (step && where) step.path = where;
     const t0 = Date.now();
     try {
+        // AI text never reaches a step that runs, opens or fetches something (sched-ai.ts).
+        // Checked on the RAW parameters: the reference is refused, whatever the text says.
+        const sharedAi = readSharedTaint();
+        const leak = taintProblem(action.type, action.params || {}, ctx, sharedAi);
+        if (leak) throw new Error((t('sched.ai.tainted') || 'Laya’s answer cannot be used in «{f}» of this step. Branch on a label instead.').replace('{f}', leak));
         await runAction(action, task, ctx, depth);
+        if (!action.type.startsWith('ai.')) {
+            const outs = propagateTaint(action.params || {}, ctx, sharedAi);
+            if (action.type === 'var.set' && action.params?.scope === 'shared') {
+                const name = String(action.params?.name || '').trim();
+                writeSharedTaint(outs.includes(name) ? [...sharedAi, name] : sharedAi.filter((n) => n !== name));
+            }
+        }
         endStep(step, 'ok');
         // What the previous action did, for the next step (A2): {last.ok}, {last.ms} and, for
         // actions that produce output, {last.out} (set in _captureOutput).
@@ -2051,6 +2069,27 @@ async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0
         ctx.nums['last.ok'] = 0;
         ctx.nums['last.ms'] = Date.now() - t0;
         throw e;
+    }
+}
+
+/**
+ * One AI step: the run's budget first (sched-ai.ts), then the call, its time charged whatever
+ * happened. Errors come back as codes (`ai.task.blocked|game_mode`) and leave in words.
+ */
+async function aiCall<T>(ctx: RunCtx, run: () => Promise<T>): Promise<T> {
+    const over = takeAiStep(ctx);
+    if (over) throw new Error(t('sched.ai.budget.' + over) || 'This run used its Laya budget.');
+    const t0 = Date.now();
+    try {
+        return await run();
+    } catch (e) {
+        const [key, why] = aiErrorParts(e);
+        const words = key.startsWith('ai.task.') ? t(key) : '';
+        if (!words || words === key) throw e instanceof Error ? e : new Error(String(e));
+        const reason = why ? t('ai.task.why.' + why) : '';
+        throw new Error(words.replace('{why}', reason && reason !== 'ai.task.why.' + why ? reason : why));
+    } finally {
+        chargeAiTime(ctx, Date.now() - t0);
     }
 }
 
@@ -2166,11 +2205,14 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         case 'mod.disable':
             await invoke('disable_mod', { modId: p.id }); break;
         case 'modpack.enable':
-            await applyModpack(p.id, true); break;
+            // `placement`: where the pack's mods go in the activation order (top | bottom |
+            // keep); empty = the pack's own choice, then the setting.
+            ctx.nums['order.moved'] = await applyModpack(p.id, true, p.placement); break;
         case 'modpack.disable':
             await applyModpack(p.id, false); break;
         case 'mods.enableAll':
-            await invoke('toggle_all_mods', { enable: true, bypassSha: true }); break;
+            // Only the mods this turns on are placed, by `placement` (empty = the setting).
+            await invoke('toggle_all_mods', { enable: true, bypassSha: true, orderMode: placementOf(p.placement) }); break;
         case 'mods.disableAll':
             await invoke('toggle_all_mods', { enable: false, bypassSha: false }); break;
         case 'mods.scan':
@@ -2419,6 +2461,53 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             if (name) delete all[name]; else for (const k of Object.keys(all)) delete all[k];
             writeSharedVars(all);
             if (ctx.shared) { if (name) delete ctx.shared[name]; else ctx.shared = {}; }
+            break;
+        }
+
+        // ── Laya (AI) ─────────────────────────────────────────────────────────
+        //
+        // commands/ai_ops.rs holds what no step can lift: AI on, no --no-ai, no game running,
+        // one call at a time, 30 a minute for all tasks, a timeout. sched-ai.ts holds this
+        // run's budget and marks free-text answers untrusted. Nothing here is ever applied.
+        case 'ai.classify': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const labels = parseLabels(p.labels);
+            if (labels.length < 2) throw new Error(t('sched.ai.fewLabels') || 'Give at least two labels.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
+                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels,
+            }));
+            const label = String(res?.label || 'none');
+            const pr = Number(res?.p) || 0;
+            ctx.text['ai.label'] = label; ctx.nums['ai.p'] = pr; ctx.text['ai.p'] = String(pr);
+            const into = String(p.into || '').trim();
+            if (into) {
+                ctx.text[into] = label; ctx.nums[into] = pr;
+                ctx.text[`${into}.p`] = String(pr); ctx.nums[`${into}.p`] = pr;
+            }
+            ctx.text['last.out'] = label;
+            break;
+        }
+        case 'ai.ask': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const question = String(p.question || '').trim();
+            if (!question) throw new Error(t('sched.ai.noQuestion') || 'There is no question to ask.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_ask', { question, lang: getLang() === 'fr' ? 'fr' : 'en' }));
+            const text = String(res?.text ?? '');
+            ctx.text['ai.answer'] = text;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.answer', 'last.out', String(p.into || '').trim());
+            break;
+        }
+        case 'ai.suggest_mod_metadata': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const id = String(p.id || '').trim();
+            const res: any = await aiCall(ctx, () => invoke('ai_task_suggest', { modId: id }));
+            const list: any[] = Array.isArray(res?.suggestions) ? res.suggestions : [];
+            const text = list.map((s) => `${s.field}: ${s.value} (${Math.round((Number(s.confidence) || 0) * 100)}%)`).join('\n');
+            ctx.text['ai.suggestions'] = text;
+            ctx.nums['ai.suggestions'] = list.length;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.suggestions', 'last.out', String(p.into || '').trim());
             break;
         }
 
@@ -2682,6 +2771,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 install: p.install !== false,
                 exact: !!p.exact,
                 passphrase: p.passphrase ? String(p.passphrase) : undefined,
+                orderMode: placementOf(p.placement) || undefined,
             });
             toast(`${task.name}: ${t('sched.listApply.done')
                 .replace('{on}', String(r.enabled))
@@ -3648,7 +3738,18 @@ async function firstDiskMount(): Promise<string> {
     } catch { return ''; }
 }
 
-async function applyModpack(modpackId: string, enable: boolean): Promise<void> {
+/** A placement word from a task (`top` | `bottom` | `keep`), or null = "the default". */
+function placementOf(v: unknown): string | null {
+    const s = String(v ?? '').trim().toLowerCase();
+    return s === 'top' || s === 'bottom' || s === 'keep' ? s : null;
+}
+
+/**
+ * Turn a modpack on or off. On: its mods are then placed in the activation order by
+ * `placement`, else the pack's own mode, else the setting (commands/order_share.rs), the same
+ * engine the Modpacks screen uses. Returns how many files changed hands.
+ */
+async function applyModpack(modpackId: string, enable: boolean, placement?: unknown): Promise<number> {
     const packs: any[] = await invoke('load_modpacks').catch(() => []);
     const pack = packs.find(m => m.id === modpackId);
     if (!pack) throw new Error(`Modpack ${modpackId} not found`);
@@ -3657,6 +3758,9 @@ async function applyModpack(modpackId: string, enable: boolean): Promise<void> {
         if (enable) await invoke('enable_mod', { modId: id, bypassSha: true }).catch(() => {});
         else await invoke('disable_mod', { modId: id }).catch(() => {});
     }
+    if (!enable || !ids.length) return 0;
+    const mode = placementOf(placement) || placementOf(pack.order_mode);
+    return Number(await invoke('mod_order_arrange', { profileId: null, ids, mode })) || 0;
 }
 
 /**
@@ -3688,6 +3792,9 @@ async function runDeepLink(url: string): Promise<void> {
 // Absent means "no task vouched for this", which is treated as no permission — the safe
 // direction, and the one that makes forgetting to thread it fail closed.
 async function evalCondition(cond: Condition, ctx: RunCtx = { nums: {}, text: {} }, task?: Task): Promise<boolean> {
+    // AI text may be compared, never used as a path or an address a condition reaches (sched-ai.ts).
+    const leak = condTaintProblem(cond.type, cond.params || {}, ctx, readSharedTaint());
+    if (leak) throw new Error((t('sched.ai.tainted') || 'Laya’s answer cannot be used in «{f}» of this step. Branch on a label instead.').replace('{f}', leak));
     let r = await evalConditionRaw(cond, ctx, task);
     return cond.negate ? !r : r;
 }
@@ -3876,6 +3983,10 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
                 default: return false;
             }
         }
+        // What `ai.classify` left: its label, and Laya's probability for it. Reads variables
+        // only, so it needs no permission: the step that asked Laya already did.
+        case 'aiLabel':
+            return aiLabelHolds(ctx, p);
         case 'online':
             return navigator.onLine;
         case 'timeReached': {
@@ -6047,7 +6158,7 @@ function renderModal(modal: HTMLElement): void {
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
-                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network'];
+                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'];
                     const granted = keys.filter((k) => (pm as any)[k] === true).length;
                     return `<div class="sched-perm-group">
                         <div class="sched-perm-head">
@@ -6069,6 +6180,7 @@ function renderModal(modal: HTMLElement): void {
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsPerf') || 'Changes how hard BMM works')}</div>
                         ${row('resources', pm.resources === true, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, game mode and the queue. A preset set for the task ends with it.')}
+                        ${row('ai', pm.ai === true, t('sched.allowAiTitle') || 'Laya (AI)', t('sched.allowAi') || 'This task may ask Laya on this PC. What Laya answers is kept as data, never run.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
                         ${row('tasks', pm.tasks === true, t('sched.allowTasksTitle') || 'Other tasks', t('sched.allowTasks') || 'This task may run, start or switch on your other tasks, which then do whatever THEY are permitted to do.')}
@@ -8358,13 +8470,13 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'mod.enable', label: 'Enable mod', needs: 'mod', group: 'mods' },
     { v: 'mod.disable', label: 'Disable mod', needs: 'mod', group: 'mods' },
     { v: 'mods.order', label: 'Set which mod wins shared files', needs: 'modOrder', group: 'mods' },
-    { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpack', group: 'mods' },
+    { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpackOn', group: 'mods' },
     { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack', group: 'mods' },
     { v: 'modpack.create', label: 'Create modpack', needs: 'mpCreate', group: 'mods' },
     { v: 'mod.add', label: 'Add a mod (from URL)', needs: 'modAdd', group: 'mods' },
     { v: 'modlist.export', label: 'Export a mod list (.mmlist)', needs: 'savePath', group: 'mods' },
     { v: 'modlist.import', label: 'Import a mod list (.mmlist)', needs: 'openPath', group: 'mods' },
-    { v: 'mods.enableAll', label: 'Enable all mods', group: 'mods' },
+    { v: 'mods.enableAll', label: 'Enable all mods', needs: 'enableAll', group: 'mods' },
     { v: 'mods.disableAll', label: 'Disable all mods', group: 'mods' },
     { v: 'mods.scan', label: 'Scan mods folder', group: 'mods' },
     { v: 'plugin.apply', label: 'Apply plugin modlist', needs: 'pluginId', group: 'mods' },
@@ -8478,6 +8590,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
+    // Laya on this PC. Needs the `ai` permission; what comes back is data, never run.
+    { v: 'ai.classify', label: 'Laya: sort a text into your labels', needs: 'aiClassify', group: 'logic' },
+    { v: 'ai.ask', label: 'Laya: ask a question', needs: 'aiAsk', group: 'logic' },
+    { v: 'ai.suggest_mod_metadata', label: 'Laya: suggest details for a mod (not applied)', needs: 'aiSuggest', group: 'mods' },
     // Waiting for something OUTSIDE BMM to be ready. A task could wait for a clock and for
     // a file; these are the two cases that kept coming up and had no answer.
     { v: 'wait.http', label: 'Wait until an address answers', needs: 'waitHttp', group: 'system' },
@@ -8687,7 +8803,7 @@ const actionPickItems = (): PickItem[] => ACTION_TYPES.map((a) => { const ad = t
 const actionPickGroups = (): PickGroup[] => ACTION_GROUPS.map((g) => ({ g: g.g, label: t('sched.grp.' + g.g) || g.label, icon: GROUP_ICON[g.g] || '' }));
 // Conditions grouped the same way, each with its one-line description (sched.condd.*).
 const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
-    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
+    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs', 'aiLabel'] },
     { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
     { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
     { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive', 'gameRunning', 'resourcesPresetIs', 'queueIdle'] },
@@ -8886,6 +9002,22 @@ const KINDS: [string, string][] = [
     ['index', 'index'],
 ];
 
+/**
+ * Where a bulk enable puts its mods in the activation order (param `placement`): the default
+ * (the pack's own choice, then the setting), on top, below what is active, or nothing moves.
+ */
+function placementField(params: Record<string, any>, pack: boolean): string {
+    const cur = String(params.placement || '');
+    const opts: [string, string][] = [
+        ['', t(pack ? 'sched.place.packDefault' : 'sched.place.default')],
+        ['top', t('order.mode.top')], ['bottom', t('order.mode.bottom')], ['keep', t('order.mode.keep')],
+    ];
+    return `<div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.place.label'))}</label>
+        <select class="input sched-p-place" style="max-width:220px" title="${escAttr(t('order.mode.tip'))}">
+            ${opts.map(([v, l]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+        </select></div>`;
+}
+
 function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
     if (!needs) { host.innerHTML = ''; return; }
     if (needs === 'profile') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`);
@@ -8907,6 +9039,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         </div>`;
     }
     else if (needs === 'modpack') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`);
+    else if (needs === 'modpackOn') host.innerHTML = _field('modpack', `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`) + placementField(params, true);
+    else if (needs === 'enableAll') host.innerHTML = placementField(params, false);
     else if (needs === 'theme') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`);
     else if (needs === 'appStop') {
         host.innerHTML = `
@@ -9690,7 +9824,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <input type="password" class="input sched-p-lapass" autocomplete="new-password"
                 value="${escAttr(params.passphrase || '')}">
             <span class="sched-cmd-hint">${escHtml(t('sched.la.passHint') || '')}</span>
-        </div>`;
+        </div>${placementField(params, false)}`;
     }
     else if (needs === 'waitHttp' || needs === 'waitHook') {
         const isHook = needs === 'waitHook';
@@ -10033,6 +10167,36 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <span class="sched-cmd-hint">${escHtml(t('sched.http.perm') || 'Needs the “Run external programs” permission — a request can post a captured value anywhere.')}</span>
         </div>`;
     }
+    // Laya. One idea per line; the details behind « Plus ». The note under each says the one
+    // thing that surprises: an answer is data for later steps, never something BMM runs.
+    else if (needs === 'aiClassify') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.text'))}</label>
+            <textarea class="input sched-p-aitext" rows="2" spellcheck="false" placeholder="${escAttr(t('sched.ai.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.labels'))}</label>
+            <textarea class="input sched-p-ailabels" rows="3" spellcheck="false" placeholder="${escAttr(t('sched.ai.labelsPh'))}">${escHtml(params.labels || '')}</textarea>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.classifyHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiAsk') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <input class="input sched-p-aiq" spellcheck="false" placeholder="${escAttr(t('sched.ai.questionPh'))}" value="${escAttr(params.question || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.untrustedHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiSuggest') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.suggestHint'))}</span>
+        </div>`;
+    }
     else if (needs === 'benchmark') {
         const profOpts = _profiles.filter((p: any) => p.mods_path)
             .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
@@ -10372,6 +10536,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         sel.addEventListener('input', set);
     }
     host.querySelector('.sched-p-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-place')?.addEventListener('change', (e) => {
+        const v = (e.target as HTMLSelectElement).value;
+        if (v) params.placement = v; else delete params.placement;
+    });
     // Picking a pattern FILLS the field rather than replacing it invisibly: the point is to
     // see what you got, and to edit it afterwards.
     host.querySelector('.sched-p-txlib')?.addEventListener('change', (e) => {
@@ -10535,6 +10703,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-jsonpath')?.addEventListener('input', (e) => { params.jsonPath = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-timeout')?.addEventListener('input', (e) => { params.timeoutMs = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-anystatus')?.addEventListener('change', (e) => { params.allowAnyStatus = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-aitext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-aipath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-ailabels')?.addEventListener('input', (e) => { params.labels = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-aiq')?.addEventListener('input', (e) => { params.question = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');
         const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);
@@ -10749,7 +10921,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle', 'aiLabel'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -10809,6 +10981,8 @@ const VALUE_SOURCES = [
     'last.ok', 'last.ms',
     // Which attempt of a task-level retry this run is (1 on the first run).
     'retry.task_attempt',
+    // Laya (AI): the last classification's probability, and how many suggestions came back.
+    'ai.p', 'ai.suggestions',
     // How big the backup came out. A task can then warn when a nightly bundle suddenly
     // triples — which is what a replays section left ticked by accident looks like.
     'backup.bytes',
@@ -11086,6 +11260,17 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.source = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiLabel') {
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(p.var || '')}">
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.condLabelPh'))}" value="${escAttr(p.label || '')}">
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condMin'))}" value="${escAttr(String(p.min ?? 0.5))}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.var = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.label = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.min = (e.target as HTMLInputElement).value; });
     } else if (cond.type === 'fileContains') {
         host.innerHTML = `${condFileInput(p)}
             <input class="input sched-cp-val" spellcheck="false" style="min-width:190px"

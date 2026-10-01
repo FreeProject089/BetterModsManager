@@ -40,6 +40,11 @@ pub struct ModList {
     /// for the same reason.
     #[serde(default)]
     pub modpacks: Vec<crate::models::modpack::LocalModpack>,
+    /// The activation order the list was exported with (its active mods, first applied
+    /// first): applying the list puts the mods it names in this order
+    /// (commands/order_share.rs). Absent on older lists and on lists with nothing active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_order: Option<crate::commands::order_share::OrderDoc>,
 }
 
 /// A download link for a mod with its type
@@ -128,6 +133,7 @@ impl ModList {
             tag_defs: Vec::new(),
             credentials: None,
             modpacks: Vec::new(),
+            load_order: None,
         }
     }
 }

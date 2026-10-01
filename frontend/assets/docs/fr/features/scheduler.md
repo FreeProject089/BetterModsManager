@@ -174,7 +174,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~110 actions réparties en neuf groupes :
+Il y a ~112 actions réparties en neuf groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -234,7 +234,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde huit choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde neuf choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -246,8 +246,9 @@ Chaque tâche accorde huit choses séparément, et chacune dit ce qu'elle déblo
 | **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
 | **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
 | **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
+| **Laya (IA)** | Interroger Laya sur ce PC : classer un texte, poser une question, proposer les infos d'un mod ([plus bas](#laya-dans-une-tache)) |
 
-Les huit sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les neuf sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
@@ -554,6 +555,29 @@ pendant une pause).
 À la souris : glisse le fond, maintiens :kbd[Espace] en glissant, ou fais défiler, pour te déplacer ;
 :kbd[Ctrl] + molette (ou un pincement) pour zoomer ; :kbd[Maj] + glisser pour sélectionner plusieurs
 nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection.
+
+## Laya dans une tâche
+
+Trois actions interrogent **Laya**, le classifieur qui tourne sur ton PC. Elles demandent la
+permission **Laya (IA)** et l'IA activée dans les Paramètres.
+
+| Action | Ce qu'elle laisse |
+|---|---|
+| `ai.classify` | Classe un texte (ou le début d'un fichier texte) dans **tes** étiquettes. `{kind}` est l'étiquette, `{kind.p}` sa probabilité ; aussi `{ai.label}` et `{ai.p}` |
+| `ai.ask` | Cherche dans la doc et tes mods pour une question. La réponse est du texte dans `{answer}` et `{ai.answer}` |
+| `ai.suggest_mod_metadata` | Liste des suggestions pour un mod (nom, tags, liens…). **Rien n'est appliqué** |
+
+Branche-toi sur le résultat avec la condition **L'étiquette de Laya est…** : `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }`.
+
+**Une réponse est une donnée, jamais une commande.** Le texte de `ai.ask` et
+`ai.suggest_mod_metadata` vient de choses que BMM ne contrôle pas (le readme d'un mod, un
+fichier). Il peut aller dans un message, une ligne de journal ou un fichier. Il ne peut pas aller
+dans un programme, un script, un lien, une adresse ou un en-tête : l'étape échoue et le dit. Une
+copie (`set`, une liste, une map) est refusée de la même façon. Une étiquette d'`ai.classify` est
+toujours un de tes propres mots (ou `none`) : s'en servir pour choisir la suite est sûr.
+
+Limites : par exécution, 20 appels à Laya et 2 minutes d'attente ; pour toutes les tâches, 30
+appels par minute, un à la fois. Rien ne tourne pendant un jeu, avec l'IA désactivée, ou avec `--no-ai`.
 
 ## Prévenir le monde extérieur — webhooks, Discord, Slack, flux
 
@@ -1427,6 +1451,18 @@ que tu as installé lui a pris ses fichiers.
 `{order.moved}` dit combien de fichiers ont changé de main. Zéro est une réponse ordinaire et
 utile : l'ordre a changé et rien sur le disque, donc les mods déplacés ne partagent aucun
 fichier.
+
+**Activer un modpack**, **Activer tous les mods** et **Appliquer une liste de mods** ont un champ
+**Ordre d'activation** (`placement` en script) : où vont les mods qu'ils activent.
+
+```bmms
+do modpack.enable(id: "night-pack", placement: "bottom")
+do mods.enableAll(placement: "keep")
+```
+
+`top` les fait gagner, `bottom` laisse gagner les vôtres, `keep` ne déplace rien de ce qui est déjà
+actif. Vide, c'est le choix du pack, puis le réglage **Activation groupée**. Activer un modpack
+écrit aussi `{order.moved}`. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
 
 !!! note "Les fichiers changent immédiatement"
 

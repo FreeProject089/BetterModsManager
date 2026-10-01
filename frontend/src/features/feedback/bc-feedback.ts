@@ -10,7 +10,7 @@
 // 2026-09-25, so an empty endpoint no longer falls back to anything.
 import { invoke } from '../../core/api.js';
 import { creatorProofFor } from '../../core/canvas-fingerprint.js';
-import { getLinks, bcApi } from '../../core/links-config.js';
+import { getLinks, bcApi, bcTestMode } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { recordNotification } from '../../ui/notification-center.js';
@@ -74,13 +74,18 @@ const CONFIG_TTL_MS = 10 * 60 * 1000;
 export function feedbackEndpoint(): string {
     const raw = (getLinks() as unknown as Record<string, unknown>).feedback_endpoint;
     if (raw === '' || raw === null) return '';
+    // Test mode points every BetterCommunity call at the test server, and the link status the
+    // dialog shows comes from there. Posting the report to the production URL in links.json
+    // meant "linked" on screen and an unknown sender at the receiving end, which answered
+    // "an e-mail is required" to someone the dialog had not given an e-mail field.
+    if (bcTestMode()) return `${bcApi()}/feedback/bmm`;
     if (typeof raw === 'string' && /^https?:\/\//.test(raw)) return raw.replace(/\/+$/, '');
     return `${bcApi()}/feedback/bmm`;
 }
 /** The web page where a linked user follows their reports. */
 export function feedbackWebUrl(): string {
     const raw = (getLinks() as unknown as Record<string, unknown>).feedback_web;
-    if (typeof raw === 'string' && /^https?:\/\//.test(raw)) return raw;
+    if (!bcTestMode() && typeof raw === 'string' && /^https?:\/\//.test(raw)) return raw;
     return `${bcApi().replace(/\/api$/, '')}/dashboard?s=reports`;
 }
 /** True when reports can be sent (the default); false = feedback_endpoint emptied, reports off. */
@@ -242,9 +247,9 @@ export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOf
         throw new FeedbackError('too_large', t('feedback.tooLarge'));
     }
     if (r.status === 422) {
-        const j = await r.json().catch(() => ({})) as { error?: string; minVersion?: string };
+        const j = await r.json().catch(() => ({})) as { error?: string; minVersion?: string; unverified?: boolean };
         if (j.error === 'version_too_old' || j.error === 'version_blocked') throw new FeedbackError('version', t('feedback.versionRefused').replace('{v}', j.minVersion || ''));
-        if (j.error === 'contact_required') throw new FeedbackError('contact_required', t('feedback.contactRequired'));
+        if (j.error === 'contact_required') throw new FeedbackError('contact_required', t('feedback.contactRequired'), 0, j);
         throw new FeedbackError('filtered', t('feedback.filtered'));
     }
     if (r.status === 503) {

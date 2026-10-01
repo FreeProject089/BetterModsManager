@@ -80,7 +80,8 @@ export function getModCardHTML(mod, ctx) {
 
         <div class="mod-info">
             <div style="display:flex;align-items:center;gap:8px">
-                <div class="mod-name" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(truncate(mod.name, 100))}</div>
+                <!-- Hover the name for the folder: the path used to be a third line on every card. -->
+                <div class="mod-name" data-tasky="${escAttr(escJs(mod.mod_folder_path || mod.name))}" data-tasky-icon="${mod.mod_folder_path ? 'folder' : 'package'}" data-tasky-literal="1">${escHtml(truncate(mod.name, 100))}</div>
                 <div class="sha-status-icon ${isShaInvalid ? 'invalid' : (isMissing ? 'missing' : 'verified')}" 
                      ${actAttrsStop('recalculateModSha', mod.id)}
                      data-tasky="${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}" data-tasky-icon="${isShaInvalid ? 'alert' : 'shield'}"
@@ -102,10 +103,6 @@ export function getModCardHTML(mod, ctx) {
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span class="mod-author-name">${escHtml(truncate(mod.author || '', 50))}</span>
                 </div>
-            </div>
-            <div class="mod-path-hint" data-tasky="${escAttr(mod.mod_folder_path || '')}" data-tasky-icon="folder" data-tasky-literal="1" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                ${escHtml(mod.mod_folder_path || '')}
             </div>
         </div>
 
@@ -210,19 +207,7 @@ export function getModCardHTML(mod, ctx) {
             </button>
         </div>
 
-        <div class="mod-status-pill ${mod.enabled ? 'enabled' : 'disabled'}" style="
-            font-size: 10px;
-            font-family: var(--font-mono);
-            padding: 3px 8px;
-            border-radius: 6px;
-            background: ${mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};
-            color: ${mod.enabled ? 'var(--success)' : 'var(--text-muted)'};
-            flex-shrink: 0;
-            width: 70px;
-            text-align: center;
-        ">
-            ${mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE')}
-        </div>
+        <!-- No ACTIVE / INACTIVE pill: the switch, the dot and the card's edge already say it. -->
 
         ${mod.shared_activations && mod.shared_activations.length > 1 ? `
         <div class="mod-shared-info" style="border-left:1px solid var(--border); padding-left:14px; margin-left:8px; align-self:stretch; display:flex; flex-direction:column; justify-content:center; gap:4px; max-width:240px; overflow-y:auto; max-height:80px; scrollbar-width: none;">

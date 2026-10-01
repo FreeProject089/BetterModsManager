@@ -363,6 +363,8 @@ Two shapes sit outside that rule:
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
 | `GET` | `/api/mods/order` | `mods.read` | — · the deployment order plus every contested file and who wins it | |
+| `GET` | `/api/mods/order/export` | `mods.read` | `?profileId=` · the order as a portable document: `doc`, `code` (`BMMORDER1.`), `link` (`bmm://order`), `text` | |
+| `GET` | `/api/mods/order/mode` | `mods.read` | — · where a bulk enable places its mods by default: `top`, `bottom` or `keep` | |
 | `GET` | `/api/schedules` | `schedules.read` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
 | `GET` | `/api/schedules/:id/runs` | `schedules.read` | — · the task’s run log, newest first: the last 50 runs, each step with its duration, status and error. Secrets are removed before a run is written. An id that names no task answers an empty list | ✓ |
@@ -373,6 +375,9 @@ Two shapes sit outside that rule:
 | `DELETE` | `/api/hook/:name` | `hooks.write` | — · forget one name | |
 | `POST` | `/api/content-id` | token | `kind`*, `doc`* · the id that says what a document IS rather than what this machine calls it. Takes the document, so it discloses nothing this install holds — which is why it is token-level and not behind a per-kind read scope |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId`, `reapply` · must be the same set of mods that are active; re-copies the files that change hands (`reapply: true`: every contested file) | |
+| `POST` | `/api/mods/order/import` | `mods.write` | `text`*, `profileId`, `dryRun` · a shared order (code, link, JSON or names): the active mods it names take its order in their slots; answers the plan and `moved` | |
+| `POST` | `/api/mods/order/arrange` | `mods.write` | `ids[]`*, `mode`, `profileId` · place a block of active mods (`top`, `bottom`, `keep`; none = the setting) | |
+| `POST` | `/api/mods/order/mode` | `mods.write` | `mode`* · set the default placement of a bulk enable | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · links a mod to the repos that can update it | |
@@ -386,7 +391,7 @@ Two shapes sit outside that rule:
 | Method | Path | Auth | Body | DL |
 |---|---|---|---|---|
 | `POST` | `/api/modpacks/create` | `modpacks.write` | `name`*, `mod_ids[]`, `source_profile_id`, `description`, `game_name`, `sr_link`, `multi_profile`, `skip_integrity_check`, `dependency_mode`, `mod_overrides[]` → `201` | ✓ |
-| `POST` | `/api/modpacks/enable` | `modpacks.write` | `modpack_id`* (legacy `profile_id` also accepted) | ✓ |
+| `POST` | `/api/modpacks/enable` | `modpacks.write` | `modpack_id`* (legacy `profile_id` also accepted), `order_mode` (`top`, `bottom`, `keep`; default: the pack's, then the setting) | ✓ |
 | `POST` | `/api/modpacks/disable` | `modpacks.write` | idem | ✓ |
 | `PUT` | `/api/modpacks/:id` | `modpacks.write` | any of the create fields | |
 | `DELETE` | `/api/modpacks/:id` | `modpacks.write` | — · irreversible, local mods kept | |
@@ -535,8 +540,8 @@ through. A note goes stale in silence; a check does not.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the 82 tools an AI client can call, and which ones need BMM open
-- [CLI reference](doc-page:reference/cli) — the same binary’s 74 subcommands, for a terminal or a `.bat`
+- [MCP server reference](doc-page:reference/mcp) — the 91 tools an AI client can call, and which ones need BMM open
+- [CLI reference](doc-page:reference/cli) — the same binary’s 77 subcommands, for a terminal or a `.bat`
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

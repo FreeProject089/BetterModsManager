@@ -334,6 +334,20 @@ async function handleDeepLink(urlStr, originIn = 'unknown') {
                         console.warn(`[BMM-API] modpack toggle: failed for ${modId}:`, err);
                     }
                 }
+                // Then the activation order, as the Modpacks screen does it: the link's
+                // `order` (top | bottom | keep), else the pack's own, else the setting.
+                // Its own `if (action === …)` so the link map (scripts/deeplink-map.mjs) knows
+                // `order` is read by modpack/enable only.
+                if (action === 'modpack/enable' && modIds.length) {
+                    const asked = (parsedUrl.searchParams.get('order') || '').trim().toLowerCase();
+                    const mode = ['top', 'bottom', 'keep'].includes(asked) ? asked : (mp?.order_mode || null);
+                    try {
+                        await invoke('mod_order_arrange', { profileId: null, ids: modIds, mode });
+                    }
+                    catch (err) {
+                        console.warn('[BMM-API] modpack order:', err);
+                    }
+                }
                 toast(isEnable
                     ? (t('plugins.deepLinkModpackEnabled') || 'Modpack activé.')
                     : (t('plugins.deepLinkModpackDisabled') || 'Modpack désactivé.'), 'success');
@@ -762,6 +776,20 @@ async function handleDeepLink(urlStr, originIn = 'unknown') {
             catch (e) {
                 toast(`${t('common.error')}: ${e}`, 'error');
             }
+            return;
+        }
+        // ── A shared activation order: bmm://order?d=BMMORDER1.… ──────────────
+        // Opens the order view with the import preview filled in. Nothing changes until the
+        // user takes the preview and presses "Apply order" there, so the gate lets it through
+        // without its own dialog (deeplink-guard.ts PROMPT_FREE).
+        if (action === 'order') {
+            const d = (parsedUrl.searchParams.get('d') || '').trim();
+            if (!d) {
+                toast(t('order.errEmpty'), 'error');
+                return;
+            }
+            const { openLoadOrder } = await import('../features/profiles/load-order.js');
+            void openLoadOrder(null, undefined, toast, { importText: d });
             return;
         }
         // ── Language: import a translation file by path ───────────────────

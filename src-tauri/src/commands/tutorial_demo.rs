@@ -165,6 +165,7 @@ pub fn tutorial_setup_demo(state: State<AppState>) -> Result<DemoSetupResult, St
             mods: vec![pack_ref(&m1), pack_ref(&m2)],
             sr_link: None,
             game_name: Some("Tutorial Sandbox".to_string()),
+            order_mode: None,
         };
 
         // Drop any stale demo entities before re-adding (defensive).

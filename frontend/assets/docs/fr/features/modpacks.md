@@ -51,10 +51,22 @@ souvent ; laisse-la coupée quand la justesse compte.
 ## L'ordre dans un pack
 
 La liste d'un pack est un **ordre** : les flèches sur chaque mod de l'éditeur le montent ou le
-descendent. Quand le pack est appliqué, ses mods sont activés puis placés **en haut** de l'ordre
-d'activation du profil, dans la séquence du pack, en un seul bloc — là où deux mods du pack
-partagent un fichier, celui plus bas dans le pack gagne, et le pack gagne ce qu'il partage avec les
-mods que le profil avait déjà. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
+descendent. Quand le pack est appliqué, ses mods sont activés puis placés dans l'ordre
+d'activation du profil en un seul bloc, dans la séquence du pack : là où deux mods du pack
+partagent un fichier, celui plus bas dans le pack gagne.
+
+L'endroit où va le bloc, c'est le champ **Ordre d'activation** du pack dans l'éditeur :
+
+| Choix | Effet |
+|---|---|
+| **Par défaut (réglage)** | Le réglage **Activation groupée** de la vue de l'ordre (ils gagnent, sauf si vous l'avez changé). |
+| **Ils gagnent (placés en dernier)** | Le pack gagne ce qu'il partage avec les mods que le profil avait déjà. |
+| **Les vôtres gagnent (placés en premier)** | Les mods que vous aviez continuent de gagner. |
+| **Rien ne bouge** | Les mods déjà actifs gardent leur place. |
+
+Le choix voyage avec le pack (export `.bmp`, listes `.mm`, dépôts). Une tâche planifiée ou un lien
+`bmm://modpack/enable?order=` peut le remplacer le temps d'une exécution. Voir
+[Ordre d'activation](doc-page:how-it-works/load-order).
 
 ## Le partager : tout repose sur le hash
 

@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 74
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 77
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-74 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+77 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -68,7 +68,7 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 | `enable` | `<mod-id>`\* | Active un mod dans le profil actif |
 | `disable` | `<mod-id>`\* | Désactive un mod |
 | `sync` | — | Applique le profil actif : déploie ce qui est activé, retire le reste |
-| `mod-order` | `--set`, `--reapply` (`false`), `--profile` | Affiche l'ordre d'activation (le dernier mod gagne un fichier partagé) et chaque fichier disputé. `--set a,b,c` réordonne : les mêmes mods que ceux actifs, le premier appliqué en premier ; les fichiers qui changent de main sont recopiés. `--reapply` recopie le gagnant de chaque fichier disputé _(app ouverte)_ |
+| `mod-order` | `--set`, `--reapply` (`false`), `--export [code\|link\|text\|json]`, `--import <ordre>`, `--dry-run`, `--arrange a,b`, `--mode`, `--bulk-mode`, `--profile` | Affiche l'ordre d'activation (le dernier mod gagne un fichier partagé) et chaque fichier disputé. `--set a,b,c` réordonne : les mêmes mods que ceux actifs, le premier appliqué en premier ; les fichiers qui changent de main sont recopiés. `--reapply` recopie le gagnant de chaque fichier disputé. `--export` affiche un ordre portable à partager ; `--import` prend un code, un lien `bmm://order`, un fichier ou `-` pour stdin (`--dry-run` : le plan seulement). `--arrange` place des mods actifs en un bloc selon `--mode` (`top`, `bottom`, `keep`) ; `--mode` seul fixe le défaut d'une activation groupée, `--bulk-mode` l'affiche _(app ouverte)_ |
 
 ### Dépôts serveur
 
@@ -206,12 +206,15 @@ tourne ; ici la ligne et la colonne sont nommées. Aucune des deux n'a besoin de
 | Commande | Arguments | Ce que ça fait |
 |---|---|---|
 | `ai-status` | — | Les réglages de l'IA optionnelle : interrupteur principal, fournisseur, quelles fonctions peuvent passer par le réseau et pourquoi pas, où sont stockées les clés (jamais les clés) |
-| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Suggestions de métadonnées pour un mod, tirées de ses fichiers, plus le fournisseur choisi seulement si l'IA est activée. `--offline` n'appelle jamais de fournisseur ; `--draft` demande aussi un brouillon de description à l'API externe. **N'écrit rien** |
+| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Suggestions de métadonnées pour un mod, tirées de ses fichiers, plus le fournisseur choisi seulement si l'IA est activée. `--offline` n'appelle jamais de fournisseur ; `--draft` demande aussi un brouillon de description au générateur configuré (local ou distant), vérifié avant d'être affiché. **N'écrit rien** |
 | `ai-apply` | `<mod-id>`\*, `--fields`\* | Écrit les champs choisis, donnés en objet JSON (`{"description":"…","tags":["<id de tag>"]}`) ; uniquement nom, version, auteur, description, tags (ids existants, 3 par mod au plus) et liens |
-| `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--json` | « Demander à Laya », hors ligne : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent à une question, en liste lisible (`--json` pour le résultat structuré). `--no-laya` = recherche par mots-clés seulement, quels que soient les réglages |
+| `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--write`, `--json` | « Demander à Laya », hors ligne : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent à une question, en liste lisible (`--json` pour le résultat structuré). `--no-laya` = recherche par mots-clés seulement, quels que soient les réglages ; `--write` formule aussi une réponse avec le générateur configuré, à partir des sources trouvées, chaque phrase citée |
+| `ai-analyze` | `<mod-ids>` (optionnel, à répéter), `--laya`, `--limit` [200] | Des suggestions pour tous les mods (ou ceux nommés) en une passe, en JSON. Fichiers seulement sauf `--laya` ; jamais de brouillon. **N'écrit rien** |
+| `ai-classify` | `<text>`\*, `--label`\* (à répéter, `id` ou `id=sens`) | Quel libellé convient au texte, avec Laya (intégré ou votre laya-serve), du meilleur au moins bon, plus `none` |
 | `ai-install` | — | Télécharge, vérifie et installe le paquet du modèle Laya intégré (environ 327 Mo), avec une ligne en direct : étape, pourcentage, débit, temps restant, miroir |
 | `ai-remove` | — | Supprime le paquet du modèle téléchargé (pas la copie de l'installateur) |
 | `ai-test` | — | Classe un exemple fixe avec le modèle installé et affiche les réponses et les durées ; code de sortie non nul si les réponses ne sont pas celles attendues |
+| `ai-api` | `<action>`\* (start, stop, status, rotate), `--port` | L'API Laya locale (désactivée par défaut). `start` l'active et affiche une fois un nouveau jeton s'il n'y en a pas ; `rotate` affiche une fois un nouveau jeton (l'ancien ne marche plus) ; `status` n'affiche jamais le jeton. C'est l'app BMM qui la sert, seulement si l'IA est activée |
 
 ---
 
@@ -232,7 +235,7 @@ compiler.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 82 outils MCP
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 91 outils MCP
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — ce que `call` appelle
 - [Référence BMMScript](doc-page:features/bmmscript-reference.fr) — le langage que lit `bmms-compile`
 - [Référence des actions](doc-page:reference/actions.fr) — ce que liste `actions`

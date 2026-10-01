@@ -4491,6 +4491,7 @@ mod manifest_tests {
             skip_integrity_check: false,
             sr_link: None,
             game_name: None,
+            order_mode: None,
             mods: refs.iter().map(|(bmm_id, folder)| crate::models::modpack::ModpackModRef {
                 mod_id: bmm_id.to_string(),
                 mod_name: folder.to_string(),

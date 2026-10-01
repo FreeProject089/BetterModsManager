@@ -2,7 +2,7 @@
 
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
-running it with a subcommand instead of `serve` gives you 74 commands from a terminal, a
+running it with a subcommand instead of `serve` gives you 77 commands from a terminal, a
 `.bat`, a cron job or a CI step.
 
 ```bash
@@ -39,7 +39,7 @@ bmm-mcp-server api --reveal
 
 ## The commands
 
-74 of them. `*` marks a required argument; a value in brackets is the default. Positional
+77 of them. `*` marks a required argument; a value in brackets is the default. Positional
 arguments are written `<like-this>`, flags `--like-this`.
 
 ### Getting your bearings
@@ -67,7 +67,7 @@ arguments are written `<like-this>`, flags `--like-this`.
 | `enable` | `<mod-id>`\* | Enable a mod in the active profile |
 | `disable` | `<mod-id>`\* | Disable a mod |
 | `sync` | — | Apply the active profile: deploy what is enabled, remove what is not |
-| `mod-order` | `--set`, `--reapply` (`false`), `--profile` | Print the activation order (the last mod wins a shared file) and every contested file. `--set a,b,c` reorders: the same mods that are active, first applied first; the files that change hands are re-copied. `--reapply` re-copies every contested file's winner _(running app)_ |
+| `mod-order` | `--set`, `--reapply` (`false`), `--export [code\|link\|text\|json]`, `--import <order>`, `--dry-run`, `--arrange a,b`, `--mode`, `--bulk-mode`, `--profile` | Print the activation order (the last mod wins a shared file) and every contested file. `--set a,b,c` reorders: the same mods that are active, first applied first; the files that change hands are re-copied. `--reapply` re-copies every contested file's winner. `--export` prints a portable order to share; `--import` takes a code, a `bmm://order` link, a file or `-` for stdin (`--dry-run`: the plan only). `--arrange` places active mods as one block by `--mode` (`top`, `bottom`, `keep`); `--mode` alone sets the default of a bulk enable, `--bulk-mode` prints it _(running app)_ |
 
 ### Server repos
 
@@ -205,12 +205,15 @@ and the column instead. Neither command needs the app open.
 | Command | Arguments | What it does |
 |---|---|---|
 | `ai-status` | — | The optional-AI settings: master switch, provider, which features may reach the network and why not, where keys are stored (never the keys) |
-| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Metadata suggestions for one mod from its own files, plus the chosen provider only if AI is on. `--offline` never calls a provider; `--draft` also asks the external API for a description draft. **Writes nothing** |
+| `ai-suggest` | `<mod-id>`\*, `--offline`, `--draft` | Metadata suggestions for one mod from its own files, plus the chosen provider only if AI is on. `--offline` never calls a provider; `--draft` also asks the configured generator (local or remote) for a description draft, checked before it is shown. **Writes nothing** |
 | `ai-apply` | `<mod-id>`\*, `--fields`\* | Writes the chosen fields, given as a JSON object (`{"description":"…","tags":["<tag id>"]}`); name, version, author, description, tags (existing ids, 3 per mod at most) and links only |
-| `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--json` | « Ask Laya », offline: the documentation, settings, commands, mods, files and conflicts that answer a question, as a readable list (`--json` for the structured result). `--no-laya` = keyword retrieval only, whatever the settings |
+| `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--write`, `--json` | « Ask Laya », offline: the documentation, settings, commands, mods, files and conflicts that answer a question, as a readable list (`--json` for the structured result). `--no-laya` = keyword retrieval only, whatever the settings; `--write` also words an answer with the configured generator from the sources found, each sentence cited |
+| `ai-analyze` | `<mod-ids>` (optional, repeat), `--laya`, `--limit` [200] | Suggestions for every mod (or the ones named) in one pass, as JSON. Files only unless `--laya`; never a draft. **Writes nothing** |
+| `ai-classify` | `<text>`\*, `--label`\* (repeat, `id` or `id=meaning`) | Which label fits the text, with Laya (embedded or your own laya-serve), best first, plus `none` |
 | `ai-install` | — | Downloads, verifies and installs the built-in Laya model pack (about 327 MB), with a live line: phase, percent, speed, time left, mirror |
 | `ai-remove` | — | Removes the downloaded model pack (not the installer's copy) |
 | `ai-test` | — | Classifies a fixed sample with the installed model and prints the answers and timings; exits non-zero when the answers are not the expected ones |
+| `ai-api` | `<action>`\* (start, stop, status, rotate), `--port` | The local Laya API (off by default). `start` turns it on and prints a new token once if there is none; `rotate` prints a new token once (the old one stops working); `status` never prints the token. The BMM app serves it, only while AI is on |
 
 ---
 
@@ -229,7 +232,7 @@ sixty-eighth, and nothing about a wrong reference page fails to compile.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 82 MCP tools it exposes
+- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 91 MCP tools it exposes
 - [Local API &amp; deeplinks](doc-page:reference/api) — what `call` is calling
 - [BMMScript reference](doc-page:features/bmmscript-reference) — the language `bmms-compile` reads
 - [Action reference](doc-page:reference/actions) — what `actions` lists

@@ -6,8 +6,10 @@
 //!
 //! THE RULES
 //!   * Two switches. Telemetry consent (`analytics_consent == Some(true)`) AND `live_errors ==
-//!     Some(true)`. The second one's first value is decided once: ON for someone who had
-//!     already accepted telemetry, OFF for everyone else (`migrate_setting`). Turning telemetry
+//!     Some(true)`. The second one FOLLOWS telemetry on the way up: turning telemetry on turns
+//!     it on (analytics.rs `live_after_consent`), unless the consent dialog's "errors" category
+//!     said otherwise; it can still be turned off on its own. Someone who had already accepted
+//!     telemetry before this switch existed gets it on (`migrate_setting`). Turning telemetry
 //!     off stops this and wipes the local queue.
 //!   * Redacted before it leaves: every secret BMM stores (data file + BetterCommunity key,
 //!     `report_redact::Redactor`, the crash-zip pass), then personal data (user-folder names,
@@ -49,10 +51,11 @@ fn now_ms() -> i64 {
 }
 
 // ── The two switches ────────────────────────────────────────────────────────────────────────
-/// The first value of `live_errors`, decided once: on for someone who had already said yes to
-/// telemetry, off for anyone else. An explicit choice is never touched.
+/// The first value of `live_errors` for an install that predates it: on for someone who had
+/// already said yes to telemetry; still undecided for anyone else (it is decided the day they
+/// turn telemetry on, see analytics.rs `live_after_consent`). An explicit choice is never touched.
 pub fn migrate_setting(consent: Option<bool>, live: Option<bool>) -> Option<bool> {
-    live.or(Some(consent == Some(true)))
+    live.or(if consent == Some(true) { Some(true) } else { None })
 }
 /// Is anything sent? Both switches, explicitly on.
 pub fn effective(consent: Option<bool>, live: Option<bool>) -> bool {
@@ -520,7 +523,9 @@ pub fn live_issues_init(state: State<AppState>, app_handle: AppHandle, endpoint:
     } else {
         disable_and_wipe();
     }
-    status_doc()
+    let mut v = status_doc();
+    v["setting"] = json!(live);
+    v
 }
 
 #[tauri::command]
@@ -577,8 +582,8 @@ mod tests {
     #[test]
     fn switch_defaults_follow_the_prior_consent_once() {
         assert_eq!(migrate_setting(Some(true), None), Some(true), "already consented → on");
-        assert_eq!(migrate_setting(None, None), Some(false), "never asked → off");
-        assert_eq!(migrate_setting(Some(false), None), Some(false));
+        assert_eq!(migrate_setting(None, None), None, "never asked → undecided (on with telemetry)");
+        assert_eq!(migrate_setting(Some(false), None), None);
         assert_eq!(migrate_setting(Some(true), Some(false)), Some(false), "an explicit choice is kept");
         assert!(effective(Some(true), Some(true)));
         assert!(!effective(Some(false), Some(true)), "no telemetry consent → nothing, whatever the switch");

@@ -25,6 +25,7 @@
     "features/storage",
     "features/privacy-telemetry",
     "features/ai",
+    "features/ai-api",
     "features/themes",
     "features/making-themes",
     "how-it-works/index",
@@ -42,6 +43,7 @@
     "how-it-works/codebase-maps",
     "how-it-works/extending",
     "how-it-works/security",
+    "how-it-works/ai-security",
     "how-it-works/ci-cd",
     "reference/api",
     "reference/content-ids",
@@ -154,7 +156,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 447,
+      "words": 500,
       "diagrams": 0,
       "fr": true
     },
@@ -184,7 +186,7 @@
         "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
         "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
       },
-      "words": 499,
+      "words": 523,
       "diagrams": 0,
       "fr": true
     },
@@ -229,7 +231,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 10538,
+      "words": 10779,
       "diagrams": 0,
       "fr": true
     },
@@ -256,10 +258,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "110 actions · 40 conditions · 36 values · 8 loop sources",
-        "fr": "110 actions · 40 conditions · 36 valeurs · 8 sources de boucle"
+        "en": "113 actions · 41 conditions · 39 values · 8 loop sources",
+        "fr": "113 actions · 41 conditions · 39 valeurs · 8 sources de boucle"
       },
-      "words": 847,
+      "words": 494,
       "diagrams": 0,
       "fr": true
     },
@@ -394,7 +396,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 1506,
+      "words": 1532,
       "diagrams": 0,
       "fr": true
     },
@@ -409,7 +411,7 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 876,
+      "words": 1043,
       "diagrams": 3,
       "fr": true
     },
@@ -424,8 +426,23 @@
         "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
         "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 2007,
+      "words": 2584,
       "diagrams": 1,
+      "fr": true
+    },
+    {
+      "path": "features/ai-api",
+      "section": "features",
+      "title": {
+        "en": "Local Laya API",
+        "fr": "API Laya locale"
+      },
+      "summary": {
+        "en": "Programs on your PC can ask the built-in Laya the same questions as laya-serve: sort a text into labels, answer yes or no, score a level. Off by default.",
+        "fr": "Les programmes de ton PC peuvent poser à la Laya intégrée les mêmes questions qu'à laya-serve : classer un texte dans des étiquettes, répondre oui ou non,…"
+      },
+      "words": 271,
+      "diagrams": 0,
       "fr": true
     },
     {
@@ -559,7 +576,7 @@
         "en": "Two active mods that ship the same file do not merge: BMM copies files, so one of them is what the game reads.",
         "fr": "Deux mods actifs qui fournissent le même fichier ne fusionnent pas : BMM copie des fichiers, donc l'un des deux est celui que le jeu lit."
       },
-      "words": 754,
+      "words": 1200,
       "diagrams": 1,
       "fr": true
     },
@@ -681,6 +698,21 @@
       },
       "words": 1120,
       "diagrams": 3,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/ai-security",
+      "section": "how-it-works",
+      "title": {
+        "en": "AI security",
+        "fr": "Sécurité de l'IA"
+      },
+      "summary": {
+        "en": "Laya is optional, and most of it runs on your PC. It still reads text BMM does not control (a mod's readme, a report, a file a task names) and some of it can…",
+        "fr": "Laya est optionnelle, et l'essentiel tourne sur ton PC. Elle lit pourtant du texte que BMM ne contrôle pas (le readme d'un mod, un rapport, un fichier qu'une…"
+      },
+      "words": 693,
+      "diagrams": 0,
       "fr": true
     },
     {

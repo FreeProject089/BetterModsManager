@@ -46,7 +46,7 @@
 
 /* ── Live: charts ───────────────────────────────────────────────────────────────────────── */
 .pf-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 12px; }
-.pf-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--bmm-text-secondary); }
+.pf-legend { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 12px; color: var(--bmm-text-secondary); }
 .pf-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .pf-legend b { color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
 .pf-canvas-wrap { position: relative; height: 240px; min-width: 0; }
@@ -166,4 +166,28 @@
     .pf-charts, .pf-res-charts, .pf-ops { grid-template-columns: 1fr; }
     .pf-canvas-wrap { height: 200px; }
 }
+/* ── Words, not shouting: labels in sentence case inside the benchmark (the shell's
+   .bms-label is small caps for dense forms; here it headed every card in capitals). ──────── */
+#modal-advanced-perf-overlay .bms-label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 700; }
+#modal-advanced-perf-overlay .pf-table th { text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+
+/* ── Live: interaction (legend toggles, drag-zoom band, inspected moment) ───────────────── */
+.pf-leg { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; margin: -2px 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+.pf-leg:hover { background: var(--bmm-s06); color: var(--bmm-text-primary); }
+.pf-leg:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.pf-leg[aria-pressed="false"] { opacity: 0.45; }
+.pf-leg[aria-pressed="false"] .pf-swatch { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c, var(--bmm-accent)); }
+.pf-leg[aria-pressed="false"] b { text-decoration: line-through; }
+.pf-sel { position: absolute; top: 10px; bottom: 22px; z-index: 1; pointer-events: none; border-radius: 4px; background: var(--bmm-accent-dim); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
+.pf-sel[hidden] { display: none; }
+.pf-inspect { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 12px; border-radius: 10px; background: var(--bmm-s04); border: 1px solid var(--bmm-border); font-size: 12.5px; color: var(--bmm-text-secondary); }
+.pf-inspect[hidden] { display: none; }
+.pf-inspect > span { display: inline-flex; align-items: center; gap: 6px; }
+.pf-inspect b { color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; }
+.pf-hint { margin: 0; }
+.pf-cmp-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); }
+.pf-cmp-pick select { height: 30px; padding: 0 8px; font: inherit; color: var(--bmm-text-primary); background: var(--bmm-s04); border: 1px solid var(--bmm-border-hover); border-radius: var(--bmm-radius-input); }
 .pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The in-app mini monitor (the browser fallback of the mini monitor window): words, not capitals. */
+#bmm-mini-monitor .bms-label { text-transform: none; letter-spacing: 0; font-size: 12px; }

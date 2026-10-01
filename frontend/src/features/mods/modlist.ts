@@ -16,6 +16,14 @@ import { renderTagChip } from '../../ui/icon-pack.js';
 
 let lastImportedModlistJson = null;
 
+/** A cancel token for one export or install run (commands/modlist.rs `runs`). The Rust side
+ *  stops THAT run, and the governor tickets doing its copy or download with it. */
+function newRunId(): string {
+    try { return crypto.randomUUID(); } catch { return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`; }
+}
+/** The install run in progress, if any: what the Cancel button stops. */
+let _installRun: { id: string; cancelled: boolean } | null = null;
+
 // Re-exporting toast from app.js for now or until moved to a better place
 import { toast, toastSaved } from '../../ui/app.js';
 
@@ -232,13 +240,20 @@ export function initModlist() {
 
         let unlisten: (() => void) | null = null;
         let wasCancelled = false;
+        const runId = newRunId();
 
-        // In-overlay abort button calls the Rust cancel command
-        const onAbort = async () => {
+        // Cancel: the progress closes NOW and says so once; the Rust side stops this run (its
+        // file walk and any hash in progress) in the background. The Save button stays off
+        // until that run has really returned, so a second export cannot overlap the first.
+        const onAbort = () => {
+            if (wasCancelled) return;
             wasCancelled = true;
-            try { await invoke('cancel_export_modlist'); } catch { /* ignore */ }
+            void invoke('cancel_export_modlist', { runId }).catch(() => { /* already over */ });
+            if (progressOverlay) progressOverlay.style.display = 'none';
+            cancelExport.style.display = '';
+            toast(t('mm.exportCancelled'), 'info');
         };
-        abortExportBtn?.addEventListener('click', onAbort, { once: true });
+        abortExportBtn?.addEventListener('click', onAbort);
 
         try {
             unlisten = await (window as any).__TAURI__.event.listen('bmm://mm-export-progress', (e: any) => {
@@ -250,22 +265,18 @@ export function initModlist() {
                 if (progressLabel) progressLabel.textContent = done ? '' : (mod_name || '');
             });
 
-            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes, creds });
+            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes, creds, runId });
 
-            if (wasCancelled) {
-                toast(t('mm.exportCancelled') || 'Export annulé', 'info');
-            } else {
+            if (!wasCancelled) {
                 toastSaved(t('mm.exportSuccess'));
                 dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
                 exportCard.style.display = 'none';
             }
         } catch (err) {
-            if (wasCancelled) {
-                toast(t('mm.exportCancelled') || 'Export annulé', 'info');
-            } else {
-                toast(t('mm.exportError').replace('{err}', err), 'error');
-            }
+            // Cancelled: already said when the button was pressed.
+            if (!wasCancelled) toast(t('mm.exportError').replace('{err}', err), 'error');
         } finally {
+            abortExportBtn?.removeEventListener('click', onAbort);
             unlisten?.();
             resetUI();
         }
@@ -377,13 +388,20 @@ export function initModlist() {
         const existingResults = previewCard.querySelectorAll('.install-results-container');
         existingResults.forEach(r => r.remove());
 
+        const run = { id: newRunId(), cancelled: false };
+        _installRun = run;
         try {
             const githubToken = await getGithubPat();
             const results = await invoke('install_from_modlist', {
                 modlistJson: lastImportedModlistJson,
                 createProfile: createProfile,
-                githubToken: githubToken
+                githubToken: githubToken,
+                runId: run.id,
             });
+            // Cancelled while the last step was finishing: what it did is undone on the Rust
+            // side only when the cancel landed in time, so the library is re-read below and
+            // nothing is reported as a success.
+            if (run.cancelled) throw new Error('cancelled');
 
             // Final results summary
             const resultHtml = results.map(r => {
@@ -414,16 +432,25 @@ export function initModlist() {
                 await refreshMods();
             }
         } catch (err) {
-            if (err.includes('annulée') || err.includes('cancelled')) {
+            const msg = String((err as any)?.message ?? err);
+            if (run.cancelled) {
+                // Said when Cancel was pressed. The Rust side has now removed what this run
+                // added: show the library as it is.
+                await refreshMods().catch(() => {});
+            } else if (msg.includes('annulée') || msg.includes('cancelled')) {
+                // Cancelled from elsewhere (the resources dashboard).
                 toast(t('mm.installCancelled'), 'info');
+                await refreshMods().catch(() => {});
             } else {
-                toast(t('mm.installError').replace('{err}', err), 'error');
+                toast(t('mm.installError').replace('{err}', msg), 'error');
             }
         } finally {
+            if (_installRun === run) _installRun = null;
             installBtn.disabled = false;
             installBtn.classList.remove('loading');
             installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection') || t('mm.installAll')}`;
-            if (progressOverlay) {
+            // Closed when Cancel was pressed; otherwise left up briefly so the last state reads.
+            if (progressOverlay && !run.cancelled) {
                 setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
             }
         }
@@ -441,19 +468,23 @@ export function initModlist() {
         }
     });
 
-    // Cancel installation
-    previewCard.addEventListener('click', async (e) => {
+    // Cancel installation: no second question, no waiting. The progress closes at once, the
+    // Rust side stops this run (the copy or download in progress stops at its next block) and
+    // takes back what it added; the Install button reads "Stopping" until that is done, so a
+    // new install cannot start on top of the old one.
+    previewCard.addEventListener('click', (e) => {
         const btn = e.target.closest('#btn-cancel-import-dl');
-        if (btn) {
-            try {
-                await invoke('cancel_install_from_modlist');
-                btn.disabled = true;
-                btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('prof.cancel')}...`;
-                toast(t('mm.cancelRequested'), 'info');
-            } catch (err) {
-                toast(t('mm.cancelError').replace('{err}', err), 'error');
-            }
-        }
+        if (!btn || !_installRun || _installRun.cancelled) return;
+        const run = _installRun;
+        run.cancelled = true;
+        btn.disabled = true;
+        const overlay = document.getElementById('imported-progress-overlay');
+        if (overlay) overlay.style.display = 'none';
+        const ib = document.getElementById('btn-install-from-mm');
+        if (ib) ib.textContent = t('mm.stopping');
+        toast(t('mm.installCancelled'), 'info');
+        invoke('cancel_install_from_modlist', { runId: run.id })
+            .catch((err) => toast(t('mm.cancelError').replace('{err}', String(err)), 'error'));
     });
 
     // Listen for progress events.
@@ -767,6 +798,8 @@ export interface ApplyListResult {
     missing: string[];
     /** Mods turned off because `exact` was asked for and the list does not name them. */
     disabled: number;
+    /** Set when the mods are on but the activation order could not be placed. */
+    orderError?: string;
 }
 
 /**
@@ -791,6 +824,10 @@ export async function applyModList(opts: {
     install?: boolean;
     exact?: boolean;
     passphrase?: string;
+    /** Where the newly enabled mods go in the activation order: top | bottom | keep; empty =
+     *  the setting. Unless it is `keep`, a list that carries its author's order
+     *  (`load_order`) then puts the mods it names in that order (commands/order_share.rs). */
+    orderMode?: string;
 }): Promise<ApplyListResult> {
     let path = opts.path || '';
     if (!path && opts.url) {
@@ -829,6 +866,7 @@ export async function applyModList(opts: {
         mods = after;
     }
 
+    const newly: string[] = [];
     for (const m of wanted) {
         const local = has(m);
         if (!local) { out.missing.push(String(m.name || m.id)); continue; }
@@ -836,6 +874,7 @@ export async function applyModList(opts: {
         try {
             await invoke('enable_mod', { modId: local.id, bypassSha: false });
             out.enabled += 1;
+            newly.push(local.id);
         } catch { out.missing.push(String(m.name || m.id)); }
     }
 
@@ -845,6 +884,20 @@ export async function applyModList(opts: {
             if (!m.enabled || keep.has(m.id)) continue;
             try { await invoke('disable_mod', { modId: m.id }); out.disabled += 1; } catch { /* leave it on */ }
         }
+    }
+
+    // The order, once the set is final: the new mods placed by the mode, then the list's own
+    // order over the mods it names. An order that cannot be placed leaves the mods on; it is
+    // reported, not fatal.
+    const mode = opts.orderMode || null;
+    try {
+        if (newly.length) await invoke('mod_order_arrange', { profileId: null, ids: newly, mode });
+        const effective = mode || await invoke('order_bulk_mode_get').catch(() => 'top');
+        if (list?.load_order && effective !== 'keep') {
+            await invoke('mod_order_import', { profileId: null, text: JSON.stringify(list.load_order) });
+        }
+    } catch (e) {
+        out.orderError = String(e);
     }
 
     if (window._refreshModsFn) window._refreshModsFn(true);

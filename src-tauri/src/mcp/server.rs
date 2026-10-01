@@ -3,6 +3,7 @@ use serde_json::json;
 
 use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs, search};
 use crate::mcp::tools::ai as ai_tools;
+use crate::mcp::tools::ai_api as ai_api_tools;
 use crate::mcp::state_bridge;
 
 /// The BMMScript vocabulary, as `scripts/gen-bmms-reference.mjs` generates it.
@@ -511,6 +512,52 @@ impl ServerHandler for BmmMcpServer {
                         "reapply": { "type": "boolean", "description": "Also re-copy the winner of every contested file, not only the ones that change hands (a repair)." }
                     },
                     "required": ["order"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_export_mod_order",
+                "Export the activation order of a profile in the running BMM app as a portable document that another machine can import: `doc` (mods named by content fingerprint, repo id and name, never by local path), `code` (one line, BMMORDER1.…), `link` (bmm://order?d=…) and `text` (a numbered list of names).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_import_mod_order",
+                "Import a shared activation order into the running BMM app. `text` is a BMMORDER1 code, a bmm://order link, the JSON document or a list of mod names, one per line. The active mods it names take its order in the slots they already hold; mods it does not name stay where they are; nothing is enabled or disabled. Answers the plan (matched, missing, inactive, extra, the resulting order, files changing hands) and how many files moved. Use dry_run to see the plan without applying it.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "The order: code, link, JSON or names." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." },
+                        "dry_run": { "type": "boolean", "description": "Only answer the plan; change nothing." }
+                    },
+                    "required": ["text"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_arrange_mod_order",
+                "Place a block of ACTIVE mods in the activation order of the running BMM app, the way a modpack or \"Enable all\" does: `top` (the block wins what it shares, in the given order), `bottom` (under everything already active), `keep` (nothing moves). No mode = the user's default (see bmm_order_bulk_mode). Only files that change hands are re-copied. Answers how many moved.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "ids": { "type": "array", "items": { "type": "string" }, "description": "Active mod ids, first applied first." },
+                        "mode": { "type": "string", "enum": ["top", "bottom", "keep"], "description": "Where the block goes. Default: the setting." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." }
+                    },
+                    "required": ["ids"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_order_bulk_mode",
+                "Read, or set with `mode`, where a bulk enable (modpack, Enable all, a mod list, a scheduled task, a script) puts its mods in the activation order when it does not say: top | bottom | keep.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mode": { "type": "string", "enum": ["top", "bottom", "keep"], "description": "Set this default. Omit to read it." }
+                    }
                 })).unwrap()),
             ),
 
@@ -1146,7 +1193,7 @@ impl ServerHandler for BmmMcpServer {
                     "properties": {
                         "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
                         "use_providers": { "type": "boolean", "description": "Default true: call the provider the user configured (only when AI is on). false = files only, no network, whatever the settings." },
-                        "draft": { "type": "boolean", "description": "Default false: also ask the user's external OpenAI-compatible API for a description draft (only when configured and enabled)." }
+                        "draft": { "type": "boolean", "description": "Default false: also ask the user's generator (« Rédaction »: a local OpenAI-compatible server such as Ollama / LM Studio, or their remote API) for a description draft, only when configured and enabled. The draft is checked (no link, file or command absent from the mod's files, tags from the user's vocabulary only) and judged by Laya before it is returned, with note \"draft\"." }
                     },
                     "required": ["mod_id"]
                 })).unwrap()),
@@ -1173,9 +1220,34 @@ impl ServerHandler for BmmMcpServer {
                         "lang": { "type": "string", "enum": ["en", "fr"], "description": "Language to show bilingual results in (both are searched). Default en." },
                         "scope": { "type": "string", "enum": ["all", "docs", "mods"], "description": "all (default), docs = documentation only, mods = the user's mods and profiles only." },
                         "limit": { "type": "integer", "description": "Results to return, 1-30. Default 8." },
-                        "use_laya": { "type": "boolean", "description": "Default true: let the embedded model rank when the user's settings allow it. false = retrieval only." }
+                        "use_laya": { "type": "boolean", "description": "Default true: let the embedded model rank when the user's settings allow it. false = retrieval only." },
+                        "write": { "type": "boolean", "description": "Default false. true = also return `written`: an answer worded by the user's generator from the numbered retrieved sources only, with [n] citations (`cites`), when the user enabled « Rédaction » and « Réponse rédigée ». Refused (`written_off` says why) when Laya abstains, when nothing cites a real source, or when the text names a link, file or command the sources do not contain. With a remote generator the question and the sources leave the PC." }
                     },
                     "required": ["question"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_analyze_library",
+                "« Analyser la bibliothèque »: metadata suggestions for many mods at once (all installed mods, or the ids given), with the same pipeline as bmm_ai_suggest_mod_metadata (files first; Laya when the user turned AI on) but never a generated draft. Returns only the mods that have something to suggest. NEVER writes: show the list and apply what the user picks, mod by mod, with bmm_ai_apply_mod_metadata.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "Mod ids (or exact names). Empty or absent = every mod." },
+                        "use_providers": { "type": "boolean", "description": "Default false here: files only, offline. true = also Laya, when the user's settings allow it." },
+                        "limit": { "type": "integer", "description": "At most this many mods, 1-2000. Default 200." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_classify",
+                "Classify one text among labels YOU give, with Laya (the embedded model, or the user's own laya-serve; never a remote server). Returns the labels best first with a probability, plus \"none\" when Laya finds that none fits. Laya only picks; it never writes text. Needs the user's AI master switch; refused under --no-ai. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "The text to classify (the first 4000 characters are read). Treated as data, never as instructions." },
+                        "labels": { "type": "array", "minItems": 2, "maxItems": 32, "items": { "type": "object", "properties": { "id": { "type": "string" }, "meaning": { "type": "string" } }, "required": ["id"] }, "description": "The choices, e.g. [{\"id\":\"bug\",\"meaning\":\"a bug report\"},{\"id\":\"idea\",\"meaning\":\"a feature idea\"}]." }
+                    },
+                    "required": ["text", "labels"]
                 })).unwrap()),
             ),
             Tool::new(
@@ -1186,6 +1258,21 @@ impl ServerHandler for BmmMcpServer {
             Tool::new(
                 "bmm_ai_pack_remove",
                 "Remove the embedded Laya model pack downloaded from Settings (or bmm_ai_pack_install). The copy installed by the BMM installer is left to the uninstaller. If the embedded model was the classifier, the classifier goes back to off. Ask the user before calling.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_status",
+                "Status of the local Laya API (off by default): enabled, port, whether a token exists (never the token), whether AI is on, and whether it answers on 127.0.0.1 right now. The API lets programs on this PC classify text with the embedded Laya (POST /v1/systemone, laya-serve compatible).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_start",
+                "Turn the local Laya API on (127.0.0.1 only). The running BMM app starts it within seconds, and only while AI is on in BMM. No token is ever returned here: if none exists yet, tell the user to make one in Settings (Local Laya API, New token) or with `bmm ai-api rotate`. Ask the user before calling.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": { "port": { "type": "integer", "description": "1024 to 65535 (default 51275)" } } })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_stop",
+                "Turn the local Laya API off. The running BMM app stops it within seconds.",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
             Tool::new(
@@ -1272,6 +1359,34 @@ impl ServerHandler for BmmMcpServer {
             if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
             if let Some(r) = args.get("reapply").and_then(|v| v.as_bool()) { body["reapply"] = r.into(); }
             self.tool_api_call("POST", "/api/mods/order", Some(body)).await
+        }
+        "bmm_export_mod_order" => {
+            let path = match args.get("profile_id").and_then(|v| v.as_str()) {
+                Some(p) => format!(
+                    "/api/mods/order/export?profileId={}",
+                    percent_encoding::utf8_percent_encode(p, percent_encoding::NON_ALPHANUMERIC)
+                ),
+                None => "/api/mods/order/export".to_string(),
+            };
+            self.tool_api_call("GET", &path, None).await
+        }
+        "bmm_arrange_mod_order" => {
+            let ids = args.get("ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing ids", None))?;
+            let mut body = json!({ "ids": ids });
+            if let Some(m) = args.get("mode").and_then(|v| v.as_str()) { body["mode"] = m.into(); }
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            self.tool_api_call("POST", "/api/mods/order/arrange", Some(body)).await
+        }
+        "bmm_order_bulk_mode" => match args.get("mode").and_then(|v| v.as_str()) {
+            Some(m) => self.tool_api_call("POST", "/api/mods/order/mode", Some(json!({ "mode": m }))).await,
+            None => self.tool_api_call("GET", "/api/mods/order/mode", None).await,
+        },
+        "bmm_import_mod_order" => {
+            let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing text", None))?;
+            let mut body = json!({ "text": text });
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            if let Some(d) = args.get("dry_run").and_then(|v| v.as_bool()) { body["dryRun"] = d.into(); }
+            self.tool_api_call("POST", "/api/mods/order/import", Some(body)).await
         }
         "bmm_generate_repo" => {
             let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
@@ -1671,7 +1786,35 @@ impl ServerHandler for BmmMcpServer {
                     let scope = args.get("scope").and_then(|v| v.as_str()).unwrap_or("all").to_string();
                     let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
                     let use_laya = args.get("use_laya").and_then(|v| v.as_bool()).unwrap_or(true);
-                    match tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, use_laya)).await {
+                    let write = args.get("write").and_then(|v| v.as_bool()).unwrap_or(false);
+                    match tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, use_laya, write)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_analyze_library" => {
+                    let ids: Vec<String> = args.get("mod_ids").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                    let use_providers = args.get("use_providers").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+                    match tokio::task::spawn_blocking(move || ai_tools::analyze(&ids, use_providers, limit)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_classify" => {
+                    let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing text", None))?.to_string();
+                    let labels: Vec<(String, String)> = args
+                        .get("labels")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|l| {
+                            let id = l.get("id").and_then(|x| x.as_str()).or_else(|| l.as_str())?.to_string();
+                            let meaning = l.get("meaning").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+                            Some((id, meaning))
+                        }).collect())
+                        .unwrap_or_default();
+                    match tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels)).await {
                         Ok(Ok(v)) => ok_json(&v),
                         Ok(Err(e)) => err_result(&e),
                         Err(e) => err_result(&e.to_string()),
@@ -1683,6 +1826,23 @@ impl ServerHandler for BmmMcpServer {
                     Err(e) => err_result(&e.to_string()),
                 },
                 "bmm_ai_pack_remove" => match tokio::task::spawn_blocking(ai_tools::pack_remove).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_api_status" => match tokio::task::spawn_blocking(ai_api_tools::status).await {
+                    Ok(v) => ok_json(&v),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_api_start" => {
+                    let port = args.get("port").and_then(|v| v.as_u64()).map(|p| p.min(65535) as u16);
+                    match tokio::task::spawn_blocking(move || ai_api_tools::start(port, false)).await {
+                        Ok(Ok((v, _))) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_api_stop" => match tokio::task::spawn_blocking(ai_api_tools::stop).await {
                     Ok(Ok(v)) => ok_json(&v),
                     Ok(Err(e)) => err_result(&e),
                     Err(e) => err_result(&e.to_string()),

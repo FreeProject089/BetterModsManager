@@ -174,13 +174,16 @@ export interface LinkDecision {
  *   telemetry/*, schedule/*, hook, catalog/<kind>/add-source, catalog/delete,
  *   repo/fetch-ssh, install|import|download — carry their OWN in-app dialog already.
  *   resources/open, schedule/runs — navigation only: the Storage manager, and a task's run
- *     log (read-only; secrets are removed before a run is written). */
+ *     log (read-only; secrets are removed before a run is written).
+ *   order — opens the activation order with a shared order in the import preview; nothing
+ *     moves until the user takes it and presses "Apply order" in that view. */
 export const PROMPT_FREE: ReadonlySet<string> = new Set([
     'plugin/compare', 'view/open', 'docs/open', 'theme/editor', 'resources/open', 'schedule/runs',
     'repo/gen', 'repo/update', 'repo/host', 'mod/update', 'repo/sync', 'mod/check-updates',
     'benchmark/open',
     'telemetry/consent', 'telemetry/set', 'schedule/run', 'schedule/enable', 'hook',
     'catalog/delete', 'repo/fetch-ssh', 'install', 'import', 'download',
+    'order',
 ]);
 
 /** The presets a link may name (governor/config.rs `Preset`). A link names a preset and

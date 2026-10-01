@@ -295,26 +295,44 @@
   },
   "src/commands/ai.rs": {
     "spawn_blocking": {
-      "count": 7,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO"
+      "count": 10,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO; « Analyser la bibliothèque » (ai_analyze_library) runs its per-mod loop under a governor Scan ticket (checkpoint per mod: waits in game mode, pausable, cancellable), and « classify » / the written Ask answer are one bounded request each"
     }
   },
   "src/extra_tools/mcp_server.rs": {
     "spawn_blocking": {
-      "count": 5,
-      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO"
+      "count": 7,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO; `ai-analyze` (the extraction of at most --limit mods, files capped per mod) and `ai-classify` (one capped inference)"
     }
   },
   "src/mcp/server.rs": {
     "spawn_blocking": {
-      "count": 5,
-      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO"
+      "count": 10,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO; `bmm_ai_analyze_library` (the extraction of at most `limit` mods, files capped per mod) and `bmm_ai_classify` (one capped inference); `bmm_ai_api_status|start|stop` (read or write the small ai-api.json, and one /health probe with a 1.5 s timeout)"
     }
   },
   "src/commands/ai_embedded.rs": {
     "io::copy": {
       "count": 1,
       "why": "one file of the verified model pack into the staging folder, once per explicit « Installer le modèle » click (≤ 353 MB, size-capped per entry)"
+    }
+  },
+  "src/commands/ai_api.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot, user-clicked « Tester » of the local Laya API: two loopback requests with a 3 s timeout each"
+    }
+  },
+  "src/commands/ai_api_core.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one local-API classification = one « Laya intégré » inference (inputs capped, ONNX capped at 2 intra-op threads), behind a 1-2 slot semaphore, a 4-deep queue, a 30 s timeout and the AI guard (refused in game mode)"
+    }
+  },
+  "src/commands/ai_ops.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one scheduled-task Laya classification: one capped inference behind a single global slot, 30 per minute for all tasks, a 30 s timeout and the AI guard (refused in game mode)"
     }
   }
 }

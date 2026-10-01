@@ -48,17 +48,13 @@ export async function initMapper() {
             const el = e.target.closest('[data-tooltip]');
             if (!el)
                 return;
-            // The FINAL PREVIEW modal has its OWN mouse-follow tooltip (_previewTipEl);
-            // don't also fire the Tasky one there or the path shows twice.
-            if (el.closest('.mapper-preview-container'))
-                return;
             const tip = el.getAttribute('data-tooltip') || '';
             if (tip)
                 window.showTaskyHelp?.(tip, 'info', true);
         });
         view.addEventListener('mouseout', (e) => {
             const el = e.target.closest('[data-tooltip]');
-            if (el && !el.closest('.mapper-preview-container'))
+            if (el)
                 window.hideTaskyHelp?.();
         });
     }
@@ -1511,262 +1507,37 @@ function openInputModal(title, label, defaultValue, callback) {
         inputRelease = bindModal(modal, { onClose: () => document.getElementById('btn-mapper-input-cancel')?.click(), initialFocus: field });
 }
 /**
- * Preview
+ * Final preview — see mapper-preview.ts. Reads the files with their sizes, the queued moves
+ * and deletions, the game tree already loaded for the right panel (to tell a new file from
+ * one that replaces a game file) and the conflicts with other mods; "Apply" runs the same
+ * save as the toolbar button.
  */
 async function showMapperPreview() {
     if (!selectedModId) {
         toast(t("mapper.selectModHint"), 'warning');
         return;
     }
+    const modId = selectedModId;
     try {
-        const files = await invoke('list_mod_files_recursive', { modId: selectedModId });
+        const [files, conflicts] = await Promise.all([
+            invoke('list_mod_files_sized', { modId }),
+            invoke('get_mod_conflicts', { modId }).catch(() => []),
+        ]);
         dispatchBmmAction(BMM_ACTIONS.MAPPER_OPENED);
-        const gamePath = activeProfile?.game_path || '';
-        const rootCount = files.filter(f => !f.includes('\\') && !f.includes('/')).length;
-        const subCount = files.filter(f => f.includes('\\') || f.includes('/')).length;
-        let html = `
-        <div class="mapper-preview-container">
-            <div class="mpv-header">
-                <div class="mpv-heading">
-                    <!-- No <h3> here: the modal's own title bar already reads FINAL PREVIEW
-                         two lines above. A second heading ("Structure Diagnostic") stacked
-                         under it spent a line of vertical room saying the same thing twice. -->
-                    <p class="mpv-desc">${escHtml(t("mapper.diagnosticDesc"))}</p>
-                </div>
-                <div class="mpv-stats">
-                    <span class="mpv-stat mpv-stat-root"><span class="mpv-dot"></span> ${escHtml(t("mapper.statsRoot"))}: <b>${rootCount}</b></span>
-                    <span class="mpv-stat mpv-stat-sub"><span class="mpv-dot"></span> ${escHtml(t("mapper.statsSub"))}: <b>${subCount}</b></span>
-                </div>
-            </div>
-            <div class="mpv-base" data-tooltip="${escHtml(gamePath)}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-                <span class="mpv-base-label">${escHtml(t("mapper.destBase") || 'Destination')}</span>
-                <code class="mpv-base-path">${escHtml(gamePath)}\\…</code>
-            </div>
-            <div class="mpv-list">
-        `;
-        let previewItems = files.map(f => {
-            let isPending = false;
-            let finalPath = f;
-            pendingMoves.forEach((targetFolder, sourcePath) => {
-                const isMatch = f === sourcePath || f.startsWith(sourcePath + '\\') || f.startsWith(sourcePath + '/');
-                if (isMatch) {
-                    isPending = true;
-                    if (targetFolder !== ".") {
-                        const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
-                        if (f === sourcePath) {
-                            finalPath = `${targetFolder}\\${fileName}`;
-                        }
-                        else {
-                            const remainder = f.substring(sourcePath.length + 1);
-                            finalPath = `${targetFolder}\\${fileName}\\${remainder}`;
-                        }
-                    }
-                    else {
-                        // Moved to root
-                        const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
-                        if (f === sourcePath) {
-                            finalPath = fileName;
-                        }
-                        else {
-                            const remainder = f.substring(sourcePath.length + 1);
-                            finalPath = `${fileName}\\${remainder}`;
-                        }
-                    }
-                }
-            });
-            return {
-                original: f,
-                finalPath: finalPath,
-                isPending: isPending,
-                isRoot: !finalPath.includes('\\') && !finalPath.includes('/')
-            };
+        const { openMapperPreview } = await import('./mapper-preview.js');
+        openMapperPreview({
+            gamePath: activeProfile?.game_path || '',
+            files: Array.isArray(files) ? files : [],
+            moves: Array.from(pendingMoves.entries()),
+            deletions: Array.from(pendingDeletions),
+            gameTree: gameTreeData || [],
+            conflicts: Array.isArray(conflicts) ? conflicts : [],
+            pending: pendingMoves.size + pendingDeletions.size + pendingNewFolders.size,
+            onApply: () => { void applyAllChanges(); },
         });
-        // Priority sorting: Pending -> Mapped -> Root
-        previewItems.sort((a, b) => {
-            if (a.isPending && !b.isPending)
-                return -1;
-            if (!a.isPending && b.isPending)
-                return 1;
-            if (!a.isRoot && b.isRoot)
-                return -1;
-            if (a.isRoot && !b.isRoot)
-                return 1;
-            return a.finalPath.localeCompare(b.finalPath);
-        });
-        if (previewItems.length === 0) {
-            html += `<div class="mpv-empty">${escHtml(t("mapper.noFiles"))}</div>`;
-        }
-        else {
-            previewItems.forEach(item => {
-                const status = item.isPending ? 'pending' : (item.isRoot ? 'root' : 'ok');
-                const targetPath = `${gamePath}\\${item.finalPath}`;
-                const label = status === 'pending' ? (t('mapper.newBadge') || 'NEW')
-                    : status === 'root' ? (t('mapper.root') || 'Root')
-                        : (t('mapper.subfolder') || 'Sub-folder');
-                const icon = status === 'pending'
-                    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>`
-                    : status === 'root'
-                        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>`
-                        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>`;
-                // Source = the file's path inside the mod; destination = the FINAL relative
-                // path. The huge absolute game-path prefix is NOT repeated per row (it's on
-                // the base line above + in the tooltip), so rows stay scannable.
-                html += `
-                <div class="mpv-row mpv-row-${status}">
-                    <span class="mpv-badge" data-tooltip="${escHtml(label)}">${icon}</span>
-                    <span class="mpv-src" data-tooltip="${escHtml(item.original)}">${escHtml(item.original)}</span>
-                    <svg class="mpv-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-                    <span class="mpv-dst" data-tooltip="${escHtml(targetPath)}">${escHtml(item.finalPath)}</span>
-                    ${item.isPending ? `<span class="mpv-chip">${escHtml(t('mapper.newBadge') || 'NEW')}</span>` : ''}
-                </div>`;
-            });
-        }
-        html += `
-            </div>
-        </div>`;
-        const confirmTitle = document.getElementById('confirm-title');
-        const confirmMsg = document.getElementById('confirm-message');
-        const confirmModal = document.getElementById('modal-confirm-generic');
-        if (confirmTitle && confirmMsg && confirmModal) {
-            confirmTitle.textContent = t("mapper.preview");
-            confirmMsg.innerHTML = html;
-            // The shared modal's icon is a RED danger triangle in the markup, and only
-            // confirmCustom ever repaints it. Borrowing the modal without touching it put a
-            // red alert badge on a read-only preview. Neutral accent instead.
-            const icon = document.getElementById('confirm-icon-container');
-            if (icon) {
-                icon.style.background = 'var(--accent-dim)';
-                icon.style.color = 'var(--accent)';
-            }
-            confirmModal.classList.add('modal-large');
-            confirmModal.classList.add('open');
-            const yesBtn = document.getElementById('btn-confirm-yes');
-            const noBtn = document.getElementById('btn-confirm-cancel');
-            if (yesBtn)
-                yesBtn.style.display = 'none';
-            if (noBtn)
-                noBtn.textContent = t("common.close");
-            // NOTE: the [data-tooltip] paths are handled by the global fixed-position
-            // tooltip system (ui/tooltips.ts). We used to ALSO attach a mapper-specific
-            // tooltip here — which showed the path TWICE on hover. Removed.
-            // Restore on EVERY exit, not just the Cancel button.
-            //
-            // The old version was `noBtn.addEventListener('click', closeFn, {once:true})`.
-            // Clicking the backdrop closes the overlay through the global handler in
-            // modals.ts WITHOUT going through the button, so closeFn never ran: `modal-large`
-            // and the hidden confirm button stayed on the shared modal, and the leftover
-            // once-listener was still armed — it fired on the NEXT unrelated confirmation's
-            // Cancel click and overwrote that dialog's button label.
-            //
-            // `display = ''` and not 'block': .btn is inline-flex, so 'block' would leave the
-            // button permanently mis-laid-out (icon and gap) everywhere else in the app.
-            let closed = false;
-            const closeFn = () => {
-                if (closed)
-                    return;
-                closed = true;
-                confirmModal.classList.remove('open');
-                confirmModal.classList.remove('modal-large');
-                if (yesBtn)
-                    yesBtn.style.display = '';
-                if (noBtn)
-                    noBtn.textContent = t("common.cancel");
-                noBtn?.removeEventListener('click', closeFn);
-                confirmModal.removeEventListener('click', onBackdrop);
-            };
-            const onBackdrop = (ev) => { if (ev.target === confirmModal)
-                closeFn(); };
-            noBtn.addEventListener('click', closeFn);
-            confirmModal.addEventListener('click', onBackdrop);
-        }
     }
     catch (e) {
-        toast(e.message || e, 'error');
+        toast(e?.message || String(e), 'error');
     }
-}
-// ── Fixed-position tooltip for the preview modal ──────────────────────────
-// CSS ::after tooltips get clipped by overflow:auto on .preview-list-wrapper,
-// and can disappear behind the sticky table header. This JS approach appends
-// the tooltip to <body> at position:fixed so it's never clipped.
-let _previewTipEl = null;
-let _previewTipContainer = null;
-function attachPreviewTooltip(container) {
-    if (!_previewTipEl) {
-        _previewTipEl = document.createElement('div');
-        _previewTipEl.id = 'mapper-preview-tip';
-        Object.assign(_previewTipEl.style, {
-            position: 'fixed',
-            background: 'rgba(10,10,20,0.97)',
-            color: 'var(--text-primary)',
-            fontSize: '11px',
-            padding: '4px 10px',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            pointerEvents: 'none',
-            zIndex: '9999999',
-            whiteSpace: 'nowrap',
-            display: 'none',
-            maxWidth: '600px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-        });
-        document.body.appendChild(_previewTipEl);
-    }
-    _previewTipContainer = container;
-    container.addEventListener('mouseover', _previewTipOver);
-    container.addEventListener('mousemove', _previewTipMove);
-    container.addEventListener('mouseout', _previewTipOut);
-}
-function detachPreviewTooltip() {
-    if (_previewTipContainer) {
-        _previewTipContainer.removeEventListener('mouseover', _previewTipOver);
-        _previewTipContainer.removeEventListener('mousemove', _previewTipMove);
-        _previewTipContainer.removeEventListener('mouseout', _previewTipOut);
-        _previewTipContainer = null;
-    }
-    if (_previewTipEl)
-        _previewTipEl.style.display = 'none';
-}
-function _previewTipOver(e) {
-    const el = e.target.closest('[data-tooltip]');
-    if (!el || !_previewTipEl)
-        return;
-    const tip = el.getAttribute('data-tooltip');
-    if (!tip)
-        return;
-    _previewTipEl.textContent = tip;
-    _previewTipEl.style.display = 'block';
-    _positionPreviewTip(e.clientX, e.clientY);
-}
-function _previewTipMove(e) {
-    if (!_previewTipEl || _previewTipEl.style.display === 'none')
-        return;
-    _positionPreviewTip(e.clientX, e.clientY);
-}
-function _previewTipOut(e) {
-    const el = e.target.closest('[data-tooltip]');
-    if (el && !el.contains(e.relatedTarget)) {
-        if (_previewTipEl)
-            _previewTipEl.style.display = 'none';
-    }
-}
-function _positionPreviewTip(mx, my) {
-    if (!_previewTipEl)
-        return;
-    const tipW = _previewTipEl.offsetWidth;
-    const tipH = _previewTipEl.offsetHeight;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const gap = 12;
-    let x = mx + gap;
-    let y = my - tipH - gap;
-    if (x + tipW > vw - 8)
-        x = mx - tipW - gap;
-    if (y < 8)
-        y = my + gap;
-    _previewTipEl.style.left = x + 'px';
-    _previewTipEl.style.top = y + 'px';
 }
 //# sourceMappingURL=mapper.js.map

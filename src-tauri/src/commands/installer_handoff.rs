@@ -91,6 +91,13 @@ pub struct HandoffResult {
     /// session recorder it lives in localStorage (`bmm_telemetry_bench`), so it is
     /// surfaced for the frontend to mirror. `None` = not asked → BMM's default (off).
     pub telemetry_bench: Option<bool>,
+    /// The installer's per-category boxes under telemetry (« Choisir »): usage statistics,
+    /// performance, Laya usage statistics. JS-side (localStorage bmm_telemetry_cats), surfaced
+    /// like the bench flag, and like it they only pre-select BMM's consent dialog: nothing is
+    /// sent before the user accepts there. `None` = not sent → the dialog's default (on).
+    pub telemetry_usage: Option<bool>,
+    pub telemetry_perf: Option<bool>,
+    pub telemetry_laya: Option<bool>,
     /// Tasky and the in-app tip callouts. All four live in localStorage on the JS side,
     /// exactly like `session_recorder`, so they are surfaced rather than applied here.
     /// `None` means the installer said nothing and BMM's own default (all on) stands —
@@ -285,6 +292,10 @@ fn apply_settings(
     // A JS-side setting (localStorage bmm_telemetry_bench), so it is surfaced, not applied.
     // It only ever matters once telemetry consent has actually been given.
     res.telemetry_bench = s.get("telemetry_bench").and_then(|v| v.as_bool());
+    // The other categories of the telemetry box's « Choisir » expander, surfaced the same way.
+    res.telemetry_usage = s.get("telemetry_usage").and_then(|v| v.as_bool());
+    res.telemetry_perf = s.get("telemetry_perf").and_then(|v| v.as_bool());
+    res.telemetry_laya = s.get("telemetry_laya").and_then(|v| v.as_bool());
     // "Send errors live" (live_issues.rs). An explicit answer, stored as is: it sends nothing
     // on its own, only once telemetry consent is given in BMM's own dialog.
     if let Some(v) = s.get("telemetry_live_errors").and_then(|v| v.as_bool()) {
@@ -433,6 +444,20 @@ mod tests {
         assert_eq!(settings.analytics_consent, None); // still undecided → the dialog runs
         assert_eq!(res.telemetry_preselect, Some(true));
         assert_eq!(res.telemetry_bench, Some(true));
+    }
+
+    /// The « Choisir » boxes under the telemetry box are surfaced as pre-selections, and never
+    /// consent: telemetry stays undecided until BMM's own dialog is answered.
+    #[test]
+    fn telemetry_category_boxes_are_surfaced_not_applied() {
+        let json = r#"{ "source":"betterinstaller", "settings": { "telemetry": true, "telemetry_usage": true, "telemetry_perf": false, "telemetry_laya": true } }"#;
+        let file: HandoffFile = serde_json::from_str(json).unwrap();
+        let mut settings = crate::state::AppSettings::default();
+        let res = apply_settings(&file.settings, &mut settings);
+        assert_eq!(settings.analytics_consent, None);
+        assert_eq!((res.telemetry_usage, res.telemetry_perf, res.telemetry_laya), (Some(true), Some(false), Some(true)));
+        let none = apply_settings(&serde_json::Map::new(), &mut crate::state::AppSettings::default());
+        assert_eq!((none.telemetry_usage, none.telemetry_perf, none.telemetry_laya), (None, None, None));
     }
 
     /// Defaults for an install that never mentioned these: everything that sends data off

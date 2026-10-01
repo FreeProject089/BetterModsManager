@@ -377,6 +377,8 @@ Deux formes échappent à la règle :
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
 | `GET` | `/api/mods/order` | `mods.read` | — · l'ordre de déploiement, plus chaque fichier disputé et qui le gagne | |
+| `GET` | `/api/mods/order/export` | `mods.read` | `?profileId=` · l'ordre en document portable : `doc`, `code` (`BMMORDER1.`), `link` (`bmm://order`), `text` | |
+| `GET` | `/api/mods/order/mode` | `mods.read` | — · où une activation groupée place ses mods par défaut : `top`, `bottom` ou `keep` | |
 | `GET` | `/api/schedules` | `schedules.read` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
 | `GET` | `/api/schedules/:id/runs` | `schedules.read` | — · le journal d’exécution de la tâche, le plus récent d’abord : les 50 dernières exécutions, chaque étape avec sa durée, son statut et son erreur. Les secrets sont retirés avant l’écriture. Un id qui ne nomme aucune tâche répond une liste vide | ✓ |
@@ -390,6 +392,9 @@ Deux formes échappent à la règle :
 | `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow`, `password`, `key` · suivre ou cesser de suivre un catalogue. `password` pour un secret partagé, `key` pour désigner QUELLE clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, jamais ignorée : une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé | |
 | `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId`, `reapply` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main (`reapply: true` : chaque fichier disputé) | |
+| `POST` | `/api/mods/order/import` | `mods.write` | `text`*, `profileId`, `dryRun` · un ordre partagé (code, lien, JSON ou noms) : les mods actifs qu'il nomme prennent son ordre dans leurs places ; répond le plan et `moved` | |
+| `POST` | `/api/mods/order/arrange` | `mods.write` | `ids[]`*, `mode`, `profileId` · place un bloc de mods actifs (`top`, `bottom`, `keep` ; aucun = le réglage) | |
+| `POST` | `/api/mods/order/mode` | `mods.write` | `mode`* · fixe le placement par défaut d'une activation groupée | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · retire l'entrée, **garde les fichiers** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · relie un mod aux dépôts qui peuvent le mettre à jour | |
@@ -403,7 +408,7 @@ Deux formes échappent à la règle :
 | Méthode | Chemin | Auth | Corps | DL |
 |---|---|---|---|---|
 | `POST` | `/api/modpacks/create` | `modpacks.write` | `name`*, `mod_ids[]`, `source_profile_id`, `description`, `game_name`, `sr_link`, `multi_profile`, `skip_integrity_check`, `dependency_mode`, `mod_overrides[]` → `201` | ✓ |
-| `POST` | `/api/modpacks/enable` | `modpacks.write` | `modpack_id`* (l'ancien `profile_id` est aussi accepté) | ✓ |
+| `POST` | `/api/modpacks/enable` | `modpacks.write` | `modpack_id`* (l'ancien `profile_id` est aussi accepté), `order_mode` (`top`, `bottom`, `keep` ; défaut : celui du pack, puis le réglage) | ✓ |
 | `POST` | `/api/modpacks/disable` | `modpacks.write` | idem | ✓ |
 | `PUT` | `/api/modpacks/:id` | `modpacks.write` | n'importe quel champ de création | |
 | `DELETE` | `/api/modpacks/:id` | `modpacks.write` | — · irréversible, les mods locaux sont conservés | |
@@ -552,8 +557,8 @@ périme en silence ; un check, non.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 82 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
-- [Référence CLI](doc-page:reference/cli.fr) — les 74 sous-commandes du même binaire, pour un terminal ou un `.bat`
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 91 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
+- [Référence CLI](doc-page:reference/cli.fr) — les 77 sous-commandes du même binaire, pour un terminal ou un `.bat`
 - [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
 - [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
 - [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

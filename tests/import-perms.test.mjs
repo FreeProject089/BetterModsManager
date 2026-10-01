@@ -46,7 +46,7 @@ describe('sanitiseImportedTask', () => {
 
   test('every outside-BMM capability is taken away', () => {
     const { task } = sanitiseImportedTask(HOSTILE);
-    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false });
+    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false });
     assert.equal(task.allowCustomCommands, false, 'the legacy flag is a grant too');
   });
 

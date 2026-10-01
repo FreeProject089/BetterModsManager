@@ -50,6 +50,10 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mods/disable` | oui · `mods.write` | `{ mod_id }` |
 | `/api/mods/order` | oui · `mods.read` | — (GET) l'ordre de déploiement, chaque fichier disputé et qui le gagne |
 | `/api/mods/order` | oui · `mods.write` | `{ order[], profileId?, reapply? }` — permutation obligatoire ; le dernier gagne un fichier partagé (`reapply: true` recopie le gagnant de chaque fichier disputé) |
+| `/api/mods/order/export` | oui · `mods.read` | — (GET, `?profileId=`) l'ordre en document portable à partager : `doc`, `code` (`BMMORDER1.`), `link` (`bmm://order`), `text` ; mods désignés par empreinte, id de dépôt et nom |
+| `/api/mods/order/import` | oui · `mods.write` | `{ text, profileId?, dryRun? }` — importe un ordre partagé (code, lien, JSON ou noms) ; les mods actifs nommés prennent son ordre dans leurs places, rien n'est activé ni désactivé |
+| `/api/mods/order/arrange` | oui · `mods.write` | `{ ids[], mode?, profileId? }` — place un bloc de mods actifs : `top` (ils gagnent), `bottom` (le reste gagne), `keep` ; sans mode = le réglage |
+| `/api/mods/order/mode` | oui | — (GET) ou `{ mode }` (POST) — lit ou fixe où une activation groupée place ses mods par défaut |
 | `/api/schedules` | oui | — (GET) id, nom, activée, déclencheur. **Pas** les étapes |
 | `/api/schedules/enabled` | oui | `{ id, enabled }` — seul `enabled` est modifiable |
 | `/api/schedules/:id/runs` | oui | — (GET) journal d’exécution d’une tâche, le plus récent d’abord (50 exécutions, étapes, durées, erreurs ; secrets retirés). `schedules.read` |

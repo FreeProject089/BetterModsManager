@@ -80,7 +80,8 @@ const STUBS = {
     }`,
   'core/canvas-fingerprint.js': 'export async function creatorProofFor() { return null; }',
   'core/links-config.js': `export const getLinks = () => globalThis.__fbLinks;
-    export const bcApi = () => 'https://bc.test/api';`,
+    export const bcApi = () => (globalThis.__fbTestMode ? 'http://localhost:5176/api' : 'https://bc.test/api');
+    export const bcTestMode = () => !!globalThis.__fbTestMode;`,
   'core/i18n.js': 'export const t = (k) => k;',
   'ui/app.js': 'export const toast = (...a) => { globalThis.__fbToasts.push(a); };',
   'ui/notification-center.js': 'export const recordNotification = () => {};',
@@ -131,6 +132,26 @@ describe('reports go to the feedback centre alone', () => {
     assert.equal(calls[0].body.appVersion, '9.9.9');
     assert.equal(calls[0].headers['X-Creator-ID'], 'BC-TEST');
     assert.ok(calls.every((c) => !/betahub/i.test(c.url)), 'a request went to BetaHub');
+  });
+
+  test('test mode sends reports to the test server, not the production URL in links.json', async () => {
+    // The link status is asked of the test server in test mode. Posting the report to the
+    // production URL meant "linked" in the dialog and an unknown sender at the other end,
+    // which answered "an e-mail is required" to a dialog with no e-mail field.
+    reset({ feedback_endpoint: 'https://bettercommunity.ch/api/feedback/bmm' });
+    globalThis.__fbTestMode = true;
+    try {
+      answer = () => new Response(JSON.stringify({ id: 'r3' }), { status: 201 });
+      await fb.submitFeedback({ kind: 'feedback', body: 'an idea for the library' });
+      assert.equal(calls[0].url, 'http://localhost:5176/api/feedback/bmm');
+    } finally { globalThis.__fbTestMode = false; }
+  });
+
+  test('contact_required comes back as its own code, with the server detail', async () => {
+    reset({});
+    answer = () => new Response(JSON.stringify({ error: 'contact_required', unverified: true }), { status: 422 });
+    await assert.rejects(fb.submitFeedback({ kind: 'feedback', body: 'an idea for the library' }),
+      (e) => e.code === 'contact_required' && e.detail?.unverified === true);
   });
 
   test('a moved feedback_endpoint is followed', async () => {

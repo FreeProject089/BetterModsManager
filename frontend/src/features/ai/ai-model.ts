@@ -26,12 +26,18 @@ export interface AiSettings {
     classifier: 'off' | 'embedded' | 'bettercommunity' | 'local' | string;
     /** The user picked the classifier in Settings; until then an installed built-in model is the default. */
     classifier_chosen?: boolean;
-    generative: 'off' | 'external' | string;
+    /** « Rédaction »: off | local (an OpenAI-compatible server on this PC) | external (a remote API, the user's key). */
+    generative: 'off' | 'local' | 'external' | string;
     mod_suggest: boolean;
     report_triage: boolean;
     description_drafts: boolean;
     /** « Ask Laya » and the library's smart search may let Laya route and rank (the search runs regardless). */
     ask?: boolean;
+    /** « Ask Laya » may add a written answer from the generator, citing the sources found. */
+    ask_generate?: boolean;
+    /** The local generator (loopback only) and its model. */
+    gen_local_url?: string;
+    gen_local_model?: string;
     local_url: string;
     local_allow_remote: boolean;
     external_url: string;

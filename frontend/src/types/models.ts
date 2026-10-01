@@ -288,6 +288,8 @@ export interface LocalModpack {
   mods: ModpackModRef[];
   sr_link: string | null;
   game_name: string | null;
+  /** Where its mods go in the activation order when applied: top | bottom | keep; absent = the setting. */
+  order_mode?: string | null;
 }
 
 // ── Server Repo Notification Payloads ────────────────────────────────────────

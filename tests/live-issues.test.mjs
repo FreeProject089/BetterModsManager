@@ -64,9 +64,12 @@ describe('wiring', () => {
   });
   test('boot, consent change and the privacy card are wired', () => {
     assert.match(analytics, /void initLiveIssues\(_sessionId\)/);
-    assert.match(analytics, /set_analytics_consent[^\n]*\n\s*void refreshLiveIssues\(\)/);
+    assert.match(analytics, /set_analytics_consent[^\n]*\n\s*(?:void|await) refreshLiveIssues\(\)/);
     assert.match(analytics, /mountLiveIssuesToggle\(\)/);
-    assert.match(analytics, /id="modal-live-toggle"(?![^>]*checked)/, 'the consent dialog does not pre-tick it');
+    // Owner's rule (Sept 30): live errors are ON with telemetry. The dialog's "errors" category
+    // is part of « Tout activer », and its answer is handed to Rust with the consent.
+    assert.match(analytics, /set_analytics_consent', \{ enabled, liveErrors: /);
+    assert.match(analytics, /applyConsentChoice\(\{ \.\.\.allOn\(\)/);
   });
   test('every command this side calls is registered in Rust', () => {
     const main = src('src-tauri/src/main.rs');

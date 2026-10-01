@@ -1,6 +1,6 @@
 # Privacy Policy — Better Mods Manager (BMM)
 
-_Last updated: 2026-09-29_
+_Last updated: 2026-09-30_
 
 Better Mods Manager is an open-source desktop application (GPL‑3.0) that runs on your computer.
 Your profiles, mods, modpacks, plugins and settings are stored **locally**, in BMM's data folder,
@@ -20,9 +20,8 @@ do not repeat any of this: on questions about data, this document is the referen
 | Update check (§2.2) | On | On |
 | Connectivity checks and web fonts (§2.3) | On, always | On, always |
 | **Telemetry** (§3) | Off. The installer's box is **unticked**; ticking it only pre‑selects the answer in BMM's own consent screen, which still has to be accepted | Off until you answer the first‑run consent screen |
-| Session replay sent with telemetry (§3.2) | Off until telemetry is accepted; then on unless you untick it | Pre‑ticked in the consent screen's "Customize" section |
-| Weekly benchmark + detailed hardware report (§3.3) | **Off**, and the installer now asks about it as its own option | **Off** — unticked in the consent screen's "Customize" section |
-| Errors sent live (§3.6) | **Off** unless ticked (its own box); does nothing without telemetry | Off, unticked in the consent screen. If you had **already** accepted telemetry before this option existed, it starts **on** (Settings → Privacy turns it off) |
+| Telemetry categories: usage, performance, errors sent live, Laya usage statistics, session replay (§3.0) | Off with telemetry. Ticking telemetry ticks them all; its *Choose* link unticks any of them | Part of *Turn all on* on the consent screen; *Choose* shows a switch for each |
+| Weekly benchmark + detailed hardware report (§3.3) | **Off**, even when telemetry is ticked (its own box under *Choose*) | **Off**: not part of *Turn all on*, a separate switch under *Choose* |
 | **Discord Rich Presence** (§4) | **Off**: the installer's box is unticked | Off |
 | Bug, crash and feedback reports (§5) | Only when you press Send | Only when you press Send |
 | **Optional AI** (§6.10) | **Off**: the installer's box is unticked; ticking it turns the switch on with **no provider**, so still nothing is sent | Off |
@@ -142,11 +141,32 @@ and when BMM closes. Each batch carries a random **packet id** so you can have i
   so the consent screen does not ask you a second time.)
 - **If you install without the installer**, telemetry is off until you answer that same screen.
 
+The consent screen has four answers, all of them buttons: **Turn all on** (recommended: the five
+categories of §3.0), **Choose** (a switch per category, then *Save*), **No thanks** (off, recorded)
+and **Later** (also the Escape key): *Later* records nothing, starts nothing, and the screen comes
+back at the next launch. A click beside the screen is not an answer and changes nothing.
+
 Settings → Privacy turns it off at any time; when off, none of §3 is collected or sent.
 
 A `bmm://telemetry/…` link (which any web page can open) cannot change these settings by itself: it
 opens BMM's consent screen, or a confirmation when it only turns something off, and nothing changes
 unless you accept there.
+
+### 3.0 Categories
+Telemetry is one consent and five categories under it. Each can be switched off on its own, on the
+consent screen (*Choose*) and in Settings → Privacy; *Turn all on* turns the five on.
+
+| Category | What it covers |
+|---|---|
+| Usage statistics | Pages, dialogs, clicks, navigation path, session start and end (§3.1 *Usage*, *Interactions*) |
+| Performance | Frames per second, frame times, interface memory, page‑load timings (§3.1 *Performance*) |
+| Errors sent live | Errors and crashes as they happen (§3.6), and the warning and error logs of §3.1 |
+| Laya usage statistics | How Laya is used, without any content (§3.7) |
+| Session replay | The masked recording of the BMM window (§3.2) |
+
+The identity and system profile of §3.1 go with whichever category is on: they are what makes the
+others readable. Two options are never part of *Turn all on*: the weekly hardware report (§3.3) and
+unmasked replay (§3.2).
 
 ### 3.1 What is sent
 - **Identity:** your Creator ID (§2.1) and a random per‑install id.
@@ -178,10 +198,10 @@ While telemetry is on, BMM also sends a **recording of the BMM window**: its lay
 scrolling and navigation. **Text typed into input fields is masked**, and so are elements marked
 as names or paths. Other windows and the rest of your screen are never recorded.
 
-- **Default:** on **while telemetry is on** — and telemetry is off unless you accepted it (§3), so
-  by itself this box sends nothing. In BetterInstaller it is the "Session replay in telemetry" box,
-  pre‑ticked; in BMM it is an option of Settings → Privacy and of the consent screen's "Customize"
-  section.
+- **Default:** on **while telemetry is on**, as one of its categories (§3.0); telemetry is off
+  unless you accepted it (§3), so by itself this sends nothing. In BetterInstaller it is the
+  "Session replay (masked)" box under the telemetry box's *Choose* link; in BMM it is a switch of
+  Settings → Privacy and of the consent screen's *Choose*.
 - A separate **"full (unmasked)"** mode exists for your own debugging. It is off unless you turn it
   on; when on, typed text is not masked and local images shown in the window are embedded in the
   recording. It can only be turned on by hand in Settings → Privacy (or the consent screen you open
@@ -196,11 +216,12 @@ vendor, the machine UUID, CPU cache and thread details, each disk's model, seria
 interface, the **MAC address of each physical network adapter**, OS build, UEFI or legacy boot,
 Secure Boot and TPM state.
 
-- **Default: off**, everywhere and on its own. BetterInstaller now asks about it as a separate
-  "Weekly hardware report & benchmark" box, unticked; in BMM it is the "Automatic Benchmark (every
-  7 days) + extra hardware report" toggle in Settings → Privacy and in the consent screen's
-  "Customize" section, also unticked. **Accepting telemetry does not turn it on** — the hardware
-  identifiers above are collected only if you tick this one yourself.
+- **Default: off**, everywhere and on its own. BetterInstaller asks about it as a separate
+  "Weekly hardware report" box under the telemetry box's *Choose* link, unticked even when
+  telemetry is ticked; in BMM it is the "Weekly hardware report" switch in Settings → Privacy and
+  under the consent screen's *Choose*, also off. **Accepting telemetry, even with *Turn all on*,
+  does not turn it on**: the hardware identifiers above are collected only if you tick this one
+  yourself.
 
 ### 3.4 What is never sent by telemetry
 The contents of your mods, game files or other files; the values you type into fields (unless you
@@ -241,14 +262,15 @@ turn on the unmasked replay mode in §3.2); your name or e‑mail.
 - The server limits how many batches one address may send per minute.
 
 ### 3.6 Errors sent live
-A separate switch, **"Send errors live"** (Settings → Privacy, the consent screen's "Customize"
-section, and its own BetterInstaller box), sends a short report within seconds when BMM hits an
-error. It works **only while telemetry is on**; turning telemetry off stops it and deletes the
-reports still waiting on your PC.
+The **"Errors sent live"** category (Settings → Privacy, the consent screen's *Choose*, and a box
+under the installer's telemetry box) sends a short report within seconds when BMM hits an error.
+It works **only while telemetry is on**; turning telemetry off stops it and deletes the reports
+still waiting on your PC. The same switch also covers the warning and error logs of §3.1.
 
-- **Default:** off, and unticked everywhere it is offered. One exception, decided once: if you had
-  already accepted telemetry when this option appeared, it starts on, because it is a narrower
-  form of the error logs telemetry already sent (§3.1).
+- **Default:** **on with telemetry**. Accepting telemetry (with *Turn all on*, or by switching
+  telemetry on in Settings → Privacy) turns it on; *Choose* lets you leave it off, and Settings →
+  Privacy turns it off on its own at any time. Switching telemetry back on after turning it off
+  turns it on again.
 - **What is sent:** JavaScript errors, crashes of the Rust side, commands that failed with a real
   error (not a cancel, not being offline, not a message already shown to you), and failed
   deploys, installs, backups and scheduled tasks. For each: the error message, where it happened in
@@ -269,6 +291,26 @@ reports still waiting on your PC.
   group of errors is classified by **Laya**, the BetterCommunity classifier running on the same
   servers (category, severity, "your setup or a BMM bug"); the text is never sent to an outside AI
   provider. Same retention as the rest of telemetry (§3.5).
+
+### 3.7 Laya usage statistics
+A category of its own (§3.0), on with *Turn all on*. It tells the team whether Laya (§6.10) helps,
+without sending anything Laya read or wrote. For each use of a Laya feature BMM sends:
+
+- **which feature** (mod suggestions, description draft, Ask Laya, smart search, report triage, a
+  connection test) and **where it ran**: built into BMM, the BetterCommunity server, your own Laya
+  server, an external API, or plain rules;
+- **how long it took** (rounded to 10 ms, and a range such as "1 to 3 s"), whether it answered, and
+  whether it **declined to answer** (nothing confident enough);
+- for suggestions, **the names of the fields** suggested (tags, category, author…) and, when you
+  apply, which fields you **kept or rejected**;
+- for Ask Laya, **how many results** it found, whether they were low‑confidence, and when you open
+  one, **what kind** of result it was (a mod, a page, a setting…);
+- the built‑in model being **installed, removed or cancelled**, and whether that worked;
+- an error as a **short code** (`timeout`, `no_model`…), never its message.
+
+**Never sent:** your question, the text Laya read or wrote, a suggestion's value, a mod, file or
+profile name, an id, a path or an error message. It goes to the telemetry server with the rest of
+telemetry, under the same retention and erasure (§3.5).
 
 ---
 
@@ -457,9 +499,10 @@ or *Get an AI hint*:
 | Update check | Yes, by default | IP address, program user‑agent | GitHub, bettercommunity.ch |
 | Connectivity checks, fonts, apps catalogue | Yes, always | IP address | Google, Cloudflare, GitHub |
 | **Telemetry** (**off** unless you accept it in BMM) | Yes | Creator ID, system profile with public and local IP, usage, clicked button text, external link addresses, logs, performance, game names, repo addresses — the server keeps the public address truncated to its network and discards the local one | BetterCommunity telemetry server; your IP to ipify.org, your truncated network to ipwho.is |
-| Session replay (with telemetry, on unless unticked) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
-| Weekly benchmark + hardware report (**off**, its own question) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |
-| Errors sent live (**off** unless ticked, needs telemetry) | Yes, within seconds | Error message and code location with secrets, folder names, e‑mails and IPs removed, BMM version, OS, a one‑way hash of the Creator ID | BetterCommunity telemetry server (classified by Laya on the same servers) |
+| Session replay (a telemetry category, on with telemetry unless switched off) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
+| Laya usage statistics (a telemetry category, on with telemetry unless switched off) | Yes | Feature, where it ran, duration, fields suggested and kept or rejected, result counts, error codes; never any text (§3.7) | BetterCommunity telemetry server |
+| Weekly benchmark + hardware report (**off**, its own question, not in *Turn all on*) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |
+| Errors sent live (a telemetry category, **on with telemetry** unless switched off) | Yes, within seconds | Error message and code location with secrets, folder names, e‑mails and IPs removed, BMM version, OS, a one‑way hash of the Creator ID | BetterCommunity telemetry server (classified by Laya on the same servers) |
 | **Discord Rich Presence** (**off** by default, in BMM and in the installer) | Yes | Profile name, active mod count, Creator ID | Discord, shown on your profile |
 | Connect or sync a Server Repo | Yes | IP address, Creator ID | That repo's owner |
 | Host a Server Repo | Yes (incoming) | Visitors' IP and Creator ID, stored on your PC | You |
@@ -474,8 +517,9 @@ or *Get an AI hint*:
 
 - Telemetry, the weekly hardware report and Discord Rich Presence are **off unless you turn them
   on**: the installer's boxes start unticked, and ticking the telemetry one only pre‑selects the
-  answer on BMM's consent screen. Untick session replay in the installer or in Settings → Privacy;
-  turn any of them on or off later in Settings; turn off automatic update checks in Settings.
+  answer on BMM's consent screen. Each telemetry category (§3.0) can be switched off on its own, in
+  the installer (*Choose*), on the consent screen (*Choose*) or in Settings → Privacy; turn any of
+  them on or off later in Settings; turn off automatic update checks in Settings.
 - Export or clear the local telemetry buffer, request erasure per packet, or request a copy of
   your data (§3.5).
 - The startup requests of §2.1 and §2.3 cannot currently be turned off in BMM; staying offline

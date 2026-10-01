@@ -92,7 +92,6 @@ function embeddedHtml(st: any): string {
     return `
       <div class="ai-block" id="ai-emb-block" data-state="${escAttr(state)}">
         <div class="ai-sub">${escHtml(t('ai.emb.title'))} ${pill}</div>
-        <p class="ai-muted">${escHtml(t('ai.emb.what'))}</p>
         ${lines.filter(Boolean).map((l) => `<div class="ai-muted${state === 'error' || state === 'no_space' ? ' ai-err' : ''}">${escHtml(l)}</div>`).join('')}
         <progress id="ai-emb-progress" max="1" value="0" ${busy ? '' : 'hidden'}></progress>
         <div class="ai-muted ai-emb-live" id="ai-emb-live" aria-live="polite" ${busy ? '' : 'hidden'}></div>
@@ -145,6 +144,36 @@ export async function mountAiSettings(): Promise<void> {
     }
 }
 
+/** « Classement : Laya intégré · Rédaction : locale · Rien ne quitte ce PC » — the card's one-line status. */
+function classifierName(c: string): string {
+    switch (c) {
+        case 'embedded': return t('ai.set2.clsEmbedded');
+        case 'local': return t('ai.set2.clsLocal');
+        case 'bettercommunity': return t('ai.set2.clsBc');
+        default: return t('ai.set2.none');
+    }
+}
+function generatorName(g: string): string {
+    switch (g) {
+        case 'local': return t('ai.set2.genLocal');
+        case 'external': return t('ai.set2.genExternal');
+        default: return t('ai.set2.none');
+    }
+}
+export function statusLine(s: AiSettings, st: any): string {
+    if (st?.killSwitch) return t('ai.set2.stKilled');
+    if (!s.enabled) return t('ai.set2.stOff');
+    const parts = [t('ai.set2.stCls', { v: classifierName(s.classifier) }), t('ai.set2.stGen', { v: generatorName(s.generative) })];
+    parts.push(st?.offline ? t('ai.set2.stOffline') : t('ai.set2.stOnline'));
+    return parts.join(' · ');
+}
+
+/** One feature toggle: a short label and a one-line hint. */
+function toggle(id: string, on: boolean, label: string, hint: string, disabled = false): string {
+    return `<label class="ai-toggle"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+        <span><b>${escHtml(label)}</b><small>${escHtml(hint)}</small></span></label>`;
+}
+
 function render(card: HTMLElement, view: AiView | null): void {
     const s: AiSettings | null = view?.settings || null;
     const st = view?.status || {};
@@ -157,89 +186,131 @@ function render(card: HTMLElement, view: AiView | null): void {
     const on = !!s.enabled && !killed;
     const pill = killed ? t('ai.settings.pillKilled') : on ? t('ai.settings.pillOn') : t('ai.settings.pillOff');
     const opt = (v: string, cur: string, label: string) => `<option value="${escAttr(v)}"${v === cur ? ' selected' : ''}>${escHtml(label)}</option>`;
+    const cls = s.classifier || 'off';
+    const gen = s.generative || 'off';
     card.innerHTML = `
       <h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.settings.title'))}</span>
         <span class="ai-pill${on ? ' ai-pill-on' : ''}" id="ai-pill">${escHtml(pill)}</span></h3>
-      <p class="ai-lead">${escHtml(t('ai.settings.lead'))}</p>
-      <p class="ai-muted">${escHtml(t('ai.settings.notBundled'))}</p>
+      <div class="ai-statusline" id="ai-statusline">${escHtml(statusLine(s, st))}</div>
       ${killed ? `<div class="ai-warn">${escHtml(t('ai.settings.killedNote'))}</div>` : ''}
-      ${s.installer_choice != null ? `<div class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</div>` : ''}
-      ${embeddedHtml(st)}
       <label class="ai-switch"><input type="checkbox" id="ai-enabled" ${s.enabled ? 'checked' : ''} ${killed ? 'disabled' : ''}>
-        <span><b>${escHtml(t('ai.settings.master'))}</b><small>${escHtml(t('ai.settings.masterHint'))}</small></span></label>
+        <span><b>${escHtml(t('ai.set2.master'))}</b><small>${escHtml(t('ai.set2.masterHint'))}</small></span></label>
       <div class="ai-settings-body${s.enabled ? '' : ' is-off'}" id="ai-body">
-        <div class="ai-grid">
-          <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.settings.classifier'))}</label>
-          <select id="ai-classifier" class="form-input">
-            ${opt('off', s.classifier, t('ai.settings.classifierOff'))}
-            ${opt('embedded', s.classifier, t('ai.settings.classifierEmbedded'))}
-            ${opt('bettercommunity', s.classifier, t('ai.settings.classifierBc'))}
-            ${opt('local', s.classifier, t('ai.settings.classifierLocal'))}
-          </select>
-        </div>
-        <div class="ai-block" id="ai-bc-block" ${s.classifier === 'bettercommunity' ? '' : 'hidden'}>
-          <p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p>
-          <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
-        </div>
-        <div class="ai-block" id="ai-local-block" ${s.classifier === 'local' ? '' : 'hidden'}>
-          <p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p>
+        <div class="ai-prov">
           <div class="ai-grid">
-            <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
-            <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
+            <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.set2.cls'))}</label>
+            <select id="ai-classifier" class="form-input">
+              ${opt('embedded', cls, t('ai.set2.clsEmbedded'))}
+              ${opt('local', cls, t('ai.set2.clsLocal'))}
+              ${opt('bettercommunity', cls, t('ai.set2.clsBc'))}
+              ${opt('off', cls, t('ai.set2.clsOff'))}
+            </select>
+            <span></span><small class="ai-hint1" id="ai-cls-hint">${escHtml(clsHint(cls))}</small>
           </div>
-          <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
-          <div class="ai-warn" id="ai-local-warn" hidden></div>
-          <div class="ai-grid">
-            <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.settings.localKey'))}</label>
-            <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-            <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-            <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
+          <div id="ai-emb-wrap" ${cls === 'embedded' || cls === 'off' ? '' : 'hidden'}>${embeddedHtml(st)}</div>
+          <div class="ai-block" id="ai-bc-block" ${cls === 'bettercommunity' ? '' : 'hidden'}>
+            <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
+            <details class="ai-more"><summary>${escHtml(t('ai.set2.whatSent'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p></details>
+          </div>
+          <div class="ai-block" id="ai-local-block" ${cls === 'local' ? '' : 'hidden'}>
+            <div class="ai-grid">
+              <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
+              <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
+              <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.set2.key'))}</label>
+              <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+              <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+              <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
+            </div>
+            <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
+            <div class="ai-warn" id="ai-local-warn" hidden></div>
+            <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p></details>
           </div>
         </div>
-        <div class="ai-grid">
-          <label class="ai-lbl" for="ai-generative">${escHtml(t('ai.settings.generative'))}</label>
-          <select id="ai-generative" class="form-input">
-            ${opt('off', s.generative, t('ai.settings.generativeOff'))}
-            ${opt('external', s.generative, t('ai.settings.generativeExternal'))}
-          </select>
-        </div>
-        <div class="ai-block" id="ai-ext-block" ${s.generative === 'external' ? '' : 'hidden'}>
-          <p class="ai-muted">${escHtml(t('ai.settings.externalWhat'))}</p>
+        <div class="ai-prov">
           <div class="ai-grid">
-            <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
-            <input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
-            <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.settings.externalModel'))}</label>
-            <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
-            <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
-            <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-            <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-            <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
+            <label class="ai-lbl" for="ai-generative">${escHtml(t('ai.set2.gen'))}</label>
+            <select id="ai-generative" class="form-input">
+              ${opt('off', gen, t('ai.set2.genOff'))}
+              ${opt('local', gen, t('ai.set2.genLocalOpt'))}
+              ${opt('external', gen, t('ai.set2.genExternalOpt'))}
+            </select>
+            <span></span><small class="ai-hint1" id="ai-gen-hint">${escHtml(genHint(gen))}</small>
+          </div>
+          <div class="ai-block" id="ai-genlocal-block" ${gen === 'local' ? '' : 'hidden'}>
+            <div class="ai-grid">
+              <label class="ai-lbl" for="ai-gen-url">${escHtml(t('ai.settings.localUrl'))}</label>
+              <input id="ai-gen-url" class="form-input" value="${escAttr(s.gen_local_url || 'http://127.0.0.1:11434/v1')}" spellcheck="false" autocomplete="off">
+              <label class="ai-lbl" for="ai-gen-model">${escHtml(t('ai.settings.externalModel'))}</label>
+              <span class="ai-keyrow"><input id="ai-gen-model" class="form-input" list="ai-gen-models" value="${escAttr(s.gen_local_model || '')}" placeholder="llama3.1:8b" spellcheck="false" autocomplete="off">
+              <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-find">${escHtml(t('ai.set2.findModels'))}</button></span>
+              <datalist id="ai-gen-models"></datalist>
+            </div>
+            <div class="ai-warn" id="ai-gen-warn" hidden></div>
+            <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.set2.genLocalHow'))}</p></details>
+          </div>
+          <div class="ai-block" id="ai-ext-block" ${gen === 'external' ? '' : 'hidden'}>
+            <div class="ai-grid">
+              <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
+              <input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
+              <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.settings.externalModel'))}</label>
+              <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
+              <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
+              <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+              <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+              <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
+            </div>
+            <div class="ai-warn">${escHtml(t('ai.set2.extWarn'))}</div>
           </div>
         </div>
         <div class="ai-sub">${escHtml(t('ai.settings.features'))}</div>
-        <label class="ai-check"><input type="checkbox" id="ai-f-mod" ${s.mod_suggest ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fMod'))}</span></label>
-        <label class="ai-check"><input type="checkbox" id="ai-f-report" ${s.report_triage ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fReport'))}</span></label>
-        <label class="ai-check"><input type="checkbox" id="ai-f-draft" ${s.description_drafts ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fDraft'))}</span></label>
-        <label class="ai-check"><input type="checkbox" id="ai-f-ask" ${s.ask !== false ? 'checked' : ''}> <span>${escHtml(t('ai.settings.fAsk'))}</span></label>
-        <details class="ai-sent">
-          <summary>${escHtml(t('ai.settings.whatSent'))}</summary>
+        <div class="ai-toggles">
+          ${toggle('ai-f-mod', s.mod_suggest, t('ai.set2.fMod'), t('ai.set2.fModHint'))}
+          ${toggle('ai-f-report', s.report_triage, t('ai.set2.fReport'), t('ai.set2.fReportHint'))}
+          ${toggle('ai-f-ask', s.ask !== false, t('ai.set2.fAsk'), t('ai.set2.fAskHint'))}
+          ${toggle('ai-f-draft', s.description_drafts, t('ai.set2.fDraft'), t('ai.set2.fDraftHint'))}
+          ${toggle('ai-f-askgen', !!s.ask_generate, t('ai.set2.fAskGen'), t('ai.set2.fAskGenHint'))}
+        </div>
+        <details class="ai-more">
+          <summary>${escHtml(t('ai.set2.more'))}</summary>
+          <p class="ai-muted">${escHtml(t('ai.set2.aboutLaya'))}</p>
+          ${s.installer_choice != null ? `<p class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</p>` : ''}
           <ul class="ai-list">
             <li>${escHtml(t('ai.settings.sent0'))}</li>
             <li>${escHtml(t('ai.settings.sent1'))}</li>
             <li>${escHtml(t('ai.settings.sent2'))}</li>
+            <li>${escHtml(t('ai.set2.sentGen'))}</li>
             <li>${escHtml(t('ai.settings.sent3'))}</li>
             <li>${escHtml(t('ai.settings.sent4'))}</li>
           </ul>
+          <button type="button" class="ai-link" id="ai-docs">${escHtml(t('ai.docsLink'))}</button>
         </details>
       </div>
       <div class="ai-actions">
         <button type="button" class="btn btn-primary btn-sm" id="ai-save">${escHtml(t('common.save'))}</button>
         <button type="button" class="btn btn-ghost btn-sm" id="ai-test" ${on ? '' : 'disabled'}>${escHtml(t('ai.settings.test'))}</button>
-        <button type="button" class="ai-link" id="ai-docs">${escHtml(t('ai.docsLink'))}</button>
         <span class="ai-muted" id="ai-status" aria-live="polite"></span>
       </div>`;
     wire(card, s, st);
     refold();
+    // Other features add their own block to this card (the local API): the card is redrawn
+    // whole, so they are told each time.
+    try { document.dispatchEvent(new CustomEvent('bmm:ai-card-rendered', { detail: { card } })); } catch { /* no DOM events */ }
+}
+
+function clsHint(v: string): string {
+    switch (v) {
+        case 'embedded': return t('ai.set2.clsEmbeddedHint');
+        case 'local': return t('ai.set2.clsLocalHint');
+        case 'bettercommunity': return t('ai.set2.clsBcHint');
+        default: return t('ai.set2.clsOffHint');
+    }
+}
+function genHint(v: string): string {
+    switch (v) {
+        case 'local': return t('ai.set2.genLocalHint');
+        case 'external': return t('ai.set2.genExternalHint');
+        default: return t('ai.set2.genOffHint');
+    }
 }
 
 /**
@@ -266,10 +337,13 @@ function read(card: HTMLElement, base: AiSettings): AiSettings {
         local_allow_remote: checked('ai-local-remote'),
         external_url: val('ai-ext-url'),
         external_model: val('ai-ext-model'),
+        gen_local_url: val('ai-gen-url') || 'http://127.0.0.1:11434/v1',
+        gen_local_model: val('ai-gen-model'),
         mod_suggest: checked('ai-f-mod'),
         report_triage: checked('ai-f-report'),
         description_drafts: checked('ai-f-draft'),
         ask: checked('ai-f-ask'),
+        ask_generate: checked('ai-f-askgen'),
     };
 }
 
@@ -295,16 +369,21 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
         const v = (e.target as HTMLSelectElement).value;
         q('ai-bc-block')?.toggleAttribute('hidden', v !== 'bettercommunity');
         q('ai-local-block')?.toggleAttribute('hidden', v !== 'local');
+        q('ai-emb-wrap')?.toggleAttribute('hidden', !(v === 'embedded' || v === 'off'));
+        const h = q('ai-cls-hint'); if (h) h.textContent = clsHint(v);
     });
     q<HTMLSelectElement>('ai-generative')?.addEventListener('change', (e) => {
-        q('ai-ext-block')?.toggleAttribute('hidden', (e.target as HTMLSelectElement).value !== 'external');
+        const v = (e.target as HTMLSelectElement).value;
+        q('ai-ext-block')?.toggleAttribute('hidden', v !== 'external');
+        q('ai-genlocal-block')?.toggleAttribute('hidden', v !== 'local');
+        const h = q('ai-gen-hint'); if (h) h.textContent = genHint(v);
     });
     // A hint while typing: the same rules Rust applies on save.
-    const checkLocal = async () => {
-        const warn = q('ai-local-warn');
+    const checkUrl = async (input: string, warnId: string, kind: 'local' | 'gen_local', remoteBox?: string) => {
+        const warn = q(warnId);
         if (!warn) return;
         try {
-            const r: any = await invoke('ai_check_url', { url: q<HTMLInputElement>('ai-local-url')?.value || '', kind: 'local', allowRemote: !!q<HTMLInputElement>('ai-local-remote')?.checked });
+            const r: any = await invoke('ai_check_url', { url: q<HTMLInputElement>(input)?.value || '', kind, allowRemote: remoteBox ? !!q<HTMLInputElement>(remoteBox)?.checked : false });
             warn.hidden = r?.warning !== 'remote';
             warn.textContent = r?.warning === 'remote' ? t('ai.settings.remoteWarn') : '';
         } catch (e) {
@@ -312,18 +391,44 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
             warn.textContent = reasonText(String((e as Error)?.message || e));
         }
     };
-    q('ai-local-url')?.addEventListener('change', () => void checkLocal());
-    q('ai-local-remote')?.addEventListener('change', () => void checkLocal());
+    q('ai-local-url')?.addEventListener('change', () => void checkUrl('ai-local-url', 'ai-local-warn', 'local', 'ai-local-remote'));
+    q('ai-local-remote')?.addEventListener('change', () => void checkUrl('ai-local-url', 'ai-local-warn', 'local', 'ai-local-remote'));
+    q('ai-gen-url')?.addEventListener('change', () => void checkUrl('ai-gen-url', 'ai-gen-warn', 'gen_local'));
+    // « Trouver les modèles »: save, then ask the local server for its model list (GET /models).
+    q('ai-gen-find')?.addEventListener('click', async () => {
+        if (!(await save())) return;
+        const c = document.getElementById(CARD_ID) || card;
+        const out = c.querySelector<HTMLElement>('#ai-status');
+        try {
+            const r: any = await invoke('ai_test_connection', { target: 'gen_local' });
+            const models: string[] = Array.isArray(r?.models) ? r.models : [];
+            const dl = c.querySelector('#ai-gen-models');
+            if (dl) dl.innerHTML = models.map((m) => `<option value="${escAttr(m)}"></option>`).join('');
+            const input = c.querySelector<HTMLInputElement>('#ai-gen-model');
+            if (input && !input.value && models[0]) input.value = models[0];
+            if (out) { out.textContent = models.length ? t('ai.set2.modelsFound', { n: String(models.length) }) : t('ai.set2.modelsNone'); out.className = 'ai-muted ai-ok'; }
+        } catch (e) {
+            if (out) { out.textContent = reasonText(String((e as Error)?.message || e)); out.className = 'ai-muted ai-err'; }
+        }
+    });
     card.querySelectorAll<HTMLButtonElement>('[data-save-key]').forEach((b) => {
         b.addEventListener('click', async () => {
             const name = b.dataset.saveKey || '';
             const input = q<HTMLInputElement>(name === 'local_key' ? 'ai-local-key' : 'ai-ext-key');
+            const value = input?.value || '';
+            if (input) input.value = '';
+            // Save the URL first: Rust binds the key to the SAVED provider address, and a later
+            // change of address clears it.
+            if (!(await save())) return;
+            const c = document.getElementById(CARD_ID) || card;
             try {
-                const where = String(await invoke('ai_set_secret', { name, value: input?.value || '' }));
-                if (input) input.value = '';
-                const out = q(name === 'local_key' ? 'ai-local-key-where' : 'ai-ext-key-where');
+                const where = String(await invoke('ai_set_secret', { name, value }));
+                const out = c.querySelector(name === 'local_key' ? '#ai-local-key-where' : '#ai-ext-key-where');
                 if (out) out.textContent = keyWhere(where);
-            } catch (e) { say(String((e as Error)?.message || e), 'err'); }
+            } catch (e) {
+                const out = c.querySelector<HTMLElement>('#ai-status');
+                if (out) { out.textContent = reasonText(String((e as Error)?.message || e)); out.className = 'ai-muted ai-err'; }
+            }
         });
     });
     q('ai-save')?.addEventListener('click', () => { void save(); });
@@ -333,18 +438,19 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
         const cur = read(card, s);
         const targets: string[] = [];
         if (cur.classifier === 'local' || cur.classifier === 'bettercommunity' || cur.classifier === 'embedded') targets.push(cur.classifier);
-        if (cur.generative === 'external') targets.push('external');
+        if (cur.generative === 'external' || cur.generative === 'local') targets.push('generator');
         if (!targets.length) { say(t('ai.reason.noProvider'), 'err'); return; }
         if (!(await save())) return;
-        const st = card.querySelector<HTMLElement>('#ai-status');
+        const st = (document.getElementById(CARD_ID) || card).querySelector<HTMLElement>('#ai-status');
         const lines: string[] = [];
         for (const target of targets) {
+            const name = target === 'generator' ? t('ai.set2.gen') : classifierName(target);
             try {
                 const auth = target === 'bettercommunity' ? await bcAuthArgs(cur) : {};
                 const r: any = await invoke('ai_test_connection', { target, ...auth });
-                lines.push(t('ai.settings.testOk', { target, ms: String(r?.latencyMs ?? '?') }));
+                lines.push(t('ai.settings.testOk', { target: name, ms: String(r?.latencyMs ?? '?') }));
             } catch (e) {
-                lines.push(`${target}: ${reasonText(String((e as Error)?.message || e))}`);
+                lines.push(`${name}: ${reasonText(String((e as Error)?.message || e))}`);
             }
         }
         if (st) { st.textContent = lines.join(' · '); st.className = 'ai-muted'; }

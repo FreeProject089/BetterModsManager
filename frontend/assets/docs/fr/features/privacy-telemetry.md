@@ -7,6 +7,15 @@ Tant que tu n'acceptes pas explicitement la boîte de consentement, **rien n'est
 tout** — le traqueur ne fait rien. Refuser (ou ne jamais répondre) = zéro donnée, et refuser
 efface aussi tout ce qui aurait été mis en tampon.
 
+La fenêtre a quatre boutons, et rien d'autre ne compte comme réponse (un clic à côté ne fait rien) :
+
+| Bouton | Ce qu'il fait |
+|---|---|
+| **Tout activer** (recommandé) | Les cinq catégories ci-dessous |
+| **Choisir** | Un interrupteur par catégorie, puis *Valider* |
+| **Non merci** | Désactivée, mémorisé |
+| **Plus tard** (ou Échap) | Rien d'enregistré, rien d'envoyé ; la question revient au prochain lancement |
+
 ```mermaid
 graph TD
     CONSENT{Consentement opt-in ?} -- "refusé / pas demandé" --> NOTHING["Rien de collecté"]
@@ -26,10 +35,22 @@ graph TD
 
 ## Si tu acceptes
 
-- **Ce qui part :** pages visitées, clics (**libellés seulement — jamais ce que tu tapes**),
-  échantillons de performance, erreurs, et un profil matériel anonyme. Pas de chemins de
-  fichiers, pas de contenu de mods, ni nom ni e-mail ; ton identité est un id anonyme.
-- Le **replay de session** (optionnel, actif par défaut quand la télémétrie l'est) enregistre
+La télémétrie est découpée en catégories, chacune avec une ligne sur ce qu'elle envoie :
+
+| Catégorie | Ce qui part |
+|---|---|
+| Statistiques d'utilisation | Pages et fonctions utilisées, clics, durée des sessions. Jamais ce que tu tapes |
+| Performance | FPS, mémoire utilisée et temps de chargement |
+| Erreurs en direct | Erreurs et plantages au moment où ils arrivent ([plus bas](#erreurs-envoyees-en-direct)) |
+| Statistiques Laya | Fonction de Laya, fournisseur, vitesse, champs gardés ou refusés ; jamais de texte ([plus bas](#statistiques-dusage-de-laya)) |
+| Replay de session (masqué) | La fenêtre de BMM seule, texte saisi masqué |
+
+Deux options ne font jamais partie de *Tout activer* : le **rapport matériel hebdomadaire**
+(identifiants matériels précis) et le **replay non masqué**. La liste complète, avec le contenu de
+chacune, est dans la
+[politique de confidentialité](https://github.com/FreeProject089/BetterModsManager/blob/main/PRIVACY_FR.md).
+
+- Le **replay de session** (actif par défaut quand la télémétrie l'est) enregistre
   l'UI **masquée** : noms de mods, de profils et chemins s'affichent en `••••`. Le démasquage
   est un interrupteur séparé et explicite.
 - Tout s'accumule d'abord dans un **fichier local (plafond 10 Mo)** et n'est envoyé qu'en lots
@@ -83,9 +104,9 @@ Un interrupteur à part, **Envoyer les erreurs en direct**, permet à BMM de sig
 l'équipe en quelques secondes, sans attendre un rapport de bug. Il ne marche que si la télémétrie
 est activée : couper la télémétrie l'arrête et efface ce qui attendait d'être envoyé.
 
-- **Sa première valeur.** Si tu avais déjà accepté la télémétrie quand cet interrupteur est
-  apparu, il démarre **activé**. Sinon il démarre **désactivé**, et la fenêtre de consentement
-  l'affiche décoché.
+- **Activé avec la télémétrie.** Accepter la télémétrie l'active (*Tout activer*, ou
+  l'interrupteur principal des Paramètres). *Choisir* permet de le laisser désactivé, et
+  Paramètres → Confidentialité le coupe seul.
 - **Ce qui est envoyé.** Les erreurs JavaScript, les plantages côté Rust, les commandes en échec
   sur une vraie erreur (une annulation, une absence de réseau ou un message déjà affiché ne sont pas
   signalés), et les déploiements, installations, sauvegardes et tâches planifiées en échec. Pour
@@ -114,10 +135,23 @@ graph TD
     SEND --> SERVER["Serveur de télémétrie : Issues"]
 ```
 
+## Statistiques d'usage de Laya
+
+Une catégorie à part, pour que l'équipe voie si Laya aide vraiment. Sans contenu : pour chaque
+utilisation d'une fonction de Laya, BMM envoie la fonction, où elle a tourné (intégrée, serveur
+BetterCommunity, ton propre serveur, une API externe, ou des règles), une tranche de latence, si
+elle a répondu ou s'est abstenue, le **nom** des champs suggérés et ceux que tu as gardés, le nombre
+de résultats de Demander à Laya et le *type* de résultat ouvert, l'installation ou la suppression du
+modèle, et les erreurs sous forme de codes courts.
+
+Jamais ta question, la valeur d'une suggestion, un nom de mod, de fichier ou de profil, un
+identifiant ni un message d'erreur. L'équipe les lit sur la page **Laya** du tableau de bord de
+télémétrie (adoption, acceptation par champ, latence, fournisseurs, erreurs).
+
 ## Tes contrôles (Paramètres → Confidentialité)
 
-- Interrupteur principal, plus des interrupteurs séparés pour le rapport benchmark / matériel
-  étendu (7 jours), le replay de session et **Envoyer les erreurs en direct**.
+- Interrupteur principal, puis un interrupteur par catégorie (avec **Tout activer** quand l'une est
+  coupée), plus le rapport matériel hebdomadaire et le replay non masqué.
 - **Exporte** le tampon brut en JSON à tout moment.
 - Consulte chaque **paquet envoyé** (noms et comptes d'événements seulement) et demande sa
   **suppression** — honorée sous 72 heures.

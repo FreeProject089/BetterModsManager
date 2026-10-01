@@ -1,5 +1,6 @@
 // Advanced storage rules (S1): per disk × per operation, the Storage Manager's "Rules per
-// disk" tab (storage-modal.ts). A legend above the table says what each column does.
+// disk" tab (storage-modal.ts). The legend (what each column does) is folded above the table;
+// a cell holding a rule of its own stands out, a column that does not apply is a dash.
 //
 // Each cell is an input whose placeholder is what is IN FORCE and where it comes from, so an
 // empty cell never hides a limit: "40 · this disk" says the value is inherited from the
@@ -37,16 +38,19 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
     const tx = (k: string, en: string) => { const v = t(k); return v && v !== k ? v : en; };
     host.innerHTML = `
         <div class="res-matrix">
-            <div class="stm-lead"><span>${esc(tx('stm.lead.rules', 'Optional. Override the preset for one disk and one kind of work. Leave a cell empty to keep what is in force.'))}</span>${learnMore('resources-rules', { compact: true })}</div>
-            <div class="stm-card stm-card-flat">
-                <div class="stm-card-title">${esc(tx('stm.legend.title', 'How to read this table'))}</div>
-                <dl class="stm-legend">${legend.map(([term, k, en]) => `<div><dt>${esc(term)}</dt><dd>${esc(tx(k, en))}</dd></div>`).join('')}</dl>
-                <div class="stm-help">${esc(t('res.advHint') || 'An empty cell inherits: this disk and operation, then this disk, then all disks, then the preset. The grey text is what is in force and where it comes from. Priority hints are ignored on network drives.')}</div>
-            </div>
+            <p class="stm-lead">${esc(tx('stm.lead.rulesShort', 'Optional. Type a value to override the preset for one disk and one kind of work.'))}</p>
+            <details class="stm-more">
+                <summary>${esc(tx('stm.legend.title', 'How to read this table'))}</summary>
+                <div class="stm-more-body">
+                    <dl class="stm-legend">${legend.map(([term, k, en]) => `<div><dt>${esc(term)}</dt><dd>${esc(tx(k, en))}</dd></div>`).join('')}</dl>
+                    <div class="stm-help">${esc(t('res.advHint') || 'An empty cell inherits: this disk and operation, then this disk, then all disks, then the preset. The grey text is what is in force and where it comes from. Priority hints are ignored on network drives.')}</div>
+                    ${learnMore('resources-rules')}
+                </div>
+            </details>
             <div class="stm-row">
                 <label class="stm-card-title" for="stm-m-disk">${esc(tx('stm.rules.disk', 'Disk'))}</label>
                 <select id="stm-m-disk" class="input res-m-disk" data-tooltip="${esc(tx('stm.rules.diskTip', 'The disk whose rules the table shows. All disks: rules every disk inherits.'))}">${disks.map((d) => `<option value="${esc(d)}">${esc(d === '*' ? (t('res.allDisks') || 'All disks') : d.toUpperCase())}</option>`).join('')}</select>
-                <button type="button" class="btn btn-sm res-m-reset" data-tooltip="${esc(tx('stm.rules.resetTip', 'Remove every rule of this disk: the preset decides again.'))}">${esc(t('res.resetDisk') || 'Back to defaults for this disk')}</button>
+                <button type="button" class="btn btn-sm btn-ghost res-m-reset" data-tooltip="${esc(tx('stm.rules.resetTip', 'Remove every rule of this disk: the preset decides again.'))}">${esc(t('res.resetDisk') || 'Back to defaults for this disk')}</button>
                 <span class="stm-msg res-m-msg" role="status"></span>
             </div>
             <div class="res-m-table stm-table-wrap"></div>
@@ -62,8 +66,14 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
         // A column that acts on nothing for this operation is disabled, with the reason, rather
         // than taking a value that would change nothing.
         const na = t('res.na') || 'Does not apply to this operation: the value would change nothing.';
-        const input = (op: string, key: string, val: unknown, ph: string, w = 70, on = true) =>
-            `<input class="input res-m-in" data-op="${op}" data-k="${key}" type="number" min="1" value="${val == null ? '' : esc(String(val))}" placeholder="${esc(ph)}" title="${esc(on ? ph : `${ph} · ${na}`)}"${on ? '' : ' disabled aria-disabled="true"'} style="max-width:${w}px;width:100%">`;
+        // An editable cell is an input (outlined, and filled with the accent when it holds a rule
+        // of its own); a column that does not apply is a dash with the reason, keeping a value
+        // stored there anyway so a save of the row does not drop it.
+        const input = (op: string, key: string, val: unknown, ph: string, w = 70, on = true) => {
+            const v = val == null ? '' : esc(String(val));
+            if (!on) return `<span class="stm-cell-off" title="${esc(`${ph} · ${na}`)}" aria-label="${esc(na)}">–</span>${v ? `<input type="hidden" class="res-m-in" data-op="${op}" data-k="${key}" value="${v}">` : ''}`;
+            return `<input class="input res-m-in${v ? ' is-set' : ''}" data-op="${op}" data-k="${key}" type="number" min="1" value="${v}" placeholder="${esc(ph)}" title="${esc(ph)}" style="max-width:${w}px;width:100%">`;
+        };
         const tip = (k: string) => { const row = legend.find((l) => l[1] === k); return row ? esc(tx(row[1], row[2])) : ''; };
         table.innerHTML = `<table class="stm-table">
             <thead><tr>
@@ -76,16 +86,17 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
             <tbody>${cells.map((c) => {
                 const mine = c.own;
                 const on = c.applies || { rate: true, parallel: true, buffer: true, io: true };
-                return `<tr>
+                const own = [mine.rate_mb_s, mine.parallel, mine.buffer_kib, mine.io_priority].some((v) => v != null);
+                return `<tr${own ? ' class="has-rule"' : ''}>
                     <td class="stm-table-op">${esc(t('res.k.' + c.op) || c.op)}</td>
                     <td>${input(c.op, 'rate', mine.rate_mb_s, `${c.rate_mb_s ?? '∞'} · ${src(c.src_rate)}`, 110, on.rate)}</td>
                     <td>${input(c.op, 'parallel', mine.parallel, `${c.parallel} · ${src(c.src_parallel)}`, 110, on.parallel)}</td>
                     <td>${input(c.op, 'buffer', mine.buffer_kib, `${c.buffer_kib} · ${src(c.src_buffer)}`, 120, on.buffer)}</td>
-                    <td><select class="input res-m-in" data-op="${c.op}" data-k="io" style="max-width:130px" title="${esc(on.io ? `${c.io_priority} · ${src(c.src_io)}` : `${c.io_priority} · ${src(c.src_io)} · ${na}`)}"${on.io ? '' : ' disabled aria-disabled="true"'}>
+                    <td>${on.io ? `<select class="input res-m-in${mine.io_priority ? ' is-set' : ''}" data-op="${c.op}" data-k="io" style="max-width:130px" title="${esc(`${c.io_priority} · ${src(c.src_io)}`)}">
                         <option value="">${esc((t('res.inherit') || 'inherit') + ` (${t('res.io.' + c.io_priority) || c.io_priority})`)}</option>
                         <option value="low"${mine.io_priority === 'low' ? ' selected' : ''}>${esc(t('res.io.low') || 'low')}</option>
                         <option value="normal"${mine.io_priority === 'normal' ? ' selected' : ''}>${esc(t('res.io.normal') || 'normal')}</option>
-                    </select></td>
+                    </select>` : input(c.op, 'io', mine.io_priority, `${c.io_priority} · ${src(c.src_io)}`, 130, false)}</td>
                 </tr>`;
             }).join('')}</tbody></table>`;
     };

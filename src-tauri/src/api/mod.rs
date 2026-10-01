@@ -180,6 +180,19 @@ struct EnableDisableModpackRealBody {
     profile_id: Option<String>,
 }
 
+/// `POST /api/modpacks/enable`: the disable body, plus where the mods go in the order.
+#[derive(Deserialize)]
+struct EnableModpackRealBody {
+    #[serde(default)]
+    modpack_id: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// top | bottom | keep. Absent = the pack's own mode, then the `order_bulk_mode` setting
+    /// (commands/order_share.rs).
+    #[serde(default)]
+    order_mode: Option<String>,
+}
+
 // ── Repo API body types ──────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -272,6 +285,44 @@ struct ModOrderBody {
     /// that changed hands: the repair when the game folder and the order may disagree.
     #[serde(default)]
     reapply: bool,
+}
+
+/// `POST /api/mods/order/import` — bring in a shared order (a code, a bmm://order link, the
+/// JSON document or a list of mod names). `dryRun` answers the plan without changing anything.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ModOrderImportBody {
+    text: String,
+    #[serde(default)]
+    profile_id: Option<String>,
+    #[serde(default)]
+    dry_run: bool,
+}
+
+/// `POST /api/mods/order/arrange` — place a block of active mods by a mode (what every bulk
+/// enable ends with). `mode` absent = the `order_bulk_mode` setting.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ModOrderArrangeBody {
+    ids: Vec<String>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+}
+
+/// `POST /api/mods/order/mode` — the default placement of a bulk enable.
+#[derive(Deserialize, Clone)]
+struct ModOrderModeBody {
+    mode: String,
+}
+
+/// `GET /api/mods/order/export?profileId=` — the profile to export; the active one when absent.
+#[derive(Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct ModOrderExportQuery {
+    #[serde(default)]
+    profile_id: Option<String>,
 }
 
 /// `POST /api/schedules/enabled` — arm or disarm one saved task.
@@ -2135,10 +2186,10 @@ pub async fn start_api_server(
         .and(warp::post())
         .and(require_token(tok_mp_enable))
         .and(require_permission(token.clone(), "modpacks.write"))
-        .and(warp::body::json::<EnableDisableModpackRealBody>())
+        .and(warp::body::json::<EnableModpackRealBody>())
         .and(with_data(data_mp_enable))
         .and(with_path(path_mp_enable))
-        .map(|body: EnableDisableModpackRealBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+        .map(|body: EnableModpackRealBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
             let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
             let mod_ids: Vec<String> = if let Some(ref mp_id) = body.modpack_id {
                 match data.modpacks.iter().find(|mp| &mp.id == mp_id) {
@@ -2164,12 +2215,21 @@ pub async fn start_api_server(
             };
             let count = mod_ids.len();
             let active_id = data.active_profile_id.clone().unwrap_or_default();
+            // The pack's own placement, then the setting, unless the caller named one.
+            let pack_mode = body.modpack_id.as_ref()
+                .and_then(|id| data.modpacks.iter().find(|mp| &mp.id == id))
+                .and_then(|mp| mp.order_mode.clone());
+            let mode = crate::commands::order_share::resolve_mode(
+                body.order_mode.as_deref().or(pack_mode.as_deref()),
+                &data.settings.order_bulk_mode,
+            );
             if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
                 for id in &mod_ids {
                     if !p.active_mods.contains(id) {
                         p.active_mods.push(id.clone());
                     }
                 }
+                p.active_mods = crate::commands::order_share::arrange(&p.active_mods, &mod_ids, mode);
             }
             for m in data.mods.iter_mut() {
                 if mod_ids.contains(&m.id) {
@@ -2980,6 +3040,7 @@ pub async fn start_api_server(
                 sr_link: body.sr_link,
                 game_name: body.game_name
                     .or_else(|| source.as_ref().map(|s| s.game_name.clone())),
+                order_mode: None,
             };
             data.modpacks.push(modpack);
             drop(data);
@@ -4805,6 +4866,96 @@ pub async fn start_api_server(
             })
         });
 
+    // A shared order: export it as a portable document (mods named by fingerprint, repo id and
+    // name, not by this machine's ids), or import one. Import never changes the active set: the
+    // active mods it names take its order in the slots they hold (commands/order_share.rs).
+    let tok_ord_exp = token.clone();
+    let handle_ord_exp = app_handle.clone();
+    let mods_order_export = warp::path!("api" / "mods" / "order" / "export")
+        .and(warp::get())
+        .and(require_permission(tok_ord_exp, "mods.read"))
+        .and(warp::query::<ModOrderExportQuery>())
+        .and(with_app_handle(handle_ord_exp))
+        .map(|q: ModOrderExportQuery, handle: tauri::AppHandle| {
+            let state = handle.state::<crate::state::AppState>();
+            match crate::commands::order_share::export_for(&state, q.profile_id) {
+                Ok(out) => warp::reply::with_status(warp::reply::json(&out), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
+    let tok_ord_imp = token.clone();
+    let handle_ord_imp = app_handle.clone();
+    let mods_order_import = warp::path!("api" / "mods" / "order" / "import")
+        .and(warp::post())
+        .and(require_permission(tok_ord_imp, "mods.write"))
+        .and(warp::body::json::<ModOrderImportBody>())
+        .and(with_app_handle(handle_ord_imp))
+        .and_then(|body: ModOrderImportBody, handle: tauri::AppHandle| async move {
+            let state = handle.state::<crate::state::AppState>();
+            let out = match crate::commands::order_share::preview_for(&state, body.profile_id.clone(), &body.text) {
+                Ok(plan) if body.dry_run || !plan.changed => Ok(serde_json::json!({ "ok": true, "dryRun": body.dry_run, "moved": 0, "plan": plan })),
+                Ok(plan) => crate::commands::order_share::import_for(&state, body.profile_id, &body.text)
+                    .await
+                    .map(|moved| serde_json::json!({ "ok": true, "dryRun": false, "moved": moved, "plan": plan })),
+                Err(e) => Err(e),
+            };
+            Ok::<_, std::convert::Infallible>(match out {
+                Ok(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            })
+        });
+
+    // Place a block of active mods (top | bottom | keep), and read or set the default.
+    let tok_ord_arr = token.clone();
+    let handle_ord_arr = app_handle.clone();
+    let mods_order_arrange = warp::path!("api" / "mods" / "order" / "arrange")
+        .and(warp::post())
+        .and(require_permission(tok_ord_arr, "mods.write"))
+        .and(warp::body::json::<ModOrderArrangeBody>())
+        .and(with_app_handle(handle_ord_arr))
+        .and_then(|body: ModOrderArrangeBody, handle: tauri::AppHandle| async move {
+            let state = handle.state::<crate::state::AppState>();
+            let out = crate::commands::order_share::arrange_for(&state, body.profile_id, &body.ids, body.mode.as_deref()).await;
+            Ok::<_, std::convert::Infallible>(match out {
+                Ok(moved) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "moved": moved })), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            })
+        });
+
+    let tok_ord_mode_get = token.clone();
+    let handle_ord_mode_get = app_handle.clone();
+    let mods_order_mode_get = warp::path!("api" / "mods" / "order" / "mode")
+        .and(warp::get())
+        .and(require_permission(tok_ord_mode_get, "mods.read"))
+        .and(with_app_handle(handle_ord_mode_get))
+        .map(|handle: tauri::AppHandle| {
+            let state = handle.state::<crate::state::AppState>();
+            let mode = crate::commands::order_share::order_bulk_mode_get(state);
+            warp::reply::json(&serde_json::json!({ "ok": true, "mode": mode }))
+        });
+
+    let tok_ord_mode_set = token.clone();
+    let handle_ord_mode_set = app_handle.clone();
+    let mods_order_mode_set = warp::path!("api" / "mods" / "order" / "mode")
+        .and(warp::post())
+        .and(require_permission(tok_ord_mode_set, "mods.write"))
+        .and(warp::body::json::<ModOrderModeBody>())
+        .and(with_app_handle(handle_ord_mode_set))
+        .map(|body: ModOrderModeBody, handle: tauri::AppHandle| {
+            let state = handle.state::<crate::state::AppState>();
+            match crate::commands::order_share::order_bulk_mode_set(state, body.mode) {
+                Ok(mode) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "mode": mode })), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
     // ── The doorbell ─────────────────────────────────────────────────
     //
     // A scheduled task could wait for a clock and for a file. This is the third thing:
@@ -5171,10 +5322,21 @@ pub async fn start_api_server(
             }
         });
 
-    let group_c = schedules_list
-        .or(schedules_set)
+    // The activation order, its own boxed group: in group_c the `or` chain grew past the
+    // compiler's query depth once the share/arrange routes joined it. The specific paths come
+    // before `/api/mods/order` itself.
+    let group_order = mods_order_export
+        .or(mods_order_import)
+        .or(mods_order_arrange)
+        .or(mods_order_mode_get)
+        .or(mods_order_mode_set)
         .or(mods_order_get)
         .or(mods_order_set)
+        .boxed();
+
+    let group_c = schedules_list
+        .or(schedules_set)
+        .or(group_order)
         .or(hook_ring)
         .or(content_id)
         .or(repo_modpacks_get)

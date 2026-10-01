@@ -73,7 +73,7 @@ Tout ce qui précède la première instruction.
 | `manual` | seulement sur le bouton Exécuter, ou via un deeplink |
 | `describe "…"` | la description affichée dans la liste |
 | `disabled` | garder la tâche sans l'exécuter |
-| `allow command, script, deeplink, stopProcess` | ce que la tâche peut faire hors de BMM (aussi `delete`, `resources`, `tasks`, `network`) |
+| `allow command, script, deeplink, stopProcess` | ce que la tâche peut faire hors de BMM (aussi `delete`, `resources`, `tasks`, `network`, `ai`) |
 
 `allow` correspond aux quatre mêmes permissions que les cases de l'éditeur de briques, et
 elles sont exigées pour les mêmes étapes. Une tâche qui lance un script sans `allow script`

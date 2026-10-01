@@ -159,7 +159,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~110 actions across nine groups:
+There are ~112 actions across nine groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -216,7 +216,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants eight things separately, and each says what it unlocks:
+Each task grants nine things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -228,8 +228,9 @@ Each task grants eight things separately, and each says what it unlocks:
 | **Resources** | Change the resource preset, game mode and the queue ([below](#how-hard-bmm-works)) |
 | **Other tasks** | Run, start or switch on another of your tasks (*Run another scheduled task*, *Start another task without waiting*, *Arm or disarm another task*) |
 | **Network** | Send webhooks and Discord or Slack messages, and read a feed for the `rss` trigger — http(s) only, never a private address unless the step allows the local network ([below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
+| **Laya (AI)** | Ask Laya on this PC: sort a text, ask a question, suggest a mod's details ([below](#laya-in-a-task)) |
 
-All eight are off until you turn them on, and a step whose permission is missing fails with a
+All nine are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
 **Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
@@ -488,6 +489,28 @@ while the canvas has the focus, so typing in a field is never taken over.
 With the mouse: drag the background, hold :kbd[Space] and drag, or scroll, to move around;
 :kbd[Ctrl] + wheel (or a pinch) to zoom; :kbd[Shift] + drag to select several nodes, :kbd[Ctrl] + click
 to add one to the selection.
+
+## Laya in a task
+
+Three actions ask **Laya**, the classifier that runs on your PC. They need the **Laya (AI)**
+permission and AI turned on in Settings.
+
+| Action | What it leaves |
+|---|---|
+| `ai.classify` | Sorts a text (or the start of a text file) into **your** labels. `{kind}` is the label, `{kind.p}` its probability; also `{ai.label}` and `{ai.p}` |
+| `ai.ask` | Searches the docs and your mods for a question. The answer is text in `{answer}` and `{ai.answer}` |
+| `ai.suggest_mod_metadata` | Lists suggestions for one mod (name, tags, links…). **Nothing is applied** |
+
+Branch on the result with the **Laya's label is…** condition: `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }`.
+
+**An answer is data, never a command.** The text from `ai.ask` and `ai.suggest_mod_metadata` is
+built from things BMM does not control (a mod's readme, a file). It can go into a message, a log
+line or a file. It cannot go into a program, a script, a link, an address or a header: the step
+fails and says so. A copy of it (`set`, a list, a map) is refused the same way. A label from
+`ai.classify` is always one of your own words (or `none`), so branching on it is safe.
+
+Limits: per run, 20 calls to Laya and 2 minutes of waiting; for all tasks together, 30 calls a
+minute, one at a time. Nothing runs while a game is running, with AI off, or with `--no-ai`.
 
 ## Telling the outside world — webhooks, Discord, Slack, feeds
 
@@ -1314,6 +1337,18 @@ winning, and does nothing — then puts it back the day something you installed 
 
 `{order.moved}` is how many files changed hands. Zero is an ordinary answer and a useful one:
 the order changed and nothing on disk did, so the mods that moved share no file.
+
+**Enable modpack**, **Enable all mods** and **Apply a mod list** have an **Activation order** field
+(`placement` in script): where the mods they turn on go.
+
+```bmms
+do modpack.enable(id: "night-pack", placement: "bottom")
+do mods.enableAll(placement: "keep")
+```
+
+`top` makes them win, `bottom` keeps yours winning, `keep` moves nothing already active. Empty is
+the pack's own choice, then the **Bulk enable** setting. Enable modpack also writes
+`{order.moved}`. See [Activation order](doc-page:how-it-works/load-order).
 
 !!! note "The files change immediately"
 

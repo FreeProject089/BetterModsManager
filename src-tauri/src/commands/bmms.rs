@@ -1264,11 +1264,11 @@ impl P {
                     let tok = self.peek().clone();
                     let p = self.word("a permission")?;
                     match p.as_str() {
-                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" | "network" => { perms.insert(p, Value::Bool(true)); }
+                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" | "network" | "ai" => { perms.insert(p, Value::Bool(true)); }
                         other => {
                             return Err(Diagnostic::at(
                                 &tok,
-                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks, network.", other),
+                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks, network, ai.", other),
                             ))
                         }
                     }
@@ -2327,7 +2327,7 @@ pub fn bmms_decompile(task: Value) -> String {
     // `perms` would silently drop permissions it really has.
     let mut granted: Vec<&str> = Vec::new();
     if let Some(p) = task.get("perms").and_then(|x| x.as_object()) {
-        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network"] {
+        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network", "ai"] {
             if p.get(k) == Some(&Value::Bool(true)) {
                 granted.push(k);
             }
@@ -3263,6 +3263,28 @@ if online {
         // A tree from a newer BMM must not lose steps when an older one prints it.
         let t = json!({ "name": "T", "trigger": {"type":"manual"}, "steps": [{ "kind": "somethingNew" }] });
         assert!(bmms_decompile(t).contains("unknown step kind"));
+    }
+
+    #[test]
+    fn laya_steps_and_the_ai_permission_round_trip() {
+        let t = compile(
+            r#"task "Triage" {
+                manual
+                allow ai
+                do ai.classify(text: "{event.title}", labels: "crash, ui", into: "kind")
+                if aiLabel(var: "kind", label: "crash", min: 0.8) {
+                    do log.print(message: "crash")
+                }
+            }"#,
+        );
+        assert_eq!(t["perms"]["ai"], true);
+        assert_eq!(t["steps"][0]["action"]["type"], "ai.classify");
+        assert_eq!(t["steps"][1]["condition"]["type"], "aiLabel");
+        let s = bmms_decompile(t);
+        assert!(s.contains("allow ai"), "the permission must be printed back: {}", s);
+        // A misspelt permission names the real list, `ai` included.
+        let r = compile_inner(r#"task "T" { allow laya }"#, false);
+        assert!(!r.ok && format!("{:?}", r.errors).contains("network, ai"));
     }
 
     #[test]

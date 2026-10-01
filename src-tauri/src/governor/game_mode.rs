@@ -131,6 +131,27 @@ fn file_name(p: &str) -> String {
     p.rsplit(['\\', '/']).next().unwrap_or(p).to_string()
 }
 
+/// Programs that are never a game by themselves: browsers, video players, chat and streaming
+/// tools, game launchers, editors. A full-screen browser (a video) or a launcher living in a
+/// profile's folder must not put BMM in game mode. Only the user's own list can still name one
+/// (their explicit choice; the Storage Manager warns). Lower-case file names. The Storage
+/// Manager keeps the same list (resources-spark.ts NOT_GAMES; a test compares the two).
+pub const NOT_GAMES: &[&str] = &[
+    "firefox.exe", "chrome.exe", "msedge.exe", "opera.exe", "brave.exe", "vivaldi.exe", "iexplore.exe",
+    "waterfox.exe", "librewolf.exe", "zen.exe", "arc.exe", "floorp.exe",
+    "vlc.exe", "mpv.exe", "mpc-hc.exe", "mpc-hc64.exe", "mpc-be64.exe", "potplayermini64.exe", "wmplayer.exe",
+    "discord.exe", "spotify.exe", "obs64.exe", "teams.exe", "ms-teams.exe", "slack.exe", "zoom.exe",
+    "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "galaxyclient.exe", "eadesktop.exe",
+    "ubisoftconnect.exe", "upc.exe", "battle.net.exe",
+    "code.exe", "explorer.exe", "powerpnt.exe",
+];
+
+/// Is this executable (a name or a full path) one of `NOT_GAMES`?
+pub fn is_known_non_game(exe: &str) -> bool {
+    let name = exe.rsplit(['\\', '/']).next().unwrap_or(exe).to_ascii_lowercase();
+    NOT_GAMES.contains(&name.as_str())
+}
+
 /// Never held, whatever the options say.
 fn never_held(k: OpKind) -> bool { matches!(k, OpKind::Deploy | OpKind::Install | OpKind::Backup) }
 
@@ -170,7 +191,8 @@ impl GameMode {
     fn match_game(&self, exe: &str) -> Option<Trigger> {
         let e = exe.replace('/', "\\").to_lowercase();
         let name = e.rsplit('\\').next().unwrap_or(&e);
-        if let Some(d) = self.game_dirs.iter().find(|d| e.starts_with(d.as_str())) {
+        // A browser or a launcher inside a profile's folder is not the game.
+        if let Some(d) = self.game_dirs.iter().find(|d| e.starts_with(d.as_str())).filter(|_| !is_known_non_game(name)) {
             return Some(Trigger { exe: exe.to_string(), name: file_name(exe), source: Source::ProfileFolder, dir: Some(d.clone()) });
         }
         if self.extra.iter().any(|x| x == &e || x == name) {
@@ -225,7 +247,7 @@ impl GameMode {
         let found = still
             .or_else(|| running.iter().find_map(|p| self.match_game(p)))
             .or_else(|| sig.exclusive_fullscreen.then(|| Trigger { exe: String::new(), name: String::new(), source: Source::ExclusiveFullscreen, dir: None }))
-            .or_else(|| sig.fullscreen_window.filter(|_| self.fullscreen_window).map(|e| Trigger { exe: e.to_string(), name: file_name(e), source: Source::FullscreenWindow, dir: None }));
+            .or_else(|| sig.fullscreen_window.filter(|e| self.fullscreen_window && !is_known_non_game(e)).map(|e| Trigger { exe: e.to_string(), name: file_name(e), source: Source::FullscreenWindow, dir: None }));
         if let Some(t) = found {
             self.last_seen = Some(now);
             if !self.active { self.since = Some(now); }
@@ -443,6 +465,21 @@ mod tests {
         for k in [OpKind::Deploy, OpKind::Install, OpKind::Backup] {
             assert_eq!(g.treatment(k), Treatment::Throttled, "{k:?}: a half-modded game folder is worse than a slow one");
         }
+    }
+
+    #[test]
+    fn a_browser_is_never_a_game_unless_the_user_listed_it() {
+        let t0 = Instant::now();
+        // A launcher in a profile's folder, a full-screen browser video: neither is a game.
+        let mut g = GameMode::new(&["C:/Program Files".into()], &[]);
+        assert!(!g.observe(["C:\\Program Files\\Mozilla Firefox\\firefox.exe"], t0));
+        g.set_options(&[OpKind::Hash], LEAVE_AFTER, &[], true);
+        let sig = Signals { exclusive_fullscreen: false, fullscreen_window: Some("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe") };
+        assert!(!g.observe_signals(&[], sig, t0));
+        // The user's own list is their explicit choice: it still counts.
+        let mut listed = GameMode::new(&[], &["firefox.exe".into()]);
+        assert!(listed.observe(["C:\\Program Files\\Mozilla Firefox\\firefox.exe"], t0));
+        assert!(is_known_non_game("FIREFOX.EXE") && is_known_non_game("D:/x/Discord.exe") && !is_known_non_game("SkyrimSE.exe"));
     }
 
     #[test]

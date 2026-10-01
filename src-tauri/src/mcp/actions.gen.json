@@ -57,7 +57,7 @@
     {
       "type": "modpack.enable",
       "label": "Enable modpack",
-      "needs": "modpack",
+      "needs": "modpackOn",
       "group": "mods"
     },
     {
@@ -93,7 +93,7 @@
     {
       "type": "mods.enableAll",
       "label": "Enable all mods",
-      "needs": null,
+      "needs": "enableAll",
       "group": "mods"
     },
     {
@@ -563,6 +563,24 @@
       "label": "Call an HTTP API",
       "needs": "http",
       "group": "system"
+    },
+    {
+      "type": "ai.classify",
+      "label": "Laya: sort a text into your labels",
+      "needs": "aiClassify",
+      "group": "logic"
+    },
+    {
+      "type": "ai.ask",
+      "label": "Laya: ask a question",
+      "needs": "aiAsk",
+      "group": "logic"
+    },
+    {
+      "type": "ai.suggest_mod_metadata",
+      "label": "Laya: suggest details for a mod (not applied)",
+      "needs": "aiSuggest",
+      "group": "mods"
     },
     {
       "type": "wait.http",

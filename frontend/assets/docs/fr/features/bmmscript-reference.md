@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    110 actions · 40 conditions · 36 valeurs · 8 sources de boucle
+    113 actions · 41 conditions · 39 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -25,13 +25,13 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `mod.enable` | Active un mod | `id` |
 | `mod.disable` | Désactive un mod | `id` |
 | `mods.order` | Déplace un mod dans l'ordre de déploiement. Si deux mods livrent le même fichier, le dernier déployé gagne. | `order` · `id` · `mode` |
-| `modpack.enable` | Active tous les mods d'un modpack | `id` |
+| `modpack.enable` | Active tous les mods d'un modpack | `id` · `placement` |
 | `modpack.disable` | Désactive tous les mods d'un modpack | `id` |
 | `modpack.create` | Crée un modpack depuis un profil | `name` · `profile` |
 | `mod.add` | Télécharge & installe un mod depuis une URL | `url` · `name` |
 | `modlist.export` | Enregistre les mods actuels en .mmlist | `path` |
 | `modlist.import` | Charge des mods depuis un fichier .mmlist | `path` |
-| `mods.enableAll` | Active tous les mods | — |
+| `mods.enableAll` | Active tous les mods | `placement` |
 | `mods.disableAll` | Désactive tous les mods | — |
 | `mods.scan` | Rescanne le dossier des mods | — |
 | `plugin.apply` | Applique la modlist d'un plugin | `id` |
@@ -41,7 +41,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `mods.autoImportOmm` | Importe les mods trouvés dans les dossiers OvGME/OMM connus de BMM. | — |
 | `mods.clearHistory` | Vide la liste d’historique des mods. Les mods eux-mêmes ne sont pas touchés. | `id` |
 | `mods.exportModpack` | Écrit le profil actif sous forme de modpack partageable. | `id` · `dir` |
-| `modlist.apply` | Installe ce que la liste nomme et qui manque, puis active exactement ceux-là. | `path` · `url` · `install` · `exact` · `passphrase` |
+| `ai.suggest_mod_metadata` | Liste des suggestions seulement. Rien n’est écrit dans le mod. | `id` · `into` |
+| `modlist.apply` | Installe ce que la liste nomme et qui manque, puis active exactement ceux-là. | `path` · `url` · `install` · `exact` · `passphrase` · `placement` |
 | `plugin.asset` | En lire un dans une variable, le copier quelque part, ouvrir son dossier, ou l'exécuter. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` · `into` |
 
 ### Repo & partage
@@ -125,6 +126,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `id.of` | Range l'id de contenu d'un modpack, d'un plugin ou d'une automatisation dans une variable. Comparez-le pour vérifier que c'est le bon, sans rien télécharger. | `into` · `kind` · `id` |
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
+| `ai.classify` | Choisit une de vos étiquettes, avec sa probabilité. Demande la permission Laya. | `labels` · `text` · `path` · `into` |
+| `ai.ask` | Cherche dans la doc et vos mods. La réponse est une donnée, jamais exécutée. | `question` · `into` |
 | `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 | `log.print` | Met une ligne dans le panneau d'exécution et dans le run.log de la tâche. En code, c'est `print "…"`. | `message` · `text` |
 | `data.validate` | Détermine ce qu'un document EST d'après sa forme, et ce qui ne va pas dedans. À utiliser avant d'agir sur quelque chose de téléchargé. | `path` · `text` · `expect` · `strict` |
@@ -211,6 +214,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `gameRunning` | Un jeu tourne (mode jeu) |
 | `resourcesPresetIs` | Le preset de ressources est |
 | `queueIdle` | BMM est au repos (file vide) |
+| `aiLabel` | L’étiquette de Laya est… |
 
 `all` et `any` sont les conditions de groupe ; en script on écrit normalement `and` et `or` à la place, pour le même résultat. `value` est la ligne de comparaison — c'est ce que `count >= 3` produit.
 
@@ -224,50 +228,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
     ` · `, ` · `,
     // Which attempt of a task-level retry this run is (1 on the first run).
     ` · `,
-    // How big the backup came out. A task can then warn when a nightly bundle suddenly
-    // triples — which is what a replays section left ticked by accident looks like.
-    ` · `,
-    // How many files changed hands when the deployment order last moved. Zero is the
-    // ordinary answer and a useful one: it means the order changed and nothing on disk
-    // did, so the mods that moved share no file.
-    ` · `,
-    // How many attempts the last retry took. 1 means it worked first time, which is
-    // worth being able to branch on: a step that needed three tries is working and worth
-    // knowing about.
-    ` · `,
-    // What the last check found. `valid.ok` and `valid.matched` are 1/0 so a plain `value`
-    // condition can read them; the format itself is text, as {valid.format}.
-    ` · `,
-    ` · `,
-    ` · `,
-    // Written by the two waits and by a script run with "keep going": what happened,
-    // as something a condition can select. Without these a task could wait and could not
-    // branch on the outcome of waiting, which is most of the reason to wait.
-    ` · `, ` · `, ` · `, ` · `,
-    // How much an import brought in — mods in a list, tasks in a .bmmpa, sections in a
-    // backup. The number is what a task branches on: "if the nightly backup came out
-    // with fewer sections than usual, say so".
-    ` · `,
-    // How many entries a publish wrote. Zero is the interesting number: a catalogue with
-    // no entries looks published and installs nothing.
-    ` · `,
-    // How many files a publish or fetch moved. Zero from a publish means the folder was
-    // empty, which is what a failed export upstream looks like from here.
-    ` · `,
-    // What a manifest rebuild found. `removed` is the one worth a condition: a mistyped
-    // path and a deliberate removal both write a valid manifest, and only one of them
-    // describes an empty server.
-    ` · `, ` · `, ` · `, ` · `,
-    // Written by http.request on every call, including a failed one. Listed here because
-    // check-scheduler-vars caught that it was not: a value an action writes and no
-    // condition can select is half a feature, and the half that is missing is the point —
-    // "call the API, and if it answered 404 do something else".
-    ` · `,
-    // The last map touched: how many keys it holds, and whether the last `map.get` found its
-    // key. `map.hit` is the one that matters — without it, a missing key and a key whose value
-    // is genuinely empty are the same empty string, and a task cannot tell "not there" from
-    // "there and blank".
-    ` · `, `
+    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 

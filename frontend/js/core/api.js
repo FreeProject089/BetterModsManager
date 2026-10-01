@@ -143,6 +143,16 @@ export async function loadTauri() {
 }
 let _onInvokeFailure = null;
 export function setInvokeFailureHook(fn) { _onInvokeFailure = fn; }
+let _observer = null;
+export function setInvokeObserver(prefix, fn) { _observer = fn ? { prefix, fn } : null; }
+function observe(command, args, ok, result, ms) {
+    if (!_observer || !command.startsWith(_observer.prefix))
+        return;
+    try {
+        _observer.fn(command, args, ok, result, ms);
+    }
+    catch { /* statistics never break a call */ }
+}
 export async function invoke(command, args = {}, opts) {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -160,11 +170,13 @@ export async function invoke(command, args = {}, opts) {
         const res = await _invoke(command, args);
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
+        observe(command, args, true, res, duration);
         return res;
     }
     catch (err) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'error', err, duration);
+        observe(command, args, false, err, duration);
         // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
         const errStr = String(err);
         const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel'

@@ -77,12 +77,11 @@ pub async fn start_benchmark(window: WebviewWindow, state: State<'_, AppState>) 
                     disk_r = process.disk_usage().read_bytes / 1024; // KB
                     disk_w = process.disk_usage().written_bytes / 1024; // KB
                     
+                    // The uptime costs nothing: always sent (the monitor showed "0s" outside
+                    // the advanced view).
+                    uptime = Some(process.run_time());
                     if advanced {
-                        // On windows/linux thread_count is usually available
-                        // Depending on sysinfo version, it might be thread_count()
-                        // If not available, we omit it
                         v_ram = Some(process.virtual_memory() / 1024 / 1024);
-                        uptime = Some(process.run_time());
                     }
                 }
             }
@@ -128,6 +127,53 @@ pub async fn start_benchmark(window: WebviewWindow, state: State<'_, AppState>) 
 #[tauri::command]
 pub fn stop_benchmark(state: State<AppState>) {
     state.benchmark_running.store(false, Ordering::SeqCst);
+}
+
+/// The label of the benchmark's mini monitor window. main.rs lets it close without ending the
+/// app (its CloseRequested handler only acts on "main").
+pub const MINI_MONITOR: &str = "mini-monitor";
+
+/// The benchmark's mini monitor: a small always-on-top window (frontend/mini-monitor.html) that
+/// stays over a game or another program, which a floating panel inside BMM's own window could
+/// not. It listens to the same `benchmark-point` events as the full monitor. Opening it again
+/// shows and focuses the existing one. Its capability (capabilities/mini-monitor.json) grants
+/// only events and moving/closing itself.
+///
+/// Async on purpose: building a window from a synchronous command deadlocks on Windows (the
+/// command runs on the main thread the new webview needs).
+#[tauri::command]
+pub async fn open_mini_monitor(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window(MINI_MONITOR) {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let (w, h) = (300.0, 182.0);
+    let mut b = tauri::WebviewWindowBuilder::new(&app, MINI_MONITOR, tauri::WebviewUrl::App("mini-monitor.html".into()))
+        .title("BMM Mini-Monitor")
+        .inner_size(w, h)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .always_on_top(true)
+        .skip_taskbar(true);
+    // Top right of the main window's screen, clear of the edge.
+    if let Some(m) = app.get_webview_window("main").and_then(|m| m.current_monitor().ok().flatten()) {
+        let s = m.scale_factor();
+        let (mx, my) = (m.position().x as f64 / s, m.position().y as f64 / s);
+        let mw = m.size().width as f64 / s;
+        b = b.position(mx + mw - w - 24.0, my + 72.0);
+    }
+    b.build().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Close the mini monitor, if open.
+#[tauri::command]
+pub fn close_mini_monitor(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window(MINI_MONITOR) { let _ = w.destroy(); }
 }
 
 #[tauri::command]

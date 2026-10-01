@@ -109,7 +109,7 @@ describe('the `network` permission', () => {
     assert.equal(M.ACTION_PERMS['feed.publish'], undefined, 'a local file needs no network');
   });
   test('an imported task never arrives with it', () => {
-    assert.match(SCHED_TS, /perms: \{ command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false \}/);
+    assert.match(SCHED_TS, /perms: \{ command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false \}/);
   });
   test('everything goes through the Rust guard, never a webview fetch', () => {
     const cases = SCHED_TS.slice(SCHED_TS.indexOf("case 'webhook.send':"), SCHED_TS.indexOf("case 'benchmark.run':"));

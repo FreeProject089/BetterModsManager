@@ -74,7 +74,9 @@ goes back to normal.
 - **Tell me when game mode turns on or off**: a notice each time it changes by itself (on by
   default).
 - **Also count any full-screen window**: catches borderless games that are in no list, but a
-  full-screen video counts too, so it is off by default.
+  full-screen video counts too, so it is off by default. Browsers, video players, chat apps and
+  game launchers never count, in full screen or inside a profile's folder, unless you add one
+  to your list yourself.
 - **Games BMM watches for**: every profile's game folder is watched by itself, each with a switch
   to ignore it (a whole drive is never watched); below, the programs you added, each with a
   remove button, added by name, with **Browse…** (the game's `.exe`) or with **Pick a running

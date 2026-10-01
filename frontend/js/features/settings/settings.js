@@ -2366,6 +2366,11 @@ export async function initSettings() {
         await (await import('../ai/ai-settings.js')).mountAiSettings();
     }
     catch (e) { }
+    // « API Laya locale » (off by default), right after the AI card.
+    try {
+        await (await import('./ai-api-card.js')).mountAiApiCard();
+    }
+    catch (e) { }
     try {
         initCardReorder();
     }

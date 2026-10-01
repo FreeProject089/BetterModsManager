@@ -89,7 +89,7 @@ Deux choses se comportent différemment du reste, et c'est volontaire :
 
 | | |
 |---|---|
-| **Profils, mods et réglages** | **Remplace** ce que tu as ; ce n'est pas fusionné. Une fusion devrait inventer une réponse pour deux profils du même nom avec des dossiers différents. Ton `data.json` actuel est copié à côté d'abord, dans un fichier horodaté, et le message te dit où. |
+| **Profils, mods et réglages** | **Remplace** ce que tu as ; ce n'est pas fusionné. Une fusion devrait inventer une réponse pour deux profils du même nom avec des dossiers différents. Ton `data.json` actuel est copié à côté d'abord, dans un fichier horodaté, et le message te dit où. L'ordre d'activation de chaque profil revient avec. |
 | **Rapports de plantage et diagnostics** | Listés, et jamais restaurés. Ils décrivent ce qui est arrivé à une installation sur une machine — remettre ceux de l'an dernier ici donne un dossier de support qui ment sur l'app dans laquelle il se trouve. |
 
 Une archive **non signée** se restaure normalement : tout ce qui a été écrit avant l'existence

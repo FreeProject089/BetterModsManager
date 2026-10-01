@@ -92,7 +92,9 @@ describe('load-order wiring', () => {
     const invoked = [...view.matchAll(/invoke\('([a-z_]+)'/g)].map((m) => m[1]);
     assert.ok(invoked.length >= 4, 'read too few invokes to be right');
     for (const name of invoked) {
-      assert.match(main, new RegExp(`commands::mod_order::${name}\\b`), `${name} is not in the invoke handler`);
+      // Two modules: the rule and the disk (mod_order), the bulk placement and the shared
+      // document (order_share).
+      assert.match(main, new RegExp(`commands::(?:mod_order|order_share)::${name}\\b`), `${name} is not in the invoke handler`);
     }
   });
 
@@ -123,9 +125,11 @@ describe('load-order wiring', () => {
     }
   });
 
-  test('the profile card opens it, and the modpack apply places the pack on top', () => {
+  test('the profile card opens it, and the modpack apply places the pack by its mode', () => {
     assert.match(read('frontend/src/features/profiles/profiles.ts'), /btn-load-order/);
-    assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /placeOnTop\(packOrder, null, toast/);
+    // Through the one bulk engine (order_share.rs `arrange`), with the pack's own mode.
+    assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /arrangeBlock\(packOrder, pack\.order_mode \|\| null, null, toast/);
+    assert.match(view, /invoke\('mod_order_arrange'/);
   });
 });
 

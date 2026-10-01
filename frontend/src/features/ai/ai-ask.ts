@@ -10,10 +10,11 @@
 // a setting to go to, a command to run, the mods (and the files) that answer « which mod
 // modifies engine.ogg? », the pairs of mods that provide the same files. Offline, always.
 import { invoke } from '../../core/api.js';
+import { noteAskClick } from '../../core/laya-telemetry.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { groupHits, topPick, rankedModIds, type AskAnswer, type AskHit } from './ai-model.js';
-import { ensureAiCss, loadAiView, offerInstall, installPromptHtml, wireInstallPrompt } from './ai-shared.js';
+import { ensureAiCss, loadAiView, offerInstall, installPromptHtml, wireInstallPrompt, reasonText } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 
 let _overlay: HTMLElement | null = null;
@@ -58,6 +59,7 @@ function settingsEntries(): Array<Record<string, unknown>> {
 export function runAskAction(a: any): void {
     const w = window as any;
     if (!a) return;
+    noteAskClick(a);   // telemetry, Laya category: the result's KIND only
     if (a.page) { w.openDocsPage?.(String(a.page), a.anchor ? String(a.anchor) : undefined); return; }
     if (a.article) { w.openDocsArticleById?.(String(a.article)); return; }
     if (a.command) { document.dispatchEvent(new CustomEvent('bmm:command:run', { detail: { id: String(a.command) } })); return; }
@@ -120,7 +122,11 @@ export async function openAskLaya(question = ''): Promise<void> {
     const o = overlay();
     _opener = document.activeElement as HTMLElement | null;
     const view = await loadAiView();
+    const vs = view?.settings;
+    // « Rédiger une réponse » is offered only when the user set up a generator and allowed it here.
+    const canWrite = !!vs?.enabled && !view?.status?.killSwitch && (vs.generative === 'local' || vs.generative === 'external') && !!vs.ask_generate;
     let hits: AskHit[] = [];
+    let lastReq: any = null;
     o.innerHTML = `
       <div class="modal ai-modal ai-ask" role="dialog" aria-modal="true" aria-labelledby="aia-title">
         <div class="modal-header">
@@ -136,7 +142,7 @@ export async function openAskLaya(question = ''): Promise<void> {
           </form>
           <div id="aia-out" aria-live="polite"></div>
         </div>
-        <div class="modal-footer ai-foot"><span class="ai-muted">${escHtml(t('ai.ask.offline'))}</span></div>
+        <div class="modal-footer ai-foot"><span class="ai-muted">${escHtml(canWrite && vs?.generative === 'external' ? t('ai.ask2.footRemote') : t('ai.ask.offline'))}</span></div>
       </div>`;
     o.classList.add('open');
     const input = o.querySelector<HTMLInputElement>('#aia-q');
@@ -183,7 +189,9 @@ export async function openAskLaya(question = ''): Promise<void> {
           <div class="ai-ask-meta">
             <span class="ai-pill">${escHtml(intentLabel(a.intent))}</span>
             <span class="ai-muted">${escHtml(a.laya ? t('ai.ask.byLaya') : t('ai.ask.byRules'))} · ${escHtml(String(a.ms))} ms</span>
+            ${canWrite && !empty ? `<button type="button" class="btn btn-ghost btn-sm ai-ask-write" id="aia-write">${IC}<span>${escHtml(t('ai.ask2.write'))}</span></button>` : ''}
           </div>
+          <div id="aia-written" aria-live="polite"></div>
           ${off ? `<div class="ai-muted">${escHtml(off)}</div>` : ''}
           ${layaOff === 'no_model' && offerInstall(view) ? installPromptHtml(view) : ''}
           ${a.low_confidence ? `<div class="ai-warn">${escHtml(t('ai.ask.low'))}</div>` : ''}
@@ -195,6 +203,47 @@ export async function openAskLaya(question = ''): Promise<void> {
         out.querySelectorAll<HTMLButtonElement>('[data-hit]').forEach((b) => b.addEventListener('click', () => { const h = hits[Number(b.dataset.hit)]; close(); runAskAction(h?.action); }));
         out.querySelectorAll<HTMLButtonElement>('[data-mod]').forEach((b) => b.addEventListener('click', () => { close(); runAskAction({ mod: b.dataset.mod, name: b.dataset.name }); }));
         wireInstallPrompt(out, () => { void ask(); });
+        out.querySelector('#aia-write')?.addEventListener('click', () => void write());
+    };
+
+    /** The written answer: the generator's wording of the sources found, each sentence cited. */
+    const write = async () => {
+        const box = out?.querySelector<HTMLElement>('#aia-written');
+        const btn = out?.querySelector<HTMLButtonElement>('#aia-write');
+        if (!box || !lastReq) return;
+        if (btn) btn.disabled = true;
+        const ticket = _seq;
+        box.innerHTML = `<div class="ai-loading"><span class="ai-dot"></span>${escHtml(t('ai.ask2.writing'))}</div>`;
+        try {
+            const r: any = await invoke('ai_ask_written', { request: lastReq });
+            if (ticket !== _seq || !o.classList.contains('open')) return;
+            const w = r?.written;
+            if (!w) {
+                box.innerHTML = `<div class="ai-muted ai-ask-nowrite">${escHtml(t('ai.ask2.none'))} ${escHtml(reasonText(String(r?.writtenOff || '')))}</div>`;
+                return;
+            }
+            const cites: any[] = Array.isArray(w.cites) ? w.cites : [];
+            const byN = new Map<number, any>(cites.map((c) => [Number(c.n), c]));
+            // Escaped first; only « [n] » of a REAL source becomes a link.
+            const text = escHtml(String(w.text || '')).replace(/\[(\d{1,2})\]/g, (m, n) => byN.has(Number(n)) ? `<button type="button" class="ai-cite" data-cite="${Number(n)}" title="${escAttr(String(byN.get(Number(n))?.title || ''))}">${Number(n)}</button>` : '');
+            const who = w.provider === 'local' ? t('ai.ask2.byLocal', { model: String(w.model || '') }) : t('ai.ask2.byRemote', { model: String(w.model || '') });
+            box.innerHTML = `
+              <div class="ai-ask-written">
+                <div class="ai-ask-wtext">${text}</div>
+                <div class="ai-muted ai-ask-wmeta"><span class="ai-src ai-src-draft">${escHtml(t('ai.ask2.badge'))}</span> ${escHtml(who)}${w.laya != null ? ` · ${escHtml(t('ai.ask2.checked', { p: String(Math.round(Number(w.laya) * 100)) }))}` : ''}</div>
+                <ol class="ai-ask-cites">${cites.map((c) => `<li value="${Number(c.n)}"><button type="button" class="ai-link" data-cite="${Number(c.n)}">${escHtml(String(c.title || ''))}</button></li>`).join('')}</ol>
+              </div>`;
+            box.querySelectorAll<HTMLButtonElement>('[data-cite]').forEach((b) => b.addEventListener('click', () => {
+                const c = byN.get(Number(b.dataset.cite));
+                if (!c) return;
+                close();
+                runAskAction(c.action);
+            }));
+        } catch (e) {
+            box.innerHTML = `<div class="ai-error">${escHtml(reasonText(String((e as Error)?.message || e)))}</div>`;
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     };
 
     const ask = async () => {
@@ -203,7 +252,8 @@ export async function openAskLaya(question = ''): Promise<void> {
         const ticket = ++_seq;
         out.innerHTML = `<div class="ai-loading"><span class="ai-dot"></span>${escHtml(t('ai.ask.loading'))}</div>`;
         try {
-            const r: any = await invoke('ai_ask', { request: { question: q, lang: getLang() === 'fr' ? 'fr' : 'en', scope: 'all', limit: 10, extra: settingsEntries() } });
+            lastReq = { question: q, lang: getLang() === 'fr' ? 'fr' : 'en', scope: 'all', limit: 10, extra: settingsEntries() };
+            const r: any = await invoke('ai_ask', { request: lastReq });
             if (ticket !== _seq || !o.classList.contains('open')) return;
             paint(r.answer as AskAnswer, String(r.layaOff || ''));
         } catch (e) {

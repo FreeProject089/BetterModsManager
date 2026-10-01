@@ -210,7 +210,14 @@
   {
     "action": "modpack/enable",
     "params": [
-      "id"
+      "id",
+      "order"
+    ]
+  },
+  {
+    "action": "order",
+    "params": [
+      "d"
     ]
   },
   {

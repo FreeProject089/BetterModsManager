@@ -37,7 +37,7 @@ describe('task-level retry', () => {
 });
 
 describe('{last.*} after every action', () => {
-  const rec = slice('async function recordedAction(', 1600);
+  const rec = slice('async function recordedAction(', 3200);
 
   test('last.ok and last.ms are written on success AND on failure', () => {
     assert.equal((rec.match(/ctx\.nums\['last\.ok'\] = 1/g) || []).length, 1);

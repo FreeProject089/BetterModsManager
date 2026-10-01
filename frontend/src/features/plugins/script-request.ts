@@ -187,6 +187,8 @@ export function apiBodyFor(a: any): { method: string; path: string; body: Record
         // about the wrong thing — and a silent no-op on an empty one. Absent, the answer
         // names the field. Kept on one line because three CI gates read these as text.
         case 'set_mod_order':      return { method: 'POST', path: '/api/mods/order',             body: _prune({ order: _list(s('order')), profileId: s('profileId') }) };
+        case 'arrange_mod_order':  return { method: 'POST', path: '/api/mods/order/arrange',     body: _prune({ ids: _list(s('ids')), mode: s('mode'), profileId: s('profileId') }) };
+        case 'import_mod_order':   return { method: 'POST', path: '/api/mods/order/import',      body: _prune({ text: s('text'), dryRun: bool('dryRun'), profileId: s('profileId') }) };
 
         case 'api_call':           return { method: (s('method') || 'GET').toUpperCase(), path: s('path') || '/api/status', body: _json(s('body')) };
         case 'open_view':          return { method: 'POST', path: '/api/view',                  body: { id: s('id') } };

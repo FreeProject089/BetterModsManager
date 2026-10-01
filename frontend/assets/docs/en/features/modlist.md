@@ -77,3 +77,8 @@ And beside the mods, the list carries:
     and the order *is* the resolution: when two mods ship the same file, the one activated
     later wins (see [conflicts](doc-page:features/library#conflicts)). Reproducing someone's setup
     "exactly" means reproducing their order — which is exactly what importing a `.MM` does.
+
+    The list also carries its author's **activation order** (`load_order`), by fingerprint and
+    name rather than by local path. Applying the list puts the mods it names in that order, and
+    you can paste a `.MM` into **Import** in the order view to preview it first. See
+    [Activation order](doc-page:how-it-works/load-order#sharing-an-order).

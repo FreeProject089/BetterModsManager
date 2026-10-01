@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-82 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+91 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -88,6 +88,10 @@ values.
 | `bmm_sync` | — | app | Synchronize files for the active profile (apply mods) |
 | `bmm_get_mod_order` | — | app | The activation order: each active mod in deployment order (the last wins a shared file), whom it overrides and who overrides it, and every contested file with its winner |
 | `bmm_set_mod_order` | `order`\*, `profile_id`, `reapply` | app | Set the activation order. `order` must be the same set of mods that are active; the files that change hands are re-copied (`reapply`: every contested file) |
+| `bmm_export_mod_order` | `profile_id` | app | The order as a portable document for another PC: `doc` (mods named by fingerprint, repo id and name), `code` (`BMMORDER1.`), `link` (`bmm://order`), `text` (numbered names) |
+| `bmm_import_mod_order` | `text`\*, `profile_id`, `dry_run` | app | Import a shared order (code, link, JSON or names). The active mods it names take its order in the slots they hold; nothing is enabled or disabled. Answers the plan and how many files moved |
+| `bmm_arrange_mod_order` | `ids`\*, `mode`, `profile_id` | app | Place a block of active mods: `top` (they win), `bottom` (the rest wins), `keep`. No mode = the setting |
+| `bmm_order_bulk_mode` | `mode` | app | Read, or set, where a bulk enable (modpack, Enable all, list, task, script) puts its mods by default |
 
 ### Modpacks & launch packs
 
@@ -206,12 +210,17 @@ writes only the fields named. See [Optional AI](doc-page:features/ai).
 | Tool | Parameters | Needs | What it does |
 |---|---|---|---|
 | `bmm_ai_status` | — |  | Whether the master switch is on, the chosen provider, which features may reach the network and why not, where keys are stored (never the keys). Works offline |
-| `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Name, version, author, description, tags and links read from the mod's own files; then, only if AI is on with a provider, tags ranked from the user's EXISTING tags by Laya, language and adult-content hints, and an optional description draft from the user's external API. Each suggestion carries its source and confidence. **Writes nothing** |
+| `bmm_ai_suggest_mod_metadata` | `mod_id`\*, `use_providers`, `draft` |  | Name, version, author, description, tags and links read from the mod's own files; then, only if AI is on with a provider, tags ranked from the user's EXISTING tags by Laya, language and adult-content hints, and an optional description draft from the user's generator (a local OpenAI-compatible server or their remote API), checked by rules and by Laya and marked `draft`. Each suggestion carries its source and confidence. **Writes nothing** |
 | `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Writes the fields the user chose (name, version, author, description, existing tag ids up to 3 per mod, http(s) links) to data.json; any other key is refused |
-| `bmm_ai_ask` | `question`\*, `lang` en/fr, `scope` all/docs/mods, `limit`, `use_laya` |  | « Ask Laya », offline: answers a question about BMM or the user's mods from what EXISTS — the bundled documentation, help articles, palette commands, the user's mods, profiles and their scanned file lists. Returns `intent` (docs, setting, files, conflicts, mods, command), `hits` (kind, title, a snippet quoted from the source, score, action), `files` (which mod provides a file) and `conflicts` (pairs of mods providing the same files). Never generated text. Laya routes and ranks only when AI is on and the model is installed (`laya`, `laya_off` say which). Works with BMM closed |
+| `bmm_ai_ask` | `question`\*, `lang` en/fr, `scope` all/docs/mods, `limit`, `use_laya`, `write` |  | « Ask Laya », offline: answers a question about BMM or the user's mods from what EXISTS — the bundled documentation, help articles, palette commands, the user's mods, profiles and their scanned file lists. Returns `intent` (docs, setting, files, conflicts, mods, command), `hits` (kind, title, a snippet quoted from the source, score, action), `files` (which mod provides a file) and `conflicts` (pairs of mods providing the same files). Never generated text, except `write: true`: then `written` is an answer worded by the user's generator (« Writing », local or remote) from the numbered sources only, with `[n]` citations in `cites`, or `written_off` says why there is none (Laya abstained, no real citation, a link, file or command the sources do not contain). Laya routes and ranks only when AI is on and the model is installed (`laya`, `laya_off` say which). Works with BMM closed |
+| `bmm_ai_analyze_library` | `mod_ids`, `use_providers`, `limit` |  | « Analyse the library »: the same suggestions as `bmm_ai_suggest_mod_metadata` for many mods at once (all, or the ids given; at most `limit`, default 200). Files only unless `use_providers`; never a generated draft. Returns only the mods with something to suggest. **Writes nothing** |
+| `bmm_ai_classify` | `text`\*, `labels`\* ([{id, meaning}], 2 to 32) |  | Which of the labels fits a text, best first with a probability, plus `none` when Laya finds that none fits. The embedded model or the user's own laya-serve only, never a remote server; needs the AI master switch. The text is data, never instructions |
 | `bmm_ai_pack_install` | — |  | Downloads, verifies (pinned SHA-256, mirrors in order) and installs the built-in Laya model pack (about 327 MB download) into the user's local app data, after a free-space check; resumes a partial download. Refused under `--no-ai`. Ask the user first |
 | `bmm_ai_pack_remove` | — |  | Removes the downloaded model pack (never the installer's copy); the classifier goes back to off if it was the built-in one |
 | `bmm_ai_test` | — |  | Classifies a fixed sample with the installed model and returns the answers, `ok` and the timings. None of the user's data, no network |
+| `bmm_ai_api_status` | — |  | The local Laya API: enabled, port, whether a token exists (never the token), whether AI is on, whether it answers on 127.0.0.1 now |
+| `bmm_ai_api_start` | `port` |  | Turns the local Laya API on; the running app starts it within seconds, only while AI is on. **Never returns a token**: the user makes one in Settings or with `bmm ai-api rotate`. Ask the user first |
+| `bmm_ai_api_stop` | — |  | Turns the local Laya API off; the running app stops it within seconds |
 
 ### Diagnostics
 
@@ -271,19 +280,19 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 82 tools with their parameters is exactly the list that rots the
+written by hand, because 91 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 82 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 91 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---
 
 ## See also
 
-- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 74 CLI subcommands for a terminal or a `.bat`
+- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 77 CLI subcommands for a terminal or a `.bat`
 - [Local API &amp; deeplinks](doc-page:reference/api) — the REST surface, its tokens and permissions
 - [Action reference](doc-page:reference/actions) — what plugins and the scheduler can trigger
 - [Extending BMM](doc-page:how-it-works/extending) — where the MCP server sits in the design

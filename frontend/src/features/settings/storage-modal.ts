@@ -5,8 +5,9 @@
 // governor's presets, game mode and live queue were the part nobody understood, and the whole
 // thing was redrawn (two disk enumerations, a new live subscription) on every toggle.
 //
-// Now: a sticky header (what is in force, and the tabs), one short first-use card, and five tabs,
-// each opening with one plain line and a "Learn more" link to its section of the docs:
+// Now: a sticky header (what is in force, and the tabs), a one-line welcome shown the first time
+// only, and five tabs, each opening with one short line and its essential controls; the long
+// explanations and the "Learn more" link to the docs are folded under an expander:
 //
 //   Disks & space · Work intensity · Game mode · Live activity · Rules per disk
 //
@@ -17,15 +18,15 @@
 // tab with live values is shown and the window is visible (storage-live.ts). Only a control
 // that changes what another part shows redraws; a toggle updates its own card.
 import { invoke, listen, getSettings, updateSettings } from '../../core/api.js';
-import { t } from '../../core/i18n.js';
+import { t, getLang } from '../../core/i18n.js';
 import { learnMore } from '../../core/learn-more.js';
-import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
+import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 import { bindLifecycle } from './storage-live.js';
-import { feed, readStatus, resetPainters, mountStatusStrip, mountIntensityPanel, mountGamePanel, mountLivePanel, type Status } from './resources-dash.js';
+import { feed, readStatus, resetPainters, mountStatusStrip, mountIntensityPanel, mountGamePanel, mountLivePanel, moreBlock, type Status } from './resources-dash.js';
 import { renderResourcesMatrix } from './resources-matrix.js';
-import { gameHeadline, type GameView } from './resources-spark.js';
+import { gameHeadline, sizeText, usedOfText, type GameView } from './resources-spark.js';
 
 export type StorageTab = 'space' | 'intensity' | 'game' | 'live' | 'rules';
 
@@ -87,6 +88,9 @@ let _tab: StorageTab = 'space';
 let _seq = 0;
 let _life: { refresh(): Promise<void>; dispose(): Promise<void> } | null = null;
 let _data: RenderData | null = null;
+/** The welcome line: shown on the first opening only, until dismissed or another tab is chosen
+ *  (it is marked as seen as soon as it is shown, so it never comes back on a later opening). */
+let _introOpen = false;
 const _mounted = new Set<StorageTab>();
 
 const overlayEl = () => document.getElementById('modal-storage');
@@ -130,7 +134,7 @@ export async function renderStorageModal(tab?: StorageTab): Promise<void> {
         disks: (invoke('get_system_disks') as Promise<DiskInfo[]>).catch(() => []),
     };
 
-    const introSeen = storeGet(INTRO_KEY) === '1';
+    if (storeGet(INTRO_KEY) !== '1') { storeSet(INTRO_KEY, '1'); _introOpen = true; }
     container.innerHTML = `
         <div class="stm">
             <div class="stm-head">
@@ -141,24 +145,15 @@ export async function renderStorageModal(tab?: StorageTab): Promise<void> {
                         <span>${esc(tr(x.label[0], x.label[1]))}</span></button>`).join('')}
                 </div>
             </div>
-            ${introSeen ? '' : `
+            ${_introOpen ? `
             <div class="stm-intro" role="note">
-                <div class="stm-intro-body">
-                    <div class="stm-card-title">${esc(tr('stm.intro.title', 'What this window is for'))}</div>
-                    <p>${esc(tr('stm.intro.body', 'BMM copies, unpacks and checks a lot of files. Here you see how full your disks are, choose how hard BMM may work (Work intensity), whether it steps aside while you play (Game mode), and watch what it is doing (Live activity). The defaults are safe: Balanced, with game detection on.'))}</p>
-                </div>
-                <div class="stm-intro-actions">
-                    ${learnMore('storage-space')}
-                    <button type="button" class="btn btn-sm stm-intro-ok">${esc(tr('stm.intro.dismiss', 'Got it'))}</button>
-                </div>
-            </div>`}
+                <span class="stm-intro-body">${esc(tr('stm.intro.short', 'Your disks, how hard BMM works, and game mode. The defaults are safe.'))}</span>
+                <button type="button" class="btn btn-sm btn-ghost stm-intro-ok">${esc(tr('stm.intro.dismiss', 'Got it'))}</button>
+            </div>` : ''}
             ${TABS.map((x) => `<section class="stm-panel" role="tabpanel" id="stm-panel-${x.id}" aria-labelledby="stm-tab-${x.id}" data-panel="${x.id}" tabindex="0" hidden></section>`).join('')}
         </div>`;
 
-    container.querySelector('.stm-intro-ok')?.addEventListener('click', () => {
-        storeSet(INTRO_KEY, '1');
-        container.querySelector('.stm-intro')?.remove();
-    });
+    container.querySelector('.stm-intro-ok')?.addEventListener('click', dropIntro);
 
     const tablist = container.querySelector<HTMLElement>('.stm-tabs');
     tablist?.addEventListener('click', (e) => {
@@ -186,9 +181,15 @@ export async function renderStorageModal(tab?: StorageTab): Promise<void> {
     if (strip) mountStatusStrip(strip, st);
 }
 
+function dropIntro(): void {
+    _introOpen = false;
+    containerEl()?.querySelector('.stm-intro')?.remove();
+}
+
 function activate(id: StorageTab): void {
     const container = containerEl();
     if (!container) return;
+    if (_introOpen && id !== _tab) dropIntro();
     _tab = id;
     storeSet(TAB_KEY, id);
     container.querySelectorAll<HTMLElement>('.stm-tab').forEach((b) => {
@@ -243,13 +244,9 @@ async function mountSmartIo(host: HTMLElement): Promise<void> {
     const smartIo = settings.smart_io_enabled !== false;
     host.innerHTML = `
         <div class="stm-card">
-            <div class="stm-row">
-                <div class="stm-grow">
-                    <label class="stm-card-title" for="chk-smart-io">${esc(t('storage.smartIoTitle'))}</label>
-                    <div class="stm-help">${esc(t('storage.smartIoDesc'))}</div>
-                    <div class="stm-help">${esc(tr('stm.smartIo.note', 'It only changes something under Balanced: switched off, a disk with no speed cap gets plain full-speed copies.'))}</div>
-                </div>
-                <label class="bmm-switch" data-tooltip="${escAttr(tr('stm.smartIo.tip', 'On: copies leave room for the rest of your PC. Off: copies use every core.'))}">
+            <div class="stm-row stm-opt" data-tooltip="${escAttr(`${t('storage.smartIoDesc')} ${tr('stm.smartIo.note', 'It only changes something under Balanced: switched off, a disk with no speed cap gets plain full-speed copies.')}`)}">
+                <label class="stm-grow stm-opt-label" for="chk-smart-io">${esc(t('storage.smartIoTitle'))} <span class="stm-help">${esc(tr('stm.smartIo.short', 'Copies leave room for the rest of your PC.'))}</span></label>
+                <label class="bmm-switch">
                     <input type="checkbox" id="chk-smart-io" ${smartIo ? 'checked' : ''}>
                     <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                 </label>
@@ -286,6 +283,10 @@ async function mountSpace(host: HTMLElement, disks: DiskInfo[]): Promise<void> {
         game_directory: ['storage.gameDir', 'Game Dir'], mod_folder: ['storage.modsDir', 'Mods'], backup: ['storage.backupDir', 'Backup'],
     };
 
+    const lang = getLang();
+    const size = (b: number) => sizeText(b, t, lang);
+    // One compact row per disk: name and kind, the usage bar with "1.5 TB of 1.8 TB", the speed
+    // cap and a secondary "Test". The profiles on it fold under one line.
     const diskCard = (d: DiskInfo): string => {
         const used = Math.max(0, d.total_space_bytes - d.available_space_bytes);
         const usedPct = d.total_space_bytes > 0 ? Math.round(used / d.total_space_bytes * 100) : 0;
@@ -294,67 +295,56 @@ async function mountSpace(host: HTMLElement, disks: DiskInfo[]): Promise<void> {
         const ratio = avail > 0 ? profileTotal / avail : 1;
         const warnRatio = Math.max(0, Math.min(99, 100 - warningPct)) / 100;
         const pState = profileTotal > avail ? 'is-crit' : ratio > warnRatio ? 'is-warn' : 'is-ok';
-        const pills = (d.profiles_using || []).map((pu) => `<span class="stm-pill stm-use-${escAttr(pu.usage_type)}">${esc(pu.profile_name)} → ${esc(usage[pu.usage_type] ? tr(usage[pu.usage_type][0], usage[pu.usage_type][1]) : pu.usage_type)}</span>`).join('');
+        const uses = d.profiles_using || [];
+        const pills = uses.map((pu) => `<span class="stm-pill stm-use-${escAttr(pu.usage_type)}">${esc(pu.profile_name)} · ${esc(usage[pu.usage_type] ? tr(usage[pu.usage_type][0], usage[pu.usage_type][1]) : pu.usage_type)}</span>`).join('');
+        const title = d.name && d.name !== d.mount_point ? `${d.mount_point} ${d.name}` : d.mount_point;
         return `
             <div class="stm-disk" data-mount="${escAttr(d.mount_point)}">
-                <div class="stm-row">
-                    <div class="stm-grow stm-disk-id">
-                        <div class="stm-disk-name">${esc(d.name)} ${kindBadge(d)} <span class="stm-kind is-fs">${esc(d.file_system)}</span></div>
-                        <div class="stm-disk-path">${esc(d.mount_point)}</div>
-                    </div>
+                <div class="stm-disk-top">
+                    <div class="stm-disk-name" title="${escAttr(`${d.mount_point} · ${d.file_system}`)}">${esc(title)} ${kindBadge(d)}</div>
                     <label class="stm-limit" data-tooltip="${escAttr(tr('stm.space.limitTip', 'The most BMM may write to this disk each second. 0 = no limit. The same value as the rule “this disk, all operations”.'))}">
-                        <span>${esc(tr('stm.space.limit', 'Speed cap'))}</span>
-                        <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${escAttr(d.mount_point)}" value="${d.current_limit_mb_s || 0}">
-                        <span>MB/s</span>
+                        <span>${esc(tr('stm.space.limitShort', 'Cap'))}</span>
+                        <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${escAttr(d.mount_point)}" value="${d.current_limit_mb_s || 0}" aria-label="${escAttr(tr('stm.space.limit', 'Speed cap'))}">
+                        <span>${esc(tr('stm.unit.mb', 'MB'))}/s</span>
                     </label>
+                    <button type="button" class="btn btn-sm btn-ghost disk-bench-btn" data-mount="${escAttr(d.mount_point)}" data-tooltip="${escAttr(tr('stm.space.benchTip', 'Writes and reads a 50 MB test file to measure this disk, then suggests a speed cap.'))}">${esc(tr('stm.space.test', 'Test'))}</button>
                 </div>
-                <div class="stm-bar-label"><span>${esc(tr('stm.space.used', 'Used'))}: ${esc(formatBytes(used))} / ${esc(formatBytes(d.total_space_bytes))}</span><span class="${level(usedPct, 70, 90)}">${usedPct}%</span></div>
-                <div class="stm-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usedPct}"><div class="stm-bar-fill ${level(usedPct, 70, 90)}" style="width:${usedPct}%"></div></div>
-                ${profileTotal > 0 ? `
-                <div class="stm-bar-label"><span>${esc(tr('stm.space.profiles', 'Profiles'))}: ${esc(formatBytes(profileTotal))} / ${esc(formatBytes(avail))} ${esc(t('storage.available') || 'available')}</span><span class="${pState}">${Math.round(ratio * 100)}%</span></div>
-                <div class="stm-bar"><div class="stm-bar-fill ${pState}" style="width:${Math.min(ratio * 100, 100)}%"></div></div>
-                ${pState === 'is-crit' ? `<div class="stm-alert is-crit" role="alert">${esc(t('storage.profilesCritical'))}</div>` : pState === 'is-warn' ? `<div class="stm-alert is-warn">${esc(t('storage.profilesWarning'))}</div>` : ''}` : ''}
-                ${pills ? `<div class="stm-pills">${pills}</div>` : ''}
-                <div class="stm-row">
-                    <button type="button" class="btn btn-sm disk-bench-btn" data-mount="${escAttr(d.mount_point)}" data-tooltip="${escAttr(tr('stm.space.benchTip', 'Writes and reads a 50 MB test file to measure this disk, then suggests a speed cap.'))}">${esc(t('storage.benchmark'))}</button>
-                    <span class="disk-bench-result stm-help"></span>
-                </div>
+                <div class="stm-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usedPct}" aria-label="${escAttr(usedOfText(used, d.total_space_bytes, t, lang))}"><div class="stm-bar-fill ${level(usedPct, 70, 90)}" style="width:${usedPct}%"></div></div>
+                <div class="stm-bar-label"><span>${esc(usedOfText(used, d.total_space_bytes, t, lang))}</span><span class="${level(usedPct, 70, 90)}">${usedPct} %</span></div>
+                ${profileTotal > 0 && pState !== 'is-ok' ? `<div class="stm-alert ${pState}"${pState === 'is-crit' ? ' role="alert"' : ''}>${esc(t(pState === 'is-crit' ? 'storage.profilesCritical' : 'storage.profilesWarning'))} <span class="stm-help">${esc(tr('stm.space.profilesNeed', 'Profiles: {p} for {a} free').replace('{p}', size(profileTotal)).replace('{a}', size(avail)))}</span></div>` : ''}
+                ${uses.length ? `<details class="stm-more stm-disk-uses"><summary>${esc((uses.length === 1 ? tr('stm.space.usedBy1', 'Used by 1 profile folder') : tr('stm.space.usedByN', 'Used by {n} profile folders').replace('{n}', String(uses.length))))}${profileTotal > 0 ? ` · ${esc(size(profileTotal))}` : ''}</summary><div class="stm-more-body"><div class="stm-pills">${pills}</div></div></details>` : ''}
+                <div class="disk-bench-result stm-help"></div>
             </div>`;
     };
 
     host.innerHTML = `
-        <div class="stm-lead"><span>${esc(tr('stm.lead.space', 'How much room each disk has left and which profiles use it. You can also cap how fast BMM writes to each disk.'))}</span>${learnMore('storage-space', { compact: true })}</div>
+        <p class="stm-lead">${esc(tr('stm.lead.spaceShort', 'Room left on each disk, and how fast BMM may write to it.'))}</p>
+        <div class="stm-disks">${disks.length ? disks.map(diskCard).join('') : `<div class="stm-help">${esc(t('storage.noDisks'))}</div>`}</div>
         <div class="stm-card">
-            <div class="stm-row">
-                <div class="stm-grow">
-                    <label class="stm-card-title" for="chk-auto-io">${esc(t('storage.autoCalibTitle'))}</label>
-                    <div class="stm-help">${esc(t('storage.autoCalibDesc'))}</div>
-                </div>
-                <button type="button" id="btn-reset-limits" class="btn btn-sm" data-tooltip="${escAttr(tr('stm.space.resetTip', 'Every disk back to no speed cap.'))}">${esc(t('storage.resetBtn'))}</button>
-                <label class="bmm-switch" data-tooltip="${escAttr(tr('stm.space.autoTip', 'On: BMM measures the disks your profiles use (again after 30 days) and sets their speed caps.'))}">
+            <div class="stm-row stm-opt" data-tooltip="${escAttr(`${t('storage.autoCalibDesc')} ${tr('stm.space.autoTip', 'On: BMM measures the disks your profiles use (again after 30 days) and sets their speed caps.')}`)}">
+                <label class="stm-grow stm-opt-label" for="chk-auto-io">${esc(tr('stm.space.autoShort', 'Set the speed caps by itself'))}</label>
+                <button type="button" id="btn-reset-limits" class="btn btn-sm btn-ghost" data-tooltip="${escAttr(tr('stm.space.resetTip', 'Every disk back to no speed cap.'))}">${esc(tr('stm.space.resetShort', 'Reset all caps'))}</button>
+                <label class="bmm-switch">
                     <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
                     <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                 </label>
             </div>
-        </div>
-        <div class="stm-card" id="storage-alert-thresholds-block">
-            <div class="stm-row">
-                <div class="stm-grow">
-                    <label class="stm-card-title" for="chk-alert-enabled">${esc(t('storage.alertThresholds'))}</label>
-                    <div class="stm-help">${esc(tr('stm.space.alertHint', 'Colours the profile bars before a disk fills up, and warns before enabling mods on a nearly full disk.'))}</div>
-                </div>
+            <div class="stm-row stm-opt" id="storage-alert-thresholds-block" data-tooltip="${escAttr(tr('stm.space.alertHint', 'Colours the profile bars before a disk fills up, and warns before enabling mods on a nearly full disk.'))}">
+                <label class="stm-grow stm-opt-label" for="chk-alert-enabled">${esc(tr('stm.space.alertShort', 'Warn me before a disk is full'))}</label>
+                ${alertEnabled ? `
+                <label class="stm-thresh"><span>${esc(tr('stm.space.warnAt', 'Warning'))}</span><input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99" aria-label="${escAttr(t('storage.alertLimit'))}"><span>%</span></label>
+                <label class="stm-thresh is-crit"><span>${esc(tr('stm.space.critAt', 'Critical'))}</span><input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99" aria-label="${escAttr(t('storage.alertCritical'))}"><span>%</span></label>` : ''}
                 <label class="bmm-switch">
                     <input type="checkbox" id="chk-alert-enabled" ${alertEnabled ? 'checked' : ''}>
                     <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                 </label>
             </div>
-            ${alertEnabled ? `
-            <div class="stm-row stm-thresholds">
-                <label class="stm-grow"><span class="stm-help">${esc(t('storage.alertLimit'))}</span><input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99"></label>
-                <label class="stm-grow"><span class="stm-help is-crit">${esc(t('storage.alertCritical'))}</span><input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99"></label>
-            </div>` : `<div class="stm-help">${esc(t('storage.alertDisabledHint'))}</div>`}
         </div>
-        <div class="stm-disks">${disks.length ? disks.map(diskCard).join('') : `<div class="stm-help">${esc(t('storage.noDisks'))}</div>`}</div>`;
+        ${moreBlock(tr('stm.more', 'Learn more'), `
+            <p class="stm-help">${esc(tr('stm.lead.space', 'How much room each disk has left and which profiles use it. You can also cap how fast BMM writes to each disk.'))}</p>
+            <p class="stm-help">${esc(t('storage.autoCalibDesc'))}</p>
+            ${alertEnabled ? '' : `<p class="stm-help">${esc(t('storage.alertDisabledHint'))}</p>`}
+            ${learnMore('storage-space')}`)}`;
 
     const redraw = () => { _mounted.delete('space'); if (_tab === 'space') activate('space'); };
 
@@ -408,10 +398,11 @@ async function mountSpace(host: HTMLElement, disks: DiskInfo[]): Promise<void> {
     host.querySelectorAll<HTMLButtonElement>('.disk-bench-btn').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const mountPoint = btn.dataset.mount || '';
-            const out = btn.parentElement?.querySelector<HTMLElement>('.disk-bench-result');
+            const out = btn.closest('.stm-disk')?.querySelector<HTMLElement>('.disk-bench-result');
             const label = btn.textContent || '';
             btn.disabled = true;
             btn.textContent = t('storage.benchmarking');
+            if (out) out.textContent = '';
             try {
                 const res: any = await invoke('benchmark_disk', { mountPoint });
                 if (out) {

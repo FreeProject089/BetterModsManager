@@ -64,6 +64,12 @@ mod commands {
     // `bmm_schedule_runs` read the same files the app writes, through the same guard.
     #[path = "../../commands/sched_runs.rs"]
     pub mod sched_runs;
+    // `sched_runs.rs` reports a failed run to the app's live issues. The CLI never appends a
+    // run (it only reads them), and the live-issue queue belongs to the running app, so the
+    // report is a no-op here rather than a second queue in another process.
+    pub mod live_issues {
+        pub fn record_rust(_component: &str, _level: &str, _message: &str, _code: Option<&str>) {}
+    }
     // Optional AI (Laya): the extractor, the gate and the providers. The same file as the
     // app's, so `bmm ai-suggest` and the in-app "Suggest" follow one set of rules.
     #[path = "../../commands/ai_core.rs"]
@@ -78,6 +84,14 @@ mod commands {
     pub mod ai_laya;
     #[path = "../../commands/ask_core.rs"]
     pub mod ask_core;
+    // The hybrid pipeline (extraction → Laya → optional generator → checks): the CLI and MCP
+    // suggest, draft and answer through the very code the app uses.
+    #[path = "../../commands/ai_hybrid.rs"]
+    pub mod ai_hybrid;
+    // « API Laya locale »: its config file and its /health probe. This binary never serves
+    // it; `bmm ai-api start|stop` edits the file the app's watcher follows.
+    #[path = "../../commands/ai_api_core.rs"]
+    pub mod ai_api_core;
 }
 
 // What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI
@@ -94,6 +108,7 @@ use mcp::server::BmmMcpServer;
 use mcp::state_bridge;
 use mcp::tools::{mods, profiles, diagnostics, launch_packs};
 use mcp::tools::ai as ai_tools;
+use mcp::tools::ai_api as ai_api_tools;
 
 /// Better Mods Manager — CLI & MCP Server
 #[derive(Parser)]
@@ -201,6 +216,30 @@ enum Commands {
         /// Re-copy the winner of every contested file (repair)
         #[arg(long)]
         reapply: bool,
+
+        /// Print the order as a portable document to share: code, link, text or json
+        #[arg(long, value_name = "FORMAT", num_args = 0..=1, default_missing_value = "code")]
+        export: Option<String>,
+
+        /// Import a shared order: a BMMORDER1 code, a bmm://order link, a file path, or - for stdin
+        #[arg(long, value_name = "ORDER")]
+        import: Option<String>,
+
+        /// With --import: print the plan (matched, missing, where each mod lands) and change nothing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Place these active mods as one block (comma-separated, first applied first), by --mode
+        #[arg(long, value_delimiter = ',')]
+        arrange: Vec<String>,
+
+        /// With --arrange: top | bottom | keep (default: the setting). Alone: set that default
+        #[arg(long)]
+        mode: Option<String>,
+
+        /// Print the default placement of a bulk enable (top | bottom | keep)
+        #[arg(long)]
+        bulk_mode: bool,
 
         /// Profile ID (defaults to the active profile)
         #[arg(short, long)]
@@ -707,9 +746,39 @@ enum Commands {
         /// Files only: never call a provider, whatever the settings say
         #[arg(long, default_value_t = false)]
         offline: bool,
-        /// Also ask the configured external API for a description draft
+        /// Also ask the configured generator (local or remote) for a description draft
         #[arg(long, default_value_t = false)]
         draft: bool,
+    },
+
+    /// Suggest metadata for every mod (or the ones named); files only unless --laya; writes nothing
+    AiAnalyze {
+        /// Mod ids (or exact names); none = every mod
+        mod_ids: Vec<String>,
+        /// Also let Laya rank tags when AI is on (default: files only, offline)
+        #[arg(long, default_value_t = false)]
+        laya: bool,
+        /// At most this many mods
+        #[arg(long, default_value_t = 200)]
+        limit: usize,
+    },
+
+    /// The local Laya API (off by default): start | stop | status | rotate. start and rotate print a token once
+    AiApi {
+        /// start, stop, status or rotate
+        action: String,
+        /// Port for `start` (default 51275)
+        #[arg(long)]
+        port: Option<u16>,
+    },
+
+    /// Classify a text among labels with Laya (embedded or your own laya-serve), e.g. --label bug="a bug report"
+    AiClassify {
+        /// The text to classify
+        text: String,
+        /// A label: id or id=meaning (2 to 32)
+        #[arg(long = "label", required = true)]
+        labels: Vec<String>,
     },
 
     /// Apply the chosen fields to a mod (name, version, author, description, tags, links)
@@ -737,6 +806,9 @@ enum Commands {
         /// Retrieval only: do not let the embedded model rank, whatever the settings say
         #[arg(long, default_value_t = false)]
         no_laya: bool,
+        /// Also word an answer with the configured generator, from the sources found (cited)
+        #[arg(long, default_value_t = false)]
+        write: bool,
         /// Print the JSON instead of the readable list
         #[arg(long, default_value_t = false)]
         json: bool,
@@ -777,6 +849,15 @@ fn print_ask(v: &serde_json::Value) {
     }
     if v["low_confidence"].as_bool() == Some(true) {
         println!("  {}", "Laya: none of these seems to answer the question exactly.".yellow());
+    }
+    if let Some(w) = v.get("written").filter(|w| !w.is_null()) {
+        println!("\n{} {}", "Written answer".bold(), format!("({}, a suggestion)", s(&w["model"])).dimmed());
+        println!("  {}", s(&w["text"]));
+        for c in w["cites"].as_array().into_iter().flatten() {
+            println!("  [{}] {}", c["n"], s(&c["title"]).dimmed());
+        }
+    } else if !s(&v["written_off"]).is_empty() && s(&v["written_off"]) != "not_requested" {
+        println!("  {} {}", "No written answer:".dimmed(), s(&v["written_off"]).dimmed());
     }
 }
 
@@ -1486,8 +1567,51 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
 
         // ── Activation order ─────────────────────────────────────────
-        Commands::ModOrder { set, reapply, profile } => {
-            if set.is_empty() && !reapply {
+        Commands::ModOrder { set, reapply, export, import, dry_run, arrange, mode, bulk_mode, profile } => {
+            if !arrange.is_empty() {
+                let mut body = serde_json::json!({ "ids": arrange });
+                if let Some(m) = &mode { body["mode"] = m.clone().into(); }
+                if let Some(p) = profile { body["profileId"] = p.into(); }
+                let res = state_bridge::api_call("POST", "/api/mods/order/arrange", Some(body)).await?;
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            } else if bulk_mode || mode.is_some() {
+                let res = match &mode {
+                    Some(m) => state_bridge::api_call("POST", "/api/mods/order/mode", Some(serde_json::json!({ "mode": m }))).await?,
+                    None => state_bridge::api_call("GET", "/api/mods/order/mode", None).await?,
+                };
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            } else if let Some(fmt) = export {
+                let path = match &profile {
+                    Some(p) => format!("/api/mods/order/export?profileId={}", percent_encoding::utf8_percent_encode(p, percent_encoding::NON_ALPHANUMERIC)),
+                    None => "/api/mods/order/export".to_string(),
+                };
+                let res = state_bridge::api_call("GET", &path, None).await?;
+                http_ok(&res)?;
+                let body = res.get("body").cloned().unwrap_or(serde_json::Value::Null);
+                match fmt.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(body.get("doc").unwrap_or(&serde_json::Value::Null))?),
+                    "link" | "text" | "code" => println!("{}", body.get(fmt.as_str()).and_then(|v| v.as_str()).unwrap_or_default()),
+                    other => anyhow::bail!("unknown export format '{}': code, link, text or json", other),
+                }
+            } else if let Some(src) = import {
+                // A file path, stdin, or the order itself.
+                let text = if src == "-" {
+                    let mut buf = String::new();
+                    std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
+                    buf
+                } else if std::path::Path::new(&src).is_file() {
+                    let meta = std::fs::metadata(&src)?;
+                    if meta.len() > 2 * 1024 * 1024 { anyhow::bail!("{} is too large to be an order", src); }
+                    std::fs::read_to_string(&src)?
+                } else { src };
+                let mut body = serde_json::json!({ "text": text, "dryRun": dry_run });
+                if let Some(p) = profile { body["profileId"] = p.into(); }
+                let res = state_bridge::api_call("POST", "/api/mods/order/import", Some(body)).await?;
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            } else if set.is_empty() && !reapply {
                 let res = state_bridge::api_call("GET", "/api/mods/order", None).await?;
                 println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
                 http_ok(&res)?;
@@ -1580,8 +1704,50 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             let v = ai_tools::apply(&mod_id, &f).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
-        Commands::AiAsk { question, lang, scope, limit, no_laya, json } => {
-            let v = tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, !no_laya))
+        Commands::AiAnalyze { mod_ids, laya, limit } => {
+            let v = tokio::task::spawn_blocking(move || ai_tools::analyze(&mod_ids, laya, limit))
+                .await?
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiApi { action, port } => {
+            let print = |v: &serde_json::Value| println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
+            let show_token = |t: &str| {
+                println!("{}", "Token (shown once, copy it now):".yellow().bold());
+                println!("{}", t);
+            };
+            match action.as_str() {
+                "status" => print(&ai_api_tools::status()),
+                "start" => {
+                    let (v, token) = ai_api_tools::start(port, true).map_err(|e| anyhow::anyhow!(e))?;
+                    if let Some(t) = token {
+                        show_token(&t);
+                    }
+                    print(&v);
+                }
+                "stop" => print(&ai_api_tools::stop().map_err(|e| anyhow::anyhow!(e))?),
+                "rotate" => {
+                    let t = ai_api_tools::rotate().map_err(|e| anyhow::anyhow!(e))?;
+                    show_token(&t);
+                }
+                other => anyhow::bail!("unknown action `{}`: start, stop, status or rotate", other),
+            }
+        }
+        Commands::AiClassify { text, labels } => {
+            let labels: Vec<(String, String)> = labels
+                .iter()
+                .map(|l| match l.split_once('=') {
+                    Some((id, m)) => (id.trim().to_string(), m.trim().to_string()),
+                    None => (l.trim().to_string(), l.trim().to_string()),
+                })
+                .collect();
+            let v = tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels))
+                .await?
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiAsk { question, lang, scope, limit, no_laya, write, json } => {
+            let v = tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, !no_laya, write))
                 .await?
                 .map_err(|e| anyhow::anyhow!(e))?;
             if json {

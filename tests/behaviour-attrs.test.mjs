@@ -138,6 +138,13 @@ const HARMLESS = {
     // the variable picker popover, the flow inspector), never from a document-wide selector.
     'data-mode': 'scheduler mode question, own dialog', 'data-x': 'close button of the scheduler mode question, own dialog',
     'data-v': 'scheduler variable picker, own popover', 'data-bp-toggle': 'flow inspector breakpoint box, own panel',
+    // The benchmark's live monitor: read from its own legend and its own time-range buttons (the
+    // modal builds both); the value only picks a chart series or a time window.
+    'data-key': 'benchmark legend toggle, own modal', 'data-range': 'benchmark time-range buttons, own modal',
+    // Activation-order share dialog: read from the copy buttons the dialog builds itself (bound per
+    // button, not document-wide; the probe reaches it through the 3000-char window after `onEsc`).
+    // The value only picks which of the export's own strings goes to the clipboard.
+    'data-what': 'order-share copy buttons, own dialog',
 };
 
 function documentListenerAttrs() {

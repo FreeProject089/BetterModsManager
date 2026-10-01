@@ -83,7 +83,7 @@ Two things behave differently from the rest, and both on purpose:
 
 | | |
 |---|---|
-| **Profiles, mods & settings** | **Replaces** what you have; it is not merged into it. A merge would have to invent an answer for two profiles with the same name and different folders. Your current `data.json` is copied aside first, to a timestamped file, and the message names where. |
+| **Profiles, mods & settings** | **Replaces** what you have; it is not merged into it. A merge would have to invent an answer for two profiles with the same name and different folders. Your current `data.json` is copied aside first, to a timestamped file, and the message names where. Each profile's activation order comes back with it. |
 | **Crash reports & diagnostics** | Listed, and never restored. They describe what happened to one installation on one machine — putting last year's into this one gives you a support folder that lies about the app it sits in. |
 
 An **unsigned** archive restores normally: everything written before signing existed is
