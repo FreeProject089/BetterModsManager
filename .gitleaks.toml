@@ -80,3 +80,11 @@ condition = "AND"
 paths = ['''^src-tauri/src/commands/ask_index\.gen\.json$''']
 regexTarget = "match"
 regexes = ['''^-----BEGIN [A-Z0-9 ]*PRIVATE KEY----- \S{1,20} ''']
+
+# .gitleaksignore itself: fingerprints (sha:path:rule:line) plus review comments that QUOTE the
+# made-up values they justify (commit 024802c2, line 16). It never holds a credential: a real secret
+# is revoked first and only its fingerprint (never the value) lands here. Path only, this ONE file.
+# Reviewed 2026-10-06.
+[[allowlists]]
+description = "the reviewed gitleaks ignore file (fingerprints and their review notes)"
+paths = ['''^\.gitleaksignore$''']

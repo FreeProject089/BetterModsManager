@@ -12,9 +12,8 @@
 588cb8e066fe376720de88e7d5c9efa3e434a27b:src-tauri/src/commands/link_guard.rs:generic-api-key:415
 
 # live_issues.rs (commit c51a63f2, #[cfg(test)]): the redaction tests feed MADE-UP values to the
-# Redactor and assert they never reach the report: "api_token":"8f14e45f-…" (a fixed UUID),
-# write(&key, "bcw_live_SECRETKEY_1234567890"), "api_token":"tok-abcdef-123456". None was ever a
-# credential. The current file builds them at run time, so they are not re-reported. Reviewed 2026-10-06.
+# Redactor and assert they never reach the report (a fixed UUID, a bcw_live_ placeholder, a
+# tok- placeholder). None was ever a credential. The current file builds them at run time, so they are not re-reported. Reviewed 2026-10-06.
 c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:593
 c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:597
 c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:724
@@ -35,12 +34,12 @@ e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api
 1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6196
 1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6202
 
-# --- BetaHub personal access token (tkn-…, generic-api-key) — NOT YET ACCEPTED -------------------
+# --- BetaHub personal access token (tkn-…, generic-api-key) — accepted after revocation -------------------
 # A real BetaHub token was committed in these two commits. The BetaHub integration was removed from
 # BMM on 2026-09-25 (no current file contains the token any more), but git history keeps it for ever,
 # so the secrets job stays RED on these two findings until the token is dead.
 # Uncomment the two lines below ONLY after the owner has revoked the token at BetaHub (or confirmed
 # the BetaHub account/project is closed), and write that date here:
-#   BetaHub integration removed on 2026-09-25; token revoked by the owner on <YYYY-MM-DD, TO BE FILLED>.
-#f46614f248c7d3783b5dd8c44e2ea0fbb33ac018:frontend/src/features/betahub/betahub-config.example.ts:generic-api-key:22
-#e90495878072f5c5243677d3481000178ed2a984:frontend/src/features/betahub/betahub-api.ts:generic-api-key:16
+#   BetaHub integration removed on 2026-09-25; token revoked by the owner on 2026-10-06.
+f46614f248c7d3783b5dd8c44e2ea0fbb33ac018:frontend/src/features/betahub/betahub-config.example.ts:generic-api-key:22
+e90495878072f5c5243677d3481000178ed2a984:frontend/src/features/betahub/betahub-api.ts:generic-api-key:16
