@@ -594,12 +594,17 @@ mod tests {
 
     #[test]
     fn redaction_removes_secrets_paths_emails_ips_and_the_bcweb_key() {
+        // Fake values, assembled at run time so the source never holds a key-shaped literal
+        // (gitleaks generic-api-key reads `"api_token":"…"` / `write(&key, "…")` as a secret).
+        let gh = ["ghp", "abcdefghijklmnopqrstuvwxyz0123456789"].join("_");
+        let uuid_like = ["8f14e45f", "ceea", "467a", "9575", "1a2b3c4d5e6f"].join("-");
+        let bcw = ["bcw", "live", "SECRETKEY", "1234567890"].join("_");
         let mut r = Redactor::new();
-        r.absorb_json_text(r#"{"settings":{"github_token":"ghp_abcdefghijklmnopqrstuvwxyz0123456789","api_token":"8f14e45f-ceea-467a-9575-1a2b3c4d5e6f"}}"#);
+        r.absorb_json_text(&serde_json::json!({ "settings": { "github_token": gh, "api_token": uuid_like } }).to_string());
         let dir = std::env::temp_dir().join(format!("bmm-live-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let key = dir.join("bcweb-api-key");
-        std::fs::write(&key, "bcw_live_SECRETKEY_1234567890").unwrap();
+        std::fs::write(&key, &bcw).unwrap();
         r.absorb_secret_file(&key);
         let i = prepare(&Raw {
             level: "error", component: "ipc",
@@ -726,7 +731,8 @@ mod tests {
             (head, body)
         });
         let mut r = Redactor::new();
-        r.absorb_json_text(r#"{"api_token":"tok-abcdef-123456"}"#);
+        let tok = ["tok", "abcdef", "123456"].join("-"); // fake, built at run time (see above)
+        r.absorb_json_text(&serde_json::json!({ "api_token": tok }).to_string());
         let mut q = Queue::default();
         for t in 0..3 {
             q.record(prepare(&raw("js", "boom with tok-abcdef-123456 at C:\\Users\\carol\\x", None), &r, Some("carol"), None, &[], None, t), t);

@@ -11,6 +11,14 @@
 54cebeaf7e2143c0187722ee2a69dd0d2a2008f4:src-tauri/src/commands/crash.rs:github-pat:1086
 588cb8e066fe376720de88e7d5c9efa3e434a27b:src-tauri/src/commands/link_guard.rs:generic-api-key:415
 
+# live_issues.rs (commit c51a63f2, #[cfg(test)]): the redaction tests feed MADE-UP values to the
+# Redactor and assert they never reach the report: "api_token":"8f14e45f-…" (a fixed UUID),
+# write(&key, "bcw_live_SECRETKEY_1234567890"), "api_token":"tok-abcdef-123456". None was ever a
+# credential. The current file builds them at run time, so they are not re-reported. Reviewed 2026-10-06.
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:593
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:597
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:724
+
 # i18n dictionaries: the KEY NAMES "i18n.copyKey" / "i18n.noKey…" matched generic-api-key (the values are UI text).
 ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:476
 ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:507
