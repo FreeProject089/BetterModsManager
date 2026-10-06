@@ -1201,3 +1201,68 @@ next launch, never sent anywhere else, behind a self-imposed throttle and a clie
 anti-spam proof-of-work. Link your BetterCommunity account and a report opens a **thread in your
 dashboard** with reply notifications; otherwise leave an e-mail or Discord. There is no other
 destination: with the endpoint unset, reports are off (the BetaHub fallback was removed in September 2026). Full detail: Privacy Policy §3.3.
+
+## 80. Laya: optional AI that stays on your PC (v1.0.0+)
+
+| Feature | Description |
+| :--- | :--- |
+| **Built in, offline** | The Laya classifier runs inside BMM: no Python, no server, nothing sent. A separate model pack (327 MB), from the installer or **Settings → AI → Install the model**, checked against its SHA-256. |
+| **Suggest details** | Name, version, author, description, links and your tags, read from the mod's files first. Each row shows its source and confidence; nothing is written until you click **Apply**. **Analyse the library** does many mods at once. |
+| **Ask Laya** | Ctrl+K: a question in plain words, answered with the docs, settings, commands, mods and files that exist, each with its action. |
+| **Writing (optional)** | A local model (Ollama, LM Studio, llama.cpp) or your own https API drafts descriptions and cited answers, checked again by rules and by Laya. |
+| **Answer settings** | How sure Laya must be, per feature (Careful, Balanced, Open, Custom), your labels described with examples, your own classification tasks, a **Try it** box, JSON export and import. |
+| **Local Laya API** | On `127.0.0.1`, off by default, token shown once. Also in scheduled tasks, BMMScript (`ai.classify`, `ai.ask`), the CLI and MCP. |
+
+AI is off until you turn it on; `--no-ai` turns it off for one session.
+
+## 81. Activation order (v1.0.0+)
+
+When two mods ship the same file, the **last one in the order wins**. The order shows in the
+mod's details panel (overwrites / overwritten by), the right-click menu, Alt+arrows and the full
+**order view**. A move re-copies only the files that change hands; **Re-apply** repairs the game
+folder. **Share** an order as a code, a `bmm://order` link, a readable list or a file; **Import**
+previews first and never enables or disables a mod. The order travels in `.mm` lists, modpacks,
+exports and backups.
+
+## 82. Resource governor, Storage Manager and app mode (v1.0.0+)
+
+| Feature | Description |
+| :--- | :--- |
+| **One queue** | Deploys, installs, downloads, backups and hashing share one queue with **Pause**, **Resume** and **Cancel**; copies to the same disk share one speed limit. |
+| **Work intensity** | Quiet, Balanced (default) or Everything for BMM. |
+| **App mode** (was game mode) | While the app you mod runs (a game, Blender, a simulator), BMM works as if on Quiet and holds the background work you pick. Deploys, installs and backups are only slowed. Add a program by name, **Browse…** or **Pick a running program…**. |
+| **Storage Manager** | Five tabs: disks, work intensity, app mode, live activity, rules per disk. Hardware detection (CPU, GPUs, disk bus) is shown there. |
+| **Graphics & display** | Pick the GPU or turn hardware acceleration off when a driver breaks the window. |
+
+## 83. One start-up window (v1.0.0+)
+
+Language, terms, privacy, file access, telemetry, crash notice, what's new, BetterCommunity,
+Ko-fi and announcements are steps of **one window** with Previous and Next. Questions need an
+answer; the rest can be skipped or hidden for good. Release notes show once per version.
+
+## 84. Scheduler: Flow, debugger, network, retries (v1.0.0+)
+
+**Flow** is a third editing mode (a node canvas over the same task as Bricks and Code). A
+**debugger** with breakpoints works in all three modes, with a **Test** button per step.
+Webhook, Discord, Slack and Atom feed actions and an RSS trigger sit behind the **network**
+permission. A failed task can **try again** (up to 5 attempts), and a **run log** keeps every
+action with its duration.
+
+## 85. Telemetry by category, live errors, no IP lookup (v1.0.0+)
+
+Nothing is collected until you say yes; the installer's box only **pre-selects** the answer in
+BMM's dialog. Categories: usage, performance, live errors, Laya usage statistics, masked replay
+(**Turn all on** or **Choose**). **Errors sent live** are cleaned of secrets and names first,
+grouped and capped. BMM puts **no IP address** in what it sends and never asks a third-party
+service (such as an IP-echo or geolocation service) for your address or location.
+
+## 86. Smaller additions (v1.0.0+)
+
+| Feature | Description |
+| :--- | :--- |
+| **Benchmark mini monitor** | Its own always-on-top window; stages and per-operation cards compared with the last run. No more google.com ping. |
+| **Mapper Final preview** | Summary, warnings, then the files as a tree or a list. |
+| **`.mm` Cancel** | Export and install really stop. |
+| **Feedback contact** | The e-mail field only when BetterCommunity cannot tell who you are; a size budget and a quality gauge before Send. |
+| **Repo zip compression** | Deflate, zstd, bzip2 or stored. |
+| **Dialogs** | One shared shell: readable close button, focus kept inside, Escape closes the top one. |

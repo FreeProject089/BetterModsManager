@@ -1,6 +1,6 @@
 # Privacy Policy — Better Mods Manager (BMM)
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-10-06_
 
 Better Mods Manager is an open-source desktop application (GPL‑3.0) that runs on your computer.
 Your profiles, mods, modpacks, plugins and settings are stored **locally**, in BMM's data folder,
@@ -172,12 +172,11 @@ unmasked replay (§3.2).
 - **Identity:** your Creator ID (§2.1) and a random per‑install id.
 - **System profile:** operating system and version, CPU and core count, RAM, every GPU, motherboard,
   machine model and manufacturer, whether BMM runs in a virtual machine, your disks (size, and where
-  they are mounted), your monitors (maker, model, year) and screen resolutions, your **local network
-  IP address** and your **public IP address** (which BMM obtains by asking `api.ipify.org`), BMM's
-  version and interface language, and for each of your profiles the **game name**, its number of
-  mods and how its folders are spread across disks. (What the server *keeps* of those two addresses
-  is less than what BMM sends: the local one is discarded on arrival and the public one is truncated
-  to its network before it is stored — see §3.5.)
+  they are mounted), your monitors (maker, model, year) and screen resolutions, BMM's version and
+  interface language, and for each of your profiles the **game name**, its number of mods and how
+  its folders are spread across disks. **No IP address is part of the profile:** BMM no longer
+  reports its local network address or its public address, and it never asks a third‑party service
+  (such as `api.ipify.org` or `ipwho.is`) what your address or location is.
 - **Preferences and counts:** active theme (id, name, built‑in or custom), language, Tasky
   settings, the filesystem security mode, and how many mods, profiles, plugins, modpacks, tags,
   launch packs and apps you have (counts, not their names).
@@ -234,16 +233,14 @@ turn on the unmasked replay mode in §3.2); your name or e‑mail.
   Creator ID. You give an e‑mail address, which is sent with the request; an administrator reviews
   it and sends the export back by e‑mail.
 - **Your IP address and location — truncated, never stored whole:** the server sees the address a
-  batch comes from, and BMM also reports its own public address (§3.1). **Neither is written down in
-  full.** Before anything is stored, an address is cut down to the network it belongs to: the first
+  batch comes from, like any web server; BMM itself sends no address (§3.1). **It is not written
+  down in full.** Before anything is stored, an address is cut down to the network it belongs to: the first
   three numbers for IPv4 (`203.0.113.45` → `203.0.113.0`) and the first three groups for IPv6. That
   is what goes into the database, into the location lookup, into the live list and into the
   administrator activity log. The exact address exists only in the server's memory for the length of
-  one request, as the key of the anti‑flood counter, and is never stored, logged or exported. **The
-  local network address BMM used to report about itself is no longer stored at all** — it is dropped
-  on arrival.
-- **Location:** the truncated address is looked up with the third‑party service **ipwho.is**, and
-  the country, region and city are stored. The coordinates are **rounded to one decimal degree
+  one request, as the key of the anti‑flood counter, and is never stored, logged or exported.
+- **Location:** BMM does not look up your location. On the server, the truncated address is looked
+  up with the third‑party service **ipwho.is**, and the country, region and city are stored. The coordinates are **rounded to one decimal degree
   (about 11 km)** before being stored, so what is kept is a city, not a place. IP geolocation finds
   the network you connect through, not your home.
 - **Retention:** everything is deleted automatically after the retention period, **180 days** unless
@@ -498,7 +495,7 @@ or *Get an AI hint*:
 | Every launch (links, contributors) | Yes, always | IP address only — **no Creator ID** (§2.1) | bettercommunity.ch (GitHub as fallback) |
 | Update check | Yes, by default | IP address, program user‑agent | GitHub, bettercommunity.ch |
 | Connectivity checks, fonts, apps catalogue | Yes, always | IP address | Google, Cloudflare, GitHub |
-| **Telemetry** (**off** unless you accept it in BMM) | Yes | Creator ID, system profile with public and local IP, usage, clicked button text, external link addresses, logs, performance, game names, repo addresses — the server keeps the public address truncated to its network and discards the local one | BetterCommunity telemetry server; your IP to ipify.org, your truncated network to ipwho.is |
+| **Telemetry** (**off** unless you accept it in BMM) | Yes | Creator ID, system profile (no IP address), usage, clicked button text, external link addresses, logs, performance, game names, repo addresses. The server sees the connection's address and keeps it truncated to its network | BetterCommunity telemetry server; the server looks up your truncated network with ipwho.is. BMM itself contacts no IP or location service |
 | Session replay (a telemetry category, on with telemetry unless switched off) | Yes | Masked recording of the BMM window | BetterCommunity telemetry server |
 | Laya usage statistics (a telemetry category, on with telemetry unless switched off) | Yes | Feature, where it ran, duration, fields suggested and kept or rejected, result counts, error codes; never any text (§3.7) | BetterCommunity telemetry server |
 | Weekly benchmark + hardware report (**off**, its own question, not in *Turn all on*) | Yes | Benchmark timings, hardware serial numbers, machine UUID, MAC addresses | BetterCommunity telemetry server |

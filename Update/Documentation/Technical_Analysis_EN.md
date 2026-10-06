@@ -1333,3 +1333,62 @@ self-imposed **throttle** (a few per ten minutes, dozens a day) sit in front of 
 loop cannot flood the centre. There is no fallback any more (BetaHub was removed on
 2026-09-25): an empty `feedback_endpoint` switches reports off, and the dialog says so. The crash zip's replay is masked by default; the DxDiag dump is pre-ticked only for a
 crash and is untickable, because it is broad (machine/OS ids, the Windows user name).
+
+## 75. Laya inside the binary (v1.0.0+)
+
+`commands/ai_embedded.rs` runs the Laya classifier (an mmBERT-base encoder plus Laya's decision
+heads, exported to ONNX and quantized) through ONNX Runtime, loaded from the model pack's own
+`onnxruntime.dll` by absolute path, never from PATH. The pack is pinned in
+`laya-model.lock.json` and checked against its SHA-256 before use (`check-laya-pins` in CI).
+Like `ai_core.rs`, the AI modules are mounted twice, by the app and by the CLI/MCP binary, so
+both answer with the same engine.
+
+| Module | Role |
+| :--- | :--- |
+| `ai_hybrid.rs` | Extraction, then Laya (classify, rank, abstain), then an optional generator, then rules and Laya again before anyone sees the text |
+| `ask_core.rs` + `ask_index.gen.json` | Ask Laya: BM25 over a generated index of docs, articles and commands, plus live settings, mods and files (`gen-ask-index --check`) |
+| `ai_tuning.rs` | Answer settings per feature, custom labels and classification tasks; untrusted label text bounded and scrubbed |
+| `ai_api_core.rs` / `ai_api.rs` | The local Laya API on `127.0.0.1`, off by default, drop-in for `laya-serve` |
+| `ai_core.rs` | Key bound to the origin it was saved for, private and mapped-IPv6 hosts refused, generated output with unsourced links, UNC paths or commands dropped |
+| Frontend `features/ai/` | `ai-suggest`, `ai-library`, `ai-ask`, `ai-settings`, `ai-tuning`, `ai-report` |
+
+## 76. Activation order (v1.0.0+)
+
+`mod_order.rs` holds the rule (last wins) and the one way to change it on disk (`commit`: save
+the order, re-copy only the files that change hands). `order_share.rs` builds on it: one
+`arrange` engine for every bulk enable (modpack, Enable all, `.mm`, task, BMMScript), and the
+share codec (code, `bmm://order` link, text, file) whose import is a preview that never toggles a
+mod. Frontend: `load-order*.ts`, `order-share*.ts`, `lib-order.ts`.
+
+## 77. Resource governor (v1.0.0+)
+
+`src-tauri/src/governor/` holds the queue (slots per category, pause, resume, cancel), the
+shared copy loop whose speed limit is per disk (`io.rs`), app mode as a pure state machine
+(`game_mode.rs`, the internal name stayed), process priorities (`procs.rs`, `win.rs`) and the
+one runtime instance every heavy call site asks (`runtime.rs`). `resources*.rs` expose it to
+the UI, the scheduler, the API and MCP; `check-governed` lists any heavy-work site outside it.
+
+## 78. Start-up deck and modal shell (v1.0.0+)
+
+`launch-deck.ts` replaces the chain of start-up dialogs with one window; `launch-steps.ts` and
+`launch-logic.ts` decide which steps a launch needs, `launch-announcements.ts` feeds the last
+step. `modal-shell.ts` and `focus-trap.ts` give every dialog the same close button, focus trap
+and Escape order (`check-modal-shell` in CI).
+
+## 79. Telemetry categories, live errors, no IP lookup (v1.0.0+)
+
+`telemetry-model.ts` holds the categories and the consent state (the installer only
+pre-selects). `live-issues-core.ts`, `live-issues.ts` and `live_issues.rs` send errors within
+seconds: redacted twice, fingerprinted, deduplicated, capped per hour, queued on disk, HTTPS or
+loopback only. `laya-telemetry.ts` sends Laya usage counts, never text.
+`analytics_system_profile` no longer carries `private_ip` or `public_ip`, and nothing asks an
+IP-echo service: the repo server's public address comes from UPnP only, and the generated
+mini-servers no longer look it up. `tests/no-ip-lookup.test.mjs` fails if a shipped source names
+an IP-echo or geolocation host. The telemetry dashboard reads `public_ip` as optional; it still
+sees the connection address and truncates it server-side.
+
+## 80. Counts at this release
+
+564 commands registered, 93 endpoints in the local API, 92 MCP tools, 78 CLI subcommands, 112
+actions in the scheduler, 13 built-in themes, and 85 steps in `npm run ci`. `check-counts` and
+`check-theme-count` fail when a page quotes another number.

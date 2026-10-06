@@ -1,6 +1,6 @@
 # Politique de confidentialité — Better Mods Manager (BMM)
 
-_Dernière mise à jour : 2026-09-30_
+_Dernière mise à jour : 2026-10-06_
 
 Better Mods Manager est une application de bureau open‑source (GPL‑3.0) qui fonctionne sur votre
 ordinateur. Vos profils, mods, modpacks, plugins et réglages sont stockés **localement**, dans le
@@ -195,12 +195,11 @@ matériel hebdomadaire (§3.3) et le replay non masqué (§3.2).
 - **Profil système :** système d'exploitation et version, processeur et nombre de cœurs, mémoire,
   chaque carte graphique, carte mère, modèle et fabricant de la machine, exécution ou non dans une
   machine virtuelle, vos disques (taille, et emplacement de montage), vos écrans (fabricant, modèle,
-  année) et leurs résolutions, votre **adresse IP sur le réseau local** et votre **adresse IP
-  publique** (que BMM obtient en interrogeant `api.ipify.org`), la version et la langue d'interface
-  de BMM, et pour chacun de vos profils le **nom du jeu**, son nombre de mods et la répartition de
-  ses dossiers sur les disques. (Ce que le serveur *conserve* de ces deux adresses est moindre que
-  ce que BMM envoie : l'adresse locale est supprimée à l'arrivée et l'adresse publique est tronquée
-  à son réseau avant d'être stockée — voir §3.5.)
+  année) et leurs résolutions, la version et la langue d'interface de BMM, et pour chacun de vos
+  profils le **nom du jeu**, son nombre de mods et la répartition de ses dossiers sur les disques.
+  **Aucune adresse IP ne fait partie du profil :** BMM ne signale plus son adresse sur le réseau
+  local ni son adresse publique, et il ne demande jamais à un service tiers (comme `api.ipify.org`
+  ou `ipwho.is`) quelle est votre adresse ou votre localisation.
 - **Préférences et décomptes :** thème actif (identifiant, nom, intégré ou personnalisé), langue,
   réglages de Tasky, mode de sécurité du système de fichiers, et combien de mods, profils, plugins,
   modpacks, tags, packs de lancement et applications vous avez (des nombres, pas leurs noms).
@@ -263,17 +262,15 @@ dans les champs (sauf si vous activez le mode non masqué du §3.2) ; votre nom 
   ce qui est lié à votre Creator ID. Vous indiquez une adresse e‑mail, envoyée avec la demande ; un
   administrateur l'examine et vous renvoie l'export par e‑mail.
 - **Votre adresse IP et votre localisation — tronquées, jamais stockées entières :** le serveur voit
-  l'adresse d'où vient un lot, et BMM signale aussi sa propre adresse publique (§3.1). **Aucune des
-  deux n'est écrite en entier.** Avant tout stockage, une adresse est réduite au réseau auquel elle
+  l'adresse d'où vient un lot, comme tout serveur web ; BMM lui‑même n'envoie aucune adresse (§3.1).
+  **Elle n'est pas écrite en entier.** Avant tout stockage, une adresse est réduite au réseau auquel elle
   appartient : les trois premiers nombres pour IPv4 (`203.0.113.45` → `203.0.113.0`) et les trois
   premiers groupes pour IPv6. C'est cela qui entre dans la base de données, dans la recherche de
   localisation, dans la liste des instances en ligne et dans le journal d'activité des
   administrateurs. L'adresse exacte n'existe que dans la mémoire du serveur, le temps d'une requête,
   comme clé du compteur anti‑inondation ; elle n'est jamais stockée, journalisée ni exportée.
-  **L'adresse du réseau local que BMM signalait sur lui‑même n'est plus stockée du tout** — elle est
-  supprimée à l'arrivée.
-- **Localisation :** l'adresse tronquée est localisée au moyen du service tiers **ipwho.is**, et le
-  pays, la région et la ville sont stockés. Les coordonnées sont **arrondies à un dixième de degré
+- **Localisation :** BMM ne cherche pas votre localisation. Sur le serveur, l'adresse tronquée est
+  localisée au moyen du service tiers **ipwho.is**, et le pays, la région et la ville sont stockés. Les coordonnées sont **arrondies à un dixième de degré
   (environ 11 km)** avant d'être stockées : ce qui est conservé est une ville, pas un lieu. La
   géolocalisation par IP situe le réseau par lequel vous vous connectez, pas votre domicile.
 - **Conservation :** tout est supprimé automatiquement après la durée de conservation, **180 jours**
@@ -563,7 +560,7 @@ vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir
 | Chaque lancement (liens, contributeurs) | Oui, toujours | Adresse IP seulement — **pas de Creator ID** (§2.1) | bettercommunity.ch (GitHub en secours) |
 | Vérification des mises à jour | Oui, par défaut | Adresse IP, user‑agent du programme | GitHub, bettercommunity.ch |
 | Tests de connectivité, polices, catalogue d'applications | Oui, toujours | Adresse IP | Google, Cloudflare, GitHub |
-| **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système avec IP publique et locale, utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts — le serveur ne conserve l'adresse publique que tronquée à son réseau et supprime l'adresse locale | Serveur de télémétrie BetterCommunity ; votre IP à ipify.org, votre réseau tronqué à ipwho.is |
+| **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système (sans adresse IP), utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts. Le serveur voit l'adresse de la connexion et ne la conserve que tronquée à son réseau | Serveur de télémétrie BetterCommunity ; le serveur localise votre réseau tronqué avec ipwho.is. BMM lui‑même ne contacte aucun service d'IP ou de localisation |
 | Replay de session (catégorie de télémétrie, actif avec elle sauf si désactivé) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
 | Statistiques Laya (catégorie de télémétrie, actives avec elle sauf si désactivées) | Oui | Fonction, où elle a tourné, durée, champs suggérés puis gardés ou refusés, nombre de résultats, codes d'erreur ; jamais de texte (§3.7) | Serveur de télémétrie BetterCommunity |
 | Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part, hors de *Tout activer*) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |

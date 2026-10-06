@@ -1128,3 +1128,70 @@ Lie ton compte BetterCommunity et un rapport ouvre un **fil dans ton tableau de 
 notifications de réponse ; sinon laisse un e-mail ou un Discord. Il n'y a pas d'autre destination :
 sans endpoint, les rapports sont coupés (le secours BetaHub a été retiré en septembre 2026). Détail complet : Politique de
 confidentialité §3.3.
+
+## 80. Laya : une IA optionnelle qui reste sur ton PC (v1.0.0+)
+
+| Fonction | Description |
+| :--- | :--- |
+| **Intégré, hors ligne** | Le classifieur Laya tourne dans BMM : pas de Python, pas de serveur, rien n'est envoyé. Un pack de modèle séparé (327 Mo), depuis l'installateur ou **Réglages → IA → Installer le modèle**, vérifié par son SHA-256. |
+| **Suggérer des infos** | Nom, version, auteur, description, liens et tes tags, lus d'abord dans les fichiers du mod. Chaque ligne montre sa source et sa confiance ; rien n'est écrit avant **Appliquer**. **Analyser la bibliothèque** traite beaucoup de mods d'un coup. |
+| **Demander à Laya** | Ctrl+K : une question en mots simples, avec pour réponse la doc, les réglages, les commandes, les mods et les fichiers qui existent, chacun avec son action. |
+| **Rédaction (optionnelle)** | Un modèle local (Ollama, LM Studio, llama.cpp) ou ta propre API https rédige des descriptions et des réponses sourcées, revérifiées par des règles et par Laya. |
+| **Réglages des réponses** | Le niveau de certitude exigé, par fonction (Prudent, Équilibré, Permissif, Personnalisé), tes étiquettes décrites avec des exemples, tes propres tâches de classification, un champ **Tester**, export et import JSON. |
+| **API Laya locale** | Sur `127.0.0.1`, coupée par défaut, jeton affiché une fois. Aussi dans les tâches planifiées, BMMScript (`ai.classify`, `ai.ask`), la CLI et MCP. |
+
+L'IA reste coupée jusqu'à ce que tu l'actives ; `--no-ai` la coupe pour une session.
+
+## 81. Ordre d'activation (v1.0.0+)
+
+Quand deux mods livrent le même fichier, **le dernier dans l'ordre gagne**. L'ordre apparaît dans
+le panneau de détail du mod (écrase / écrasé par), le menu clic droit, Alt+flèches et la **vue de
+l'ordre** complète. Un déplacement ne recopie que les fichiers qui changent de main ;
+**Réappliquer** répare le dossier du jeu. **Partager** un ordre en code, en lien `bmm://order`, en
+liste lisible ou en fichier ; **Importer** montre un aperçu et n'active ni ne désactive jamais un
+mod. L'ordre voyage dans les listes `.mm`, les modpacks, les exports et les sauvegardes.
+
+## 82. Gouverneur de ressources, Gestionnaire de stockage et mode application (v1.0.0+)
+
+| Fonction | Description |
+| :--- | :--- |
+| **Une seule file** | Déploiements, installations, téléchargements, sauvegardes et hachage partagent une file avec **Pause**, **Reprendre** et **Annuler** ; les copies vers un même disque partagent une limite de vitesse. |
+| **Intensité de travail** | Silencieux, Équilibré (par défaut) ou Tout pour BMM. |
+| **Mode application** (anciennement mode jeu) | Pendant que l'app que tu moddes tourne (un jeu, Blender, un simulateur), BMM travaille comme en Silencieux et met en attente le travail de fond que tu choisis. Déploiements, installations et sauvegardes sont seulement ralentis. Ajoute un programme par son nom, **Parcourir…** ou **Choisir un programme lancé…**. |
+| **Gestionnaire de stockage** | Cinq onglets : disques, intensité de travail, mode application, activité en direct, règles par disque. La détection matérielle (CPU, cartes graphiques, bus des disques) y est affichée. |
+| **Graphismes et affichage** | Choisir le GPU ou couper l'accélération matérielle quand un pilote casse la fenêtre. |
+
+## 83. Une seule fenêtre au démarrage (v1.0.0+)
+
+Langue, conditions, confidentialité, accès aux fichiers, télémétrie, avis de plantage,
+nouveautés, BetterCommunity, Ko-fi et annonces sont les étapes d'**une seule fenêtre** avec
+Précédent et Suivant. Les questions demandent une réponse ; le reste peut être passé ou masqué
+pour de bon. Les notes de version s'affichent une fois par version.
+
+## 84. Planificateur : Flux, débogueur, réseau, nouvelles tentatives (v1.0.0+)
+
+**Flux** est un troisième mode d'édition (un canevas de nœuds sur la même tâche que Briques et
+Code). Un **débogueur** avec points d'arrêt marche dans les trois modes, avec un bouton **Tester**
+par étape. Les actions webhook, Discord, Slack et flux Atom et un déclencheur RSS passent par la
+permission **réseau**. Une tâche en échec peut **réessayer** (jusqu'à 5 tentatives), et un
+**journal d'exécution** garde chaque action avec sa durée.
+
+## 85. Télémétrie par catégorie, erreurs en direct, pas de recherche d'IP (v1.0.0+)
+
+Rien n'est collecté avant ton oui ; la case de l'installateur ne fait que **présélectionner** la
+réponse dans le dialogue de BMM. Catégories : usage, performances, erreurs en direct, statistiques
+d'usage de Laya, relecture masquée (**Tout activer** ou **Choisir**). Les **erreurs envoyées en
+direct** sont d'abord nettoyées des secrets et des noms, regroupées et plafonnées. BMM ne met
+**aucune adresse IP** dans ce qu'il envoie et ne demande jamais ton adresse ou ta localisation à
+un service tiers (écho d'IP ou géolocalisation).
+
+## 86. Ajouts plus petits (v1.0.0+)
+
+| Fonction | Description |
+| :--- | :--- |
+| **Mini moniteur du benchmark** | Sa propre fenêtre toujours au premier plan ; étapes et cartes par opération comparées au dernier passage. Plus de ping vers google.com. |
+| **Aperçu final du Mapper** | Résumé, avertissements, puis les fichiers en arbre ou en liste. |
+| **Annuler `.mm`** | L'export et l'installation s'arrêtent vraiment. |
+| **Contact des retours** | Le champ e-mail seulement quand BetterCommunity ne peut pas savoir qui tu es ; un budget de taille et une jauge de qualité avant Envoyer. |
+| **Compression zip des dépôts** | Deflate, zstd, bzip2 ou stocké. |
+| **Dialogues** | Un seul cadre partagé : bouton fermer lisible, focus gardé dedans, Échap ferme celui du dessus. |

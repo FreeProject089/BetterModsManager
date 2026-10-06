@@ -192,15 +192,6 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
     Ok(cf_path)
 }
 
-async fn fetch_public_ip() -> Result<String, String> {
-    reqwest::get("https://api.ipify.org")
-        .await
-        .map_err(|e| format!("Network error: {}", e))?
-        .text()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))
-}
-
 #[derive(serde::Serialize)]
 pub struct StartServerResult {
     pub lan_url: String,
@@ -812,12 +803,8 @@ pub async fn start_repo_server(
         }
     }
 
-    // Fallback: Fetch public IP manually if UPnP failed or didn't provide IP
-    if public_ip.is_none() {
-        if let Ok(ip) = fetch_public_ip().await {
-            public_ip = Some(ip);
-        }
-    }
+    // No third-party fallback: the public address comes from the router (UPnP) or not at all.
+    // Asking an IP-echo service would send the user's address to someone else.
 
     // 7. Spawn the server in a Tokio task
     // warp 0.4 (hyper 1, h2 0.4: RUSTSEC-2026-0258 is fixed there). The listener is bound here

@@ -242,10 +242,6 @@ async function ensureUpnpc() {
     }
 }
 
-async function getPublicIP() {
-    return new Promise(r => https.get('https://api.ipify.org', res => { let d = ''; res.on('data', c => d+=c); res.on('end', () => r(d.trim())); }).on('error', () => r(null)));
-}
-
 async function testLocalReachability() {
     return new Promise(r => {
         const req = http.get("http://127.0.0.1:" + PORT + "/repo.json", res => r(res.statusCode === 200)).on('error', () => r(false));
@@ -267,8 +263,6 @@ server.listen(PORT, '0.0.0.0', async () => {
     console.log("  " + bold + green + "[STATUS]" + reset + "  🟢 SERVER ONLINE (Port " + PORT + ")");
     console.log("  " + bold + cyan + "[LOCAL]" + reset + "   http://" + LOCAL_IP + ":" + PORT + "/");
     
-    const publicIp = await getPublicIP();
-    if (publicIp) console.log("  " + bold + yellow + "[PUBLIC]" + reset + "  http://" + publicIp + ":" + PORT + "/");
 
     if (USE_UPNP) {
         if (await ensureUpnpc()) {

@@ -50,6 +50,11 @@ Deux options ne font jamais partie de *Tout activer* : le **rapport matériel he
 chacune, est dans la
 [politique de confidentialité](https://github.com/FreeProject089/BetterModsManager/blob/main/PRIVACY_FR.md).
 
+**Pas de recherche d'IP ni de localisation.** BMM ne met aucune adresse IP dans ce qu'il envoie
+(ni l'adresse locale, ni l'adresse publique) et ne demande jamais à un service tiers où tu es. Le
+serveur de télémétrie ne voit que l'adresse d'où vient la connexion, comme tout serveur web, et ne
+la garde que réduite à son réseau.
+
 - Le **replay de session** (actif par défaut quand la télémétrie l'est) enregistre
   l'UI **masquée** : noms de mods, de profils et chemins s'affichent en `••••`. Le démasquage
   est un interrupteur séparé et explicite.

@@ -149,18 +149,6 @@ fn detect_vm(model: &str, manuf: &str, gpu: &str) -> bool {
         .iter().any(|s| hay.contains(s))
 }
 
-/// Best-effort public IP (HTTPS to a plain IP-echo service). Empty on failure.
-async fn public_ip() -> String {
-    match crate::commands::net::client()
-        .get("https://api.ipify.org")
-        .timeout(std::time::Duration::from_secs(6))
-        .send().await
-    {
-        Ok(r) => r.text().await.unwrap_or_default().trim().to_string(),
-        Err(_) => String::new(),
-    }
-}
-
 /// The drive root of a path (e.g. "C:" on Windows), for "same disk?" comparisons.
 fn drive_of(p: &std::path::Path) -> String {
     let s = p.to_string_lossy().replace('/', "\\");
@@ -296,7 +284,7 @@ fn profile_layout(state: &State<AppState>) -> Value {
 }
 
 /// Anonymous machine profile: real OS/CPU/RAM/GPU/disk specs, motherboard, VM flag,
-/// private + public IP, profile/folder topology, app version, locale, creator_id.
+/// profile/folder topology, app version, locale, creator_id. No IP address, private or public.
 #[tauri::command]
 pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: AppHandle, extra: Option<bool>) -> Result<Value, String> {
     use sysinfo::System;
@@ -314,8 +302,8 @@ pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: Ap
     let (disks_json, disk_total_gb) = collect_disks();
     let disk_count = disks_json.as_array().map(|a| a.len()).unwrap_or(0);
 
-    let private_ip = local_ip_address::local_ip().map(|ip| ip.to_string()).unwrap_or_default();
-    let public_ip = public_ip().await;
+    // No IP address in the profile: neither the LAN address nor a public one. BMM never asks a
+    // third-party echo service for the public IP; the server sees only the connection itself.
 
     let profiles = profile_layout(&state);
     let locale = state.data.lock().map(|d| d.settings.language.clone()).unwrap_or_default();
@@ -347,8 +335,6 @@ pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: Ap
         "resolutions": cim.resolutions,           // active resolution(s) e.g. 2560x1440@144
         "primary_resolution": cim.resolutions.first().cloned().unwrap_or_default(),
         "profiles_summary": profiles,
-        "private_ip": private_ip,
-        "public_ip": public_ip,
         "locale": locale,
         "app_version": app_version,
     }))

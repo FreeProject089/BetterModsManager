@@ -49,6 +49,11 @@ Two options are never part of *Turn all on*: the **weekly hardware report** (pre
 IDs) and **unmasked replay**. The full list, with what each one contains, is in the
 [privacy policy](https://github.com/FreeProject089/BetterModsManager/blob/main/PRIVACY.md).
 
+**No IP or location lookup.** BMM does not put an IP address in what it sends (neither the local
+one nor the public one) and never asks a third-party service where you are. The telemetry server
+only sees the address the connection comes from, like any web server, and keeps it cut down to its
+network.
+
 - **Session replay** (on by default when telemetry is on) records the UI **masked**:
   mod names, profile names and paths appear as `••••`. Unmasking is a separate, explicit toggle.
 - Everything buffers to a **local file (10 MB cap)** first and is only uploaded as gzip batches

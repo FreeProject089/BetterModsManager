@@ -1296,3 +1296,66 @@ Il n'y a plus de secours (BetaHub a été retiré le 2026-09-25) : un `feedback_
 coupe les rapports, et le dialogue le dit. La relecture du zip de
 plantage est masquée par défaut ; le dump DxDiag n'est pré-coché que pour un plantage et est
 décochable, car il est large (identifiants machine/OS, nom d'utilisateur Windows).
+
+## 75. Laya dans le binaire (v1.0.0+)
+
+`commands/ai_embedded.rs` exécute le classifieur Laya (un encodeur mmBERT-base et les têtes de
+décision de Laya, exportés en ONNX et quantifiés) via ONNX Runtime, chargé depuis le
+`onnxruntime.dll` du pack de modèle par chemin absolu, jamais depuis le PATH. Le pack est épinglé
+dans `laya-model.lock.json` et vérifié par son SHA-256 avant usage (`check-laya-pins` en CI).
+Comme `ai_core.rs`, les modules IA sont montés deux fois, par l'appli et par le binaire CLI/MCP,
+pour que les deux répondent avec le même moteur.
+
+| Module | Rôle |
+| :--- | :--- |
+| `ai_hybrid.rs` | Extraction, puis Laya (classer, ordonner, s'abstenir), puis un générateur optionnel, puis règles et Laya à nouveau avant que quiconque voie le texte |
+| `ask_core.rs` + `ask_index.gen.json` | Demander à Laya : BM25 sur un index généré de la doc, des articles et des commandes, plus les réglages, mods et fichiers en direct (`gen-ask-index --check`) |
+| `ai_tuning.rs` | Réglages des réponses par fonction, étiquettes et tâches de classification personnalisées ; texte d'étiquette non fiable borné et nettoyé |
+| `ai_api_core.rs` / `ai_api.rs` | L'API Laya locale sur `127.0.0.1`, coupée par défaut, compatible avec `laya-serve` |
+| `ai_core.rs` | Clé liée à l'origine pour laquelle elle a été enregistrée, hôtes privés et IPv6 mappées refusés, sortie générée avec liens non sourcés, chemins UNC ou commandes rejetée |
+| Frontend `features/ai/` | `ai-suggest`, `ai-library`, `ai-ask`, `ai-settings`, `ai-tuning`, `ai-report` |
+
+## 76. Ordre d'activation (v1.0.0+)
+
+`mod_order.rs` porte la règle (le dernier gagne) et la seule façon de la changer sur le disque
+(`commit` : enregistrer l'ordre, recopier seulement les fichiers qui changent de main).
+`order_share.rs` s'appuie dessus : un moteur `arrange` pour toute activation en lot (modpack,
+Tout activer, `.mm`, tâche, BMMScript), et le codec de partage (code, lien `bmm://order`, texte,
+fichier) dont l'import est un aperçu qui n'active ni ne désactive jamais un mod. Frontend :
+`load-order*.ts`, `order-share*.ts`, `lib-order.ts`.
+
+## 77. Gouverneur de ressources (v1.0.0+)
+
+`src-tauri/src/governor/` contient la file (places par catégorie, pause, reprise, annulation), la
+boucle de copie partagée dont la limite de vitesse est par disque (`io.rs`), le mode application
+comme machine à états pure (`game_mode.rs`, le nom interne est resté), les priorités de processus
+(`procs.rs`, `win.rs`) et l'instance unique que chaque site lourd interroge (`runtime.rs`).
+`resources*.rs` l'exposent à l'interface, au planificateur, à l'API et à MCP ; `check-governed`
+liste tout site de travail lourd hors du gouverneur.
+
+## 78. Fenêtre de démarrage et cadre des dialogues (v1.0.0+)
+
+`launch-deck.ts` remplace la suite de dialogues de démarrage par une seule fenêtre ;
+`launch-steps.ts` et `launch-logic.ts` décident des étapes d'un lancement,
+`launch-announcements.ts` alimente la dernière. `modal-shell.ts` et `focus-trap.ts` donnent à
+chaque dialogue le même bouton fermer, le même piège de focus et le même ordre pour Échap
+(`check-modal-shell` en CI).
+
+## 79. Catégories de télémétrie, erreurs en direct, pas de recherche d'IP (v1.0.0+)
+
+`telemetry-model.ts` porte les catégories et l'état du consentement (l'installateur ne fait que
+présélectionner). `live-issues-core.ts`, `live-issues.ts` et `live_issues.rs` envoient les erreurs
+en quelques secondes : expurgées deux fois, avec empreinte, dédoublonnées, plafonnées par heure,
+mises en file sur disque, HTTPS ou boucle locale uniquement. `laya-telemetry.ts` envoie des
+compteurs d'usage de Laya, jamais de texte. `analytics_system_profile` ne porte plus `private_ip`
+ni `public_ip`, et plus rien n'interroge un service d'écho d'IP : l'adresse publique du serveur de
+dépôt vient de l'UPnP uniquement, et les mini-serveurs générés ne la cherchent plus.
+`tests/no-ip-lookup.test.mjs` échoue si une source livrée nomme un hôte d'écho d'IP ou de
+géolocalisation. Le tableau de bord de télémétrie lit `public_ip` comme optionnel ; il voit
+toujours l'adresse de la connexion et la tronque côté serveur.
+
+## 80. Les comptes à cette version
+
+564 commandes enregistrées, 93 endpoints dans l'API locale, 92 outils MCP, 78 sous-commandes CLI,
+112 actions de tâche dans le planificateur, 13 thèmes intégrés, et 85 étapes dans `npm run ci`.
+`check-counts` et `check-theme-count` échouent quand une page cite un autre nombre.

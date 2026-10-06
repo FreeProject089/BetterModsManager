@@ -820,3 +820,111 @@ that asks, and a name already on your ring is skipped rather than overwritten.
 - **Feedback dialog**: dropped the wide soft drop-shadow that read as a murky halo on the dim
   backdrop ("a shadow on the invisible div") for the standard modal shadow, so it sits exactly
   like every other dialog; crisper selected-kind ring.
+
+---
+
+## [1.0 cycle: September and October] Laya, activation order, app mode
+
+### [MAJOR] Laya: optional AI that stays on your PC
+- **Laya built in (offline).** The classifier runs inside BMM: no Python, no server, nothing
+  sent. A separate model pack (327 MB), ticked by default in the installer, or **Settings → AI →
+  Install the model** (checked against its SHA-256, pause, resume, cancel, remove).
+- **Suggest details** on a mod: name, version, author, description, links and your own tags,
+  read from its files first. Each row shows its source and confidence. Nothing is written until
+  you tick and click **Apply**. **Analyse the library** does it for many mods at once.
+- **Ask Laya** (Ctrl+K): a question in plain words ("which mod changes engine.ogg?") answered
+  with the docs, settings, commands, mods and files that exist, each with its action.
+- **Writing (optional):** a local model (Ollama, LM Studio, llama.cpp) or your own https API
+  for description drafts and cited answers. Checked by rules and by Laya, never applied alone.
+- **Laya answers:** how sure Laya must be, per feature (Careful, Balanced, Open, Custom), your
+  tags and report categories described with examples, your own classification tasks, a
+  **Try it** box, JSON export and import.
+- **Local Laya API** on `127.0.0.1` (off by default, token shown once) for other programs on
+  this PC. Also in scheduled tasks, BMMScript (`ai.classify`, `ai.ask`), the CLI and MCP.
+- Unticked in the installer, AI stays off until you turn it on; `--no-ai` turns it off for a session.
+
+### [MAJOR] Activation order
+- When two mods ship the same file, the **last one in the order wins**. The order is visible in
+  the mod's details panel (overwrites / overwritten by), the right-click menu, Alt+arrows and the
+  full **order view** (drag, sorts, live hints).
+- A move re-copies only the files that change hands. **Re-apply** repairs the game folder.
+- **Share** an order as a code, a `bmm://order` link, a readable list or a file. **Import**
+  shows a preview first and never enables or disables a mod.
+- Kept in `.mm` lists, modpacks, exports and backups. Fixed: disabling the top mod could restore
+  the oldest copy, and a batch disable could delete a game original.
+
+### [MAJOR] Resource governor and the Storage Manager
+- Every heavy operation (deploy, install, download, backup, hashing) goes through one queue with
+  **Pause**, **Resume** and **Cancel**, and copies to the same disk share one speed limit.
+- **Work intensity:** Quiet, Balanced (default) or Everything for BMM.
+- **App mode** (was game mode): BMM steps aside while the app you mod runs (a game, Blender, a
+  simulator). It names the app, holds the background work you choose (deploys, installs and
+  backups are only slowed, never held), then comes back after a cooldown. Add any program by name, **Browse…** or **Pick a running
+  program…**.
+- The Storage Manager has five tabs: disks, work intensity, app mode, live activity, rules per
+  disk. Hardware detection (CPU, graphics cards, disk bus) is shown there too.
+- **Graphics & display** in Settings: pick the GPU or turn hardware acceleration off when a
+  driver breaks the window.
+- Disk calibration measures the real disk, off the main thread, once a month instead of at
+  every start.
+
+### [NEW] One start-up window
+- Language, terms, privacy, file access, telemetry, crash notice, what's new, BetterCommunity,
+  Ko-fi and announcements are steps of **one window** with Previous and Next, instead of a chain
+  of dialogs. Questions must be answered; the rest can be skipped or hidden for good.
+- Release notes show once per version. Settings can turn the window or the announcements off.
+
+### [NEW] Scheduler
+- **Flow:** a third editing mode, a node canvas over the same task as Bricks and Code.
+- A **debugger** with breakpoints in all three modes, and a **Test** button per step.
+- Webhook, Discord, Slack and Atom feed actions and an RSS trigger, behind a new **network**
+  permission.
+- **Try again after a failure** (up to 5 attempts), a **run log** of every action with its
+  duration, resource actions, and tasks that wait for app mode to end.
+
+### [CHANGED] Privacy and telemetry
+- Nothing is collected until you say yes. The installer's telemetry box now **pre-selects** the
+  answer in BMM's own dialog instead of consenting for you.
+- Telemetry by **category**: usage, performance, live errors, Laya usage statistics, masked
+  replay. **Turn all on** or **Choose**. The weekly hardware report and Discord presence are off
+  by default.
+- **Send errors live:** errors and crashes reach the team within seconds, cleaned of secrets
+  and names on your PC first, grouped and capped.
+- **No IP or location lookup:** BMM no longer asks `api.ipify.org` for your public IP and no
+  longer puts your local or public address in the telemetry profile. A hosted repo's public
+  address now comes from your router (UPnP) only; the generated mini-servers stopped looking it
+  up too. A test fails if any shipped source names an IP or geolocation service.
+
+### [IMPROVED] The rest
+- **Benchmark:** a mini monitor in its own always-on-top window, stages and per-operation cards
+  compared with the last run. It no longer pings google.com.
+- **Mapper:** a rebuilt Final preview (summary, warnings, then the files as a tree or a list).
+- **`.mm` export and install:** Cancel really cancels.
+- **Feedback:** the e-mail field only when BetterCommunity cannot tell who you are; a size budget
+  and a quality gauge before Send. BetaHub is gone.
+- **Repo export** picks its zip compression: deflate, zstd, bzip2 or stored.
+- **Isometric icons** in the icon picker.
+- Dialogs share one shell: readable close button, focus kept inside, Escape closes the top one.
+- 942 interface strings shortened (about 30% less text). "Learn more" links across the app.
+- Help & other: a lighter landing page, the CLI reference, the resource pages.
+
+### [PERFORMANCE]
+- Start-up no longer stalls about 15 s: the window is usable in about 0.5 s.
+- The live activity feed and its sampler only run while the Storage Manager is open.
+- Zero compiler warnings.
+
+### [SECURITY]
+- **`bmm://` links pass one gate:** a web page could make BMM run a program or install from a
+  chosen URL. Every action that changes something now asks inside BMM first.
+- A link in a blog comment could run a command (`open_external`); fixed.
+- A crafted `repo.json`, `.mm` or `.7z` could write outside its folder; refused before any write.
+- Crash and report zips no longer carry your tokens or your BetterCommunity key.
+- A read-only API permission could write a file anywhere, and a web page could tell a right API
+  token from a wrong one. Both fixed.
+- A `.bmmscript` granting itself `resources` now shows the consent box.
+- The incremental update manifest is **signed** and expires after 7 days.
+- Creator key v5: your Creator ID stays, the key that proves it is separate, encrypted and
+  pinned.
+- AI: a key only goes to the address it was saved for; generated text with unsourced links,
+  paths or commands is dropped; text from mods is data, never instructions.
+- Generated mini-servers stay inside their folder and no longer serve their own config.

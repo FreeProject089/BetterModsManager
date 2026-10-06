@@ -138,10 +138,10 @@ BMM fetches those bytes and plays them in its own player rather than opening a b
 |---|---|
 | `https://www.gstatic.com/generate_204` | Is there internet? |
 | `https://cloudflare.com/cdn-cgi/trace` | Second opinion, if the first fails |
-| `https://api.ipify.org` | The public IP, shown when hosting a server repo |
 
-The first two are deliberately two different companies — one being blocked should not make BMM
-believe the whole network is down.
+They are deliberately two different companies: one being blocked should not make BMM believe
+the whole network is down. BMM asks no service for your public IP or your location (the
+`api.ipify.org` lookup is gone); a hosted repo's public address comes from your router over UPnP.
 
 ---
 

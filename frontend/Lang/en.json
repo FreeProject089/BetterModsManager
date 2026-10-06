@@ -6623,7 +6623,7 @@
   "analytics.deleteTitle": "Delete telemetry data",
   "analytics.deleteConfirm": "Permanently delete all telemetry buffered on this PC?",
   "analytics.deleted": "Telemetry data deleted",
-  "analytics.collect.network": "Network info (IP, approximate region, VM detection) for abuse prevention",
+  "analytics.collect.network": "VM detection, for abuse prevention. BMM never looks up your IP address or your location.",
   "analytics.benchToggle": "Automatic Benchmark (every 7 days) + extra hardware report",
   "analytics.liveToggle": "Send errors live",
   "analytics.liveHint": "When BMM hits an error, a short redacted report reaches the team within seconds. Needs telemetry on.",

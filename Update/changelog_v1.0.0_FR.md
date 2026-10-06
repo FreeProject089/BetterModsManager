@@ -854,3 +854,134 @@ est ignoré, jamais écrasé.
 - **Dialogue de retours** : l'ombre large et diffuse qui faisait un halo trouble sur le fond
   sombre (« une ombre sur la div invisible ») remplacée par l'ombre standard des modals, pour
   qu'il se pose exactement comme les autres ; anneau de sélection plus net.
+
+---
+
+## [Cycle 1.0 : septembre et octobre] Laya, ordre d'activation, mode application
+
+### [MAJEUR] Laya : une IA optionnelle qui reste sur ton PC
+- **Laya intégré (hors ligne).** Le classifieur tourne dans BMM : pas de Python, pas de serveur,
+  rien n'est envoyé. Un pack de modèle séparé (327 Mo), coché par défaut dans l'installateur, ou
+  **Réglages → IA → Installer le modèle** (vérifié par son SHA-256, pause, reprise, annulation,
+  suppression).
+- **Suggérer des infos** sur un mod : nom, version, auteur, description, liens et tes propres
+  tags, lus d'abord dans ses fichiers. Chaque ligne montre sa source et sa confiance. Rien n'est
+  écrit avant que tu coches et cliques **Appliquer**. **Analyser la bibliothèque** le fait pour
+  beaucoup de mods d'un coup.
+- **Demander à Laya** (Ctrl+K) : une question en mots simples (« quel mod modifie
+  engine.ogg ? ») qui répond avec la doc, les réglages, les commandes, les mods et les fichiers
+  qui existent, chacun avec son action.
+- **Rédaction (optionnelle) :** un modèle local (Ollama, LM Studio, llama.cpp) ou ta propre API
+  https pour des brouillons de description et des réponses sourcées. Vérifiés par des règles et
+  par Laya, jamais appliqués seuls.
+- **Réponses de Laya :** le niveau de certitude exigé, par fonction (Prudent, Équilibré, Permissif,
+  Personnalisé), tes tags et catégories de rapport décrits avec des exemples, tes propres tâches
+  de classification, un champ **Tester**, export et import JSON.
+- **API Laya locale** sur `127.0.0.1` (coupée par défaut, jeton affiché une fois) pour les
+  autres programmes de ce PC. Aussi dans les tâches planifiées, BMMScript (`ai.classify`,
+  `ai.ask`), la CLI et MCP.
+- Décochée dans l'installateur, l'IA reste coupée jusqu'à ce que tu l'actives ; `--no-ai` la
+  coupe pour une session.
+
+### [MAJEUR] Ordre d'activation
+- Quand deux mods livrent le même fichier, **le dernier dans l'ordre gagne**. L'ordre est visible
+  dans le panneau de détail du mod (écrase / écrasé par), le menu clic droit, Alt+flèches et la
+  **vue de l'ordre** complète (glisser, tris, indications en direct).
+- Un déplacement ne recopie que les fichiers qui changent de main. **Réappliquer** répare le
+  dossier du jeu.
+- **Partager** un ordre en code, en lien `bmm://order`, en liste lisible ou en fichier.
+  **Importer** montre d'abord un aperçu et n'active ni ne désactive jamais un mod.
+- Gardé dans les listes `.mm`, les modpacks, les exports et les sauvegardes. Corrigé : désactiver
+  le mod du haut pouvait remettre la plus vieille copie, et une désactivation en lot pouvait
+  supprimer un original du jeu.
+
+### [MAJEUR] Gouverneur de ressources et Gestionnaire de stockage
+- Chaque opération lourde (déploiement, installation, téléchargement, sauvegarde, hachage) passe
+  par une seule file avec **Pause**, **Reprendre** et **Annuler**, et les copies vers un même
+  disque partagent une seule limite de vitesse.
+- **Intensité de travail :** Silencieux, Équilibré (par défaut) ou Tout pour BMM.
+- **Mode application** (anciennement mode jeu) : BMM se met en retrait pendant que l'app que tu moddes
+  tourne (un jeu, Blender, un simulateur). Il nomme l'app, met en attente le travail de fond que
+  tu choisis (déploiements, installations et sauvegardes sont seulement ralentis, jamais mis en
+  attente), puis revient après un délai. Ajoute
+  n'importe quel programme par son nom, **Parcourir…** ou **Choisir un programme lancé…**.
+- Le Gestionnaire de stockage a cinq onglets : disques, intensité de travail, mode application, activité
+  en direct, règles par disque. La détection matérielle (CPU, cartes graphiques, bus des disques)
+  y est affichée aussi.
+- **Graphismes et affichage** dans les Réglages : choisir le GPU ou couper l'accélération
+  matérielle quand un pilote casse la fenêtre.
+- La calibration mesure le vrai disque, hors du thread principal, une fois par mois au lieu
+  d'à chaque démarrage.
+
+### [NOUVEAU] Une seule fenêtre au démarrage
+- Langue, conditions, confidentialité, accès aux fichiers, télémétrie, avis de plantage,
+  nouveautés, BetterCommunity, Ko-fi et annonces sont les étapes d'**une seule fenêtre** avec
+  Précédent et Suivant, au lieu d'une suite de dialogues. Les questions demandent une réponse ;
+  le reste peut être passé ou masqué pour de bon.
+- Les notes de version s'affichent une fois par version. Les Réglages peuvent couper la fenêtre
+  ou les annonces.
+
+### [NOUVEAU] Planificateur
+- **Flux :** un troisième mode d'édition, un canevas de nœuds sur la même tâche que Briques et
+  Code.
+- Un **débogueur** avec points d'arrêt dans les trois modes, et un bouton **Tester** par étape.
+- Actions webhook, Discord, Slack et flux Atom, et un déclencheur RSS, derrière une nouvelle
+  permission **réseau**.
+- **Réessayer après un échec** (jusqu'à 5 tentatives), un **journal d'exécution** de chaque
+  action avec sa durée, des actions de ressources, et des tâches qui attendent la fin du mode
+  application.
+
+### [CHANGÉ] Confidentialité et télémétrie
+- Rien n'est collecté avant ton oui. La case télémétrie de l'installateur **présélectionne**
+  maintenant la réponse dans le dialogue de BMM au lieu de consentir à ta place.
+- Télémétrie par **catégorie** : usage, performances, erreurs en direct, statistiques d'usage de
+  Laya, relecture masquée. **Tout activer** ou **Choisir**. Le rapport matériel hebdomadaire et
+  la présence Discord sont coupés par défaut.
+- **Envoyer les erreurs en direct :** erreurs et plantages arrivent à l'équipe en quelques
+  secondes, nettoyés des secrets et des noms sur ton PC d'abord, regroupés et plafonnés.
+- **Plus de recherche d'IP ni de localisation :** BMM ne demande plus ton IP publique à
+  `api.ipify.org` et ne met plus ton adresse locale ni publique dans le profil de télémétrie.
+  L'adresse publique d'un dépôt hébergé vient maintenant de ton routeur (UPnP) uniquement ; les
+  mini-serveurs générés ne la cherchent plus non plus. Un test échoue si une source livrée nomme
+  un service d'IP ou de géolocalisation.
+
+### [AMÉLIORÉ] Le reste
+- **Benchmark :** un mini moniteur dans sa propre fenêtre toujours au premier plan, des étapes et
+  des cartes par opération comparées au dernier passage. Il ne pingue plus google.com.
+- **Mapper :** un Aperçu final refait (résumé, avertissements, puis les fichiers en arbre ou en
+  liste).
+- **Export et installation `.mm` :** Annuler annule vraiment.
+- **Retours :** le champ e-mail seulement quand BetterCommunity ne peut pas savoir qui tu es ; un
+  budget de taille et une jauge de qualité avant Envoyer. BetaHub est retiré.
+- **Export de dépôt :** choix de la compression zip : deflate, zstd, bzip2 ou stocké.
+- **Icônes isométriques** dans le sélecteur d'icônes.
+- Les dialogues partagent un seul cadre : bouton fermer lisible, focus gardé dedans, Échap ferme
+  celui du dessus.
+- 942 textes de l'interface raccourcis (environ 30 % de texte en moins). Des liens « En savoir
+  plus » dans toute l'appli.
+- Aide & autres : une page d'accueil plus légère, la référence CLI, les pages sur les ressources.
+
+### [PERFORMANCES]
+- Le démarrage ne bloque plus environ 15 s : la fenêtre est utilisable en environ 0,5 s.
+- Le flux d'activité en direct et son échantillonneur ne tournent que pendant que le
+  Gestionnaire de stockage est ouvert.
+- Zéro avertissement du compilateur.
+
+### [SÉCURITÉ]
+- **Les liens `bmm://` passent par une seule porte :** une page web pouvait faire lancer un
+  programme à BMM ou installer depuis une URL choisie. Chaque action qui change quelque chose
+  demande maintenant d'abord dans BMM.
+- Un lien dans un commentaire de blog pouvait lancer une commande (`open_external`) ; corrigé.
+- Un `repo.json`, un `.mm` ou un `.7z` piégé pouvait écrire hors de son dossier ; refusé avant
+  toute écriture.
+- Les zips de plantage et de rapport ne contiennent plus tes jetons ni ta clé BetterCommunity.
+- Une permission API en lecture seule pouvait écrire un fichier n'importe où, et une page web
+  pouvait distinguer un bon jeton d'API d'un mauvais. Les deux sont corrigés.
+- Un `.bmmscript` qui s'accorde `resources` affiche maintenant la case de consentement.
+- Le manifeste de mise à jour incrémentale est **signé** et expire après 7 jours.
+- Clé Creator v5 : ton Creator ID reste le même, la clé qui le prouve est séparée, chiffrée et
+  épinglée.
+- IA : une clé ne part que vers l'adresse pour laquelle elle a été enregistrée ; un texte généré
+  avec des liens, chemins ou commandes non sourcés est rejeté ; le texte des mods est une
+  donnée, jamais une instruction.
+- Les mini-serveurs générés restent dans leur dossier et ne servent plus leur propre config.
