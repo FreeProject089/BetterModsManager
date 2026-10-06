@@ -110,8 +110,10 @@ export async function reviewBeforeSend(parts: ReportParts): Promise<{ proceed: b
             });
             const tr = res?.triage || {};
             const bits: string[] = [];
-            if (tr.category) bits.push(t('ai.report.hintCategory', { v: String(tr.category), p: tr.category_p != null ? `${pct(tr.category_p)}%` : '—' }));
-            if (tr.severity) bits.push(t('ai.report.hintSeverity', { v: String(tr.severity), p: tr.severity_p != null ? `${pct(tr.severity_p)}%` : '—' }));
+            // « Réponses de Laya »: no percentages when the user hid them; a kept guess says so.
+            const showP = tr.show_probs !== false;
+            if (tr.category) bits.push(t('ai.report.hintCategory', { v: String(tr.category), p: showP && tr.category_p != null ? `${pct(tr.category_p)}%` : '—' }) + (tr.uncertain ? ` (${t('ai.lt.guessBadge')})` : ''));
+            if (tr.severity) bits.push(t('ai.report.hintSeverity', { v: String(tr.severity), p: showP && tr.severity_p != null ? `${pct(tr.severity_p)}%` : '—' }));
             if (tr.duplicate_of != null && known[tr.duplicate_of]) bits.push(t('ai.report.hintDuplicate', { v: known[tr.duplicate_of] }));
             if (out) out.textContent = bits.length ? bits.join(' · ') : t('ai.report.hintNone');
         } catch (e) {

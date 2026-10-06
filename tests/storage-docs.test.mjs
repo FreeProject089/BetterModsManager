@@ -56,8 +56,8 @@ test('each link names a known topic, a bundled page, and an anchor present in EN
 test('the storage page explains its tabs and the settings page the graphics card, in both languages', () => {
   const en = readFileSync(join(DOCS, 'features/storage.md'), 'utf8');
   const fr = readFileSync(join(DOCS, 'features/storage.fr.md'), 'utf8');
-  for (const w of ['Work intensity', 'Game mode', 'Rules per disk', 'Live activity']) assert.match(en, new RegExp(w), `storage.md does not name the "${w}" tab`);
-  for (const w of ['Intensité de travail', 'Mode jeu', 'Règles par disque', 'Activité en direct']) assert.match(fr, new RegExp(w), `storage.fr.md does not name the "${w}" tab`);
+  for (const w of ['Work intensity', 'App mode', 'Rules per disk', 'Live activity']) assert.match(en, new RegExp(w), `storage.md does not name the "${w}" tab`);
+  for (const w of ['Intensité de travail', 'Mode application', 'Règles par disque', 'Activité en direct']) assert.match(fr, new RegExp(w), `storage.fr.md does not name the "${w}" tab`);
   // Graphics moved to Settings → Graphics & display: its section is in settings.md now.
   const sen = readFileSync(join(DOCS, 'features/settings.md'), 'utf8');
   const sfr = readFileSync(join(DOCS, 'features/settings.fr.md'), 'utf8');

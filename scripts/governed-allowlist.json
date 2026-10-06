@@ -295,8 +295,8 @@
   },
   "src/commands/ai.rs": {
     "spawn_blocking": {
-      "count": 10,
-      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO; « Analyser la bibliothèque » (ai_analyze_library) runs its per-mod loop under a governor Scan ticket (checkpoint per mod: waits in game mode, pausable, cancellable), and « classify » / the written Ask answer are one bounded request each"
+      "count": 12,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO; « Analyser la bibliothèque » (ai_analyze_library) runs its per-mod loop under a governor Scan ticket (checkpoint per mod: waits in game mode, pausable, cancellable), and « classify » / the written Ask answer are one bounded request each; « Réponses de Laya »: « Tester » (ai_laya_test) is one bounded request, and a custom task run on the library (ai_laya_run_task) loops per mod under the same governor Scan ticket and cancel flag as the analysis"
     }
   },
   "src/extra_tools/mcp_server.rs": {

@@ -2471,10 +2471,13 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         // run's budget and marks free-text answers untrusted. Nothing here is ever applied.
         case 'ai.classify': {
             requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            // A saved « tâche perso » (Settings, Laya answers) brings its own labels, wording and
+            // settings; otherwise the step's labels, under the « Tâches et scripts » settings.
+            const taskId = String(p.task || '').trim();
             const labels = parseLabels(p.labels);
-            if (labels.length < 2) throw new Error(t('sched.ai.fewLabels') || 'Give at least two labels.');
+            if (!taskId && labels.length < 2) throw new Error(t('sched.ai.fewLabels') || 'Give at least two labels.');
             const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
-                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels,
+                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels: taskId ? null : labels, task: taskId || null,
             }));
             const label = String(res?.label || 'none');
             const pr = Number(res?.p) || 0;
@@ -6179,7 +6182,7 @@ function renderModal(modal: HTMLElement): void {
                         ${row('delete', pm.delete === true, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsPerf') || 'Changes how hard BMM works')}</div>
-                        ${row('resources', pm.resources === true, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, game mode and the queue. A preset set for the task ends with it.')}
+                        ${row('resources', pm.resources === true, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, app mode and the queue. A preset set for the task ends with it.')}
                         ${row('ai', pm.ai === true, t('sched.allowAiTitle') || 'Laya (AI)', t('sched.allowAi') || 'This task may ask Laya on this PC. What Laya answers is kept as data, never run.')}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
@@ -8531,7 +8534,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle', group: 'perf' },
     { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag', group: 'perf' },
     { v: 'resources.preset', label: 'Resources: set the preset', needs: 'resPreset', group: 'perf' },
-    { v: 'resources.gameMode', label: 'Resources: game mode', needs: 'resGame', group: 'perf' },
+    { v: 'resources.gameMode', label: 'Resources: app mode', needs: 'resGame', group: 'perf' },
     { v: 'resources.queue', label: 'Resources: pause or resume the queue', needs: 'resQueue', group: 'perf' },
     { v: 'perf.diskSpace', label: 'Check free disk space', needs: 'disk', group: 'perf' },
     // ── Privacy & recorder ──
@@ -10177,6 +10180,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
             <label class="sched-cmd-label">${escHtml(t('sched.ai.labels'))}</label>
             <textarea class="input sched-p-ailabels" rows="3" spellcheck="false" placeholder="${escAttr(t('sched.ai.labelsPh'))}">${escHtml(params.labels || '')}</textarea>
+            <input class="input sched-p-aitask" spellcheck="false" placeholder="${escAttr(t('sched.ai.taskPh'))}" value="${escAttr(params.task || '')}">
             <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
             <span class="sched-cmd-hint">${escHtml(t('sched.ai.classifyHint'))}</span>
         </div>`;
@@ -10241,7 +10245,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <option value="task"${params.scope !== 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeTask') || 'for this task only')}</option>
                 <option value="persistent"${params.scope === 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeKeep') || 'for good')}</option>
             </select>
-            <label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-r-og" ${params.overridesGame ? 'checked' : ''}> ${escHtml(t('sched.res.overGame') || 'even while a game runs')}</label>
+            <label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-r-og" ${params.overridesGame ? 'checked' : ''}> ${escHtml(t('sched.res.overGame') || 'even in app mode')}</label>
             <span class="sched-cmd-hint">${escHtml(t('sched.res.hint') || 'For this task only: back to your preset when the task ends, and after 2 hours at most.')}</span>`;
         host.querySelector('.sched-r-name')?.addEventListener('change', (e) => { params.name = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-r-scope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
@@ -10706,6 +10710,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-aitext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-aipath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-ailabels')?.addEventListener('input', (e) => { params.labels = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-aitask')?.addEventListener('input', (e) => { params.task = (e.target as HTMLInputElement).value.trim(); });
     host.querySelector('.sched-p-aiq')?.addEventListener('input', (e) => { params.question = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');
@@ -12346,7 +12351,7 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
         deeplink: t('bmi.p.deeplink') || 'Fires bmm:// deeplinks',
         stopProcess: t('bmi.p.stop') || 'Stops running programs',
         delete: t('bmi.p.delete') || 'Deletes profiles, modpacks or mod folders',
-        resources: t('bmi.p.resources') || 'Changes the resource preset, game mode or the queue',
+        resources: t('bmi.p.resources') || 'Changes the resource preset, app mode or the queue',
         tasks: t('bmi.p.tasks') || 'Runs, starts or switches on other tasks',
     };
     const REACH: Record<string, string> = {

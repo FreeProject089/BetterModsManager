@@ -94,7 +94,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `storage.smartIo` | Active/désactive Smart I/O | `enabled` |
 | `storage.flag` | Bascule un réglage avancé | `key` · `enabled` |
 | `resources.preset` | Silencieux, Équilibré ou Max, pour cette tâche ou pour de bon | `name` · `scope` · `overridesGame` |
-| `resources.gameMode` | Forcer le mode jeu, l’arrêter, ou laisser la détection décider | `mode` |
+| `resources.gameMode` | Forcer le mode application, l’arrêter, ou laisser la détection décider | `mode` |
 | `resources.queue` | Retenir ou relâcher toutes les opérations BMM en attente | `action` |
 | `perf.diskSpace` | Lit l’espace libre et l’enregistre, pour qu’une condition puisse s’en servir. | `mountPoint` |
 
@@ -126,7 +126,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `id.of` | Range l'id de contenu d'un modpack, d'un plugin ou d'une automatisation dans une variable. Comparez-le pour vérifier que c'est le bon, sans rien télécharger. | `into` · `kind` · `id` |
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
-| `ai.classify` | Choisit une de vos étiquettes, avec sa probabilité. Demande la permission Laya. | `labels` · `text` · `path` · `into` |
+| `ai.classify` | Choisit une de vos étiquettes, avec sa probabilité. Demande la permission Laya. | `task` · `labels` · `text` · `path` · `into` |
 | `ai.ask` | Cherche dans la doc et vos mods. La réponse est une donnée, jamais exécutée. | `question` · `into` |
 | `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 | `log.print` | Met une ligne dans le panneau d'exécution et dans le run.log de la tâche. En code, c'est `print "…"`. | `message` · `text` |
@@ -211,7 +211,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `dayOfWeek` | Jour de la semaine |
 | `timeRange` | Heure comprise dans |
 | `commandSucceeds` | La commande réussit |
-| `gameRunning` | Un jeu tourne (mode jeu) |
+| `gameRunning` | Une application tourne (mode application) |
 | `resourcesPresetIs` | Le preset de ressources est |
 | `queueIdle` | BMM est au repos (file vide) |
 | `aiLabel` | L’étiquette de Laya est… |

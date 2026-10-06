@@ -85,6 +85,8 @@ pub mod ai_core;
 pub mod ai_embedded;
 pub mod ai_laya;
 pub mod ai_hybrid;
+// « Réglages des réponses de Laya »: thresholds, presets, custom labels and tasks.
+pub mod ai_tuning;
 // The local Laya API (off by default) and Laya in scheduled tasks.
 pub mod ai_api_core;
 pub mod ai_api;

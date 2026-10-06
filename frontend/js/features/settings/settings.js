@@ -2371,6 +2371,11 @@ export async function initSettings() {
         await (await import('./ai-api-card.js')).mountAiApiCard();
     }
     catch (e) { }
+    // « Réponses de Laya »: thresholds, presets, custom tasks (ai-tuning.ts), slotted between the AI card and the API card.
+    try {
+        await (await import('../ai/ai-tuning.js')).mountLayaTuning();
+    }
+    catch (e) { }
     try {
         initCardReorder();
     }

@@ -28,7 +28,7 @@ It no longer measures every disk at every start. Leave it on unless you want to 
 <a id="tabs"></a>
 ## The tabs
 The Storage Manager is split into five tabs. The line at the top, above the tabs, always says which
-preset is in force and whether a game is running. Every tab opens with one sentence saying what it
+preset is in force and whether an app is running. Every tab opens with one sentence saying what it
 is for and a **Learn more** link to the matching part of this documentation; every control has a
 tooltip. The first time you open it, a short card explains the window; **Got it** hides it for good.
 
@@ -36,7 +36,7 @@ tooltip. The first time you open it, a short card explains the window; **Got it*
 |---|---|
 | **Disks & space** | How full each disk is, which [profiles](doc-page:features/profiles) live on it, the low-space alerts, **Auto Performance Calibration**, and a **speed cap** per disk with its benchmark ([below](#per-disk-cards)) |
 | **Work intensity** | How much of your PC BMM may use for heavy work: the three presets, each with what it means for you, and **Smart I/O** |
-| **Game mode** | Whether BMM steps aside while you play, and the games it watches for |
+| **App mode** | Whether BMM steps aside while another app runs, and the apps it watches for |
 | **Live activity** | Four live curves and everything BMM is doing, with **Pause**, **Resume** and **Cancel** |
 | **Rules per disk** | Optional fine rules for one disk and one kind of work, with a legend of every column |
 
@@ -49,38 +49,39 @@ heavy operations run at once, on how many threads, and how fast they may write.
 
 | Preset | What it means for you |
 |---|---|
-| **Quiet** | BMM stays out of your way while you play or work. Deploys and installs take longer |
+| **Quiet** | BMM stays out of your way while you use other apps. Deploys and installs take longer |
 | **Balanced** (the default, recommended) | The usual BMM: quick, and your PC stays usable. Exactly how BMM always worked |
 | **Everything for BMM** | Everything finishes as fast as your disks allow. Your PC may feel slow meanwhile |
 
-**In force** says the preset applied right now: game mode or a scheduled task can switch to another
+**In force** says the preset applied right now: app mode or a scheduled task can switch to another
 one for a while, and your choice comes back by itself afterwards. The exact numbers behind each
 preset are in [Presets](doc-page:how-it-works/resources#presets).
 
-### Game mode
+<a id="game-mode"></a>
+### App mode
+App mode (called game mode before) is for any application BMM manages mods for: a game, but also
+Blender, a simulator or any program you pick. **Detect it** (the default), **Force on**,
+**Force off**. The tab says, in words, what is happening: which app turned app mode on
+(*An app is running: SkyrimSE.exe*), where BMM found it (*in the app folder of your profile
+"Skyrim SE"*, *in your list of apps*, *in exclusive full screen*), for how long, what is held right
+now, and, once the app has closed, how long before BMM goes back to normal.
 
-**Detect it** (the default), **Force on**, **Force off**. The tab says, in words, what is
-happening: which game turned game mode on (*A game is running: SkyrimSE.exe*), where BMM found it
-(*in the game folder of your profile "Skyrim SE"*, *in your list of games*, *in exclusive full
-screen*), for how long, what is held right now, and, once the game has closed, how long before BMM
-goes back to normal.
-
-- **Pause everything until I quit the game** holds every operation, deploys included, and lets
-  them go by themselves when game mode ends (or when you press **Resume all**).
-- **While you play**: tick what waits until you stop playing: file checks (hashing), maintenance
+- **Pause everything until I close the app** holds every operation, deploys included, and lets
+  them go by themselves when app mode ends (or when you press **Resume all**).
+- **While the app runs**: tick what waits until you close the app: file checks (hashing), maintenance
   and disk benchmarks (both ticked by default), downloads, folder scans, unpacking and packing
   archives, image processing. Enabling mods, installs and backups are slowed, never held.
-- **Back to normal after**: the cooldown after the game closes, 5 to 600 seconds (30 by default).
-- **Tell me when game mode turns on or off**: a notice each time it changes by itself (on by
+- **Back to normal after**: the cooldown after the app closes, 5 to 600 seconds (30 by default).
+- **Tell me when app mode turns on or off**: a notice each time it changes by itself (on by
   default).
-- **Also count any full-screen window**: catches borderless games that are in no list, but a
+- **Also count any full-screen window**: catches borderless apps that are in no list, but a
   full-screen video counts too, so it is off by default. Browsers, video players, chat apps and
   game launchers never count, in full screen or inside a profile's folder, unless you add one
   to your list yourself.
-- **Games BMM watches for**: every profile's game folder is watched by itself, each with a switch
-  to ignore it (a whole drive is never watched); below, the programs you added, each with a
-  remove button, added by name, with **Browse…** (the game's `.exe`) or with **Pick a running
-  program…** (start the game, then pick it in the list).
+- **Apps BMM watches for**: every profile's app folder is watched by itself, each with a switch
+  to ignore it (a whole drive is never watched); below, the programs you added (`eldenring.exe`,
+  `blender.exe`…), each with a remove button, added by name, with **Browse…** (the app's `.exe`)
+  or with **Pick a running program…** (start the app, then pick it in the list).
 
 The details and what one look costs are in
 [How detection works](doc-page:how-it-works/resources#how-detection-works).
@@ -90,7 +91,7 @@ The details and what one look costs are in
 Four curves (BMM's CPU, the whole PC's CPU, BMM's reads and writes in MB/s) and every operation
 running, paused or waiting, with **Pause**, **Resume** and **Cancel**, plus **Pause all** and
 **Resume all**. The values are measured once a second, and only while it is worth it: the Storage
-Manager is open, one of the **Work intensity**, **Game mode** or **Live activity** tabs is shown,
+Manager is open, one of the **Work intensity**, **App mode** or **Live activity** tabs is shown,
 and BMM's window is not hidden. Otherwise BMM does not measure itself at all.
 
 ### Rules per disk
@@ -149,7 +150,7 @@ Each disk on your system gets a card:
 
     The read is made without the operating system's cache, so it measures the disk and not the
     memory holding the file just written. The benchmark runs as background maintenance: it waits
-    while mods are being enabled or installed, and while game mode is on.
+    while mods are being enabled or installed, and while app mode is on.
 
 === "Reset everything"
 
@@ -192,12 +193,12 @@ re-hashing on purpose — see [Integrity & hashing](doc-page:how-it-works/integr
 
 The governor still has a say over hashing: it runs on its own thread pool, sized by the preset,
 counts as background work, and so steps aside while mods are being enabled or installed and waits
-out game mode.
+out app mode.
 
 ## Automate it
 
 The [Scheduler](doc-page:features/scheduler) can *benchmark a disk*, *apply a disk speed limit*, *check free disk
 space*, and toggle *Smart I/O* / *Auto-Calibration* as workflow actions — and branch on the measured
 result (e.g. *if `disk.write_mbps` < 50, show a warning*). It can also pick a preset for the length
-of a task, switch game mode and pause the queue: see
+of a task, switch app mode and pause the queue: see
 [How hard BMM works](doc-page:features/scheduler#how-hard-bmm-works).

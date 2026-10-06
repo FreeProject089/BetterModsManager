@@ -1,0 +1,88 @@
+/* « Réponses de Laya » (features/ai/ai-tuning.ts) — linked by the card the first time Settings
+   opens. Tokens only, like ai.css: every colour follows the theme; secondary text is
+   --text-secondary (never --text-muted); the accent is a fill, text that names it mixes it with
+   the text ink. */
+
+.lt-card .lt-lead { margin: 0 0 8px; }
+.lt-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.lt-row .ai-lbl { flex: none; }
+.lt-area, .lt-small { max-width: 280px; min-width: 0; }
+.lt-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.lt-fs[disabled] { opacity: 0.6; }
+
+/* The four presets: one row of chips, one line under it. */
+.lt-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.lt-chip {
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--bmm-s05); color: var(--text-secondary);
+}
+.lt-chip:hover:not(:disabled) { border-color: color-mix(in srgb, var(--bmm-accent) 50%, var(--border)); }
+.lt-chip.is-on {
+    border-color: color-mix(in srgb, var(--bmm-accent) 70%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
+    color: color-mix(in srgb, var(--bmm-accent) 60%, var(--bmm-text-primary));
+}
+.lt-chip:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent); outline-offset: 2px; }
+.lt-hint { margin: 2px 0 6px; }
+
+/* « Réglages fins »: label · control · one-line hint. */
+.lt-grid { max-width: 720px; display: grid; grid-template-columns: minmax(110px, max-content) minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 8px 0; }
+.lt-grid .lt-fhint { grid-column: 2; margin-top: -4px; font-size: 11.5px; color: var(--text-secondary); }
+.lt-grid .lt-fhint:empty { display: none; }
+.lt-range { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lt-range input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--bmm-accent); }
+.lt-range output { flex: none; min-width: 48px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
+
+/* Tasks. */
+.lt-tasks { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.lt-task {
+    display: flex; align-items: center; gap: 10px; min-width: 0;
+    padding: 8px 10px; border-radius: var(--bmm-radius-chip, 6px);
+    border: 1px solid var(--border); background: var(--bmm-s05);
+}
+.lt-task.is-off .lt-task-name { opacity: 0.6; }
+.lt-task-on { flex: none; display: flex; }
+.lt-task-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lt-task-name b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-task-name small { font-size: 11.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-task-btns { flex: none; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.lt-empty { margin: 4px 0; }
+
+.lt-editor {
+    margin: 0 0 6px; padding: 10px 12px; border-radius: var(--bmm-radius-chip, 6px);
+    border: 1px dashed color-mix(in srgb, var(--bmm-accent) 40%, var(--border));
+}
+.lt-grid2 { display: grid; grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); gap: 6px 12px; align-items: center; }
+.lt-id { margin: 6px 0 0; }
+
+/* Label rows: name · meaning · examples · remove. */
+.lt-labels { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.lt-label { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+.lt-label .form-input { min-width: 0; width: 100%; }
+.lt-label-id { font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-label:has(.lt-label-id) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.4fr); }
+
+/* Test and run results: the verdict, then the bars. */
+.lt-out, .lt-run { margin: 6px 0; }
+.lt-out { max-width: 720px; }
+.lt-verdict { font-size: 13px; font-weight: 600; margin: 4px 0 6px; color: var(--bmm-text-primary); }
+.lt-verdict.is-unsure { color: color-mix(in srgb, var(--warning) 55%, var(--text-primary)); }
+.lt-verdict.is-guess { color: color-mix(in srgb, var(--warning) 45%, var(--text-primary)); }
+.lt-bar { display: grid; grid-template-columns: minmax(60px, 160px) minmax(0, 1fr) 48px; gap: 8px; align-items: center; margin: 3px 0; font-size: 12px; }
+.lt-bar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.lt-bar-t { height: 8px; border-radius: 999px; background: var(--bmm-s05); border: 1px solid var(--border); overflow: hidden; }
+.lt-bar-f { display: block; height: 100%; background: var(--bmm-accent); border-radius: 999px; }
+.lt-bar-v { text-align: right; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
+.lt-res { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; min-width: 0; }
+.lt-res-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-res-ans { flex: none; color: var(--bmm-text-primary); }
+.lt-res-ans.is-unsure, .lt-res-ans.is-guess { color: color-mix(in srgb, var(--warning) 55%, var(--text-primary)); }
+.lt-import { cursor: pointer; }
+
+@media (max-width: 760px) {
+    .lt-label, .lt-label:has(.lt-label-id) { grid-template-columns: minmax(0, 1fr); }
+    .lt-grid, .lt-grid2 { grid-template-columns: minmax(0, 1fr); }
+    .lt-grid .lt-fhint { grid-column: 1; }
+    .lt-task { flex-wrap: wrap; }
+}

@@ -307,6 +307,65 @@ Si les deux premiers ne trouvent rien, le rapport part directement, comme avant.
 à nouveau sur **Envoyer** pour l'envoyer comme vous l'avez choisi. Les zips de plantage joints
 à un rapport ont déjà été débarrassés de leurs secrets à leur écriture.
 
+## Réponses de Laya : à quel point sûr, et vos propres tâches
+
+**Paramètres → Réponses de Laya** (sous la carte IA) règle à quel point Laya doit être sûr avant que
+BMM propose ou utilise une réponse. Rien ne change tant que vous n'y touchez pas : **Équilibré** est
+le comportement habituel de BMM.
+
+| Préréglage | Ce qu'il fait |
+|---|---|
+| **Prudent** | Moins de réponses, plus souvent justes. Dit *je ne sais pas* en cas de doute |
+| **Équilibré** | Le comportement habituel (tags dès 35 %, catégorie de rapport dès 30 %, les tâches répondent toujours) |
+| **Permissif** | Plus de réponses. Une réponse douteuse est gardée et marquée *hypothèse* |
+| **Personnalisé** | Vos valeurs, dans *Réglages fins* |
+
+*Pour* choisit la fonction : toutes, ou une seule avec ses propres réglages (suggestions de mods,
+Ask Laya, rapports de bug, analyse de la bibliothèque, tâches planifiées et scripts, programmes).
+*Réglages fins* :
+
+| Réglage | Sens |
+|---|---|
+| Confiance minimum | En dessous, la réponse n'est pas retenue |
+| Marge | Une seule étiquette : si les deux premières sont plus proches que ça, c'est une égalité (non retenue) |
+| Température | Sous 1 plus tranché, au-dessus de 1 plus nuancé. Appliquée par-dessus la calibration du modèle (exactement un softmax à une autre température) |
+| Réponses affichées | Combien de réponses classées sont listées (Ask Laya : combien de résultats Laya compare) |
+| Étiquettes par élément | Le plus d'étiquettes gardées par élément (un mod garde 3 tags au plus) |
+| En cas de doute | Dire *je ne sais pas*, ou garder la meilleure, marquée comme telle. Le *aucune* de Laya n'est jamais changé en hypothèse |
+| Plusieurs étiquettes, Afficher les pourcentages, Appliquer sans demander | Comme leur nom. *Appliquer sans demander* n'applique jamais une hypothèse |
+
+### Décrire vos tags et catégories de rapport
+
+*Décrire mes tags et catégories* : un sens court et quelques exemples par tag (ou catégorie de
+rapport), et si vous voulez la question posée à Laya. Laya est un classifieur qui lit le texte de
+chaque option : une description remplace ce texte, les exemples deviennent une deuxième façon de
+demander, et votre question est posée à côté de celle de BMM. Les probabilités de ces questions
+sont moyennées, en un seul appel au modèle. Sans description, exemple ni question, BMM demande
+exactement ce qu'il demandait avant.
+
+### Vos propres tâches
+
+*Mes tâches* : un nom, ce qu'elle lit (nom, description, readme du mod ou tout ; un texte ; un
+fichier ; un rapport), 2 à 32 étiquettes (chacune avec un sens et des exemples facultatifs), une
+question facultative, ses propres réglages ou ceux des *tâches*, et quoi faire de la réponse sur un
+mod (afficher seulement, ajouter le tag du même nom, le définir comme catégorie du mod parmi les
+étiquettes de la tâche, ou écrire une ligne de note). Aucun tag n'est créé : une étiquette sans tag
+du même nom est signalée.
+
+- **Lancer sur mes mods** répond pour chaque mod ; **Appliquer** mod par mod, ou d'un coup avec
+  *Appliquer sans demander*.
+- Dans une tâche planifiée ou un script : `ai.classify` avec `task: "<id>"` (les étiquettes
+  viennent de la tâche). En BMMScript : `do ai.classify(task: "genre", text: "{event.title}", into: "genre")`.
+- Programmes : `bmm ai-classify "<texte>" --task genre`, `bmm_ai_classify` avec `task`, ou
+  `POST /v1/classify` sur l'[API locale](doc-page:features/ai-api.fr).
+- **Tester** : tapez un texte, choisissez une tâche (ou tapez des étiquettes) et voyez la réponse
+  et le pourcentage de chaque étiquette. Rien n'est enregistré.
+
+**Exporter** écrit un fichier JSON versionné ; **Importer** le relit (vérifié, refusé s'il vient d'un
+BMM plus récent ou a des champs inconnus) ; **Réinitialiser** revient aux réglages par défaut. Les
+programmes ne peuvent modifier ces réglages que si vous cochez *Les programmes (API locale, MCP,
+CLI) peuvent modifier ces réglages* ; un programme ne peut jamais la cocher.
+
 ## Désactiver
 
 - **Réglages → IA (optionnelle)** : l'interrupteur principal. Éteint, aucune requête réseau
@@ -332,7 +391,8 @@ L'interrupteur est dans `ai-settings.json` à côté de `data.json` ; les clés 
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Écrit les champs nommés, avec la validation de la fenêtre |
 | `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--write] [--json]` | *Demander à Laya* : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent, en résultats structurés ; `write` ajoute une réponse rédigée et citée |
 | `bmm_ai_analyze_library` | `ai-analyze [mod-ids] [--laya] [--limit 200]` | Des suggestions pour plusieurs mods à la fois. **N'écrit rien** |
-| `bmm_ai_classify` | `ai-classify "<texte>" --label id=sens …` | Lequel de vos libellés convient à un texte (Laya, hors ligne), plus *aucun* |
+| `bmm_ai_classify` | `ai-classify "<texte>" --label id=sens …` ou `--task <id>` | Lequel de vos libellés (ou ceux d'une tâche enregistrée) convient à un texte (Laya, hors ligne), plus *aucun*, selon vos réglages de réponses |
+| `bmm_ai_laya_config` | `ai-laya get\|set <fichier>\|reset` | Les réglages de réponses de Laya en export versionné ; `set` et `reset` seulement si vous avez permis aux programmes de les modifier |
 | `bmm_ai_pack_install` | `ai-install` | Télécharge, vérifie et installe le paquet du modèle (progression en direct dans la CLI) |
 | `bmm_ai_pack_remove` | `ai-remove` | Supprime le paquet du modèle téléchargé |
 | `bmm_ai_test` | `ai-test` | Classe un exemple fixe, avec les durées |

@@ -36,6 +36,23 @@ is `choice`, `noul` or `score` with its `criteria` (a list, or an object whose o
 | 503 | AI off, `--no-ai`, a game running (`game_mode`), the model not installed, or busy (1 or 2 at a time, 4 waiting) |
 | 504 | Laya took more than 30 s |
 
+## Your labels and settings: /v1/classify
+
+```bash
+curl -s http://127.0.0.1:51275/v1/classify \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"text":"The game crashes at start","labels":["crash",{"id":"ui","description":"a display problem","examples":["text cut off"]}]}'
+```
+
+`labels` are ids or `{id, description, examples}` (2 to 32), or `"task": "<id>"` names a task saved
+in **Settings → Laya answers**. The answer follows your settings for *Programs* (or the task's):
+`label` (`none` when Laya abstained), `p`, `labels` (accepted), `ranked`, `probabilities` (every
+label), `abstained`, `uncertain`, `reason`. Unknown fields: 400.
+
+`GET /v1/laya/config` returns the settings as an export. `PUT /v1/laya/config` stores a config or an
+export only if you ticked *Programs (local API, MCP, CLI) may change these settings*; otherwise 403
+`config_locked`. A program can never tick it, and a bad value is refused (422), not corrected.
+
 ## What it guards
 
 - **127.0.0.1 only.** Any other address in the settings is refused before a port is opened.

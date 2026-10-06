@@ -8,8 +8,12 @@
 //! ## What it exposes, and what it never does
 //!
 //! Classification and nothing else: a text and some questions in, laya-serve's answers out. It has
-//! no route that reads a file, lists a mod, touches a setting or says anything about the library;
-//! the engine it calls sees only the text the caller sent. Off by default, and a toggle in
+//! no route that reads a file, lists a mod or says anything about the library; the engine it calls
+//! sees only the text the caller sent. Two BMM additions: `POST /v1/classify` (a text and labels,
+//! or a saved « tâche perso », answered with the user's answer settings: threshold, margin,
+//! « je ne sais pas ») and `GET|PUT /v1/laya/config` (« Réglages des réponses »: read always,
+//! written ONLY when the user ticked « Les programmes peuvent modifier ces réglages » in
+//! Settings, and a program can never tick it). Off by default, and a toggle in
 //! Settings → AI (or `bmm ai-api start|stop`).
 //!
 //! ## The defences, in the order a request meets them
@@ -456,6 +460,71 @@ pub struct Engine {
     pub available: Arc<dyn Fn() -> bool + Send + Sync>,
     pub guard: GuardFn,
     pub log: LogFn,
+    /// « Réglages des réponses de Laya »: read and write the stored config. `None` → the
+    /// `/v1/classify` and `/v1/laya/config` routes answer 404.
+    pub laya: Option<LayaHooks>,
+}
+
+#[derive(Clone)]
+pub struct LayaHooks {
+    pub load: Arc<dyn Fn() -> crate::commands::ai_tuning::LayaConfig + Send + Sync>,
+    pub save: Arc<dyn Fn(&crate::commands::ai_tuning::LayaConfig) -> Result<(), String> + Send + Sync>,
+}
+
+/// `POST /v1/classify`: a text, and a saved task's id or labels (strings, or `{id, description,
+/// examples}`), and an optional wording. Unknown fields refused.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ClassifyIn {
+    text: String,
+    #[serde(default)]
+    task: Option<String>,
+    #[serde(default)]
+    labels: Vec<LabelIn>,
+    #[serde(default)]
+    template: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum LabelIn {
+    Id(String),
+    Def(crate::commands::ai_tuning::LabelDef),
+}
+
+/// Parse and resolve one `/v1/classify` body against the stored config: the text (neutralised),
+/// the labels, the wording and the answer settings (« Programmes », or the task's own).
+pub fn parse_classify(body: &[u8], cfg: &crate::commands::ai_tuning::LayaConfig) -> Result<(String, Vec<crate::commands::ai_tuning::LabelDef>, String, crate::commands::ai_tuning::Tuning), ApiError> {
+    use crate::commands::ai_tuning as tu;
+    let req: ClassifyIn = serde_json::from_slice(body).map_err(|_| ApiError(StatusCode::BAD_REQUEST, "bad_json"))?;
+    if req.text.chars().count() > MAX_TEXT {
+        return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "text_too_long"));
+    }
+    if req.labels.len() > tu::MAX_LABELS {
+        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "too_many_options"));
+    }
+    let given: Vec<tu::LabelDef> = req
+        .labels
+        .into_iter()
+        .map(|l| match l {
+            LabelIn::Id(id) => tu::LabelDef { id, ..Default::default() },
+            LabelIn::Def(d) => d,
+        })
+        .collect();
+    let (labels, template, tune) = match req.task.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(_) => {
+            let (l, t, tune) = tu::task_spec(cfg, req.task.as_deref(), &[], tu::Area::Api).map_err(|e| ApiError(StatusCode::UNPROCESSABLE_ENTITY, if e.ends_with("taskOff") { "task_off" } else { "unknown_task" }))?;
+            (l, t, tune)
+        }
+        None => {
+            let labels = tu::clean_labels(&given);
+            if labels.len() < 2 {
+                return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, "too_few_options"));
+            }
+            (labels, req.template.unwrap_or_default(), cfg.resolve(tu::Area::Api))
+        }
+    };
+    Ok((neutralize_specials(&req.text), labels, template, tune))
 }
 
 /// Refusal lines written per minute at most. The log is flushed on every line, and a web page
@@ -549,28 +618,90 @@ fn client_ip(addr: Option<SocketAddr>) -> IpAddr {
     addr.map(|a| a.ip()).unwrap_or(IpAddr::from([127, 0, 0, 1]))
 }
 
-async fn handle_predict(auth: Option<String>, addr: Option<SocketAddr>, body: bytes::Bytes, sh: Arc<Shared>) -> Result<warp::reply::Response, warp::Rejection> {
+/// Lockout, token, rate: every route but /health goes through this first.
+fn admit(auth: Option<&str>, addr: Option<SocketAddr>, sh: &Shared) -> Result<(), warp::Rejection> {
     let ip = client_ip(addr);
     if sh.bad.count(ip) >= BAD_AUTH_PER_MIN {
         return Err(warp::reject::custom(Refused(StatusCode::TOO_MANY_REQUESTS, "locked_out")));
     }
-    if !token_ok(auth.as_deref(), &sh.token_sha256) {
+    if !token_ok(auth, &sh.token_sha256) {
         sh.bad.hit(ip, usize::MAX);
         return Err(warp::reject::custom(Refused(StatusCode::UNAUTHORIZED, "unauthorized")));
     }
     if !sh.rate.hit(ip, RATE_PER_MIN) {
         return Err(warp::reject::custom(Refused(StatusCode::TOO_MANY_REQUESTS, "rate_limited")));
     }
+    Ok(())
+}
+
+/// The guard (AI off, `--no-ai`, game mode) and the model: before any inference.
+fn ready(sh: &Shared) -> Result<(), warp::Rejection> {
     if let Some(why) = (sh.engine.guard)() {
         return Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, why)));
     }
     if !(sh.engine.available)() {
         return Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, "model_absent")));
     }
-    let (text, qs) = parse_request(&body).map_err(|e| warp::reject::custom(Refused(e.0, e.1)))?;
-    let n_q = qs.len();
+    Ok(())
+}
+
+fn json_reply(v: &Value) -> warp::reply::Response {
+    let mut r = warp::reply::json(v).into_response_();
+    r.headers_mut().insert("cache-control", warp::http::HeaderValue::from_static("no-store"));
+    r
+}
+
+/// `POST /v1/classify` (BMM's own): labels or a saved task, the user's answer settings.
+async fn handle_classify(auth: Option<String>, addr: Option<SocketAddr>, body: bytes::Bytes, sh: Arc<Shared>) -> Result<warp::reply::Response, warp::Rejection> {
+    admit(auth.as_deref(), addr, &sh)?;
+    let hooks = sh.engine.laya.clone().ok_or_else(warp::reject::not_found)?;
+    ready(&sh)?;
+    let cfg = (hooks.load)();
+    let (text, labels, template, tune) = parse_classify(&body, &cfg).map_err(|e| warp::reject::custom(Refused(e.0, e.1)))?;
     let n_chars = text.chars().count();
-    // The queue: at most QUEUE_MAX waiting, each for at most QUEUE_WAIT.
+    let n_l = labels.len();
+    let predict = sh.engine.predict.clone();
+    let t0 = Instant::now();
+    let v = queued(&sh, Box::new(move || {
+        use crate::commands::ai_tuning as tu;
+        let ask = |qs: &[LayaQuestion]| predict(&text, qs);
+        let (probs, d) = tu::classify_labels(&ask, &crate::commands::ai_laya::choice_probs, &labels, &template, &tune)?;
+        Ok(tu::decision_json(&probs, &d))
+    }))
+    .await?;
+    sh.stats.served.fetch_add(1, Ordering::Relaxed);
+    (sh.engine.log)(format!("[AI-API] POST /v1/classify 200 labels={} chars={} ms={}", n_l, n_chars, t0.elapsed().as_millis()));
+    Ok(json_reply(&v))
+}
+
+/// `GET /v1/laya/config`: the answer settings as an export (no key, no text of the user's).
+async fn handle_config_get(auth: Option<String>, addr: Option<SocketAddr>, sh: Arc<Shared>) -> Result<warp::reply::Response, warp::Rejection> {
+    admit(auth.as_deref(), addr, &sh)?;
+    let hooks = sh.engine.laya.clone().ok_or_else(warp::reject::not_found)?;
+    Ok(json_reply(&(hooks.load)().export()))
+}
+
+/// `PUT /v1/laya/config`: only when the user allowed programs to change it in Settings (403
+/// `config_locked` otherwise); the same strict checks as an import; never turns that
+/// permission on.
+async fn handle_config_put(auth: Option<String>, addr: Option<SocketAddr>, body: bytes::Bytes, sh: Arc<Shared>) -> Result<warp::reply::Response, warp::Rejection> {
+    admit(auth.as_deref(), addr, &sh)?;
+    let hooks = sh.engine.laya.clone().ok_or_else(warp::reject::not_found)?;
+    let incoming: Value = serde_json::from_slice(&body).map_err(|_| warp::reject::custom(Refused(StatusCode::BAD_REQUEST, "bad_json")))?;
+    let current = (hooks.load)();
+    let next = crate::commands::ai_tuning::LayaConfig::program_change(&current, &incoming).map_err(|e| {
+        warp::reject::custom(if e == "laya.cfg.locked" { Refused(StatusCode::FORBIDDEN, "config_locked") } else { Refused(StatusCode::UNPROCESSABLE_ENTITY, "bad_config") })
+    })?;
+    (hooks.save)(&next).map_err(|_| warp::reject::custom(Refused(StatusCode::INTERNAL_SERVER_ERROR, "save_failed")))?;
+    (sh.engine.log)("[AI-API] PUT /v1/laya/config 200".to_string());
+    Ok(json_reply(&next.export()))
+}
+
+type Job = Box<dyn FnOnce() -> Result<Value, String> + Send>;
+
+/// The queue and the engine slot: at most QUEUE_MAX waiting (each for at most QUEUE_WAIT),
+/// then one run under RUN_TIMEOUT. Engine messages never go out (they can name a path).
+async fn queued(sh: &Shared, job: Job) -> Result<Value, warp::Rejection> {
     if sh.waiting.fetch_add(1, Ordering::SeqCst) >= QUEUE_MAX {
         sh.waiting.fetch_sub(1, Ordering::SeqCst);
         return Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, "busy")));
@@ -581,31 +712,33 @@ async fn handle_predict(auth: Option<String>, addr: Option<SocketAddr>, body: by
         Ok(Ok(p)) => p,
         _ => return Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, "busy"))),
     };
-    let predict = sh.engine.predict.clone();
-    let t0 = Instant::now();
     // The permit goes INTO the job: a request that times out does not free the engine for the
     // next one while its run is still going.
     let job = tokio::task::spawn_blocking(move || {
         let _p = permit;
-        predict(&text, &qs)
+        job()
     });
-    let out = match tokio::time::timeout(RUN_TIMEOUT, job).await {
-        Err(_) => return Err(warp::reject::custom(Refused(StatusCode::GATEWAY_TIMEOUT, "timeout"))),
-        Ok(Err(_)) => return Err(warp::reject::custom(Refused(StatusCode::INTERNAL_SERVER_ERROR, "inference_failed"))),
-        Ok(Ok(r)) => r,
-    };
-    match out {
-        Ok(v) => {
-            sh.stats.served.fetch_add(1, Ordering::Relaxed);
-            (sh.engine.log)(format!("[AI-API] POST /v1/systemone 200 questions={} chars={} ms={}", n_q, n_chars, t0.elapsed().as_millis()));
-            let mut r = warp::reply::json(&v).into_response_();
-            r.headers_mut().insert("cache-control", warp::http::HeaderValue::from_static("no-store"));
-            Ok(r)
-        }
-        Err(e) if e.contains("absent") => Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, "model_absent"))),
-        // The engine's own message can name a file path: only a code goes out.
-        Err(_) => Err(warp::reject::custom(Refused(StatusCode::INTERNAL_SERVER_ERROR, "inference_failed"))),
+    match tokio::time::timeout(RUN_TIMEOUT, job).await {
+        Err(_) => Err(warp::reject::custom(Refused(StatusCode::GATEWAY_TIMEOUT, "timeout"))),
+        Ok(Err(_)) => Err(warp::reject::custom(Refused(StatusCode::INTERNAL_SERVER_ERROR, "inference_failed"))),
+        Ok(Ok(Ok(v))) => Ok(v),
+        Ok(Ok(Err(e))) if e.contains("absent") => Err(warp::reject::custom(Refused(StatusCode::SERVICE_UNAVAILABLE, "model_absent"))),
+        Ok(Ok(Err(_))) => Err(warp::reject::custom(Refused(StatusCode::INTERNAL_SERVER_ERROR, "inference_failed"))),
     }
+}
+
+async fn handle_predict(auth: Option<String>, addr: Option<SocketAddr>, body: bytes::Bytes, sh: Arc<Shared>) -> Result<warp::reply::Response, warp::Rejection> {
+    admit(auth.as_deref(), addr, &sh)?;
+    ready(&sh)?;
+    let (text, qs) = parse_request(&body).map_err(|e| warp::reject::custom(Refused(e.0, e.1)))?;
+    let n_q = qs.len();
+    let n_chars = text.chars().count();
+    let predict = sh.engine.predict.clone();
+    let t0 = Instant::now();
+    let v = queued(&sh, Box::new(move || predict(&text, &qs))).await?;
+    sh.stats.served.fetch_add(1, Ordering::Relaxed);
+    (sh.engine.log)(format!("[AI-API] POST /v1/systemone 200 questions={} chars={} ms={}", n_q, n_chars, t0.elapsed().as_millis()));
+    Ok(json_reply(&v))
 }
 
 /// Every route, behind the Host and Origin checks, with errors as JSON and CORS stamped only for
@@ -640,11 +773,11 @@ fn routes(sh: Arc<Shared>) -> impl Filter<Extract = (warp::reply::Response,), Er
     });
     // Only on the two real paths: an OPTIONS matcher without a path turned every unknown GET
     // into a 405 (the method mismatch outranks the not-found), which names a route that is not there.
-    let known = warp::path!("v1" / "systemone").or(warp::path!("health")).unify();
+    let known = warp::path!("v1" / "systemone").or(warp::path!("health")).unify().or(warp::path!("v1" / "classify")).unify().or(warp::path!("v1" / "laya" / "config")).unify();
     let preflight = known.and(warp::options()).map(|| {
         let mut r = warp::reply::with_status(warp::reply(), StatusCode::NO_CONTENT).into_response_();
         let h = r.headers_mut();
-        h.insert("access-control-allow-methods", warp::http::HeaderValue::from_static("POST, GET, OPTIONS"));
+        h.insert("access-control-allow-methods", warp::http::HeaderValue::from_static("POST, GET, PUT, OPTIONS"));
         h.insert("access-control-allow-headers", warp::http::HeaderValue::from_static("authorization, content-type"));
         h.insert("access-control-max-age", warp::http::HeaderValue::from_static("600"));
         r
@@ -657,12 +790,34 @@ fn routes(sh: Arc<Shared>) -> impl Filter<Extract = (warp::reply::Response,), Er
         .and(warp::body::bytes())
         .and(with.clone())
         .and_then(handle_predict);
+    let classify = warp::path!("v1" / "classify")
+        .and(warp::post())
+        .and(warp::header::optional::<String>("authorization"))
+        .and(warp::addr::remote())
+        .and(warp::body::content_length_limit(MAX_BODY))
+        .and(warp::body::bytes())
+        .and(with.clone())
+        .and_then(handle_classify);
+    let config_get = warp::path!("v1" / "laya" / "config")
+        .and(warp::get())
+        .and(warp::header::optional::<String>("authorization"))
+        .and(warp::addr::remote())
+        .and(with.clone())
+        .and_then(handle_config_get);
+    let config_put = warp::path!("v1" / "laya" / "config")
+        .and(warp::put())
+        .and(warp::header::optional::<String>("authorization"))
+        .and(warp::addr::remote())
+        .and(warp::body::content_length_limit(MAX_BODY))
+        .and(warp::body::bytes())
+        .and(with.clone())
+        .and_then(handle_config_put);
     let stats = sh.stats.clone();
     let log = sh.engine.log.clone();
     let gate = Arc::new(LogGate::default());
     let origins = Arc::new(sh.origins.clone());
     let inner = pre
-        .and(health.or(preflight).unify().or(predict).unify())
+        .and(health.or(preflight).unify().or(predict).unify().or(classify).unify().or(config_get).unify().or(config_put).unify())
         .recover(move |err: warp::Rejection| {
             let stats = stats.clone();
             let log = log.clone();
@@ -920,6 +1075,7 @@ mod tests {
             available: Arc::new(|| true),
             guard: Arc::new(move || guard),
             log: Arc::new(|_line: String| {}),
+            laya: None,
         }
     }
 
@@ -987,6 +1143,79 @@ mod tests {
         assert_eq!(raw(port, format!("GET /health HTTP/1.1\r\nHost: attacker:{port}\r\nConnection: close\r\n\r\n")).await.0, 421);
         // Nothing else is served.
         assert_eq!(raw(port, format!("GET /api/mods HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n")).await.0, 404);
+        let _ = stop.send(());
+    }
+
+    fn req(port: u16, method: &str, path: &str, extra: &str, body: &str) -> String {
+        format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{extra}\r\n{body}", body.len())
+    }
+
+    /// « Réglages des réponses »: /v1/classify answers with the user's settings and only with
+    /// the labels given; /v1/laya/config is read freely (with the token) and written only when
+    /// the user allowed programs to, and never turns that permission on.
+    #[tokio::test]
+    async fn classify_and_config_routes_follow_the_users_settings() {
+        use crate::commands::ai_tuning::{LayaConfig, Preset, Tuning};
+        let token = new_token();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let stored = Arc::new(Mutex::new(LayaConfig::default()));
+        let mut engine = fake_engine(calls.clone(), None);
+        // A model that prefers « a » at 0.5 against « b » 0.3 and « none » 0.2, and names a label of its own.
+        engine.predict = Arc::new(|_t: &str, qs: &[LayaQuestion]| {
+            let mut answers = serde_json::Map::new();
+            for (id, _, _, _) in qs {
+                answers.insert(id.clone(), json!({ "type": "choice", "probabilities": { "a": 0.5, "b": 0.3, "none": 0.2, "rm -rf": 0.9 } }));
+            }
+            Ok(json!({ "answers": answers }))
+        });
+        let (s1, s2) = (stored.clone(), stored.clone());
+        engine.laya = Some(LayaHooks {
+            load: Arc::new(move || s1.lock().unwrap().clone()),
+            save: Arc::new(move |c: &LayaConfig| {
+                *s2.lock().unwrap() = c.clone();
+                Ok(())
+            }),
+        });
+        let cfg = ApiConfig { enabled: true, token_sha256: hash_token(&token), ..Default::default() };
+        let (port, stop) = start(cfg, engine).await;
+        let auth = format!("Authorization: Bearer {}\r\n", token);
+        let body = r#"{"text":"some text","labels":["a",{"id":"b","description":"the b one","examples":["bee"]}]}"#;
+
+        let (s, text) = raw(port, req(port, "POST", "/v1/classify", &auth, body)).await;
+        assert_eq!(s, 200, "{text}");
+        assert!(text.contains("\"label\":\"a\"") && !text.contains("rm -rf"), "{text}");
+        // No token: 401.
+        assert_eq!(raw(port, req(port, "POST", "/v1/classify", "", body)).await.0, 401);
+        // Unknown fields and one label are refused.
+        assert_eq!(raw(port, req(port, "POST", "/v1/classify", &auth, r#"{"text":"x","labels":["a","b"],"evil":1}"#)).await.0, 400);
+        assert_eq!(raw(port, req(port, "POST", "/v1/classify", &auth, r#"{"text":"x","labels":["a"]}"#)).await.0, 422);
+        assert_eq!(raw(port, req(port, "POST", "/v1/classify", &auth, r#"{"text":"x","task":"nope"}"#)).await.0, 422);
+
+        // The user's « Programmes » threshold: 0.6 → Laya abstains.
+        stored.lock().unwrap().features.api = Some(Tuning { preset: Preset::Custom, threshold: 0.6, ..Tuning::default() });
+        let (_, text) = raw(port, req(port, "POST", "/v1/classify", &auth, body)).await;
+        assert!(text.contains("\"label\":\"none\"") && text.contains("\"abstained\":true"), "{text}");
+
+        // Read: allowed. Write: locked until the user allows it.
+        let (s, text) = raw(port, req(port, "GET", "/v1/laya/config", &auth, "")).await;
+        assert_eq!(s, 200);
+        assert!(text.contains("bmm-laya-config"));
+        let mut want = LayaConfig::default();
+        want.allow_program_changes = true;
+        want.global.threshold = 0.42;
+        want.global.preset = Preset::Custom;
+        let put = serde_json::to_string(&want).unwrap();
+        let (s, text) = raw(port, req(port, "PUT", "/v1/laya/config", &auth, &put)).await;
+        assert_eq!(s, 403, "{text}");
+        assert!(text.contains("config_locked"));
+        assert_eq!(stored.lock().unwrap().global.threshold, 0.0);
+        stored.lock().unwrap().allow_program_changes = true;
+        assert_eq!(raw(port, req(port, "PUT", "/v1/laya/config", &auth, &put)).await.0, 200);
+        assert_eq!(stored.lock().unwrap().global.threshold, 0.42);
+        // Bad values are refused, not clamped.
+        let mut bad = serde_json::to_value(&want).unwrap();
+        bad["global"]["margin"] = json!(3.0);
+        assert_eq!(raw(port, req(port, "PUT", "/v1/laya/config", &auth, &bad.to_string())).await.0, 422);
         let _ = stop.send(());
     }
 

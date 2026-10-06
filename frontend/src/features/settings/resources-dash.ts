@@ -72,7 +72,7 @@ export async function readStatus(): Promise<Status | null> {
 
 function effectiveText(effective: string, game: boolean, task: Status['task']): string {
     let txt = tr('res.inForce', 'In force: {p}').replace('{p}', presetLabel(effective));
-    if (game) txt += ` · ${tr('res.byGame', 'game mode')}`;
+    if (game) txt += ` · ${tr('res.byGame', 'app mode')}`;
     else if (task) txt += ` · ${tr('res.byTask', 'set by a task, {m} min left').replace('{m}', String(Math.ceil(task.remaining_ms / 60000)))}`;
     return txt;
 }
@@ -80,14 +80,14 @@ function effectiveText(effective: string, game: boolean, task: Status['task']): 
 /** The sticky status line: the preset in force and the game state, kept live. */
 export function mountStatusStrip(host: HTMLElement, st: Status | null): void {
     host.innerHTML = `
-        <span class="stm-chip stm-chip-preset" data-tooltip="${esc(tr('stm.inForceTip', 'The preset BMM uses right now. Game mode or a scheduled task can switch to another one for a while.'))}"></span>
+        <span class="stm-chip stm-chip-preset" data-tooltip="${esc(tr('stm.inForceTip', 'The preset BMM uses right now. App mode or a scheduled task can switch to another one for a while.'))}"></span>
         <span class="stm-chip stm-chip-game"></span>`;
     const pre = host.querySelector('.stm-chip-preset');
     const game = host.querySelector<HTMLElement>('.stm-chip-game');
     const paint = (effective: string, active: boolean, task: Status['task'], view?: GameView) => {
         setText(pre, effectiveText(effective, active, task));
         // Which game, when the detector knows (game_mode.rs GameView); the plain words otherwise.
-        setText(game, view ? gameHeadline(view, t) : active ? tr('res.gameOn', 'A game is running: background work is paused') : tr('res.gameOff', 'No game detected'));
+        setText(game, view ? gameHeadline(view, t) : active ? tr('res.gameOn', 'An app is running: background work is paused') : tr('res.gameOff', 'No app detected'));
         game?.classList.toggle('is-on', active);
     };
     if (st) paint(st.effective, st.game_active, st.task, st.game);
@@ -98,7 +98,7 @@ export function mountStatusStrip(host: HTMLElement, st: Status | null): void {
 
 const PRESET_TEXT: Record<string, { you: [string, string]; detail: [string, string] }> = {
     silent: {
-        you: ['stm.p.silent.you', 'BMM stays out of your way while you play or work. Deploys and installs take longer.'],
+        you: ['stm.p.silent.you', 'BMM stays out of your way while you use other apps. Deploys and installs take longer.'],
         detail: ['stm.p.silent.detail', 'One operation at a time, low priority, small copy steps.'],
     },
     balanced: {
@@ -127,7 +127,7 @@ export function mountIntensityPanel(host: HTMLElement, st: Status | null): void 
         </div>
         ${moreBlock(tr('stm.p.more', 'What it changes'), `
             <dl class="stm-legend">${PRESETS.map((p) => `<div><dt>${esc(presetLabel(p))}</dt><dd>${esc(tr(PRESET_TEXT[p].you[0], PRESET_TEXT[p].you[1]))} ${esc(tr(PRESET_TEXT[p].detail[0], PRESET_TEXT[p].detail[1]))}</dd></div>`).join('')}</dl>
-            <p class="stm-help">${esc(tr('stm.inForceHint', 'While game mode is on, BMM works as if on Quiet. A scheduled task can also pick a preset for its own duration. Your choice comes back by itself afterwards.'))}</p>
+            <p class="stm-help">${esc(tr('stm.inForceHint', 'While app mode is on, BMM works as if on Quiet. A scheduled task can also pick a preset for its own duration. Your choice comes back by itself afterwards.'))}</p>
             ${learnMore('resources-presets')}`)}
         <div class="stm-intensity-extra"></div>`;
     const eff = host.querySelector('.res-effective');
@@ -199,7 +199,7 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
             <label class="stm-grow stm-opt-label" for="${id}">${esc(tr(label[0], label[1]))}</label>${sw(id, on)}
         </div>`;
     host.innerHTML = `
-        <p class="stm-lead">${esc(tr('stm.lead.game', 'While you play, BMM works quietly and waits for you.'))}</p>
+        <p class="stm-lead">${esc(tr('stm.lead.game', 'While your app runs, BMM works quietly and waits for you.'))}</p>
         <div class="stm-card stm-game-now">
             <div class="stm-row">
                 <div class="stm-grow">
@@ -207,41 +207,41 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
                     <div class="stm-help stm-game-detail"></div>
                     <div class="stm-help stm-game-effect"></div>
                 </div>
-                <div class="stm-seg res-game" role="radiogroup" aria-label="${esc(tr('res.game', 'Game mode'))}" data-tooltip="${esc(tr('stm.game.modeTip', 'Detect it: BMM notices a game by itself. Force on: act as if a game were running. Force off: never step aside.'))}">
+                <div class="stm-seg res-game" role="radiogroup" aria-label="${esc(tr('res.game', 'App mode'))}" data-tooltip="${esc(tr('stm.game.modeTip', 'Detect it: BMM notices an app by itself. Force on: act as if an app were running. Force off: never step aside.'))}">
                     ${['auto', 'on', 'off'].map((m) => `<button type="button" class="stm-seg-btn" role="radio" data-mode="${m}" aria-checked="${manual === m}">${esc(tr('res.game.' + m, m))}</button>`).join('')}
                 </div>
             </div>
             <div class="res-paused-all stm-game-paused" role="status" hidden><span class="res-paused-all-text"></span><button type="button" class="btn btn-sm btn-secondary res-q-all" data-a="resume_all">${esc(tr('res.resumeAll', 'Resume all'))}</button></div>
             <div class="stm-row">
-                <button type="button" class="btn btn-sm btn-secondary stm-game-pause" hidden data-tooltip="${esc(tr('stm.game.pauseTip', 'Holds every operation, deploys included, and lets them go by themselves when game mode ends.'))}">${esc(tr('stm.game.pauseBtn', 'Pause everything until I quit the game'))}</button>
+                <button type="button" class="btn btn-sm btn-secondary stm-game-pause" hidden data-tooltip="${esc(tr('stm.game.pauseTip', 'Holds every operation, deploys included, and lets them go by themselves when app mode ends.'))}">${esc(tr('stm.game.pauseBtn', 'Pause everything until I close the app'))}</button>
                 <span class="stm-msg stm-game-msg" role="status"></span>
             </div>
         </div>
-        ${moreBlock(tr('stm.game.optsTitle', 'While you play'), `
-            <div class="stm-help">${esc(tr('stm.game.optsShort', 'Waits until you stop playing:'))}</div>
+        ${moreBlock(tr('stm.game.optsTitle', 'While the app runs'), `
+            <div class="stm-help">${esc(tr('stm.game.optsShort', 'Waits until you close the app:'))}</div>
             <div class="stm-checks">
                 ${GAME_PAUSABLE.map(([k, l]) => `<label class="stm-check"><input type="checkbox" class="stm-game-kind" value="${k}"${opts.pause.includes(k) ? ' checked' : ''}> <span>${esc(tr(l[0], l[1]))}</span></label>`).join('')}
             </div>
             <div class="stm-help">${esc(tr('stm.game.neverHeld', 'Enabling mods, installs and backups are slowed, never held.'))}</div>
-            <label class="stm-row stm-opt" data-tooltip="${esc(tr('stm.game.cooldownTip', 'How long BMM waits after the game closes before it goes back to normal, so a launcher or a loading screen does not flip it back and forth. 5 to 600 seconds.'))}">
+            <label class="stm-row stm-opt" data-tooltip="${esc(tr('stm.game.cooldownTip', 'How long BMM waits after the app closes before it goes back to normal, so a launcher or a loading screen does not flip it back and forth. 5 to 600 seconds.'))}">
                 <span class="stm-grow stm-opt-label">${esc(tr('stm.game.cooldownShort', 'Back to normal after (seconds)'))}</span>
                 <input type="number" class="form-input stm-game-cooldown" min="5" max="600" step="5" value="${opts.leave_after_secs}">
             </label>
-            ${optRow('stm-game-notify', ['stm.game.notify', 'Tell me when game mode turns on or off'], ['stm.game.notifyTip', 'A short notice when a game starts or stops.'], opts.notify)}
-            ${optRow('stm-game-fsw', ['stm.game.fsw', 'Also count any full-screen window'], ['stm.game.fswHint', 'Catches borderless games that are in no list. A full-screen video counts too, which is why it is off.'], opts.fullscreen_window)}
-            ${optRow('stm-game-sched', ['stm.game.sched', 'Hold scheduled tasks'], ['stm.game.schedHint', 'A task that falls due while you play waits until game mode ends. A task you run by hand still runs.'], opts.hold_scheduler)}
+            ${optRow('stm-game-notify', ['stm.game.notify', 'Tell me when app mode turns on or off'], ['stm.game.notifyTip', 'A short notice when an app starts or stops.'], opts.notify)}
+            ${optRow('stm-game-fsw', ['stm.game.fsw', 'Also count any full-screen window'], ['stm.game.fswHint', 'Catches borderless apps that are in no list. A full-screen video counts too, which is why it is off.'], opts.fullscreen_window)}
+            ${optRow('stm-game-sched', ['stm.game.sched', 'Hold scheduled tasks'], ['stm.game.schedHint', 'A task that falls due while the app runs waits until app mode ends. A task you run by hand still runs.'], opts.hold_scheduler)}
             <span class="stm-msg stm-game-opts-msg" role="status"></span>`, 'stm-game-opts')}
-        ${moreBlock(tr('res.gameExes', 'Games BMM watches for'), `
-            <div class="stm-help">${esc(tr('stm.game.detectedShort', 'A program started from a profile\'s game folder, one of yours below, or a game in exclusive full screen. Browsers and common apps never count.'))}</div>
+        ${moreBlock(tr('res.gameExes', 'Apps BMM watches for'), `
+            <div class="stm-help">${esc(tr('stm.game.detectedShort', 'A program started from a profile\'s app folder, one of yours below, or an app in exclusive full screen. Browsers and common apps never count.'))}</div>
             <div class="stm-sub">${esc(tr('stm.game.fromProfiles', 'From your profiles'))}</div>
             <div class="stm-game-dirs"></div>
             <div class="stm-sub">${esc(tr('stm.game.added', 'Programs you added'))}</div>
             <div class="stm-pills stm-game-exes"></div>
             <div class="stm-row">
-                <input type="text" class="form-input stm-grow stm-game-add-input" spellcheck="false" placeholder="eldenring.exe" aria-label="${esc(tr('stm.game.addLabel', 'Executable name or path'))}" data-tooltip="${esc(tr('stm.game.addedHint', 'For a game outside every profile: its executable name (eldenring.exe) or its full path.'))}">
+                <input type="text" class="form-input stm-grow stm-game-add-input" spellcheck="false" placeholder="eldenring.exe" aria-label="${esc(tr('stm.game.addLabel', 'Executable name or path'))}" data-tooltip="${esc(tr('stm.game.addedHint', 'For an app outside every profile: its executable name (eldenring.exe, blender.exe) or its full path.'))}">
                 <button type="button" class="btn btn-sm btn-secondary stm-game-add">${esc(tr('stm.game.add', 'Add'))}</button>
-                <button type="button" class="btn btn-sm btn-ghost stm-game-browse" data-tooltip="${esc(tr('stm.game.browseTip', 'Choose the game\'s .exe file.'))}">${esc(tr('stm.game.browse', 'Browse…'))}</button>
-                <button type="button" class="btn btn-sm btn-ghost stm-game-pick" data-tooltip="${esc(tr('stm.game.pickTip', 'Start the game, then pick it among the programs running now.'))}">${esc(tr('stm.game.pick', 'Pick a running program…'))}</button>
+                <button type="button" class="btn btn-sm btn-ghost stm-game-browse" data-tooltip="${esc(tr('stm.game.browseTip', 'Choose the app\'s .exe file.'))}">${esc(tr('stm.game.browse', 'Browse…'))}</button>
+                <button type="button" class="btn btn-sm btn-ghost stm-game-pick" data-tooltip="${esc(tr('stm.game.pickTip', 'Start the app, then pick it among the programs running now.'))}">${esc(tr('stm.game.pick', 'Pick a running program…'))}</button>
             </div>
             <div class="stm-game-picker" hidden></div>
             <span class="stm-msg res-games-msg" role="status"></span>
@@ -261,7 +261,7 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
         state?.classList.toggle('is-on', v.active);
         setText(detail, gameDetail(v, profiles, t));
         setText(effect, v.active
-            ? tr('stm.game.effectOn', 'Now: BMM works as if on Quiet. Held until you stop playing: {k}.').replace('{k}', v.paused_kinds.length ? v.paused_kinds.map(kindName).join(', ') : tr('stm.game.nothingHeld', 'nothing'))
+            ? tr('stm.game.effectOn', 'Now: BMM works as if on Quiet. Held until you close the app: {k}.').replace('{k}', v.paused_kinds.length ? v.paused_kinds.map(kindName).join(', ') : tr('stm.game.nothingHeld', 'nothing'))
             : '');
         const byGame = paused?.by === 'game';
         if (pausedBox) { if (pausedBox.hidden !== !byGame) pausedBox.hidden = !byGame; setText(pausedBox.querySelector('.res-paused-all-text'), byGame && paused ? pausedAllText(paused, t) : ''); }
@@ -327,13 +327,13 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
     const paintDirs = () => {
         if (!dirsHost) return;
         const rows = profileFolders(profiles, opts.ignored_dirs);
-        if (!rows.length) { dirsHost.innerHTML = `<div class="stm-help">${esc(tr('stm.game.noProfileDirs', 'No profile has a game folder yet.'))}</div>`; return; }
+        if (!rows.length) { dirsHost.innerHTML = `<div class="stm-help">${esc(tr('stm.game.noProfileDirs', 'No profile has an app folder yet.'))}</div>`; return; }
         dirsHost.innerHTML = rows.map((r) => `
             <div class="stm-game-dir">
                 <div class="stm-grow"><div class="stm-game-dir-name">${esc(r.name)}</div><div class="stm-disk-path">${esc(r.path)}</div></div>
                 ${r.wholeDrive
                     ? `<span class="stm-help">${esc(tr('stm.game.wholeDrive', 'A whole drive is never watched'))}</span>`
-                    : `<label class="bmm-switch" data-tooltip="${esc(tr('stm.game.watchTip', 'Off: programs in this folder no longer count as a game.'))}"><input type="checkbox" class="stm-game-dir-on" data-dir="${esc(r.dir)}"${r.ignored ? '' : ' checked'} aria-label="${esc(tr('stm.game.watch', 'Watch this folder') + ' — ' + r.name)}"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>`}
+                    : `<label class="bmm-switch" data-tooltip="${esc(tr('stm.game.watchTip', 'Off: programs in this folder no longer turn app mode on.'))}"><input type="checkbox" class="stm-game-dir-on" data-dir="${esc(r.dir)}"${r.ignored ? '' : ' checked'} aria-label="${esc(tr('stm.game.watch', 'Watch this folder') + ' — ' + r.name)}"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>`}
             </div>`).join('');
     };
     paintDirs();
@@ -372,7 +372,7 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
         if (!v) return;
         void saveExes([...exes, v]).then(() => {
             if (!isKnownNonGame(v)) return;
-            setText(exesMsg, tr('stm.game.notAGame', '{x} is a browser or an everyday app: while it runs, BMM will think you are playing.').replace('{x}', v.split(/[\\/]/).pop() || v));
+            setText(exesMsg, tr('stm.game.notAGame', '{x} is a browser or an everyday app: while it runs, app mode stays on.').replace('{x}', v.split(/[\\/]/).pop() || v));
             exesMsg?.classList.add('is-err');
         });
     };
@@ -400,7 +400,7 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
         picker.innerHTML = rows.length
             ? `<div class="stm-help">${esc(tr('stm.game.pickHint', 'Heaviest first. Windows\' own programs are left out.'))}</div>` + rows.map((r) => `
                 <button type="button" class="stm-pick-row" data-exe="${esc(r.exe)}" title="${esc(r.exe)}"><span class="stm-pick-name">${esc(r.name)}</span><span class="stm-disk-path">${esc(r.exe)}</span><span class="stm-help">${r.memMb} MB</span></button>`).join('')
-            : `<div class="stm-help">${esc(tr('stm.game.pickNone', 'No program to offer. Start the game first.'))}</div>`;
+            : `<div class="stm-help">${esc(tr('stm.game.pickNone', 'No program to offer. Start the app first.'))}</div>`;
     });
     picker?.addEventListener('click', (e) => {
         const b = (e.target as HTMLElement).closest('.stm-pick-row') as HTMLElement | null;

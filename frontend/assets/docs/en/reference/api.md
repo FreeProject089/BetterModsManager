@@ -540,8 +540,8 @@ through. A note goes stale in silence; a check does not.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the 91 tools an AI client can call, and which ones need BMM open
-- [CLI reference](doc-page:reference/cli) — the same binary’s 77 subcommands, for a terminal or a `.bat`
+- [MCP server reference](doc-page:reference/mcp) — the 92 tools an AI client can call, and which ones need BMM open
+- [CLI reference](doc-page:reference/cli) — the same binary’s 78 subcommands, for a terminal or a `.bat`
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

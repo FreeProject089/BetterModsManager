@@ -43,7 +43,7 @@ export function pausedAllText(p: PausedAll, t: (k: string) => string): string {
     const name = rest.join(':');
     let who: string;
     if (by === 'user') who = t('res.pausedBy.user') || 'Paused by you, until you resume it.';
-    else if (by === 'game') who = t('stm.game.pausedByGame') || 'Paused by you until you quit the game: it resumes by itself when game mode ends.';
+    else if (by === 'game') who = t('stm.game.pausedByGame') || 'Paused by you until you close the app: it resumes by itself when app mode ends.';
     else if (kind === 'task' && name) who = (t('res.pausedBy.task') || 'Paused by the task “{n}”.').replace('{n}', name);
     else if (kind === 'plugin' && name) who = (t('res.pausedBy.plugin') || 'Paused by the plugin {n}.').replace('{n}', name);
     else if (by === 'api') who = t('res.pausedBy.api') || 'Paused through the local API.';
@@ -126,12 +126,12 @@ export function durationText(ms: number, t: T): string {
 
 /** The status line's headline. */
 export function gameHeadline(v: GameView, t: T): string {
-    if (v.manual === 'off') return say(t, 'stm.game.hOff', 'Game mode is off: BMM never steps aside');
-    if (v.manual === 'on') return say(t, 'stm.game.hForced', 'Game mode is forced on');
-    if (!v.active || !v.trigger) return say(t, 'stm.game.hNone', 'No game detected');
+    if (v.manual === 'off') return say(t, 'stm.game.hOff', 'App mode is off: BMM never steps aside');
+    if (v.manual === 'on') return say(t, 'stm.game.hForced', 'App mode is forced on');
+    if (!v.active || !v.trigger) return say(t, 'stm.game.hNone', 'No app detected');
     const src = v.trigger.source;
-    if (src === 'exclusive_fullscreen') return say(t, 'stm.game.hFullscreen', 'A game is running in full screen');
-    return say(t, 'stm.game.hGame', 'A game is running: {g}').replace('{g}', v.trigger.name || '?');
+    if (src === 'exclusive_fullscreen') return say(t, 'stm.game.hFullscreen', 'An app is running in full screen');
+    return say(t, 'stm.game.hGame', 'An app is running: {g}').replace('{g}', v.trigger.name || '?');
 }
 
 /** Where the game was found, since when, and the cooldown left once it closed. */
@@ -141,14 +141,14 @@ export function gameDetail(v: GameView, profiles: { name: string; game_path: str
     let where: string;
     if (tr.source === 'profile_folder') {
         const p = profiles.find((x) => x.game_path && normGameDir(x.game_path) === tr.dir);
-        where = p ? say(t, 'stm.game.fromProfile', 'Found in the game folder of your profile “{p}”.').replace('{p}', p.name)
-            : say(t, 'stm.game.fromProfileAny', 'Found in one of your profiles\' game folders.');
-    } else if (tr.source === 'listed') where = say(t, 'stm.game.fromList', 'It is in your list of games.');
+        where = p ? say(t, 'stm.game.fromProfile', 'Found in the app folder of your profile “{p}”.').replace('{p}', p.name)
+            : say(t, 'stm.game.fromProfileAny', 'Found in one of your profiles\' app folders.');
+    } else if (tr.source === 'listed') where = say(t, 'stm.game.fromList', 'It is in your list of apps.');
     else if (tr.source === 'exclusive_fullscreen') where = say(t, 'stm.game.fromExclusive', 'Windows says a program runs in exclusive full screen.');
     else where = say(t, 'stm.game.fromWindow', 'Its window covers the whole screen.');
     const parts = [where];
     if (v.since_ms != null) parts.push(say(t, 'stm.game.since', 'On for {d}.').replace('{d}', durationText(v.since_ms, t)));
-    if (v.leaving_in_ms != null) parts.push(say(t, 'stm.game.leaving', 'The game closed: back to normal in {d}.').replace('{d}', durationText(v.leaving_in_ms, t)));
+    if (v.leaving_in_ms != null) parts.push(say(t, 'stm.game.leaving', 'The app closed: back to normal in {d}.').replace('{d}', durationText(v.leaving_in_ms, t)));
     return parts.join(' ');
 }
 

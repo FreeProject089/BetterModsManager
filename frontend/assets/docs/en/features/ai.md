@@ -286,6 +286,62 @@ If the first two find nothing, the report goes straight out, as before. Otherwis
 again to send it the way you chose. Crash zips attached to a report were already stripped of
 secrets when they were written.
 
+## Laya's answers: how sure, and your own tasks
+
+**Settings → Laya answers** (under the AI card) decides how sure Laya must be before BMM shows or
+uses an answer. Nothing changes until you touch it: **Balanced** is BMM's usual behaviour.
+
+| Preset | What it does |
+|---|---|
+| **Careful** | Fewer answers, more often right. Says *I don't know* when unsure |
+| **Balanced** | BMM's usual behaviour (tags from 35 %, a report category from 30 %, tasks always answer) |
+| **Open** | More answers. A doubtful one is kept and marked *guess* |
+| **Custom** | Your own numbers, under *Fine settings* |
+
+*For* picks the feature: all of them, or one with its own settings (mod suggestions, Ask Laya,
+bug reports, library analysis, scheduled tasks and scripts, programs). *Fine settings*:
+
+| Setting | Meaning |
+|---|---|
+| Minimum confidence | Below it, the answer is not accepted |
+| Margin | One label only: if the top two are closer than this, it is a tie (not accepted) |
+| Temperature | Under 1 sharper, over 1 more spread out. Applied on top of the model's own calibration (exactly a softmax at another temperature) |
+| Answers shown | How many ranked answers are listed (Ask Laya: how many results Laya compares) |
+| Labels per item | Most labels kept per item (a mod still holds 3 tags at most) |
+| When unsure | Say *I don't know*, or keep the best guess marked as such. Laya's own *none of these* is never turned into a guess |
+| Several labels per item, Show percentages, Apply without asking | As named. *Apply without asking* never applies a guess |
+
+### Describe your tags and report categories
+
+*Describe my tags and categories*: a short meaning and a few examples per tag (or report
+category), and optionally the question Laya is asked. Laya is a classifier that reads each option's
+text: a description replaces the option's text, the examples become a second way of asking, and
+your question is asked next to BMM's own. The probabilities of these questions are averaged, in
+one model call. Without a description, an example or a question, BMM asks exactly what it asked
+before.
+
+### Your own tasks
+
+*My tasks*: a name, what it reads (the mod's name, description, readme or everything; a text; a
+file; a report), 2 to 32 labels (each with an optional meaning and examples), an optional question,
+its own settings or the *tasks* ones, and what to do with a mod's answer (show only, add the tag of
+the same name, set it as the mod's category among the task's labels, or write a note line). A tag
+is never created: a label without a tag of the same name is reported.
+
+- **Run on my mods** answers for each mod; **Apply** per mod, or at once with *Apply without
+  asking*.
+- In a scheduled task or a script: `ai.classify` with `task: "<id>"` (the labels come from the
+  task). In BMMScript: `do ai.classify(task: "kind", text: "{event.title}", into: "kind")`.
+- Programs: `bmm ai-classify "<text>" --task kind`, `bmm_ai_classify` with `task`, or
+  `POST /v1/classify` on the [local API](doc-page:features/ai-api).
+- **Try it**: type a text, pick a task (or type labels) and see the answer and every label's
+  percentage. Nothing is saved.
+
+**Export** writes a versioned JSON file; **Import** reads one back (checked, refused if it comes
+from a newer BMM or has unknown fields); **Reset** goes back to the defaults. Programs may change
+these settings only if you tick *Programs (local API, MCP, CLI) may change these settings*; a
+program can never tick it.
+
 ## Turning it off
 
 - **Settings → AI (optional)**: the master switch. Off means no AI network request anywhere in
@@ -309,7 +365,8 @@ The switch lives in `ai-settings.json` beside `data.json`; keys are in `ai-secre
 | `bmm_ai_apply_mod_metadata` | `ai-apply <mod-id> --fields '{…}'` | Writes the fields named, with the dialog's validation |
 | `bmm_ai_ask` | `ai-ask "<question>" [--lang fr] [--scope docs\|mods] [--no-laya] [--write] [--json]` | *Ask Laya*: the docs, settings, commands, mods, files and conflicts that answer, as structured results; `write` adds a cited written answer |
 | `bmm_ai_analyze_library` | `ai-analyze [mod-ids] [--laya] [--limit 200]` | Suggestions for many mods at once. **Writes nothing** |
-| `bmm_ai_classify` | `ai-classify "<text>" --label id=meaning …` | Which of your labels fits a text (Laya, offline), plus *none* |
+| `bmm_ai_classify` | `ai-classify "<text>" --label id=meaning …` or `--task <id>` | Which of your labels (or a saved task's) fits a text (Laya, offline), plus *none*, under your answer settings |
+| `bmm_ai_laya_config` | `ai-laya get\|set <file>\|reset` | Laya's answer settings as a versioned export; `set` and `reset` only if you allowed programs to change them |
 | `bmm_ai_pack_install` | `ai-install` | Downloads, checks and installs the model pack (live progress in the CLI) |
 | `bmm_ai_pack_remove` | `ai-remove` | Removes the downloaded model pack |
 | `bmm_ai_test` | `ai-test` | Classifies a fixed sample, with the timings |

@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 77
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 78
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-77 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+78 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -210,7 +210,8 @@ tourne ; ici la ligne et la colonne sont nommées. Aucune des deux n'a besoin de
 | `ai-apply` | `<mod-id>`\*, `--fields`\* | Écrit les champs choisis, donnés en objet JSON (`{"description":"…","tags":["<id de tag>"]}`) ; uniquement nom, version, auteur, description, tags (ids existants, 3 par mod au plus) et liens |
 | `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--write`, `--json` | « Demander à Laya », hors ligne : la documentation, les réglages, les commandes, les mods, les fichiers et les conflits qui répondent à une question, en liste lisible (`--json` pour le résultat structuré). `--no-laya` = recherche par mots-clés seulement, quels que soient les réglages ; `--write` formule aussi une réponse avec le générateur configuré, à partir des sources trouvées, chaque phrase citée |
 | `ai-analyze` | `<mod-ids>` (optionnel, à répéter), `--laya`, `--limit` [200] | Des suggestions pour tous les mods (ou ceux nommés) en une passe, en JSON. Fichiers seulement sauf `--laya` ; jamais de brouillon. **N'écrit rien** |
-| `ai-classify` | `<text>`\*, `--label`\* (à répéter, `id` ou `id=sens`) | Quel libellé convient au texte, avec Laya (intégré ou votre laya-serve), du meilleur au moins bon, plus `none` |
+| `ai-classify` | `<text>`\*, `--label` (à répéter, `id` ou `id=sens` ; 2 à 32 sauf avec `--task`), `--task` | Quel libellé convient au texte, avec Laya (intégré ou votre laya-serve), du meilleur au moins bon, plus `none`, et la décision selon vos réglages de réponses (`label`, `abstained`, `uncertain`). `--task <id>` prend les étiquettes, la question et les réglages d'une tâche enregistrée |
+| `ai-laya` | `<action>`\* (get, set, reset), `<file>` (pour set) | Les réglages de réponses de Laya (Paramètres → Réponses de Laya) : `get` les affiche en export versionné avec les tâches ; `set <fichier>` enregistre une config ou un export (vérifié strictement) ; `reset` revient aux réglages par défaut. `set` et `reset` sont refusés sauf si l'utilisateur a coché *Les programmes peuvent modifier ces réglages* |
 | `ai-install` | — | Télécharge, vérifie et installe le paquet du modèle Laya intégré (environ 327 Mo), avec une ligne en direct : étape, pourcentage, débit, temps restant, miroir |
 | `ai-remove` | — | Supprime le paquet du modèle téléchargé (pas la copie de l'installateur) |
 | `ai-test` | — | Classe un exemple fixe avec le modèle installé et affiche les réponses et les durées ; code de sortie non nul si les réponses ne sont pas celles attendues |
@@ -235,7 +236,7 @@ compiler.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 91 outils MCP
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 92 outils MCP
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — ce que `call` appelle
 - [Référence BMMScript](doc-page:features/bmmscript-reference.fr) — le langage que lit `bmms-compile`
 - [Référence des actions](doc-page:reference/actions.fr) — ce que liste `actions`

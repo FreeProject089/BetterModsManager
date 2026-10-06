@@ -250,3 +250,9 @@
 .ai-lib-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .ai-lib-summary { margin-bottom: 4px; }
 .ai-foot .ai-foot-note { margin-right: auto; }
+
+/* « hypothèse »: a Laya guess kept under the user's threshold (Settings → Laya answers). */
+.ai-src-unsure {
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    color: color-mix(in srgb, var(--warning) 55%, var(--text-primary));
+}

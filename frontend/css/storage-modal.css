@@ -81,6 +81,8 @@
 .stm-tab[aria-selected="true"] { color: var(--bmm-text-primary); border-bottom-color: var(--bmm-accent); }
 .stm-tab[aria-selected="true"] svg { color: var(--stm-accent-ink); }
 .stm-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+/* A narrow window keeps all five tabs in view ("Mode application" is the longest label). */
+@media (max-width: 960px) { .stm-tab { padding-inline: 8px; } }
 
 /* ── First-use line (shown once) ────────────────────────────────────────────────────────── */
 .stm-intro {

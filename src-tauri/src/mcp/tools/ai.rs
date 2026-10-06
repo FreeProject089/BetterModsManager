@@ -108,7 +108,7 @@ pub fn analyze(mod_ids: &[String], use_providers: bool, limit: usize) -> Result<
         let mut items: Vec<Value> = Vec::new();
         let mut sent = false;
         for m in &list {
-            let o = ai_hybrid::suggest_mod(ctx, &facts_of(m), &vocab, &[], use_providers, false);
+            let o = ai_hybrid::suggest_mod_in(ctx, &facts_of(m), &vocab, &[], use_providers, false, crate::commands::ai_tuning::Area::Library);
             sent |= !o.offline;
             if !o.suggestions.is_empty() {
                 items.push(json!({ "mod_id": m.id, "mod_name": m.name, "suggestions": o.suggestions, "notes": o.notes, "sources_read": o.sources_read }));
@@ -127,12 +127,42 @@ pub fn analyze(mod_ids: &[String], use_providers: bool, limit: usize) -> Result<
     }))
 }
 
-/// Classify a text among labels ((id, meaning), 2 to 32) with the embedded engine or the
-/// user's own laya-serve. Returns the labels best first, with « none ».
-pub fn classify(text: &str, labels: &[(String, String)]) -> Result<Value, String> {
+/// Classify a text among labels ((id, meaning), 2 to 32) — or with a saved « tâche perso »
+/// (`task`: its labels, wording and settings) — with the embedded engine or the user's own
+/// laya-serve. Returns the labels best first with « none », and the decision under the user's
+/// answer settings (« Programmes »): `label` (or `none` when Laya abstained), `abstained`,
+/// `uncertain`.
+pub fn classify(text: &str, labels: &[(String, String)], task: Option<&str>) -> Result<Value, String> {
+    use crate::commands::ai_tuning as tu;
     let dir = state_bridge::get_bmm_data_dir();
-    let r = with_ctx(&dir, None, |ctx| ai_hybrid::classify(ctx, text, labels))?;
-    Ok(json!({ "labels": r.iter().map(|(id, p)| json!({ "id": id, "p": (p * 1000.0).round() / 1000.0 })).collect::<Vec<_>>(), "note": "\"none\" = Laya found that none of the labels fits." }))
+    let cfg = settings_now(&dir).laya;
+    let (defs, template, tune) = tu::task_spec(&cfg, task, labels, tu::Area::Api)?;
+    let (probs, d) = with_ctx(&dir, None, |ctx| ai_hybrid::classify_tuned(ctx, text, &defs, &template, &tune))?;
+    let mut v = tu::decision_json(&probs, &d);
+    v["labels"] = json!(probs.iter().map(|(id, p)| json!({ "id": id, "p": (p * 1000.0).round() / 1000.0 })).collect::<Vec<_>>());
+    v["accepted"] = json!(d.labels);
+    v["note"] = json!("\"none\" = Laya found that none of the labels fits, or it was not sure enough under the user's settings (abstained).");
+    Ok(v)
+}
+
+/// « Réglages des réponses de Laya »: `get` (the config as an export, plus the saved tasks),
+/// `set` (a config or an export) and `reset`. Changing it needs the user's permission in
+/// Settings (« Les programmes peuvent modifier ces réglages »); a program can never grant it.
+pub fn laya_config(action: &str, config: Option<&Value>) -> Result<Value, String> {
+    use crate::commands::ai_tuning as tu;
+    let dir = state_bridge::get_bmm_data_dir();
+    let mut s = ai_core::load_settings(&dir);
+    match action {
+        "get" | "" => Ok(json!({ "export": s.laya.export(), "tasks": s.laya.tasks.iter().map(tu::task_summary).collect::<Vec<_>>(), "programs_may_change": s.laya.allow_program_changes })),
+        "set" | "reset" => {
+            let incoming = if action == "reset" { serde_json::to_value(tu::LayaConfig { allow_program_changes: s.laya.allow_program_changes, ..Default::default() }).map_err(|e| e.to_string())? } else { config.cloned().ok_or_else(|| "missing config".to_string())? };
+            let next = tu::LayaConfig::program_change(&s.laya, &incoming).map_err(|e| if e == "laya.cfg.locked" { "Locked: the user has not allowed programs to change Laya's answer settings (Settings, AI, Laya answers).".to_string() } else { format!("Refused: {}", e) })?;
+            s.laya = next;
+            let saved = ai_core::save_settings(&dir, &s)?;
+            Ok(json!({ "saved": true, "export": saved.laya.export(), "restart_hint": "The running BMM app reads these settings at each AI call." }))
+        }
+        other => Err(format!("unknown action `{}`: get, set or reset", other)),
+    }
 }
 
 /// Apply an explicit field list to one mod (data.json). Validation is `ai_core::build_patch`.

@@ -50,6 +50,16 @@ an error message. Each key is bound to the address it was saved for (scheme, hos
 only ever sent there. Changing the address clears the key: type it again for the new server. A key
 never travels over plain http, except to this PC.
 
+**Custom labels and tasks.** A label, a description, an example, a question or an imported file is
+untrusted text. It only becomes a Laya option or the Laya question, never a system prompt, a
+command or a path. Each string is bounded (64 / 300 / 200 / 300 characters, 5 examples, 32 labels,
+32 tasks), made single-line, cleaned like any untrusted text and scrubbed of the model's reserved
+tokens (`<eos>`, `<mask>`…, any case) so it cannot close its segment or forge an option marker.
+The settings file is read with unknown fields refused and every number bounded; an import or a
+program's change is refused rather than corrected. An answer is only ever one of the labels given,
+or `none`. Programs read these settings but change them only if the user allowed it in Settings,
+and cannot grant themselves that permission.
+
 **Exhaustion.** Caps on text, questions and options; one engine run at a time (two for the API);
 short queues; timeouts; 20 Laya steps and 2 minutes per task run, 30 steps a minute for all tasks,
 60 API requests a minute per caller; refusals are logged a few per minute, not one line each.

@@ -38,6 +38,25 @@ l'ordre est gardé). `GET /health` répond sans jeton : `{"status":"ok","ready":
 | 503 | IA désactivée, `--no-ai`, un jeu en cours (`game_mode`), modèle absent, ou occupée (1 ou 2 à la fois, 4 en attente) |
 | 504 | Laya a mis plus de 30 s |
 
+## Vos étiquettes et réglages : /v1/classify
+
+```bash
+curl -s http://127.0.0.1:51275/v1/classify \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"text":"Le jeu plante au lancement","labels":["crash",{"id":"ui","description":"un problème d'affichage","examples":["texte coupé"]}]}'
+```
+
+`labels` sont des ids ou des `{id, description, examples}` (2 à 32), ou `"task": "<id>"` désigne
+une tâche enregistrée dans **Paramètres → Réponses de Laya**. La réponse suit vos réglages pour les
+*Programmes* (ou ceux de la tâche) : `label` (`none` quand Laya s'abstient), `p`, `labels`
+(retenues), `ranked`, `probabilities` (chaque étiquette), `abstained`, `uncertain`, `reason`. Champs
+inconnus : 400.
+
+`GET /v1/laya/config` renvoie les réglages en export. `PUT /v1/laya/config` enregistre une config ou
+un export seulement si vous avez coché *Les programmes (API locale, MCP, CLI) peuvent modifier ces
+réglages* ; sinon 403 `config_locked`. Un programme ne peut jamais la cocher, et une valeur hors
+limites est refusée (422), pas corrigée.
+
 ## Ce qu'elle protège
 
 - **127.0.0.1 seulement.** Toute autre adresse dans les réglages est refusée avant d'ouvrir un port.

@@ -759,6 +759,7 @@
       "type": "ai.classify",
       "group": "logic",
       "params": [
+        "task",
         "labels",
         "text",
         "path",

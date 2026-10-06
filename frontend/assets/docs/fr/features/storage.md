@@ -30,8 +30,8 @@ sauf si tu veux régler les limites à la main.
 <a id="tabs"></a>
 ## Les onglets
 Le Gestionnaire de Stockage est découpé en cinq onglets. La ligne du haut, au-dessus des onglets, dit
-toujours quel preset est en vigueur et si un jeu tourne. Chaque onglet s'ouvre sur une phrase qui dit
-à quoi il sert et un lien **En savoir plus** vers la partie correspondante de cette documentation ;
+toujours quel preset est en vigueur et si une application tourne. Chaque onglet s'ouvre sur une
+phrase qui dit à quoi il sert et un lien **En savoir plus** vers la partie correspondante de cette documentation ;
 chaque réglage a une infobulle. La première fois, une courte carte explique la fenêtre ; **Compris**
 la masque pour de bon.
 
@@ -39,7 +39,7 @@ la masque pour de bon.
 |---|---|
 | **Disques et espace** | Le remplissage de chaque disque, les [profils](doc-page:features/profiles) qui y vivent, les alertes d'espace faible, l'**auto-calibration**, et une **limite de vitesse** par disque avec son benchmark ([plus bas](#per-disk-cards)) |
 | **Intensité de travail** | Quelle part de ton PC BMM peut utiliser pour le travail lourd : les trois presets, chacun avec ce qu'il change pour toi, et **Smart I/O** |
-| **Mode jeu** | Si BMM s'efface pendant que tu joues, et les jeux qu'il surveille |
+| **Mode application** | Si BMM s'efface pendant qu'une autre application tourne, et les applications qu'il surveille |
 | **Activité en direct** | Quatre courbes en direct et tout ce que fait BMM, avec **Suspendre**, **Reprendre** et **Annuler** |
 | **Règles par disque** | Des règles fines, facultatives, pour un disque et une sorte de travail, avec une légende de chaque colonne |
 
@@ -53,42 +53,44 @@ vitesse elles peuvent écrire.
 
 | Preset | Ce que ça change pour toi |
 |---|---|
-| **Silencieux** | BMM se fait oublier pendant que tu joues ou travailles. Les déploiements et installations prennent plus de temps |
+| **Silencieux** | BMM se fait oublier pendant que tu utilises d'autres applications. Les déploiements et installations prennent plus de temps |
 | **Équilibré** (par défaut, recommandé) | Le BMM habituel : rapide, et ton PC reste utilisable. Exactement le fonctionnement de toujours |
 | **Tout pour BMM** | Tout finit aussi vite que tes disques le permettent. Ton PC peut sembler lent pendant ce temps |
 
-**En vigueur** dit le preset appliqué en ce moment : le mode jeu ou une tâche planifiée peuvent en
+**En vigueur** dit le preset appliqué en ce moment : le mode application ou une tâche planifiée peuvent en
 changer un temps, et ton choix revient tout seul ensuite. Les chiffres exacts de chaque preset sont
 dans [Les presets](doc-page:how-it-works/resources#presets).
 
-### Mode jeu
+<a id="mode-jeu"></a>
+### Mode application
+Le mode application (appelé mode jeu auparavant) vaut pour toute application dont BMM gère les
+mods : un jeu, mais aussi Blender, un simulateur ou tout programme que tu choisis. **Le détecter**
+(par défaut), **Forcer**, **Arrêter**. L'onglet dit en clair ce qui se passe : quelle application a
+allumé le mode application (*Une application tourne : SkyrimSE.exe*), où BMM l'a trouvée (*dans le
+dossier de l'application de ton profil « Skyrim SE »*, *dans ta liste d'applications*, *en plein
+écran exclusif*), depuis combien de temps, ce qui est retenu en ce moment et, une fois l'application
+fermée, dans combien de temps BMM revient à la normale.
 
-**Le détecter** (par défaut), **Forcer**, **Arrêter**. L'onglet dit en clair ce qui se passe : quel
-jeu a allumé le mode jeu (*Un jeu tourne : SkyrimSE.exe*), où BMM l'a trouvé (*dans le dossier de
-jeu de ton profil « Skyrim SE »*, *dans ta liste de jeux*, *en plein écran exclusif*), depuis combien
-de temps, ce qui est retenu en ce moment et, une fois le jeu fermé, dans combien de temps BMM
-revient à la normale.
-
-- **Tout suspendre jusqu'à ce que je quitte le jeu** retient toutes les opérations, déploiements
-  compris, et les relâche toutes seules quand le mode jeu se termine (ou quand tu appuies sur
-  **Tout reprendre**).
-- **Pendant que tu joues** : coche ce qui attend que tu arrêtes de jouer : vérifications de
+- **Tout suspendre jusqu'à ce que je ferme l'application** retient toutes les opérations,
+  déploiements compris, et les relâche toutes seules quand le mode application se termine (ou quand
+  tu appuies sur **Tout reprendre**).
+- **Pendant que l'application tourne** : coche ce qui attend que tu fermes l'application : vérifications de
   fichiers (empreintes), maintenance et benchmarks de disque (cochés par défaut), téléchargements,
   analyses de dossiers, décompression et compression d'archives, traitement d'images. Activer des
   mods, installer et sauvegarder sont ralentis, jamais retenus.
-- **Retour à la normale après** : le délai après la fermeture du jeu, de 5 à 600 secondes (30 par
+- **Retour à la normale après** : le délai après la fermeture de l'application, de 5 à 600 secondes (30 par
   défaut).
-- **Me prévenir quand le mode jeu s'allume ou s'éteint** : un avis à chaque changement automatique
+- **Me prévenir quand le mode application s'allume ou s'éteint** : un avis à chaque changement automatique
   (activé par défaut).
-- **Compter aussi toute fenêtre plein écran** : attrape les jeux en fenêtre sans bordure qui ne sont
+- **Compter aussi toute fenêtre plein écran** : attrape les applications en fenêtre sans bordure qui ne sont
   dans aucune liste, mais une vidéo plein écran compte aussi, d'où le réglage désactivé par défaut.
   Les navigateurs, lecteurs vidéo, messageries et lanceurs de jeux ne comptent jamais, en plein
   écran ou dans le dossier d'un profil, sauf si tu les ajoutes toi-même à ta liste.
-- **Jeux surveillés par BMM** : le dossier de jeu de chaque profil est surveillé tout seul, chacun
-  avec un interrupteur pour l'ignorer (un disque entier n'est jamais surveillé) ; en dessous, les
-  programmes que tu as ajoutés, chacun avec un bouton de retrait, ajoutés par leur nom, avec
-  **Parcourir…** (le `.exe` du jeu) ou avec **Choisir un programme lancé…** (lance le jeu, puis
-  choisis-le dans la liste).
+- **Applications surveillées par BMM** : le dossier de l'application de chaque profil est surveillé
+  tout seul, chacun avec un interrupteur pour l'ignorer (un disque entier n'est jamais surveillé) ;
+  en dessous, les programmes que tu as ajoutés (`eldenring.exe`, `blender.exe`…), chacun avec un
+  bouton de retrait, ajoutés par leur nom, avec **Parcourir…** (le `.exe` de l'application) ou avec
+  **Choisir un programme lancé…** (lance l'application, puis choisis-la dans la liste).
 
 Les détails et le coût d'un coup d'œil sont dans
 [Comment marche la détection](doc-page:how-it-works/resources#comment-marche-la-detection).
@@ -99,7 +101,7 @@ Quatre courbes (le CPU de BMM, le CPU de tout le PC, les lectures et écritures 
 chaque opération en cours, suspendue ou en attente, avec **Suspendre**, **Reprendre** et **Annuler**,
 plus **Tout suspendre** et **Tout reprendre**. Les valeurs sont mesurées une fois par seconde, et
 seulement quand ça sert : le Gestionnaire de Stockage est ouvert, un des onglets **Intensité de
-travail**, **Mode jeu** ou **Activité en direct** est affiché, et la fenêtre de BMM n'est pas cachée.
+travail**, **Mode application** ou **Activité en direct** est affiché, et la fenêtre de BMM n'est pas cachée.
 Sinon BMM ne se mesure pas du tout.
 
 ### Règles par disque
@@ -131,7 +133,7 @@ Chaque disque du système a une carte :
 | **Badge de type** | SSD / HDD / Inconnu, plus **Cloud** ou **Réseau** si détecté (Drive, OneDrive, Dropbox, MEGA, iCloud, NAS). |
 | **Barre UTILISÉ** | Utilisé vs. total, colorée bleu → ambre (>70 %) → rouge (>90 %). |
 | **Barre PROFILS** | Taille totale des mods de profils sur ce disque vs. espace libre — colorée selon tes seuils d'alerte. |
-| **Pastilles de profil** | Quels [profils](doc-page:features/profiles) utilisent le disque, et comment (dossier jeu / dossier mods / sauvegarde). |
+| **Pastilles de profil** | Quels [profils](doc-page:features/profiles) utilisent le disque, et comment (dossier de l'application / dossier mods / sauvegarde). |
 
 !!! note "Les badges Cloud/Réseau sont heuristiques"
 
@@ -160,7 +162,7 @@ Chaque disque du système a une carte :
 
     La lecture se fait sans le cache du système, donc elle mesure le disque et pas la mémoire qui
     garde le fichier tout juste écrit. Le benchmark tourne comme une maintenance de fond : il attend
-    pendant qu'on active ou installe des mods, et pendant le mode jeu.
+    pendant qu'on active ou installe des mods, et pendant le mode application.
 
 === "Tout réinitialiser"
 
@@ -206,12 +208,12 @@ grosses activations sautent souvent le re-hachage exprès — voir
 
 Le gouverneur a quand même son mot à dire sur le hachage : il tourne sur son propre pool de threads,
 dimensionné par le preset, compte comme travail de fond, et donc s'efface pendant qu'on active ou
-installe des mods et attend la fin du mode jeu.
+installe des mods et attend la fin du mode application.
 
 ## Automatise-le
 
 Le [Planificateur](doc-page:features/scheduler) peut *benchmarker un disque*, *appliquer une limite de vitesse*,
 *vérifier l'espace libre* et basculer *Smart I/O* / *Auto-calibration* comme actions de workflow — et
 brancher sur le résultat mesuré (ex. *si `disk.write_mbps` < 50, afficher un avertissement*). Il
-peut aussi choisir un preset pour la durée d'une tâche, changer le mode jeu et suspendre la file :
+peut aussi choisir un preset pour la durée d'une tâche, changer le mode application et suspendre la file :
 voir [L'intensité de travail de BMM](doc-page:features/scheduler#lintensite-de-travail-de-bmm).

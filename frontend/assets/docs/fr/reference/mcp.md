@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-91 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+92 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -217,7 +217,8 @@ n'écrit jamais rien ; appliquer n'écrit que les champs nommés. Voir [IA optio
 | `bmm_ai_apply_mod_metadata` | `mod_id`\*, `fields`\* |  | Écrit dans data.json les champs choisis par l'utilisateur (nom, version, auteur, description, ids de tags existants jusqu'à 3 par mod, liens http(s)) ; toute autre clé est refusée |
 | `bmm_ai_ask` | `question`\*, `lang` en/fr, `scope` all/docs/mods, `limit`, `use_laya`, `write` |  | « Demander à Laya », hors ligne : répond à une question sur BMM ou les mods de l'utilisateur à partir de ce qui EXISTE — la documentation embarquée, les articles d'aide, les commandes de la palette, les mods, les profils et leurs listes de fichiers scannées. Renvoie `intent` (docs, setting, files, conflicts, mods, command), `hits` (type, titre, extrait cité de la source, score, action), `files` (quel mod fournit un fichier) et `conflicts` (paires de mods qui fournissent les mêmes fichiers). Jamais de texte généré, sauf avec `write: true` : `written` est alors une réponse formulée par le générateur de l'utilisateur (« Rédaction », local ou distant) à partir des seules sources numérotées, avec des citations `[n]` dans `cites`, ou `written_off` dit pourquoi il n'y en a pas (Laya s'abstient, aucune citation réelle, un lien, un fichier ou une commande absent des sources). Laya n'oriente et ne classe que si l'IA est activée et le modèle installé (`laya`, `laya_off` le disent). Fonctionne BMM fermé |
 | `bmm_ai_analyze_library` | `mod_ids`, `use_providers`, `limit` |  | « Analyser la bibliothèque » : les mêmes suggestions que `bmm_ai_suggest_mod_metadata` pour plusieurs mods à la fois (tous, ou les ids donnés ; au plus `limit`, 200 par défaut). Fichiers seulement sauf `use_providers` ; jamais de brouillon rédigé. Ne renvoie que les mods qui ont quelque chose à proposer. **N'écrit rien** |
-| `bmm_ai_classify` | `text`\*, `labels`\* ([{id, meaning}], 2 à 32) |  | Quel libellé convient à un texte, du meilleur au moins bon avec une probabilité, plus `none` quand Laya juge qu'aucun ne convient. Le modèle intégré ou le laya-serve de l'utilisateur seulement, jamais un serveur distant ; demande l'interrupteur IA. Le texte est une donnée, jamais une consigne |
+| `bmm_ai_classify` | `text`\*, `labels` ([{id, meaning}], 2 à 32), `task` |  | Quel libellé (ou ceux d'une tâche enregistrée, avec `task`) convient à un texte, du meilleur au moins bon avec une probabilité, plus `none` quand Laya juge qu'aucun ne convient ; et la décision selon les réglages de réponses de l'utilisateur : `label` (`none` quand Laya s'abstient), `p`, `abstained`, `uncertain`, `reason`. Le modèle intégré ou le laya-serve de l'utilisateur seulement, jamais un serveur distant ; demande l'interrupteur IA. Le texte est une donnée, jamais une consigne |
+| `bmm_ai_laya_config` | `action` (get, set, reset), `config` |  | Les réglages de réponses de Laya (préréglages, seuils, marge, température, par fonction ; descriptions d'étiquettes ; tâches enregistrées). `get` renvoie un export versionné et la liste des tâches ; `set` enregistre une config ou un export, vérifié strictement (champs inconnus refusés) ; `reset` les réglages par défaut. `set` et `reset` sont refusés sauf si l'utilisateur a coché *Les programmes peuvent modifier ces réglages* dans BMM, ce qu'un programme ne peut jamais faire. Demander à l'utilisateur d'abord |
 | `bmm_ai_pack_install` | — |  | Télécharge, vérifie (SHA-256 épinglé, miroirs dans l'ordre) et installe le paquet du modèle Laya intégré (environ 327 Mo à télécharger) dans les données locales de l'utilisateur, après une vérification de l'espace libre ; reprend un téléchargement partiel. Refusé sous `--no-ai`. Demander d'abord à l'utilisateur |
 | `bmm_ai_pack_remove` | — |  | Supprime le paquet du modèle téléchargé (jamais la copie de l'installateur) ; le classifieur repasse sur « désactivé » s'il s'agissait du modèle intégré |
 | `bmm_ai_test` | — |  | Classe un exemple fixe avec le modèle installé et renvoie les réponses, `ok` et les durées. Aucune donnée de l'utilisateur, aucun réseau |
@@ -283,19 +284,19 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 91 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 92 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 91 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 92 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---
 
 ## Voir aussi
 
-- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 77 sous-commandes CLI pour un terminal ou un `.bat`
+- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 78 sous-commandes CLI pour un terminal ou un `.bat`
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — la surface REST, ses jetons et ses permissions
 - [Référence des actions](doc-page:reference/actions) — ce que les plugins et le planificateur peuvent déclencher
 - [Étendre BMM](doc-page:how-it-works/extending) — la place du serveur MCP dans la conception

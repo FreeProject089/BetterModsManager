@@ -94,7 +94,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `storage.smartIo` | Toggle Smart I/O | `enabled` |
 | `storage.flag` | Toggle any advanced setting | `key` · `enabled` |
 | `resources.preset` | Quiet, Balanced or Max, for this task only or for good | `name` · `scope` · `overridesGame` |
-| `resources.gameMode` | Force game mode on or off, or let detection decide | `mode` |
+| `resources.gameMode` | Force app mode on or off, or let detection decide | `mode` |
 | `resources.queue` | Hold or release every waiting BMM operation | `action` |
 | `perf.diskSpace` | Reads free space and records it, so a condition can act on it. | `mountPoint` |
 
@@ -126,7 +126,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `id.of` | Stores the content id of a modpack, plugin or automation in a variable. Compare it to check you have the right thing, without downloading. | `into` · `kind` · `id` |
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
-| `ai.classify` | Picks one of your labels, with its probability. Needs the Laya permission. | `labels` · `text` · `path` · `into` |
+| `ai.classify` | Picks one of your labels, with its probability. Needs the Laya permission. | `task` · `labels` · `text` · `path` · `into` |
 | `ai.ask` | Searches the docs and your mods. The answer is data, never run. | `question` · `into` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 | `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
@@ -211,7 +211,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `dayOfWeek` | Day of week |
 | `timeRange` | Time is within |
 | `commandSucceeds` | Command succeeds |
-| `gameRunning` | A game is running (game mode) |
+| `gameRunning` | An app is running (app mode) |
 | `resourcesPresetIs` | Resource preset is |
 | `queueIdle` | BMM is idle (queue empty) |
 | `aiLabel` | Laya’s label is… |

@@ -22,7 +22,7 @@ test('durations read like a person would say them', () => {
 });
 
 test('the headline names the game, or says why there is none', () => {
-  assert.match(gameHeadline(view(), none), /No game detected/);
+  assert.match(gameHeadline(view(), none), /No app detected/);
   const on = view({ active: true, trigger: { exe: 'D:\\Games\\Skyrim\\SkyrimSE.exe', name: 'SkyrimSE.exe', source: 'profile_folder', dir: 'd:\\games\\skyrim\\' }, since_ms: 720000 });
   assert.match(gameHeadline(on, none), /SkyrimSE\.exe/);
   assert.match(gameHeadline(view({ active: true, manual: 'on', trigger: { exe: '', name: '', source: 'forced' } }), none), /forced on/i);
@@ -52,9 +52,9 @@ test('profile folders: watched, ignored, or never (a whole drive, an unset folde
   assert.equal(by['Unset'], undefined, 'a profile with no game folder has nothing to watch');
 });
 
-test('a pause "until I quit the game" says so and has no timer', () => {
+test('a pause "until I close the app" says so and has no timer', () => {
   const txt = pausedAllText({ by: 'game', age_ms: 0, remaining_ms: null }, none);
-  assert.match(txt, /until you quit the game/);
+  assert.match(txt, /until you close the app/);
   assert.doesNotMatch(txt, /Resumes by itself in/);
 });
 

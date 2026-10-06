@@ -302,7 +302,7 @@
     },
     {
       "type": "resources.gameMode",
-      "label": "Resources: game mode",
+      "label": "Resources: app mode",
       "needs": "resGame",
       "group": "perf"
     },

@@ -71,11 +71,26 @@ pub fn not_running_because(cfg: &ApiConfig, ai_on: bool, killed: bool) -> Option
 }
 
 fn engine(dir: PathBuf) -> Engine {
+    let dir_for_hooks = dir.clone();
     Engine {
         predict: Arc::new(|text: &str, qs: &[ai_core::LayaQuestion]| ai_embedded::Embedded.predict(text, qs)),
         available: Arc::new(|| ai_embedded::Embedded.available()),
         guard: Arc::new(move || crate::commands::ai_ops::guard(&dir)),
         log: Arc::new(|line: String| crate::commands::crash::log_line(line)),
+        laya: Some(laya_hooks(dir_for_hooks)),
+    }
+}
+
+/// « Réglages des réponses » for the API: read from, and saved into, ai-settings.json.
+fn laya_hooks(dir: PathBuf) -> crate::commands::ai_api_core::LayaHooks {
+    let d2 = dir.clone();
+    crate::commands::ai_api_core::LayaHooks {
+        load: Arc::new(move || ai_core::load_settings(&dir).laya),
+        save: Arc::new(move |c: &crate::commands::ai_tuning::LayaConfig| {
+            let mut s = ai_core::load_settings(&d2);
+            s.laya = c.clone();
+            ai_core::save_settings(&d2, &s).map(|_| ())
+        }),
     }
 }
 

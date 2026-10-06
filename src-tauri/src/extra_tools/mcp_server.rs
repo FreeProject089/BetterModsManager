@@ -88,6 +88,9 @@ mod commands {
     // suggest, draft and answer through the very code the app uses.
     #[path = "../../commands/ai_hybrid.rs"]
     pub mod ai_hybrid;
+    // « Réglages des réponses de Laya »: the same thresholds, presets and custom tasks as the app.
+    #[path = "../../commands/ai_tuning.rs"]
+    pub mod ai_tuning;
     // « API Laya locale »: its config file and its /health probe. This binary never serves
     // it; `bmm ai-api start|stop` edits the file the app's watcher follows.
     #[path = "../../commands/ai_api_core.rs"]
@@ -772,13 +775,24 @@ enum Commands {
         port: Option<u16>,
     },
 
-    /// Classify a text among labels with Laya (embedded or your own laya-serve), e.g. --label bug="a bug report"
+    /// Classify a text among labels with Laya (embedded or your own laya-serve), e.g. --label bug="a bug report", or with a saved custom task (--task)
     AiClassify {
         /// The text to classify
         text: String,
-        /// A label: id or id=meaning (2 to 32)
-        #[arg(long = "label", required = true)]
+        /// A label: id or id=meaning (2 to 32, unless --task)
+        #[arg(long = "label")]
         labels: Vec<String>,
+        /// The id of a saved custom task (Settings, AI, Laya answers): its labels, wording and settings
+        #[arg(long)]
+        task: Option<String>,
+    },
+
+    /// Laya's answer settings: get | set <file> | reset. set and reset need "Programs may change these settings" in BMM
+    AiLaya {
+        /// get, set or reset
+        action: String,
+        /// For set: a JSON file (a config, or an export from get / Settings)
+        file: Option<String>,
     },
 
     /// Apply the chosen fields to a mod (name, version, author, description, tags, links)
@@ -1733,7 +1747,7 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 other => anyhow::bail!("unknown action `{}`: start, stop, status or rotate", other),
             }
         }
-        Commands::AiClassify { text, labels } => {
+        Commands::AiClassify { text, labels, task } => {
             let labels: Vec<(String, String)> = labels
                 .iter()
                 .map(|l| match l.split_once('=') {
@@ -1741,9 +1755,24 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                     None => (l.trim().to_string(), l.trim().to_string()),
                 })
                 .collect();
-            let v = tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels))
+            let v = tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels, task.as_deref()))
                 .await?
                 .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
+        Commands::AiLaya { action, file } => {
+            let config = match (action.as_str(), file) {
+                ("set", Some(f)) => {
+                    let meta = std::fs::metadata(&f)?;
+                    if meta.len() > crate::commands::ai_tuning::MAX_CONFIG_BYTES as u64 {
+                        anyhow::bail!("{} is larger than {} bytes", f, crate::commands::ai_tuning::MAX_CONFIG_BYTES);
+                    }
+                    Some(serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&f)?)?)
+                }
+                ("set", None) => anyhow::bail!("set needs a JSON file: bmm ai-laya set laya.json"),
+                _ => None,
+            };
+            let v = ai_tools::laya_config(&action, config.as_ref()).map_err(|e| anyhow::anyhow!(e))?;
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
         Commands::AiAsk { question, lang, scope, limit, no_laya, write, json } => {

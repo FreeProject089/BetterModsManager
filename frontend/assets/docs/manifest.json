@@ -396,7 +396,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 1532,
+      "words": 1568,
       "diagrams": 0,
       "fr": true
     },
@@ -426,7 +426,7 @@
         "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
         "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 2584,
+      "words": 2980,
       "diagrams": 1,
       "fr": true
     },
@@ -441,7 +441,7 @@
         "en": "Programs on your PC can ask the built-in Laya the same questions as laya-serve: sort a text into labels, answer yes or no, score a level. Off by default.",
         "fr": "Les programmes de ton PC peuvent poser à la Laya intégrée les mêmes questions qu'à laya-serve : classer un texte dans des étiquettes, répondre oui ou non,…"
       },
-      "words": 271,
+      "words": 378,
       "diagrams": 0,
       "fr": true
     },
@@ -711,7 +711,7 @@
         "en": "Laya is optional, and most of it runs on your PC. It still reads text BMM does not control (a mod's readme, a report, a file a task names) and some of it can…",
         "fr": "Laya est optionnelle, et l'essentiel tourne sur ton PC. Elle lit pourtant du texte que BMM ne contrôle pas (le readme d'un mod, un rapport, un fichier qu'une…"
       },
-      "words": 693,
+      "words": 832,
       "diagrams": 0,
       "fr": true
     },

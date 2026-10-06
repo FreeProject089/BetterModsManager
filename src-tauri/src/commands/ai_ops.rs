@@ -30,6 +30,7 @@ use tauri::State;
 use crate::commands::ai_api_core::neutralize_specials;
 use crate::commands::ai_core::{self, Ctx, HttpTransport};
 use crate::commands::ai_embedded;
+use crate::commands::ai_tuning;
 use crate::state::AppState;
 
 /// The first bytes of a file classified by a task.
@@ -204,9 +205,16 @@ pub fn task_text(text: Option<&str>, path: Option<&str>) -> Result<String, Strin
 }
 
 #[tauri::command(async)]
-pub async fn ai_task_classify(state: State<'_, AppState>, text: Option<String>, path: Option<String>, labels: Vec<LabelIn>) -> Result<Value, String> {
+pub async fn ai_task_classify(state: State<'_, AppState>, text: Option<String>, path: Option<String>, labels: Option<Vec<LabelIn>>, task: Option<String>) -> Result<Value, String> {
     let dir = data_dir(&state);
-    let labels = clean_labels(&labels)?;
+    let cfg = ai_core::load_settings(&dir).laya;
+    // A saved task (« Tâches perso »: its labels, wording and settings) or the step's own labels.
+    let given = match task.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(_) => Vec::new(),
+        None => clean_labels(labels.as_deref().unwrap_or(&[]))?,
+    };
+    let (defs, template, tune) = ai_tuning::task_spec(&cfg, task.as_deref(), &given, ai_tuning::Area::Tasks)?;
+    let labels: Vec<(String, String)> = defs.iter().map(|l| (l.id.clone(), l.description.clone())).collect();
     // The guard BEFORE the file is touched: with AI off, a task reads nothing.
     let permit = slot(&dir).await?;
     let body = task_text(text.as_deref(), path.as_deref())?;
@@ -215,7 +223,6 @@ pub async fn ai_task_classify(state: State<'_, AppState>, text: Option<String>, 
     let n_labels = labels.len();
     let job = {
         let dir = dir.clone();
-        let labels = labels.clone();
         tauri::async_runtime::spawn_blocking(move || {
             // The slot goes INTO the job: a step that times out does not free the engine for
             // the next one while this run is still going.
@@ -232,10 +239,10 @@ pub async fn ai_task_classify(state: State<'_, AppState>, text: Option<String>, 
                 external_key: None,
                 bc: None,
             };
-            crate::commands::ai_hybrid::classify(&ctx, &body, &labels)
+            crate::commands::ai_hybrid::classify_tuned(&ctx, &body, &defs, &template, &tune)
         })
     };
-    let probs = match tokio::time::timeout(RUN_TIMEOUT, job).await {
+    let (probs, d) = match tokio::time::timeout(RUN_TIMEOUT, job).await {
         Err(_) => return Err("ai.task.blocked|timeout".into()),
         Ok(Err(_)) => return Err("ai.task.failed".into()),
         Ok(Ok(Err(e))) => {
@@ -245,12 +252,19 @@ pub async fn ai_task_classify(state: State<'_, AppState>, text: Option<String>, 
         }
         Ok(Ok(Ok(p))) => p,
     };
-    let (label, p, ranked) = constrain(&labels, &probs);
-    crate::commands::crash::log_line(format!("[AI-TASK] classify labels={} chars={} ms={}", n_labels, n_chars, t0.elapsed().as_millis()));
+    let (_, _, ranked) = constrain(&labels, &probs);
+    // The answer: one of the task's labels, or `none` when Laya abstained (« je ne sais pas »).
+    let (label, p) = d.top();
+    let (label, p, _) = constrain(&labels, &[(label, p)]);
+    crate::commands::crash::log_line(format!("[AI-TASK] classify labels={} chars={} ms={} abstained={}", n_labels, n_chars, t0.elapsed().as_millis(), d.abstained));
     Ok(json!({
         "label": label,
         "p": p,
         "ranked": ranked.iter().map(|(l, p)| json!({ "label": l, "p": p })).collect::<Vec<_>>(),
+        "labels": d.labels.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+        "abstained": d.abstained,
+        "uncertain": d.uncertain,
+        "reason": d.reason,
     }))
 }
 

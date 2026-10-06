@@ -55,6 +55,8 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
     // « Rédaction »: a local server (nothing leaves this PC) or the user's remote API.
     const canDraft = !!settings?.enabled && (settings.generative === 'external' || settings.generative === 'local') && settings.description_drafts !== false;
     let rows: SuggestionRow[] = [];
+    // « Réponses de Laya »: percent bars on or off (the Rust side sends the user's choice).
+    let showProbs = true;
     let busy = false;
 
     const head = `
@@ -142,7 +144,8 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             <span class="ai-row-head"><b>${escHtml(fieldLabel(r.field))}</b>
               <span class="ai-src ai-src-${escAttr(r.source)}">${escHtml(sourceLabel(r.source))}</span>
               <span class="ai-origin">${escHtml(r.origin)}</span>
-              <span class="ai-conf" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span>
+              ${showProbs ? `<span class="ai-conf" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span>` : ''}
+              ${r.uncertain ? `<span class="ai-src ai-src-unsure" title="${escAttr(t('ai.lt.guessTip'))}">${escHtml(t('ai.lt.guessBadge'))}</span>` : ''}
               ${r.note === 'draft' ? `<span class="ai-src ai-src-draft">${escHtml(t('ai.suggest.draftBadge'))}</span>` : ''}
             </span>
             <span class="ai-value${multi ? ' ai-value-multi' : ''}">${escHtml(r.display)}</span>
@@ -154,7 +157,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         <div class="ai-hint"><b>${escHtml(fieldLabel(r.field))}</b>
           <span>${escHtml(r.field === 'nsfw' ? (r.value === true ? t('ai.suggest.nsfwYes') : t('ai.suggest.nsfwNo')) : r.display)}</span>
           <span class="ai-src ai-src-${escAttr(r.source)}">${escHtml(sourceLabel(r.source))}</span>
-          <span class="ai-conf">${pct(r.confidence)}%</span></div>`;
+          ${showProbs ? `<span class="ai-conf">${pct(r.confidence)}%</span>` : ''}</div>`;
 
     let wantDraft = false;
     let last: { notes?: string[]; sent?: string | null; read?: string[]; sources?: any[]; offline?: boolean } = {};
@@ -173,6 +176,10 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
             });
             const view: ModView = mod;
             rows = rowsFromSuggestions((res?.suggestions || []) as AiSuggestion[], view, tagName);
+            showProbs = res?.tuning?.showProbs !== false;
+            // « Appliquer sans demander »: in this dialog, Laya's tags come pre-ticked (never a
+            // guess); Apply stays the user's click.
+            if (res?.tuning?.autoApply) for (const r of rows) if (r.field === 'tags' && r.applicable && !r.uncertain && (r.source === 'laya' || r.source === 'embedded')) rows = toggleRow(rows, r.key, true);
             last = { notes: res?.notes || [], sent: res?.sentText || null, read: res?.sourcesRead || [], sources: res?.sources || [], offline: !!res?.offline };
             busy = false;
             render('ready', last);

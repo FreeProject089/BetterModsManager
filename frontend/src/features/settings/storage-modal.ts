@@ -33,7 +33,7 @@ export type StorageTab = 'space' | 'intensity' | 'game' | 'live' | 'rules';
 const ICON: Record<StorageTab, string> = {
     space: '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
     intensity: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
-    game: '<line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59L2 15a3 3 0 0 0 5.2 2.04L9 15h6l1.8 2.04A3 3 0 0 0 22 15l-.7-6.41A4 4 0 0 0 17.32 5z"/>',
+    game: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
     live: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
     rules: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
 };
@@ -41,7 +41,7 @@ const ICON: Record<StorageTab, string> = {
 const TABS: { id: StorageTab; label: [string, string]; tip: [string, string] }[] = [
     { id: 'space', label: ['stm.tab.space', 'Disks & space'], tip: ['stm.tabTip.space', 'How full each disk is, which profiles live on it, space alerts, and a speed cap per disk.'] },
     { id: 'intensity', label: ['stm.tab.intensity', 'Work intensity'], tip: ['stm.tabTip.intensity', 'How much of your PC BMM may use for heavy work.'] },
-    { id: 'game', label: ['stm.tab.game', 'Game mode'], tip: ['stm.tabTip.game', 'BMM steps aside while you play.'] },
+    { id: 'game', label: ['stm.tab.game', 'App mode'], tip: ['stm.tabTip.game', 'BMM steps aside while your app runs.'] },
     { id: 'live', label: ['stm.tab.live', 'Live activity'], tip: ['stm.tabTip.live', 'What BMM is doing right now, with pause and cancel.'] },
     { id: 'rules', label: ['stm.tab.rules', 'Rules per disk'], tip: ['stm.tabTip.rules', 'Optional fine rules for one disk and one kind of work.'] },
 ];
@@ -147,7 +147,7 @@ export async function renderStorageModal(tab?: StorageTab): Promise<void> {
             </div>
             ${_introOpen ? `
             <div class="stm-intro" role="note">
-                <span class="stm-intro-body">${esc(tr('stm.intro.short', 'Your disks, how hard BMM works, and game mode. The defaults are safe.'))}</span>
+                <span class="stm-intro-body">${esc(tr('stm.intro.short', 'Your disks, how hard BMM works, and app mode. The defaults are safe.'))}</span>
                 <button type="button" class="btn btn-sm btn-ghost stm-intro-ok">${esc(tr('stm.intro.dismiss', 'Got it'))}</button>
             </div>` : ''}
             ${TABS.map((x) => `<section class="stm-panel" role="tabpanel" id="stm-panel-${x.id}" aria-labelledby="stm-tab-${x.id}" data-panel="${x.id}" tabindex="0" hidden></section>`).join('')}
@@ -457,6 +457,6 @@ export function initStorageModal(h: Hooks): void {
 
 /** The engage / disengage notice. */
 function gameModeNotice(v: GameView): string {
-    if (v.active) return `${gameHeadline(v, t)} — ${tr('stm.game.noticeOn', 'BMM steps aside until you stop playing.')}`;
-    return tr('stm.game.noticeOff', 'Game mode ended: BMM works normally again.');
+    if (v.active) return `${gameHeadline(v, t)}. ${tr('stm.game.noticeOn', 'BMM steps aside until you close the app.')}`;
+    return tr('stm.game.noticeOff', 'App mode ended: BMM works normally again.');
 }

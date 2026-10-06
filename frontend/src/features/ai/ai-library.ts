@@ -133,6 +133,11 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
                 const m = byId.get(String(it.modId)) || { id: it.modId, name: it.name };
                 return { id: String(it.modId), name: String(m.name || it.name || it.modId), rows: rowsFromSuggestions((it.suggestions || []) as AiSuggestion[], m, opts.tagName), notes: it.notes || [], done: false };
             }).filter((it: Item) => it.rows.some((r) => r.applicable));
+            // « Réponses de Laya » for the library: percent bars, and « apply without asking »
+            // for Laya's tags (never a guess kept under the threshold, never a file's value).
+            const tune = (r?.items || [])[0]?.tuning || {};
+            showProbs = tune.showProbs !== false;
+            autoApply = !!tune.autoApply;
             summary = r?.cancelled ? t('ai.lib.summaryStopped', { n: String(items.length), ms: String(Math.round((r?.ms || 0) / 100) / 10) }) : t('ai.lib.summary', { n: String(items.length), total: String(r?.total ?? total), s: String(Math.round((r?.ms || 0) / 100) / 10) });
         } catch (e) {
             summary = reasonText(String((e as Error)?.message || e));
@@ -142,7 +147,18 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
             _running = false;
         }
         review();
+        if (autoApply) {
+            for (const it of items) {
+                let any = false;
+                for (const r of it.rows) {
+                    if (r.field === 'tags' && r.applicable && !r.uncertain && (r.source === 'laya' || r.source === 'embedded')) { it.rows = toggleRow(it.rows, r.key, true); any = true; }
+                }
+                if (any) await apply(it.id);
+            }
+        }
     };
+    let showProbs = true;
+    let autoApply = false;
 
     // ── 3. Review: per mod, per field ────────────────────────────────────
     const rowHtml = (it: Item, r: SuggestionRow) => `
@@ -152,7 +168,8 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
             <span class="ai-row-head"><b>${escHtml(fieldLabel(r.field))}</b>
               <span class="ai-src ai-src-${escAttr(r.source)}">${escHtml(sourceLabel(r.source))}</span>
               <span class="ai-origin">${escHtml(r.origin)}</span>
-              <span class="ai-conf" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span></span>
+              ${showProbs ? `<span class="ai-conf" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span>` : ''}
+              ${r.uncertain ? `<span class="ai-src ai-src-unsure">${escHtml(t('ai.lt.guessBadge'))}</span>` : ''}</span>
             <span class="ai-value${r.field === 'description' ? ' ai-value-multi' : ''}">${escHtml(r.display)}</span>
           </span>
         </label>`;

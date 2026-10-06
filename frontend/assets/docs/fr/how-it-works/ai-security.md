@@ -55,6 +55,17 @@ journalisées, jamais dans un message d'erreur. Chaque clé est liée à l'adres
 été enregistrée (schéma, hôte, port) et n'est envoyée que là. Changer l'adresse efface la clé :
 retape-la pour le nouveau serveur. Une clé ne passe jamais en http simple, sauf vers ce PC.
 
+**Étiquettes et tâches perso.** Une étiquette, une description, un exemple, une question ou un
+fichier importé est du texte non fiable. Il devient seulement une option ou la question de Laya,
+jamais un prompt système, une commande ou un chemin. Chaque texte est borné (64 / 300 / 200 / 300
+caractères, 5 exemples, 32 étiquettes, 32 tâches), mis sur une ligne, nettoyé comme tout texte non
+fiable et débarrassé des jetons réservés du modèle (`<eos>`, `<mask>`…, toute casse) pour qu'il ne
+puisse ni fermer son segment ni forger un marqueur d'option. Le fichier de réglages est lu en
+refusant les champs inconnus et en bornant chaque nombre ; un import ou une modification par un
+programme est refusé plutôt que corrigé. Une réponse n'est jamais qu'une des étiquettes données, ou
+`none`. Les programmes lisent ces réglages mais ne les modifient que si l'utilisateur l'a permis
+dans les Paramètres, et ne peuvent pas se donner cette permission.
+
 **Épuisement.** Plafonds sur le texte, les questions et les options ; une exécution du moteur à
 la fois (deux pour l'API) ; files courtes ; délais ; 20 étapes Laya et 2 minutes par exécution de
 tâche, 30 étapes par minute pour toutes les tâches, 60 requêtes API par minute et par appelant ;

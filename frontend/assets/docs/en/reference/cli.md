@@ -2,7 +2,7 @@
 
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
-running it with a subcommand instead of `serve` gives you 77 commands from a terminal, a
+running it with a subcommand instead of `serve` gives you 78 commands from a terminal, a
 `.bat`, a cron job or a CI step.
 
 ```bash
@@ -39,7 +39,7 @@ bmm-mcp-server api --reveal
 
 ## The commands
 
-77 of them. `*` marks a required argument; a value in brackets is the default. Positional
+78 of them. `*` marks a required argument; a value in brackets is the default. Positional
 arguments are written `<like-this>`, flags `--like-this`.
 
 ### Getting your bearings
@@ -209,7 +209,8 @@ and the column instead. Neither command needs the app open.
 | `ai-apply` | `<mod-id>`\*, `--fields`\* | Writes the chosen fields, given as a JSON object (`{"description":"…","tags":["<tag id>"]}`); name, version, author, description, tags (existing ids, 3 per mod at most) and links only |
 | `ai-ask` | `<question>`\*, `--lang` [en], `--scope` [all], `--limit` [8], `--no-laya`, `--write`, `--json` | « Ask Laya », offline: the documentation, settings, commands, mods, files and conflicts that answer a question, as a readable list (`--json` for the structured result). `--no-laya` = keyword retrieval only, whatever the settings; `--write` also words an answer with the configured generator from the sources found, each sentence cited |
 | `ai-analyze` | `<mod-ids>` (optional, repeat), `--laya`, `--limit` [200] | Suggestions for every mod (or the ones named) in one pass, as JSON. Files only unless `--laya`; never a draft. **Writes nothing** |
-| `ai-classify` | `<text>`\*, `--label`\* (repeat, `id` or `id=meaning`) | Which label fits the text, with Laya (embedded or your own laya-serve), best first, plus `none` |
+| `ai-classify` | `<text>`\*, `--label` (repeat, `id` or `id=meaning`; 2 to 32 unless `--task`), `--task` | Which label fits the text, with Laya (embedded or your own laya-serve), best first, plus `none`, and the decision under your answer settings (`label`, `abstained`, `uncertain`). `--task <id>` uses a saved task's labels, question and settings |
+| `ai-laya` | `<action>`\* (get, set, reset), `<file>` (for set) | Laya's answer settings (Settings → Laya answers): `get` prints them as a versioned export with the saved tasks; `set <file>` stores a config or an export (strictly checked); `reset` goes back to the defaults. `set` and `reset` are refused unless the user ticked *Programs may change these settings* |
 | `ai-install` | — | Downloads, verifies and installs the built-in Laya model pack (about 327 MB), with a live line: phase, percent, speed, time left, mirror |
 | `ai-remove` | — | Removes the downloaded model pack (not the installer's copy) |
 | `ai-test` | — | Classifies a fixed sample with the installed model and prints the answers and timings; exits non-zero when the answers are not the expected ones |
@@ -232,7 +233,7 @@ sixty-eighth, and nothing about a wrong reference page fails to compile.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 91 MCP tools it exposes
+- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 92 MCP tools it exposes
 - [Local API &amp; deeplinks](doc-page:reference/api) — what `call` is calling
 - [BMMScript reference](doc-page:features/bmmscript-reference) — the language `bmms-compile` reads
 - [Action reference](doc-page:reference/actions) — what `actions` lists

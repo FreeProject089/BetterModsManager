@@ -34,6 +34,7 @@ use std::sync::OnceLock;
 
 use crate::commands::ai_core::{self, Ctx, Feature, GenTarget, LayaQuestion, ModFacts, Provider, SourceInfo, Suggestion, Vocab};
 use crate::commands::ai_laya as L;
+use crate::commands::ai_tuning as tu;
 use crate::commands::ask_core;
 
 /// A draft Laya scores below this (« is it supported by the facts? ») is not shown.
@@ -350,7 +351,7 @@ pub fn draft_mod(ctx: &Ctx, facts_text: &str, vocab: &Vocab) -> DraftOutcome {
 }
 
 fn sugg(field: &str, value: Value, source: &str, origin: &str, confidence: f32, note: &str) -> Suggestion {
-    Suggestion { field: field.into(), value, source: source.into(), origin: origin.into(), confidence, applicable: true, note: note.into() }
+    Suggestion { field: field.into(), value, source: source.into(), origin: origin.into(), confidence, applicable: true, note: note.into(), uncertain: false }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -367,12 +368,19 @@ pub struct SuggestOutcome {
     pub sent_text: Option<String>,
     /// Nothing left this PC.
     pub offline: bool,
+    /// How the UI shows the answers (« Réglages des réponses »: percent bars, auto-apply, top-k).
+    pub tuning: Value,
 }
 
 /// Suggestions for one mod: extraction (always), Laya (when on), a draft (when asked for and a
 /// generator is configured). Writes nothing — applying is `build_patch` + the caller's write.
 /// `extra_names`: the file names of a 7z/rar mod (listed, not read).
 pub fn suggest_mod(ctx: &Ctx, facts: &ModFacts, vocab: &Vocab, extra_names: &[String], use_providers: bool, draft: bool) -> SuggestOutcome {
+    suggest_mod_in(ctx, facts, vocab, extra_names, use_providers, draft, crate::commands::ai_tuning::Area::ModSuggest)
+}
+
+/// [`suggest_mod`] with the answer settings of `area` (`Library` for « Analyser la bibliothèque »).
+pub fn suggest_mod_in(ctx: &Ctx, facts: &ModFacts, vocab: &Vocab, extra_names: &[String], use_providers: bool, draft: bool, area: crate::commands::ai_tuning::Area) -> SuggestOutcome {
     let ex = ai_core::extract(facts, vocab, extra_names);
     let mut all = ex.suggestions.clone();
     let mut notes: Vec<String> = Vec::new();
@@ -380,7 +388,7 @@ pub fn suggest_mod(ctx: &Ctx, facts: &ModFacts, vocab: &Vocab, extra_names: &[St
     if use_providers {
         let text = ai_core::provider_text(facts, &ex);
         if ai_core::gate(ctx.settings, Feature::ModSuggest, ctx.killed).is_ok() {
-            let (s, n) = ai_core::classify_mod(ctx, &text, vocab);
+            let (s, n) = ai_core::classify_mod_in(ctx, &text, vocab, area);
             // The embedded engine reads the text in this process: nothing was SENT.
             if ctx.settings.classifier != "embedded" {
                 sent = Some(text.clone());
@@ -405,6 +413,7 @@ pub fn suggest_mod(ctx: &Ctx, facts: &ModFacts, vocab: &Vocab, extra_names: &[St
         sources: ex.sources,
         offline: sent.is_none(),
         sent_text: sent,
+        tuning: ctx.settings.laya.view(area),
     }
 }
 
@@ -532,7 +541,7 @@ pub fn answer_with_sources(ctx: &Ctx, question: &str, lang: &str, a: &ask_core::
 /// gate allowed it), and — when `generate` and the settings allow it — a written answer.
 /// Returns the answer, the written one (if any) and why there is none ("" when there is).
 pub fn ask(ctx: &Ctx, req: &ask_core::Request, lib: &ask_core::Library, model: Option<&dyn ai_core::LocalModel>, generate: bool) -> (ask_core::Answer, Option<GenAnswer>, String) {
-    let a = ask_core::answer(req, lib, model);
+    let a = ask_core::answer_tuned(req, lib, model, &ctx.settings.laya.resolve(tu::Area::Ask));
     if !generate {
         return (a, None, "not_requested".into());
     }
@@ -550,18 +559,29 @@ pub fn ask(ctx: &Ctx, req: &ask_core::Request, lib: &ask_core::Library, model: O
 /// Laya's « none of these » when it is the answer. Embedded engine or the user's own
 /// laya-serve only; the text is neutralized first. Gate: master switch and `--no-ai`.
 pub fn classify(ctx: &Ctx, text: &str, labels: &[(String, String)]) -> Result<Vec<(String, f64)>, String> {
-    let provider = ai_core::gate(ctx.settings, Feature::Classify, ctx.killed).map_err(|w| format!("classifier:{}", w))?;
     if labels.len() < 2 || labels.len() > 32 {
+        // Checked before the gate, as before: a malformed call says so even with AI off.
+        let _ = ai_core::gate(ctx.settings, Feature::Classify, ctx.killed).map_err(|w| format!("classifier:{}", w))?;
         return Err("labels: between 2 and 32".into());
     }
-    let mut crit: Vec<(String, String)> = labels.iter().map(|(id, what)| (id.chars().take(64).collect(), ai_core::neutralize(what).chars().take(300).collect())).collect();
-    crit.push(("none".into(), "none of these fits the text".into()));
-    let q: LayaQuestion = ("label".into(), "choice", "Which of these best describes the text?".into(), crit);
-    let body: String = ai_core::neutralize(text).chars().take(ai_core::MAX_PROVIDER_TEXT).collect();
-    let resp = ai_core::ask_laya(ctx, provider, &body, &[q]).map_err(|e| ai_core::laya_note(provider, &e))?;
-    let mut probs = L::choice_probs(&resp, "label");
-    probs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let defs: Vec<tu::LabelDef> = labels.iter().map(|(id, what)| tu::LabelDef { id: id.clone(), description: what.clone(), examples: Vec::new() }).collect();
+    let (probs, _) = classify_tuned(ctx, text, &defs, "", &tu::Tuning::default())?;
     Ok(probs)
+}
+
+/// A classification with the user's labels (descriptions, examples), wording and answer
+/// settings: the probabilities per label (averaged over the hypotheses, at the user's
+/// temperature, best first) and the decision (threshold, margin, abstain, top-k).
+pub fn classify_tuned(ctx: &Ctx, text: &str, labels: &[tu::LabelDef], template: &str, t: &tu::Tuning) -> Result<(Vec<(String, f64)>, tu::Decision), String> {
+    let provider = ai_core::gate(ctx.settings, Feature::Classify, ctx.killed).map_err(|w| format!("classifier:{}", w))?;
+    if labels.len() < 2 || labels.len() > tu::MAX_LABELS {
+        return Err("labels: between 2 and 32".into());
+    }
+    let body: String = ai_core::neutralize(text).chars().take(ai_core::MAX_PROVIDER_TEXT).collect();
+    let ask = |qs: &[LayaQuestion]| ai_core::ask_laya(ctx, provider, &body, qs).map_err(|e| ai_core::laya_note(provider, &e));
+    let (mut probs, d) = tu::classify_labels(&ask, &L::choice_probs, labels, template, t)?;
+    probs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    Ok((probs, d))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

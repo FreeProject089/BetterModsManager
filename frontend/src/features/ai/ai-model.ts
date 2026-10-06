@@ -60,6 +60,8 @@ export interface SuggestionRow {
     applicable: boolean;
     checked: boolean;
     note: string;
+    /** A best guess kept under the user's threshold (« Réponses de Laya »: abstain = flag). */
+    uncertain?: boolean;
 }
 
 /** The subset of a mod the dialog compares against. */
@@ -104,6 +106,7 @@ export function rowsFromSuggestions(list: AiSuggestion[], mod: ModView, tagName:
             applicable: !!s.applicable && (APPLICABLE_FIELDS as readonly string[]).includes(field),
             checked: false,
             note: String(s.note || ''),
+            uncertain: !!(s as any).uncertain,
         };
     });
 }

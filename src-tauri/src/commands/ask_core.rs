@@ -483,7 +483,16 @@ fn kind_fits(intent: &str, k: &str) -> f64 {
 
 /// Answer a question. `model` is the embedded Laya engine when the caller's gate allows it
 /// (`None` = retrieval only, which is always available, offline, with AI off).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn answer(req: &Request, lib: &Library, model: Option<&dyn LocalModel>) -> Answer {
+    answer_tuned(req, lib, model, &crate::commands::ai_tuning::builtin(crate::commands::ai_tuning::Area::Ask))
+}
+
+/// [`answer`] with the user's answer settings for « Ask Laya » (« Réglages des réponses »):
+/// `top_k` = how many results Laya compares, the temperature, and when the answer reads as
+/// unsure (`low_confidence`): Laya's « none » first, then the threshold and the margin on its
+/// best candidate. « Équilibré » is exactly [`answer`] as it was.
+pub fn answer_tuned(req: &Request, lib: &Library, model: Option<&dyn LocalModel>, tune: &crate::commands::ai_tuning::Tuning) -> Answer {
     let started = Instant::now();
     let question: String = req.question.trim().chars().take(MAX_QUESTION).collect();
     let limit = if req.limit == 0 { DEFAULT_LIMIT } else { req.limit.min(30) };
@@ -572,7 +581,7 @@ pub fn answer(req: &Request, lib: &Library, model: Option<&dyn LocalModel>) -> A
     let mut low_confidence = false;
     if let Some(m) = model {
         if hits.len() >= 2 {
-            let k = hits.len().min(RERANK_K);
+            let k = hits.len().min((tune.top_k as usize).clamp(2, 10));
             let mut crit: Vec<(String, String)> = hits[..k]
                 .iter()
                 .enumerate()
@@ -582,7 +591,7 @@ pub fn answer(req: &Request, lib: &Library, model: Option<&dyn LocalModel>) -> A
             let q: LayaQuestion = ("best".into(), "choice", "Which of these parts of the mod manager answers the user's question best?".into(), crit);
             match m.predict(&question, &[q]) {
                 Ok(resp) => {
-                    let lp = L::choice_probs(&resp, "best");
+                    let lp = crate::commands::ai_tuning::calibrate(&L::choice_probs(&resp, "best"), tune.temperature);
                     let p_none = lp.iter().find(|(c, _)| c == "none").map(|(_, p)| *p).unwrap_or(0.0);
                     for (j, h) in hits.iter_mut().enumerate().take(k) {
                         let p = lp.iter().find(|(c, _)| *c == format!("c{}", j)).map(|(_, p)| *p).unwrap_or(0.0);
@@ -594,7 +603,11 @@ pub fn answer(req: &Request, lib: &Library, model: Option<&dyn LocalModel>) -> A
                         h.score *= 0.5;
                     }
                     hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-                    low_confidence = p_none >= 0.6;
+                    let mut cand: Vec<f64> = lp.iter().filter(|(c, _)| c != "none").map(|(_, p)| *p).collect();
+                    cand.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+                    let best = cand.first().copied().unwrap_or(0.0);
+                    let second = cand.get(1).copied().unwrap_or(0.0);
+                    low_confidence = p_none >= 0.6 || best < tune.threshold || (tune.margin > 0.0 && cand.len() >= 2 && best - second < tune.margin);
                     laya_used = true;
                 }
                 Err(e) => notes.push(format!("laya:{}", e.chars().take(80).collect::<String>())),

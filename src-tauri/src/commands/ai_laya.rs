@@ -343,7 +343,9 @@ pub fn combine_tag_votes(names: &[String], candidates: &[usize], lexical: &[f64]
     out
 }
 
-/// The tags to suggest: above the threshold, best first, at most `max`.
+/// The tags to suggest: above the threshold, best first, at most `max`. The app now decides
+/// through `ai_tuning::decide_independent` (« Équilibré » gives this exactly; a test pins it).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn pick_tags(combined: &[(usize, f64)], max: usize) -> Vec<(usize, f64)> {
     combined.iter().filter(|(_, p)| *p >= TAG_THRESHOLD).take(max).cloned().collect()
 }

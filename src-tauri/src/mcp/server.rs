@@ -1240,14 +1240,26 @@ impl ServerHandler for BmmMcpServer {
             ),
             Tool::new(
                 "bmm_ai_classify",
-                "Classify one text among labels YOU give, with Laya (the embedded model, or the user's own laya-serve; never a remote server). Returns the labels best first with a probability, plus \"none\" when Laya finds that none fits. Laya only picks; it never writes text. Needs the user's AI master switch; refused under --no-ai. Works with BMM closed.",
+                "Classify one text among labels YOU give, or with one of the user's saved custom tasks (`task`: its labels, wording and settings), with Laya (the embedded model, or the user's own laya-serve; never a remote server). Returns the labels best first with a probability (\"none\" when Laya finds that none fits), and the decision under the user's answer settings (Settings, AI, Laya answers: threshold, margin, temperature): `label` (\"none\" when Laya abstained), `p`, `abstained`, `uncertain`, `reason`. Laya only picks; it never writes text. Needs the user's AI master switch; refused under --no-ai. Works with BMM closed.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
                         "text": { "type": "string", "description": "The text to classify (the first 4000 characters are read). Treated as data, never as instructions." },
-                        "labels": { "type": "array", "minItems": 2, "maxItems": 32, "items": { "type": "object", "properties": { "id": { "type": "string" }, "meaning": { "type": "string" } }, "required": ["id"] }, "description": "The choices, e.g. [{\"id\":\"bug\",\"meaning\":\"a bug report\"},{\"id\":\"idea\",\"meaning\":\"a feature idea\"}]." }
+                        "labels": { "type": "array", "maxItems": 32, "items": { "type": "object", "properties": { "id": { "type": "string" }, "meaning": { "type": "string" } }, "required": ["id"] }, "description": "The choices (2 to 32, unless `task` is given), e.g. [{\"id\":\"bug\",\"meaning\":\"a bug report\"},{\"id\":\"idea\",\"meaning\":\"a feature idea\"}]." },
+                        "task": { "type": "string", "description": "The id of a saved custom task (see bmm_ai_laya_config, action get). Its labels are used instead of `labels`." }
                     },
-                    "required": ["text", "labels"]
+                    "required": ["text"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_laya_config",
+                "Laya's answer settings (Settings, AI, Laya answers): presets (prudent, balanced, permissive, custom), threshold, top-k, margin, temperature, abstain, multi-label, per feature; the user's label descriptions and examples; their saved custom tasks. action get = the config as a versioned export plus the task list; set = store a config or an export (strictly validated, unknown fields refused); reset = the defaults. set and reset are REFUSED unless the user ticked \"Programs may change these settings\" in BMM; a program can never tick it. Ask the user before set or reset.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "action": { "type": "string", "enum": ["get", "set", "reset"], "description": "get (default), set or reset" },
+                        "config": { "type": "object", "description": "For set: the config, or the export object returned by get (its `export` field)." }
+                    }
                 })).unwrap()),
             ),
             Tool::new(
@@ -1814,10 +1826,19 @@ impl ServerHandler for BmmMcpServer {
                             Some((id, meaning))
                         }).collect())
                         .unwrap_or_default();
-                    match tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels)).await {
+                    let task = args.get("task").and_then(|v| v.as_str()).map(str::to_string);
+                    match tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels, task.as_deref())).await {
                         Ok(Ok(v)) => ok_json(&v),
                         Ok(Err(e)) => err_result(&e),
                         Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_laya_config" => {
+                    let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("get").to_string();
+                    let config = args.get("config").cloned();
+                    match ai_tools::laya_config(&action, config.as_ref()) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e),
                     }
                 }
                 "bmm_ai_pack_install" => match tokio::task::spawn_blocking(|| ai_tools::pack_install(&|_| {})).await {

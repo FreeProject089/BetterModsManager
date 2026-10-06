@@ -101,6 +101,11 @@ pub struct AiSettings {
     pub timeout_ms: u64,
     /// The installer set the master switch (informational; the switch itself is `enabled`).
     pub installer_choice: Option<bool>,
+    /// « Réglages des réponses de Laya » (`ai_tuning`): thresholds, presets, custom labels and
+    /// tasks. Read leniently (a block that does not parse gives today's behaviour, not an
+    /// error); written only through `ai_laya_save` — the AI card's own Save keeps what is stored.
+    #[serde(deserialize_with = "crate::commands::ai_tuning::lenient")]
+    pub laya: crate::commands::ai_tuning::LayaConfig,
 }
 
 impl Default for AiSettings {
@@ -124,6 +129,7 @@ impl Default for AiSettings {
             bc_consent: false,
             timeout_ms: 20_000,
             installer_choice: None,
+            laya: crate::commands::ai_tuning::LayaConfig::default(),
         }
     }
 }
@@ -149,6 +155,7 @@ impl AiSettings {
         self.gen_local_model = bounded(self.gen_local_model.trim(), 120);
         self.external_url = bounded(self.external_url.trim(), 300);
         self.external_model = bounded(self.external_model.trim(), 120);
+        self.laya = self.laya.sanitized();
         self
     }
 }
@@ -1007,6 +1014,10 @@ pub struct Suggestion {
     /// Extra words for the UI ("draft", the tag's name…).
     #[serde(default)]
     pub note: String,
+    /// The best guess kept although it failed the user's threshold or margin
+    /// (« Réglages des réponses » → abstain: flag). Shown as such, never auto-applied.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub uncertain: bool,
 }
 
 /// What the mod currently says — to skip suggestions that change nothing.
@@ -1498,7 +1509,7 @@ fn push(out: &mut Vec<Suggestion>, field: &str, value: Value, source: &str, orig
         origin: origin.into(),
         confidence,
         applicable: true,
-        note: String::new(),
+        note: String::new(), uncertain: false,
     });
 }
 
@@ -1775,7 +1786,7 @@ pub fn match_vocab(vocab: &Vocab, text: &str, raw_tags: &[String]) -> Vec<Sugges
             origin: origin.into(),
             confidence: conf,
             applicable: true,
-            note: name.clone(),
+            note: name.clone(), uncertain: false,
         });
     }
     out
@@ -1843,7 +1854,7 @@ pub fn extract(facts: &ModFacts, vocab: &Vocab, extra_names: &[String]) -> Extra
             origin: "text".into(),
             confidence: conf,
             applicable: false,
-            note: String::new(),
+            note: String::new(), uncertain: false,
         });
     }
     Extracted {
@@ -2021,7 +2032,16 @@ fn bc_suggest(ctx: &Ctx, task: &str, text: &str, options: &[String]) -> Result<V
 /// Classifier pass for one mod: tags from the user's vocabulary, language, adult content.
 /// Returns suggestions and human-readable notes (a provider error is a note, not a failure:
 /// the deterministic suggestions stand on their own).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, Vec<String>) {
+    classify_mod_in(ctx, text, vocab, crate::commands::ai_tuning::Area::ModSuggest)
+}
+
+/// [`classify_mod`] with the answer settings of `area` (« Suggestions » for one mod, or
+/// « Analyser la bibliothèque »).
+pub fn classify_mod_in(ctx: &Ctx, text: &str, vocab: &Vocab, area: crate::commands::ai_tuning::Area) -> (Vec<Suggestion>, Vec<String>) {
+    use crate::commands::ai_tuning as tu;
+    let tune = ctx.settings.laya.resolve(area);
     let provider = match gate(ctx.settings, Feature::ModSuggest, ctx.killed) {
         Ok(p) => p,
         Err(why) => return (Vec::new(), vec![format!("classifier:{}", why)]),
@@ -2043,21 +2063,30 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
             let names: Vec<String> = asked.iter().map(|(_, n)| n.clone()).collect();
             let lex = crate::commands::ai_laya::lexical_tag_scores(text, &names);
             let cands = crate::commands::ai_laya::tag_candidates(&names, &lex, crate::commands::ai_laya::MAX_CHOICE);
-            let mut qs: Vec<LayaQuestion> = crate::commands::ai_laya::tag_questions(&names, &cands);
+            // The user's descriptions / examples / wording for their tags, when they wrote some
+            // (« Réglages des réponses »); otherwise exactly the questions above.
+            let mut qs: Vec<LayaQuestion> = tu::tag_questions(&ctx.settings.laya, &names, &cands);
             qs.push(crate::commands::ai_laya::nsfw_question());
             match ask_laya(ctx, provider, text, &qs) {
                 Ok(resp) => {
-                    let choice = crate::commands::ai_laya::choice_probs(&resp, "tags_choice");
+                    let choice = tu::averaged(&resp, "tags_choice", &crate::commands::ai_laya::choice_probs);
                     let noul: Vec<Option<f64>> = cands.iter().map(|i| crate::commands::ai_laya::noul_p(&resp, &format!("tag_{}", i))).collect();
                     let combined = crate::commands::ai_laya::combine_tag_votes(&names, &cands, &lex, &noul, &choice);
-                    for (i, p) in crate::commands::ai_laya::pick_tags(&combined, MAX_TAGS_PER_MOD) {
+                    // Threshold, temperature, margin, max per mod: the user's (« Équilibré » =
+                    // `pick_tags` exactly). A mod still holds at most three tags.
+                    let mut t = tune.clone();
+                    t.max_labels = t.max_labels.min(MAX_TAGS_PER_MOD as u32);
+                    let scores: Vec<(String, f64)> = combined.iter().map(|(i, p)| (i.to_string(), *p)).collect();
+                    let d = tu::decide_independent(&scores, &t);
+                    for s in &d.labels {
+                        let Some(i) = s.id.parse::<usize>().ok().filter(|i| *i < asked.len()) else { continue };
                         let (id, name) = asked[i];
-                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: p.min(1.0) as f32, applicable: true, note: name.clone() });
+                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: s.p.min(1.0) as f32, applicable: true, note: name.clone(), uncertain: d.uncertain });
                     }
                     // The language hint is the detector's (`extract` already adds it): the model
                     // is no language identifier (measured, see ai_laya::language_hint).
                     if let (_, Some(p), _) = laya_answer(&resp, "nsfw") {
-                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: source.into(), origin: origin.into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p) });
+                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: source.into(), origin: origin.into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p), uncertain: false });
                     }
                 }
                 Err(e) => notes.push(laya_note(provider, &e)),
@@ -2081,7 +2110,7 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
                         ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
                         for (p, name) in ranked.into_iter().filter(|(p, _)| *p >= 0.3).take(MAX_TAGS_PER_MOD) {
                             if let Some((id, _)) = asked.iter().find(|(_, n)| *n == name) {
-                                out.push(Suggestion { field: "tags".into(), value: json!(id), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p as f32, applicable: true, note: name });
+                                out.push(Suggestion { field: "tags".into(), value: json!(id), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p as f32, applicable: true, note: name, uncertain: false });
                             }
                         }
                     }
@@ -2092,7 +2121,7 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
             match bc_suggest(ctx, "language", text, &codes) {
                 Ok(r) => {
                     if let Some(c) = r.get("choice").and_then(|c| c.as_str()).filter(|c| codes.iter().any(|k| k == c)) {
-                        out.push(Suggestion { field: "language".into(), value: json!(c), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: r.get("p").and_then(|p| p.as_f64()).unwrap_or(0.6) as f32, applicable: false, note: String::new() });
+                        out.push(Suggestion { field: "language".into(), value: json!(c), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: r.get("p").and_then(|p| p.as_f64()).unwrap_or(0.6) as f32, applicable: false, note: String::new(), uncertain: false });
                     }
                 }
                 Err(e) => notes.push(format!("bettercommunity:{}", short_reason(&e))),
@@ -2100,7 +2129,7 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
             match bc_suggest(ctx, "nsfw", text, &[]) {
                 Ok(r) => {
                     if let Some(p) = r.get("p").and_then(|p| p.as_f64()) {
-                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p) });
+                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p), uncertain: false });
                     }
                 }
                 Err(e) => notes.push(format!("bettercommunity:{}", short_reason(&e))),
@@ -2196,6 +2225,13 @@ pub struct Triage {
     pub duplicate_of: Option<usize>,
     pub duplicate_p: Option<f64>,
     pub provider: String,
+    /// The category is the best guess kept under the user's threshold or margin (abstain:
+    /// flag), to be shown as unsure.
+    pub uncertain: bool,
+    /// The best categories with their probabilities (the user's top-k), for the percent bars.
+    pub ranked: Vec<crate::commands::ai_tuning::Scored>,
+    /// Show the percent bars (« Réglages des réponses »).
+    pub show_probs: bool,
 }
 
 /// A HINT for a report the user is about to send: category, severity, likely duplicate among
@@ -2214,20 +2250,30 @@ pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, 
             let body = lv::informative_chunks(text, 1500);
             let known_owned: Vec<String> = known.iter().map(|k| k.to_string()).collect();
             let dup_cands = lv::dup_candidates(text, &known_owned, lv::DUP_CANDIDATES);
-            let mut qs: Vec<LayaQuestion> = lv::report_questions();
+            use crate::commands::ai_tuning as tu;
+            let tune = ctx.settings.laya.resolve(tu::Area::Triage);
+            t.show_probs = tune.show_probs;
+            // The user's descriptions / examples / wording for the categories, when they wrote
+            // some (« Réglages des réponses »); otherwise exactly `report_questions`.
+            let mut qs: Vec<LayaQuestion> = tu::report_questions(&ctx.settings.laya);
             qs.extend(lv::dup_questions(&known_owned, &dup_cands));
             let resp = ask_laya(ctx, provider, &body, &qs).map_err(|e| laya_note(provider, &e))?;
-            let cat = lv::choice_probs(&resp, "category");
-            if let Some((c, p)) = cat.iter().cloned().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)) {
-                if REPORT_CATEGORIES.contains(&c.as_str()) && p >= lv::CATEGORY_THRESHOLD {
-                    let (sev, sp) = lv::combine_severity(&c, text, &lv::choice_probs(&resp, "severity"));
-                    if REPORT_SEVERITIES.contains(&sev.as_str()) {
-                        t.severity = Some(sev);
-                        t.severity_p = Some(sp);
-                    }
-                    t.category = Some(c);
-                    t.category_p = Some(p);
+            let cat: Vec<(String, f64)> = tu::averaged(&resp, "category", &lv::choice_probs).into_iter().filter(|(c, _)| REPORT_CATEGORIES.contains(&c.as_str())).collect();
+            let cat = tu::calibrate(&cat, tune.temperature);
+            // « Équilibré »: the best category at 0.30 or more, as before. The user's threshold,
+            // margin and « je ne sais pas / meilleure hypothèse » otherwise.
+            let d = tu::decide(&cat, &tu::Tuning { multi_label: false, ..tune.clone() }, None);
+            t.ranked = d.ranked.clone();
+            if let Some(best) = d.labels.first() {
+                let (c, p) = (best.id.clone(), best.p);
+                let (sev, sp) = lv::combine_severity(&c, text, &lv::choice_probs(&resp, "severity"));
+                if REPORT_SEVERITIES.contains(&sev.as_str()) {
+                    t.severity = Some(sev);
+                    t.severity_p = Some(sp);
                 }
+                t.category = Some(c);
+                t.category_p = Some(p);
+                t.uncertain = d.uncertain;
             }
             let noul: Vec<Option<f64>> = dup_cands.iter().map(|(i, _)| lv::noul_p(&resp, &format!("dup_{}", i))).collect();
             if let Some((i, p)) = lv::combine_dup(&dup_cands, &noul) {

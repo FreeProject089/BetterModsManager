@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::commands::ai_core::{self, AiSettings, BcAuth, Ctx, HttpTransport, ModFacts};
-use crate::commands::{ai_embedded, ai_hybrid};
+use crate::commands::{ai_embedded, ai_hybrid, ai_tuning};
 use crate::state::AppState;
 
 fn data_dir(state: &AppState) -> PathBuf {
@@ -103,6 +103,9 @@ pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> Result<
     let mut s = s;
     // The installer's choice is history, not something the page can rewrite.
     s.installer_choice = before.installer_choice;
+    // « Réglages des réponses de Laya » have their own screen and their own checks
+    // (`ai_laya_save`): this card keeps what is stored, whatever the page sent.
+    s.laya = before.laya.clone();
     // Saved from the card = the user's own choice of classifier from now on.
     s.classifier_chosen = true;
     ai_core::save_settings(&dir, &s)?;
@@ -200,6 +203,8 @@ fn outcome_json(mod_id: &str, o: &ai_hybrid::SuggestOutcome) -> Value {
         "sentText": o.sent_text,
         // Nothing left this PC (files only, the embedded engine, a loopback generator).
         "offline": o.offline,
+        // Percent bars, auto-apply, top-k (« Réglages des réponses »).
+        "tuning": o.tuning,
     })
 }
 
@@ -311,7 +316,7 @@ pub async fn ai_analyze_library(
                 break;
             }
             let extra = archive_names(&facts.path);
-            let o = ai_hybrid::suggest_mod(&ctx, facts, &vocab, &extra, use_providers, draft);
+            let o = ai_hybrid::suggest_mod_in(&ctx, facts, &vocab, &extra, use_providers, draft, ai_tuning::Area::Library);
             sent |= !o.offline;
             if !o.suggestions.is_empty() {
                 let mut v = outcome_json(id, &o);
@@ -690,4 +695,157 @@ pub async fn ai_embedded_remove(state: State<'_, AppState>) -> Result<Value, Str
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// « Réglages des réponses de Laya » (commands/ai_tuning.rs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn laya_view(dir: &std::path::Path) -> Value {
+    let cfg = ai_core::load_settings(dir).laya;
+    json!({ "config": cfg, "presets": ai_tuning::presets_table(), "limits": ai_tuning::limits(), "export": cfg.export() })
+}
+
+/// The answer settings, what each preset means, and the limits. Never a key, never a text.
+#[tauri::command]
+pub fn ai_laya_get(state: State<AppState>) -> Value {
+    laya_view(&data_dir(&state))
+}
+
+/// Save the answer settings from Settings (or an import, or « Réinitialiser » with the
+/// defaults): strict — unknown fields, out-of-range numbers, too many or too long labels and a
+/// newer version are refused with a translation key; then every string is cleaned.
+#[tauri::command]
+pub fn ai_laya_save(state: State<AppState>, config: Value) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let cfg = ai_tuning::LayaConfig::import(&config)?;
+    let mut s = ai_core::load_settings(&dir);
+    s.laya = cfg;
+    let s = ai_core::save_settings(&dir, &s)?;
+    crate::commands::crash::log_line(format!("[AI] laya settings saved: tasks={} programs={}", s.laya.tasks.len(), s.laya.allow_program_changes));
+    Ok(laya_view(&dir))
+}
+
+/// « Tester »: classify a text with labels, a wording and settings that may not be saved yet.
+/// Same gate as a task (master switch, `--no-ai`, the embedded engine or the user's own
+/// laya-serve — never a server).
+#[tauri::command(async)]
+pub async fn ai_laya_test(state: State<'_, AppState>, text: String, labels: Vec<ai_tuning::LabelDef>, template: Option<String>, tuning: Option<ai_tuning::Tuning>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let (settings, lk, _, _) = ctx_owned(&dir, None);
+    let tune = match tuning {
+        Some(t) => ai_tuning::preset_values(t.preset, ai_tuning::Area::Tasks, &t),
+        None => settings.laya.resolve(ai_tuning::Area::Tasks),
+    };
+    let text: String = text.chars().take(crate::commands::ai_ops::MAX_TASK_TEXT).collect();
+    tauri::async_runtime::spawn_blocking(move || {
+        let t = HttpTransport;
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed: ai_core::kill_switch(), local_key: lk, external_key: None, bc: None };
+        let (probs, d) = ai_hybrid::classify_tuned(&ctx, &text, &labels, template.as_deref().unwrap_or(""), &tune)?;
+        Ok(ai_tuning::decision_json(&probs, &d))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Run a saved mod-source task (« Tâches perso ») on mods (all when `mod_ids` is absent, at most
+/// [`ANALYZE_MAX`]): one decision per mod. Writes nothing — applying is `ai_laya_apply_task`,
+/// on the user's click (or at once by the page when the task's settings say auto-apply).
+#[tauri::command(async)]
+pub async fn ai_laya_run_task(window: tauri::Window, state: State<'_, AppState>, task_id: String, mod_ids: Option<Vec<String>>) -> Result<Value, String> {
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+    let dir = data_dir(&state);
+    let (settings, lk, _, _) = ctx_owned(&dir, None);
+    let task = settings.laya.task(&task_id).cloned().ok_or_else(|| "ai.task.unknownTask".to_string())?;
+    if !task.source.is_mod() {
+        return Err("laya.task.notModSource".into());
+    }
+    let tune = settings.laya.resolve_task(&task);
+    let list: Vec<(String, ModFacts)> = {
+        let data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        let want: Option<std::collections::HashSet<&String>> = mod_ids.as_ref().map(|v| v.iter().collect());
+        data.mods.iter().filter(|m| want.as_ref().map(|w| w.contains(&m.id)).unwrap_or(true)).take(ANALYZE_MAX).map(|m| (m.id.clone(), mod_facts(m))).collect()
+    };
+    if analyze_busy().swap(true, Ordering::SeqCst) {
+        return Err("busy".into());
+    }
+    analyze_cancel().store(false, Ordering::SeqCst);
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        let t = HttpTransport;
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed: ai_core::kill_switch(), local_key: lk, external_key: None, bc: None };
+        let total = list.len();
+        let started = std::time::Instant::now();
+        // Background work under the resource governor, like « Analyser la bibliothèque ».
+        let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Scan, "AI custom task");
+        let mut items: Vec<Value> = Vec::new();
+        let mut cancelled = false;
+        let mut error: Option<String> = None;
+        for (i, (id, facts)) in list.iter().enumerate() {
+            if analyze_cancel().load(Ordering::SeqCst) || ticket.checkpoint().is_err() {
+                cancelled = true;
+                break;
+            }
+            let text = if matches!(task.source, ai_tuning::Source::ModName | ai_tuning::Source::ModDescription) {
+                ai_tuning::mod_source_text(task.source, facts, &[], "")
+            } else {
+                let ex = ai_core::extract(facts, &Vec::new(), &archive_names(&facts.path));
+                ai_tuning::mod_source_text(task.source, facts, &ex.excerpts, &ai_core::provider_text(facts, &ex))
+            };
+            if !text.trim().is_empty() {
+                match ai_hybrid::classify_tuned(&ctx, &text, &task.labels, &task.template, &tune) {
+                    Ok((probs, d)) => {
+                        let mut v = ai_tuning::decision_json(&probs, &d);
+                        v["modId"] = json!(id);
+                        v["name"] = json!(facts.name);
+                        items.push(v);
+                    }
+                    Err(e) => {
+                        // The gate (AI off, no provider) answers the same for every mod: stop.
+                        error = Some(e);
+                        break;
+                    }
+                }
+            }
+            let _ = window.emit("ai-analyze-progress", json!({ "done": i + 1, "total": total }));
+        }
+        crate::commands::crash::log_line(format!("[AI] custom task: mods={} answered={} cancelled={} ms={}", total, items.len(), cancelled, started.elapsed().as_millis()));
+        match error {
+            Some(e) if items.is_empty() => Err(e),
+            _ => Ok(json!({ "taskId": task.id, "action": task.action, "autoApply": tune.auto_apply, "showProbs": tune.show_probs, "total": total, "items": items, "cancelled": cancelled })),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string());
+    analyze_busy().store(false, Ordering::SeqCst);
+    r?
+}
+
+/// Apply a task's answer to one mod (its action: tag, catégorie or note). Only labels of the
+/// task; a label becomes the EXISTING tag of the same name, never a new one.
+#[tauri::command]
+pub fn ai_laya_apply_task(state: State<AppState>, mod_id: String, task_id: String, labels: Vec<String>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let cfg = ai_core::load_settings(&dir).laya;
+    let task = cfg.task(&task_id).cloned().ok_or_else(|| "ai.task.unknownTask".to_string())?;
+    let (name, patch, updated) = {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        let vocab: Vec<(String, String)> = data.custom_tags.iter().map(|t| (t.id.clone(), t.name.clone())).collect();
+        let m = data.mods.iter_mut().find(|m| m.id == mod_id).ok_or_else(|| "mod_not_found".to_string())?;
+        let patch = ai_tuning::task_patch(&task, &labels, &vocab, &m.tags, &m.install_notes, ai_core::MAX_TAGS_PER_MOD)?;
+        if let Some(t) = &patch.tags {
+            m.tags = t.clone();
+        }
+        if let Some(n) = &patch.notes {
+            m.install_notes = n.clone();
+        }
+        (m.name.clone(), patch, serde_json::to_value(&*m).unwrap_or(Value::Null))
+    };
+    if patch.tags.is_some() || patch.notes.is_some() {
+        let active = state.data.lock().ok().and_then(|d| d.active_profile_id.clone()).unwrap_or_default();
+        crate::commands::history::log_activity(&state, &active, &mod_id, &name, "Modified", Some(json!({ "laya_task": task.id }).to_string()));
+        let _ = state.save();
+    }
+    crate::commands::crash::log_line(format!("[AI] task {} applied to mod {}", task.id, mod_id));
+    Ok(json!({ "modId": mod_id, "patch": patch, "mod": updated }))
 }

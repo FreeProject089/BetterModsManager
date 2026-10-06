@@ -90,7 +90,7 @@ export function mountGraphicsCard(): HTMLElement | null {
     card.innerHTML = `
         <h3 class="card-title" style="display:flex;align-items:center;gap:10px">${ICON}<span data-i18n="gfx.cardTitle">${esc(tr('gfx.cardTitle', 'Graphics & display'))}</span>${learnMore('graphics', { compact: true, className: 'lm-end' })}</h3>
         <div class="stm stm-gfx-card">
-            <div class="stm-lead"><span data-i18n="stm.lead.graphics">${esc(tr('stm.lead.graphics', 'Which graphics card draws BMM\'s window. It only concerns the interface, never your games or your mods.'))}</span></div>
+            <div class="stm-lead"><span data-i18n="stm.lead.graphics">${esc(tr('stm.lead.graphics', 'Which graphics card draws BMM\'s window. It only concerns the interface, never your apps or your mods.'))}</span></div>
             <div class="stm-card">
                 <div class="stm-row">
                     <div class="stm-grow">
