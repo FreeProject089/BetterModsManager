@@ -6043,21 +6043,21 @@ function switchGaps(step: { cases?: { condition: Condition }[]; default?: Step[]
 
 function renderModal(modal: HTMLElement): void {
     modal.innerHTML = `
-      <div class="modal glass sched-modal sched-full">
+      <div class="modal glass bms modal--full sched-modal">
         <div class="modal-header sched-head">
             <div class="sched-head-main">
-                <div class="sched-head-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <div class="sched-head-text">
+                <div class="bms-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="bms-titles">
                     <div class="sched-head-line">
                         <h2 class="modal-title sched-head-name" id="sched-head-name">${escHtml(_draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')))}</h2>
                         <button type="button" class="sched-status ${_draft.enabled ? 'is-on' : 'is-off'}" id="sched-status" aria-pressed="${_draft.enabled ? 'true' : 'false'}"
                             data-tooltip="${escAttr(t('sched.head.statusTip'))}">${escHtml(t(_draft.enabled ? 'sched.head.on' : 'sched.head.off'))}</button>
                         <span class="sched-dirty" id="sched-dirty" hidden>${escHtml(t('sched.head.unsaved'))}</span>
                     </div>
-                    <span class="sched-head-summary" id="sched-summary">${escHtml(draftSummary())}</span>
+                    <span class="bms-sub sched-head-summary" id="sched-summary">${escHtml(draftSummary())}</span>
                 </div>
             </div>
-            <div class="sched-head-actions" role="toolbar" aria-label="${escAttr(t('sched.head.actions'))}">
+            <div class="bms-head-end sched-head-actions" role="toolbar" aria-label="${escAttr(t('sched.head.actions'))}">
                 <!-- Three views of ONE draft. There is no state where the code, the
                      bricks and the flow disagree, because there is only ever one tree. -->
                 <span class="sched-mode-switch has-flow" id="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">

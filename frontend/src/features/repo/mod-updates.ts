@@ -280,20 +280,18 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
 
     ov.innerHTML = `
         <div class="modal glass modal--md">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="modal-header">
+                <div class="bms-icon bms-icon--ok" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
                         <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
                     </svg>
-                    <span style="font-size:15px;font-weight:700;color:var(--text-primary);">${updates.length === 0 && reDownloadSources.length > 0 ? (t('repo.directReDownloadTitle') || 'Direct download') : (t('repo.updatesTitle') || 'Mod updates available')}</span>
-                    ${updates.length > 0 ? `<span style="font-size:11px;font-weight:700;color:var(--bmm-success);background:rgba(46,204,113,0.14);padding:2px 8px;border-radius:100px;">${updates.length}</span>` : ''}
                 </div>
-                <button id="mod-updates-close" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--text-secondary);">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <div class="bms-titles"><h2 class="modal-title">${updates.length === 0 && reDownloadSources.length > 0 ? (t('repo.directReDownloadTitle') || 'Direct download') : (t('repo.updatesTitle') || 'Mod updates available')}</h2></div>
+                ${updates.length > 0 ? `<span class="bms-chip bms-chip--ok"><b>${updates.length}</b></span>` : ''}
+                <button type="button" class="modal-close" id="mod-updates-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            <div style="padding:16px 18px;overflow-y:auto;flex:1 1 auto;min-height:0;">
+            <div class="modal-body" style="display:block">
                 ${updates.length > 0 ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.updatesDesc') || 'These installed mods have a newer version in a repository they are linked to. Updating re-syncs only the changed files.'}</p>` : ''}
                 ${reDownloadNote}
                 ${errorBlock}
@@ -474,16 +472,14 @@ export function openModUpdateConfig(modId: string): void {
 
     ov.innerHTML = `
         <div class="modal glass modal--md">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
-                <div style="display:flex;flex-direction:column;min-width:0;">
-                    <span style="font-size:14px;font-weight:700;color:var(--text-primary);">${t('repo.cfgTitle') || 'Update sources'}</span>
-                    <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px;">${escHtml(mod.name)}</span>
+            <div class="modal-header">
+                <div class="bms-titles">
+                    <h2 class="modal-title">${t('repo.cfgTitle') || 'Update sources'}</h2>
+                    <p class="bms-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(mod.name)}</p>
                 </div>
-                <button id="muc-close" style="width:26px;height:26px;padding:0;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--text-secondary);">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <button type="button" class="modal-close" id="muc-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            <div style="padding:16px 18px;overflow-y:auto;flex:1 1 auto;min-height:0;">
+            <div class="modal-body" style="display:block">
                 <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.cfgDesc') || 'Link this mod to one or more repos so BMM can detect updates for it. The repo_mod_id is the mod\'s stable id inside that repo (visible in "Update an existing repo").'}</p>
 
                 <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;">${t('repo.cfgModId') || 'This mod\'s id in its repo (repo_mod_id)'}</label>
@@ -517,7 +513,7 @@ export function openModUpdateConfig(modId: string): void {
                      the check to fail, and be asked then. -->
                 <div style="margin-top:14px;">${sourceAccessHtml('muc')}</div>
             </div>
-            <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
+            <div class="modal-footer">
                 <button id="muc-cancel" class="btn btn-secondary btn-sm">${t('common.cancel') || 'Cancel'}</button>
                 <button id="muc-save" class="btn btn-primary btn-sm">${t('common.save') || 'Save'}</button>
             </div>

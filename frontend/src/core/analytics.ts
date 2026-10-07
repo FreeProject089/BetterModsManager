@@ -14,6 +14,8 @@ import type { TelemetryLinkPlan } from './telemetry-link.js';
 import { initLiveIssues, refreshLiveIssues, mountLiveIssuesToggle, liveErrorsSetting, liveErrorsStored, setLiveErrors } from './live-issues.js';
 import { initLayaTelemetry } from './laya-telemetry.js';
 import { categoryOf, parseStoredCategories, allOn, anyOn, TELEMETRY_CATEGORIES, type CategoryChoice, type TelemetryCategory } from './telemetry-model.js';
+import { openModal } from '../ui/modal-shell.js';
+import { raiseAboveAll } from '../ui/layer.js';
 
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
@@ -1017,27 +1019,26 @@ function syncAllOnButton(): void {
 // webview). Resolves to the trimmed value, or null on cancel.
 function promptEmail(title: string, desc: string): Promise<string | null> {
     return new Promise(resolve => {
-        const ov = document.createElement('div');
-        ov.className = 'modal-generic-overlay open';
-        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)';
-        ov.innerHTML = `<div class="modal glass">
-            <div class="modal-header"><h2 class="modal-title" style="margin:0;font-size:1.05rem">${escHtml(title)}</h2></div>
-            <div class="modal-body">
-                <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:0 0 12px">${escHtml(desc)}</p>
-                <input type="email" class="input" id="pe-input" placeholder="you@example.com" style="width:100%" autocomplete="email">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-ghost" id="pe-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
-                <button class="btn btn-primary" id="pe-ok">${escHtml(t('common.send') || 'Send')}</button>
-            </div></div>`;
-        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
-        const input = ov.querySelector('#pe-input') as HTMLInputElement;
-        const done = (v: string | null) => { ov.remove(); resolve(v); };
-        ov.querySelector('#pe-cancel')?.addEventListener('click', () => done(null));
-        ov.querySelector('#pe-ok')?.addEventListener('click', () => done(input.value.trim() || null));
-        ov.addEventListener('click', e => { if (e.target === ov) done(null); });
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') done(input.value.trim() || null); if (e.key === 'Escape') done(null); });
-        setTimeout(() => input.focus(), 30);
+        // The house shell (openModal, sm): Escape, the × and the dim all mean Cancel.
+        let value: string | null = null;
+        const m = openModal({
+            title,
+            size: 'sm',
+            closeLabel: t('common.close') || 'Close',
+            body: `<p class="modal-message">${escHtml(desc)}</p>
+                <input type="email" class="input" id="pe-input" placeholder="you@example.com" style="width:100%" autocomplete="email">`,
+            footer: `<button class="btn btn-ghost" id="pe-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
+                <button class="btn btn-primary" id="pe-ok">${escHtml(t('common.send') || 'Send')}</button>`,
+            initialFocus: '#pe-input',
+            onClose: () => resolve(value),
+        });
+        // It is asked from the consent flow, which can sit very high in the stack.
+        raiseAboveAll(m.overlay, 2147483500);
+        const input = m.q<HTMLInputElement>('#pe-input')!;
+        const done = (v: string | null) => { value = v; m.close(); };
+        m.q('#pe-cancel')?.addEventListener('click', () => done(null));
+        m.q('#pe-ok')?.addEventListener('click', () => done(input.value.trim() || null));
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') done(input.value.trim() || null); });
     });
 }
 

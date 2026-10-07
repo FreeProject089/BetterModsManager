@@ -16,7 +16,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-bottom: 14px;
 }
 .sched-body.sflow-on .sched-flow-head { margin-bottom: 10px; flex-shrink: 0; }
 .sched-body.sflow-on .sched-flow-hint,

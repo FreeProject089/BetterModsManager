@@ -8,6 +8,7 @@ import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
+import { raiseAboveAll } from './layer.js';
 import { getLinks } from '../core/links-config.js';
 import { expandDocBlocks, headingSlug } from './rich-markdown.js';
 // Imported for its side effect: it registers the delegated `:::tabs` handler.
@@ -811,170 +812,97 @@ function showUpdateAvailableModal(info) {
     // buttons, tables…) instead of a raw marked.parse — much nicer notes.
     const releaseNotes = info.release_notes ? renderMarkdown(info.release_notes) : '';
     const isPre = !!info.is_prerelease;
+    // The house shell (.modal-overlay > .modal.modal--md): Tasky and the version in the header,
+    // the diff, the notes and the progress in the body, the three ways out in the footer.
     const modal = document.createElement('div');
     modal.id = 'update-available-modal';
-    modal.style.cssText = `
-        position:fixed;inset:0;z-index:10400;
-        display:flex;align-items:center;justify-content:center;padding:24px;
-        background:rgba(0,0,0,0.75);
-        backdrop-filter:blur(8px);
-        animation:fadeIn 0.18s ease;
-    `;
+    modal.className = 'modal-overlay open';
     modal.innerHTML = `
-        <div id="upd-card" style="
-            width:100%;max-width:480px;
-            background:var(--bmm-bg-elevated);
-            border:1px solid rgba(16,185,129,0.22);
-            border-radius:20px;
-            overflow:hidden;
-            box-shadow:0 0 0 1px rgba(255,255,255,0.04) inset,0 8px 32px rgba(0,0,0,0.6),0 32px 80px rgba(0,0,0,0.4);
-            animation:modalIn 0.28s cubic-bezier(0.22,1,0.36,1);
-            position:relative;
-        ">
-            <!-- Glow accent -->
-            <div style="position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(16,185,129,0.12) 0%,transparent 70%);pointer-events:none;"></div>
-
-            <!-- Close -->
-            <button id="close-update-modal" style="
-                position:absolute;top:12px;right:12px;z-index:2;
-                width:28px;height:28px;border-radius:8px;border:none;cursor:pointer;
-                background:rgba(255,255,255,0.06);color:var(--bmm-text-secondary);
-                display:flex;align-items:center;justify-content:center;
-                transition:background 0.15s,color 0.15s;
-            " data-hover="background:rgba(255,255,255,0.12);color:#fff"
-               data-hover-out="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-            </button>
-
-            <!-- Hero -->
-            <div style="
-                display:flex;align-items:center;gap:16px;
-                padding:22px 24px 18px;
-                background:linear-gradient(135deg,rgba(16,185,129,0.08) 0%,rgba(59,130,246,0.04) 100%);
-                border-bottom:1px solid rgba(255,255,255,0.06);
-            ">
-                <img src="assets/Tasky_Happy.png" alt="Tasky" style="
-                    width:54px;height:54px;object-fit:contain;flex-shrink:0;
-                    filter:drop-shadow(0 4px 16px rgba(16,185,129,0.35));
-                    animation:float 3s ease-in-out infinite;
-                ">
-                <div>
-                    <div style="font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${isPre ? '#f59e0b' : '#10b981'};margin-bottom:4px;display:flex;align-items:center;gap:5px;">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="${isPre ? '#f59e0b' : '#10b981'}"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <div id="upd-card" class="modal bms modal--md" role="dialog" aria-modal="true" aria-labelledby="upd-title">
+            <div class="modal-header">
+                <img src="assets/Tasky_Happy.png" alt="" class="upd-tasky">
+                <div class="bms-titles">
+                    <span class="upd-kicker${isPre ? ' is-pre' : ''}">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                         ${isPre ? (t('update.preReleaseTag') || 'PRE-RELEASE') : (t('update.newVersion') || 'NEW VERSION')}
-                    </div>
-                    <div style="font-size:18px;font-weight:800;color:var(--bmm-text-primary);letter-spacing:-0.01em;line-height:1.2;">
-                        ${t('settings.updateAvailableTitle') || 'Update Available!'}
-                    </div>
-                    <div style="font-size:11px;color:var(--bmm-text-secondary);margin-top:3px;">
-                        ${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}
-                    </div>
+                    </span>
+                    <h2 class="modal-title" id="upd-title">${t('settings.updateAvailableTitle') || 'Update Available!'}</h2>
+                    <p class="bms-sub">${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}</p>
                 </div>
+                <button type="button" class="modal-close" id="close-update-modal" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
 
-            <!-- Body -->
-            <div style="padding:18px 22px 20px;display:flex;flex-direction:column;gap:14px;">
-
+            <div class="modal-body">
                 <!-- Version diff -->
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);text-align:center;">
-                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:color-mix(in srgb, var(--bmm-danger) 70%, transparent);margin-bottom:4px;">${t('settings.currentVersion') || 'CURRENT'}</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--bmm-danger);font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.current_version)}</div>
+                <div class="upd-diff">
+                    <div class="upd-ver is-old">
+                        <div class="upd-ver-label">${t('settings.currentVersion') || 'CURRENT'}</div>
+                        <div class="upd-ver-num">v${escHtml(info.current_version)}</div>
                     </div>
-                    <div style="color:var(--bmm-text-muted);flex-shrink:0;">
+                    <div class="upd-arrow" aria-hidden="true">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </div>
-                    <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.22);text-align:center;">
-                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:color-mix(in srgb, var(--bmm-success) 70%, transparent);margin-bottom:4px;">${t('settings.latestVersion') || 'LATEST'}</div>
-                        <div style="font-size:20px;font-weight:800;color:var(--bmm-success);font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.latest_version)}</div>
+                    <div class="upd-ver is-new">
+                        <div class="upd-ver-label">${t('settings.latestVersion') || 'LATEST'}</div>
+                        <div class="upd-ver-num">v${escHtml(info.latest_version)}</div>
                     </div>
                 </div>
 
                 <!-- Release notes -->
                 ${releaseNotes ? `
-                <div style="border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;background:rgba(0,0,0,0.18);">
-                    <div style="display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--bmm-text-secondary);">
+                <div class="upd-notes">
+                    <div class="upd-notes-head">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         ${t('settings.releaseNotes') || "WHAT'S NEW"}
                         <span style="flex:1;"></span>
-                        <span style="font-weight:700;color:var(--bmm-success);letter-spacing:0;">v${escHtml(info.latest_version)}</span>
+                        <span class="upd-notes-v">v${escHtml(info.latest_version)}</span>
                     </div>
-                    <div class="upd-notes-scroll" style="max-height:230px;overflow-y:auto;padding:6px 16px 12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;">
+                    <div class="upd-notes-scroll">
                         ${releaseNotes}
                     </div>
                 </div>
                 ` : ''}
 
                 <!-- Progress bar (incremental update) -->
-                <div id="incremental-progress-section" style="display:none;border-radius:10px;padding:12px 14px;border:1px solid rgba(59,130,246,0.2);background:rgba(59,130,246,0.05);">
+                <div id="incremental-progress-section" class="upd-progress" style="display:none;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                         <span id="incremental-progress-label" style="font-size:12px;font-weight:600;color:var(--text-secondary);">Applying update...</span>
-                        <span id="incremental-progress-count" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">0 / 0</span>
+                        <span id="incremental-progress-count" style="font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);">0 / 0</span>
                     </div>
-                    <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">
-                        <div id="incremental-progress-bar" style="height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);width:0%;transition:width 0.3s ease;border-radius:3px;"></div>
+                    <div class="upd-progress-track">
+                        <div id="incremental-progress-bar" class="upd-progress-bar" style="width:0%;"></div>
                     </div>
-                    <div id="incremental-progress-file" style="font-size:10px;color:var(--text-muted);margin-top:5px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                    <div id="incremental-progress-file" style="font-size:10px;color:var(--text-secondary);margin-top:5px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
                 </div>
 
                 ${info.major_bump ? `
-                <div style="border-radius:10px;padding:11px 13px;margin-bottom:2px;border:1px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.09);display:flex;gap:9px;align-items:flex-start;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    <div style="font-size:11.5px;line-height:1.5;color:var(--text-secondary);">${t('update.majorManual') || 'This is a <b>major version</b>. It installs by hand: download the installer below and run it — it migrates your existing data and settings. There is no in-place quick update for a major version.'}</div>
+                <div class="upd-major">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <div>${t('update.majorManual') || 'This is a <b>major version</b>. It installs by hand: download the installer below and run it — it migrates your existing data and settings. There is no in-place quick update for a major version.'}</div>
                 </div>
                 ` : ''}
-                <!-- Actions -->
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    ${info.manifest_url && !info.major_bump ? `
-                    <button id="btn-incremental-update" style="
-                        display:flex;align-items:center;justify-content:center;gap:9px;
-                        padding:11px 16px;border-radius:11px;border:none;cursor:pointer;
-                        background:linear-gradient(135deg,#10b981,#059669);
-                        color:var(--bmm-text-on-accent);font-size:13px;font-weight:700;
-                        box-shadow:0 4px 16px rgba(16,185,129,0.3);
-                        transition:opacity 0.15s,transform 0.15s;
-                    " data-hover="opacity:0.9;transform:translateY(-1px)"
-                       data-hover-out="opacity:1;transform:translateY(0)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        <span>${t('update.quickUpdate') || 'Quick Update'}</span>
-                        <span style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.18);">${t('update.recommended') || 'Recommended'}</span>
-                    </button>
-                    ` : ''}
-                    <div style="display:flex;gap:8px;">
-                        <button id="btn-update-later" style="
-                            flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;
-                            background:rgba(255,255,255,0.04);color:var(--bmm-text-secondary);
-                            font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
-                        " data-hover="background:rgba(255,255,255,0.08);color:#fff"
-                           data-hover-out="background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5)"
-                        >${t('settings.later') || 'Later'}</button>
-                        <button id="btn-download-install-update" style="
-                            flex:2;display:flex;align-items:center;justify-content:center;gap:8px;
-                            padding:10px 14px;border-radius:10px;cursor:pointer;
-                            border:1px solid rgba(59,130,246,0.3);
-                            background:rgba(59,130,246,0.1);color:var(--bmm-text-primary);
-                            font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
-                        " data-hover="background:rgba(59,130,246,0.2);color:#fff"
-                           data-hover-out="background:rgba(59,130,246,0.1);color:rgba(255,255,255,0.75)">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            ${t('update.fullInstaller') || 'Full Installer (.msi)'}
-                        </button>
-                    </div>
-                </div>
+            </div>
 
-                <!-- GitHub link -->
-                <div style="text-align:center;">
-                    <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:color-mix(in srgb, var(--bmm-accent) 60%, transparent);text-decoration:none;transition:color 0.15s;"
-                       data-hover="color:#3b82f6" data-hover-out="color:rgba(59,130,246,0.6)">
-                        ${t('settings.viewOnGithub') || 'View release on GitHub'} ↗
-                    </a>
+            <div class="modal-footer">
+                <div class="modal-footer-start">
+                    <a class="upd-gh" href="${escAttr(info.release_url)}" target="_blank">${t('settings.viewOnGithub') || 'View release on GitHub'} ↗</a>
                 </div>
+                <button type="button" class="btn btn-ghost" id="btn-update-later">${t('settings.later') || 'Later'}</button>
+                <button type="button" class="btn ${info.manifest_url && !info.major_bump ? 'btn-secondary' : 'btn-primary'}" id="btn-download-install-update">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    ${t('update.fullInstaller') || 'Full Installer (.msi)'}
+                </button>
+                ${info.manifest_url && !info.major_bump ? `
+                <button type="button" class="btn btn-primary" id="btn-incremental-update" data-tooltip="${escAttr(t('update.recommended') || 'Recommended')}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span>${t('update.quickUpdate') || 'Quick Update'}</span>
+                </button>
+                ` : ''}
             </div>
         </div>
     `;
     (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    raiseAboveAll(modal);
     // Release notes are the surface most likely to carry a command someone will copy.
     void import('./code-highlight.js').then((m) => m.highlightIn(modal)).catch(() => { });
     // Incremental update button
@@ -1035,8 +963,7 @@ function showUpdateAvailableModal(info) {
                     toast(t('update.incrementalSuccess') || `Update applied! ${result.applied} files updated, ${result.skipped} unchanged. Restart BMM to complete.`, 'success');
                 }
                 progressLabel.textContent = t('update.done') || 'Done! Restart BMM to apply changes.';
-                progressSection.style.background = 'rgba(16,185,129,0.06)';
-                progressSection.style.borderColor = 'rgba(16,185,129,0.2)';
+                progressSection.classList.add('is-done');
             }
             catch (err) {
                 toast(t('common.error') + ': ' + String(err), 'error');
@@ -1480,16 +1407,13 @@ async function openLangSelectModal() {
     const existing = document.getElementById('modal-lang-select');
     if (existing)
         existing.remove();
+    // The house shell, and a question that must be answered: no ×, Escape and a click on the
+    // dim do nothing (data-prevent-close). The language list opens over the footer, so the
+    // body lets it out (.langsel-body).
     const modal = document.createElement('div');
     modal.id = 'modal-lang-select';
-    modal.className = 'modal-backdrop open';
-    modal.style.cssText = `
-        position: fixed; inset: 0; z-index: 10500;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(5, 8, 22, 0.85);
-        backdrop-filter: blur(12px);
-        animation: fadeIn 0.35s ease;
-    `;
+    modal.className = 'modal-overlay open';
+    modal.setAttribute('data-prevent-close', 'true');
     function buildContent() {
         const languages = getLanguages();
         const appLang = getLang();
@@ -1505,39 +1429,18 @@ async function openLangSelectModal() {
             return `<span style="margin-right:6px">${f}</span>`;
         };
         return `
-        <div style="
-            background: var(--bmm-bg-elevated);
-            border: 1px solid var(--bmm-border);
-            border-top: 2px solid rgba(59,130,246,0.6);
-            border-radius: 20px;
-            padding: 36px 32px 28px;
-            min-width: 340px;
-            max-width: 400px;
-            box-shadow: 0 8px 8px -4px rgba(0,0,0,0.4), 0 32px 80px -8px rgba(0,0,0,0.8), 0 0 0 1px rgba(59,130,246,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
-            backdrop-filter: blur(32px);
-            animation: modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
-            text-align: center;
-            position: relative;
-        ">
-            <!-- Tasky mascot -->
-            <div style="margin-bottom:20px">
-                <img src="assets/Tasky_Happy.png" alt="Tasky"
-                    style="width:80px; height:80px; object-fit:contain;
-                    filter: drop-shadow(0 6px 18px rgba(59,130,246,0.4));
-                    animation: float 3s ease-in-out infinite;">
+        <div class="modal bms modal--sm" role="dialog" aria-modal="true" aria-labelledby="lang-select-title" data-modal-kind="question">
+            <div class="modal-header">
+                <img src="assets/Tasky_Happy.png" alt="" class="upd-tasky">
+                <div class="bms-titles">
+                    <h2 class="modal-title" id="lang-select-title">${t('onboarding.lang_title')}</h2>
+                    <p class="bms-sub">${t('onboarding.lang_desc')}</p>
+                </div>
             </div>
 
-            <!-- Title -->
-            <p style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); margin-bottom:8px">TASKY</p>
-            <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0 0 6px">
-                ${t('onboarding.lang_title')}
-            </h2>
-            <p style="font-size:13px; color:var(--text-muted); margin:0 0 24px; line-height:1.5">
-                ${t('onboarding.lang_desc')}
-            </p>
-
+            <div class="modal-body langsel-body">
             <!-- Language dropdown -->
-            <div style="position:relative; margin-bottom:16px">
+            <div style="position:relative">
                 <button id="lang-select-toggle" style="
                     width:100%; display:flex; align-items:center; gap:10px;
                     padding:10px 14px; border-radius:10px; cursor:pointer;
@@ -1574,24 +1477,16 @@ async function openLangSelectModal() {
                 </div>
             </div>
 
-            <!-- Confirm button -->
-            <button id="lang-select-confirm" style="
-                width:100%; padding:12px; border-radius:12px; border:none; cursor:pointer;
-                background: linear-gradient(135deg, var(--accent), #6366f1);
-                color:var(--bmm-text-on-accent); font-size:14px; font-weight:700; letter-spacing:0.02em;
-                box-shadow: 0 4px 16px rgba(59,130,246,0.4);
-                transition: all 0.2s; transform: translateY(0);
-            "
-            data-hover="transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,0.5)"
-            data-hover-out="transform:translateY(0);box-shadow:0 4px 16px rgba(59,130,246,0.4)"
-            >
-                ${t('common.ok')} →
-            </button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="lang-select-confirm">${t('common.ok')} →</button>
+            </div>
         </div>
         `;
     }
     modal.innerHTML = buildContent();
     (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    raiseAboveAll(modal, 10400);
     function rerender() {
         modal.innerHTML = buildContent();
         attachListeners();

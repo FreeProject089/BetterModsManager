@@ -228,3 +228,32 @@
 .bmm-switch-wrap .switch-knob {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
+
+/* ── Modpack dialogs on the house shell (modpack-creator.ts) ──────────────────────────────
+   The mod picker and the quick-apply list share one search field in their toolbar band;
+   the delete confirmation shows the pack it is about to remove. The cards themselves are
+   css/modal-shell.css. */
+.mp-ms-search {
+    flex: 1 1 220px; min-width: 0;
+    display: flex; align-items: center; gap: 8px;
+    height: 36px; padding: 0 12px; border-radius: 10px;
+    background: var(--bmm-s04); border: 1px solid var(--bmm-border);
+    color: var(--text-secondary);
+    transition: border-color 0.15s;
+}
+.mp-ms-search:focus-within { border-color: var(--bmm-accent); }
+.mp-ms-search > svg { flex-shrink: 0; }
+.mp-ms-search input {
+    flex: 1; min-width: 0; background: none; border: 0; outline: none;
+    font-size: 13px; color: var(--text-primary);
+}
+.mp-del-card { padding: 14px 16px; background: var(--bmm-s03); border: 1px solid var(--bmm-border); border-radius: 12px; }
+.mp-del-row { display: flex; align-items: center; gap: 12px; }
+.mp-del-ic {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: var(--bmm-accent-dim); border: 1px solid var(--bmm-border-accent); color: var(--bms-accent-ink);
+}
+.mp-del-name { font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-del-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; font-weight: 600; }
+.mp-del-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.55; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bmm-border); }

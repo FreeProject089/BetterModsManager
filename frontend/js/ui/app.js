@@ -25,6 +25,7 @@ import { isActivationBusy, configureActivationJobs } from '../core/activation-jo
 import { initActivationIndicator } from './activation-indicator.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
+import { openModal } from './modal-shell.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
 import { fireErrorEvent } from '../core/bmm-events.js';
@@ -2050,20 +2051,7 @@ function openStackDetail(it) {
     const lang = getLang() === 'fr' ? 'fr' : 'en';
     const d = stackDesc(it);
     const row = (label, value) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
-    const overlay = document.createElement('div');
-    overlay.id = 'bmm-stack-detail';
-    overlay.className = 'modal-generic-overlay open';
-    overlay.innerHTML = `
-        <div class="modal stackd-modal" role="dialog" aria-modal="true" aria-label="${escAttr(it.name)}">
-            <div class="stackd-head">
-                <div class="stackd-id">
-                    <span class="stackd-name">${escHtml(it.name)}</span>
-                    ${it.version ? `<span class="stackd-v">${escHtml(stackVersion(it.version))}</span>` : ''}
-                </div>
-                <button class="stackd-close" id="stackd-close" data-tooltip="${escAttr(t('common.close') || 'Close')}" aria-label="${escAttr(t('common.close') || 'Close')}">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </div>
+    const body = `
             ${d.text ? `<div class="stackd-block">
                 <div class="stackd-label">${escHtml(t('credits.stackWhatIs') || 'What it is')}</div>
                 <p class="stackd-text"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</p>
@@ -2078,27 +2066,22 @@ function openStackDetail(it) {
                 ${it.apps?.length ? row(t('credits.stackUsedBy') || 'Used by', it.apps.join(', ')) : ''}
                 ${row(t('credits.stackSource') || 'Read from', it.source)}
                 ${it.licenseFrom && it.licenseFrom !== it.source ? row(t('credits.stackLicenseFrom') || 'Licence read from', it.licenseFrom) : ''}
-            </dl>
-            ${it.url ? `<div class="stackd-foot">
-                <button class="btn btn-secondary btn-sm" id="stackd-open">${escHtml(t('credits.stackOpenPage') || 'Open its page')} ↗</button>
-            </div>` : ''}
-        </div>`;
-    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); };
-    const onKey = (ev) => { if (ev.key === 'Escape') {
-        ev.stopPropagation();
-        close();
-    } };
-    document.addEventListener('keydown', onKey, true);
-    overlay.querySelector('#stackd-close')?.addEventListener('click', close);
-    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay)
-        close(); });
-    overlay.querySelector('#stackd-open')?.addEventListener('click', () => {
+            </dl>`;
+    const m = openModal({
+        id: 'bmm-stack-detail',
+        title: it.name,
+        subtitle: it.version ? stackVersion(it.version) : undefined,
+        size: 'md',
+        className: 'stackd-modal',
+        closeLabel: t('common.close') || 'Close',
+        body,
+        footer: it.url ? `<button type="button" class="btn btn-secondary" id="stackd-open">${escHtml(t('credits.stackOpenPage') || 'Open its page')} ↗</button>` : null,
+    });
+    m.q('#stackd-open')?.addEventListener('click', () => {
         if (it.url)
             window.openExternal?.(it.url);
-        close();
+        m.close();
     });
-    overlay.querySelector('#stackd-close')?.focus();
 }
 window.openContributorModal = (id) => {
     const c = CONTRIBUTORS.find(x => x.id === id);

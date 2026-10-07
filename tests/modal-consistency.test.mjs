@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 const G = await import(pathToFileURL(join(ROOT, 'scripts/check-modal-consistency.mjs')).href);
+const O = await import(pathToFileURL(join(ROOT, 'scripts/check-overlay-mount.mjs')).href);
 const M = await import(pathToFileURL(join(ROOT, 'frontend/js/ui/modal-shell.js')).href);
 
 const X = '<button type="button" class="modal-close"></button>';
@@ -62,6 +63,36 @@ describe('gate: built dialogs', () => {
     test('a new overlay family fails; a listed one passes', () => {
         assert.match(G.auditTs('features/x.ts', "el.className = 'shiny-overlay';").problems.join('\n'), /new overlay family \.shiny-overlay/);
         assert.deepEqual(G.auditTs('features/x.ts', "el.className = 'kofi-overlay';").problems, []);
+    });
+    test('a -backdrop is an overlay family too', () => {
+        assert.match(G.auditTs('features/x.ts', "el.className = 'shiny-backdrop';").problems.join('\n'), /new overlay family \.shiny-backdrop/);
+    });
+    test('a full-window overlay built from inline styles fails, in every spelling', () => {
+        const css = "ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex';";
+        assert.match(G.auditTs('features/x.ts', css).problems.join('\n'), /full-window overlay built from inline styles/);
+        const arr = "ov.style.cssText = ['position:fixed;inset:0;', 'background:rgba(0,0,0,0.82);', 'z-index:99999;'].join('');";
+        assert.equal(G.inlineOverlays(arr).length, 1);
+        const tpl = 'm.style.cssText = `\n  position: fixed; top: 0; left: 0; right: 0; bottom: 0;\n  backdrop-filter: blur(8px);\n`;';
+        assert.equal(G.inlineOverlays(tpl).length, 1);
+        assert.equal(G.inlineOverlays('x.innerHTML = `<div style="position:fixed;inset:0;background:#000">`;').length, 1);
+    });
+    test('what is not a dialog is left alone: a transparent click-catcher, a 1px helper, a stylesheet', () => {
+        assert.deepEqual(G.inlineOverlays("b.style.cssText = 'position:fixed;inset:0;z-index:99998;background:transparent;';"), []);
+        assert.deepEqual(G.inlineOverlays("ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';"), []);
+        assert.deepEqual(G.inlineOverlays("s.textContent = `.x-overlay{position:fixed;inset:0;background:#000}`;"), []);
+        assert.deepEqual(G.inlineOverlays("p.style.cssText = 'position:fixed; top:0; left:0; pointer-events:none; z-index:999999;';"), []);
+    });
+});
+
+describe('gate: overlays mount in the app frame', () => {
+    test('any class that names an overlay counts, not only .modal-overlay', () => {
+        for (const cls of ['modal-overlay open', 'community-history-overlay', 'community-lightbox', 'update-modal-backdrop']) {
+            assert.equal(O.bodyMounted(`ov.className = '${cls}'; document.body.appendChild(ov);`).out.length, 1, cls);
+        }
+    });
+    test('mounted in the frame passes; a class that only mentions an overlay does not count', () => {
+        assert.deepEqual(O.bodyMounted("ov.className = 'community-history-overlay'; (document.getElementById('app-window-outer') || document.body).appendChild(ov);").out, []);
+        assert.deepEqual(O.bodyMounted("m.className = 'menu overlay-ish'; document.body.appendChild(m);").out, []);
     });
 });
 

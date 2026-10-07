@@ -770,12 +770,15 @@ export function openNavbarEditor(): void {
     }).join('');
 
     overlay.innerHTML = `
-        <div class="modal-generic nbe-modal">
-            <div class="modal-generic-header">
-                <h3>${t('navedit.title') || 'Customize navigation'}</h3>
-                <button class="modal-close" id="nbe-close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div class="modal bms modal--xl modal--tall nbe-modal" role="dialog" aria-modal="true" aria-labelledby="nbe-title">
+            <div class="modal-header">
+                <div class="bms-titles">
+                    <h2 class="modal-title" id="nbe-title">${t('navedit.title') || 'Customize navigation'}</h2>
+                    <p class="bms-sub">${t('navedit.sub') || 'Drag to reorder, rename, or hide items.'}</p>
+                </div>
+                <button type="button" class="modal-close" id="nbe-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            <p class="nbe-sub">${t('navedit.sub') || 'Drag to reorder, rename, or hide items.'}</p>
+            <div class="modal-body">
             <div class="nbe-scroll">
             <div class="nbe-list" id="nbe-list">${rowsHtml}</div>
             <button class="btn btn-ghost btn-sm nbe-add-section-btn" id="nbe-add-section">+ ${t('navedit.addSection') || 'Add a section'}</button>
@@ -852,12 +855,13 @@ export function openNavbarEditor(): void {
                 <button class="btn btn-xs btn-accent" id="nbe-import-apply">${t('common.apply') || 'Apply'}</button>
             </div>
             </div><!-- /nbe-scroll -->
+            </div><!-- /modal-body -->
             <!-- Share/import used to be four sibling ghost buttons ("Share", "Import",
                  ".bmmnav", "Import .bmmnav") — nothing said WHICH share carries what, and
                  the field feedback was exactly that confusion. One menu, and every entry
                  explains itself with a hint line: link = layout only, file = everything.
                  Same ids inside, so every handler below survives unchanged. -->
-            <div class="nbe-actions">
+            <div class="modal-footer nbe-actions">
                 <button class="btn btn-ghost nbe-act" id="nbe-reset"><span class="nbe-act-ic">${svgWrap('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>')}</span><span class="nbe-act-tx">${t('navedit.reset') || 'Reset'}</span></button>
                 <span class="nbe-share-menu-wrap">
                     <button class="btn btn-ghost nbe-act" id="nbe-share-menu-btn"><span class="nbe-act-ic">${svgWrap('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>')}</span><span class="nbe-act-tx">${t('navedit.shareMenu') || 'Share / Import'} ▾</span></button>

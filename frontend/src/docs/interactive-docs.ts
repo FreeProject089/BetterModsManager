@@ -137,7 +137,9 @@ export function initInteractiveDocs() {
 
     // Close on Escape
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && document.getElementById('modal-docs-diagram')?.classList.contains('active')) {
+        if (e.key === 'Escape' && !e.defaultPrevented && document.getElementById('modal-docs-diagram')?.classList.contains('active')) {
+            // Answered here: the shell's global Escape must not press the × a second time.
+            e.preventDefault();
             closeDiagram();
         }
     });

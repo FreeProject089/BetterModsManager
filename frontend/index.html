@@ -5287,545 +5287,6 @@
         </div>
         <!-- END Crash Report Modal -->
 
-        <!-- ══ BETAHUB MODALS ══ -->
-
-        <!-- BetaHub: Feedback / Suggestion Modal -->
-        <div class="modal-overlay bh-modal-overlay" id="modal-betahub-feedback">
-            <div class="modal-container">
-                <div class="modal-content bh-theme-feedback" style="max-width:800px;padding:0">
-                    <!-- Header -->
-                    <div class="modal-header" style="padding:24px 28px;border-bottom:1px solid var(--border)">
-                        <div style="display:flex;align-items:center;gap:14px">
-                            <div style="color:var(--bmm-warning);display:flex;align-items:center;justify-content:center">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="modal-title" style="color:var(--text-primary)"
-                                    data-i18n="betahub.feedbackTitle">Suggestion / Feedback</h2>
-                                <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0"
-                                    data-i18n="betahub.feedbackSubtitle">Share your ideas to improve BMM.</p>
-                            </div>
-                        </div>
-                        <button class="modal-close" data-close="modal-betahub-feedback">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    </div>
-                    <!-- Body -->
-                    <div class="modal-body" style="max-height:75vh;overflow-y:auto;padding:28px">
-                        <form id="betahub-feedback-form" autocomplete="off" data-no-submit="1">
-                            <div style="display:grid;grid-template-columns:1fr 260px;gap:32px">
-                                <!-- Left: Form -->
-                                <div style="display:flex;flex-direction:column;gap:20px">
-                                    <!-- Title -->
-                                    <div class="bh-field-group">
-                                        <label class="bh-label" data-i18n="betahub.fieldTitle">Title</label>
-                                        <input id="bh-feedback-title" type="text" class="bh-input"
-                                            data-i18n-placeholder="betahub.fieldTitlePlaceholder"
-                                            placeholder="Short summary (optional)" maxlength="150">
-                                        <div
-                                            style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
-                                            <div class="bh-field-group">
-                                                <label class="bh-label"><span
-                                                        data-i18n="betahub.fieldEmail">Email</span> <span
-                                                        style="color:var(--bmm-danger)">*</span></label>
-                                                <input id="bh-feedback-email" type="email" class="bh-input"
-                                                    data-i18n-placeholder="betahub.fieldContactPlaceholder"
-                                                    placeholder="user@example.com">
-                                            </div>
-                                            <div class="bh-field-group">
-                                                <label class="bh-label"><span
-                                                        data-i18n="betahub.fieldDiscordUsername">Discord Username</span>
-                                                    <span style="color:var(--bmm-danger)">*</span></label>
-                                                <input id="bh-feedback-discord" type="text" class="bh-input"
-                                                    data-i18n-placeholder="betahub.fieldDiscordPlaceholder"
-                                                    placeholder="Ex: username#1234">
-                                            </div>
-                                        </div>
-                                        <p style="font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.4"
-                                            data-i18n="betahub.contactRequirement">
-                                            * At least one contact method is required. Please use your <strong>Discord
-                                                Username</strong>.
-                                        </p>
-                                    </div>
-                                    <!-- Description -->
-                                    <div class="bh-field-group">
-                                        <div style="display:flex;justify-content:space-between;align-items:baseline">
-                                            <label class="bh-label" data-i18n="betahub.fieldDesc">Description <span
-                                                    style="color:var(--bmm-danger)">*</span></label>
-                                            <span id="bh-feedback-desc-count" class="bh-counter">0/4500</span>
-                                        </div>
-                                        <textarea id="bh-feedback-desc" class="bh-textarea" rows="8"
-                                            data-i18n-placeholder="betahub.fieldDescPlaceholderFeedback"
-                                            placeholder="Describe your suggestion..." maxlength="4500"></textarea>
-                                    </div>
-                                    <div class="bh-field-group">
-                                        <label class="bh-label" data-i18n="betahub.fieldScreenshots">Screenshots</label>
-                                        <div
-                                            style="background: rgba(129, 140, 248, 0.1); border: 1px dashed rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 12px; font-size: 11px; color: color-mix(in srgb, var(--bmm-purple) 55%, var(--bmm-text-primary)); text-align: center; line-height: 1.5;">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" style="margin-bottom:6px">
-                                                <rect x="3" y="3" width="18" height="18" rx="2" />
-                                                <circle cx="8.5" cy="8.5" r="1.5" />
-                                                <polyline points="21 15 16 10 5 21" />
-                                            </svg>
-                                            <br>
-                                            <span data-i18n="betahub.screenshotFeedbackDesc">
-                                                BetaHub does not support direct image uploads for suggestions. To attach
-                                                screenshots, please create an account on BetaHub with the email provided
-                                                below and attach them manually after submitting.
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- Right: Quality & Guidance -->
-                                <div style="display:flex;flex-direction:column;gap:24px">
-                                    <!-- Quality Gauge -->
-                                    <div class="bh-strength-box">
-                                        <h3 class="bh-strength-title">Suggestion Strength</h3>
-                                        <div class="bh-gauge-container">
-                                            <svg viewBox="0 0 100 65" class="bh-gauge-svg">
-                                                <!-- Segments -->
-                                                <path class="bh-gauge-segment segment-bad"
-                                                    d="M 15 50 A 35 35 0 0 1 25.25 25.25" fill="none" stroke="var(--bmm-danger)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-well"
-                                                    d="M 25.25 25.25 A 35 35 0 0 1 50 15" fill="none" stroke="var(--bmm-warning)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-good"
-                                                    d="M 50 15 A 35 35 0 0 1 74.75 25.25" fill="none" stroke="#3b82f6"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-best"
-                                                    d="M 74.75 25.25 A 35 35 0 0 1 85 50" fill="none" stroke="var(--bmm-success)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-
-                                                <!-- Ticks -->
-                                                <g class="bh-gauge-ticks" transform="translate(50,50)"
-                                                    stroke="rgba(255,255,255,0.2)" stroke-width="1">
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(0)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(18)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(36)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(54)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(72)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(90)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(108)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(126)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(144)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(162)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(180)" />
-                                                </g>
-
-                                                <!-- Labels -->
-                                                <text x="12" y="58" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthBad">Bad</text>
-                                                <text x="25" y="15" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthWell">Well</text>
-                                                <text x="75" y="15" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthGood">Good</text>
-                                                <text x="88" y="58" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthBest">Best</text>
-
-                                                <!-- Needle -->
-                                                <g id="bh-feedback-gauge-needle-group" class="bh-gauge-needle-group">
-                                                    <line x1="50" y1="50" x2="50" y2="20" stroke="currentColor"
-                                                        stroke-width="2" stroke-linecap="round"
-                                                        filter="url(#bh-needle-shadow)" />
-                                                    <path d="M 50 18 L 47 24 L 53 24 Z" fill="currentColor"
-                                                        filter="url(#bh-needle-shadow)" />
-                                                </g>
-                                            </svg>
-                                            <div class="bh-gauge-info">
-                                                <div id="bh-feedback-strength-score" class="bh-strength-score">0</div>
-                                                <div id="bh-feedback-strength-label" style="display:none"></div>
-                                            </div>
-                                        </div>
-                                        <ul id="bh-feedback-suggestions" class="bh-strength-suggestions">
-                                            <li data-i18n="hub.suggestAddTitle">+ Add a descriptive title</li>
-                                            <li data-i18n="hub.suggestExpandDesc">+ Expand your description</li>
-                                        </ul>
-                                    </div>
-                                    <!-- Guidance -->
-                                    <div class="bh-guidance-box">
-                                        <h4 class="bh-guidance-title" data-i18n="hub.guidanceTitle">Expert Guidance</h4>
-                                        <ul class="bh-guidance-list">
-                                            <li><strong data-i18n="hub.guideSpecific">Be Specific:</strong> <span data-i18n="hub.guideSpecificBody">Focus on one feature. Describe scenarios.</span>
-                                            </li>
-                                            <li><strong data-i18n="hub.guideBenefit">Explain the Benefit:</strong> <span data-i18n="hub.guideBenefitBody">How does it improve BMM?</span></li>
-                                            <li><strong data-i18n="hub.guideExamples">Use Examples:</strong> <span data-i18n="hub.guideExamplesBody">Refer to other tools or features.</span></li>
-                                            <li><strong data-i18n="hub.guideClear">Keep it Clear:</strong> <span data-i18n="hub.guideClearBody">Use bullet points and paragraphs.</span></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- PoW -->
-                            <div id="bh-feedback-pow" class="bh-pow-container bh-pow-idle bh-theme-feedback">
-                                <label class="bh-verifier">
-                                    <input type="checkbox" id="bh-feedback-pow-check">
-                                    <div class="bh-verifier-box">
-                                        <div class="bh-verifier-spinner"></div>
-                                        <div class="bh-verifier-check">
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="4" stroke-linecap="round"
-                                                stroke-linejoin="round">
-                                                <polyline points="20 6 9 17 4 12"></polyline>
-                                            </svg>
-                                        </div>
-                                        <div class="bh-verifier-ripple"></div>
-                                    </div>
-                                    <div class="bh-verifier-text">
-                                        <div style="display:flex;align-items:center;gap:8px">
-                                            <img src="./assets/Tasky.png" class="bh-pow-mascot" alt="Tasky">
-                                            <span class="bh-pow-label" data-i18n="betahub.powLabel">Anti-Spam
-                                                Verification (PoW)</span>
-                                        </div>
-                                        <span class="bh-pow-msg" data-i18n="betahub.powIdleHint">Click the box to verify
-                                            request</span>
-                                    </div>
-                                </label>
-                                <div class="bh-pow-bar">
-                                    <div class="bh-pow-bar-fill"></div>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Footer -->
-                    <div class="modal-footer"
-                        style="padding:20px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;background:rgba(0,0,0,0.1)">
-                        <button class="btn btn-secondary" data-close="modal-betahub-feedback"
-                            data-i18n="common.cancel">Cancel</button>
-                        <button id="bh-feedback-submit" class="bh-submit-btn" disabled>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="22" y1="2" x2="11" y2="13" />
-                                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                            </svg>
-                            <span data-i18n="betahub.submit">Send Suggestion</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- END BetaHub Feedback Modal -->
-
-        <!-- BetaHub: Bug Report Modal -->
-        <!-- BetaHub: Bug Report Modal -->
-        <div class="modal-overlay bh-modal-overlay" id="modal-betahub-bugreport">
-            <div class="modal-container">
-                <div class="modal-content bh-theme-bug" style="max-width:850px;padding:0">
-                    <!-- Header -->
-                    <div class="modal-header" style="padding:24px 28px;border-bottom:1px solid var(--border)">
-                        <div style="display:flex;align-items:center;gap:14px">
-                            <div style="color:var(--bmm-danger);display:flex;align-items:center;justify-content:center">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5">
-                                    <path d="m8 2 1.88 1.88" />
-                                    <path d="M14.12 3.88 16 2" />
-                                    <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
-                                    <path
-                                        d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
-                                    <path d="M12 20v-9" />
-                                    <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
-                                    <path d="M6 13H2" />
-                                    <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
-                                    <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
-                                    <path d="M22 13h-4" />
-                                    <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="modal-title" style="color:var(--text-primary)"
-                                    data-i18n="betahub.bugReportTitle">Bug Report</h2>
-                                <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0"
-                                    data-i18n="betahub.bugReportSubtitle">Found an issue? Let us know so we can fix it.
-                                </p>
-                            </div>
-                        </div>
-                        <button class="modal-close" data-close="modal-betahub-bugreport">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    </div>
-                    <!-- Body -->
-                    <div class="modal-body" style="padding:28px;overflow-y:auto">
-                        <form id="betahub-bugreport-form" autocomplete="off" data-no-submit="1">
-                            <div style="display:grid;grid-template-columns:1fr 280px;gap:28px">
-                                <!-- Left: Details -->
-                                <div style="display:flex;flex-direction:column;gap:24px">
-                                    <!-- Basic Info -->
-                                    <div style="display:flex;flex-direction:column;gap:16px">
-                                        <div class="bh-field-group">
-                                            <label class="bh-label" data-i18n="betahub.fieldTitle">Issue Title</label>
-                                            <input id="bh-bug-title" type="text" class="bh-input"
-                                                data-i18n-placeholder="betahub.fieldTitlePlaceholder"
-                                                placeholder="What happened?">
-                                        </div>
-                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                                            <div class="bh-field-group">
-                                                <label class="bh-label"><span data-i18n="betahub.fieldEmail">Public
-                                                        Email</span> <span style="color:var(--bmm-danger)">*</span></label>
-                                                <input id="bh-bug-contact" type="email" class="bh-input"
-                                                    data-i18n-placeholder="betahub.fieldContactPlaceholder"
-                                                    placeholder="user@example.com">
-                                            </div>
-                                            <div class="bh-field-group">
-                                                <label class="bh-label"><span
-                                                        data-i18n="betahub.fieldDiscordUsername">Discord Username</span>
-                                                    <span style="color:var(--bmm-danger)">*</span></label>
-                                                <input id="bh-bug-discord" type="text" class="bh-input"
-                                                    data-i18n-placeholder="betahub.fieldDiscordPlaceholder"
-                                                    placeholder="Ex: username#1234">
-                                            </div>
-                                        </div>
-                                        <p style="font-size:10px;color:var(--text-muted);margin-top:-10px;line-height:1.4"
-                                            data-i18n="betahub.contactRequirementBug">
-                                            * At least one contact method is required so we can follow up. Please
-                                            provide your <strong>Discord Username</strong> (not display name).
-                                        </p>
-                                    </div>
-
-                                    <!-- Description -->
-                                    <div class="bh-field-group">
-                                        <div style="display:flex;justify-content:space-between;align-items:baseline">
-                                            <label class="bh-label" data-i18n="betahub.fieldDesc">Description <span
-                                                    style="color:var(--bmm-danger)">*</span></label>
-                                            <span id="bh-bug-desc-count" class="bh-counter"
-                                                data-i18n="betahub.descCount">0/4500</span>
-                                        </div>
-                                        <textarea id="bh-bug-desc" class="bh-textarea" rows="6"
-                                            data-i18n-placeholder="betahub.fieldDescPlaceholder"
-                                            placeholder="Provide as much detail as possible..."></textarea>
-                                    </div>
-
-                                    <!-- Steps to Reproduce -->
-                                    <div class="bh-field-group">
-                                        <div
-                                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                                            <label class="bh-label" data-i18n="betahub.fieldSteps">Steps to
-                                                Reproduce</label>
-                                            <button type="button" class="bh-add-file-btn" id="bh-bug-add-step"
-                                                style="padding:4px 10px;font-size:10px" data-i18n="betahub.addStep">+
-                                                Add Step</button>
-                                        </div>
-                                        <div id="bh-bug-steps-container"
-                                            style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;padding-right:4px">
-                                            <!-- Steps injected here -->
-                                        </div>
-                                    </div>
-
-                                    <!-- Attachments -->
-                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-                                        <div class="bh-field-group">
-                                            <label class="bh-label" data-i18n="betahub.visualMedia">Visual Media <span
-                                                    style="opacity:0.6;font-size:10px">(max 3 images, 1
-                                                    video)</span></label>
-                                            <div class="bh-file-zone">
-                                                <div id="bh-bug-screenshots-list"></div>
-                                                <div id="bh-bug-video-preview"></div>
-                                                <div style="display:flex;gap:8px">
-                                                    <button type="button" class="bh-add-file-btn"
-                                                        id="bh-bug-screenshots-add"
-                                                        data-click-proxy="#bh-bug-screenshots"
-                                                        data-i18n="betahub.addImage">+ Image</button>
-                                                    <button type="button" class="bh-add-file-btn" id="bh-bug-video-add"
-                                                        data-click-proxy="#bh-bug-video"
-                                                        data-i18n="betahub.addVideo">+ Video</button>
-                                                </div>
-                                                <input id="bh-bug-screenshots" type="file" accept="image/*" multiple
-                                                    style="display:none">
-                                                <input id="bh-bug-video" type="file" accept="video/*"
-                                                    style="display:none">
-                                            </div>
-                                        </div>
-                                        <div class="bh-field-group">
-                                            <label class="bh-label" data-i18n="betahub.logsData">Logs & Data</label>
-                                            <div class="bh-file-zone" style="gap:12px;padding:16px">
-                                                <label class="bh-checkbox-label"
-                                                    style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                                                    <input type="checkbox" id="bh-bug-include-logs"
-                                                        style="width:16px;height:16px;accent-color:#6366f1" checked>
-                                                    <span style="font-size:12px;color:var(--text-secondary)"
-                                                        data-i18n="betahub.includeLogs">Include BMM Frontend Logs</span>
-                                                </label>
-                                                <label class="bh-checkbox-label"
-                                                    style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                                                    <input type="checkbox" id="bh-bug-include-dxdiag"
-                                                        style="width:16px;height:16px;accent-color:#6366f1" checked>
-                                                    <span style="font-size:12px;color:var(--text-secondary)"
-                                                        data-i18n="betahub.includeDxDiag">Include DxDiag Report</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Right: Crash Reports & Gauge -->
-                                <div style="display:flex;flex-direction:column;gap:24px;align-self:flex-start">
-                                    <!-- Quality Gauge -->
-                                    <div class="bh-strength-box">
-                                        <h3 class="bh-strength-title" data-i18n="betahub.submissionStrength">Submission
-                                            Strength</h3>
-                                        <div class="bh-gauge-container">
-                                            <svg viewBox="0 0 100 65" class="bh-gauge-svg">
-                                                <defs>
-                                                    <filter id="bh-needle-shadow" x="-50%" y="-50%" width="200%"
-                                                        height="200%">
-                                                        <feGaussianBlur in="SourceAlpha" stdDeviation="1" />
-                                                        <feOffset dx="0" dy="1" result="offsetblur" />
-                                                        <feComponentTransfer>
-                                                            <feFuncA type="linear" slope="0.3" />
-                                                        </feComponentTransfer>
-                                                        <feMerge>
-                                                            <feMergeNode />
-                                                            <feMergeNode in="SourceGraphic" />
-                                                        </feMerge>
-                                                    </filter>
-                                                </defs>
-
-                                                <!-- Segments -->
-                                                <path class="bh-gauge-segment segment-bad"
-                                                    d="M 15 50 A 35 35 0 0 1 25.25 25.25" fill="none" stroke="var(--bmm-danger)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-well"
-                                                    d="M 25.25 25.25 A 35 35 0 0 1 50 15" fill="none" stroke="var(--bmm-warning)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-good"
-                                                    d="M 50 15 A 35 35 0 0 1 74.75 25.25" fill="none" stroke="#3b82f6"
-                                                    stroke-width="5" stroke-linecap="butt" />
-                                                <path class="bh-gauge-segment segment-best"
-                                                    d="M 74.75 25.25 A 35 35 0 0 1 85 50" fill="none" stroke="var(--bmm-success)"
-                                                    stroke-width="5" stroke-linecap="butt" />
-
-                                                <!-- Ticks -->
-                                                <g class="bh-gauge-ticks" transform="translate(50,50)"
-                                                    stroke="rgba(255,255,255,0.2)" stroke-width="1">
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(0)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(18)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(36)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(54)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(72)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(90)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(108)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(126)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(144)" />
-                                                    <line x1="-35" y1="0" x2="-33" y2="0" transform="rotate(162)" />
-                                                    <line x1="-35" y1="0" x2="-32" y2="0" transform="rotate(180)" />
-                                                </g>
-
-                                                <!-- Labels -->
-                                                <text x="12" y="58" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthBad">Bad</text>
-                                                <text x="25" y="15" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthWell">Well</text>
-                                                <text x="75" y="15" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthGood">Good</text>
-                                                <text x="88" y="58" class="bh-gauge-label" text-anchor="middle"
-                                                    data-i18n="betahub.strengthBest">Best</text>
-
-                                                <!-- Needle -->
-                                                <g id="bh-bug-gauge-needle-group" class="bh-gauge-needle-group">
-                                                    <line x1="50" y1="50" x2="50" y2="20" stroke="currentColor"
-                                                        stroke-width="2" stroke-linecap="round"
-                                                        filter="url(#bh-needle-shadow)" />
-                                                    <path d="M 50 18 L 47 24 L 53 24 Z" fill="currentColor"
-                                                        filter="url(#bh-needle-shadow)" />
-                                                </g>
-                                            </svg>
-                                            <div class="bh-gauge-info">
-                                                <div id="bh-bug-strength-score" class="bh-strength-score">0</div>
-                                                <div id="bh-bug-strength-label" style="display:none"></div>
-                                            </div>
-                                        </div>
-                                        <ul id="bh-bug-suggestions" class="bh-strength-suggestions">
-                                            <li data-i18n="hub.suggestAddSteps">+ Add steps to reproduce</li>
-                                            <li data-i18n="hub.suggestExpandDesc">+ Expand your description</li>
-                                        </ul>
-                                    </div>
-
-                                    <!-- Crash Reports -->
-                                    <div class="bh-field-group"
-                                        style="margin-bottom:0;flex:1;display:flex;flex-direction:column">
-                                        <div
-                                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                                            <label class="bh-label">Log/Crash Explorer <span
-                                                    style="opacity:0.6;font-size:10px">(max 3 selected)</span></label>
-                                            <button type="button" class="bh-tab-sm-btn"
-                                                id="bh-bug-refresh-reports">↻</button>
-                                        </div>
-                                        <div class="bh-report-explorer" style="flex:1">
-                                            <div class="bh-explorer-tabs">
-                                                <button type="button" class="bh-tab active"
-                                                    data-bh-tab="crash">Crash</button>
-                                                <button type="button" class="bh-tab"
-                                                    data-bh-tab="session">Session</button>
-                                            </div>
-                                            <div id="bh-bug-report-list" class="bh-report-list"
-                                                style="max-height:280px"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- PoW -->
-                            <div id="bh-bug-pow" class="bh-pow-container bh-pow-idle bh-theme-bug">
-                                <label class="bh-verifier">
-                                    <input type="checkbox" id="bh-bug-pow-check">
-                                    <div class="bh-verifier-box">
-                                        <div class="bh-verifier-spinner"></div>
-                                        <div class="bh-verifier-check">
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="4" stroke-linecap="round"
-                                                stroke-linejoin="round">
-                                                <polyline points="20 6 9 17 4 12"></polyline>
-                                            </svg>
-                                        </div>
-                                        <div class="bh-verifier-ripple"></div>
-                                    </div>
-                                    <div class="bh-verifier-text">
-                                        <div style="display:flex;align-items:center;gap:8px">
-                                            <img src="./assets/Tasky.png" class="bh-pow-mascot" alt="Tasky">
-                                            <span class="bh-pow-label" data-i18n="betahub.powLabel">Anti-Spam
-                                                Verification (PoW)</span>
-                                        </div>
-                                        <span class="bh-pow-msg" data-i18n="betahub.powIdleHint">Click to verify
-                                            report</span>
-                                    </div>
-                                </label>
-                                <div class="bh-pow-bar">
-                                    <div class="bh-pow-bar-fill"></div>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Footer -->
-                    <div class="modal-footer"
-                        style="padding:20px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;background:rgba(0,0,0,0.1)">
-                        <button class="btn btn-secondary" data-close="modal-betahub-bugreport"
-                            data-i18n="common.cancel">Cancel</button>
-                        <button id="bh-bug-submit" class="bh-submit-btn" disabled>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="22" y1="2" x2="11" y2="13" />
-                                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                            </svg>
-                            <span data-i18n="betahub.submit">Submit Bug</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- END BetaHub Bug Report Modal -->
-
         <!-- History Modal -->
         <div class="modal-overlay" id="modal-history">
             <div class="modal glass modal--lg">
@@ -6221,7 +5682,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-ghost" data-close="modal-edit-profile">Annuler</button>
+                    <button class="btn btn-ghost" data-close="modal-edit-profile" data-i18n="common.cancel">Cancel</button>
                     <button class="btn btn-primary" id="btn-confirm-edit-profile">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.2">
@@ -6886,39 +6347,32 @@
 
         <!-- Interactive Documentation Diagram Modal -->
         <div class="modal-overlay" id="modal-docs-diagram" style="z-index: 10002;">
-            <div class="modal-docs-container glass">
-                <div class="modal-docs-header">
-                    <div class="modal-docs-title-group">
-                        <div class="modal-docs-icon">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                <path d="M2 17l10 5 10-5" />
-                                <path d="M2 12l10 5 10-5" />
-                            </svg>
-                        </div>
-                        <div class="modal-docs-title" id="docs-diagram-title">Fonctionnement</div>
+            <div class="modal glass modal--full modal-docs">
+                <div class="modal-header">
+                    <div class="bms-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                            <path d="M2 17l10 5 10-5" />
+                            <path d="M2 12l10 5 10-5" />
+                        </svg>
                     </div>
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <button class="btn-docs-util" id="btn-docs-reset-zoom"
-                            data-tasky="benchmark.resetZoomTip" data-tasky-icon="refresh"
-                           >
+                    <div class="bms-titles">
+                        <h2 class="modal-title" id="docs-diagram-title"></h2>
+                    </div>
+                    <div class="bms-head-end">
+                        <button type="button" class="btn-docs-util" id="btn-docs-reset-zoom"
+                            data-tasky="benchmark.resetZoomTip" data-tasky-icon="refresh">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                                 <path d="M3 3v5h5" />
                             </svg>
                         </button>
-                        <button class="btn-docs-close" id="btn-close-docs-diagram">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
                     </div>
+                    <button type="button" class="modal-close" id="btn-close-docs-diagram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
-                <div class="modal-docs-content">
+                <div class="modal-body modal-body--flush modal-docs-content">
                     <div class="diagram-wrapper">
                         <div id="mermaid-diagram-container" class="mermaid-container"></div>
                     </div>
@@ -7146,7 +6600,7 @@
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         </svg></div>
                         <div class="bms-titles">
-                            <h2 class="modal-title">Ouvrir fichier en conflit</h2>
+                            <h2 class="modal-title" data-i18n="mod.conflictFileOpenTitle">Open a conflicting file</h2>
                             <div id="conflict-file-selector-name" style="max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="bms-sub"></div>
                         </div>
                     
@@ -7155,9 +6609,9 @@
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;" data-i18n="mod.pickModsForFile">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur :</div>
                     <div id="conflict-file-selector-list" style="display:flex;flex-direction:column;gap:8px;"></div>
                 </div>
-                <div style="padding:14px 20px;border-top:1px solid var(--bmm-s06);display:flex;justify-content:flex-end;gap:8px;background:var(--bmm-bg-base);">
-                    <button class="btn btn-secondary" id="btn-cancel-conflict-file-selector" style="padding:6px 16px;font-size:11px;">Annuler</button>
-                    <button class="btn btn-primary" id="btn-open-conflict-files" style="padding:6px 16px;font-size:11px;">Ouvrir</button>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="btn-cancel-conflict-file-selector" data-i18n="common.cancel">Cancel</button>
+                    <button class="btn btn-primary" id="btn-open-conflict-files" data-i18n="mod.conflictFileOpenBtn">Open</button>
                 </div>
             </div>
         </div>
@@ -7632,7 +7086,7 @@
                                 <button class="btn btn-ghost btn-xs" id="lp-btn-detect-exe"
                                     style="color:var(--text-muted); font-size:10px; gap:4px; display:flex; align-items:center;">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                                    Détecter</button>
+                                    <span data-i18n="settings.launchPackDetect">Detect</span></button>
                                 <button class="btn btn-ghost btn-xs" id="lp-btn-add-exe"
                                     style="color:var(--accent); font-size:10px;" data-i18n="settings.launchPackPickApps">+
                                     Ajouter</button>

@@ -9,7 +9,7 @@
 // The numbers come from mapper-preview-model.ts (pure, tested); this file only draws them.
 import { t } from '../../core/i18n.js';
 import { escHtml, formatBytes } from '../../core/utils.js';
-import { bindModal } from '../../ui/modal-shell.js';
+import { bindModal, MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { buildPreview, gameFileSet, middleEllipsis, matchesQuery, matchesFilter, visibleRange, type PvItem, type PvModel, type PvFilter, type PvFile } from './mapper-preview-model.js';
 
 export interface PreviewOpts {
@@ -29,7 +29,6 @@ const IC = {
     folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>',
     chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
     warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-    x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
     search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
 };
 
@@ -71,14 +70,14 @@ export function openMapperPreview(opts: PreviewOpts): void {
     }
     const dest = opts.gamePath || '';
     o.innerHTML = `
-    <div class="modal mpv2" role="dialog" aria-labelledby="mpv2-title">
-      <header class="mpv2-head">
-        <div class="mpv2-head-text">
-          <h3 class="modal-title" id="mpv2-title">${escHtml(t('mapper.preview'))}</h3>
-          <div class="mpv2-dest" title="${escHtml(dest)}">${IC.folder}<code>${escHtml(middleEllipsis(dest, 70))}</code></div>
+    <div class="modal bms modal--xl modal--tall mpv2" role="dialog" aria-modal="true" aria-labelledby="mpv2-title">
+      <div class="modal-header">
+        <div class="bms-titles">
+          <h2 class="modal-title" id="mpv2-title">${escHtml(t('mapper.preview'))}</h2>
+          <div class="bms-sub mpv2-dest" title="${escHtml(dest)}">${IC.folder}<code>${escHtml(middleEllipsis(dest, 70))}</code></div>
         </div>
-        <button type="button" class="mpv2-x" id="mpv2-x" aria-label="${escHtml(t('common.close'))}">${IC.x}</button>
-      </header>
+        <button type="button" class="modal-close" id="mpv2-x" aria-label="${escHtml(t('common.close'))}">${MODAL_CLOSE_SVG}</button>
+      </div>
       <div class="mpv2-tiles">
         ${tile(T.files, t('mapper.pv.files'))}
         ${tile(T.folders, t('mapper.pv.folders'))}
@@ -88,7 +87,7 @@ export function openMapperPreview(opts: PreviewOpts): void {
         ${tile(formatBytes(T.bytes), t('mapper.pv.size'))}
       </div>
       ${warnings.length ? `<ul class="mpv2-warns">${warnings.join('')}</ul>` : ''}
-      <div class="mpv2-bar">
+      <div class="modal-toolbar mpv2-bar">
         <div class="mpv2-seg" role="tablist">
           <button type="button" role="tab" data-view="tree" class="is-on" aria-selected="true">${escHtml(t('mapper.pv.tree'))}</button>
           <button type="button" role="tab" data-view="list" aria-selected="false">${escHtml(t('mapper.pv.list'))}</button>
@@ -98,13 +97,15 @@ export function openMapperPreview(opts: PreviewOpts): void {
           ${(['all', 'moved', 'overwrite', 'root'] as PvFilter[]).map((f) => `<button type="button" data-filter="${f}" class="${f === 'all' ? 'is-on' : ''}">${escHtml(t(`mapper.pv.f.${f}`))}</button>`).join('')}
         </div>
       </div>
-      <div class="mpv2-scroll" id="mpv2-scroll" tabindex="0"><div class="mpv2-spacer" id="mpv2-spacer"></div></div>
-      <div class="mpv2-empty" id="mpv2-empty" hidden>${escHtml(T.files ? t('mapper.pv.noMatch') : t('mapper.noFiles'))}</div>
-      <footer class="mpv2-foot">
-        <span class="mpv2-foot-note">${escHtml(opts.pending ? t('mapper.pv.pending', { n: String(opts.pending) }) : t('mapper.pv.nothingPending'))}</span>
+      <div class="modal-body modal-body--flush">
+        <div class="mpv2-scroll" id="mpv2-scroll" tabindex="0"><div class="mpv2-spacer" id="mpv2-spacer"></div></div>
+        <div class="mpv2-empty" id="mpv2-empty" hidden>${escHtml(T.files ? t('mapper.pv.noMatch') : t('mapper.noFiles'))}</div>
+      </div>
+      <div class="modal-footer mpv2-foot">
+        <span class="modal-footer-note mpv2-foot-note">${escHtml(opts.pending ? t('mapper.pv.pending', { n: String(opts.pending) }) : t('mapper.pv.nothingPending'))}</span>
         <button type="button" class="btn btn-ghost btn-sm" id="mpv2-back">${escHtml(t('mapper.pv.back'))}</button>
         <button type="button" class="btn btn-primary btn-sm" id="mpv2-apply" ${opts.pending ? '' : 'disabled'}>${escHtml(t('mapper.pv.apply'))}</button>
-      </footer>
+      </div>
     </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(o);
     _overlay = o;

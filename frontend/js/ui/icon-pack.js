@@ -13,7 +13,7 @@
 // the boot-weight guard stays untouched. Renderers build the <svg> from data at use
 // time; nothing here interpolates user strings into markup unescaped.
 import { t } from '../core/i18n.js';
-import { raiseAboveAll } from './layer.js';
+import { openModal } from './modal-shell.js';
 import { escAttr, escHtml } from '../core/utils.js';
 import { ISO_NAMES, isoIconUrl } from '../core/icon-cdn.js';
 let _lucide = null;
@@ -292,14 +292,9 @@ export function forgetIcon(id) {
 export function openIconPicker(opts = {}) {
     return new Promise((resolve) => {
         document.getElementById('bmm-icon-picker')?.remove();
-        const overlay = document.createElement('div');
-        overlay.id = 'bmm-icon-picker';
-        overlay.className = 'modal-generic-overlay open';
-        overlay.innerHTML = `
-            <div class="modal ipk-modal">
-                <div class="ipk-head">
-                    <h3 class="ipk-title">${t('iconpack.title') || 'Choose an icon'}</h3>
-                    <div class="ipk-tabs">
+        const tabs = document.createElement('div');
+        tabs.className = 'ipk-tabs';
+        tabs.innerHTML = `
                         <button class="ipk-tab" data-src="ours">${t('iconpack.ours') || 'Better*'}</button>
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
@@ -308,20 +303,24 @@ export function openIconPicker(opts = {}) {
                         <label class="ipk-tab ipk-tab-upload" for="ipk-upload">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
                             ${t('iconpack.upload') || 'Upload…'}
-                            <input type="file" id="ipk-upload" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" hidden></label>
-                    </div>
-                    <button class="ipk-close" id="ipk-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                </div>
-                <div class="ipk-searchwrap">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    <input id="ipk-search" placeholder="${escAttr(t('iconpack.search') || 'Search 5000+ icons…')}" autocomplete="off" spellcheck="false">
-                </div>
-                <div class="ipk-grid" id="ipk-grid"></div>
-                <div class="ipk-foot">
+                            <input type="file" id="ipk-upload" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" hidden></label>`;
+        // The house shell (openModal): the sources ride in the header between the title and
+        // the ×, the search is a toolbar band that never scrolls, the grid is the one scroller.
+        // openModal measures the stack itself, so a picker opened from the tutorial creator
+        // (2000100) still lands above it instead of under its dim.
+        let picked = null;
+        const m = openModal({
+            id: 'bmm-icon-picker',
+            title: t('iconpack.title') || 'Choose an icon',
+            size: 'lg',
+            tall: true,
+            className: 'ipk-modal',
+            headerEnd: tabs,
+            closeLabel: t('common.close') || 'Close',
+            body: '<div class="ipk-grid" id="ipk-grid"></div>',
+            footer: `
                     <span class="ipk-count"><b id="ipk-count"></b> ${escHtml(t('iconpack.available') || 'available')}</span>
-                    <span class="ipk-credit" id="ipk-iso-credit" style="display:none;font-size:11px;opacity:.75;margin-left:8px" title="${escAttr(t('iconpack.isoLicences') || 'Licences and attributions: assets/icons/iso/LICENSES.txt')}">${escHtml(t('iconpack.isoCredit') || 'Isoflow, MI2, Jolloficons (MIT)')}</span>
+                    <span class="ipk-credit" id="ipk-iso-credit" style="display:none" title="${escAttr(t('iconpack.isoLicences') || 'Licences and attributions: assets/icons/iso/LICENSES.txt')}">${escHtml(t('iconpack.isoCredit') || 'Isoflow, MI2, Jolloficons (MIT)')}</span>
                     <div class="ipk-colour">
                         <label class="ipk-auto" id="ipk-auto-wrap" title="${escAttr(t('iconpack.autoTip') || 'Use each brand’s official colour')}">
                             <input type="checkbox" id="ipk-auto"> ${escHtml(t('iconpack.auto') || 'Brand colour')}
@@ -331,25 +330,25 @@ export function openIconPicker(opts = {}) {
                         </label>
                         <input type="color" id="ipk-tint" value="#3b82f6" disabled>
                     </div>
-                    <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>
-                </div>
-            </div>`;
-        // Measured, not fixed: this picker is opened from ordinary modals (11000) and from
-        // the tutorial creator (2000100). A single number is wrong for one of them, and the
-        // symptom there is not "it looks wrong" but "the button does nothing" — you see the
-        // dim of a panel painted underneath the thing that opened it.
-        raiseAboveAll(overlay, 10000);
-        (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+                    <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>`,
+            onClose: () => resolve(picked),
+        });
+        m.footer?.classList.add('ipk-foot');
+        const toolbar = document.createElement('div');
+        toolbar.className = 'modal-toolbar';
+        toolbar.innerHTML = `<div class="ipk-searchwrap">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input id="ipk-search" placeholder="${escAttr(t('iconpack.search') || 'Search 5000+ icons…')}" autocomplete="off" spellcheck="false">
+                </div>`;
+        m.header.after(toolbar);
+        const overlay = m.overlay;
         const grid = overlay.querySelector('#ipk-grid');
         const search = overlay.querySelector('#ipk-search');
         const countEl = overlay.querySelector('#ipk-count');
         const moreBtn = overlay.querySelector('#ipk-more');
         let src = 'lucide';
         let shown = PAGE;
-        const done = (ref) => { overlay.remove(); resolve(ref); };
-        overlay.querySelector('#ipk-close')?.addEventListener('click', () => done(null));
-        overlay.addEventListener('mousedown', (e) => { if (e.target === overlay)
-            done(null); });
+        const done = (ref) => { picked = ref; m.close(); };
         const names = () => {
             if (src === 'ours') {
                 const q = search.value.trim().toLowerCase();

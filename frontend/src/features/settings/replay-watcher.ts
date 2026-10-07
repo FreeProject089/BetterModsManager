@@ -9,6 +9,8 @@ import { invoke, saveFile, pickFile } from '../../core/api.js';
 import { subscribeReplay, unsubscribeReplay, ReplaySubscriber, loadRrweb } from '../../core/replay-recorder.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 
 const ON = 'bmm_watcher_on';
 const FULL = 'bmm_watcher_full';
@@ -398,9 +400,9 @@ export async function importReplayFromUrl(url: string): Promise<void> {
 /** Modal listing recently imported replays — click one to watch it. */
 export function openReplayList(): void {
   const recents = getRecents();
+  // The house shell (.modal-overlay > .modal.modal--md): title, Import in the header, ×.
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)';
   const rows = recents.length
     ? recents.map((r, i) => `<div style="display:flex;gap:12px;align-items:center;width:100%;padding:14px 18px;border:1px solid var(--border,#2a2d34);border-radius:12px;background:rgba(255,255,255,.015);transition:background 0.2s" data-hover="background:rgba(255,255,255,.04)" data-hover-out="background:rgba(255,255,255,.015)">
         <button class="rw-pick" data-i="${i}" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:none;border:none;cursor:pointer;padding:0">
@@ -411,15 +413,16 @@ export function openReplayList(): void {
       </div>`).join('')
     : `<div style="font-size:13px;color:var(--text-muted,#8a8f98);padding:16px;text-align:center">${t('watcher.noImports') || "Aucun replay récent pour l'instant."}</div>`;
   overlay.innerHTML = `
-    <div style="width:min(580px,92vw);max-height:80vh;background:#13151a;border:1px solid var(--border,#2a2d34);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:16px;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <strong style="font-size:16px;font-weight:700;color:var(--bmm-text-primary)">${t('watcher.listTitle') || 'Imported replays'}</strong><span style="flex:1"></span>
-        <button id="rw-list-pick" style="background:#e2e8f0;color:#0f1115;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s" data-press="transform:scale(0.96)" data-press-out="transform:none">${t('watcher.import') || 'Import & replay'}</button>
-        <button id="rw-list-close" style="background:none;border:none;color:var(--text-muted,#8a8f98);font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;transition:color 0.2s" data-hover="color:#fff" data-hover-out="color:var(--text-muted,#8a8f98)">${t('common.close') || 'Close'}</button>
+    <div class="modal bms modal--md" role="dialog" aria-modal="true" aria-labelledby="rw-list-title">
+      <div class="modal-header">
+        <div class="bms-titles"><h2 class="modal-title" id="rw-list-title">${t('watcher.listTitle') || 'Imported replays'}</h2></div>
+        <div class="bms-head-end"><button type="button" class="btn btn-sm btn-primary" id="rw-list-pick">${t('watcher.import') || 'Import & replay'}</button></div>
+        <button type="button" class="modal-close" id="rw-list-close" aria-label="${t('common.close') || 'Close'}">${MODAL_CLOSE_SVG}</button>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;padding:20px 24px;overflow-y:auto">${rows}</div>
+      <div class="modal-body" style="gap:10px">${rows}</div>
     </div>`;
   (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+  raiseAboveAll(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   (overlay.querySelector('#rw-list-close') as HTMLElement).onclick = () => overlay.remove();
   (overlay.querySelector('#rw-list-pick') as HTMLElement).onclick = () => { overlay.remove(); importAndPlay(); };
@@ -460,23 +463,23 @@ async function playBundle(bundle: any): Promise<void> {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
   overlay.setAttribute('data-prevent-close', 'true');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)';
   const meta = `${bundle.masked ? (t('watcher.masked') || 'masqué') : 'full'} · ${Math.round((bundle.durationMs || 0) / 1000)}s`;
   overlay.innerHTML = `
-    <div style="width:min(1120px,95vw);height:min(88vh,840px);background:var(--bg-secondary,#15171c);border:1px solid var(--border,#2a2d34);border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border,#2a2d34)">
-        <strong style="font-size:13px">${t('watcher.viewerTitle') || 'Lecture de session'}</strong>
-        <span style="font-size:11px;color:var(--text-muted,#8a8f98)">${meta}</span>
-        <span style="flex:1"></span>
-        <button id="rw-video" class="btn btn-sm">${t('watcher.tovideo') || 'Exporter en vidéo'}</button>
-        <button id="rw-close" class="btn btn-sm btn-ghost">${t('common.close') || 'Fermer'}</button>
+    <div class="modal bms modal--xl modal--tall" role="dialog" aria-modal="true" aria-labelledby="rw-title">
+      <div class="modal-header">
+        <div class="bms-titles">
+          <h2 class="modal-title" id="rw-title">${t('watcher.viewerTitle') || 'Session replay'}</h2>
+          <p class="bms-sub">${meta}</p>
+        </div>
+        <div class="bms-head-end"><button type="button" id="rw-video" class="btn btn-sm">${t('watcher.tovideo') || 'Export as video'}</button></div>
+        <button type="button" class="modal-close" id="rw-close" aria-label="${t('common.close') || 'Close'}">${MODAL_CLOSE_SVG}</button>
       </div>
-      <div style="flex:1;display:flex;min-height:0">
+      <div class="modal-body modal-body--flush rw-body">
         <div id="rw-host" style="flex:1;overflow:hidden;background:#000;position:relative"></div>
-        <div id="rw-logs" style="width:320px;border-left:1px solid var(--border,#2a2d34);overflow:auto;font-family:var(--font-mono,monospace);font-size:10.5px;padding:8px;color:var(--text-secondary,#c9ccd1)"></div>
+        <div id="rw-logs" style="width:320px;border-left:1px solid var(--bmm-border);overflow:auto;font-family:var(--font-mono,monospace);font-size:10.5px;padding:8px;color:var(--text-secondary)"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border,#2a2d34)">
-        <button id="rw-play" class="btn btn-sm" style="width:34px">⏸</button>
+      <div class="modal-footer" style="flex-wrap:nowrap">
+        <button id="rw-play" class="btn btn-sm" style="width:34px;min-width:0">⏸</button>
         <div style="position:relative;flex:1">
           <div id="rw-marks" style="position:relative;height:10px;margin-bottom:2px"></div>
           <input id="rw-seek" type="range" min="0" max="1000" value="0" style="width:100%;accent-color:var(--accent,#5b8cff)" />
@@ -485,6 +488,7 @@ async function playBundle(bundle: any): Promise<void> {
       </div>
     </div>`;
   (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+  raiseAboveAll(overlay);
 
   const host = overlay.querySelector('#rw-host') as HTMLElement;
   // Building the Replayer over a big event stream is a heavy synchronous DOM

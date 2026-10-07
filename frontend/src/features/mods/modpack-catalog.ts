@@ -4,6 +4,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 
 // Browsing community MODPACK catalogues.
 //
@@ -104,21 +105,21 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open mpc-overlay';
     ov.innerHTML = `
-      <div class="mpc-panel">
-        <header class="mpc-head">
-          <div>
-            <h2 class="mpc-h1">${escHtml(t('modpack.cat.title'))}</h2>
-            <p class="mpc-sub">${escHtml(t('modpack.cat.sub'))}</p>
+      <div class="modal bms modal--lg mpc-panel" role="dialog" aria-modal="true" aria-labelledby="mpc-title">
+        <div class="modal-header">
+          <div class="bms-titles">
+            <h2 class="modal-title" id="mpc-title">${escHtml(t('modpack.cat.title'))}</h2>
+            <p class="bms-sub">${escHtml(t('modpack.cat.sub'))}</p>
           </div>
-          <button class="mpc-x" id="mpc-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
-        </header>
+          <button type="button" class="modal-close" id="mpc-close" aria-label="${escHtml(t('common.close'))}">${MODAL_CLOSE_SVG}</button>
+        </div>
 
-        <div class="mpc-modes" role="group">
+        <div class="modal-toolbar mpc-modes" role="group">
           <button type="button" class="mpc-mode is-on" id="mpc-tab-follow" aria-pressed="true">${escHtml(t('modpack.cat.tabFollow'))}</button>
           <button type="button" class="mpc-mode" id="mpc-tab-build" aria-pressed="false">${escHtml(t('modpack.cat.tabBuild'))}</button>
         </div>
 
-        <section class="mpc-view" id="mpc-view-follow">
+        <section class="modal-body mpc-view" id="mpc-view-follow">
           <p class="mpc-lede">${escHtml(t('modpack.cat.desc'))}</p>
           <div class="mpc-row">
             <input type="text" class="input" id="mpc-src" placeholder="https://.../catalogue.cbmp" spellcheck="false">
@@ -132,7 +133,7 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
           <div id="mpc-list" class="mpc-list"></div>
         </section>
 
-        <section class="mpc-view" id="mpc-view-build" hidden>
+        <section class="modal-body mpc-view" id="mpc-view-build" hidden>
           <p class="mpc-lede">${escHtml(t('modpack.cat.build.desc'))}</p>
           <input type="text" class="input" id="mpc-b-name"
                  placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
@@ -148,11 +149,11 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
           </div>
           <div class="mpc-label">${escHtml(t('modpack.cat.build.pick'))}</div>
           <div id="mpc-b-list" class="mpc-list"></div>
-          <footer class="mpc-foot">
-            <span class="mpc-note">${escHtml(t('modpack.cat.build.oneFile'))}</span>
-            <button class="btn btn-sm btn-accent" id="mpc-b-export">${escHtml(t('modpack.cat.build.export'))}</button>
-          </footer>
         </section>
+        <div class="modal-footer" id="mpc-build-foot" hidden>
+          <span class="modal-footer-note mpc-note">${escHtml(t('modpack.cat.build.oneFile'))}</span>
+          <button class="btn btn-accent" id="mpc-b-export">${escHtml(t('modpack.cat.build.export'))}</button>
+        </div>
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     _overlay = ov;
@@ -204,6 +205,7 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
     const showTab = (build: boolean) => {
         (ov.querySelector('#mpc-view-follow') as HTMLElement).hidden = build;
         (ov.querySelector('#mpc-view-build') as HTMLElement).hidden = !build;
+        (ov.querySelector('#mpc-build-foot') as HTMLElement).hidden = !build;
         for (const [id, on] of [['mpc-tab-follow', !build], ['mpc-tab-build', build]] as const) {
             const b = ov.querySelector(`#${id}`)!;
             b.classList.toggle('is-on', on);

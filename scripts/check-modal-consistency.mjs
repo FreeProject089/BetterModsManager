@@ -17,7 +17,9 @@
 //   TS    a module that builds a .modal-overlay without a header, a title and a close, unless it
 //         uses openModal / buildModalHeader; the same inline shell styles in a template; a
 //         `.style.maxWidth = …` (and kin) on a card it created; a NEW overlay family that is
-//         not the house shell.
+//         not the house shell (`*-overlay` or `*-backdrop`); a full-window overlay built from
+//         inline styles (position:fixed on all four edges with a dim), which carries no class
+//         for any other rule to see — seven dialogs hid that way until Oct 2026.
 //   CSS   a feature stylesheet rule that repaints the shell (padding, background, border,
 //         radius, shadow, size) on .modal / .modal-header / .modal-body / .modal-footer /
 //         .modal-title / .modal-close / the overlays.
@@ -44,24 +46,15 @@ const CSS_SHELL_PROPS = /^(padding(?:-\w+)?|background(?:-\w+)?|border(?:-(?:top
 const SHELL_CLASSES = ['modal', 'modal-header', 'modal-body', 'modal-footer', 'modal-title', 'modal-close', 'modal-overlay', 'modal-generic-overlay'];
 
 /** Static dialogs (index.html) that keep their own shell, and why. */
-export const HTML_BESPOKE = {
-    'modal-docs-diagram': 'full-window diagram viewer (pan/zoom canvas), not a dialog card',
-    'modal-betahub-feedback': 'unreachable: no code opens it since BetaHub was removed; delete or migrate when revived',
-    'modal-betahub-bugreport': 'unreachable: no code opens it since BetaHub was removed; delete or migrate when revived',
-};
+export const HTML_BESPOKE = {};
 
 /** Built dialogs that keep their own shell, and why. Keyed by module path under frontend/src. */
 export const TS_BESPOKE = {
     'ui/launch-deck.ts': 'the start-up deck: a paged card with its own step header (ld-head) and focus handling',
     'ui/tutorial-creator.ts': 'a workspace panel (tutc-panel) hosted in the house overlay',
-    'features/mods/modpack-catalog.ts': 'a full catalogue page (mpc-panel) hosted in the house overlay',
-    'features/mods/modpack-creator.ts': 'legacy .modal-content cards; migrate with the creator rewrite',
     'features/settings/replay-watcher.ts': 'a session-replay player surface, not a dialog card',
-    'features/settings/scheduler.ts': 'the task editor (sched-modal) is a full workspace; its small dialogs are house shells',
-    'features/mapper/mapper-preview.ts': 'mapper preview workspace (mpv2-head), bound with bindModal',
     'features/feedback/feedback-modal.ts': 'feedback form with its own head (fbm-head); Escape and focus handled in-module',
     'ui/bettercommunity-modal.ts': 'branded hero header (bc-hero)',
-    'features/repo/mod-updates.ts': 'persistent overlay re-filled per view; header is rebuilt per view',
     'core/analytics.ts': 'the consent question has no × by design (Escape = later); promptEmail is answered by its buttons',
     'ui/ask-one.ts': 'one-field prompt answered by its buttons',
     'core/source-access.ts': 'access gate question answered by its buttons',
@@ -73,10 +66,6 @@ export const TS_BESPOKE = {
     'features/apps/apps-catalog.ts': 'apps-modal-overlay templates render inside the Apps view, not over the app',
     'core/learn-more.ts': 'Learn-more reader hosted in the house overlay with its own reader header',
     'ui/catalog-modal.ts': 'header built from a spec; house shell',
-    'ui/app.ts': 'credits stack-detail card (stackd-head): migrate to buildModalHeader next',
-    'ui/icon-pack.ts': 'icon picker: tabs live in its head row (ipk-head); migrate to .modal-header + .bms-head-end next',
-    'ui/navbar-customize.ts': 'navbar editor (.modal-generic nbe-modal): migrate to the house card next',
-    'ui/style-modal.ts': 'first-run look picker: a forced choice laid out as doors, no close by design',
     'ui/legacy-import.ts': 'header built with buildModalHeader',
     'features/settings/restore-bundle.ts': 'header built with buildModalHeader',
 };
@@ -85,15 +74,12 @@ export const TS_BESPOKE = {
 export const OVERLAY_FAMILIES = {
     'kofi-overlay': 'support card with injected styles (ui/kofi-modal.ts)',
     'onboarding-overlay': 'first-run language step that blocks the app shell',
-    'style-modal-overlay': 'first-run look picker (doors layout)',
     'tut-hub-overlay': 'tutorial hub: must sit above everything for lesson spotlights',
     'tut-unsaved-overlay': 'tutorial engine guard, above the tutorial layer',
     'cp-overlay': 'command palette, not a dialog card',
-    'plug-overlay': 'plugin workspace overlay (plugins.ts createOverlay), eight uses',
     'bte-confirm-overlay': 'theme editor inline confirm/prompt, above the editor',
     'community-history-overlay': 'community history/comments panels',
     'flappy-overlay': 'easter-egg game',
-    'mod-repair-overlay': 'modpack creator repair card; migrate with the creator rewrite',
     'mod-loading-overlay': 'the library loading veil, not a dialog',
     'debug-modal-overlay': 'DevTools prompt, developer-only',
     'debug-crash-overlay': 'DevTools crash screen, developer-only',
@@ -109,6 +95,16 @@ export const OVERLAY_FAMILIES = {
     'sched-pc-overlay': 'preset catalogue (generic overlay + hook class)',
     'tutc-overlay': 'tutorial creator (house overlay + hook class)',
     'legacy-overlay': 'legacy import (house overlay + stacking hook)',
+    // -backdrop classes, caught since the family rule learnt the second suffix:
+    'update-modal-backdrop': 'update notes / test-build welcome: a notes reader with a folder tree (ui/update-notes.ts)',
+    'tut-hub-backdrop': 'the dim inside the tutorial hub overlay, not a separate dialog',
+    'lom-backdrop': 'click-catcher behind the library order menu, not a dialog',
+};
+
+/** Modules (and index.html elements, as index.html#id) that still build a full-window overlay
+ *  from inline styles, and why. */
+export const INLINE_OVERLAYS = {
+    'index.html#app-loader': 'the boot splash: covers the frame while the app starts, not a dialog',
 };
 
 /** Feature stylesheet rules that still repaint the shell, and why. Selector text as written. */
@@ -116,14 +112,10 @@ export const CSS_BASELINE = {
     'launch-deck.css .ld-hosted.modal': 'the deck hosted INSIDE another surface (no overlay): a panel, not a dialog',
     'launch-deck.css .ld-hosted .modal-body': 'same hosted deck',
     'launch-deck.css .ld-hosted .modal-footer': 'same hosted deck',
-    'main.css .nbe-modal .modal-close': 'navbar editor, listed in TS_BESPOKE',
-    'main.css .sched-modal .modal-body.sched-body': 'the scheduler task editor is a full workspace (listed in TS_BESPOKE)',
-    'sched-flow.css .sched-modal .modal-body.sched-body.sflow-on': 'same workspace, flow view',
     'main.css .i18n-overlay-active .modal': 'Translation Sandbox pick mode: the dialog outlines itself while you pick on screen',
     'main.css body.i18nsb-docked #modal-i18n-sandbox .modal': 'Translation Sandbox docked as a side panel',
     'mapper.css .modal-large .modal-body': 'the mapper borrows the confirm as its large preview (modals.ts resets it)',
     'mapper.css .modal-large .modal.glass': 'same borrowed preview',
-    'mapper.css .mpv2-overlay .modal.mpv2': 'mapper preview workspace, listed in TS_BESPOKE',
 };
 
 // ── Static dialogs ──────────────────────────────────────────────────────────────────────────
@@ -223,14 +215,59 @@ export function auditTs(rel, src) {
         const re = new RegExp(`\\b${v}\\.style\\.(maxWidth|width|padding|borderRadius|background|boxShadow|border|maxHeight)\\s*=`, 'g');
         for (const s of src.matchAll(re)) say(s.index, `${v}.style.${s[1]} on a .modal card (use a size modifier)`);
     }
-    // Overlay families.
+    // Overlay families (a -backdrop is an overlay under another name: the update dialogs wore one).
     for (const m of src.matchAll(/(?:className\s*=\s*|class=|el\(\s*'div'\s*,\s*)[`'"]([^`'"]*)[`'"]/g)) {
         for (const cls of m[1].split(/\s+/)) {
-            if (!/^[a-z][\w-]*-overlay$/.test(cls) || cls === 'modal-overlay' || cls === 'modal-generic-overlay') continue;
+            if (!FAMILY_CLASS.test(cls) || cls === 'modal-overlay' || cls === 'modal-generic-overlay') continue;
             if (!OVERLAY_FAMILIES[cls]) say(m.index, `new overlay family .${cls} — use the house .modal-overlay (or list it in OVERLAY_FAMILIES with a reason)`);
         }
     }
-    return { builds, problems };
+    // A full-window overlay built from inline styles: no class for the gate to see, so it was the
+    // way a dialog escaped every rule above (seven of them, Oct 2026).
+    const inline = inlineOverlays(src);
+    if (inline.length && !INLINE_OVERLAYS[rel]) {
+        for (const o of inline) say(o.at, `a full-window overlay built from inline styles (${o.decls}) — use openModal / the house .modal-overlay (or list the module in INLINE_OVERLAYS with a reason)`);
+    }
+    return { builds, problems, inline: inline.length };
+}
+
+const FAMILY_CLASS = /^[a-z][\w-]*-(?:overlay|backdrop)$/;
+
+/**
+ * Inline declaration lists in `src` that paint a full-window dim: `position:fixed`, pinned to
+ * all four edges (`inset:0`, or top/left 0 with right/bottom 0 or a 100% size), and a scrim (a
+ * background that is not transparent, or a backdrop-filter). Looked for where a dialog is
+ * styled by hand: `style="…"` attributes, `.style.cssText = '…'` (also `[…].join('')`).
+ * A stylesheet in a string (it has braces) is not a declaration list and is skipped.
+ * Returns [{ at, decls }]. Pure.
+ */
+export function inlineOverlays(src) {
+    const out = [];
+    const lists = [];
+    for (const m of src.matchAll(/\bstyle="([^"]*)"/g)) lists.push([m.index, m[1]]);
+    for (const m of src.matchAll(/\.cssText\s*=\s*(['"`])([\s\S]*?)\1/g)) lists.push([m.index, m[2]]);
+    for (const m of src.matchAll(/\.cssText\s*=\s*\[([\s\S]*?)\]\s*\.join/g)) {
+        lists.push([m.index, [...m[1].matchAll(/(['"`])([\s\S]*?)\1/g)].map((x) => x[2]).join('')]);
+    }
+    for (const [at, text] of lists) {
+        if (/[{}]/.test(text.replace(/\$\{[^}]*\}/g, ''))) continue;
+        const d = {};
+        for (const part of text.split(';')) {
+            const i = part.indexOf(':');
+            if (i < 0) continue;
+            d[part.slice(0, i).trim().toLowerCase()] = part.slice(i + 1).trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+        if (d.position !== 'fixed') continue;
+        const zero = (v) => v != null && /^0(px)?$/.test(v);
+        const full = (v) => v === '100%' || v === '100vw' || v === '100vh';
+        const covers = zero(d.inset) || (zero(d.top) && zero(d.left) && (zero(d.right) || zero(d.bottom) || full(d.width) || full(d.height)));
+        if (!covers) continue;
+        const bg = d.background ?? d['background-color'];
+        const dims = (bg != null && !/^(transparent|none)$/.test(bg)) || d['backdrop-filter'] != null;
+        if (!dims) continue;
+        out.push({ at, decls: ['position:fixed', d.inset != null ? 'inset:0' : 'top/left:0', bg != null ? `background:${bg}` : 'backdrop-filter'].join('; ') });
+    }
+    return out;
 }
 
 // ── Feature stylesheets ─────────────────────────────────────────────────────────────────────
@@ -271,11 +308,18 @@ function walk(dir) {
 
 export function run({ report = false } = {}) {
     const problems = [];
+    const inlineSeen = new Set();
     const html = readFileSync(join(ROOT, 'frontend/index.html'), 'utf8');
     const h = auditHtml(html);
     problems.push(...h.problems);
     for (const id of Object.keys(HTML_BESPOKE)) {
         if (!h.dialogs.includes(id)) problems.push(`HTML_BESPOKE lists #${id}, which no longer exists — remove the entry`);
+    }
+    for (const o of inlineOverlays(html)) {
+        const tag = html.slice(html.lastIndexOf('<', o.at), html.indexOf('>', o.at) + 1);
+        const key = `index.html#${attr(tag, 'id') || '?'}`;
+        if (INLINE_OVERLAYS[key]) { inlineSeen.add(key); continue; }
+        problems.push(`index.html:${html.slice(0, o.at).split('\n').length} — a full-window overlay built from inline styles (${o.decls}) — use the house .modal-overlay`);
     }
 
     const SRC = join(ROOT, 'frontend/src');
@@ -288,10 +332,12 @@ export function run({ report = false } = {}) {
         const r = auditTs(rel, src);
         if (r.builds) built++;
         if (TS_BESPOKE[rel]) seenBespoke.add(rel);
-        for (const m of src.matchAll(/(?<![\w-])[\w-]+-overlay(?![\w-])/g)) famSeen.add(m[0]);
+        if (r.inline) inlineSeen.add(rel);
+        for (const m of src.matchAll(/(?<![\w-])[\w-]+-(?:overlay|backdrop)(?![\w-])/g)) famSeen.add(m[0]);
         problems.push(...r.problems);
     }
     for (const rel of Object.keys(TS_BESPOKE)) if (!seenBespoke.has(rel)) problems.push(`TS_BESPOKE lists ${rel}, which no longer exists — remove the entry`);
+    for (const rel of Object.keys(INLINE_OVERLAYS)) if (!inlineSeen.has(rel)) problems.push(`INLINE_OVERLAYS lists ${rel}, which builds no inline overlay any more — remove the entry`);
     for (const fam of Object.keys(OVERLAY_FAMILIES)) if (!famSeen.has(fam)) problems.push(`OVERLAY_FAMILIES lists .${fam}, which nothing uses any more — remove the entry`);
 
     const CSSDIR = join(ROOT, 'frontend/css');
@@ -309,7 +355,7 @@ export function run({ report = false } = {}) {
 
     if (report) {
         console.log(`static dialogs: ${h.dialogs.length} (${Object.keys(HTML_BESPOKE).length} bespoke)`);
-        console.log(`modules building a house overlay: ${built}; bespoke modules: ${Object.keys(TS_BESPOKE).length}; other overlay families: ${Object.keys(OVERLAY_FAMILIES).length}`);
+        console.log(`modules building a house overlay: ${built}; bespoke modules: ${Object.keys(TS_BESPOKE).length}; other overlay families: ${Object.keys(OVERLAY_FAMILIES).length}; inline-built overlays excused: ${Object.keys(INLINE_OVERLAYS).length}`);
     }
     return { problems, dialogs: h.dialogs.length, built };
 }

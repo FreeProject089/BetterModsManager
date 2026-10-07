@@ -123,7 +123,7 @@ export function showKofiReminder(): void {
         </div>
       </div>
     `;
-    document.getElementById('app-window-outer')?.appendChild(overlay) || document.body.appendChild(overlay);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('open'));
 
     // Escape must dismiss it: the card declares role="dialog" aria-modal="true", so without

@@ -3672,6 +3672,12 @@ body.bmm-toolbar-opaque .lib-header-shell {
     background: var(--bmm-s03);
 }
 .prof-custom-icon-preview img { width: 100%; height: 100%; object-fit: cover; }
+/* The session-replay player (replay-watcher.ts): the stage and the log column side by side in a
+   flush body that does not scroll (the stage scales the recording to fit). */
+.rw-body { flex-direction: row; overflow: hidden; }
+#rw-host { flex: 1; min-width: 0; }
+/* The background cropper (profiles.ts openCropOverlay), inside the house shell. */
+.prof-crop-stage { width: 100%; height: min(500px, 58vh); background: var(--bmm-bg-base); border-radius: 12px; overflow: hidden; border: 1px solid var(--bmm-border); }
 
 /* ── Util ── */
 .mono {
@@ -5535,18 +5541,10 @@ body.tut-docked.tut-min .app-shell {
 .nav-item-hidden { display: none !important; }
 .nav-customize-btn { opacity: 0.6; }
 .nav-customize-btn:hover { opacity: 1; }
-.nbe-modal {
-    /* 460px made the custom-page editors a peephole; the modal is a workspace now. */
-    width: min(720px, 94vw); max-height: 90vh; display: flex; flex-direction: column;
-    padding: 20px 22px; background: var(--bmm-bg-elevated); border: 1px solid var(--border);
-    border-radius: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
-    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.nbe-modal .modal-generic-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.nbe-modal .modal-generic-header h3 { margin: 0; font-size: 16px; }
-.nbe-modal .modal-close { background: transparent; border: 0; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+/* The editor is the house shell (.modal.modal--xl.modal--tall): header, the body scrolls,
+   the actions are the footer. Only its content is styled here. */
 .nbe-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
-.nbe-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 4px; margin-right: -4px; }
+.nbe-scroll { min-width: 0; }
 .nbe-list { display: flex; flex-direction: column; gap: 6px; }
 .nbe-row {
     display: flex; align-items: center; gap: 10px;
@@ -5565,7 +5563,7 @@ body.tut-docked.tut-min .app-shell {
 }
 .nbe-eye.is-hidden { color: var(--text-muted); opacity: 0.7; }
 .nbe-eye:disabled { opacity: 0.3; cursor: not-allowed; }
-.nbe-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.nbe-actions { justify-content: stretch; }
 .nbe-act { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; justify-content: center; }
 .nbe-act .nbe-act-ic { display: inline-flex; flex-shrink: 0; }
 .nbe-act .nbe-act-ic svg { width: 15px; height: 15px; }
@@ -9034,83 +9032,9 @@ select:focus {
    INTERACTIVE DOCUMENTATION
 ═══════════════════════════════════ */
 
-.modal-docs-container {
-    position: fixed;
-    top: 30px;
-    left: 30px;
-    right: 30px;
-    bottom: 30px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-accent);
-    border-radius: 24px;
-    z-index: 10001;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    backdrop-filter: blur(30px);
-    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8),
-                inset 0 0 40px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.05);
-    animation: modalSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalSlideUp {
-    from { transform: translateY(100%) scale(0.95); opacity: 0; }
-    to { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-.modal-docs-header {
-    padding: 24px 32px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--bmm-s02);
-}
-
-.modal-docs-title-group {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.modal-docs-icon {
-    width: 42px;
-    height: 42px;
-    background: var(--accent-dim);
-    border: 1px solid var(--border-accent);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent);
-    box-shadow: 0 0 15px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.2);
-}
-
-.modal-docs-title {
-    font-size: 20px;
-    font-weight: 800;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
-}
-
-.btn-docs-close {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 8px;
-    border-radius: 50%;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-docs-close:hover {
-    background: rgba(239,68,68,0.2);
-    color: var(--bmm-danger);
-    transform: rotate(90deg);
-}
+/* The diagram viewer is the house shell at full size (.modal.modal--full): header with the
+   reset-zoom action, and a flush body that is the pan/zoom surface. The body does not scroll:
+   svg-pan-zoom moves the drawing inside it. */
 
 .btn-docs-util {
     background: var(--bmm-s05);
@@ -9133,10 +9057,7 @@ select:focus {
     transform: translateY(-2px);
 }
 
-.modal-docs-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+.modal-docs > .modal-body.modal-docs-content {
     position: relative;
     overflow: hidden; /* Important for full-area pan */
 }
@@ -11659,15 +11580,10 @@ body.tasky-hidden #app-mascot-container {
 .sched-empty strong { font-size:13px; color:var(--text-primary); }
 .sched-empty span { font-size:11.5px; color:var(--text-muted); max-width:420px; line-height:1.5; }
 
-.sched-modal { width:860px; max-width:96vw; display:flex; flex-direction:column; max-height:90vh; }
 /* ── Full-window automation builder ─────────────────────────────────────────
-   The editor fills the app window (like the diagram viewer): a fixed left pane
+   The editor fills the app window (the house .modal--full): a fixed left pane
    holds the WHAT/WHEN meta (name, trigger, options) and the main pane is a
-   roomy top-to-bottom flow of steps — no more cramped 860px column. */
-.sched-modal.sched-full {
-    width:calc(100% - 28px); height:calc(100% - 28px);
-    max-width:none; max-height:none; margin:14px;
-}
+   roomy top-to-bottom flow of steps. */
 .sched-layout { flex:1; display:flex; min-height:0; }
 .sched-side {
     width:300px; flex-shrink:0; overflow-y:auto; padding:16px 18px;
@@ -11709,12 +11625,6 @@ body.tasky-hidden #app-mascot-container {
 /* Modal header: icon tile + live summary line that updates as the task is edited. */
 .sched-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .sched-head-main { display:flex; align-items:center; gap:12px; min-width:0; }
-.sched-head-icon { width:38px; height:38px; border-radius:11px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center; color:var(--accent);
-    background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.14));
-    border:1px solid var(--bmm-border-accent, transparent); }
-.sched-head-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
-.sched-head-text .modal-title { margin:0; font-size:1.1rem; }
 .sched-head-summary { font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* Numbered sections give the modal a clear 1-2-3-4 flow. */
 .sched-section { margin-bottom:18px; padding:14px; border:1px solid var(--border); border-radius:12px;
@@ -11749,9 +11659,9 @@ body.tasky-hidden #app-mascot-container {
 .sched-test:hover { background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.12)); }
 /* overflow:auto (both axes): deeply-nested steps keep a usable min-width and the
    body scrolls HORIZONTALLY instead of squishing the innermost block to a sliver. */
-.sched-modal .modal-body.sched-body { flex:1; overflow:auto; padding:18px 22px; display:block; }
+.sched-modal .modal-body.sched-body { flex:1; overflow:auto; display:block; }
 .sched-modal .modal-header, .sched-modal .sched-footer { flex-shrink:0; }
-.sched-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid var(--border); }
+.sched-footer { gap:10px; }
 .sched-label { display:block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
     color:var(--text-muted); margin:14px 0 6px; }
 .sched-steps { display:flex; flex-direction:column; gap:8px; }
@@ -13658,52 +13568,13 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
 /* ═══════════════════════════════════════════════════════════════════════════
    PLUG-OVERLAY — redesigned from scratch
    ═══════════════════════════════════════════════════════════════════════════ */
-@keyframes plugOverlayIn  { from { opacity: 0 } to { opacity: 1 } }
-@keyframes plugPanelIn    { from { opacity: 0; transform: translateY(18px) scale(0.97) } to { opacity: 1; transform: translateY(0) scale(1) } }
-
-.plug-overlay {
-    /* Full-screen dark scrim */
-    position: fixed;
-    inset: 0;
-    z-index: 9100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    background: rgba(0, 0, 0, 0.72);
-    backdrop-filter: blur(6px) saturate(0.7);
-    -webkit-backdrop-filter: blur(6px) saturate(0.7);
-    animation: plugOverlayIn 0.15s ease both;
-    /* Clip so no child shadow bleeds beyond the viewport */
-    overflow: hidden;
-}
-
-.plug-overlay-panel {
-    /* Card */
-    position: relative;
-    width: 100%;
-    max-width: 600px;
-    max-height: min(90vh, 720px);
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-secondary, #111827);
-    border: 1px solid var(--bmm-s08);
-    border-radius: 18px;
-    box-shadow:
-        0 0   0 1px var(--bmm-s04) inset,
-        0 4px 6px rgba(0,0,0,0.18),
-        0 16px 40px rgba(0,0,0,0.55),
-        0 32px 64px rgba(0,0,0,0.30);
-    overflow: hidden;
-    animation: plugPanelIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+/* The plugin dialogs (createOverlay in plugins.ts) are the house shell: .modal-overlay >
+   .modal.modal--md (.plug-overlay-panel is only the hook) with .modal-header / .modal-body /
+   .modal-footer bands. Only their content is styled here. */
 
 /* ── Catalog builder overlay (My catalogs) ── */
-.plug-ov-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px 10px; }
-.plug-ov-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
-.plug-ov-head h3 svg { width: 16px; height: 16px; }
-.plug-cat-desc { padding: 0 18px; margin: 0 0 10px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-.plug-cat-list, .plug-cat-meta, .plug-cat-addbar, .plug-cat-entries { padding: 0 18px; }
+.plug-cat-body { gap: 10px; }
+.plug-cat-desc { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 .plug-cat-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .plug-cat-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--bmm-s08); border-radius: 10px; background: var(--bmm-s03); }
 .plug-cat-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -13722,7 +13593,7 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
 .pcb-body { flex: 1; min-width: 0; }
 .plug-cat-entry-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .plug-cat-entry-grid .input { font-size: 11px; padding: 5px 8px; }
-.plug-ov-actions { display: flex; align-items: center; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--bmm-s06); margin-top: 10px; flex-wrap: wrap; }
+.plug-ov-actions { justify-content: flex-start; }
 
 /* ── Quick-test form field consistency ── */
 .plug-ov-body .plug-form-label {
@@ -13772,94 +13643,13 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
 .plug-ov-body details > summary::before { content: '▸'; margin-right: 6px; font-size: 10px; opacity: .7; transition: transform .15s; display: inline-block; }
 .plug-ov-body details[open] > summary::before { transform: rotate(90deg); }
 
-/* ── Header ── */
-.plug-ov-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 13px 16px 13px 18px;
-    border-bottom: 1px solid var(--bmm-s07);
-    flex-shrink: 0;
-    background: var(--bmm-s02);
-}
-
-.plug-ov-title {
-    flex: 1;
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-/* Header ✕ icon button — fixed 26×26 square */
-.plug-ov-header .plug-ov-close-btn {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px; height: 26px;
-    background: transparent;
-    border: none;
-    border-radius: 7px;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-}
-.plug-ov-header .plug-ov-close-btn:hover { background: var(--bmm-s09); color: var(--text-primary); }
-
-/* Footer text Close/Cancel buttons — auto-sized, inherit from btn-ghost */
-.plug-ov-footer .plug-ov-close-btn {
-    padding: 7px 14px;
-    height: auto;
-    width: auto;
-    min-width: 72px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    border: 1px solid var(--bmm-s10);
-    background: var(--bmm-s04);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-.plug-ov-footer .plug-ov-close-btn:hover {
-    background: var(--bmm-s08);
-    color: var(--text-primary);
-    border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.18);
-}
+/* ── Header: the title carries an icon (and, for a quick test, the method and path). ── */
+.plug-ov-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* ── Body ── */
-.plug-ov-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    /* Custom scrollbar */
-    scrollbar-width: thin;
-    scrollbar-color: var(--bmm-s12) transparent;
-}
+.plug-ov-body { scrollbar-width: thin; scrollbar-color: var(--bmm-s12) transparent; }
 .plug-ov-body::-webkit-scrollbar { width: 5px; }
 .plug-ov-body::-webkit-scrollbar-thumb { background: var(--bmm-s12); border-radius: 99px; }
-
-/* ── Footer ── */
-.plug-ov-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 11px 16px;
-    border-top: 1px solid var(--bmm-s07);
-    flex-shrink: 0;
-    background: var(--bmm-s02);
-}
 
 /* Smart-QT form fields */
 .plug-qt-smart-field {
@@ -16315,24 +16105,9 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
    its own line under the title, and packed 5000 icons into 84px cells with 9px
    captions. One head row (title | sources | close), a real search field, and
    cells big enough to recognise a glyph without reading its name. */
-.ipk-modal {
-    width: min(760px, 94vw);
-    max-height: 82vh;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 18px 20px 16px;
-}
-.ipk-head { display: flex; align-items: center; gap: 14px; }
-.ipk-title { margin: 0; font-size: 16px; font-weight: 700; white-space: nowrap; }
-.ipk-close {
-    margin-left: auto; flex-shrink: 0;
-    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-    background: transparent; border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text-muted); cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-}
-.ipk-close:hover { color: var(--danger); border-color: var(--danger); }
+/* The card is the house shell (openModal, modal--lg modal--tall): the sources sit in the
+   header (.bms-head-end), the search is a .modal-toolbar band, the grid is the scroller. */
+.ipk-modal > .modal-body { overflow: hidden; }
 .ipk-tabs { display: flex; gap: 6px; }
 .ipk-tab {
     display: inline-flex; align-items: center; gap: 5px;
@@ -16349,11 +16124,8 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
    Title + close stay on top, the tabs drop to their own full-width strip that scrolls
    sideways instead of overflowing, and the search bar + grid tighten. */
 @media (max-width: 580px) {
-    .ipk-modal { width: 96vw; padding: 14px 14px 12px; gap: 10px; }
-    .ipk-head { flex-wrap: wrap; row-gap: 10px; }
-    .ipk-title { order: 1; }
-    .ipk-close { order: 2; margin-left: auto; }
-    .ipk-tabs { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 3px; scrollbar-width: thin; }
+    .ipk-modal .bms-head-end { order: 3; width: 100%; }
+    .ipk-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 3px; scrollbar-width: thin; }
     .ipk-tab { flex-shrink: 0; }
     .ipk-searchwrap { height: 44px; }
     .ipk-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
@@ -16441,10 +16213,8 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 }
 .ipk-cell:hover .ipk-name { color: var(--text-secondary); }
 .ipk-loading { grid-column: 1 / -1; padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
-.ipk-foot {
-    display: flex; align-items: center; justify-content: space-between;
-    padding-top: 4px; color: var(--text-muted); font-size: 11px;
-}
+.ipk-foot { justify-content: space-between; color: var(--text-secondary); font-size: 11px; }
+.ipk-credit { font-size: 11px; opacity: .75; }
 .ipk-count b { color: var(--text-secondary); }
 
 
@@ -16576,27 +16346,8 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 /* ── Dependency explainer (Credits → Technical Architecture) ─────────────────
    Clicking a stack card used to launch a browser. It opens this first: what the
    library is, and — the part worth reading — what BMM uses it FOR. */
-.stackd-modal {
-    width: min(520px, 92vw);
-    display: flex; flex-direction: column; gap: 14px;
-    padding: 20px 22px 18px;
-}
-.stackd-head { display: flex; align-items: flex-start; gap: 12px; }
-.stackd-id { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
-.stackd-name { font-size: 17px; font-weight: 700; color: var(--text-primary); }
-.stackd-v {
-    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-    padding: 2px 7px; border-radius: 5px;
-    background: var(--bmm-s06); color: var(--text-muted);
-}
-.stackd-close {
-    margin-left: auto; flex-shrink: 0;
-    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-    background: transparent; border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text-muted); cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-}
-.stackd-close:hover { color: var(--danger); border-color: var(--danger); }
+/* The card itself is the house shell (openModal, modal--md); only the content is ours. */
+.stackd-modal > .modal-body { gap: 14px; }
 .stackd-block {
     padding: 12px 14px; border-radius: 10px;
     background: var(--bmm-s02); border: 1px solid var(--border);
@@ -16614,7 +16365,6 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 .stackd-role .stackd-label { color: var(--accent); }
 .stackd-text { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
 .stackd-role .stackd-text { color: var(--text-primary); }
-.stackd-foot { display: flex; justify-content: flex-end; }
 
 /* ── A dock must never be covered by, nor cover, the app ─────────────────────
    The reservation is a padding on .app-shell, which any child that sets its own
@@ -19045,31 +18795,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 [hidden] { display: none !important; }
 
 /* ── Modpack catalogues ──────────────────────────────────────────────────────
-   Its own class names rather than the shared .modal-body, which forces a column flex that
-   overrode `hidden` and drew both views at once. A window with two places in it needs the two
-   to be able to hide. */
-.mpc-panel {
-    width: min(680px, 94vw); max-height: 84vh;
-    display: flex; flex-direction: column; overflow: hidden;
-    background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
-    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.mpc-head {
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-    padding: 16px 20px 12px;
-}
-.mpc-h1 { margin: 0; font-size: 16px; font-weight: 700; }
-.mpc-sub { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
-.mpc-x {
-    background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1;
-    cursor: pointer; padding: 0 4px;
-}
-.mpc-x:hover { color: var(--text-primary); }
-.mpc-x:focus-visible, .mpc-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+   The house shell (.modal.modal--lg): header, the Follow / Publish switch as a toolbar band,
+   one .modal-body per view (the global [hidden] rule lets the hidden one go), and the Publish
+   footer, shown with its view. */
+.mpc-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* The same segmented pair the update dialog uses. Two answers, and which one is active has to
    be readable without opening anything. */
-.mpc-modes { display: flex; gap: 6px; padding: 0 20px 12px; }
+.mpc-modes { gap: 6px; flex-wrap: nowrap; }
 .mpc-mode {
     flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
     background: var(--bmm-s03); color: var(--text-muted);
@@ -19077,10 +18809,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .mpc-mode:hover { color: var(--text-primary); }
 .mpc-mode.is-on { background: var(--bmm-s06); color: var(--text-primary); border-color: var(--accent); }
-.mpc-view {
-    padding: 0 20px 18px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 10px;
-}
+.mpc-view { gap: 10px; }
 .mpc-lede { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.55; }
 /* min-width:0 on the row and the input: an address is one unbreakable string, and without it
    a long one pushes the buttons off the panel. */
@@ -19092,10 +18821,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .mpc-sources { display: flex; flex-direction: column; gap: 4px; }
 .mpc-list { display: flex; flex-direction: column; gap: 6px; }
-.mpc-foot {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    flex-wrap: wrap; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
-}
 .mpc-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; flex: 1; min-width: 180px; }
 
 
@@ -21065,7 +20790,6 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 /* ── Customize navigation: two columns when there is room — the list on the left, the
    "add a button" and "custom pages" panels on the right as cards rather than stacked
    disclosures that pushed the list off screen. ── */
-.nbe-modal { width: min(900px, 96vw); }
 .nbe-scroll { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
 @media (min-width: 860px) {
     .nbe-scroll { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "list add" "list pages" "addsec pages"; }
@@ -21151,9 +20875,6 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
    modal between ~580px and the point it all fits on one line, pushing the tabs
    and Import button out past the rounded border. Let the head wrap at ANY width,
    contain the modal, and keep the grid inside its box. */
-.ipk-modal { overflow: hidden; min-width: 0; }
-.ipk-head { flex-wrap: wrap; row-gap: 10px; }
-.ipk-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ipk-tabs { min-width: 0; flex-wrap: wrap; }
 .ipk-grid { min-width: 0; }
 .ipk-cell { min-width: 0; }
@@ -21162,7 +20883,6 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 /* Nav customizer: more room to breathe. Bigger gap between the two columns, calmer
    rows, and the add/pages panels sit on a faint surface so the left list and the right
    forms read as two areas rather than one crowded sheet. */
-.nbe-modal { padding: 22px 24px; }
 @media (min-width: 860px) { .nbe-scroll { gap: 12px 22px; } }
 .nbe-row { padding: 8px 10px; gap: 11px; border-radius: 9px; }
 .nbe-row:hover { border-color: var(--bmm-s15, var(--border)); background: rgba(255,255,255,0.04); }
@@ -21362,3 +21082,32 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .stackd-fact dt { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bmm-text-secondary); }
 .stackd-fact dd { margin: 0; font-size: 12.5px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { .credits-stack-chip, .stack-chip { transition: none; } }
+
+/* ── The update dialog and the first-run language question (ui/update-notes.ts) ─────────────
+   Both are the house shell; what is left here is their content: Tasky in the header, the
+   version diff, the notes panel, the quick-update progress. */
+.upd-tasky { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--bmm-accent) 30%, transparent)); }
+.upd-kicker { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.upd-kicker.is-pre { color: color-mix(in srgb, var(--bmm-warning) 70%, var(--bmm-text-primary)); }
+.upd-diff { display: flex; align-items: center; gap: 10px; }
+.upd-ver { flex: 1; padding: 10px 14px; border-radius: 11px; text-align: center; border: 1px solid var(--bmm-border); }
+.upd-ver.is-old { background: var(--bmm-danger-dim); border-color: color-mix(in srgb, var(--bmm-danger) 30%, var(--bmm-border)); }
+.upd-ver.is-new { background: var(--bmm-success-dim); border-color: color-mix(in srgb, var(--bmm-success) 30%, var(--bmm-border)); }
+.upd-ver-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--bmm-text-secondary); margin-bottom: 4px; }
+.upd-ver-num { font-size: 20px; font-weight: 800; font-family: var(--font-mono, monospace); letter-spacing: -0.02em; }
+.upd-ver.is-old .upd-ver-num { color: color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary)); }
+.upd-ver.is-new .upd-ver-num { color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.upd-arrow { color: var(--bmm-text-secondary); flex-shrink: 0; }
+.upd-notes { border-radius: 12px; border: 1px solid var(--bmm-border); overflow: hidden; background: var(--bmm-s02); }
+.upd-notes-head { display: flex; align-items: center; gap: 7px; padding: 9px 13px; background: var(--bmm-s03); border-bottom: 1px solid var(--bmm-border); font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--bmm-text-secondary); }
+.upd-notes-v { font-weight: 700; letter-spacing: 0; color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.upd-notes-scroll { max-height: 230px; overflow-y: auto; padding: 6px 16px 12px; scrollbar-width: thin; }
+.upd-progress { border-radius: 10px; padding: 12px 14px; border: 1px solid var(--bmm-border-accent); background: var(--bmm-accent-dim); }
+.upd-progress.is-done { border-color: color-mix(in srgb, var(--bmm-success) 30%, var(--bmm-border)); background: var(--bmm-success-dim); }
+.upd-progress-track { height: 3px; background: var(--bmm-s08); border-radius: 3px; overflow: hidden; }
+.upd-progress-bar { height: 100%; background: var(--bmm-success); transition: width 0.3s ease; border-radius: 3px; }
+.upd-major { display: flex; gap: 9px; align-items: flex-start; border-radius: 10px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border)); background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 70%, var(--bmm-text-primary)); }
+.upd-major > div { font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.upd-gh { font-size: 12px; color: var(--bms-accent-ink); text-decoration: none; }
+.upd-gh:hover { text-decoration: underline; }
+.langsel-body { overflow: visible; }

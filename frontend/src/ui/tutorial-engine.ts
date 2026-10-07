@@ -1523,7 +1523,7 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     // A ring around something INSIDE an open dialog must paint above that dialog
     // (modal overlays live at 9000-10000); a ring on the page stays under them so a
     // dialog opening is never greyed by the spotlight (see the z-index note below).
-    const inModal = !!(target as HTMLElement).closest?.('.modal-generic-overlay, .modal-overlay, .plug-overlay');
+    const inModal = !!(target as HTMLElement).closest?.('.modal-generic-overlay, .modal-overlay');
     // Above EVERY modal layer, not just the low ones: the app's dialogs run from
     // mapper.css's 9000 up to the assets panel at 2000300, so a ring on an element
     // inside a high panel at 20000 would vanish under it — the same invisible-

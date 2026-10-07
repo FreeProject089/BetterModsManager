@@ -15,8 +15,11 @@ import {
     BUILTIN_THEMES, getInstalledThemes, getActiveTheme, applyTheme, resetTheme,
     type BmmTheme,
 } from '../features/themes/theme-engine.js';
+import { openModal, type ModalHandle } from './modal-shell.js';
+import { raiseAboveAll } from './layer.js';
 
 const OVERLAY_ID = 'bmm-style-modal';
+let _handle: ModalHandle | null = null;
 
 // One-shot close callback, so a caller can sequence "style first, then the hub" without
 // this module knowing anything about tutorials.
@@ -68,13 +71,16 @@ function tile(theme: BmmTheme, active: boolean, onPick: () => void): HTMLElement
 }
 
 export function closeStyleModal(): void {
-    const o = document.getElementById(OVERLAY_ID);
-    if (!o) return;
+    // The handle's onClose (below) runs the follow-up, so a click on the dim and the Close
+    // button end the same way.
+    _handle?.close();
+}
+
+/** After the dialog is gone, whatever closed it: run the one-shot follow-up. */
+function afterClose(): void {
+    _handle = null;
     const cb = _onClose; _onClose = null;
     if (cb) { try { cb(); } catch { /* a follow-up failing must not keep the modal */ } }
-    o.classList.add('closing');
-    o.addEventListener('animationend', () => o.remove(), { once: true });
-    setTimeout(() => document.getElementById(OVERLAY_ID)?.remove(), 350);
 }
 
 /** Jump to the settings view and, if an anchor is given, bring that card into view. */
@@ -89,14 +95,6 @@ function goToSettings(anchorId?: string): void {
 export function openStyleModal(onClose?: () => void): void {
     if (document.getElementById(OVERLAY_ID)) return;
     _onClose = onClose ?? null;
-
-    const overlay = el('div', 'style-modal-overlay');
-    overlay.id = OVERLAY_ID;
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeStyleModal(); });
-
-    const box = el('div', 'style-modal');
-    box.append(el('h2', 'style-modal-title', t('style.title') || 'Style your BMM'));
-    box.append(el('p', 'style-modal-sub', t('style.sub') || 'Pick a look — it applies instantly and sticks. Everything here also lives in Settings.'));
 
     const grid = el('div', 'style-modal-grid');
     const activeId = getActiveTheme()?.id ?? null;
@@ -125,9 +123,8 @@ export function openStyleModal(onClose?: () => void): void {
             openStyleModal(carry ?? undefined);
         }));
     }
-    box.append(grid);
 
-    const doors = el('div', 'style-modal-doors');
+    const doors = document.createDocumentFragment();
     const tasky = el('button', 'btn btn-secondary', t('style.tasky') || 'Tasky settings');
     tasky.setAttribute('type', 'button');
     tasky.addEventListener('click', () => goToSettings('settings-tasky-icon'));
@@ -137,9 +134,24 @@ export function openStyleModal(onClose?: () => void): void {
     const close = el('button', 'btn btn-primary', t('common.close') || 'Close');
     close.setAttribute('type', 'button');
     close.addEventListener('click', closeStyleModal);
-    doors.append(tasky, all, close);
-    box.append(doors);
+    const start = el('div', 'modal-footer-start');
+    start.append(tasky, all);
+    doors.append(start, close);
 
-    overlay.append(box);
-    (document.getElementById('app-window-outer') || document.body).append(overlay);
+    // The house shell. Not dismissible by Escape and without a ×, as before (the footer's
+    // Close is the answer), but a click on the dim still closes it. Its old z-index stays the
+    // floor: it is opened at the end of the first run, above everything that run put up.
+    _handle = openModal({
+        id: OVERLAY_ID,
+        title: t('style.title') || 'Style your BMM',
+        subtitle: t('style.sub') || 'Pick a look — it applies instantly and sticks. Everything here also lives in Settings.',
+        size: 'lg',
+        className: 'style-modal',
+        body: grid,
+        footer: doors,
+        dismissible: false,
+        backdropClose: true,
+        onClose: afterClose,
+    });
+    raiseAboveAll(_handle.overlay, 100050);
 }

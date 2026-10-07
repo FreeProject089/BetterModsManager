@@ -8,6 +8,8 @@ import { permDomains } from './plugin-perms.js';
 import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
 export { permDomains } from './plugin-perms.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { MODAL_CLOSE_SVG, bindModal } from '../../ui/modal-shell.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
@@ -1013,7 +1015,7 @@ function draftToCatalogJson(d: PlugCatDraft): string {
 }
 
 function openPluginCatalogBuilder(onSourcesChanged: () => void) {
-    const ov = createOverlay('');
+    const ov = createOverlay('', 'lg');
     const panel = ov.querySelector('.plug-overlay-panel') as HTMLElement;
     let editing: PlugCatDraft | null = null; // null = list view
 
@@ -1029,10 +1031,12 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
     const renderList = () => {
         const drafts = getMyPluginCatalogs();
         panel.innerHTML = `
-            <div class="plug-ov-head">
-                <h3>${IC.list} ${t('plugins.myCatalogs') || 'My plugin catalogs'}</h3>
-                <button class="plug-ov-close-btn btn btn-sm btn-ghost">${IC.x}</button>
+            <div class="modal-header">
+                <div class="bms-icon" aria-hidden="true">${IC.list}</div>
+                <h2 class="modal-title">${t('plugins.myCatalogs') || 'My plugin catalogs'}</h2>
+                <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
             </div>
+            <div class="modal-body plug-cat-body">
             <p class="plug-cat-desc">${t('plugins.myCatalogsDesc') || 'Build your own plugin catalog from your installed plugins, then export it or add it as a source. To share it publicly, host it on BetterCommunity.'}</p>
             <div class="plug-cat-list">
                 ${drafts.length ? drafts.map(d => `
@@ -1048,7 +1052,8 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
                         <button class="btn btn-xs btn-ghost plug-cat-del" data-id="${escAttr(d.id)}" style="color:var(--danger)">${IC.trash || IC.x}</button>
                     </div>`).join('') : `<p class="plug-sources-empty">${t('plugins.noMyCatalogs') || 'No catalog yet — create your first one.'}</p>`}
             </div>
-            <div class="plug-ov-actions">
+            </div>
+            <div class="modal-footer plug-ov-actions">
                 <button class="btn btn-accent" id="plug-cat-new">${IC.plus} ${t('plugins.newCatalog') || 'New catalog'}</button>
             </div>`;
         panel.querySelector('.plug-ov-close-btn')?.addEventListener('click', close);
@@ -1213,10 +1218,12 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
     const renderEditor = () => {
         const d = editing!;
         panel.innerHTML = `
-            <div class="plug-ov-head">
-                <h3>${IC.list} ${t('plugins.editCatalog') || 'Edit catalog'}</h3>
-                <button class="plug-ov-close-btn btn btn-sm btn-ghost">${IC.x}</button>
+            <div class="modal-header">
+                <div class="bms-icon" aria-hidden="true">${IC.list}</div>
+                <h2 class="modal-title">${t('plugins.editCatalog') || 'Edit catalog'}</h2>
+                <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
             </div>
+            <div class="modal-body plug-cat-body">
             <div class="plug-cat-meta">
                 <div class="plug-form-row"><label class="plug-form-label">${t('plugins.catalogName') || 'Catalog name'} *</label><input type="text" id="pcb-name" class="input" value="${escAttr(d.name)}" placeholder="${escAttr(t('plugins.phServerPlugins'))}"></div>
                 <div class="plug-form-row" style="max-width:120px;"><label class="plug-form-label">${t('plugins.createVersion')}</label><input type="text" id="pcb-version" class="input" value="${escAttr(d.version)}"></div>
@@ -1230,7 +1237,8 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
                 <button class="btn btn-sm btn-ghost" id="pcb-add-empty">${IC.plus} ${t('plugins.addManual') || 'Add empty entry'}</button>
             </div>
             <div id="pcb-entries" class="plug-cat-entries"></div>
-            <div class="plug-ov-actions">
+            </div>
+            <div class="modal-footer plug-ov-actions">
                 <button class="btn btn-ghost" id="pcb-back">${t('common.back') || 'Back'}</button>
                 <div style="flex:1"></div>
                 <button class="btn btn-secondary" id="pcb-export">${IC.exportIcon} ${t('plugins.export') || 'Export'}</button>
@@ -1516,23 +1524,26 @@ function filterCatalogGrid(query: string) {
 
 // ── Overlay utility ────────────────────────────────────────────────────────
 
-function createOverlay(html: string): HTMLElement {
+// The house shell: .modal-overlay > .modal.modal--{size} with the header / body / footer bands
+// the templates write. bindModal gives it Escape (only when it is the top dialog), the Tab trap
+// and the focus back; `.plug-overlay-panel` stays as the hook the catalogue builder re-renders.
+function createOverlay(html: string, size: 'sm' | 'md' | 'lg' | 'xl' = 'md'): HTMLElement {
     const ov = document.createElement('div');
-    ov.className = 'plug-overlay';
-    ov.innerHTML = `<div class="plug-overlay-panel">${html}</div>`;
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal bms modal--${size} plug-overlay-panel" role="dialog" aria-modal="true">${html}</div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    raiseAboveAll(ov);
     // Backdrop click closes
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) ov.remove(); });
-    // Esc key closes
-    const onEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', onEsc); }
-    };
-    document.addEventListener('keydown', onEsc);
-    // Clean up Esc listener when overlay is removed via other means
-    const obs = new MutationObserver(() => {
-        if (!document.contains(ov)) { document.removeEventListener('keydown', onEsc); obs.disconnect(); }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
+    const release = bindModal(ov, { onClose: () => ov.remove() });
+    // Release the keys when the overlay is removed by any of its own buttons.
+    const host = ov.parentElement;
+    if (host) {
+        const obs = new MutationObserver(() => {
+            if (!ov.isConnected) { release(); obs.disconnect(); }
+        });
+        obs.observe(host, { childList: true });
+    }
     return ov;
 }
 
@@ -2648,14 +2659,14 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
     const methodCls: Record<string, string> = { GET:'plug-method-get', POST:'plug-method-post', PUT:'plug-method-put', DELETE:'plug-method-delete', PATCH:'plug-method-patch' };
     const overlay = createOverlay(`
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.play} <span class="plug-method ${methodCls[m] || 'plug-method-get'}" style="font-size:10px;">${escHtml(m)}</span> <code style="font-size:11px;color:var(--accent);margin-left:4px;">${escHtml(p)}</code></span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="modal-header plug-ov-header">
+            <h2 class="modal-title plug-ov-title">${IC.play} <span class="plug-method ${methodCls[m] || 'plug-method-get'}" style="font-size:10px;">${escHtml(m)}</span> <code style="font-size:11px;color:var(--accent);margin-left:4px;">${escHtml(p)}</code></h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:4px;">
+        <div class="modal-body plug-ov-body" style="display:flex;flex-direction:column;gap:4px;">
             ${formHtml}
         </div>
-        <div class="plug-ov-footer">
+        <div class="modal-footer plug-ov-footer">
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.cancel')}</button>
             <button class="btn btn-ghost" id="plug-qt-s-copy"  style="gap:5px;">${IC.copy} cURL</button>
             <button class="btn btn-accent" id="plug-qt-s-run">${IC.play} ${t('plugins.run')}</button>
@@ -3618,11 +3629,11 @@ function buildCompareContent(result: any, pluginName?: string, mode: 'compare' |
     const headerIcon = mode === 'apply' ? IC.play : IC.search;
 
     return `
-        <div class="plug-ov-header ${headerCls}">
-            <span class="plug-ov-title">${headerIcon} <strong>${escHtml(name)}</strong></span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn" data-tooltip="${t('common.close')}">${IC.x}</button>
+        <div class="modal-header plug-ov-header ${headerCls}">
+            <h2 class="modal-title plug-ov-title">${headerIcon} <strong>${escHtml(name)}</strong></h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body">
+        <div class="modal-body plug-ov-body" style="display:block;">
             <div class="plug-cmp-stats-bar">
                 ${statsChips || `<span class="plug-cmp-stat plug-cmp-stat-ok">${IC.checkCircle} ${t('plugins.cmpAllOk')}</span>`}
                 ${result.strict ? `<span class="plug-cmp-stat plug-cmp-stat-strict">${IC.lock} ${t('plugins.strict')}</span>` : ''}
@@ -3645,7 +3656,7 @@ function buildCompareContent(result: any, pluginName?: string, mode: 'compare' |
                 ${extraRows}
             </div>` : ''}
         </div>
-        <div class="plug-ov-footer">
+        <div class="modal-footer plug-ov-footer">
             ${mode === 'apply' ? `<button class="btn btn-accent" id="plug-ov-apply">${IC.play} ${t('plugins.applyNow')}</button>` : ''}
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
         </div>`;
@@ -7971,11 +7982,11 @@ async function handleApiTest() {
 
 function _showServerRepoAuthModal() {
     const ov = createOverlay(`
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.lock} ${t('plugins.serverRepoAuthTitle')}</span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="modal-header plug-ov-header">
+            <h2 class="modal-title plug-ov-title">${IC.lock} ${t('plugins.serverRepoAuthTitle')}</h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body" style="padding:16px;">
+        <div class="modal-body plug-ov-body" style="display:block;">
             <p style="font-size:13px;margin:0 0 12px;">${t('plugins.serverRepoAuthDesc')}</p>
             <ol style="font-size:12px;color:var(--text-muted);margin:0;padding-left:18px;line-height:1.8;">
                 <li>${t('plugins.serverRepoAuthStep1')}</li>
@@ -7983,7 +7994,7 @@ function _showServerRepoAuthModal() {
                 <li>${t('plugins.serverRepoAuthStep3')}</li>
             </ol>
         </div>
-        <div class="plug-ov-footer">
+        <div class="modal-footer plug-ov-footer">
             <button class="btn btn-accent" id="plug-sr-goto-settings">${IC.settings} ${t('plugins.serverRepoGotoSettings')}</button>
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
         </div>`);
@@ -11018,17 +11029,17 @@ async function askForRequestedPerms(plugin: any): Promise<void> {
 function handlePluginChecksumModal(manifest: any, installDir: string, hash: string) {
     const date = new Date().toLocaleDateString();
     const ov = createOverlay(`
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.hash} <strong>${escHtml(manifest.name)}</strong></span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="modal-header plug-ov-header">
+            <h2 class="modal-title plug-ov-title">${IC.hash} <strong>${escHtml(manifest.name)}</strong></h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body" style="padding:16px;">
+        <div class="modal-body plug-ov-body" style="display:block;">
             <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.checksumTitle')}</p>
             <div class="plug-code-pre" style="font-size:11px;word-break:break-all;user-select:all;cursor:text;padding:10px;border-radius:6px;background:rgba(0,0,0,0.3);">${escHtml(hash)}</div>
             <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">${IC.info} ${escHtml(installDir)}</p>
             <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">${date}</p>
         </div>
-        <div class="plug-ov-footer">
+        <div class="modal-footer plug-ov-footer">
             <button class="btn btn-sm btn-ghost" id="plug-sha-copy">${IC.copy} ${t('common.copy')}</button>
             <button class="btn btn-sm btn-ghost" id="plug-sha-recalc">${IC.refresh} ${t('plugins.checksumRecalc')}</button>
             <button class="btn btn-sm btn-danger" id="plug-sha-delete">${IC.trash} ${t('common.delete')}</button>
@@ -11372,11 +11383,11 @@ async function maybeRunPluginScripts(pluginId: string): Promise<void> {
         `<button class="plug-script-run-row" data-script="${escHtml(s)}">${IC.play}<code>${escHtml(s)}</code></button>`
     ).join('');
     const ov = createOverlay(`
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.terminal} ${t('plugins.chooseScriptTitle') || 'Choose a script to run'}</span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="modal-header plug-ov-header">
+            <h2 class="modal-title plug-ov-title">${IC.terminal} ${t('plugins.chooseScriptTitle') || 'Choose a script to run'}</h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
+        <div class="modal-body plug-ov-body" style="display:flex;flex-direction:column;gap:10px;">
             <p style="font-size:12.5px;color:var(--text-secondary);margin:0;line-height:1.5;">${(t('plugins.chooseScriptDesc') || '"{name}" — pick a script to launch. It runs a real program on your PC.').replace('{name}', escHtml(plugin.manifest.name))}</p>
             <div class="plug-script-run-list">${rows}</div>
             <p style="font-size:10.5px;color:var(--warning);display:flex;gap:6px;align-items:flex-start;margin:2px 0 0;line-height:1.4;">${IC.lock}<span>${t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC.'}</span></p>
@@ -11402,18 +11413,18 @@ function handleInspect(plugin: any) {
     const manifest = plugin.manifest ?? plugin;
     const json = JSON.stringify(manifest, null, 2);
     const ov = createOverlay(`
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.eye} <strong>${escHtml(manifest.name)}</strong></span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="modal-header plug-ov-header">
+            <h2 class="modal-title plug-ov-title">${IC.eye} <strong>${escHtml(manifest.name)}</strong></h2>
+            <button type="button" class="modal-close plug-ov-close-btn" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div class="plug-ov-body" style="padding:14px 16px;">
+        <div class="modal-body plug-ov-body" style="display:block;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <span style="font-size:11px;color:var(--text-muted);">plugin.json</span>
                 <button class="btn btn-xs btn-ghost" id="plug-inspect-copy">${IC.copy} ${t('common.copy')}</button>
             </div>
             <pre class="plug-code-pre" style="max-height:55vh;overflow:auto;font-size:11px;">${hlJson(json)}</pre>
         </div>
-        <div class="plug-ov-footer">
+        <div class="modal-footer plug-ov-footer">
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
         </div>`);
     ov.querySelector('#plug-inspect-copy')?.addEventListener('click', async () => {

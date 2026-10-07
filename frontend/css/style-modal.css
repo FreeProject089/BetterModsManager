@@ -1,38 +1,15 @@
-/* The Style modal — theme tiles + doors into Settings. See src/ui/style-modal.ts.
+/* The Style modal — theme tiles + doors into Settings (src/ui/style-modal.ts), and the
+   first-run file-access question (src/ui/security-modal.ts), both on the house shell.
    Tokens throughout: this screen exists to change the theme, so it is the last place a
    fixed wash could hide (it would look right on exactly one of the things it sells). */
 
-.style-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100050;
-    display: grid;
-    place-items: center;
-    background: rgba(0, 0, 0, 0.55);   /* scrim: intentionally black in every theme */
-    animation: styleFadeIn 0.18s ease;
-}
-.style-modal-overlay.closing { animation: styleFadeOut 0.2s ease forwards; }
-@keyframes styleFadeIn  { from { opacity: 0; } }
-@keyframes styleFadeOut { to   { opacity: 0; } }
-
-.style-modal {
-    width: min(680px, calc(100vw - 48px));
-    max-height: min(640px, calc(100vh - 64px));
-    overflow-y: auto;
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 22px 24px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-}
-.style-modal-title { margin: 0 0 4px; font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); }
-.style-modal-sub   { margin: 0 0 16px; font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.5; }
+/* The card is the house shell (openModal, .modal--lg): title + subtitle in the header, the
+   tiles in the body, the doors in the footer. Only the tiles are styled here. */
 
 .style-modal-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 10px;
-    margin-bottom: 18px;
 }
 
 .style-tile {
@@ -76,4 +53,22 @@
 }
 .style-tile.on .style-tile-name { color: var(--bmm-text-primary); }
 
-.style-modal-doors { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+
+/* ── The first-run file-access question (src/ui/security-modal.ts) ─────────────────────────
+   House shell, sm; two radio cards — the same pair as the launch deck's file-access step. */
+.secm-body { display: flex; flex-direction: column; gap: 14px; }
+.secm-choices { display: flex; flex-direction: column; gap: 8px; }
+.secm-choice {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s02);
+    cursor: pointer; transition: background var(--bmm-transition-fast), border-color var(--bmm-transition-fast);
+}
+.secm-choice:hover { background: var(--bmm-s05); }
+.secm-choice.is-on { border-color: var(--bmm-accent); background: var(--bmm-s05); box-shadow: inset 3px 0 0 var(--bmm-accent); }
+.secm-choice input { accent-color: var(--bmm-accent); margin: 3px 0 0; flex-shrink: 0; }
+.secm-choice-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.secm-choice-name { font-size: 13.5px; font-weight: 650; color: var(--bmm-text-primary); }
+.secm-choice-desc { font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.secm-error { margin: 0; font-size: 12px; color: var(--bmm-danger); }

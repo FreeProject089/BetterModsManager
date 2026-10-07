@@ -766,35 +766,28 @@
    Summary tiles, warnings, a tree/list toggle with search and filters, a virtualised file
    list (rows are absolutely positioned at 32px), and Back / Apply in the footer. */
 .mpv2-overlay { pointer-events: auto; z-index: 10060; }
-.mpv2-overlay .modal.mpv2 {
-    width: min(1040px, 96%); max-width: none; height: min(820px, calc(100vh - 64px));
-    padding: 0; display: flex; flex-direction: column; overflow: hidden;
-    background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px;
-}
-.mpv2-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px 10px; }
-.mpv2-head-text { min-width: 0; flex: 1; }
-.mpv2-head .modal-title { margin: 0; font-size: 15px; }
-.mpv2-dest { display: flex; align-items: center; gap: 7px; margin-top: 6px; color: var(--text-secondary); min-width: 0; }
+/* The card is the house shell (.modal.modal--xl.modal--tall): header, the summary, a
+   .modal-toolbar, a flush body whose only child scrolls, and the footer. */
+.mpv2 > .modal-body { overflow: hidden; }
+.mpv2-dest { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .mpv2-dest > svg { color: var(--accent); flex: none; }
 .mpv2-dest code { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mpv2-x { width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; flex: none; }
-.mpv2-x:hover { background: var(--bmm-s05); color: var(--text-primary); border-color: var(--border); }
 
-.mpv2-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 4px 20px 12px; }
+.mpv2-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 14px var(--bms-pad-x) 12px; flex: none; }
 .mpv2-tile { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 10px; background: var(--bmm-s03); border: 1px solid var(--bmm-s06); min-width: 0; }
 .mpv2-tile b { font-size: 17px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mpv2-tile span { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mpv2-tile.is-ok b { color: var(--bmm-success); }
 .mpv2-tile.is-warn b { color: var(--bmm-warning); }
 
-.mpv2-warns { list-style: none; margin: 0 20px 10px; padding: 6px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, transparent); background: color-mix(in srgb, var(--bmm-warning) 8%, transparent); }
+.mpv2-warns { flex: none; list-style: none; margin: 0 var(--bms-pad-x) 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, transparent); background: color-mix(in srgb, var(--bmm-warning) 8%, transparent); }
 .mpv2-warn { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; color: var(--text-secondary); }
 .mpv2-warn > span:first-child { color: var(--bmm-warning); display: grid; place-items: center; flex: none; }
 .mpv2-warn > span:nth-child(2) { flex: 1; min-width: 0; }
 .mpv2-link { background: none; border: 0; padding: 2px 4px; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; border-radius: 6px; flex: none; }
 .mpv2-link:hover { text-decoration: underline; }
 
-.mpv2-bar { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-top: 1px solid var(--bmm-s06); border-bottom: 1px solid var(--bmm-s06); flex-wrap: wrap; }
+.mpv2-bar { gap: 10px; border-top: 1px solid var(--bmm-border); }
 .mpv2-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bmm-s04); border: 1px solid var(--bmm-s06); }
 .mpv2-seg button, .mpv2-filters button { background: transparent; border: 0; color: var(--text-secondary); font: inherit; font-size: 12px; padding: 5px 11px; border-radius: 7px; cursor: pointer; }
 .mpv2-seg button.is-on { background: var(--bmm-bg-elevated); color: var(--text-primary); box-shadow: 0 1px 2px var(--bmm-s12); }
@@ -830,8 +823,7 @@
 .mpv2-tag { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 999px; flex: none; }
 .mpv2-empty { flex: 1; display: grid; place-items: center; color: var(--text-secondary); font-size: 13px; padding: 40px; }
 
-.mpv2-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px 14px; border-top: 1px solid var(--bmm-s06); }
-.mpv2-foot-note { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+.mpv2-foot-note { flex: 1; margin-right: auto; }
 
 @media (max-width: 980px) {
     .mpv2-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }

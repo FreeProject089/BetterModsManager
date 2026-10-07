@@ -9,6 +9,8 @@ import { isPackIcon, renderPackIcon, ensurePackFor, openIconPicker } from '../..
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
+import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 let selectedGlobalModIds = new Set();
@@ -1859,21 +1861,33 @@ function openCropOverlay(sourcePath, profile, opts) {
     const existing = document.getElementById('crop-overlay');
     if (existing)
         existing.remove();
+    // The house shell (.modal-overlay > .modal.modal--lg): it is opened from the profile
+    // dialogs, so it measures the stack and goes above them. The × is Cancel.
     const overlay = document.createElement('div');
     overlay.id = 'crop-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;';
+    overlay.className = 'modal-overlay open';
     overlay.innerHTML = `
-        <div style="font-size:16px;font-weight:700;color:var(--bmm-text-primary);margin-bottom:8px">${t('prof.bgCropTitle')}</div>
-        <div style="font-size:12px;color:var(--bmm-text-secondary);margin-bottom:4px">${t('prof.bgCropDesc')}</div>
-        <div style="width:100%;max-width:800px;height:500px;background:#111;border-radius:12px;overflow:hidden;border:1px solid var(--bmm-s10)">
-            <img id="cropper-image" style="display:block;max-width:100%;">
-        </div>
-        <div style="display:flex;gap:12px;margin-top:12px">
-            <button class="btn btn-ghost" id="crop-cancel" style="min-width:120px">${t('prof.bgCropCancel')}</button>
-            <button class="btn btn-primary" id="crop-confirm" style="min-width:120px">${t('prof.bgCropConfirm')}</button>
+        <div class="modal bms modal--lg" role="dialog" aria-modal="true" aria-labelledby="crop-title">
+            <div class="modal-header">
+                <div class="bms-titles">
+                    <h2 class="modal-title" id="crop-title">${t('prof.bgCropTitle')}</h2>
+                    <p class="bms-sub">${t('prof.bgCropDesc')}</p>
+                </div>
+                <button type="button" class="modal-close" id="crop-x" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
+            </div>
+            <div class="modal-body">
+                <div class="prof-crop-stage">
+                    <img id="cropper-image" style="display:block;max-width:100%;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="crop-cancel">${t('prof.bgCropCancel')}</button>
+                <button class="btn btn-primary" id="crop-confirm">${t('prof.bgCropConfirm')}</button>
+            </div>
         </div>
     `;
-    document.getElementById('app-window-outer').appendChild(overlay);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    raiseAboveAll(overlay);
     const imageElement = document.getElementById('cropper-image');
     imageElement.src = convertFileSrc(sourcePath);
     let cropper;
@@ -1896,11 +1910,13 @@ function openCropOverlay(sourcePath, profile, opts) {
         toast(t('prof.bgLoadError'), 'error');
         overlay.remove();
     };
-    document.getElementById('crop-cancel').addEventListener('click', () => {
+    const cancelCrop = () => {
         if (cropper)
             cropper.destroy();
         overlay.remove();
-    });
+    };
+    document.getElementById('crop-cancel').addEventListener('click', cancelCrop);
+    document.getElementById('crop-x').addEventListener('click', cancelCrop);
     document.getElementById('crop-confirm').addEventListener('click', async () => {
         if (!cropper)
             return;

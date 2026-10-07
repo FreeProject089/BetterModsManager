@@ -12,6 +12,8 @@ import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { MODAL_CLOSE_SVG, openModal } from '../../ui/modal-shell.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 // ── State ────────────────────────────────────────────────────────────────────
 let _modpacks = [];
 let _editingPack = null; // LocalModpack currently being edited
@@ -739,42 +741,40 @@ function _makeIconBtn(svgHtml, bgColor, color) {
     return btn;
 }
 function _openMultiSelectModal(listEl) {
+    // The house shell: .modal-overlay > .modal.modal--md.modal--tall, a header with the
+    // count as its subtitle, the search as a toolbar band, a scrolling list, the footer.
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
+    overlay.className = 'modal-overlay open';
     const content = document.createElement('div');
-    content.className = 'modal-content glass';
-    content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
-    // Header with search
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
-    header.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <div style="width:36px; height:36px; border-radius:10px; background:rgba(0,194,255,0.12); border:1px solid rgba(0,194,255,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent);">
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>                </div>
-                <div>
-                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${t('modpack.selectMods')}</div>
-                    <div style="font-size:11px; color:var(--text-muted); margin-top:1px;" id="ms-count-label"></div>
-                </div>
+    content.className = 'modal bms modal--md modal--tall';
+    content.setAttribute('role', 'dialog');
+    content.setAttribute('aria-modal', 'true');
+    // Header + search band, written straight into the card; `header` stays the name the
+    // queries below use for "where the search and the count live".
+    const header = content;
+    content.innerHTML = `
+        <div class="modal-header">
+            <div class="bms-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+            </svg></div>
+            <div class="bms-titles">
+                <h2 class="modal-title">${escHtml(t('modpack.selectMods'))}</h2>
+                <p class="bms-sub" id="ms-count-label"></p>
             </div>
-            <button class="btn btn-icon btn-ghost" id="ms-close" style="color:var(--text-muted); width:32px; height:32px; border-radius:8px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            <button type="button" class="modal-close" id="ms-close" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
-            <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="ms-search-wrap">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="ms-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
+        <div class="modal-toolbar">
+            <div class="mp-ms-search" id="ms-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="ms-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
             </div>
         </div>
     `;
     // Body
     const body = document.createElement('div');
-    body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:5px;';
+    body.className = 'modal-body';
+    body.style.cssText = 'gap:5px;';
     // Filter available mods
     // Show all mods, but mark those already in pack
     let availableMods = [..._allMods];
@@ -875,20 +875,20 @@ function _openMultiSelectModal(listEl) {
     });
     // Footer
     const footer = document.createElement('div');
-    footer.style.cssText = 'padding:14px 20px; border-top:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
+    footer.className = 'modal-footer';
     footer.innerHTML = `
-        <span style="font-size:11px; color:var(--text-muted);" id="ms-footer-count"></span>
-        <div style="display:flex; align-items:center; gap:14px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); cursor:pointer;" data-tooltip="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
+        <div class="modal-footer-start">
+            <span class="modal-footer-note" id="ms-footer-count"></span>
+            <label class="modal-footer-note" style="cursor:pointer;" data-tooltip="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
                 <input type="checkbox" id="ms-auto-update-src" checked>
                 <span>${t('modpack.autoUpdateSrc') || 'Auto-add update repo as fallback'}</span>
             </label>
-            <button class="btn btn-ghost" id="ms-cancel" style="border:1px solid var(--bmm-s07);">${t('common.cancel')}</button>
-            <button class="btn btn-primary" id="ms-confirm" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.2); min-width:130px; opacity:0.5; transition:opacity 0.2s;">
+        </div>
+            <button class="btn btn-ghost" id="ms-cancel">${t('common.cancel')}</button>
+            <button class="btn btn-primary" id="ms-confirm" style="opacity:0.5; transition:opacity 0.2s;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
                 ${t('modpack.addMod')}
             </button>
-        </div>
     `;
     const countLabel = header.querySelector('#ms-count-label');
     const footerCount = footer.querySelector('#ms-footer-count');
@@ -922,18 +922,10 @@ function _openMultiSelectModal(listEl) {
             row.style.display = !q || searchLabel.includes(q) ? 'flex' : 'none';
         });
     });
-    header.querySelector('#ms-search-wrap').addEventListener('focusin', () => {
-        header.querySelector('#ms-search-wrap').style.borderColor = 'rgba(0,194,255,0.35)';
-    });
-    header.querySelector('#ms-search-wrap').addEventListener('focusout', () => {
-        header.querySelector('#ms-search-wrap').style.borderColor = 'var(--bmm-s08)';
-    });
     const close = () => {
         _currentSelectionModalUpdateFn = null;
         _currentSelectionModalOverlay = null;
-        overlay.style.opacity = '0';
-        content.style.transform = 'translateY(10px) scale(0.97)';
-        setTimeout(() => overlay.remove(), 220);
+        overlay.remove();
     };
     // Cancel: if mods are still being added, abort the in-progress run; otherwise close.
     const cancelOrAbort = () => {
@@ -1026,7 +1018,6 @@ function _openMultiSelectModal(listEl) {
                 closeBtn.click();
         }
     });
-    content.appendChild(header);
     content.appendChild(body);
     content.appendChild(footer);
     overlay.appendChild(content);
@@ -1037,12 +1028,9 @@ function _openMultiSelectModal(listEl) {
     });
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(overlay);
+    raiseAboveAll(overlay);
     _currentSelectionModalOverlay = overlay;
-    requestAnimationFrame(() => {
-        overlay.style.opacity = '1';
-        content.style.transform = 'translateY(0) scale(1)';
-        setTimeout(() => header.querySelector('#ms-search').focus(), 100);
-    });
+    requestAnimationFrame(() => header.querySelector('#ms-search').focus());
 }
 async function _showRepairModal(container, pack, report, onComplete) {
     // Told to whoever is listening, before the modal opens.
@@ -1071,12 +1059,14 @@ async function _showRepairModal(container, pack, report, onComplete) {
         toast((window.t ? window.t('common.error') : 'No active profile'), "error");
         return;
     }
+    // The house shell (.modal-overlay > .modal.modal--md): header with a warning tile, the
+    // list and the progress in the body, the actions in the footer.
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'mod-repair-overlay';
-    modalOverlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:9999; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
+    modalOverlay.className = 'modal-overlay open';
     const content = document.createElement('div');
-    content.className = 'editor-section-card';
-    content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--bmm-s08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
+    content.className = 'modal bms modal--md';
+    content.setAttribute('role', 'dialog');
+    content.setAttribute('aria-modal', 'true');
     // Build lists
     let modsHtml = '';
     const problematicMods = [...report.missingMods, ...report.corruptedMods];
@@ -1112,21 +1102,22 @@ async function _showRepairModal(container, pack, report, onComplete) {
         `;
     });
     content.innerHTML = `
-        <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
-            <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(255,136,0,0.2) 0%, rgba(255,85,0,0.05) 100%); color:var(--bmm-warning); display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,136,0,0.2);">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <div class="modal-header">
+            <div class="bms-icon bms-icon--warn" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             </div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-                <h3 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary); letter-spacing:-0.5px;">${t('modpack.repair.title') || 'Réparation Requise'}</h3>
-                <p style="font-size:12px; color:var(--text-muted); margin:0;">${t('modpack.repair.subtitle') || 'Certains mods sont manquants ou corrompus.'}</p>
+            <div class="bms-titles">
+                <h2 class="modal-title">${t('modpack.repair.title') || 'Repair needed'}</h2>
+                <p class="bms-sub">${t('modpack.repair.subtitle') || 'Some mods are missing or corrupted.'}</p>
             </div>
+            <button type="button" class="modal-close" id="repair-x" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        
-        <div style="max-height:350px; overflow-y:auto; margin-bottom:24px; padding-right:8px; display:flex; flex-direction:column;" class="custom-scrollbar">
+        <div class="modal-body" style="display:block">
+        <div class="custom-scrollbar" style="display:flex; flex-direction:column;">
             ${modsHtml}
         </div>
-        
-        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:24px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--bmm-s03);">
+
+        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-top:16px; padding:16px; background:var(--bmm-s03); border-radius:12px; border:1px solid var(--bmm-border);">
             <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
                 <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
                 <span id="repair-status-pct" style="color:var(--bmm-warning);">0%</span>
@@ -1136,9 +1127,10 @@ async function _showRepairModal(container, pack, report, onComplete) {
             </div>
         </div>
 
-        <div id="repair-actions" style="display:flex; justify-content:flex-end; gap:12px; margin-top:auto;">
-            <button id="repair-cancel" class="btn btn-ghost" style="border:1px solid var(--bmm-s05); border-radius:10px;">${t('modpack.repair.cancel') || 'Annuler'}</button>
-            <button id="repair-start" class="btn btn-primary" style="background:linear-gradient(135deg, #ff8800 0%, #ff5500 100%); border:none; border-radius:10px; box-shadow:0 4px 15px rgba(255, 136, 0, 0.3); ${!canRepairAny ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${!canRepairAny ? 'disabled' : ''}>
+        </div>
+        <div class="modal-footer" id="repair-actions">
+            <button id="repair-cancel" class="btn btn-ghost">${t('modpack.repair.cancel') || 'Cancel'}</button>
+            <button id="repair-start" class="btn btn-warning" ${!canRepairAny ? 'disabled' : ''}>
                 ${canRepairAny ? (t('modpack.repair.startBtn') || 'Réparer et Appliquer') : (t('modpack.repair.impossible') || 'Réparation Impossible')}
             </button>
         </div>
@@ -1146,10 +1138,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
     modalOverlay.appendChild(content);
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(modalOverlay);
-    requestAnimationFrame(() => {
-        modalOverlay.style.opacity = '1';
-        content.style.transform = 'scale(1)';
-    });
+    raiseAboveAll(modalOverlay);
     const closeBtn = content.querySelector('#repair-cancel');
     const startBtn = content.querySelector('#repair-start');
     const progressContainer = content.querySelector('#repair-progress-container');
@@ -1157,12 +1146,9 @@ async function _showRepairModal(container, pack, report, onComplete) {
     const statusPct = content.querySelector('#repair-status-pct');
     const progressBar = content.querySelector('#repair-progress-bar');
     const actionsBlock = content.querySelector('#repair-actions');
-    const closeModal = () => {
-        modalOverlay.style.opacity = '0';
-        content.style.transform = 'scale(0.95)';
-        setTimeout(() => modalOverlay.remove(), 300);
-    };
+    const closeModal = () => { modalOverlay.remove(); };
     closeBtn.addEventListener('click', closeModal);
+    content.querySelector('#repair-x')?.addEventListener('click', closeModal);
     modalOverlay.addEventListener('mousedown', (e) => {
         if (e.target === modalOverlay)
             closeModal();
@@ -1420,125 +1406,77 @@ async function _deleteModpack(container, pack) {
  */
 function _showDeleteModal(container, pack) {
     return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = [
-            'position:fixed;inset:0;',
-            'background:rgba(0,0,0,0.82);',
-            'backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);',
-            'z-index:99999;',
-            'display:flex;align-items:center;justify-content:center;',
-            'opacity:0;transition:opacity 0.22s ease;',
-        ].join('');
-        const modal = document.createElement('div');
-        modal.style.cssText = [
-            'width:460px;max-width:94vw;',
-            'background:var(--bg-secondary,#0f172a);',
-            'border:1px solid rgba(239,68,68,0.18);',
-            'border-radius:20px;overflow:hidden;',
-            'box-shadow:0 0 0 1px var(--bmm-s04),0 32px 80px rgba(0,0,0,0.8);',
-            'transform:scale(0.93) translateY(14px);',
-            'transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);',
-        ].join('');
         const modsCount = pack.mods?.length || 0;
         const gameLine = pack.game_name ? ` · ${escHtml(pack.game_name)}` : '';
         const descBlock = pack.description
-            ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.55;padding-top:10px;border-top:1px solid var(--bmm-s05);">${escHtml(pack.description)}</div>`
+            ? `<div class="mp-del-desc">${escHtml(pack.description)}</div>`
             : '';
-        modal.innerHTML = `
-            <!-- ── Header ── -->
-            <div style="padding:26px 26px 0;display:flex;align-items:flex-start;gap:16px;">
-                <div style="width:50px;height:50px;border-radius:15px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--danger,#ef4444);">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                </div>
-                <div style="flex:1;min-width:0;padding-top:2px;">
-                    <h3 style="margin:0 0 3px;font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-0.3px;">${t('modpack.deleteTitle') || 'Supprimer le launchpack'}</h3>
-                    <p style="margin:0;font-size:12px;color:var(--text-muted);">${t('modpack.deleteSubtitle') || 'Cette action est irréversible. Le pack sera définitivement supprimé.'}</p>
-                </div>
-                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--bmm-s06);background:var(--bmm-s03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" data-hover="background:var(--bmm-s07)" data-hover-out="background:var(--bmm-s03)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </div>
-
-            <!-- ── Pack preview card ── -->
-            <div style="margin:18px 26px;padding:14px 16px;background:rgba(255,255,255,0.025);border:1px solid var(--bmm-s06);border-radius:12px;">
-                <div style="display:flex;align-items:center;gap:12px;${pack.description ? 'margin-bottom:10px;' : ''}">
-                    <div style="width:34px;height:34px;border-radius:9px;background:rgba(0,194,255,0.09);border:1px solid rgba(0,194,255,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#00c2ff)" stroke-width="2"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg>
-                    </div>
+        let result = null;
+        const TRASH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+        const m = openModal({
+            title: t('modpack.deleteTitle') || 'Delete the launchpack',
+            subtitle: t('modpack.deleteSubtitle') || 'This cannot be undone. The pack will be deleted for good.',
+            icon: TRASH,
+            tone: 'danger',
+            size: 'sm',
+            closeLabel: t('common.close') || 'Close',
+            body: `
+            <div class="mp-del-card">
+                <div class="mp-del-row">
+                    <div class="mp-del-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg></div>
                     <div style="min-width:0;">
-                        <div style="font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(pack.name)}</div>
-                        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-weight:600;">${modsCount} mod${modsCount !== 1 ? 's' : ''}${gameLine}</div>
+                        <div class="mp-del-name">${escHtml(pack.name)}</div>
+                        <div class="mp-del-meta">${modsCount} mod${modsCount !== 1 ? 's' : ''}${gameLine}</div>
                     </div>
                 </div>
                 ${descBlock}
-            </div>
-
-            <!-- ── Actions ── -->
-            <div style="padding:0 26px 24px;display:flex;align-items:center;gap:10px;">
-                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" data-hover="background:rgba(0,194,255,0.07);border-color:rgba(0,194,255,0.2);color:var(--accent)" data-hover-out="background:var(--bmm-s03);border-color:var(--bmm-s07);color:var(--text-secondary)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    ${t('modpack.edit') || 'Modifier'}
-                </button>
-                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" data-hover="background:var(--bmm-s07)" data-hover-out="background:var(--bmm-s03)">${t('common.cancel') || 'Annuler'}</button>
-                <button id="dmod-confirm" style="display:flex;align-items:center;gap:7px;padding:0 16px;height:34px;border-radius:9px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.3);transition:all 0.15s;" data-hover="transform:translateY(-1px);box-shadow:0 6px 20px rgba(239,68,68,0.45)" data-hover-out="transform:none;box-shadow:0 4px 16px rgba(239,68,68,0.3)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    ${t('modpack.deleteConfirmBtn') || 'Supprimer'}
-                </button>
-            </div>
-        `;
-        const close = (result) => {
-            overlay.style.opacity = '0';
-            modal.style.transform = 'scale(0.93) translateY(14px)';
-            setTimeout(() => overlay.remove(), 280);
-            resolve(result);
-        };
-        modal.querySelector('#dmod-close').addEventListener('click', () => close(null));
-        modal.querySelector('#dmod-cancel').addEventListener('click', () => close(null));
-        modal.querySelector('#dmod-confirm').addEventListener('click', () => close('delete'));
-        modal.querySelector('#dmod-edit').addEventListener('click', () => close('edit'));
-        overlay.addEventListener('mousedown', (e) => { if (e.target === overlay)
-            close(null); });
-        overlay.appendChild(modal);
-        (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-        requestAnimationFrame(() => {
-            overlay.style.opacity = '1';
-            modal.style.transform = 'scale(1) translateY(0)';
+            </div>`,
+            // The destructive action stands apart: Edit on the left, Cancel then Delete.
+            footer: `
+                <div class="modal-footer-start">
+                    <button type="button" class="btn btn-ghost" id="dmod-edit">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        ${t('modpack.edit') || 'Edit'}
+                    </button>
+                </div>
+                <button type="button" class="btn btn-secondary" id="dmod-cancel">${t('common.cancel') || 'Cancel'}</button>
+                <button type="button" class="btn btn-danger" id="dmod-confirm">${t('modpack.deleteConfirmBtn') || 'Delete'}</button>`,
+            initialFocus: '#dmod-cancel',
+            onClose: () => resolve(result),
         });
+        const close = (r) => { result = r; m.close(); };
+        m.q('#dmod-cancel')?.addEventListener('click', () => close(null));
+        m.q('#dmod-confirm')?.addEventListener('click', () => close('delete'));
+        m.q('#dmod-edit')?.addEventListener('click', () => close('edit'));
     });
 }
 // ── Quick Apply Modal ────────────────────────────────────────────────────────
 export async function openQuickApplyModal() {
     await _loadData();
+    // The house shell, like the mod picker: header, a search/filter toolbar band, the list.
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
+    overlay.className = 'modal-overlay open';
     const content = document.createElement('div');
-    content.className = 'modal-content glass';
-    content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
-    // Header
-    const header = document.createElement('div');
-    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
-    header.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <div style="width:36px; height:36px; border-radius:10px; background:rgba(0,194,255,0.12); border:1px solid rgba(0,194,255,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent);">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                </div>
-                <div>
-                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${t('modpack.quickApplyTitle') || 'Activer un Modpack'}</div>
-                    <div style="font-size:11px; color:var(--text-muted); margin-top:1px;">${_modpacks.length} ${t('modpack.available') || 'disponibles'}</div>
-                </div>
+    content.className = 'modal bms modal--md modal--tall';
+    content.setAttribute('role', 'dialog');
+    content.setAttribute('aria-modal', 'true');
+    // Header + toolbar written straight into the card; `header` is where the queries look.
+    const header = content;
+    content.innerHTML = `
+        <div class="modal-header">
+            <div class="bms-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="bms-titles">
+                <h2 class="modal-title">${t('modpack.quickApplyTitle') || 'Activate a modpack'}</h2>
+                <p class="bms-sub">${_modpacks.length} ${t('modpack.available') || 'available'}</p>
             </div>
-            <button class="btn btn-icon btn-ghost" id="qa-close" style="color:var(--text-muted); width:32px; height:32px; border-radius:8px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+            <button type="button" class="modal-close" id="qa-close" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
         </div>
-        <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
-            <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="qa-search-wrap">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="qa-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
+        <div class="modal-toolbar">
+            <div class="mp-ms-search" id="qa-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="qa-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
             </div>
-            <select id="qa-filter" style="background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; cursor:pointer;">
+            <select id="qa-filter" class="form-input" style="flex:none;width:auto;">
                 <option value="all">${t('modpack.filterAll') || 'Tous'}</option>
                 <option value="single">${t('modpack.singleProfile') || 'Profil unique'}</option>
                 <option value="multi">${t('modpack.multiProfile') || 'Multi-profil'}</option>
@@ -1547,8 +1485,8 @@ export async function openQuickApplyModal() {
     `;
     // Body
     const body = document.createElement('div');
-    body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px;';
-    body.className = 'custom-scrollbar';
+    body.className = 'modal-body custom-scrollbar';
+    body.style.cssText = 'gap:8px;';
     const cards = [];
     if (_modpacks.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
@@ -1636,9 +1574,6 @@ export async function openQuickApplyModal() {
     });
     const searchInput = header.querySelector('#qa-search');
     const filterSelect = header.querySelector('#qa-filter');
-    const searchWrap = header.querySelector('#qa-search-wrap');
-    searchInput.addEventListener('focus', () => { searchWrap.style.borderColor = 'var(--accent)'; });
-    searchInput.addEventListener('blur', () => { searchWrap.style.borderColor = 'var(--bmm-s08)'; });
     const applyFilters = () => {
         const q = searchInput.value.toLowerCase().trim();
         const f = filterSelect.value;
@@ -1655,21 +1590,13 @@ export async function openQuickApplyModal() {
     };
     searchInput.addEventListener('input', applyFilters);
     filterSelect.addEventListener('change', applyFilters);
-    content.appendChild(header);
     content.appendChild(body);
     overlay.appendChild(content);
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(overlay);
-    requestAnimationFrame(() => {
-        overlay.style.opacity = '1';
-        content.style.transform = 'translateY(0) scale(1)';
-    });
+    raiseAboveAll(overlay);
     const closeBtn = header.querySelector('#qa-close');
-    const closeModal = () => {
-        overlay.style.opacity = '0';
-        content.style.transform = 'translateY(10px) scale(0.98)';
-        setTimeout(() => overlay.remove(), 300);
-    };
+    const closeModal = () => { overlay.remove(); };
     closeBtn.addEventListener('click', closeModal);
     overlay.addEventListener('mousedown', (e) => {
         if (e.target === overlay)

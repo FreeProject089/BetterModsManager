@@ -532,19 +532,23 @@ function wire(): void {
   });
 }
 
+// The overlays below mount inside the app frame, like every dialog: the window is transparent
+// and the app is inset in it, so one on <body> spreads its dim over the invisible margin.
+function appFrame(): HTMLElement { return document.getElementById('app-window-outer') || document.body; }
+
 function openExternal(url: string) {
   invoke('open_external_url', { url }).catch(() => { try { window.open(url, '_blank'); } catch {} });
 }
 
 // Click any image in a post / comment / history body → blow it up full-screen; click
 // anywhere (or Esc) to shrink it back. One document-level delegated handler covers the
-// article view AND the body-appended overlays (history/comments), incl. future ones.
+// article view AND the frame-mounted overlays (history/comments), incl. future ones.
 function openLightbox(src: string): void {
   if (!src) return;
   const ov = document.createElement('div');
   ov.className = 'community-lightbox';
   ov.innerHTML = `<img src="${escAttr(src)}" alt="" /><button class="community-lightbox-close" aria-label="${escAttr(t('community.close') || 'Close')}">✕</button>`;
-  document.body.appendChild(ov);
+  appFrame().appendChild(ov);
   const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
   ov.addEventListener('click', close); // click the backdrop OR the image → shrink back
   const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -636,7 +640,7 @@ async function openPost(slug: string): Promise<void> {
 }
 
 // Read-only edit-history viewer (public users see a PUBLISHED post's changelog; the
-// BCWEB endpoint gates drafts/restore). Overlay appended to <body> so a re-render of the
+// BCWEB endpoint gates drafts/restore). Overlay mounted in the app frame (outside the view) so a re-render of the
 // article view doesn't wipe it.
 async function openHistory(postId: string): Promise<void> {
   const L = {
@@ -655,7 +659,7 @@ async function openHistory(postId: string): Promise<void> {
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
-  document.body.appendChild(ov);
+  appFrame().appendChild(ov);
   const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
   ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
   ov.querySelector('.community-history-close')?.addEventListener('click', close);
@@ -758,7 +762,7 @@ async function openComments(postId: string): Promise<void> {
     <div class="community-comments-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
-  document.body.appendChild(ov);
+  appFrame().appendChild(ov);
   const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
   ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
   ov.querySelector('.community-history-close')?.addEventListener('click', close);
@@ -801,7 +805,7 @@ async function openCommentHistory(postId: string, cid: string, L: any): Promise<
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
-  document.body.appendChild(ov);
+  appFrame().appendChild(ov);
   const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
   ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
   ov.querySelector('.community-history-close')?.addEventListener('click', close);
