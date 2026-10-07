@@ -267,17 +267,38 @@
 }
 .laya-sum-row:hover { background: var(--bg-hover); }
 .laya-sum-row span { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-overlay .laya-modal { max-width: 860px; height: 85vh; }
-.laya-tabs { display: flex; gap: 4px; padding: 8px 24px 0; border-bottom: 1px solid var(--border); }
+.ai-overlay .laya-modal { max-width: 860px; height: min(85vh, 780px); }
+.laya-tabs { display: flex; gap: 4px; padding: 6px 28px 0; border-bottom: 1px solid var(--border); }
 .laya-tab {
     border: none; background: transparent; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     color: var(--text-secondary); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .laya-tab:hover { color: var(--text-primary); }
 .laya-tab.is-on { color: var(--text-primary); border-bottom-color: var(--bmm-accent); }
-.laya-body { overflow-y: auto; min-height: 0; flex: 1; }
+.laya-body { overflow-y: auto; min-height: 0; flex: 1; padding: 22px 28px 28px; }
 .laya-pane[hidden] { display: none; }
-.laya-pane-card > .card-title { font-size: 14px; margin-bottom: var(--space-2); }
+/* Inside the dialog the cards are pages, not Settings cards: one vertical rhythm owned by the
+   card (gap), so the children's own margins are dropped instead of stacking on top of it. */
+.laya-pane-card { display: flex; flex-direction: column; gap: 14px; }
+.laya-pane-card > * { margin-top: 0; margin-bottom: 0; }
+.laya-pane-card > .card-title {
+    font-size: 15px; text-transform: none; letter-spacing: 0;
+    padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.laya-pane-card p.ai-muted, .laya-pane-card > div.ai-muted, .laya-pane-card .ai-warn { margin: 0; }
+/* The expanders read as sections: framed, with room inside, a gap between them. */
+.laya-pane-card details.ai-more {
+    border: 1px solid var(--border); border-radius: var(--bmm-radius-chip, 8px);
+    background: var(--bmm-s05); padding: 10px 14px;
+}
+.laya-pane-card details.ai-more > summary { margin: 0; padding: 2px 0; }
+.laya-pane-card details.ai-more[open] > summary { margin-bottom: 12px; }
+.laya-pane-card > .ai-actions { margin-top: 0; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+.laya-pane-card .ai-settings-body { gap: 16px; }
+@media (max-width: 640px) {
+    .laya-tabs { padding: 6px 16px 0; }
+    .laya-body { padding: 16px; }
+}
 
 /* ── Laya in the feedback dialog, the crash manager and the debug menu (features/ai/laya-*.ts) ── */
 .laya-fb { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--bmm-radius-input); background: var(--bmm-s05); }
@@ -324,3 +345,5 @@
 .laya-dbg-bars li { display: grid; grid-template-columns: minmax(80px, 160px) 1fr 64px; align-items: center; gap: var(--space-2); }
 .laya-dbg-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
 .laya-dbg-bar-fill { display: block; height: 100%; background: var(--bmm-accent); }
+.laya-pane-card > .lt-fs { display: flex; flex-direction: column; gap: 10px; }
+.laya-pane-card > .lt-fs > * { margin-top: 0; margin-bottom: 0; }
