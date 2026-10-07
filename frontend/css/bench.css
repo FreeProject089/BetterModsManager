@@ -5,7 +5,6 @@
    success) passed in as --c. Numbers are tabular so a live value never makes its line jump. */
 
 #modal-advanced-perf-overlay { z-index: 100003; }
-#modal-advanced-perf-overlay .modal.bms { width: min(100%, 1180px); max-width: 1180px; }
 .pf-view { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .pf-view[hidden] { display: none !important; }
 .pf-mono, .pf-num { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; }

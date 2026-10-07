@@ -1187,10 +1187,10 @@ export async function openRunLog(taskId: string): Promise<void> {
     </details>`).join('') : `<p>${escHtml(t('sched.runlog.empty') || 'No run recorded yet.')}</p>`;
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
-    ov.innerHTML = `<div class="modal glass cm-modal" style="max-width:720px;width:calc(100% - 32px)">
-        <div class="modal-header"><h3>${escHtml(t('sched.runlog.title') || 'Run log')}</h3>
-            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">&times;</button></div>
-        <div class="modal-body" style="max-height:65vh;overflow:auto"><p style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.runlog.lede') || 'The last 50 runs, each action with its duration and, when it failed, why. Secrets are removed before anything is written.')}</p>${body}</div>
+    ov.innerHTML = `<div class="modal glass cm-modal modal--lg">
+        <div class="modal-header"><h3 class="modal-title">${escHtml(t('sched.runlog.title') || 'Run log')}</h3>
+            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="modal-body"><p style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.runlog.lede') || 'The last 50 runs, each action with its duration and, when it failed, why. Secrets are removed before anything is written.')}</p>${body}</div>
         <div class="modal-footer"><button class="btn btn-sm btn-ghost" data-clear>${escHtml(t('sched.runlog.clear') || 'Clear the log')}</button><button class="btn btn-sm" data-x>${escHtml(t('common.close'))}</button></div>
     </div>`;
     ov.querySelectorAll('[data-x]').forEach((b) => b.addEventListener('click', () => ov.remove()));
@@ -5605,11 +5605,11 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
                 </div>`;
         }
         g.innerHTML = `
-            <div class="modal glass spg" role="dialog" aria-modal="true" aria-labelledby="spg-title">
+            <div class="modal glass modal--xl spg" role="dialog" aria-modal="true" aria-labelledby="spg-title">
                 <div class="modal-header spg-head">
                     <div class="spg-head-l">
                         <div class="spg-head-ico">${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}</div>
-                        <div><h2 id="spg-title">${escHtml(t('sched.pg.title') || 'Automation templates')}</h2><p>${escHtml((t('sched.pg.sub') || '{n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then make it yours.').replace('{n}', String(PRESETS.length)))}</p></div>
+                        <div><h2 class="modal-title" id="spg-title">${escHtml(t('sched.pg.title') || 'Automation templates')}</h2><p>${escHtml((t('sched.pg.sub') || '{n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then make it yours.').replace('{n}', String(PRESETS.length)))}</p></div>
                     </div>
                     <div class="spg-search">${SVG16('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>')}<input id="spg-q" type="search" placeholder="${escAttr(t('sched.pg.search') || 'Search templates…')}" value="${escAttr(q)}" autocomplete="off"></div>
                     <button type="button" class="modal-close" id="spg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${SVG16('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')}</button>
@@ -6087,7 +6087,7 @@ function renderModal(modal: HTMLElement): void {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${t('sched.testRun') || 'Test run'}</span></button>
                 <button class="btn btn-sm btn-primary" id="sched-save-stay" data-tooltip="${escAttr(t('sched.head.saveTip'))}">${escHtml(t('common.save') || 'Save')}</button>
             </div>
-            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}">&times;</button>
+            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="sched-layout">
             <aside class="sched-side">
@@ -7353,8 +7353,8 @@ function askEditorMode(): Promise<EditorMode | null | 'away'> {
         const ov = document.createElement('div');
         ov.className = 'modal-overlay open sched-modeask';
         ov.innerHTML = `<div class="modal glass sched-modeask-card" role="dialog" aria-modal="true" aria-labelledby="sched-modeask-h">
-            <div class="modal-header"><h3 id="sched-modeask-h">${escHtml(t('sched.modes.askTitle'))}</h3>
-                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title" id="sched-modeask-h">${escHtml(t('sched.modes.askTitle'))}</h3>
+                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
             <div class="modal-body">
                 <p class="sched-modeask-lede">${escHtml(t('sched.modes.askLede'))}</p>
                 <div class="sched-modeask-list" role="radiogroup" aria-labelledby="sched-modeask-h">
@@ -12058,11 +12058,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                  title with a subtitle, and a real × — the shape theme-catalog.ts already uses. -->
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <div style="width:36px;height:36px;border-radius:9px;background:rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    <div class="bms-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                     </div>
                     <div>
-                        <h2 style="margin:0;font-size:16px;">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
+                        <h2 class="modal-title">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
                         <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${esc(t('sched.pc.sub') || 'Published by other people — nothing is imported until you say so')}</p>
                     </div>
                 </div>
@@ -12845,8 +12845,8 @@ async function pickBmmPath(): Promise<string | null> {
             </button>`;
         }).join('');
         ov.innerHTML = `<div class="modal glass cm-modal pp-modal">
-            <div class="modal-header"><h3>${escHtml(t('paths.pickTitle'))}</h3>
-                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title">${escHtml(t('paths.pickTitle'))}</h3>
+                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
             <p class="pp-lede">${escHtml(t('paths.pickLede'))}</p>
             <input type="search" class="input pp-q" id="pp-q" placeholder="${escAttr(t('common.search') || 'Search')}" spellcheck="false">
             <div class="pp-list" id="pp-list">${rows}</div>
@@ -12999,8 +12999,8 @@ async function openPreview(): Promise<void> {
     ov.className = 'modal-overlay open';
     ov.innerHTML = `<div class="modal glass cm-modal pv-modal">
         <div class="modal-header">
-            <h3>${escHtml(t('sched.prev.title'))}</h3>
-            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}">&times;</button>
+            <h3 class="modal-title">${escHtml(t('sched.prev.title'))}</h3>
+            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <p class="pv-lede">${escHtml(t('sched.prev.lede')
             .replace('{c}', String(changes))

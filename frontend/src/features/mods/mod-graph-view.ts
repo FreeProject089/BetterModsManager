@@ -85,19 +85,23 @@ export async function showModGraph(rootId?: string): Promise<void> {
     const asText = trees.map(renderTreeText).join('\n\n');
 
     overlay.innerHTML = `
-        <div class="modal mg-modal">
-            <div class="sched-insp-top">
-                <b>${esc(t('mg.title') || 'Dependencies & conflicts')}</b>
-                <button class="btn btn-ghost btn-sm" id="mg-copy"
-                    data-tooltip="${escAttr(t('mg.copyTip') || 'Copy the tree as text — searchable and quotable, unlike a screenshot')}">${esc(t('mg.copy') || 'Copy as text')}</button>
-                <button class="btn btn-ghost btn-sm" id="mg-close">${esc(t('common.close') || 'Close')}</button>
-            </div>
-            <div class="mg-summary">
+        <div class="modal glass modal--lg mg-modal">
+            <div class="modal-header">
+                <div class="bms-titles">
+                    <h2 class="modal-title">${esc(t('mg.title') || 'Dependencies & conflicts')}</h2>
+                    <p class="bms-sub mg-summary">
                 ${esc((t('mg.summary') || '{m} mods · {r} top-level · {c} conflicting pair(s)')
                     .replace('{m}', String(mods.length))
                     .replace('{r}', String(roots.length))
-                    .replace('{c}', String(conflicts.length)))}
+                    .replace('{c}', String(conflicts.length)))}</p>
+                </div>
+                <div class="bms-head-end">
+                    <button class="btn btn-ghost btn-sm" id="mg-copy"
+                        data-tooltip="${escAttr(t('mg.copyTip') || 'Copy the tree as text — searchable and quotable, unlike a screenshot')}">${esc(t('mg.copy') || 'Copy as text')}</button>
+                </div>
+                <button type="button" class="modal-close" id="mg-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
+            <div class="modal-body">
             ${missing.length ? `<div class="mg-warn">${esc((t('mg.missingSummary')
                 || '{n} dependency/ies named by a mod and provided by nothing:').replace('{n}', String(missing.length)))}
                 ${missing.slice(0, 8).map((x) => `<code>${esc(x.missing)}</code>`).join(' ')}</div>` : ''}
@@ -105,6 +109,7 @@ export async function showModGraph(rootId?: string): Promise<void> {
                 ${trees.length
                     ? trees.map(nodeHtml).join('<div class="mg-sep"></div>')
                     : `<p class="sched-pc-empty">${esc(t('mg.none') || 'No mods to draw.')}</p>`}
+            </div>
             </div>
         </div>`;
 

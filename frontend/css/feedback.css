@@ -3,7 +3,6 @@
    like where it lands. The overlay opts back into pointer events (body has none) and sits
    above every other modal, like the scheduler's template gallery. */
 .fbm-overlay { pointer-events: auto; z-index: 10060; }
-.fbm-overlay .modal.fbm { max-width: 760px; width: 96%; max-height: 90vh; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .fbm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
 .fbm-head-icon { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; color: var(--bmm-text-on-accent);
     background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff)); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -94,14 +93,8 @@
    `0 8px 20px rgba(0,0,0,.7)` paints unbounded over the dim and reads as a dark smudge
    sitting under the dialog. So: no overlay override at all, and no shadow override — the
    dialog now elevates identically to every other modal in the app. */
-.fbm-overlay .modal.fbm {
-    overflow: hidden;                       /* clip children to the rounded corners only */
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--border);        /* the crisp edge the base modal has */
-    border-radius: 16px;
-    max-width: 820px;                       /* two columns: rail + form */
-    max-height: calc(100vh - 64px);
-}
+/* The card is the house shell (.modal--lg in feedback-modal.ts): same border, radius, shadow
+   and size scale as every other dialog. */
 .fbm-head { border-radius: 16px 16px 0 0; background: transparent; padding: 16px 20px 10px; border-bottom: 0; align-items: center; }
 .fbm-head-icon { width: 34px; height: 34px; border-radius: 10px; box-shadow: none; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .fbm-head .modal-title { font-size: 15px; }

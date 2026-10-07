@@ -1288,7 +1288,7 @@ export async function openEulaModal(showButtons = false) {
         footer.style.setProperty('display', showButtons ? 'flex' : 'none', 'important');
     }
     if (closeBtn) {
-        closeBtn.style.display = showButtons ? 'none' : 'block';
+        closeBtn.style.display = showButtons ? 'none' : '';
     }
     // Prevent closing if buttons are shown (mandatory acceptance)
     modal.setAttribute('data-prevent-close', showButtons ? 'true' : 'false');

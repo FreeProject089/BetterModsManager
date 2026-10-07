@@ -279,7 +279,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
         : '';
 
     ov.innerHTML = `
-        <div class="modal glass" style="width:min(620px,92vw);max-width:620px;overflow:hidden;">
+        <div class="modal glass modal--md">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -473,7 +473,7 @@ export function openModUpdateConfig(modId: string): void {
     };
 
     ov.innerHTML = `
-        <div class="modal glass" style="width:min(560px,92vw);max-width:560px;">
+        <div class="modal glass modal--md">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <div style="display:flex;flex-direction:column;min-width:0;">
                     <span style="font-size:14px;font-weight:700;color:var(--text-primary);">${t('repo.cfgTitle') || 'Update sources'}</span>

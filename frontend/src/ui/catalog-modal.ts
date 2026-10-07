@@ -564,10 +564,10 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         <div class="modal glass cm-modal">
             <div class="modal-header">
                 <div>
-                    <h3 style="margin:0">${escHtml(spec.title)}</h3>
+                    <h3 class="modal-title">${escHtml(spec.title)}</h3>
                     ${spec.subtitle ? `<p class="cm-sub">${escHtml(spec.subtitle)}</p>` : ''}
                 </div>
-                <button class="modal-close" type="button" data-x>&times;</button>
+                <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div class="cm-tabs" role="tablist">
                 ${spec.browse ? `<button type="button" class="cm-tab${tab === 'browse' ? ' on' : ''}" data-tab="browse"

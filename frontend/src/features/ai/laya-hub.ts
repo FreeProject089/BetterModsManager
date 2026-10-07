@@ -46,7 +46,7 @@ function overlay(): HTMLElement {
       <div class="modal ai-modal laya-modal" role="dialog" aria-modal="true" aria-labelledby="laya-title">
         <div class="modal-header">
           <h3 class="modal-title ai-title" id="laya-title">${IC}<span></span></h3>
-          <button type="button" class="modal-close" id="laya-close">&times;</button>
+          <button type="button" class="modal-close" id="laya-close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="laya-tabs" role="tablist">
           ${TABS.map((k) => `<button type="button" class="laya-tab" role="tab" id="laya-tab-${k}" data-tab="${k}" aria-controls="laya-pane-${k}"></button>`).join('')}

@@ -117,7 +117,7 @@ function render(who, crashes, cfg) {
     _account = linked;
     const needContact = pol.required;
     o.innerHTML = `
-    <div class="modal fbm" role="dialog" aria-labelledby="fbm-heading">
+    <div class="modal modal--lg fbm" role="dialog" aria-modal="true" aria-labelledby="fbm-heading">
         <div class="fbm-head">
             <span class="fbm-head-icon">${IC.site}</span>
             <div class="fbm-head-text">

@@ -76,7 +76,7 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
         <div class="modal ai-modal ai-lib" role="dialog" aria-modal="true" aria-labelledby="ail-title">
           <div class="modal-header">
             <h3 class="modal-title ai-title" id="ail-title">${IC}<span>${escHtml(t('ai.lib.title'))}</span></h3>
-            <button type="button" class="modal-close" id="ail-close" aria-label="${escAttr(t('common.close'))}" ${_running ? 'disabled' : ''}>&times;</button>
+            <button type="button" class="modal-close" id="ail-close" aria-label="${escAttr(t('common.close'))}" ${_running ? 'disabled' : ''}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div class="modal-body ai-body">${body}</div>
           <div class="modal-footer ai-foot">${foot}</div>

@@ -2528,12 +2528,12 @@ function showLauncherPicker(appId: string, exes: { name: string; path: string; s
     ov.className = 'modal-overlay open';
     ov.style.zIndex = '10000';
     ov.innerHTML = `
-      <div class="modal glass" style="max-width:560px;width:94%;">
+      <div class="modal glass modal--md">
         <div class="modal-header">
-          <h2 style="margin:0;font-size:16px;">${escHtml(t('apps.pickLauncher')||'Choose launcher')}</h2>
+          <h2 class="modal-title">${escHtml(t('apps.pickLauncher')||'Choose launcher')}</h2>
           <button class="modal-close" id="alp-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
-        <div class="modal-body" style="padding:16px 18px;">
+        <div class="modal-body">
           <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;">${escHtml(t('apps.pickLauncherDesc')||'This app contains several executables. Pick the one to launch, or keep BMM auto choice.')}</p>
           <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;">
             ${exes.map((e, i) => {
@@ -2549,7 +2549,7 @@ function showLauncherPicker(appId: string, exes: { name: string; path: string; s
             }).join('')}
           </div>
         </div>
-        <div class="modal-footer" style="padding:12px 18px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.08);">
+        <div class="modal-footer">
           <button class="btn btn-ghost btn-sm" id="alp-browse">${escHtml(t('plugins.qtBrowse')||'Browse…')}</button>
           <button class="btn btn-ghost btn-sm" id="alp-auto">${escHtml(t('apps.autoDetected')||'Keep auto')}</button>
           <button class="btn btn-accent btn-sm" id="alp-use">${escHtml(t('apps.useThis')||'Use this')}</button>

@@ -303,12 +303,12 @@ async function openCatalogBuilder(onScreen) {
         const list = [...rows.values()];
         const on = list.filter((r) => r.on).length;
         ov.innerHTML = `
-        <div class="modal glass modal--lg" style="max-height:86vh;">
-            <div class="modal-header" style="flex-shrink:0;">
-                <h3>${escHtml(t('repo.cat.b.title') || 'Build a repo catalogue')}</h3>
-                <button class="modal-close" type="button" data-x>&times;</button>
+        <div class="modal glass modal--lg">
+            <div class="modal-header">
+                <h3 class="modal-title">${escHtml(t('repo.cat.b.title') || 'Build a repo catalogue')}</h3>
+                <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
+            <div class="modal-body">
                 <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.name') || 'Catalogue name')}</label>
                 <input class="input" id="repo-cat-b-name" value="${escAttr(name)}" style="margin-bottom:14px;">
 
@@ -370,7 +370,7 @@ async function openCatalogBuilder(onScreen) {
                 </div>
                 </section>
             </div>
-            <div class="modal-footer" style="flex-shrink:0; display:flex; gap:8px; justify-content:flex-end;">
+            <div class="modal-footer" style="flex-shrink:0">
                 <button class="btn" type="button" data-x>${escHtml(t('common.cancel') || 'Cancel')}</button>
                 <button class="btn btn-primary" type="button" data-go${on ? '' : ' disabled'}>${escHtml(
         // "Export 0" reads like an instruction that will do something. With

@@ -1020,13 +1020,13 @@ function promptEmail(title: string, desc: string): Promise<string | null> {
         const ov = document.createElement('div');
         ov.className = 'modal-generic-overlay open';
         ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)';
-        ov.innerHTML = `<div class="modal glass" style="width:min(440px,92vw);padding:0">
+        ov.innerHTML = `<div class="modal glass">
             <div class="modal-header"><h2 class="modal-title" style="margin:0;font-size:1.05rem">${escHtml(title)}</h2></div>
-            <div class="modal-body" style="padding:16px 20px">
+            <div class="modal-body">
                 <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:0 0 12px">${escHtml(desc)}</p>
                 <input type="email" class="input" id="pe-input" placeholder="you@example.com" style="width:100%" autocomplete="email">
             </div>
-            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid var(--border)">
+            <div class="modal-footer">
                 <button class="btn btn-ghost" id="pe-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
                 <button class="btn btn-primary" id="pe-ok">${escHtml(t('common.send') || 'Send')}</button>
             </div></div>`;
@@ -1266,7 +1266,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
     overlay.style.zIndex = '2100000';
     const cats = TELEMETRY_CATEGORIES.map((c) => switchRow(c, catName(c), catDesc(c), start[c])).join('');
     overlay.innerHTML = `
-      <div class="modal glass tc-modal" role="dialog" aria-modal="true" aria-labelledby="tc-title">
+      <div class="modal glass modal--md tc-modal" role="dialog" aria-modal="true" aria-labelledby="tc-title">
         <div class="modal-header">
             <h2 class="modal-title tc-title" id="tc-title">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>

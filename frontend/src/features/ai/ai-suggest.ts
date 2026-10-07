@@ -62,7 +62,7 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
     const head = `
       <div class="modal-header">
         <h3 class="modal-title ai-title" id="ais-title">${IC_SPARK}<span>${escHtml(t('ai.suggest.title', { name: String(mod.name || '') }))}</span></h3>
-        <button type="button" class="modal-close" id="ais-close" aria-label="${escAttr(t('common.close'))}">&times;</button>
+        <button type="button" class="modal-close" id="ais-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>`;
 
     const providerLine = (): string => {

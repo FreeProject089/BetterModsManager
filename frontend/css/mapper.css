@@ -340,40 +340,23 @@
     transform: scale(0.95);
 }
 
-/* Mapper Modals */
+/* Mapper Modals — the generic overlay fades in with opacity + visibility (so it can be
+   transitioned); the dim, blur, padding and the card itself are css/modal-shell.css. */
 .modal-generic-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(10px);
     display: flex;
-    align-items: center;
-    justify-content: center;
     z-index: 9000;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: none !important; /* Ensure overlay has no shadow */
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .modal-generic-overlay.open {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-}
-
-.modal-generic-overlay .modal.glass {
-    transform: translateY(20px);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 40px rgba(59, 130, 246, 0.1);
-    background: var(--bmm-bg-overlay);
-    backdrop-filter: blur(25px) saturate(180%);
-    border: 1px solid var(--bmm-s12);
-}
-
-.modal-generic-overlay.open .modal.glass {
-    transform: translateY(0);
 }
 
 /* Modal sizing for preview.
@@ -1033,30 +1016,6 @@
 #view-mapper .panel-legend { opacity: 1; padding: 9px 16px; border-top-color: var(--bmm-border); }
 #view-mapper .panel-legend .legend-item { color: var(--bmm-text-secondary); }
 
-
-/* ── The mapper's dialogs. Their markup in index.html carries inline styles; these rules
-      restate the parts that broke: a hard-coded white title on BMM White, muted body text, a
-      footer wash that was the page background, an all-caps confirm button. Owner: dropping
-      those inline styles from index.html makes the !important below unnecessary. ────────── */
-#modal-mapper-input .modal,
-#modal-mapper-confirm .modal { border-radius: 16px !important; border-color: var(--bmm-border-hover) !important; }
-#modal-mapper-input .modal-header,
-#modal-mapper-confirm .modal-header { padding: 18px 22px !important; background: var(--bmm-s02) !important; border-bottom-color: var(--bmm-border) !important; }
-#mapper-confirm-title,
-#mapper-input-title { color: var(--bmm-text-primary) !important; font-size: 16px !important; }
-#modal-mapper-input .modal-header p,
-#modal-mapper-confirm .modal-header p { color: var(--bmm-text-secondary) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; font-size: 12px !important; }
-#modal-mapper-input .modal-body,
-#modal-mapper-confirm .modal-body { padding: 20px 22px !important; }
-#mapper-input-label,
-#mapper-confirm-message { color: var(--bmm-text-secondary) !important; }
-#mapper-input-field { background: var(--bmm-s04) !important; border-color: var(--bmm-border-hover) !important; height: 40px !important; border-radius: var(--bmm-radius-input) !important; }
-#modal-mapper-input .modal-footer,
-#modal-mapper-confirm .modal-footer { padding: 14px 22px !important; background: var(--bmm-s02) !important; border-top: 1px solid var(--bmm-border); }
-#modal-mapper-input .modal-footer .btn,
-#modal-mapper-confirm .modal-footer .btn { text-transform: none !important; letter-spacing: 0 !important; min-height: 36px; }
-#btn-mapper-input-cancel,
-#btn-mapper-confirm-cancel { color: var(--bmm-text-secondary) !important; }
 
 /* Context menu: reading colours and a tighter row. */
 #mapper-context-menu .menu-item { color: var(--bmm-text-secondary); padding: 8px 12px; font-size: 13px; }

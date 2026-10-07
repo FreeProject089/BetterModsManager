@@ -29,18 +29,10 @@ export const showConfirm = (title: string, message: string, isDanger = true): Pr
         if (titleEl) titleEl.textContent = title || t('common.confirm');
         if (messageEl) messageEl.textContent = message || "";
         
-        if (isDanger) {
-            btnYes.className = 'btn btn-danger';
-            if (iconContainer) {
-                iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
-                iconContainer.style.color = 'var(--danger)';
-            }
-        } else {
-            btnYes.className = 'btn btn-accent';
-            if (iconContainer) {
-                iconContainer.style.background = 'rgba(59, 130, 246, 0.1)';
-                iconContainer.style.color = 'var(--accent)';
-            }
+        btnYes.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+        if (iconContainer) {
+            iconContainer.removeAttribute('style');
+            iconContainer.className = isDanger ? 'bms-icon bms-icon--danger' : 'bms-icon';
         }
 
         const cleanup = () => {

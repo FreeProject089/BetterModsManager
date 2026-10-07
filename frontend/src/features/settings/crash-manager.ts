@@ -47,11 +47,12 @@ export async function openCrashManager(): Promise<void> {
     overlay.id = 'crashmgr-overlay';
     overlay.className = 'modal-generic-overlay open';
     overlay.innerHTML = `
-        <div class="modal-generic crashmgr-modal">
-            <div class="crashmgr-head">
-                <h3>${t('crashmgr.title') || 'Crash Reports & Sessions'}</h3>
-                <button class="modal-close" id="crashmgr-close">✕</button>
+        <div class="modal glass modal--lg modal--tall crashmgr-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">${t('crashmgr.title') || 'Crash Reports & Sessions'}</h3>
+                <button type="button" class="modal-close" id="crashmgr-close" aria-label="${t('common.close') || 'Close'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
+            <div class="modal-toolbar crashmgr-bar">
             <div class="crashmgr-tabs">
                 <button class="crashmgr-tab active" data-tab="reports">${t('crashmgr.tabReports') || 'Crash reports'}</button>
                 <button class="crashmgr-tab" data-tab="sessions">${t('crashmgr.tabSessions') || 'Saved sessions'}</button>
@@ -64,11 +65,14 @@ export async function openCrashManager(): Promise<void> {
                 <button class="btn btn-xs btn-ghost" id="crashmgr-applylimits">${t('common.apply') || 'Apply'}</button>
                 <span class="crashmgr-limits-hint">${t('crashmgr.limitsHint') || 'applies to saved sessions + session reports'}</span>
             </div>
-            <div class="crashmgr-body" id="crashmgr-body"></div>
-            <div class="crashmgr-actions">
-                <button class="btn btn-ghost btn-sm" id="crashmgr-import">${t('crashmgr.import') || 'Import a session…'}</button>
-                <button class="btn btn-ghost btn-sm" id="crashmgr-folder">${t('settings.crashOpenFolder') || 'Open folder'}</button>
-                <button class="btn btn-primary btn-sm" id="crashmgr-done">${t('common.done') || 'Done'}</button>
+            </div>
+            <div class="modal-body crashmgr-body" id="crashmgr-body"></div>
+            <div class="modal-footer">
+                <div class="modal-footer-start">
+                    <button class="btn btn-ghost btn-sm" id="crashmgr-import">${t('crashmgr.import') || 'Import a session…'}</button>
+                    <button class="btn btn-ghost btn-sm" id="crashmgr-folder">${t('settings.crashOpenFolder') || 'Open folder'}</button>
+                </div>
+                <button class="btn btn-primary" id="crashmgr-done">${t('common.done') || 'Done'}</button>
             </div>
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);

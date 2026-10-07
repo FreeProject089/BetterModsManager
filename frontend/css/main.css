@@ -1145,20 +1145,7 @@ body.is-maximized .titlebar-spacer {
     display: none;
 }
 
-/* ── Modal Footer Fix ── */
-.modal-footer {
-    padding: 16px 24px;
-    background: rgba(0, 0, 0, 0.2);
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-}
-
-.modal-footer .btn {
-    min-width: 100px;
-    padding: 10px 20px;
-}
+/* The modal shell (overlay, card, header, body, footer) lives in css/modal-shell.css. */
 
 /* ── BMM Toggle Switch ── */
 .bmm-switch {
@@ -1185,25 +1172,6 @@ body.is-maximized .titlebar-spacer {
     border: 1px solid var(--border);
     transition: var(--transition);
     cursor: pointer;
-}
-
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    z-index: 5000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.18s ease;
-    padding: 32px;
-    overflow: hidden;
-    /* `contain: paint` used to sit here. It clips descendants to the padding box, and the
-       modal's own `box-shadow: 0 8px 20px …` is painted OUTSIDE its border box — so the
-       shadow was cut off along a hard rectangle, which is what "the shadow is broken" looks
-       like. The overlay is one full-screen element with a blur; there is nothing here for
-       paint containment to save. */
 }
 
 .bmm-switch input:checked+.bmm-switch-track {
@@ -2789,7 +2757,10 @@ body.bmm-toolbar-opaque .lib-header-shell {
     transform: translateY(0);
 }
 
-.btn-primary {
+/* `.btn-accent` is the same button: twenty-odd modules (the shared confirm among them) wrote it
+   and no rule defined it, so their primary action rendered as a neutral grey button. */
+.btn-primary,
+.btn-accent {
     background: var(--bmm-btn-primary-bg, var(--accent));
     color: var(--bmm-btn-primary-text, #ffffff);
     border-color: var(--bmm-btn-primary-border, var(--bmm-s12));
@@ -2799,9 +2770,11 @@ body.bmm-toolbar-opaque .lib-header-shell {
    surface that reads as "lit"; over the accent it desaturates the accent into a flat pale
    blue, so the primary action stops looking primary at the moment you point at it. It gets
    brighter instead, and keeps its colour. */
-.btn-primary:hover::after { opacity: 0; }
+.btn-primary:hover::after,
+.btn-accent:hover::after { opacity: 0; }
 
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-accent:hover {
     box-shadow: var(--accent-glow);
     transform: translateY(-1px);
     filter: brightness(1.09);
@@ -2844,6 +2817,14 @@ body.bmm-toolbar-opaque .lib-header-shell {
 .btn-danger:hover {
     box-shadow: 0 0 12px rgba(var(--bmm-danger-r,239),var(--bmm-danger-g,68),var(--bmm-danger-b,68),0.3);
 }
+
+/* Used by confirmCustom(type 'warning') and never defined: a warning confirm rendered plain. */
+.btn-warning {
+    background: var(--bmm-warning-dim);
+    color: color-mix(in srgb, var(--bmm-warning) 60%, var(--bmm-text-primary));
+    border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border));
+}
+.btn-warning:hover { border-color: var(--bmm-warning); }
 
 .btn-sm {
     padding: 6px 10px;
@@ -3332,27 +3313,8 @@ body.bmm-toolbar-opaque .lib-header-shell {
     font-size: 13px;
 }
 
-/* ═══════════════════════════════════
-   MODALS
-═══════════════════════════════════ */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    z-index: 5000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.18s ease;
-    padding: 32px;
-    overflow: hidden;
-    /* `contain: paint` used to sit here. It clips descendants to the padding box, and the
-       modal's own `box-shadow: 0 8px 20px …` is painted OUTSIDE its border box — so the
-       shadow was cut off along a hard rectangle, which is what "the shadow is broken" looks
-       like. The overlay is one full-screen element with a blur; there is nothing here for
-       paint containment to save. */
-}
+/* ═══ MODALS: the shell (overlay, card, header, body, footer, sizes, motion) is defined once,
+   in css/modal-shell.css. Nothing here may restyle it. ═══ */
 
 /* "N more waiting" while a start-up card is up (ui/nudge-queue.ts). Above every overlay,
    below nothing that matters; small and in the corner, because it is context, not a
@@ -3366,99 +3328,6 @@ body.bmm-toolbar-opaque .lib-header-shell {
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     pointer-events: none;
     animation: fadeIn .18s ease;
-}
-
-.modal-overlay.open {
-    display: flex;
-}
-
-.modal {
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    width: 100%;
-    max-width: 520px;
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
-}
-
-@keyframes modalIn {
-    from {
-        opacity: 0;
-        transform: scale(0.94) translateY(16px);
-    }
-
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--border);
-}
-
-.modal-title {
-    font-size: 16px;
-    font-weight: 700;
-}
-
-.modal-close {
-    width: 30px;
-    height: 30px;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition-fast);
-}
-
-.modal-close:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-
-.modal-body {
-    padding: 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex: 1;
-    min-height: 0;
-}
-
-.modal-footer {
-    padding: 14px 24px 20px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    border-top: 1px solid var(--border);
-}
-
-/* Mobile: a modal centred with 32px of overlay padding wastes most of a phone screen and
-   crams the content. On a narrow viewport it becomes a near-full-height sheet with tight edge
-   padding, so the layout inside gets the room it needs. */
-@media (max-width: 560px) {
-    .modal-overlay { padding: 10px; align-items: flex-end; }
-    .modal, .srv-modal { max-width: 100%; width: 100%; max-height: 94vh; border-radius: 18px 18px 0 0; }
-    .modal-header { padding: 15px 18px 11px; }
-    .modal-body { padding: 15px 18px; gap: 12px; }
-    .modal-footer { padding: 11px 18px 16px; }
-    .modal-footer .btn { flex: 1; }
-    .srv-header, .srv-actions { padding-left: 16px; padding-right: 16px; }
 }
 
 /* ═══════════════════════════════════
@@ -5782,17 +5651,16 @@ body.tut-docked.tut-min .app-shell {
 .api-warn { color: var(--danger); font-size: 12.5px; background: rgba(248,113,113,0.08); border-left: 3px solid #f87171; border-radius: 6px; padding: 10px 12px; margin-top: 12px; }
 
 /* ── Crash Reports & Sessions manager ── */
-.crashmgr-modal { width: min(720px, 94vw); max-height: 86vh; display: flex; flex-direction: column; padding: 18px 20px; background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
-.crashmgr-head, .crashmgr-tabs, .crashmgr-limits, .crashmgr-actions { flex-shrink: 0; }
-.crashmgr-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.crashmgr-head h3 { margin: 0; font-size: 16px; }
-.crashmgr-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+/* The card, header, body and footer are the house shell (modal--lg modal--tall). The tabs and the
+   limits row share one toolbar band. */
+.crashmgr-bar { flex-direction: column; align-items: stretch; }
+.crashmgr-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); }
 .crashmgr-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); padding: 6px 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .crashmgr-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.crashmgr-limits { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); margin-bottom: 10px; padding: 7px 9px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; }
-.crashmgr-limits input { width: 64px; padding: 3px 6px; font-size: 11px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); }
+.crashmgr-limits { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); padding: 7px 9px; background: var(--bmm-s02); border: 1px solid var(--border); border-radius: 8px; }
+.crashmgr-limits input { width: 64px; padding: 3px 6px; font-size: 11px; background: var(--bmm-bg-base); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); }
 .crashmgr-limits-hint { color: var(--text-muted); opacity: 0.7; font-style: italic; margin-left: auto; }
-.crashmgr-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; margin-right: -4px; }
+.crashmgr-body.modal-body { gap: 6px; }
 .crashmgr-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px 0; }
 .crashmgr-row { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,0.02); flex-wrap: wrap; }
 .crashmgr-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
@@ -5819,7 +5687,6 @@ body.tut-docked.tut-min .app-shell {
 .crashmgr-rowdetail h5 { margin: 10px 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 .crashmgr-sub > summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); margin: 8px 0 4px; }
 .crashmgr-pre { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 11px; font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; margin: 0; color: var(--text-secondary); }
-.crashmgr-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
 /* ── Per-file reader (D1): browse & read any text file inside a report zip ── */
 .crashmgr-fileshint { font-size: 11px; color: var(--text-muted); margin: 2px 0 6px; }
@@ -6629,11 +6496,6 @@ body.tut-docked.tut-min .app-shell {
         opacity: 1;
         width: 100%;
         justify-content: flex-end;
-    }
-
-    .modal {
-        max-width: 95%;
-        margin: 10px;
     }
 
     .profile-grid {
@@ -8450,21 +8312,6 @@ select:focus {
     color: var(--text-muted);
 }
 
-/* Modal Polish */
-#modal-benchmark .modal {
-    background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(24px);
-    border: 1px solid var(--bmm-s10);
-    border-radius: 24px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-#modal-benchmark .modal-header {
-    border-bottom: 1px solid var(--bmm-s05);
-}
-
 @keyframes slideInUp {
     from {
         opacity: 0;
@@ -10094,65 +9941,6 @@ select:focus {
     letter-spacing: 0.12em;
 }
 
-/* Specific Modal Header for Server Mgmt */
-.server-modal-header {
-    padding: 24px 28px !important;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: nowrap;
-    gap: 12px;
-}
-
-.server-modal-header > div:first-child {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
-    min-width: 0;
-}
-
-.server-modal-header > div:last-child {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-}
-
-.server-modal-header h2 {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 18px;
-    line-height: 1.2;
-}
-
-.server-modal-header .modal-close {
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    border: 1px solid var(--bmm-s10);
-    background: var(--bmm-s05);
-    color: var(--text-muted);
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.server-modal-header .modal-close:hover {
-    background: rgba(239,68,68,0.1);
-    border-color: rgba(239,68,68,0.2);
-    color: var(--bmm-danger);
-}
-
-.server-modal-header .btn-ghost {
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
 /* Search bar styling in modals */
 .modal-search-bar {
     margin: 15px;
@@ -10537,36 +10325,23 @@ body.tasky-hidden #app-mascot-container {
     padding: 20px 25px;
 }
 
-/* --- MODAL OVERLAY IMPROVEMENTS --- */
+/* --- The generic overlay family (.modal-generic-overlay): position and stacking only; the
+   dim, blur, padding and the card's entrance are css/modal-shell.css. --- */
 .modal-generic-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.75); /* Darker like original */
-    backdrop-filter: blur(10px); /* Slightly more blur for premium look */
     z-index: 10000;
     display: none;
-    align-items: center;
-    justify-content: center;
     opacity: 0;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.2s ease;
 }
 
 .modal-generic-overlay.open {
     display: flex;
     opacity: 1;
-}
-
-.modal-generic-overlay.open .modal {
-    transform: scale(1);
-    animation: modalPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes modalPopIn {
-    0% { transform: scale(0.9) translateY(20px); opacity: 0; }
-    100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 /* Ensure modals in index.html are fixed if they are global, but relative to app if needed */
@@ -12254,10 +12029,9 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    badges on it is one the reader must stop at, and everything else should get out of the
    way. Markers are words rather than colours alone — a faint red row on a light theme is
    exactly what gets skimmed past. */
-.mg-modal { width: min(760px, 94vw); }
-.mg-summary { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.mg-summary { font-size: 11.5px; }
 .mg-warn { font-size: 11px; color: var(--warning); margin-bottom: 8px; overflow-wrap: anywhere; }
-.mg-body { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.mg-body { display: flex; flex-direction: column; gap: 2px; }
 .mg-node { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
     border-left: 2px solid var(--border); padding: 2px 0 2px 8px; }
 .mg-name { font-size: 12px; }
@@ -12330,7 +12104,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    every other modal. */
 .spg-overlay { pointer-events: auto; z-index: 10060; }
 .skp { pointer-events: auto; }
-.spg-overlay .modal.spg { max-width:1040px; width:96%; max-height:calc(100vh - 64px); display:flex; flex-direction:column; padding:0; }
 .spg-head { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .spg-head-l { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
 .spg-head-l h2 { margin:0; font-size:15px; }
@@ -16348,46 +16121,16 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
 .i18n-newlang-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 /* ── Legal modals (Privacy / TOS / GPL License) — premium rework ──────────── */
-.legal-modal { max-width: 700px; width: 92%; }
-.legal-modal-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: linear-gradient(135deg, rgba(91, 140, 255, 0.10) 0%, rgba(91, 140, 255, 0.02) 100%);
-}
-.legal-modal-header .legal-id {
-    width: 46px; height: 46px; border-radius: 13px; flex: 0 0 auto;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, rgba(91, 140, 255, 0.22) 0%, rgba(91, 140, 255, 0.10) 100%);
-    border: 1px solid rgba(91, 140, 255, 0.30); color: var(--accent, #5b8cff);
-    box-shadow: 0 4px 14px rgba(91, 140, 255, 0.18);
-}
-.legal-modal-header .legal-title {
-    margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary);
-}
-.legal-modal-header .legal-sub {
-    margin: 3px 0 0; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.12em; color: var(--accent, #5b8cff); opacity: 0.85;
-}
-.legal-modal-header .modal-close {
-    width: 36px; height: 36px; border-radius: 10px; background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.10); transition: all 0.2s ease;
-}
-.legal-modal-header .modal-close:hover { background: rgba(255, 255, 255, 0.12); }
-.legal-body {
-    max-height: 60vh; overflow-y: auto; padding: 20px 24px; margin: 14px;
-    background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px; line-height: 1.7; color: var(--text-secondary); text-align: left;
-}
+/* The legal dialogs are house dialogs (.modal--lg, .bms-icon header); only the document's
+   typography is theirs. The body is the dialog's own scroll region. */
+.legal-body { line-height: 1.7; color: var(--bmm-text-secondary); text-align: left; }
 .legal-body h1, .legal-body h2, .legal-body h3 { color: var(--text-primary); margin: 16px 0 6px; line-height: 1.35; }
 .legal-body h1 { font-size: 17px; } .legal-body h2 { font-size: 15px; } .legal-body h3 { font-size: 13px; }
 .legal-body p, .legal-body li { margin: 6px 0; }
-.legal-body a { color: var(--accent, #5b8cff); text-decoration: none; }
+.legal-body a { color: var(--bms-accent-ink); text-decoration: none; }
 .legal-body a:hover { text-decoration: underline; }
 .legal-body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
-.legal-body th, .legal-body td { border: 1px solid rgba(255, 255, 255, 0.08); padding: 6px 8px; text-align: left; }
-.legal-body::-webkit-scrollbar { width: 10px; }
-.legal-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 6px; }
+.legal-body th, .legal-body td { border: 1px solid var(--bmm-border); padding: 6px 8px; text-align: left; }
 #license-content {
     font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; color: var(--bmm-text-secondary);
     white-space: pre-wrap; word-wrap: break-word; margin: 0;

@@ -65,7 +65,7 @@ export function dialog(id: string, title: string, body: string, foot: string): {
     ov.innerHTML = `
       <div class="modal glass osh-modal" role="dialog" aria-modal="true" aria-labelledby="${id}-title">
         <div class="modal-header">
-          <h3 id="${id}-title">${escHtml(title)}</h3>
+          <h3 class="modal-title" id="${id}-title">${escHtml(title)}</h3>
           <button type="button" class="modal-close osh-x" aria-label="${escAttr(t('common.close'))}">${CLOSE}</button>
         </div>
         <div class="osh-body">${body}</div>

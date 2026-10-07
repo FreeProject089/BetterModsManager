@@ -154,8 +154,8 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
 
         ov.innerHTML = `<div class="modal glass cm-modal pa-modal">
             <div class="modal-header">
-                <h3>${escHtml(t('plugins.assets.title').replace('{p}', pluginName))}</h3>
-                <button class="modal-close" type="button" id="pa-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
+                <h3 class="modal-title">${escHtml(t('plugins.assets.title').replace('{p}', pluginName))}</h3>
+                <button class="modal-close" type="button" id="pa-close" aria-label="${escHtml(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             ${items.length ? `
                 <div class="modal-body pa-wrap">
@@ -374,8 +374,8 @@ export async function runCheck(pluginId: string): Promise<void> {
     ov.className = 'modal-overlay open';
     ov.innerHTML = `<div class="modal glass cm-modal pa-check">
         <div class="modal-header">
-            <h3>${escHtml(t('plugins.check.title'))}</h3>
-            <button class="modal-close" type="button" id="pc-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
+            <h3 class="modal-title">${escHtml(t('plugins.check.title'))}</h3>
+            <button class="modal-close" type="button" id="pc-x" aria-label="${escHtml(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body pa-check-body">
             ${errors.length ? `<div class="pa-check-group">

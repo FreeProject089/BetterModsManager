@@ -72,10 +72,10 @@ export function openSshServers(focus?: string): void {
     ov.innerHTML = `
       <div class="modal glass modal--lg">
         <div class="modal-header">
-          <h2 style="margin:0;font-size:16px;">${escHtml(t('sshsrv.title'))}</h2>
+          <h2 class="modal-title">${escHtml(t('sshsrv.title'))}</h2>
           <button class="modal-close" id="sshsrv-close" aria-label="${escAttr(t('common.close'))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
-        <div class="modal-body" style="padding:14px 18px;display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:start;">
+        <div class="modal-body" style="display:grid; grid-template-columns:180px 1fr; gap:16px; align-items:start">
           <div>
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;">${escHtml(t('sshsrv.list'))}</div>
             <div id="sshsrv-list" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;"></div>

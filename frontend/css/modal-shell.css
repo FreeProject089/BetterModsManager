@@ -1,18 +1,31 @@
-/* ═══ The modal shell (ui/modal-shell.ts links this file at boot, from initModals) ══════════
-   Two layers, both theme tokens only.
+/* ═══ The modal shell — THE one definition of a BMM dialog ════════════════════════════════
+   Linked statically from index.html, after every feature stylesheet (and re-linked by
+   ui/modal-shell.ts → ensureModalShellCss if a page forgot it). main.css no longer defines
+   any part of the shell: this file is the only place to change how a dialog looks.
 
-   1. A POLISH LAYER over the house modal (.modal-overlay > .modal > .modal-header /
-      .modal-body / .modal-footer). It is linked after main.css, so these single-class rules
-      win over main.css's own and lose to every feature rule that is more specific: a feature
-      that styled its modal keeps what it chose. What it fixes, for every modal at once:
-        · the close button was --text-muted (2.2:1 on the dark card): now --text-secondary;
-        · the footer painted a square black wash past the modal's rounded corners;
-        · no keyboard focus ring on the dialog's buttons;
-        · the pop-in animation ignored prefers-reduced-motion.
-   2. SHELL COMPONENTS (.bms-*) for dialogs built in TypeScript: a header with an icon tile,
-      a title and a subtitle; tabs and segmented controls; status chips; section cards; empty
-      states; a progress bar; size modifiers. One vocabulary, so a new dialog looks like the
-      others without copying a page of inline styles.
+   Anatomy (scripts/check-modal-consistency.mjs enforces it):
+
+     .modal-overlay.open | .modal-generic-overlay.open      backdrop, centring, stacking
+       .modal [.modal--sm|md|lg|xl|full] [.modal--tall]      the card: size by modifier only
+         .modal-header                                       never scrolls
+           [.bms-icon[--danger|--warn|--ok]]                 optional icon tile
+           .modal-title | .bms-titles > .bms-title + .bms-sub
+           [.bms-head-end]                                   optional header actions
+           .modal-close                                      always last, always present
+         .modal-body [.modal-body--flush]                    the ONLY scroll region
+         .modal-footer                                       never scrolls
+           [.modal-footer-start]                             secondary / destructive, LEFT
+           Cancel (.btn-ghost/.btn-secondary)  Primary (.btn-primary/.btn-danger)   RIGHT
+
+   Rules: no inline style on the four shell elements (size → modifier, tone → .bms-icon--*),
+   the primary action is the LAST button of the footer, a destructive action that is not the
+   question being asked goes in .modal-footer-start. Theme tokens only — every surface here
+   resolves through the --bmm-sNN ladder, so BMM White and the dark themes share one file.
+
+   Two layers below:
+   1. THE SHELL — overlay, card, header, body, footer, sizes, motion.
+   2. SHELL COMPONENTS (.bms-*) for what goes inside: icon tile, title block, tabs and
+      segmented controls, chips, cards, empty states, progress.
 
    The accent is a FILL (tabs, chips, the icon tile). Accent-coloured TEXT goes through
    --bms-accent-ink, the accent walked toward the theme's ink so it stays readable on BMM White
@@ -22,70 +35,209 @@
     --bms-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
     --bms-radius: 16px;
     --bms-pad-x: 24px;
-    --bms-pad-y: 18px;
+    --bms-pad-y: 16px;
+    /* The dim behind a dialog. Black in every theme on purpose, like a shadow: a white dim on
+       BMM White would read as a page that went pale, not as "something is in front". */
+    --bms-backdrop: rgb(0 0 0 / 0.62);
+    --bms-inset: 32px;
+    --bms-w-sm: 440px;
+    --bms-w-md: 560px;
+    --bms-w-lg: 760px;
+    --bms-w-xl: 1080px;
 }
 
-/* ── 1. Polish layer ─────────────────────────────────────────────────────────────────────── */
-:where(.modal-overlay) .modal {
+/* ── 1. The shell ────────────────────────────────────────────────────────────────────────── */
+
+/* Backdrop. Two overlay families exist (.modal-overlay for most dialogs, the older
+   .modal-generic-overlay for the mapper and the pickers); they now dim, blur and pad alike.
+   Positioning stays per family: mascot.css pins both inside #app-window-outer. */
+.modal-overlay,
+.modal-generic-overlay {
+    inset: 0;
+    background: var(--bms-backdrop);
+    backdrop-filter: blur(6px);
+    align-items: center;
+    justify-content: center;
+    padding: var(--bms-inset);
+    overflow: hidden;
+}
+.modal-overlay {
+    position: fixed;
+    z-index: 5000;
+    display: none;
+    animation: bms-fade 0.16s ease-out;
+}
+.modal-overlay.open { display: flex; }
+
+/* The card. */
+.modal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--bms-w-md);
+    max-height: 100%;
+    min-height: 0;
+    background: var(--bmm-bg-elevated);
+    color: var(--bmm-text-primary);
+    border: 1px solid var(--bmm-border-hover);
     border-radius: var(--bms-radius);
     box-shadow: var(--bmm-shadow-modal), 0 0 0 1px var(--bmm-s05);
+    animation: bms-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.modal-header { gap: 12px; min-width: 0; }
-.modal-title { color: var(--bmm-text-primary); line-height: 1.3; min-width: 0; }
-.modal-close {
-    flex: none;
-    width: 32px;
-    height: 32px;
-    font-size: 20px;
-    line-height: 1;
-    color: var(--bmm-text-secondary);
-}
-.modal-close:hover { color: var(--bmm-text-primary); background: var(--bmm-s08); }
-.modal-footer {
-    flex-wrap: wrap;
+:is(.modal-overlay, .modal-generic-overlay) > .modal { flex: 0 1 auto; }
+/* The generic family is always laid out (it fades with opacity), so its card would play the
+   entrance once at boot, invisibly. It plays on .open instead. */
+.modal-generic-overlay > .modal { animation: none; }
+.modal-generic-overlay.open > .modal { animation: bms-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Sizes: the ONLY way to make a dialog wider or narrower. `min()` keeps a narrow window
+   from getting a horizontal scroll. */
+.modal.modal--sm { width: min(100%, var(--bms-w-sm)); max-width: var(--bms-w-sm); }
+.modal.modal--md { width: min(100%, var(--bms-w-md)); max-width: var(--bms-w-md); }
+.modal.modal--lg { width: min(100%, var(--bms-w-lg)); max-width: var(--bms-w-lg); }
+.modal.modal--xl { width: min(100%, var(--bms-w-xl)); max-width: var(--bms-w-xl); }
+.modal.modal--full { width: 100%; max-width: none; height: 100%; }
+/* A browser-type dialog (lists, trees, editors) keeps its height while its content loads
+   or filters, instead of jumping as rows come and go. */
+.modal.modal--tall { height: min(100%, 860px); }
+
+/* Header: never scrolls. Icon tile, title block, optional actions, close — in that order. */
+.modal-header {
+    display: flex;
     align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    min-width: 0;
+    flex: none;
+    padding: var(--bms-pad-y) var(--bms-pad-x);
+    border-bottom: 1px solid var(--bmm-border);
     background: var(--bmm-s02);
 }
-/* The modal does not clip (dropdowns and tooltips escape it on purpose), so its first and
+.modal-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--bmm-text-primary);
+    overflow-wrap: anywhere;
+}
+.modal-subtitle { margin: 0; font-size: 12px; line-height: 1.4; color: var(--bmm-text-secondary); }
+.modal-close:not(.btn) {
+    flex: none;
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
+}
+.modal-close:not(.btn):hover { color: var(--bmm-text-primary); background: var(--bmm-s08); }
+
+/* Body: the one scroll region. Column flex with a gap, as before (features that need a row
+   use their own inner class — see the .modal-body flex note in the project docs). */
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 20px var(--bms-pad-x);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.modal-body--flush { padding: 0; gap: 0; }
+/* A band that stays put between the header and the body: a search field, filters. */
+.modal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px 10px;
+    flex-wrap: wrap;
+    flex: none;
+    min-width: 0;
+    padding: 12px var(--bms-pad-x);
+    border-bottom: 1px solid var(--bmm-border);
+}
+.modal-toolbar > .form-input,
+.modal-toolbar > input { flex: 1 1 220px; min-width: 0; }
+/* The sentence a confirmation asks, and a short note in the footer (a count, a rule). */
+.modal-message { margin: 0; font-size: 14px; line-height: 1.6; color: var(--bmm-text-secondary); }
+.modal-footer-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bmm-text-secondary); min-width: 0; }
+
+/* Footer: never scrolls. Secondary actions left (.modal-footer-start), Cancel then the
+   primary action on the right. */
+.modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: none;
+    padding: 14px var(--bms-pad-x);
+    border-top: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+.modal-footer-start,
+.bms-foot-start { display: flex; align-items: center; gap: 8px; margin-right: auto; flex-wrap: wrap; min-width: 0; }
+.modal-footer .btn { min-width: 92px; justify-content: center; }
+.modal-footer .modal-footer-start .btn,
+.modal-footer .bms-foot-start .btn { min-width: 0; }
+
+/* The card does not clip (dropdowns and tooltips escape it on purpose), so its first and
    last bands round their own corners instead of painting a square wash past the edge. */
 .modal > .modal-header:first-child { border-radius: var(--bms-radius) var(--bms-radius) 0 0; }
 .modal > .modal-footer:last-child { border-radius: 0 0 var(--bms-radius) var(--bms-radius); }
 
-.modal-overlay .modal :is(button, [role="tab"], a, summary, input, select, textarea):focus-visible {
+.modal :is(button, [role="tab"], a, summary, input, select, textarea):focus-visible {
     outline: 2px solid var(--bmm-accent);
     outline-offset: 2px;
 }
 
-/* Size scale. `min()` keeps a phone-width window from getting a horizontal scroll. */
-.modal.modal--sm { width: min(100%, 420px); max-width: 420px; }
-.modal.modal--md { width: min(100%, 560px); max-width: 560px; }
-.modal.modal--lg { width: min(100%, 760px); max-width: 760px; }
-.modal.modal--xl { width: min(100%, 1120px); max-width: 1120px; }
-
+/* Motion: a short rise and fade, no overshoot. Off under reduced motion and BMM's own switch. */
+@keyframes bms-in { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes bms-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
     .modal-overlay,
-    .modal-overlay .modal,
-    .modal-generic-overlay.open .modal { animation: none !important; transition: none !important; }
+    .modal-generic-overlay,
+    .modal { animation: none !important; transition: none !important; }
 }
-body.bmm-no-anim .modal-overlay .modal { animation: none !important; }
+body.bmm-no-anim :is(.modal-overlay, .modal-generic-overlay, .modal) { animation: none !important; }
+
+/* Narrow window: a near-full-height sheet with tight gutters, buttons full width. */
+@media (max-width: 560px) {
+    .modal-overlay, .modal-generic-overlay { padding: 10px; align-items: flex-end; }
+    .modal { max-width: 100%; width: 100%; max-height: 94%; border-radius: 18px 18px 0 0; }
+    :root { --bms-pad-x: 18px; --bms-pad-y: 13px; }
+    .modal-footer .btn { flex: 1; }
+}
 
 /* ── 2. Shell components ─────────────────────────────────────────────────────────────────── */
-.modal.bms {
-    display: flex;
-    flex-direction: column;
-    max-height: min(92vh, 980px);
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--bmm-border-hover);
-}
-.bms > .modal-header,
+/* `.bms` on a .modal is the TS-built flavour of the same shell; it adds nothing to the card
+   any more (section 1 is the shell). `.bms-head` / `.bms-body` / `.bms-foot` are aliases for a
+   dialog whose bands are not .modal-header/.modal-body/.modal-footer (an embedded panel). */
+.bms > .modal-header { flex-wrap: wrap; }
 .bms-head {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     padding: var(--bms-pad-y) var(--bms-pad-x);
     border-bottom: 1px solid var(--bmm-border);
     background: var(--bmm-s02);
     flex-wrap: wrap;
+    flex: none;
 }
 .bms-icon {
     flex: none;
@@ -98,12 +250,16 @@ body.bmm-no-anim .modal-overlay .modal { animation: none !important; }
     color: var(--bms-accent-ink);
     border: 1px solid var(--bmm-border-accent);
 }
+.bms-icon > svg { width: 20px; height: 20px; }
+.bms-icon--danger { background: var(--bmm-danger-dim); color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); }
+.bms-icon--warn { background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary)); border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); }
+.bms-icon--ok { background: var(--bmm-success-dim); color: color-mix(in srgb, var(--bmm-success) 62%, var(--bmm-text-primary)); border-color: color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border)); }
 .bms-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
-.bms-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--bmm-text-primary); letter-spacing: -0.01em; line-height: 1.25; }
+.bms-titles > .modal-title { flex: none; }
+.bms-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--bmm-text-primary); letter-spacing: -0.01em; line-height: 1.25; }
 .bms-sub { margin: 0; font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.4; }
 .bms-head-end { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; min-width: 0; }
 
-.bms > .modal-body,
 .bms-body {
     padding: 20px var(--bms-pad-x);
     display: flex;
@@ -114,9 +270,7 @@ body.bmm-no-anim .modal-overlay .modal { animation: none !important; }
     flex: 1 1 auto;
     min-height: 0;
 }
-/* Sticky footer: the body scrolls, the actions never do. Secondary actions sit left
-   (.bms-foot-start), the primary one ends the row on the right. */
-.bms > .modal-footer,
+.bms > .modal-body { gap: 16px; }
 .bms-foot {
     display: flex;
     align-items: center;
@@ -128,8 +282,6 @@ body.bmm-no-anim .modal-overlay .modal { animation: none !important; }
     background: var(--bmm-s02);
     flex: none;
 }
-.bms-foot-start { display: flex; align-items: center; gap: 8px; margin-right: auto; flex-wrap: wrap; }
-.bms > .modal-footer .btn { min-width: 0; }
 
 /* Tabs (role="tablist"): a segmented rail. The selected tab is an accent FILL with the
    theme's on-accent ink. */

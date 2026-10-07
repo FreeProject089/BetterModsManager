@@ -16,6 +16,7 @@
 
 import { t } from '../core/i18n.js';
 import { invoke } from '../core/api.js';
+import { bindModal, buildModalHeader } from './modal-shell.js';
 
 // No toast here, and not to dodge the import cycle it would create (app.ts reaches this
 // module back through onboarding): the modal is the thing on screen when the import
@@ -90,17 +91,17 @@ export async function offerLegacyImport(next: () => void): Promise<void> {
     const finish = () => {
         if (done) return;      // Skip then a slow import resolving must not run next() twice
         done = true;
+        release();
         document.getElementById(OVERLAY_ID)?.remove();
         next();
     };
+    let release: () => void = () => {};
 
-    const overlay = el('div', 'modal-overlay legacy-overlay');
+    const overlay = el('div', 'modal-overlay open legacy-overlay');
     overlay.id = OVERLAY_ID;
-    const modal = el('div', 'modal legacy-modal');
-
-    const head = el('div', 'modal-header');
-    head.appendChild(el('h3', '', t('legacy.title')));
-    modal.appendChild(head);
+    const modal = el('div', 'modal modal--md legacy-modal');
+    // The × is "Skip": closing the offer is declining it, and the next first-run step still runs.
+    modal.appendChild(buildModalHeader({ title: t('legacy.title'), id: OVERLAY_ID, closeLabel: t('common.close'), onClose: () => finish() }));
 
     const skip = el('button', 'btn btn-secondary', t('legacy.skip')) as HTMLButtonElement;
     skip.type = 'button';
@@ -146,5 +147,6 @@ export async function offerLegacyImport(next: () => void): Promise<void> {
     modal.appendChild(foot);
 
     overlay.appendChild(modal);
-    document.getElementById('app-window-outer')?.appendChild(overlay);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    release = bindModal(overlay, { onClose: finish });
 }

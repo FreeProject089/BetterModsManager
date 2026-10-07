@@ -146,12 +146,12 @@ function showReview(path: string, source: string, task: any): void {
 
     const lines = describe(task?.steps || []);
     ov.innerHTML = `
-    <div class="modal glass" style="max-width:720px; width:94%; max-height:88vh; display:flex; flex-direction:column;">
-        <div class="modal-header" style="flex-shrink:0;">
-            <h3>${escHtml(t('bms.title') || 'Run this script?')}</h3>
-            <button class="modal-close" type="button" data-x>&times;</button>
+    <div class="modal glass modal--lg">
+        <div class="modal-header">
+            <h3 class="modal-title">${escHtml(t('bms.title') || 'Run this script?')}</h3>
+            <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
-        <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
+        <div class="modal-body">
             <div class="bms-file">${escHtml(fileName(path))}</div>
             <div class="bms-name">${escHtml(task?.name || 'Untitled')}</div>
             ${task?.description ? `<p class="bms-desc">${escHtml(task.description)}</p>` : ''}

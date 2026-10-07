@@ -5,45 +5,7 @@
    often at a glance, so it has to be legible in every theme rather than in the one it was
    designed in. */
 
-.srv-modal {
-    max-width: 1000px;
-    width: 95%;
-    max-height: 86vh;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-}
-
-/* One header for three views. It no longer announces WHICH of the three you opened — the tab
-   rail does that, and it does it without you having to close anything to find out. */
-.srv-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-}
-.srv-title { display: flex; align-items: center; gap: 10px; color: var(--accent); }
-.srv-title h2 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--text-primary);
-}
-.srv-close {
-    width: 32px; height: 32px;
-    border-radius: 9px;
-    background: var(--bmm-s05);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    display: grid; place-items: center;
-    transition: color .15s ease, background .15s ease;
-}
-.srv-close:hover { color: var(--text-primary); background: var(--bmm-s10); }
+/* The card, header and close are the house shell (.modal--xl.modal--tall, css/modal-shell.css). */
 
 /* The rail. Scrolls rather than wraps: three tabs that reflow onto two lines move the panel
    under them, which is exactly what you do not want while watching a live table. */
@@ -137,13 +99,11 @@
 #modal-server .srv-tab[aria-selected="true"] { color: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary)); }
 #modal-server .srv-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
 #modal-server .srv-tab-count:empty { display: none; }
-#modal-server .srv-close { color: var(--bmm-text-secondary); }
 #modal-server .srv-actions-note,
 #modal-server .monitoring-stat-label,
 #modal-server .monitoring-table thead th,
 #modal-server [style*="color:var(--text-muted)"],
 #modal-server [style*="color: var(--text-muted)"] { color: var(--bmm-text-secondary) !important; }
-#modal-server .srv-header { background: var(--bmm-s02); }
 /* The live numbers were the cyan/accent themselves as text: 3.3:1 on BMM White. The numbers
    are read, so they take the ink; the label beside each says what it is. */
 #modal-server .monitoring-stat-value { color: var(--bmm-text-primary) !important; }

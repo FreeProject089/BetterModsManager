@@ -39,6 +39,9 @@
     <link rel="stylesheet" href="css/legacy-import.css" />
     <link rel="stylesheet" href="css/server-modal.css" />
     <link rel="stylesheet" href="css/activation-jobs.css" />
+    <!-- The dialog shell: after every feature sheet, so no feature can restyle a modal by accident
+         (scripts/check-modal-consistency.mjs). Its id lets ui/modal-shell.ts skip re-linking it. -->
+    <link rel="stylesheet" href="css/modal-shell.css" id="modal-shell-css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
     <!-- GSAP — used for boot loader animation (vendored locally, CWE-829: no CDN/SRI risk) -->
@@ -3509,10 +3512,10 @@
 
                         <!-- ── i18n Translation Sandbox Modal ── -->
                         <div class="modal-overlay" id="modal-i18n-sandbox" style="z-index:9999;">
-                            <div class="modal glass i18n-sb" style="max-width:1080px; width:96%; height:88vh; display:flex; flex-direction:column;">
-                                <div class="modal-header i18n-sb-header" style="flex-shrink:0;">
+                            <div class="modal glass i18n-sb modal--xl" style="height: 88vh;">
+                                <div class="modal-header i18n-sb-header">
                                     <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
-                                        <h2 style="margin:0;font-size:15px;white-space:nowrap;" data-i18n="i18n.title"
+                                        <h2 class="modal-title" style="white-space:nowrap; flex:none;" data-i18n="i18n.title"
                                             data-i18n-tooltip="i18n.subtitle">Translation Sandbox</h2>
                                         <div class="i18n-sb-progress" id="i18n-progress" style="flex:1;max-width:260px;">
                                             <div class="i18n-sb-progress-bar"><span id="i18n-progress-fill"></span></div>
@@ -3539,7 +3542,7 @@
                                         <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
                                         </button>
-                                        <button class="modal-close" data-close="modal-i18n-sandbox">
+                                        <button type="button" class="modal-close" data-close="modal-i18n-sandbox">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                                         </button>
                                     </div>
@@ -5196,38 +5199,30 @@
         <!-- ══ MODALS ══ -->
 
         <!-- Crash Report Modal -->
-        <div class="modal-overlay bh-modal-overlay" id="modal-crash-report">
-            <div class="modal-container">
-                <!-- 860, not 800: at 800 the four footer actions fit in English and did NOT in
-                     French ("Signaler à BetterCommunity", "Ouvrir dans l'Explorateur"), so the row
-                     wrapped and the layout the user saw depended on their language. The extra
-                     60px also gives the log excerpt above a wider column, which is the thing
-                     people actually read here. -->
-                <div class="modal-content glass"
-                    style="max-width:860px;padding:0;border:1px solid rgba(239,68,68,0.25)">
-                    <!-- Header -->
-                    <div class="bh-crash-header">
-                        <div style="display:flex;align-items:center;gap:16px">
-                            <div class="bh-crash-icon-box">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5">
-                                    <path
-                                        d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h2 class="bh-crash-title" data-i18n="crash.title">BMM Crashed</h2>
-                                <p style="font-size:12px;color:color-mix(in srgb, var(--bmm-danger) 70%, transparent);margin:2px 0 0"
-                                    data-i18n="crash.subtitle">Something went wrong, but we've got you covered.</p>
-                            </div>
-                        </div>
+        <div class="modal-overlay" id="modal-crash-report">
+            <!-- xl, not lg: at 760 the footer actions fit in English and did NOT in French
+                 ("Signaler à BetterCommunity", "Ouvrir dans l'Explorateur"), so the row wrapped and
+                 the layout the user saw depended on their language. -->
+            <div class="modal glass modal--xl crash-modal">
+                <div class="modal-header">
+                    <div class="bms-icon bms-icon--danger">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
                     </div>
+                    <div class="bms-titles">
+                        <h2 class="modal-title" data-i18n="crash.title">BMM Crashed</h2>
+                        <p class="bms-sub" data-i18n="crash.subtitle">Something went wrong, but we've got you covered.</p>
+                    </div>
+                    <button type="button" class="modal-close" data-close="modal-crash-report"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
                     <!-- Body -->
-                    <div class="modal-body" style="padding:28px">
-                        <p style="font-size:14px;line-height:1.6;color:var(--text-secondary);margin-bottom:20px"
-                            data-i18n="crash.desc">
+                    <div class="modal-body">
+                        <p class="modal-message" data-i18n="crash.desc">
                             Better Mod Manager encountered an unexpected error. A diagnostic report containing logs and
                             system info has been generated automatically to help us fix it.
                         </p>
@@ -5259,19 +5254,11 @@
                                 Sharing this report on our Discord is the fastest way to get help.</p>
                         </div>
                     </div>
-                    <!-- Footer -->
-                    <div class="bh-crash-footer">
-                        <button class="bh-btn-premium bh-btn-ghost" data-close="modal-crash-report"
-                            data-i18n="prof.cancel">Close</button>
-
-                        <!-- The three actions travel together. Loose in a wrapping flex row they
-                             broke apart at narrow widths and left one button alone on a second
-                             line, right-aligned, looking accidental. As a group the row either
-                             fits or wraps as a block. Order is deliberate: the PRIMARY action —
-                             reporting — is last, where the eye lands. Discord used to sit there
-                             in full blurple and read as the main thing to do. -->
-                        <div class="bh-crash-actions">
-                            <button class="bh-btn-premium bh-btn-glass" id="btn-crash-open-zip">
+                <!-- Footer: the order is deliberate. The PRIMARY action, reporting, is last, where the eye
+                     lands; Discord used to sit there in full blurple and read as the main thing to do. -->
+                <div class="modal-footer">
+                    <div class="modal-footer-start">
+                        <button class="btn btn-secondary" id="btn-crash-open-zip">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
@@ -5279,27 +5266,22 @@
                                 </svg>
                                 <span data-i18n="crash.openZip">Open in Explorer</span>
                             </button>
-
-
-                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank"
-                                class="bh-btn-premium bh-btn-discord" style="text-decoration:none" data-link-key="discord">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <a href="https://discord.com/invite/CTaaEF9R75" target="_blank"
+                                class="btn btn-secondary" data-link-key="discord">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                     <path
                                         d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z">
                                     </path>
                                 </svg>
                                 <span data-i18n="crash.discord">Join Discord</span>
                             </a>
-                            <button class="bh-btn-premium bh-btn-indigo" id="btn-crash-report-betahub">
-                                <!-- The mark, not a globe. A globe says "this opens a website"; the
-                                     question at this moment is WHICH one, and the button beside it
-                                     already carries Discord's mark for exactly that reason. -->
+                    </div>
+                    <button class="btn btn-ghost" data-close="modal-crash-report" data-i18n="common.close">Close</button>
+                    <button class="btn btn-primary" id="btn-crash-report-betahub">
                                 <img src="assets/BC_white.webp" alt="" aria-hidden="true"
                                     style="width:18px;height:18px;border-radius:5px;background:#fff;padding:1px;display:block;flex-shrink:0;">
                                 <span data-i18n="crash.reportBc">Report to BetterCommunity</span>
                             </button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -5846,18 +5828,11 @@
 
         <!-- History Modal -->
         <div class="modal-overlay" id="modal-history">
-            <div class="modal glass" style="max-width: 650px; width: 90%;">
+            <div class="modal glass modal--lg">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="history.title">Historique d'activation</h2>
-                    <button class="modal-close" data-close="modal-history">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+                <button type="button" class="modal-close" data-close="modal-history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <div
                         style="display:flex; gap:15px; margin-bottom: 15px; align-items:center; flex-wrap:wrap; background: var(--bmm-bg-base); padding: 10px; border-radius: 8px; border: 1px solid var(--border)">
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -5903,29 +5878,21 @@
 
         <!-- History Detail Modal -->
         <div class="modal-overlay" id="modal-history-detail">
-            <div class="modal glass" style="max-width: 800px; width: 95%;">
+            <div class="modal glass modal--lg">
                 <div class="modal-header">
-                    <h2 class="modal-title" style="display:flex; align-items:center; gap:10px">
+                    <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
                         <span data-i18n="history.detail.title">Détails de la modification</span>
                         <span style="opacity:0.5">/</span>
                         <span id="history-detail-modname" style="color:var(--accent)"></span>
                     </h2>
-                    <button class="modal-close" data-close="modal-history-detail">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="max-height: 600px; overflow-y: auto; padding: 25px;">
+                <button type="button" class="modal-close" data-close="modal-history-detail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <div id="history-detail-diff-container" style="display: flex; flex-direction: column; gap: 15px;">
                         <!-- Diff rows inserted here -->
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding:15px 25px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; background:rgba(0,0,0,0.1)">
-                    <button class="btn btn-primary" data-close="modal-history-detail"
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-close="modal-history-detail"
                         data-i18n="common.close">Close</button>
                 </div>
             </div>
@@ -5933,27 +5900,25 @@
 
         <!-- License Modal -->
         <div class="modal-overlay" id="modal-license">
-            <div class="modal glass legal-modal">
-                <div class="modal-header legal-modal-header">
-                    <div style="display:flex;align-items:center;gap:14px">
-                        <div class="legal-id">
+            <div class="modal glass modal--lg legal-modal">
+                <div class="modal-header">
+                        <div class="bms-icon">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                 <path d="M14 2v6h6" /><path d="M9 13h6M9 17h6" />
                             </svg>
                         </div>
-                        <div>
-                            <h2 class="legal-title">GNU General Public License v3.0</h2>
-                            <p class="legal-sub" data-i18n="license.subtitle">Free software license · GPL-3.0</p>
+                        <div class="bms-titles">
+                            <h2 class="modal-title">GNU General Public License v3.0</h2>
+                            <p class="bms-sub" data-i18n="license.subtitle">Free software license · GPL-3.0</p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-license">
+                    <button type="button" class="modal-close" data-close="modal-license">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="legal-body">
+                <div class="modal-body legal-body">
                     <pre id="license-content" data-i18n="license.loading">Chargement de la licence...</pre>
                 </div>
             </div>
@@ -5961,31 +5926,29 @@
 
         <!-- TOS (Terms of Service) Modal -->
         <div class="modal-overlay" id="modal-tos" data-prevent-close="true">
-            <div class="modal glass legal-modal">
-                <div class="modal-header legal-modal-header">
-                    <div style="display:flex;align-items:center;gap:14px">
-                        <div class="legal-id">
+            <div class="modal glass modal--lg legal-modal">
+                <div class="modal-header">
+                        <div class="bms-icon">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                 <path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" />
                             </svg>
                         </div>
-                        <div>
-                            <h2 class="legal-title" data-i18n="credits.eula">Terms of Service</h2>
-                            <p class="legal-sub" data-i18n="tos.subtitle">Please read before accepting</p>
+                        <div class="bms-titles">
+                            <h2 class="modal-title" data-i18n="credits.eula">Terms of Service</h2>
+                            <p class="bms-sub" data-i18n="tos.subtitle">Please read before accepting</p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-tos" id="btn-tos-close" style="display:none">
+                    <button type="button" class="modal-close" data-close="modal-tos" id="btn-tos-close">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="legal-body">
+                <div class="modal-body legal-body">
                     <div id="tos-content">Loading…</div>
                 </div>
-                <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:12px;padding:20px;">
-                    <button class="btn btn-danger" id="btn-tos-quit" data-i18n="eula.quit">Quit BMM</button>
+                <div class="modal-footer">
+                    <div class="modal-footer-start"><button class="btn btn-ghost" id="btn-tos-quit" data-i18n="eula.quit">Quit BMM</button></div>
                     <button class="btn btn-primary" id="btn-tos-accept" data-i18n="eula.accept">Accept</button>
                 </div>
             </div>
@@ -5993,26 +5956,24 @@
 
         <!-- Privacy Policy Modal -->
         <div class="modal-overlay" id="modal-privacy">
-            <div class="modal glass legal-modal">
-                <div class="modal-header legal-modal-header">
-                    <div style="display:flex;align-items:center;gap:14px">
-                        <div class="legal-id">
+            <div class="modal glass modal--lg legal-modal">
+                <div class="modal-header">
+                        <div class="bms-icon">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" />
                             </svg>
                         </div>
-                        <div>
-                            <h2 class="legal-title" data-i18n="credits.privacy">Privacy Policy</h2>
-                            <p class="legal-sub" data-i18n="privacy.subtitle">Opt-in · privacy-first</p>
+                        <div class="bms-titles">
+                            <h2 class="modal-title" data-i18n="credits.privacy">Privacy Policy</h2>
+                            <p class="bms-sub" data-i18n="privacy.subtitle">Opt-in · privacy-first</p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-privacy" id="btn-privacy-close">
+                    <button type="button" class="modal-close" data-close="modal-privacy" id="btn-privacy-close">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="legal-body">
+                <div class="modal-body legal-body">
                     <div id="privacy-content">Loading…</div>
                 </div>
             </div>
@@ -6023,14 +5984,7 @@
             <div class="modal glass">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="lib.addMod">Ajouter un mod</h2>
-                    <button class="modal-close" data-close="modal-add-mod">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
+                <button type="button" class="modal-close" data-close="modal-add-mod"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div class="modal-body">
                     <div class="form-group">
                         <label class="form-label"><span data-i18n="detail.name">Nom du mod</span> <span
@@ -6107,17 +6061,10 @@
 
         <!-- New Profile Modal -->
         <div class="modal-overlay" id="modal-new-profile">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="prof.new">Nouveau profil</h2>
-                    <button class="modal-close" data-close="modal-new-profile">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
+                <button type="button" class="modal-close" data-close="modal-new-profile"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div class="modal-body">
                     <div class="form-group">
                         <label class="form-label" data-i18n="prof.nameLabel">Nom du profil <span
@@ -6207,17 +6154,10 @@
 
         <!-- Edit Profile Modal -->
         <div class="modal-overlay" id="modal-edit-profile">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="prof.editTitle">Éditer le profil</h2>
-                    <button class="modal-close" data-close="modal-edit-profile">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
+                <button type="button" class="modal-close" data-close="modal-edit-profile"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div class="modal-body">
                     <input type="hidden" id="edit-prof-id" />
                     <div class="form-group">
@@ -6305,22 +6245,15 @@
 
         <!-- Integrity Modal -->
         <div class="modal-overlay" id="modal-integrity">
-            <div class="modal glass" style="max-width:500px">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="integrity.title">Rapport d'Intégrité</h2>
-                    <button class="modal-close" data-close="modal-integrity">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
+                <button type="button" class="modal-close" data-close="modal-integrity"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div class="modal-body">
                     <div id="integrity-report-content"></div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary" data-close="modal-integrity"
+                    <button class="btn btn-secondary" data-close="modal-integrity"
                         data-i18n="common.close">Fermer</button>
                 </div>
             </div>
@@ -6330,20 +6263,13 @@
         <script src="js/lib/purify.min.js"></script>
         <!-- Conflict Warning Modal -->
         <div class="modal-overlay" id="modal-conflict-warning">
-            <div class="modal glass" style="max-width: 500px;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
-                    <h2 class="modal-title" style="color:var(--warning)" data-i18n="conflict.warningTitle">Conflit
+                    <h2 class="modal-title" data-i18n="conflict.warningTitle">Conflit
                         détecté
                     </h2>
-                    <button class="modal-close" data-close="modal-conflict-warning">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding: 24px; text-align: center;">
+                <button type="button" class="modal-close" data-close="modal-conflict-warning"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" style="text-align: center;">
                     <div
                         style="background:rgba(245,158,11,0.1); color:var(--warning); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid rgba(245,158,11,0.2)">
                         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -6370,11 +6296,11 @@
                         <span data-i18n="conflict.dontShow">Ne plus m'avertir</span>
                     </label>
                 </div>
-                <div class="modal-footer" style="padding: 12px 20px;">
+                <div class="modal-footer">
                     <button class="btn btn-ghost modal-close" data-close="modal-conflict-warning"
                         data-i18n="common.close">Fermer</button>
-                    <button class="btn btn-primary" id="btn-confirm-conflict-toggle"
-                        style="background:var(--warning); border-color:var(--warning); color:#000">
+                    <button class="btn btn-warning" id="btn-confirm-conflict-toggle"
+                       >
                         <span data-i18n="lib.confirm">Continuer l'activation</span>
                     </button>
                 </div>
@@ -6383,27 +6309,18 @@
 
         <!-- Duplicate Folder Warning Modal -->
         <div class="modal-overlay" id="modal-duplicate-folder-warning">
-            <div class="modal glass"
-                style="max-width:550px; border:1px solid rgba(239, 68, 68, 0.3); border-radius:12px; overflow:hidden">
-                <div class="modal-header"
-                    style="background: linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent); border-bottom: 1px solid rgba(239, 68, 68, 0.1); padding: 20px 24px;">
-                    <div style="display:flex; align-items:center; gap:16px">
-                        <div
-                            style="width:40px; height:40px; border-radius:10px; background:rgba(239,68,68,0.2); display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.3)">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-danger)"
-                                stroke-width="2.5">
-                                <path
-                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
+            <div class="modal glass modal--md">
+                <div class="modal-header">
+                        <div class="bms-icon bms-icon--danger">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
                         </div>
-                        <h2 class="modal-title" style="color:var(--bmm-danger); font-weight:800; margin:0"
-                            data-i18n="prof.duplicateFolderTitle">Action Risquée Détectée</h2>
-                        <button class="modal-close" data-close="modal-duplicate-folder-warning">&times;</button>
-                    </div>
-                </div>
-                <div class="modal-body" style="padding: 24px; text-align: left;">
+                        <h2 class="modal-title" data-i18n="prof.duplicateFolderTitle">Action Risquée Détectée</h2>
+                <button type="button" class="modal-close" data-close="modal-duplicate-folder-warning"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" style="text-align: left;">
                     <div
                         style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:16px; margin-bottom:20px">
                         <p style="font-weight:600; font-size:15px; color:var(--text-primary); line-height:1.5; margin:0"
@@ -6430,11 +6347,11 @@
                             style="font-size:13px; font-weight:500; color:var(--text-muted)">Ne plus m'avertir</span>
                     </label>
                 </div>
-                <div class="modal-footer" style="padding: 16px 24px; background:rgba(255,255,255,0.01)">
+                <div class="modal-footer">
                     <button class="btn btn-ghost" data-close="modal-duplicate-folder-warning"
                         data-i18n="prof.cancel">Annuler</button>
-                    <button class="btn btn-primary" id="btn-confirm-duplicate-folder"
-                        style="background:var(--bmm-danger); border:none; color:white; font-weight:700; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2)">
+                    <button class="btn btn-danger" id="btn-confirm-duplicate-folder"
+                       >
                         <span data-i18n="lib.confirm">Continuer malgré les risques</span>
                     </button>
                 </div>
@@ -6443,13 +6360,12 @@
 
         <!-- Delete Mod Modal -->
         <div class="modal-overlay" id="modal-delete-mod">
-            <div class="modal glass" style="max-width: 480px;">
+            <div class="modal glass modal--lg">
                 <div class="modal-header">
-                    <h2 class="modal-title" style="color:var(--danger)" data-i18n="mod.deleteTitle">Supprimer le mod
+                    <h2 class="modal-title" data-i18n="mod.deleteTitle">Supprimer le mod
                     </h2>
-                    <button class="modal-close" data-close="modal-delete-mod">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 24px; text-align: center;">
+                <button type="button" class="modal-close" data-close="modal-delete-mod"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" style="text-align: center;">
                     <div
                         style="background:rgba(239, 68, 68, 0.1); color:var(--danger); padding:20px; border-radius:16px; margin-bottom:20px; border:1px solid rgba(239, 68, 68, 0.2)">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -6477,13 +6393,16 @@
                             fichiers.</label>
                     </div>
                 </div>
-                <div class="modal-footer" style="padding: 12px 20px; display:flex; gap:10px; justify-content:flex-end">
+                <div class="modal-footer">
+                    <!-- The milder alternative sits apart from the question being asked (delete
+                         the files: Cancel / Delete), so the two right-hand buttons read as one pair. -->
+                    <div class="modal-footer-start">
+                        <button class="btn btn-secondary" id="btn-remove-only-mod">
+                            <span data-i18n="mod.removeOnly">Retirer de la liste uniquement</span>
+                        </button>
+                    </div>
                     <button class="btn btn-ghost" data-close="modal-delete-mod" data-i18n="prof.cancel">Annuler</button>
-                    <button class="btn btn-secondary" id="btn-remove-only-mod" style="font-size:12px">
-                        <span data-i18n="mod.removeOnly">Retirer de la liste uniquement</span>
-                    </button>
-                    <button class="btn btn-danger" id="btn-final-delete-mod" disabled
-                        style="padding-left:24px; padding-right:24px; font-size:12px">
+                    <button class="btn btn-danger" id="btn-final-delete-mod" disabled>
                         <span data-i18n="lib.delete">Supprimer définitivement</span>
                     </button>
                 </div>
@@ -6492,13 +6411,12 @@
 
         <!-- Delete Profile Modal -->
         <div class="modal-overlay" id="modal-delete-profile">
-            <div class="modal glass" style="max-width: 480px;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
-                    <h2 class="modal-title" style="color:var(--danger)" data-i18n="prof.deleteTitle">Supprimer le profil
+                    <h2 class="modal-title" data-i18n="prof.deleteTitle">Supprimer le profil
                     </h2>
-                    <button class="modal-close" data-close="modal-delete-profile">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 24px; text-align: center;">
+                <button type="button" class="modal-close" data-close="modal-delete-profile"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" style="text-align: center;">
                     <div
                         style="background:rgba(239, 68, 68, 0.1); color:var(--danger); padding:20px; border-radius:16px; margin-bottom:20px; border:1px solid rgba(239, 68, 68, 0.2)">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -6513,32 +6431,29 @@
                         </p>
                     </div>
                 </div>
-                <div class="modal-footer" style="padding: 12px 20px; display:flex; gap:10px; justify-content:flex-end">
+                <div class="modal-footer">
                     <button class="btn btn-ghost" data-close="modal-delete-profile"
                         data-i18n="prof.cancel">Annuler</button>
                     <button class="btn btn-danger" id="btn-final-delete-profile"
-                        style="padding-left:24px; padding-right:24px; font-size:12px">
+                       >
                         <span data-i18n="lib.delete">Supprimer définitivement</span>
                     </button>
                 </div>
             </div>
         </div>
         <div class="modal-overlay" id="modal-archive-explorer">
-            <div class="modal glass" style="max-width: 850px;">
+            <div class="modal glass modal--lg">
                 <div class="modal-header">
                     <h3 class="modal-title" data-i18n="mod.explorerTitle">Explorateur d'Archive</h3>
-                    <button class="modal-close" data-close="modal-archive-explorer">&times;</button>
+                <button type="button" class="modal-close" data-close="modal-archive-explorer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-toolbar">
+                    <input type="text" id="archive-explorer-search" class="form-input" placeholder="Rechercher un fichier...">
                 </div>
-                <div style="padding: 0 20px 10px 20px;">
-                    <input type="text" id="archive-explorer-search" placeholder="Rechercher un fichier..."
-                        style="width:100%; padding:8px 12px; background:var(--bmm-bg-base); border:1px solid var(--border); border-radius:6px; color:var(--bmm-text-primary); font-size:13px">
-                </div>
-                <div class="modal-content" id="archive-explorer-content"
-                    style="max-height: 60vh; overflow-y: auto; padding-top:0">
+                <div class="modal-body" id="archive-explorer-content">
                     <!-- Tree rendered here -->
                 </div>
-                <div class="modal-footer" style="padding: 12px 20px;">
-                    <button class="btn btn-primary" data-close="modal-archive-explorer"
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-close="modal-archive-explorer"
                         data-i18n="common.close">Fermer</button>
                 </div>
             </div>
@@ -6572,17 +6487,10 @@
         </div>
         <!-- Mod Tags Modal -->
         <div class="modal-overlay" id="modal-mod-tags">
-            <div class="modal glass" style="max-width: 400px; width: 90%;">
+            <div class="modal glass modal--sm">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="mod.tagsTitle" id="mod-tags-modal-title">Tags du Mod</h2>
-                    <button class="modal-close" data-close="modal-mod-tags">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
+                <button type="button" class="modal-close" data-close="modal-mod-tags"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div class="modal-body">
                     <div id="mod-tags-list-container" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
                 </div>
@@ -6592,38 +6500,23 @@
 
         <!-- Storage Manager Modal -->
         <div class="modal-overlay" id="modal-storage">
-            <div class="modal glass"
-                style="max-width:850px;width:95%;max-height:90vh;display:flex;flex-direction:column;">
+            <div class="modal glass modal--lg">
                 <div class="modal-header">
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <div
-                            style="width:36px;height:36px;background:rgba(59,130,246,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                                fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <path d="M10 16h.01" />
-                                <path
-                                    d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-                                <path d="M21.946 12.013H2.054" />
-                                <path d="M6 16h.01" />
+                        <div class="bms-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor">
+                                <path d="M10 16h.01"/>
+                                <path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                                <path d="M21.946 12.013H2.054"/>
+                                <path d="M6 16h.01"/>
                             </svg>
                         </div>
-                        <div>
+                        <div class="bms-titles">
                             <h2 class="modal-title" data-i18n="storage.modalTitle">Gestionnaire de Stockage</h2>
-                            <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0"
-                                data-i18n="storage.modalSubtitle">Configurez les limites de vitesse pour chaque disque
+                            <p data-i18n="storage.modalSubtitle" class="bms-sub">Configurez les limites de vitesse pour chaque disque
                             </p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-storage">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="overflow-y:auto;flex:1;padding:16px 20px;">
+                <button type="button" class="modal-close" data-close="modal-storage"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <div id="storage-disks-container" style="display:flex;flex-direction:column;gap:12px;">
                         <!-- Disks will be injected by JS -->
                     </div>
@@ -6633,37 +6526,23 @@
 
         <!-- Repo Sync Summary Modal -->
         <div class="modal-overlay" id="modal-repo-sync-summary">
-            <div class="modal glass" style="max-width:550px; width:90%;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div
-                            style="width:36px; height:36px; background:rgba(16,185,129,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
-                                stroke-width="2.5">
-                                <polyline points="20 6 9 17 4 12" />
+                        <div class="bms-icon bms-icon--ok">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <polyline points="20 6 9 17 4 12"/>
                             </svg>
                         </div>
-                        <div>
+                        <div class="bms-titles">
                             <h2 class="modal-title" data-i18n="repo.summaryTitle">Synchronisation terminée</h2>
-                            <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;"
-                                data-i18n="repo.summarySubtitle">Voici le détail des modifications effectuées</p>
+                            <p data-i18n="repo.summarySubtitle" class="bms-sub">Voici le détail des modifications effectuées</p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-repo-sync-summary">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" id="repo-sync-summary-body"
-                    style="padding:20px; max-height:450px; overflow-y:auto;">
+                <button type="button" class="modal-close" data-close="modal-repo-sync-summary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" id="repo-sync-summary-body">
                     <!-- Summary content injected by JS -->
                 </div>
-                <div class="modal-footer"
-                    style="padding:15px 20px; background:var(--bmm-s02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
-                    <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;"
+                <div class="modal-footer">
+                    <button class="btn btn-primary" data-close="modal-repo-sync-summary"
                         data-i18n="common.ok">OK</button>
                 </div>
             </div>
@@ -6671,41 +6550,28 @@
 
         <!-- Repo Browser Modal -->
         <div class="modal-overlay" id="modal-repo-browser">
-            <div class="modal glass" style="max-width:900px; width:95%; height:80vh;">
+            <div class="modal glass modal--xl" style="height: 80vh;">
                 <div class="modal-header">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div
-                            style="width:36px; height:36px; background:rgba(188,116,255,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bc74ff"
-                                stroke-width="2.5">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="2" y1="12" x2="22" y2="12"></line>
-                                <path
-                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                        <div class="bms-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="2" y1="12" x2="22" y2="12"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
                                 </path>
                             </svg>
                         </div>
-                        <div>
+                        <div class="bms-titles">
                             <h2 class="modal-title" data-i18n="repo.browserTitle">Browse Server Repositories</h2>
-                            <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;"
-                                data-i18n="repo.browserSubtitle">Official and partner server repositories</p>
+                            <p data-i18n="repo.browserSubtitle" class="bms-sub">Official and partner server repositories</p>
                         </div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="bms-head-end">
                         <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bmm-s05);border:1px solid var(--bmm-s10);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" data-hover="color:var(--text-primary)" data-hover-out="color:var(--text-muted)">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                         </button>
-                        <button class="modal-close" data-close="modal-repo-browser">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
+                        
                     </div>
-                </div>
-                <div class="modal-body" id="repo-browser-body"
-                    style="padding:20px; max-height:calc(80vh - 140px); overflow-y:auto;">
+                <button type="button" class="modal-close" data-close="modal-repo-browser"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" id="repo-browser-body">
                     <!-- Quick-link cards strip -->
                     <div id="quicklinks-strip" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
                         <div id="quicklink-card-1" class="quicklink-card"
@@ -6865,11 +6731,10 @@
                             style="margin-top:12px;">Retry</button>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding:16px 24px; background:var(--bmm-s03); display:flex; justify-content:flex-end; align-items:center; gap:12px; border-top:1px solid var(--bmm-s08);">
-                    <button class="btn btn-ghost" data-close="modal-repo-browser"
-                        style="padding:8px 20px; font-size:13px; border:1px solid var(--bmm-s10);"
-                        data-i18n="common.cancel">Close</button>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-close="modal-repo-browser"
+                       
+                        data-i18n="common.close">Close</button>
                 </div>
             </div>
         </div>
@@ -6879,22 +6744,17 @@
 
         <!-- Repo Update Modal (incremental) -->
         <div class="modal-overlay" id="modal-repo-update">
-            <div class="modal glass" style="max-width:760px; width:95%; height:82vh; display:flex; flex-direction:column;">
+            <div class="modal glass modal--lg" style="height: 82vh;">
                 <div class="modal-header">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:38px;height:38px;background:rgba(6,182,212,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
+                        <div class="bms-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke="currentColor"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                         </div>
-                        <div>
-                            <h2 class="modal-title" style="font-size:17px;margin:0;" data-i18n="repo.update.title">Update Server Repo</h2>
-                            <p class="modal-subtitle" style="font-size:12px;margin:0;color:var(--text-muted);" data-i18n="repo.update.subtitle">Add or remove mods &amp; profiles without regenerating</p>
+                        <div class="bms-titles">
+                            <h2 class="modal-title" data-i18n="repo.update.title">Update Server Repo</h2>
+                            <p class="bms-sub" data-i18n="repo.update.subtitle">Add or remove mods &amp; profiles without regenerating</p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-repo-update">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding:18px 22px; overflow-y:auto; flex:1;">
+                <button type="button" class="modal-close" data-close="modal-repo-update"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <!-- Step 1: pick folder -->
                     <!-- TWO MODES, said out loud.
                          The folder and the address are different starting points that end in
@@ -6962,9 +6822,10 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer" style="padding:14px 22px;background:var(--bmm-s03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s08);">
+                <div class="modal-footer">
+                    <div class="modal-footer-start"><button class="btn btn-outline-danger" id="btn-cancel-repo-update" style="display:none;" data-i18n="repo.update.cancel">Cancel update</button></div>
                     <button class="btn btn-ghost" data-close="modal-repo-update" data-i18n="common.close">Close</button>
-                    <button class="btn btn-outline-danger" id="btn-cancel-repo-update" style="display:none;color:var(--danger);border-color:rgba(239,68,68,0.3);" data-i18n="repo.update.cancel">Cancel update</button>
+                    
                     <!-- Offered, not automatic. Publishing overwrites what is live; doing
                          that as a silent consequence of "apply changes" would make a local
                          edit and a public release the same click.
@@ -6979,33 +6840,21 @@
         </div>
 
         <div class="modal-overlay" id="modal-repo-history">
-            <div class="modal glass" style="max-width:700px; width:95%; height:70vh;">
+            <div class="modal glass modal--lg" style="height: 70vh;">
                 <div class="modal-header">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div
-                            style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(251,146,60,0.15); border-radius:8px;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c"
-                                stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
+                        <div class="bms-icon bms-icon--warn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
                             </svg>
                         </div>
-                        <div>
-                            <h2 class="modal-title" style="font-size:18px; margin:0;" data-i18n="repo.historyTitle">
+                        <div class="bms-titles">
+                            <h2 class="modal-title" data-i18n="repo.historyTitle">
                             </h2>
-                            <p class="modal-subtitle" style="font-size:12px; margin:0; color:var(--text-muted);"
-                                data-i18n="repo.historySubtitle"></p>
+                            <p class="bms-sub" data-i18n="repo.historySubtitle"></p>
                         </div>
-                    </div>
-                    <button class="modal-close" data-close="modal-repo-history">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding:20px; overflow-y:auto;">
+                <button type="button" class="modal-close" data-close="modal-repo-history"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <div id="repo-history-list" style="display:flex; flex-direction:column; gap:12px;">
                         <!-- History items will be injected by JS -->
                     </div>
@@ -7020,19 +6869,17 @@
                         <p style="font-size:11px; opacity:0.7;" data-i18n="repo.historyEmptyHint"></p>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding:16px 24px; background:var(--bmm-s03); display:flex; justify-content:space-between; align-items:center; gap:12px; border-top:1px solid var(--bmm-s08);">
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn btn-ghost" id="btn-clear-repo-history"
-                            style="padding:8px 16px; font-size:12px; color:var(--bmm-warning); border:1px solid rgba(251,146,60,0.25);"
+                <div class="modal-footer">
+                    <div class="modal-footer-start">
+                        <button class="btn btn-ghost btn-sm" id="btn-clear-repo-history"
+                           
                             data-i18n="repo.clearHistory"></button>
-                        <button class="btn btn-ghost" id="btn-clear-all-repo-history"
-                            style="padding:8px 16px; font-size:12px; color:var(--bmm-danger); border:1px solid rgba(239,68,68,0.2);"
+                        <button class="btn btn-outline-danger btn-sm" id="btn-clear-all-repo-history"
+                           
                             data-i18n="repo.clearAllHistory">Clear All</button>
                     </div>
-                    <button class="btn btn-ghost" data-close="modal-repo-history"
-                        style="padding:8px 20px; font-size:13px; border:1px solid var(--bmm-s10);"
-                        data-i18n="common.cancel">Close</button>
+                    <button class="btn btn-secondary" data-close="modal-repo-history"
+                        data-i18n="common.close">Close</button>
                 </div>
             </div>
         </div>
@@ -7092,29 +6939,24 @@
              window could paint. src/ui/lazy-vendor.ts fetches them on the first diagram. -->
         <!-- Modal: Conflict Warning with Tree -->
         <div class="modal-overlay" id="modal-conflict-tree">
-            <div class="modal glass"
-                style="max-width:640px;width:90%;border:1px solid rgba(239,68,68,0.25);overflow:hidden;">
+            <div class="modal glass modal--lg">
                 <!-- Danger banner header -->
-                <div
-                    style="background:linear-gradient(135deg,rgba(239,68,68,0.18) 0%,rgba(239,68,68,0.06) 100%);border-bottom:1px solid rgba(239,68,68,0.2);padding:20px 24px;display:flex;align-items:flex-start;gap:16px;">
-                    <div
-                        style="flex-shrink:0;width:44px;height:44px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:12px;display:flex;align-items:center;justify-content:center;">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-danger)" stroke-width="2.5">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                <div class="modal-header">
+                    <div class="bms-icon bms-icon--danger">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
                     </div>
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:16px;font-weight:800;color:var(--bmm-danger);letter-spacing:-0.02em;margin-bottom:4px;"
-                            data-i18n="conflict.criticalWarningTitle">Critical Conflict Alert</div>
-                        <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin:0;"
-                            data-i18n="conflict.warningDesc">Activating this mod will overwrite files from the mods
+                    <div class="bms-titles">
+                        <h2 data-i18n="conflict.criticalWarningTitle" class="modal-title">Critical Conflict Alert</h2>
+                        <p data-i18n="conflict.warningDesc" class="bms-sub">Activating this mod will overwrite files from the mods
                             listed below.</p>
                     </div>
+                    <button type="button" class="modal-close" data-close="modal-conflict-tree"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
-                <div class="modal-body" style="padding:20px 24px;">
+                <div class="modal-body">
                     <!-- File count badge injected by JS if needed -->
                     <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;"
                         data-i18n="conflict.sharedFilesTitle">Shared / Overwritten Files</div>
@@ -7122,9 +6964,8 @@
                         style="background:var(--bmm-bg-base);border-radius:10px;border:1px solid rgba(239,68,68,0.15);padding:10px 12px;max-height:280px;overflow-y:auto;font-family:var(--font-mono);font-size:11.5px;display:flex;flex-direction:column;gap:2px;">
                     </div>
                 </div>
-                <div
-                    style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--bmm-s06);background:var(--bmm-bg-base);">
-                    <span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                <div class="modal-footer">
+                    <span class="modal-footer-start modal-footer-note">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
                             <circle cx="12" cy="12" r="10" />
@@ -7133,11 +6974,10 @@
                         </svg>
                         <span data-i18n="conflict.lastWins">Last activated mod wins</span>
                     </span>
-                    <div style="display:flex;gap:10px;">
-                        <button class="btn btn-ghost modal-close" style="min-width:90px;"
+                    <button class="btn btn-ghost modal-close"
                             data-i18n="common.close">Close</button>
                         <button class="btn btn-danger" id="btn-confirm-conflict-tree"
-                            style="min-width:150px;display:none;gap:6px;">
+                            style="display:none;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <path
@@ -7147,35 +6987,30 @@
                             </svg>
                             <span data-i18n="conflict.activateAnyway">Activate Anyway</span>
                         </button>
-                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Modal: Activation Warning (Conflicts) -->
         <div class="modal-overlay" id="modal-activation-warning">
-            <div class="modal glass"
-                style="max-width:540px;width:90%;border:1px solid rgba(239,68,68,0.2);overflow:hidden;">
+            <div class="modal glass modal--md">
                 <!-- Header -->
-                <div
-                    style="background:linear-gradient(135deg,rgba(239,68,68,0.15) 0%,rgba(239,68,68,0.04) 100%);border-bottom:1px solid rgba(239,68,68,0.18);padding:18px 22px;display:flex;align-items:center;gap:14px;">
-                    <div
-                        style="flex-shrink:0;width:38px;height:38px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.28);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-danger)" stroke-width="2.5">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                <div class="modal-header">
+                    <div class="bms-icon bms-icon--danger">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
                     </div>
-                    <div>
-                        <div style="font-size:15px;font-weight:800;color:var(--bmm-danger);margin-bottom:2px;"
-                            data-i18n="conflict.warningTitle">Conflict Warning</div>
-                        <div style="font-size:11px;color:var(--text-muted);" data-i18n="conflict.warningDesc">Activating
+                    <div class="bms-titles">
+                        <h2 data-i18n="conflict.warningTitle" class="modal-title">Conflict Warning</h2>
+                        <div data-i18n="conflict.warningDesc" class="bms-sub">Activating
                             this mod will overwrite files from the following mods.</div>
                     </div>
+                    <button type="button" class="modal-close" data-close="modal-activation-warning"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
-                <div class="modal-body" style="padding:18px 22px;">
+                <div class="modal-body">
                     <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;"
                         data-i18n="conflict.conflictingMods">Conflicting Mods</div>
                     <div id="activation-warning-list"
@@ -7195,12 +7030,10 @@
                         <div id="activation-order-list" style="display:flex;flex-direction:column;gap:4px;"></div>
                     </div>
                 </div>
-                <div
-                    style="padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s06);background:rgba(0,0,0,0.12);">
+                <div class="modal-footer">
                     <button class="btn btn-ghost" id="btn-cancel-activation-warning"
                         data-i18n="common.close">Close</button>
-                    <button class="btn btn-danger" id="btn-confirm-activation-anyway"
-                        style="display:flex;align-items:center;gap:6px;">
+                    <button class="btn btn-danger" id="btn-confirm-activation-anyway">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
                             <path
@@ -7215,21 +7048,22 @@
         </div>
 
         <!-- Modal: Global Conflict View -->
-        <div class="modal-overlay" id="modal-global-conflicts"
-            style="align-items: flex-start; padding-top: 5vh; overflow-y: auto;">
-            <div class="modal glass"
-                style="max-width: 820px; width: 95%; max-height: 85vh; display: flex; flex-direction: column; margin-bottom: 5vh;">
+        <div class="modal-overlay" id="modal-global-conflicts">
+            <div class="modal glass modal--lg modal--tall">
                 <div class="modal-header">
-                    <h3 class="modal-title" style="display:flex;align-items:center;gap:10px">
+                    <div class="bms-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
-                        <span data-i18n="conflict.globalTitle">Vue Globale des Conflits</span>
-                    </h3>
-                    <input type="text" id="global-conflict-search" class="input-field"
-                        data-i18n-placeholder="conflict.searchPlaceholder" placeholder="Rechercher un mod..."
-                        style="width:200px; font-size:12px;">
+                    </div>
+                    <h2 class="modal-title" data-i18n="conflict.globalTitle">Vue Globale des Conflits</h2>
+                    <div class="bms-head-end">
+                        <input type="text" id="global-conflict-search" class="input-field"
+                            data-i18n-placeholder="conflict.searchPlaceholder" placeholder="Rechercher un mod..."
+                            style="width:200px; font-size:12px;">
+                    </div>
+                    <button type="button" class="modal-close" data-close="modal-global-conflicts"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
                 <!-- The filters moved OUT of the title row. Four controls crammed beside the
                      heading had no room for labels, so every one of them was a bare word:
@@ -7293,58 +7127,31 @@
                     </div>
                 </div>
                 <div class="modal-body" id="global-conflicts-list"
-                    style="display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding:20px 24px;"></div>
-                <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
+                    style="display: flex; flex-direction: column;"></div>
+                <div class="modal-footer">
                     <button class="btn btn-secondary modal-close" id="btn-close-global-conflicts"
-                        style="min-width: 120px; padding: 10px 24px;" data-i18n="common.close">Fermer</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal: Conflict File Tree -->
-        <div class="modal-overlay" id="modal-conflict-tree">
-            <div class="modal glass" style="max-width: 600px; width: 90%; max-height: 80vh;">
-                <div class="modal-header">
-                    <h3 class="modal-title" style="display:flex;align-items:center;gap:10px">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
-                        <span data-i18n="conflict.treeTitle">Fichiers en Conflit</span>
-                    </h3>
-                </div>
-                <div class="modal-body" style="padding:20px 24px;overflow-y:auto;">
-                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px" data-i18n="conflict.treeDesc">
-                        Ces fichiers se trouvent dans les deux mods et créent un conflit direct.</p>
-                    <div id="conflict-tree-container"
-                        style="max-height:400px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:8px;padding:12px;border:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:2px;">
-                    </div>
-                </div>
-                <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
-                    <button class="btn btn-secondary modal-close" id="btn-close-conflict-tree"
                         data-i18n="common.close">Fermer</button>
                 </div>
             </div>
-        </div>
+        </div> 
+
+        <!-- (A second #modal-conflict-tree used to live here: a duplicate id nothing could reach;
+             getElementById returns the one above.) -->
 
         <!-- Conflict File Mod Selector Modal -->
         <div class="modal-overlay" id="modal-conflict-file-selector" style="z-index:10006;">
-            <div class="modal glass" style="max-width:500px;width:92%;border-radius:18px;overflow:hidden;border:1px solid var(--bmm-s10);">
-                <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
-                        <div>
-                            <div style="font-size:13px;font-weight:700;color:var(--text-primary);">Ouvrir fichier en conflit</div>
-                            <div id="conflict-file-selector-name" style="font-size:10px;font-weight:600;color:var(--text-muted);margin-top:2px;max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+            <div class="modal glass modal--md">
+                <div class="modal-header">
+                        <div class="bms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg></div>
+                        <div class="bms-titles">
+                            <h2 class="modal-title">Ouvrir fichier en conflit</h2>
+                            <div id="conflict-file-selector-name" style="max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="bms-sub"></div>
                         </div>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" id="btn-close-conflict-file-selector" style="padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding:16px 20px;overflow-y:auto;max-height:350px;">
+                    
+                <button class="modal-close" id="btn-close-conflict-file-selector" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;" data-i18n="mod.pickModsForFile">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur :</div>
                     <div id="conflict-file-selector-list" style="display:flex;flex-direction:column;gap:8px;"></div>
                 </div>
@@ -7367,19 +7174,15 @@
 
         <!-- Repo Verification Detail Modal -->
         <div class="modal-overlay" id="modal-repo-verify-detail" style="z-index:1150;">
-            <div class="modal glass" style="max-width:480px;width:92%;border-radius:18px;overflow:hidden;border:1px solid var(--bmm-s10);">
-                <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div id="repo-vd-status-icon" style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
-                        <div>
-                            <div style="font-size:13px;font-weight:700;color:var(--text-primary);" data-i18n="repo.verifyDetail.title">Informations du Dépôt</div>
-                            <div id="repo-vd-status-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-top:1px;"></div>
+            <div class="modal glass modal--md">
+                <div class="modal-header">
+                        <div id="repo-vd-status-icon" class="bms-icon"></div>
+                        <div class="bms-titles">
+                            <h2 data-i18n="repo.verifyDetail.title" class="modal-title">Informations du Dépôt</h2>
+                            <div id="repo-vd-status-label" class="bms-sub"></div>
                         </div>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" id="btn-close-repo-verify-detail" style="padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                </div>
+                    
+                <button class="modal-close" id="btn-close-repo-verify-detail" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <div style="padding:18px 20px 20px;display:flex;flex-direction:column;gap:13px;">
                     <div class="repo-vd-row">
                         <span class="repo-vd-label" data-i18n="repo.verifyDetail.name">Nom</span>
@@ -7431,18 +7234,18 @@
              the ids too would have turned a layout change into a behaviour change, with
              nothing to tell the two apart when something broke. -->
         <div class="modal-overlay" id="modal-server" style="z-index: 1100;">
-            <div class="modal glass srv-modal">
-                <div class="modal-header srv-header">
-                    <div class="srv-title">
+            <div class="modal glass modal--xl modal--tall srv-modal">
+                <div class="modal-header">
+                    <div class="bms-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                             <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
                             <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
                             <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
                         </svg>
-                        <h2 data-i18n="repo.serverPanelTitle">Server</h2>
                     </div>
-                    <button class="modal-close srv-close" data-close="modal-server" aria-label="Close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <h2 class="modal-title" data-i18n="repo.serverPanelTitle">Server</h2>
+                    <button type="button" class="modal-close" data-close="modal-server" aria-label="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
@@ -7500,7 +7303,7 @@
                     </div>
                 </div>
                 <div class="modal-body"
-                    style="padding: 16px 24px 24px; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    style="display: flex; flex-direction: column;">
                     <div id="monitoring-table-container"
                         style="flex:1; overflow-y:auto; overflow-x:auto; border-radius:12px; border:1px solid rgba(6,182,212,0.1); background:rgba(6,182,212,0.02);">
                         <table class="monitoring-table" style="width:100%; border-collapse: collapse;">
@@ -7565,7 +7368,7 @@
                         </button>
                     </div>
                 <div class="modal-body"
-                    style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    style="display: flex; flex-direction: column;">
                     <!-- Manual Whitelist Form -->
                     <div
                         style="padding:20px 24px; background:rgba(59, 130, 246, 0.03); border-bottom:1px solid rgba(59, 130, 246, 0.1);">
@@ -7630,7 +7433,7 @@
                         </button>
                     </div>
                 <div class="modal-body"
-                    style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    style="display: flex; flex-direction: column;">
                     <!-- Manual Ban Form -->
                     <div
                         style="padding:20px 24px; background:rgba(239, 68, 68, 0.03); border-bottom:1px solid rgba(239, 68, 68, 0.1);">
@@ -7691,36 +7494,28 @@
 
 
         <!-- Modal: Generic Premium Confirmation -->
-        <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 9999;">
-            <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid var(--bmm-s10);">
-                <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
-                    <div style="display:flex; align-items:center; gap:12px; width: 100%;">
-                        <div id="confirm-icon-container"
-                            style="width:40px; height:40px; background:rgba(239, 68, 68, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path
-                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
+        <div class="modal-overlay" id="modal-confirm-generic" data-modal-kind="question" style="z-index: 9999;">
+            <div class="modal glass modal--sm">
+                <div class="modal-header">
+                        <div id="confirm-icon-container" class="bms-icon bms-icon--danger">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
                         </div>
-                        <h3 id="confirm-title"
-                            style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">Confirmation
+                        <h3 id="confirm-title" class="modal-title">Confirmation
                         </h3>
-                    </div>
+                    
                 </div>
-                <div class="modal-body" style="padding: 24px;">
-                    <div id="confirm-message" data-i18n="common.confirmGeneric"
-                        style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
+                <div class="modal-body">
+                    <div id="confirm-message" data-i18n="common.confirmGeneric" class="modal-message">
                         Êtes-vous sûr de vouloir continuer ?</div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
-                    <button class="btn btn-ghost modal-close" id="btn-confirm-cancel" style="min-width: 100px;"
+                <div class="modal-footer">
+                    <button class="btn btn-ghost modal-close" id="btn-confirm-cancel"
                         data-i18n="common.cancel">Annuler</button>
                     <button class="btn btn-danger" id="btn-confirm-yes"
-                        style="min-width: 120px; font-weight: 800; text-transform: uppercase;"
                         data-i18n="common.confirm">CONFIRMER</button>
                 </div>
             </div>
@@ -7732,32 +7527,21 @@
 
         <!-- Modal for Mapper Inputs -->
         <div id="modal-mapper-input" class="modal-generic-overlay">
-            <div class="modal glass"
-                style="width: 440px; max-width: 90vw; border: 1px solid var(--bmm-s10); border-radius: 20px; overflow: hidden;">
-                <div class="modal-header"
-                    style="background: var(--bmm-s03); padding: 22px 28px; border-bottom: 1px solid var(--bmm-s08);">
-                    <div style="display: flex; align-items: center; gap: 14px;">
-                        <div
-                            style="width: 40px; height: 40px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            <div class="modal glass modal--sm">
+                <div class="modal-header">
+                        <div class="bms-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>
                         </div>
-                        <div>
-                            <h2 id="mapper-input-title" data-i18n="mapper.newFolder"
-                                style="margin: 0; font-size: 1.15rem; color: var(--bmm-text-primary); font-weight: 700; letter-spacing: -0.01em;">
+                        <div class="bms-titles">
+                            <h2 id="mapper-input-title" data-i18n="mapper.newFolder" class="modal-title">
                                 Nouveau Dossier</h2>
-                            <p style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;"
-                                data-i18n="mapper.inputSubtitle">Action Requise</p>
+                            <p data-i18n="mapper.inputSubtitle" class="bms-sub">Action Requise</p>
                         </div>
-                    </div>
-                    <button class="modal-close"
-                        data-close-modal="#modal-mapper-input"
-                        style="top: 22px; right: 22px;">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 30px 28px;">
+                <button type="button" class="modal-close" data-close-modal="#modal-mapper-input"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <label id="mapper-input-label" data-i18n="mapper.enterName"
                         style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; font-weight: 500;">Entrez
                         le nom :</label>
@@ -7767,38 +7551,35 @@
                             style="width: 100%; height: 44px; font-size: 1rem; padding: 0 16px; background: var(--bmm-bg-base); border-radius: 12px; border: 1px solid var(--bmm-s10); color: var(--bmm-text-primary);">
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 18px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
+                <div class="modal-footer">
                     <button id="btn-mapper-input-cancel" class="btn btn-ghost" data-i18n="common.cancel"
-                        style="font-weight: 600; color: var(--text-muted);">Annuler</button>
+                       >Annuler</button>
                     <button id="btn-mapper-input-confirm" class="btn btn-primary" data-i18n="common.confirm"
-                        style="padding: 0 24px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;">Confirmer</button>
+                       >Confirmer</button>
                 </div>
             </div>
         </div>
 
         <!-- ══ Steam-style App Picker for Launchpack ══ -->
         <div id="modal-app-picker" class="modal-generic-overlay" data-backdrop-close="1" style="z-index:10010;">
-            <div class="modal glass" style="width:700px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;">
-                <div class="modal-header" style="padding:18px 24px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;">
-                    <div>
-                        <div style="font-size:15px;font-weight:800;color:var(--text-bright);" data-i18n="settings.appPicker.title">Ajouter une application</div>
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="settings.appPicker.subtitle">Sélectionnez un ou plusieurs programmes à ajouter au Launch Pack.</div>
+            <div class="modal glass modal--lg">
+                <div class="modal-header">
+                    <div class="bms-titles">
+                        <h2 data-i18n="settings.appPicker.title" class="modal-title">Ajouter une application</h2>
+                        <div data-i18n="settings.appPicker.subtitle" class="bms-sub">Sélectionnez un ou plusieurs programmes à ajouter au Launch Pack.</div>
                     </div>
-                    <button class="modal-close" data-close-modal="#modal-app-picker" style="position:static;font-size:20px;line-height:1;">&times;</button>
-                </div>
+                <button type="button" class="modal-close" data-close-modal="#modal-app-picker"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                 <!-- Search -->
-                <div style="padding:10px 16px;border-bottom:1px solid var(--bmm-s05);">
+                <div class="modal-toolbar">
                     <input id="app-picker-search" type="text" class="form-input"
                         data-i18n-placeholder="settings.appPicker.search"
-                        placeholder="Rechercher…"
-                        style="width:100%;background:var(--bmm-s04);border:1px solid var(--bmm-s08);font-size:13px;padding:6px 12px;border-radius:6px;">
+                        placeholder="Rechercher…">
                 </div>
                 <!-- List -->
-                <div style="flex:1;overflow-y:auto;padding:0;">
+                <div class="modal-body modal-body--flush">
                     <table style="width:100%;border-collapse:collapse;font-size:12px;">
                         <thead>
-                            <tr style="position:sticky;top:0;background:rgba(15,20,35,0.98);z-index:2;">
+                            <tr style="position:sticky;top:0;background:var(--bmm-bg-elevated);z-index:2;">
                                 <th style="width:28px;padding:8px 10px;"></th>
                                 <th style="width:28px;padding:8px 6px;"></th>
                                 <th style="text-align:left;padding:8px 6px;font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;" data-i18n="settings.appPicker.colApp">PROGRAMME ▲</th>
@@ -7813,11 +7594,13 @@
                     </table>
                 </div>
                 <!-- Footer -->
-                <div style="padding:12px 20px;border-top:1px solid var(--bmm-s06);display:flex;align-items:center;gap:10px;background:var(--bmm-bg-base);">
-                    <button class="btn btn-secondary btn-sm" id="app-picker-browse" style="font-size:11px;" data-i18n="settings.appPicker.browse">Parcourir…</button>
-                    <span id="app-picker-sel-count" style="font-size:11px;color:var(--text-muted);flex:1;"></span>
-                    <button class="btn btn-ghost btn-sm" data-close-modal="#modal-app-picker" style="font-size:11px;" data-i18n="settings.appPicker.cancel">Annuler</button>
-                    <button class="btn btn-primary btn-sm" id="app-picker-confirm" disabled style="font-size:11px;" data-i18n="settings.appPicker.confirm">Ajouter la sélection</button>
+                <div class="modal-footer">
+                    <div class="modal-footer-start">
+                        <button class="btn btn-secondary btn-sm" id="app-picker-browse" data-i18n="settings.appPicker.browse">Parcourir…</button>
+                        <span id="app-picker-sel-count" class="modal-footer-note"></span>
+                    </div>
+                    <button class="btn btn-ghost" data-close-modal="#modal-app-picker" data-i18n="settings.appPicker.cancel">Annuler</button>
+                    <button class="btn btn-primary" id="app-picker-confirm" disabled data-i18n="settings.appPicker.confirm">Ajouter la sélection</button>
                 </div>
             </div>
         </div>
@@ -7825,14 +7608,11 @@
         <!-- Modal for Launch Packs -->
         <div id="modal-launchpack" class="modal-generic-overlay"
             data-backdrop-close="1">
-            <div class="modal glass" style="width: 500px; max-width: 95vw;">
+            <div class="modal glass modal--md">
                 <div class="modal-header">
-                    <h2 data-i18n="settings.launchPackModalTitle"
-                        style="margin: 0; font-size: 1.2rem; color: var(--text-main);">Créer un Launch Pack</h2>
-                    <button class="modal-close"
-                        data-close-modal="#modal-launchpack">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 20px 28px; display:flex; flex-direction:column; gap:20px;">
+                    <h2 data-i18n="settings.launchPackModalTitle" class="modal-title">Créer un Launch Pack</h2>
+                <button type="button" class="modal-close" data-close-modal="#modal-launchpack"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" style="display: flex; flex-direction: column;">
                     <!-- Name -->
                     <div>
                         <label
@@ -7883,12 +7663,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 16px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
-                    <button class="btn btn-ghost btn-sm"
+                <div class="modal-footer">
+                    <button class="btn btn-ghost "
                         data-close-modal="#modal-launchpack"
                         data-i18n="common.cancel">Annuler</button>
-                    <button class="btn btn-primary btn-sm" id="lp-btn-confirm"
+                    <button class="btn btn-primary " id="lp-btn-confirm"
                         data-i18n="settings.launchPackBtnCreate">Créer le Pack</button>
                 </div>
             </div>
@@ -7897,33 +7676,21 @@
         <!-- Modal for Launch Pack Deletion -->
         <div id="modal-launchpack-delete" class="modal-generic-overlay"
             data-backdrop-close="1">
-            <div class="modal glass"
-                style="width: 420px; max-width: 90vw; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
-                <div class="modal-header"
-                    style="background: rgba(239, 68, 68, 0.1); padding: 24px 28px; border-bottom: 1px solid rgba(239, 68, 68, 0.1);">
-                    <div style="display: flex; align-items: center; gap: 14px;">
-                        <div
-                            style="width: 40px; height: 40px; background: rgba(239, 68, 68, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--bmm-danger);">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path
-                                    d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6" />
+            <div class="modal glass modal--sm">
+                <div class="modal-header">
+                        <div class="bms-icon bms-icon--danger">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6"/>
                             </svg>
                         </div>
-                        <div>
-                            <h2 data-i18n="settings.launchPackDeleteTitle"
-                                style="margin: 0; font-size: 1.2rem; color: var(--bmm-text-primary); font-weight: 700; letter-spacing: -0.01em;">
+                        <div class="bms-titles">
+                            <h2 data-i18n="settings.launchPackDeleteTitle" class="modal-title">
                                 Supprimer le Pack</h2>
-                            <p data-i18n="settings.launchPackDeleteIrreversible"
-                                style="margin: 2px 0 0; font-size: 0.8rem; color: color-mix(in srgb, var(--bmm-danger) 80%, transparent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+                            <p data-i18n="settings.launchPackDeleteIrreversible" class="bms-sub">
                                 Action Irréversible</p>
                         </div>
-                    </div>
-                    <button class="modal-close"
-                        data-close-modal="#modal-launchpack-delete"
-                        style="top: 24px; right: 24px;">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 30px 28px;">
+                <button type="button" class="modal-close" data-close-modal="#modal-launchpack-delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <p id="lp-delete-confirm-text"
                         style="color: var(--text-main); font-size: 1rem; margin: 0; line-height: 1.6; font-weight: 500;">
                         <!-- Dynamically populated -->
@@ -7945,14 +7712,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 20px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 14px;">
+                <div class="modal-footer">
                     <button class="btn btn-ghost"
                         data-close-modal="#modal-launchpack-delete"
                         data-i18n="common.cancel"
-                        style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted);">Annuler</button>
-                    <button id="lp-btn-delete-confirm" data-i18n="settings.launchPackDeleteBtn" class="btn"
-                        style="background: var(--bmm-danger); color: white; border: none; padding: 10px 24px; border-radius: 10px; font-weight: 700; font-size: 0.9rem; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);">
+                       >Annuler</button>
+                    <button id="lp-btn-delete-confirm" data-i18n="settings.launchPackDeleteBtn" class="btn btn-danger"
+                       >
                         Confirmer la Suppression
                     </button>
                 </div>
@@ -8017,44 +7783,31 @@
 
         <!-- Mapper Confirm Modal -->
         <div id="modal-mapper-confirm" class="modal-generic-overlay">
-            <div class="modal glass"
-                style="width: 440px; max-width: 90vw; border: 1px solid var(--bmm-s10); border-radius: 20px; overflow: hidden;">
-                <div class="modal-header"
-                    style="background: var(--bmm-s03); padding: 22px 28px; border-bottom: 1px solid var(--bmm-s08);">
-                    <div style="display: flex; align-items: center; gap: 14px;">
-                        <div
-                            style="width: 40px; height: 40px; background: rgba(239, 68, 68, 0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--danger);">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path
-                                    d="m10.29 3.86 7.39 12.45a2 2 0 0 1-1.71 3H3.03a2 2 0 0 1-1.71-3l7.39-12.45a2 2 0 0 1 3.58 0z" />
-                                <path d="M12 9v4" />
-                                <path d="M12 17h.01" />
+            <div class="modal glass modal--sm">
+                <div class="modal-header">
+                        <div class="bms-icon bms-icon--danger">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="m10.29 3.86 7.39 12.45a2 2 0 0 1-1.71 3H3.03a2 2 0 0 1-1.71-3l7.39-12.45a2 2 0 0 1 3.58 0z"/>
+                                <path d="M12 9v4"/>
+                                <path d="M12 17h.01"/>
                             </svg>
                         </div>
-                        <div>
-                            <h2 id="mapper-confirm-title" data-i18n="common.confirmDelete"
-                                style="margin: 0; font-size: 1.15rem; color: #fff; font-weight: 700; letter-spacing: -0.01em;">
+                        <div class="bms-titles">
+                            <h2 id="mapper-confirm-title" data-i18n="common.confirmDelete" class="modal-title">
                                 Confirmation</h2>
-                            <p style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;"
-                                data-i18n="mapper.inputSubtitle">Action Requise</p>
+                            <p data-i18n="mapper.inputSubtitle" class="bms-sub">Action Requise</p>
                         </div>
-                    </div>
-                    <button class="modal-close"
-                        data-close-modal="#modal-mapper-confirm"
-                        style="top: 22px; right: 22px;">&times;</button>
-                </div>
-                <div class="modal-body" style="padding: 30px 28px;">
+                <button type="button" class="modal-close" data-close-modal="#modal-mapper-confirm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body">
                     <p id="mapper-confirm-message" data-i18n="mapper.confirmGeneric"
                         style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">Voulez-vous
                         vraiment effectuer cette action ?</p>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 18px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
+                <div class="modal-footer">
                     <button id="btn-mapper-confirm-cancel" class="btn btn-ghost" data-i18n="common.cancel"
-                        style="font-weight: 600; color: var(--text-muted);">Annuler</button>
+                       >Annuler</button>
                     <button id="btn-mapper-confirm-ok" class="btn btn-danger" data-i18n="common.confirm"
-                        style="padding: 0 24px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;">Confirmer</button>
+                       >Confirmer</button>
                 </div>
             </div>
         </div>
@@ -8063,18 +7816,12 @@
         <!-- Modals moved inside container to avoid bleeding -->
         <div id="modal-contributor-detail" class="modal-generic-overlay"
             data-backdrop-close="1">
-            <div class="modal glass"
-                style="width: 700px; max-width: 95vw; border-radius: 28px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
-                <button class="modal-close"
-                    data-close-modal="#modal-contributor-detail"
-                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-                <div class="modal-body" id="contributor-modal-content" style="padding: 40px;">
+            <div class="modal glass modal--lg">
+                <div class="modal-header">
+                    <h2 class="modal-title" data-i18n="credits.contributors">Contributors</h2>
+                    <button type="button" class="modal-close" data-close-modal="#modal-contributor-detail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+                <div class="modal-body" id="contributor-modal-content">
                     <!-- Dynamically populated -->
                 </div>
             </div>
@@ -8082,39 +7829,24 @@
 
         <div id="modal-stack" class="modal-generic-overlay"
             data-backdrop-close="1">
-            <div class="modal glass"
-                style="width: 1080px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; border-radius: 24px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
-                <button class="modal-close" data-close-modal="#modal-stack"
-                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-                <div class="modal-header" style="padding: 25px 30px; flex-shrink: 0;">
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <div
-                            style="width:40px; height:40px; background:rgba(59, 130, 246, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--bmm-info);">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path
-                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+            <div class="modal glass modal--xl">
+                <div class="modal-header">
+                        <div class="bms-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
                                 </path>
-                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
                             </svg>
                         </div>
-                        <div>
-                            <h2 data-i18n="credits.stackTitle" style="margin:0; font-size:1.2rem;">Technical
+                        <div class="bms-titles">
+                            <h2 data-i18n="credits.stackTitle" class="modal-title">Technical
                                 Architecture</h2>
-                            <p
-                                style="margin:0; font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">
+                            <p class="bms-sub">
                                 BMM Core Stack</p>
                         </div>
-                    </div>
-                </div>
-                <div class="modal-body" id="stack-modal-content" style="padding: 0 30px 40px; flex: 1; min-height: 0; overflow-y: auto;">
+                <button type="button" class="modal-close" data-close-modal="#modal-stack"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <div class="modal-body" id="stack-modal-content">
                     <!-- Dynamically populated -->
                 </div>
             </div>

@@ -828,19 +828,8 @@ window.showHashingStats = async () => {
         overlay.className = 'modal-overlay open';
         overlay.id = 'modal-sha-stats';
         overlay.style.zIndex = '100002';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.pointerEvents = 'auto';
-        overlay.style.animation = 'modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)';
         const content = document.createElement('div');
-        content.className = 'modal glass';
-        content.style.maxWidth = '850px';
-        content.style.width = '95%';
-        content.style.maxHeight = '90vh';
-        content.style.display = 'flex';
-        content.style.flexDirection = 'column';
-        content.style.pointerEvents = 'auto';
+        content.className = 'modal glass modal--lg';
         let currentProfileId = null;
         let profiles = [];
         try {
@@ -850,16 +839,16 @@ window.showHashingStats = async () => {
         content.innerHTML = `
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:12px">
-                    <div style="width:36px;height:36px;background:rgba(59,130,246,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                    <div class="bms-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                     </div>
                     <div>
                         <h2 class="modal-title">${t('settings.shaStatsBtn') || 'Hashing Progress'}</h2>
-                        <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${t('settings.shaStatsDesc') || 'Monitor and manage mod file integrity calculation'}</p>
+                        <p class="bms-sub">${t('settings.shaStatsDesc') || 'Monitor and manage mod file integrity calculation'}</p>
                     </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:12px">
-                    <select id="sha-profile-select" class="form-select" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:var(--text-primary);border-radius:8px;padding:6px 12px;font-size:12px;outline:none">
+                <div class="bms-head-end">
+                    <select id="sha-profile-select" class="form-select">
                         <option value="">${t('common.global') || 'Global (All)'}</option>
                         ${profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('')}
                     </select>
@@ -870,10 +859,10 @@ window.showHashingStats = async () => {
                     </button>
                 </div>
             </div>
-            <div class="modal-body" id="sha-stats-body" style="overflow-y:auto;flex:1;padding:24px;display:flex;flex-direction:column;gap:20px;">
+            <div class="modal-body" id="sha-stats-body">
             </div>
-            <div class="modal-footer" style="padding:18px 24px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:12px; background:rgba(0,0,0,0.2)">
-                <button class="btn btn-secondary" style="height:40px; padding:0 32px; font-weight:700; border-radius:10px" ${actAttrs('closeShaStats')}>${t('common.close') || 'Close'}</button>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" ${actAttrs('closeShaStats')}>${t('common.close') || 'Close'}</button>
             </div>
         `;
         const profileSelect = content.querySelector('#sha-profile-select');
@@ -1017,24 +1006,17 @@ window.recalculateAllHashesPrompt = async () => {
     overlay.className = 'modal-overlay open';
     overlay.id = 'modal-sha-recalc';
     overlay.style.zIndex = '100001';
-    overlay.style.pointerEvents = 'auto';
-    overlay.style.animation = 'modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)';
     const content = document.createElement('div');
-    content.className = 'modal glass';
-    content.style.maxWidth = '450px';
-    content.style.width = '90%';
-    content.style.pointerEvents = 'auto';
-    content.style.display = 'flex';
-    content.style.flexDirection = 'column';
+    content.className = 'modal glass modal--sm';
     content.innerHTML = `
         <div class="modal-header">
             <div style="display:flex;align-items:center;gap:12px">
-                <div style="width:36px;height:36px;background:rgba(245,158,11,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center">
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <div class="bms-icon bms-icon--warn">
+                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 </div>
                 <div>
                     <h2 class="modal-title">${t('settings.shaRecalculateTitle')}</h2>
-                    <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${t('common.actionRequired') || 'Action Required'}</p>
+                    <p class="bms-sub">${t('common.actionRequired') || 'Action Required'}</p>
                 </div>
             </div>
             <button class="modal-close" id="btn-recalc-x">
@@ -1044,7 +1026,7 @@ window.recalculateAllHashesPrompt = async () => {
             </button>
         </div>
         
-        <div class="modal-body" style="padding:32px; text-align:center;">
+        <div class="modal-body" style="text-align:center">
             <p style="font-size:13px; color:var(--text-secondary); margin-bottom:32px; line-height:1.6">
                 ${t('settings.shaRecalculateDesc')}
             </p>
@@ -1061,8 +1043,8 @@ window.recalculateAllHashesPrompt = async () => {
             </div>
         </div>
         
-        <div class="modal-footer" style="padding:16px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:12px; background:rgba(0,0,0,0.1)">
-            <button class="btn btn-ghost" id="btn-recalc-cancel" style="height:36px; padding:0 24px">${t('common.cancel')}</button>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" id="btn-recalc-cancel">${t('common.cancel')}</button>
         </div>
     `;
     overlay.appendChild(content);
@@ -2435,33 +2417,22 @@ export async function initSettings() {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay open';
             overlay.style.zIndex = '100002';
-            overlay.style.pointerEvents = 'auto';
-            overlay.style.animation = 'modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)';
             const close = () => {
                 overlay.style.opacity = '0';
                 setTimeout(() => overlay.remove(), 250);
             };
             const content = document.createElement('div');
-            // Use the same clean container style as the Launch Pack modal
-            // (solid #111827 background instead of the dark glass blur).
-            content.className = 'modal';
-            content.style.maxWidth = '430px';
-            content.style.width = '430px';
-            content.style.padding = '0';
-            content.style.overflow = 'hidden';
-            content.style.pointerEvents = 'auto';
+            content.className = 'modal modal--sm';
             content.innerHTML = `
-                <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border)">
-                    <h3 style="margin:0; font-size:14px; font-weight:700; color:var(--text-bright); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:8px">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        ${t('settings.exportTitle')}
-                    </h3>
-                    <button class="btn-close" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px" data-remove-closest=".modal-overlay">
+                <div class="modal-header">
+                    <div class="bms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+                    <h3 class="modal-title">${t('settings.exportTitle')}</h3>
+                    <button type="button" class="modal-close" aria-label="${escAttr(t('common.close'))}" data-remove-closest=".modal-overlay">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
                 
-                <div class="modal-body" style="padding:20px 22px; display:flex; flex-direction:column; gap:14px">
+                <div class="modal-body">
                     <div class="exp-opt-list">
                         <label class="exp-opt">
                             <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
@@ -2621,9 +2592,9 @@ export async function initSettings() {
                     </div>
                 </div>
                 
-                <div class="modal-footer" style="padding:16px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:12px; background:rgba(0,0,0,0.1)">
-                    <button class="btn btn-secondary btn-cancel-exp" style="height:36px; padding:0 24px">${t('common.cancel')}</button>
-                    <button class="btn btn-primary btn-confirm-exp" style="height:36px; padding:0 24px; min-width:100px">${t('common.export') || 'Export'}</button>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-cancel-exp">${t('common.cancel')}</button>
+                    <button class="btn btn-primary btn-confirm-exp">${t('common.export') || 'Export'}</button>
                 </div>
             `;
             overlay.appendChild(content);

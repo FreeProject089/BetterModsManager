@@ -93,7 +93,7 @@ export function browseRemoteFolder(
       <div class="modal glass ssh-br modal--md">
         <div class="modal-header">
           <div style="min-width:0;">
-            <h3 style="margin:0;font-size:15px;">${escHtml(t('sshbr.title'))}</h3>
+            <h3 class="modal-title">${escHtml(t('sshbr.title'))}</h3>
             <div class="ssh-br-who">${escHtml(`${target.user}@${target.host}`)}${target.port && target.port !== 22 ? escHtml(`:${target.port}`) : ''}</div>
           </div>
           <button class="modal-close" id="sshbr-x" aria-label="${escAttr(t('common.close'))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>

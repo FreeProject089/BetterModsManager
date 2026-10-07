@@ -15,6 +15,7 @@ import { t } from '../../core/i18n.js';
 import { invoke, pickFile } from '../../core/api.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { recordNotification } from '../../ui/notification-center.js';
+import { bindModal, buildModalHeader } from '../../ui/modal-shell.js';
 
 interface BundleSection { section: string; files: number; bytes: number; restorable: boolean }
 interface BundleInfo {
@@ -106,13 +107,14 @@ export async function openRestoreBundle(): Promise<void> {
     }
 
     document.getElementById(OVERLAY_ID)?.remove();
-    const overlay = el('div', 'modal-overlay');
+    // `.open`: the house overlay is display:none without it. This dialog was mounted without
+    // it and showed only because nothing hid it — the shell stylesheet now does.
+    const overlay = el('div', 'modal-overlay open');
     overlay.id = OVERLAY_ID;
-    const modal = el('div', 'modal');
-
-    const head = el('div', 'modal-header');
-    head.appendChild(el('h3', '', t('restore.title')));
-    modal.appendChild(head);
+    const modal = el('div', 'modal modal--md');
+    let release: () => void = () => {};
+    const dismiss = () => { release(); overlay.remove(); };
+    modal.appendChild(buildModalHeader({ title: t('restore.title'), id: OVERLAY_ID, closeLabel: t('common.close'), onClose: dismiss }));
 
     const body = el('div', 'modal-body');
 
@@ -171,7 +173,7 @@ export async function openRestoreBundle(): Promise<void> {
     const foot = el('div', 'modal-footer');
     const cancel = el('button', 'btn btn-ghost', t('common.cancel')) as HTMLButtonElement;
     cancel.type = 'button';
-    cancel.addEventListener('click', () => overlay.remove());
+    cancel.addEventListener('click', dismiss);
 
     const go = el('button', 'btn btn-danger', t('restore.go')) as HTMLButtonElement;
     go.type = 'button';
@@ -210,7 +212,7 @@ export async function openRestoreBundle(): Promise<void> {
             if (r.navbar) {
                 try { localStorage.setItem('bmm_navbar_config', JSON.stringify(r.navbar)); } catch { /* private mode */ }
             }
-            overlay.remove();
+            dismiss();
 
             // The record has to OUTLIVE the reload, and a toast does not.
             //
@@ -255,5 +257,6 @@ export async function openRestoreBundle(): Promise<void> {
     foot.appendChild(go);
     modal.appendChild(foot);
     overlay.appendChild(modal);
-    document.getElementById('app-window-outer')?.appendChild(overlay);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    release = bindModal(overlay, { onClose: dismiss });
 }

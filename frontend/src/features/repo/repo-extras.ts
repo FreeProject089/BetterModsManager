@@ -722,8 +722,8 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
 
         ov.innerHTML = `<div class="modal glass cm-modal rx-modal">
             <div class="modal-header">
-                <h3>${esc(t('repo.extras.pickTitle'))}</h3>
-                <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}">&times;</button>
+                <h3 class="modal-title">${esc(t('repo.extras.pickTitle'))}</h3>
+                <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div class="modal-body rx-body">
                 <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>

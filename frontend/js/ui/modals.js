@@ -85,20 +85,13 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
             noBtn.removeAttribute('data-i18n');
         else
             noBtn.setAttribute('data-i18n', 'common.cancel');
-        if (type === 'danger') {
-            yesBtn.className = 'btn btn-danger';
-            iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
-            iconContainer.style.color = 'var(--danger)';
-        }
-        else if (type === 'warning') {
-            yesBtn.className = 'btn btn-warning'; // Assumes btn-warning exists or will use primary fallback
-            iconContainer.style.background = 'rgba(245, 158, 11, 0.1)';
-            iconContainer.style.color = '#f59e0b';
-        }
-        else {
-            yesBtn.className = 'btn btn-primary';
-            iconContainer.style.background = 'rgba(59, 130, 246, 0.1)';
-            iconContainer.style.color = 'var(--accent)';
+        // The tone is a class on the icon tile (modal-shell.css), never an inline colour: an
+        // inline rgba() is a dark-theme wash that reads as a smudge on BMM White.
+        const tone = type === 'danger' ? 'danger' : type === 'warning' ? 'warn' : '';
+        yesBtn.className = type === 'danger' ? 'btn btn-danger' : type === 'warning' ? 'btn btn-warning' : 'btn btn-primary';
+        if (iconContainer) {
+            iconContainer.removeAttribute('style');
+            iconContainer.className = tone ? `bms-icon bms-icon--${tone}` : 'bms-icon';
         }
         modal.classList.add('open');
         const cleanup = (result) => {

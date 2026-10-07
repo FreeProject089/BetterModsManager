@@ -129,7 +129,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
       <div class="modal glass lo-modal" role="dialog" aria-modal="true" aria-labelledby="lo-title">
         <div class="modal-header lo-head">
           <div class="lo-head-text">
-            <h3 id="lo-title">${escHtml(profileName ? fill('order.titleFor', { p: profileName }) : t('order.title'))}</h3>
+            <h3 class="modal-title" id="lo-title">${escHtml(profileName ? fill('order.titleFor', { p: profileName }) : t('order.title'))}</h3>
             <p class="lo-lede">${escHtml(t('order.lede'))}</p>
           </div>
           ${learnMore('load-order', { compact: true, className: 'lo-learn' })}

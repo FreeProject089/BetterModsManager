@@ -14,7 +14,7 @@ npm run dev        # surveillance TypeScript + la fenêtre Tauri, ensemble
 npm run ci         # toutes les vérifications, dans l'ordre de la CI
 ```
 
-`npm run ci` fait 86 étapes. Elle est lente exprès — c'est la différence entre « ça compile »
+`npm run ci` fait 87 étapes. Elle est lente exprès — c'est la différence entre « ça compile »
 et « ça marche ».
 
 ## Construire

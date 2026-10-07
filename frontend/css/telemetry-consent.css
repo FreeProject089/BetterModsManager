@@ -8,14 +8,7 @@
  *              of "all" (the detailed hardware report, unmasked replay).
  */
 
-.modal.tc-modal {
-    width: min(620px, calc(100vw - 32px));
-    max-width: none;
-    max-height: calc(100vh - 48px);
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-}
+/* The card is the house shell (.modal--md). */
 .tc-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.05rem; }
 .tc-body { padding: 14px 20px 6px; overflow-y: auto; gap: 10px; }
 

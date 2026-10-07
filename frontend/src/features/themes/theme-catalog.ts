@@ -52,18 +52,18 @@ function buildModal(): void {
     _modal.className = 'modal-overlay';
     _modal.id = 'modal-theme-catalog';
     _modal.innerHTML = `
-        <div class="modal glass" style="max-width:860px;width:95%;max-height:88vh;display:flex;flex-direction:column;">
+        <div class="modal glass modal--lg">
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <div style="width:36px;height:36px;border-radius:9px;background:rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                    <div class="bms-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
                     </div>
                     <div>
                         <!-- t(), not data-i18n. applyTranslations() runs once at boot and this
                              modal is built long after — so the two attributes here were never
                              read, and the header sat in English inside a French app while every
                              other string in this file, which uses t(), was translated. -->
-                        <h2 style="margin:0;font-size:16px;">${escHtml(t('themes.catalogue'))}</h2>
+                        <h2 class="modal-title">${escHtml(t('themes.catalogue'))}</h2>
                         <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${escHtml(t('themes.catalogueSub'))}</p>
                     </div>
                 </div>
@@ -86,7 +86,7 @@ function buildModal(): void {
                 </button>
             </div>
             <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
-            <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);display:flex;align-items:center;gap:8px;">
+            <div class="modal-footer" style="font-size:11px; color:var(--bmm-text-muted)">
                 <span id="theme-cat-count"></span>
                 <div style="flex:1"></div>
                 <!-- The way in, so it looks like one. Following and making a catalogue were a

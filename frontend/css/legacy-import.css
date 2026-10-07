@@ -2,25 +2,9 @@
    See src/ui/legacy-import.ts. Tokens only — this can appear before the tutorial and right
    after the style modal, so it has to be correct in every theme, light included. */
 
-.legacy-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100040;               /* under the style modal, over the app */
-    display: grid;
-    place-items: center;
-    background: rgba(0, 0, 0, 0.55);   /* scrim: intentionally black in every theme */
-    animation: legacyFadeIn 0.18s ease;
-}
-@keyframes legacyFadeIn { from { opacity: 0; } }
-
-.legacy-modal {
-    width: min(560px, calc(100vw - 48px));
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-    overflow: hidden;
-}
+/* The shell is the house one (.modal-overlay.open > .modal.modal--md). Only the stacking is
+   this dialog's: under the style modal, over the app. */
+.legacy-overlay { z-index: 100040; }
 
 .legacy-lede {
     margin: 0 0 16px;
