@@ -135,7 +135,8 @@ describe('the AI screens never reach the network themselves', () => {
         }
         const main = readFileSync(join(ROOT, 'src-tauri/src/main.rs'), 'utf8');
         assert.ok(used.size >= 6, [...used].join(', '));
-        for (const c of used) assert.ok(main.includes(`commands::ai::${c},`), `${c} is not registered`);
+        // commands/ai.rs, or commands/ai_assist.rs (Laya in the feedback dialog, the crash manager, the debug menu).
+        for (const c of used) assert.ok(main.includes(`commands::ai::${c},`) || main.includes(`commands::ai_assist::${c},`), `${c} is not registered`);
     });
     test('the Rust gate test that proves "off = no request" is still there', () => {
         const core = readFileSync(join(ROOT, 'src-tauri/src/commands/ai_core.rs'), 'utf8');

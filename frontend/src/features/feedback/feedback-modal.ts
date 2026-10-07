@@ -39,6 +39,8 @@ let _shots: string[] = [];
 let _zips: string[] = [];
 let _steps: string[] = [''];
 let _busy = false;
+/** A newly opened dialog: Laya's proposals start over (a re-render after linking keeps them). */
+let _assistFresh = true;
 /** The account identifies the sender (feedback-contact.ts). Set by render, cleared when the
  *  server answers contact_required anyway. */
 let _account = false;
@@ -83,7 +85,7 @@ export async function openFeedback(kind: Kind = 'bug', opts: OpenOpts = {}): Pro
         toast(t('fbc.testNoUrl'), 'warning');
         return;
     }
-    _kind = kind; _shots = []; _zips = opts.crashZip ? [opts.crashZip] : []; _steps = ['']; _busy = false;
+    _kind = kind; _shots = []; _zips = opts.crashZip ? [opts.crashZip] : []; _steps = ['']; _busy = false; _assistFresh = true;
     // `bcLinkState` replaces `has_bcweb_api_key` here. See the module note in core/bc-link.ts:
     // the key file answers a different question and answered it wrongly in both directions.
     const [who, crashes, cfg] = await Promise.all([
@@ -140,6 +142,11 @@ function render(who: Who, crashes: string[], cfg: Awaited<ReturnType<typeof fetc
                 <label class="fbm-lbl" for="fbm-desc">${esc(t('fbm.fDesc'))} <span class="fbm-count" id="fbm-count">0</span></label>
                 <textarea class="form-input fbm-input fbm-textarea" id="fbm-desc" rows="5" maxlength="6000" placeholder="${esc(t(`fbm.fDescPh.${_kind}`))}"></textarea>
             </section>
+
+            <!-- Laya's proposals while writing (features/ai/laya-assist.ts): kind, category,
+                 severity, area, tags, an earlier report, the crash zip that fits. Drawn only
+                 with AI on; nothing changes until the user clicks « Appliquer ». -->
+            <div id="fbm-laya" hidden></div>
 
             <!-- Everything past "what happened" folds away.
                  All of it used to be open at once: steps, two attach buttons, the crash-zip
@@ -467,6 +474,20 @@ function wire(o: HTMLElement, who: Who, crashes: string[], cfg: Awaited<ReturnTy
         el?.focus();
     });
     q('fbm-send')?.addEventListener('click', () => send(who, cfg));
+    const layaBox = q('fbm-laya');
+    if (layaBox) {
+        void import('../ai/laya-assist.js').then((m) => {
+            if (_assistFresh) { m.resetReportAssist(); _assistFresh = false; }
+            return m.mountReportAssist(layaBox, {
+                kind: () => _kind,
+                setKind: (k) => o.querySelector<HTMLButtonElement>(`.fbm-kind[data-kind="${k === 'feedback' || k === 'crash' ? k : 'bug'}"]`)?.click(),
+                text: () => ({ title: q<HTMLInputElement>('fbm-title')?.value.trim() || '', desc: q<HTMLTextAreaElement>('fbm-desc')?.value.trim() || '', steps: _steps.map((s) => s.trim()).filter(Boolean) }),
+                crashes,
+                attached: () => _zips,
+                attach: (p) => { if (!_zips.includes(p)) { _zips.push(p); renderFiles(); void measurePicked(); } },
+            });
+        }).catch(() => { /* the dialog works without Laya */ });
+    }
 }
 
 // A small proof-of-work: a report is only sent after the client has spent some CPU finding a
@@ -578,13 +599,16 @@ async function send(who: Who, cfg: Awaited<ReturnType<typeof fetchFeedbackConfig
         // brief wait reads as "checking", not "stuck".
         if (status) status.innerHTML = `<span class="fbm-pow"><span class="fbm-pow-dot"></span>${esc(t('fbm.pow') || 'Anti-spam check…')}</span>`;
         const pow = await proofOfWork(`${_kind}|${title}|${body.slice(0, 200)}|${Date.now()}`);
+        // Only the labels the user accepted from Laya's proposals (laya-assist.ts), never a guess.
+        let laya: unknown = null;
+        try { laya = (await import('../ai/laya-assist.js')).reportAssistMeta(); } catch { /* none */ }
         say(t('fbm.sending'));
         // `linked` picks which client throttle applies. `unknown` counts as linked here on
         // purpose: the tighter budget is for people we KNOW are anonymous, and refusing
         // somebody a report because their connection was down would be the worst version of
         // this feature. The server applies its own limit either way.
         const r = await submitFeedback(
-            { kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length }, attachments },
+            { kind: _kind, title: title || undefined, body, email: email || undefined, discord: discord || undefined, meta: { pow: pow || undefined, steps: steps.length, crashZips: _zips.length, screenshots: _shots.length, ...(laya ? { laya } : {}) }, attachments },
             { linked: who.state !== 'anonymous' });
         try {
             const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');

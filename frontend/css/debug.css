@@ -1,54 +1,76 @@
 /**
  * debug.css — Styles for BMM DevTools Overlay
- * Premium glassmorphism and integrated look.
+ *
+ * The panel follows the app theme. Every --debug-* colour is an alias of a --bmm-* token,
+ * so a light theme gets a light panel and a dark theme a dark one — the old always-dark
+ * literals made the panel the one surface that ignored the user's theme.
  */
 
 :root {
-    --debug-bg: rgba(10, 14, 23, 0.95);
-    --debug-border: rgba(255, 255, 255, 0.1);
-    --debug-accent: #3b82f6;
-    --debug-success: #10b981;
-    --debug-warn: #f59e0b;
-    --debug-error: #ef4444;
+    --debug-bg: var(--bmm-bg-elevated);
+    --debug-sunken: var(--bmm-s04);
+    --debug-border: var(--bmm-border-hover);
+    --debug-accent: var(--bmm-accent);
+    --debug-success: var(--bmm-success);
+    --debug-warn: var(--bmm-warning);
+    --debug-error: var(--bmm-danger);
     /* PREFIXED, and it matters. These three used to be declared here as --text-primary /
        --text-secondary / --text-muted, on :root, in a file that loads AFTER tokens.css.
-       Same specificity, later wins — so the app-wide aliases (tokens.css:222,
-       `--text-primary: var(--bmm-text-primary)`) were permanently overridden to this
-       near-white, in every theme, whether or not DevTools was ever opened.
-       On a light theme that is white text on a white surface. */
-    --debug-text-primary: #f8fafc;
-    --debug-text-secondary: #94a3b8;
-    --debug-text-muted: #64748b;
+       Same specificity, later wins — so the app-wide aliases were permanently overridden,
+       in every theme, whether or not DevTools was ever opened. */
+    --debug-text-primary: var(--bmm-text-primary);
+    --debug-text-secondary: var(--bmm-text-secondary);
+    --debug-text-muted: var(--bmm-text-muted);
 }
 
+/* ── The panel ───────────────────────────────────────────────────────────────
+   Mounted inside #app-window-outer (contain: paint makes the frame its containing
+   block), so `position: fixed` places it within the rounded app card. A size
+   container, so the layout answers to the PANEL's width, not the window's: the user
+   resizes the panel, and a narrow panel needs the compact sidebar even on a wide
+   screen. */
 #bmm-debug-overlay {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 680px;
-    height: 480px;
+    width: 720px;
+    height: 500px;
     min-width: 320px;
     min-height: 220px;
-    background: linear-gradient(160deg, rgba(8, 12, 22, 0.98) 0%, rgba(5, 8, 18, 0.98) 100%);
-    backdrop-filter: blur(24px);
-    border: 1px solid rgba(59, 130, 246, 0.15);
-    border-top: 1px solid rgba(59, 130, 246, 0.25);
-    border-radius: 18px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 40px rgba(59,130,246,0.05), inset 0 1px 0 rgba(255,255,255,0.04);
-    z-index: 20000;
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    background: var(--debug-bg);
+    color: var(--debug-text-primary);
+    border: 1px solid var(--debug-border);
+    border-radius: 14px;
+    box-shadow: var(--bmm-shadow-modal);
+    z-index: 200000;
     pointer-events: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transform: translateY(16px) scale(0.97);
+    container-type: inline-size;
+    container-name: devtools;
+    /* Layout containment makes the panel the containing block of its position:fixed
+       children. The crash screen inside it is `position: fixed; inset: 0`, and without
+       this it covered the WHOLE app (100vw x 100vh of "system halt") instead of the panel —
+       an app that looks dead because DevTools saw one uncaught error. The open state has no
+       transform any more, so nothing else provided that boundary. */
+    contain: layout;
+    transform: translateY(12px) scale(0.98);
     opacity: 0;
     visibility: hidden;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
-.debug-header {
-    cursor: move;
-    user-select: none;
+#bmm-debug-overlay.open {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #bmm-debug-overlay { transition: none; }
 }
 
 .debug-resizer {
@@ -58,14 +80,9 @@
     bottom: 0;
     right: 0;
     cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.1) 50%);
-    border-radius: 0 0 16px 0;
-}
-
-#bmm-debug-overlay.open {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-    visibility: visible;
+    background: linear-gradient(135deg, transparent 50%, var(--bmm-s15) 50%);
+    border-radius: 0 0 14px 0;
+    z-index: 2;
 }
 
 /* ── Production mode: hide dev-only tabs ── */
@@ -73,131 +90,191 @@
 #bmm-debug-overlay.debug-prod-mode .debug-tab[data-tab="sources"] {
     display: none !important;
 }
-
-/* Hide JS debugger sub-tab in prod (not useful without PTB access) */
 #bmm-debug-overlay.debug-prod-mode .debug-subtab[data-sub="js"] {
     display: none !important;
 }
 
-/* Header */
+/* ── Header: title on the left, one toolbar on the right ── */
 .debug-header {
-    padding: 10px 14px;
-    background: linear-gradient(90deg, rgba(59,130,246,0.06) 0%, rgba(255,255,255,0.02) 100%);
-    border-bottom: 1px solid rgba(59,130,246,0.12);
+    padding: 8px 10px 8px 14px;
+    background: var(--bmm-s03);
+    border-bottom: 1px solid var(--debug-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    position: relative;
-}
-
-.debug-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(59,130,246,0.3) 0%, transparent 60%);
+    gap: 10px;
+    cursor: move;
+    user-select: none;
+    flex: none;
 }
 
 .debug-title {
     font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     color: var(--debug-accent);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     text-transform: uppercase;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* Square icon targets. The last pair (clear everything, close) sits after a hairline
+   and gets its own hover colour, so destruction and dismissal read differently from
+   the tools pressed all the time. */
 .debug-controls {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    cursor: default;
+}
+.debug-controls .debug-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    flex: none;
+}
+.debug-controls-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--debug-border);
 }
 
+/* ── Buttons ── */
 .debug-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bmm-s05);
+    border: 1px solid var(--debug-border);
     color: var(--debug-text-primary);
     padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
+    border-radius: 7px;
+    font: 600 11px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     white-space: nowrap;
     outline: none;
-    backdrop-filter: blur(4px);
 }
-
 .debug-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: var(--bmm-s10);
+    border-color: var(--bmm-s20);
 }
-
-.debug-btn:active {
-    transform: translateY(0);
-}
-
-.debug-btn#debug-btn-close:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: var(--debug-error);
-}
-
+.debug-btn:disabled { opacity: 0.55; cursor: default; }
 .debug-btn.active {
     background: var(--debug-accent);
-    color: white;
+    color: var(--bmm-text-on-accent);
     border-color: var(--debug-accent);
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
 }
 
-/* Tabs */
-.debug-tabs {
+/* ── Body: sidebar + content ── */
+.debug-body {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    background: rgba(0,0,0,0.3);
-    padding: 0 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    gap: 2px;
 }
+
+.debug-nav {
+    flex: none;
+    width: 148px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--bmm-s02);
+    border-right: 1px solid var(--debug-border);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.debug-nav-group {
+    padding: 10px 8px 4px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--debug-text-muted);
+}
+.debug-nav-group:first-child { padding-top: 2px; }
+.debug-nav-ext { display: contents; }
 
 .debug-tab {
-    padding: 9px 13px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--debug-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--debug-text-secondary);
+    font: 600 11.5px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
+    text-align: left;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.18s;
-    text-transform: uppercase;
+    position: relative;
+    transition: background 0.12s ease, color 0.12s ease;
 }
-
+.debug-tab > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.debug-tab-icon { flex: none; opacity: 0.8; }
 .debug-tab:hover {
-    color: rgba(255,255,255,0.7);
-    background: rgba(255,255,255,0.03);
+    background: var(--bmm-s05);
+    color: var(--debug-text-primary);
+}
+.debug-tab.active {
+    background: color-mix(in srgb, var(--debug-accent) 14%, transparent);
+    color: var(--debug-accent);
+}
+.debug-tab.active::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--debug-accent);
+}
+.debug-tab.active .debug-tab-icon { opacity: 1; }
+.debug-tab:focus-visible {
+    outline: 2px solid var(--debug-accent);
+    outline-offset: -2px;
 }
 
-.debug-tab.active {
-    color: var(--debug-accent);
-    border-bottom-color: var(--debug-accent);
-    background: rgba(59,130,246,0.04);
+/* Narrow panel: the sidebar becomes an icon rail. Labels stay in the DOM (and in the
+   accessibility tree), only visually hidden. */
+@container devtools (max-width: 520px) {
+    .debug-nav { width: 44px; padding: 6px 4px; }
+    .debug-nav-group { height: 1px; padding: 0; margin: 6px 6px; background: var(--debug-border); font-size: 0; overflow: hidden; }
+    .debug-nav-group:first-child { display: none; }
+    .debug-tab { justify-content: center; padding: 8px 0; }
+    .debug-tab > span {
+        position: absolute; width: 1px; height: 1px; overflow: hidden;
+        clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .debug-tab.active::before { left: -4px; }
+    .debug-footer { gap: 12px; }
 }
 
 /* Content Area */
 .debug-content {
     flex: 1;
+    min-width: 0;
     overflow-y: auto;
     padding: 0;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace;
     font-size: 11px;
+    position: relative;
 }
 
 .debug-pane {
@@ -206,13 +283,93 @@
 }
 
 .debug-pane.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
+
+.debug-pane-ext.active { display: block; overflow-y: auto; }
+.debug-section-host { min-height: 100%; }
+.debug-section-error { color: var(--debug-error); }
+
+.debug-pane-pad { padding: 14px; }
+.debug-pane-intro {
+    margin: 0 0 12px;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--debug-text-secondary);
+}
+
+/* Empty states: the list says what will appear in it instead of being a blank box. */
+.debug-list:empty::before,
+.debug-empty-state {
+    display: block;
+    margin: 18px auto;
+    max-width: 320px;
+    padding: 14px;
+    text-align: center;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--debug-text-muted);
+    border: 1px dashed var(--debug-border);
+    border-radius: 10px;
+}
+.debug-list:empty::before { content: attr(data-empty-text); }
+
+/* ── Studios pane ── */
+.debug-studio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+.debug-studio-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--debug-border);
+    border-radius: 12px;
+    background: var(--bmm-s02);
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.debug-studio-card .debug-btn { align-self: flex-start; }
+.debug-studio-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.debug-studio-head h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--debug-text-primary);
+}
+.debug-studio-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    color: var(--debug-accent);
+    background: color-mix(in srgb, var(--debug-accent) 14%, transparent);
+}
+.debug-studio-state {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--debug-success);
+}
+.debug-studio-state:empty { display: none; }
 
 /* Console Entries */
 .log-entry {
     padding: 6px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--bmm-s02);
     white-space: pre-wrap;
     word-break: break-all;
     display: flex;
@@ -222,12 +379,12 @@
 .log-entry.INFO { color: var(--debug-text-secondary); border-left: 2px solid transparent; }
 .log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); border-left: 2px solid #fbbf24; }
 .log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); border-left: 2px solid #ef4444; }
-.log-entry:hover { background: rgba(255,255,255,0.03); }
+.log-entry:hover { background: var(--bmm-s03); }
 
 /* IPC Entries */
 .ipc-entry {
     padding: 6px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--bmm-s02);
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
     align-items: center;
@@ -250,7 +407,7 @@
     text-transform: uppercase; 
     padding: 2px 6px; 
     border-radius: 4px; 
-    background: rgba(255,255,255,0.05); 
+    background: var(--bmm-s05); 
     text-align: center; 
     width: fit-content;
     max-width: 150px;
@@ -265,7 +422,7 @@
 
 /* Timeline enhanced entries */
 .timeline-entry { cursor: default; transition: background 0.1s; flex-wrap: wrap; }
-.timeline-entry:hover { background: rgba(255,255,255,0.03); }
+.timeline-entry:hover { background: var(--bmm-s03); }
 .timeline-entry .ipc-time { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
 .timeline-expand-btn { font-size: 10px; line-height: 1; color: var(--debug-text-muted); opacity: 0.6; transition: opacity 0.15s; }
 .timeline-expand-btn:hover { opacity: 1; }
@@ -273,15 +430,15 @@
 
 /* Sources: line numbers */
 .src-line { line-height: 1.6; }
-.src-line:hover { background: rgba(255,255,255,0.03); }
+.src-line:hover { background: var(--bmm-s03); }
 .src-gutter { font-size: 10px; }
-.tree-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
+.tree-row:hover { background: var(--bmm-s04); border-radius: 4px; }
 .tree-row.active { background: rgba(59,130,246,0.12); border-radius: 4px; color: var(--debug-accent); }
 
 /* Metrics Footer */
 .debug-footer {
     padding: 8px 16px;
-    background: rgba(255,255,255,0.02);
+    background: var(--bmm-s02);
     border-top: 1px solid var(--debug-border);
     display: flex;
     gap: 20px;
@@ -322,21 +479,22 @@
 
 /* Crash Overlay */
 .debug-crash-overlay {
+    /* Fills the PANEL (its containing block, see `contain: layout` above), never the app:
+       an error report must not make the app it reports on look dead. Scrolls when the
+       panel is small. */
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
+    inset: 0;
+    overflow-y: auto;
     background: radial-gradient(circle at center, rgba(30, 0, 0, 0.95) 0%, rgba(10, 0, 0, 0.98) 100%);
     backdrop-filter: blur(25px) saturate(1.5);
     z-index: 99999;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     color: white;
     text-align: center;
-    padding: 40px;
+    padding: 28px 20px;
     visibility: hidden;
     opacity: 0;
     transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -378,7 +536,7 @@
     max-width: 650px;
     width: 100%;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--bmm-s08);
     border-radius: 16px;
     padding: 24px;
     margin-bottom: 40px;
@@ -417,7 +575,7 @@
 }
 
 .sources-tree {
-    background: rgba(0,0,0,0.2);
+    background: var(--debug-sunken);
     border-right: 1px solid var(--debug-border);
     overflow-y: auto;
 }
@@ -428,7 +586,7 @@
 }
 
 .tree-row:hover {
-    background: rgba(255,255,255,0.05);
+    background: var(--bmm-s05);
 }
 
 .tree-row.active {
@@ -447,12 +605,12 @@
 }
 
 #bmm-debug-overlay *::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.1);
+    background: var(--bmm-s10);
     border-radius: 3px;
 }
 
 #bmm-debug-overlay *::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.2);
+    background: var(--bmm-s20);
 }
 
 /* Modals Scoped to DevTools */
@@ -462,7 +620,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--bmm-bg-overlay);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     display: none;
@@ -478,13 +636,13 @@
 }
 
 .debug-modal-content {
-    background: #111214;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--debug-bg);
+    border: 1px solid var(--bmm-s08);
     border-radius: 12px;
     padding: 24px 28px;
     width: 90%;
     max-width: 420px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    box-shadow: var(--bmm-shadow-modal);
     transform: translateY(20px) scale(0.95);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     pointer-events: auto;
@@ -498,7 +656,7 @@
     font-size: 18px;
     font-weight: 700;
     margin-bottom: 12px;
-    color: white;
+    color: var(--debug-text-primary);
     letter-spacing: -0.3px;
 }
 
@@ -511,11 +669,11 @@
 
 .debug-modal-input {
     width: 100%;
-    background: rgba(0,0,0,0.3);
+    background: var(--debug-sunken);
     border: 1px solid var(--debug-border);
     border-radius: 6px;
     padding: 10px 12px;
-    color: white;
+    color: var(--debug-text-primary);
     font-family: inherit;
     font-size: 13px;
     outline: none;
@@ -537,7 +695,7 @@
     display: flex;
     overflow-x: auto;
     gap: 8px;
-    border-bottom: 2px solid rgba(255,255,255,0.05);
+    border-bottom: 2px solid var(--bmm-s05);
 }
 
 .debug-subtab {
@@ -563,18 +721,18 @@
 }
 
 .dom-tree-node:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bmm-s05);
 }
 
 .dom-toggle {
     transition: transform 0.1s;
 }
 .dom-toggle:hover {
-    color: white !important;
+    color: var(--debug-text-primary) !important;
 }
 
 .js-watcher-row:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bmm-s05);
 }
 
 /* CSS Tools Toggles */
@@ -591,7 +749,7 @@
 .debug-toggle-title {
     font-size: 13px;
     font-weight: 600;
-    color: white;
+    color: var(--debug-text-primary);
     margin-bottom: 2px;
 }
 .debug-toggle-desc {
@@ -605,13 +763,13 @@
     -webkit-appearance: none;
     width: 40px;
     height: 24px;
-    background: rgba(255,255,255,0.1);
+    background: var(--bmm-s10);
     border-radius: 20px;
     position: relative;
     cursor: pointer;
     outline: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    box-shadow: inset 0 0 0 1px var(--debug-border);
     flex-shrink: 0;
 }
 .debug-switch::after {
@@ -632,7 +790,7 @@
    short of the track end, so checked read as half-on. The variant classes stay in
    the markup (harmless), but every switch now renders identically. */
 .debug-switch:checked {
-    background: var(--debug-accent, #007aff);
+    background: var(--debug-accent);
 }
 .debug-switch:checked::after {
     transform: translateX(16px);
@@ -700,7 +858,7 @@
 .custom-range {
     appearance: none;
     -webkit-appearance: none;
-    background: linear-gradient(to right, #007aff 0%, #007aff var(--val, 25%), white var(--val, 25%), white 100%);
+    background: linear-gradient(to right, var(--debug-accent) 0%, var(--debug-accent) var(--val, 25%), var(--bmm-s15) var(--val, 25%), var(--bmm-s15) 100%);
     height: 4px;
     border-radius: 2px;
     outline: none;
@@ -710,7 +868,7 @@
     appearance: none;
     width: 12px;
     height: 12px;
-    background: white;
+    background: var(--debug-accent);
     border-radius: 50%;
     cursor: pointer;
 }
@@ -732,7 +890,7 @@
 .debug-btn-success { background: var(--debug-success); color: white; border-color: transparent; }
 .debug-btn-success:hover { background: #059669; }
 .debug-btn-ghost { background: transparent; border-color: transparent; }
-.debug-btn-ghost:hover { background: rgba(255,255,255,0.05); }
+.debug-btn-ghost:hover { background: var(--bmm-s05); }
 
 /* Accessibility Warnings */
 .bmm-hardcoded-error {
@@ -757,7 +915,7 @@
     pointer-events: none;
     white-space: nowrap;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--bmm-s20);
 }
 .bmm-a11y-error-outline {
     outline: 2px solid #ef4444 !important;
@@ -789,8 +947,8 @@
 }
 
 .rule-inspect-btn:hover {
-    background: rgba(255,255,255,0.1) !important;
-    color: white !important;
+    background: var(--bmm-s10) !important;
+    color: var(--debug-text-primary) !important;
     transform: scale(1.1);
 }
 
@@ -960,40 +1118,7 @@
 }
 .debug-rustline:nth-child(even) { background: var(--bmm-s02); }
 
-/* ── Header toolbar: three groups, not seven identical buttons ────────────────
-   Seven controls sat in one undifferentiated row, and the two at the end were
-   "clear everything" and "close" — adjacent, same size, same colour. That is a row
-   where a misclick costs you your session, and nothing in the design said so.
-
-   The buttons are square icon targets now, and the last two are separated from the
-   tools and given their own hover colours, so destruction and dismissal read
-   differently from the things you press all the time. */
-.debug-controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-.debug-controls .debug-btn {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    flex: none;
-}
-/* A hairline before the last pair. ::before on the trash button rather than a spacer
-   element, so the markup does not need to know about the grouping. */
-#dbg-clear-all,
-#debug-btn-close {
-    position: relative;
-}
-#dbg-clear-all::before {
-    content: '';
-    position: absolute;
-    left: -4px;
-    top: 5px;
-    bottom: 5px;
-    width: 1px;
-    background: var(--bmm-s10);
-}
+/* Header toolbar hover colours for the destructive pair. */
 #dbg-clear-all:hover {
     background: color-mix(in srgb, var(--debug-warn) 18%, transparent);
     border-color: color-mix(in srgb, var(--debug-warn) 45%, transparent);
@@ -1003,15 +1128,6 @@
     background: color-mix(in srgb, var(--debug-error) 18%, transparent);
     border-color: color-mix(in srgb, var(--debug-error) 45%, transparent);
     color: var(--debug-error);
-}
-
-/* The title stops being crowded by them. */
-.debug-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    letter-spacing: 0.06em;
-    margin-right: 12px;
 }
 
 /* ── The sandbox pair, calmed down ────────────────────────────────────────────
@@ -1043,25 +1159,26 @@
     border-color: var(--debug-success);
 }
 
-/* ── One tab style, not two ───────────────────────────────────────────────────
-   The main row and the sub-row (RUST ENGINE / DOM / CSS) were styled separately and
-   had drifted — different weights, different underline treatment. Two rows of tabs
-   that do not look like the same mechanism make a panel feel assembled from parts. */
+/* ── Debugger sub-tabs: the same mechanism as the sidebar, horizontal ── */
 .debug-subtab {
-    font-size: 10.5px;
+    font: 600 10.5px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
     letter-spacing: 0.04em;
+    text-transform: uppercase;
     padding: 7px 12px;
+    margin: 0;
+    border: 0;
     border-bottom: 2px solid transparent;
     color: var(--debug-text-muted);
     background: transparent;
     border-radius: 0;
+    cursor: pointer;
 }
 .debug-subtab:hover { color: var(--debug-text-primary); }
 .debug-subtab.active {
     color: var(--debug-accent);
     border-bottom-color: var(--debug-accent);
-    font-weight: 600;
 }
+.debug-subtab:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
 
 /* ── Replay Studio, collapsed ─────────────────────────────────────────────────
    The bar sits over the app while recording, which is exactly the app you are

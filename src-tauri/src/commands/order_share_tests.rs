@@ -219,10 +219,10 @@ fn arrange_ignores_mods_that_are_not_active() {
 
 fn lib() -> Vec<LibMod> {
     vec![
-        LibMod { id: "id-a".into(), name: "Alpha".into(), version: "1.0".into(), content_id: Some("cid-a".into()), repo_mod_id: None },
-        LibMod { id: "id-b".into(), name: "Beta".into(), version: "2.0".into(), content_id: None, repo_mod_id: Some("repo-b".into()) },
-        LibMod { id: "id-c".into(), name: "Gamma".into(), version: "1.0".into(), content_id: None, repo_mod_id: None },
-        LibMod { id: "id-d".into(), name: "Delta".into(), version: "1.0".into(), content_id: None, repo_mod_id: None },
+        LibMod { id: "id-a".into(), name: "Alpha".into(), version: "1.0".into(), content_id: Some("cid-a".into()), repo_mod_id: None, source_repo: None },
+        LibMod { id: "id-b".into(), name: "Beta".into(), version: "2.0".into(), content_id: None, repo_mod_id: Some("repo-b".into()), source_repo: None },
+        LibMod { id: "id-c".into(), name: "Gamma".into(), version: "1.0".into(), content_id: None, repo_mod_id: None, source_repo: None },
+        LibMod { id: "id-d".into(), name: "Delta".into(), version: "1.0".into(), content_id: None, repo_mod_id: None, source_repo: None },
     ]
 }
 

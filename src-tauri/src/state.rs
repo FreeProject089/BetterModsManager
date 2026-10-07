@@ -288,6 +288,10 @@ pub struct AppData {
     pub plugin_permissions: std::collections::HashMap<String, Vec<String>>,
     #[serde(default)]
     pub modpacks: Vec<crate::models::modpack::LocalModpack>,
+    /// Saved activation-order lists (models/order_list.rs): named orders that may name mods
+    /// that are not active, applied to one or several profiles or activated in one step.
+    #[serde(default)]
+    pub order_lists: Vec<crate::models::order_list::OrderList>,
 }
 
 /// The settings that belong to THIS installation and never to a file: the three credentials

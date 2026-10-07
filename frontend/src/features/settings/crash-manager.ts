@@ -134,23 +134,26 @@ export async function openCrashManager(): Promise<void> {
                             <span class="crashmgr-meta">${esc(fmtDate(r.date))} · ${fmtSize(r.size)}</span>
                         </div>
                         <div class="crashmgr-row-actions">
-                            <button class="btn btn-xs btn-ghost" data-act="analyze">${t('crashmgr.analyze') || 'Analyze'}</button>
-                            <button class="btn btn-xs btn-ghost" data-act="open">${t('crashmgr.openZip') || 'Open'}</button>
-                            <button class="btn btn-xs btn-ghost" data-act="export">${t('crashmgr.export') || 'Export'}</button>
-                            <button class="btn btn-xs btn-ghost crashmgr-del" data-act="delete">${t('common.delete') || 'Delete'}</button>
+                            <button class="btn btn-xs btn-ghost" data-cm-act="analyze">${t('crashmgr.analyze') || 'Analyze'}</button>
+                            <button class="btn btn-xs btn-ghost" data-cm-act="open">${t('crashmgr.openZip') || 'Open'}</button>
+                            <button class="btn btn-xs btn-ghost" data-cm-act="export">${t('crashmgr.export') || 'Export'}</button>
+                            <button class="btn btn-xs btn-ghost crashmgr-del" data-cm-act="delete">${t('common.delete') || 'Delete'}</button>
                         </div>
                     </div>
                     <div class="crashmgr-rowdetail" data-detail style="display:none"></div>`).join('')}
                 </div>
             </details>`;
         }).join('');
-        body.querySelectorAll('.crashmgr-row [data-act]').forEach(b => b.addEventListener('click', () => onReportAction(b as HTMLElement)));
+        body.querySelectorAll('.crashmgr-row [data-cm-act]').forEach(b => b.addEventListener('click', () => onReportAction(b as HTMLElement)));
+        // Laya (features/ai/laya-crash.ts): groups of similar crashes, a probable cause per
+        // crash on click, filters. Draws nothing when AI is off.
+        void import('../ai/laya-crash.js').then(m => m.mountCrashInsights(body, reports)).catch(() => {});
     }
 
     async function onReportAction(b: HTMLElement) {
         const row = b.closest('.crashmgr-row') as HTMLElement;
         const path = row.dataset.p!;
-        const act = b.dataset.act!;
+        const act = b.dataset.cmAct!;
         if (act === 'open') { invoke('open_file', { path }).catch(e => toast(String(e), 'error')); return; }
         if (act === 'export') {
             const dest = await saveFile({ defaultPath: row.dataset.n || 'crash-report.zip', filters: [{ name: 'Zip', extensions: ['zip'] }] }).catch(() => null);
@@ -188,6 +191,8 @@ export async function openCrashManager(): Promise<void> {
                         <div class="crashmgr-filelist">${filesList}</div>
                         <div class="crashmgr-fileview" data-fileview hidden></div>
                     </details>`;
+                // « Expliquer » — only when the user configured a generator.
+                void import('../ai/laya-crash.js').then(m => m.mountExplain(detail, path)).catch(() => {});
                 detail.querySelector('[data-play]')?.addEventListener('click', async () => {
                     try { const json = await invoke('read_crash_session', { path }) as string; await playReplayJson(json); }
                     catch (e) { toast(String(e), 'error'); }

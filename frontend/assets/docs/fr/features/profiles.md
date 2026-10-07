@@ -65,7 +65,9 @@ Un profil garde ses mods actifs dans un **ordre**, et quand deux d'entre eux liv
 celui appliqué en **dernier** le gagne. Un mod que tu actives va à la fin ; l'icône de liste sur la
 carte du profil ouvre l'ordre, où tu glisses les mods (ou `Alt+↑` / `Alt+↓`), vois qui écrase qui, et
 **Appliquer l'ordre** — seuls les fichiers qui changent de main sont recopiés. L'ordre voyage avec le
-profil dans une sauvegarde et un `.DATABMM`. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
+profil dans une sauvegarde et un `.DATABMM`. Son bouton **Listes** garde des ordres nommés qui
+peuvent inclure des mods désactivés, en applique un à plusieurs profils, ou active les mods d'une
+liste en une fois. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
 
 ## Emmener un profil ailleurs
 

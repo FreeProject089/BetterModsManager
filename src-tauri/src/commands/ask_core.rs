@@ -589,6 +589,7 @@ pub fn answer_tuned(req: &Request, lib: &Library, model: Option<&dyn LocalModel>
                 .collect();
             crit.push(("none".into(), "none of these answers the question".into()));
             let q: LayaQuestion = ("best".into(), "choice", "Which of these parts of the mod manager answers the user's question best?".into(), crit);
+            let _scope = crate::commands::ai_core::laya_scope("ask");
             match m.predict(&question, &[q]) {
                 Ok(resp) => {
                     let lp = crate::commands::ai_tuning::calibrate(&L::choice_probs(&resp, "best"), tune.temperature);

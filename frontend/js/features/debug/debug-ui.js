@@ -1,12 +1,26 @@
 // @ts-nocheck
-import { debugHub } from './debug.js';
+import { debugHub, getListenerTypes } from './debug.js';
 import { collectWebviewEnv } from './webview-env.js';
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
+import { getDebugSections, watchDebugSections } from './debug-sections.js';
 /**
  * debug-ui.js — UI Logic for BMM DevTools
  */
+// Sidebar icons. Inline and tiny, decorative (aria-hidden): the label beside each says it.
+const NAV_ICON = (d) => `<svg class="debug-tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const NAV_ICONS = {
+    console: NAV_ICON('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
+    timeline: NAV_ICON('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+    state: NAV_ICON('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/>'),
+    session: NAV_ICON('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>'),
+    inspect: NAV_ICON('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+    debugger: NAV_ICON('<rect x="8" y="6" width="8" height="14" rx="4"/><path d="M19 7l-3 2M5 7l3 2M19 19l-3-2M5 19l3-2M20 13h-4M4 13h4M10 4l1 2M14 4l-1 2"/>'),
+    playground: NAV_ICON('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+    studios: NAV_ICON('<rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/>'),
+    section: NAV_ICON('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
+};
 class DebugUI {
     constructor() {
         this.isOpen = false;
@@ -28,6 +42,25 @@ class DebugUI {
         this.a11yInterval = null;
         this._updateInterval = null;
         this._hubSub = null;
+        // Every listener this UI puts on document/window carries this signal, so destroy()
+        // removes all of them with one abort(). They used to be added on every open and
+        // never removed: each close/open cycle stacked another keydown, click, mousemove
+        // and mouseup handler on the document, each holding the torn-down UI.
+        this._ac = null;
+        // Where focus was before opening, so closing hands it back.
+        this._opener = null;
+        // Registered extension sections: id -> { section, tab, pane, mounted }.
+        this._sections = new Map();
+        this._unwatchSections = null;
+    }
+    /** Listener options carrying the teardown signal. */
+    _on(extra) {
+        return { ...(extra || {}), signal: this._ac?.signal };
+    }
+    /** The app frame. The panel mounts inside it like every other overlay, so it is clipped
+     *  to the rounded app card instead of spilling over the transparent window margin. */
+    _host() {
+        return document.getElementById('app-window-outer') || document.body;
     }
     // Helper to find elements within devtools containers
     _get(id) {
@@ -45,6 +78,8 @@ class DebugUI {
         const existing = document.getElementById('bmm-debug-overlay');
         if (existing)
             existing.remove();
+        this._ac?.abort();
+        this._ac = new AbortController();
         this.createContainer();
         // Fire-and-forget: disable prod-only tabs when not in PTB/dev mode.
         // Resolves before the user can interact with the overlay.
@@ -55,6 +90,7 @@ class DebugUI {
         }).catch(() => { });
         this.createContextMenu();
         this.attachListeners();
+        this._wireSections();
         this.translateUI();
         this.startUpdateLoop();
         console.info('[BMM-Debug] UI Initialized. Toggle with Ctrl+Alt+D');
@@ -67,16 +103,31 @@ class DebugUI {
         if (willOpen && !appState.get('debugMode') && force !== true)
             return;
         if (willOpen) {
-            if (!this.container)
-                this.init(); // lazy build on first open
-            this._ensureStateStyles();
-            // The pane is rebuilt from scratch on open, so the last signature is meaningless.
-            this._stateSignature = null;
-            this.isOpen = true;
-            this.container.classList.add('open');
-            this.refreshAllPanes();
-            this.translateUI();
-            this.container.style.zIndex = '200000';
+            if (this.isOpen && this.container) {
+                this._focusActiveTab();
+                return;
+            }
+            const active = document.activeElement;
+            this._opener = (active && active !== document.body) ? active : null;
+            try {
+                if (!this.container)
+                    this.init(); // lazy build on first open
+                this._ensureStateStyles();
+                // The pane is rebuilt from scratch on open, so the last signature is meaningless.
+                this._stateSignature = null;
+                this.isOpen = true;
+                this.container.classList.add('open');
+                this.refreshAllPanes();
+                this.translateUI();
+                // Restore the tab that was in front last time (saved with the position).
+                this.switchTab(this._tabExists(this.activeTab) ? this.activeTab : 'console');
+                this._focusActiveTab();
+            }
+            catch (e) {
+                // A failed build must not leave half a panel (or its listeners) behind.
+                console.error('[BMM-Debug] DevTools failed to open', e);
+                this.destroy();
+            }
         }
         else {
             // Closing → fully unload to free RAM (rebuilt next time it opens).
@@ -116,54 +167,59 @@ class DebugUI {
         // major source of memory growth (and could OOM the webview on repeated open/close).
         div.classList.add('bmm-no-record');
         div.setAttribute('data-bmm-no-record', '1');
+        div.setAttribute('role', 'dialog');
+        div.setAttribute('aria-modal', 'false');
+        div.setAttribute('aria-labelledby', 'debug-title');
         div.innerHTML = `
             <div class="debug-header">
-                <div class="debug-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
-                    BMM DEVTOOLS
+                <div class="debug-title" id="debug-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+                    <span>BMM DevTools</span>
                 </div>
-                <div class="debug-controls">
-                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" data-tasky="dev.msg.jsDesc" data-tasky-icon="icon-help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <div class="debug-controls" role="toolbar" data-dbg-aria="dev.aria.toolbar">
+                    <button type="button" class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" data-dbg-aria="dev.btn.openDevtools" data-tasky="dev.msg.jsDesc" data-tasky-icon="icon-help">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-inspect" data-tasky="dev.tool.inspectTip" data-tasky-icon="icon-help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                    <button type="button" class="debug-btn" id="debug-btn-inspect" aria-pressed="false" data-dbg-aria="dev.aria.inspect" data-tasky="dev.tool.inspectTip" data-tasky-icon="icon-help">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-export" data-tasky="dev.tool.exportTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    <button type="button" class="debug-btn" id="debug-btn-export" data-dbg-aria="dev.aria.export" data-tasky="dev.tool.exportTip" data-tasky-icon="help">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-rstudio" data-tasky="dev.tool.rstudioTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                    <span class="debug-controls-sep" aria-hidden="true"></span>
+                    <button type="button" class="debug-btn" id="dbg-clear-all" data-dbg-aria="dev.aria.clearAll" data-tasky="dev.tool.clearAllTip" data-tasky-icon="help">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-anim" data-tasky="dev.tool.animTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
-                    </button>
-                    <button class="debug-btn" id="dbg-clear-all" data-tasky="dev.tool.clearAllTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
-                    </button>
-                    <button class="debug-btn" id="debug-btn-close" data-tasky="dev.tool.closeTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <button type="button" class="debug-btn" id="debug-btn-close" data-dbg-aria="dev.aria.close" data-tasky="dev.tool.closeTip" data-tasky-icon="help">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
             </div>
-            <div class="debug-tabs">
-                <div class="debug-tab active" data-tab="console" data-i18n="dev.tab.console">Console</div>
-                <div class="debug-tab" data-tab="timeline" data-i18n="dev.tab.timeline">Timeline</div>
-                <div class="debug-tab" data-tab="debugger" data-i18n="dev.tab.debugger">Debugger</div>
-                <div class="debug-tab" data-tab="inspect-view" data-i18n="dev.tab.inspect">Inspect</div>
-                <div class="debug-tab" data-tab="state" data-i18n="dev.tab.state">State</div>
-                <div class="debug-tab" data-tab="playground" data-i18n="dev.tab.playground">Playground</div>
-                <div class="debug-tab" data-tab="session" data-i18n="dev.tab.session">Session</div>
-            </div>
+            <div class="debug-body">
+            <nav class="debug-nav" role="tablist" aria-orientation="vertical" data-dbg-aria="dev.nav.label">
+                <div class="debug-nav-group" data-i18n="dev.nav.observe">Observe</div>
+                <button type="button" class="debug-tab active" role="tab" data-tab="console">${NAV_ICONS.console}<span data-i18n="dev.tab.console">Console</span></button>
+                <button type="button" class="debug-tab" role="tab" data-tab="timeline">${NAV_ICONS.timeline}<span data-i18n="dev.tab.timeline">Timeline</span></button>
+                <button type="button" class="debug-tab" role="tab" data-tab="state">${NAV_ICONS.state}<span data-i18n="dev.tab.state">State</span></button>
+                <button type="button" class="debug-tab" role="tab" data-tab="session">${NAV_ICONS.session}<span data-i18n="dev.tab.session">Session</span></button>
+                <div class="debug-nav-group" data-i18n="dev.nav.inspect">Inspect</div>
+                <button type="button" class="debug-tab" role="tab" data-tab="inspect-view">${NAV_ICONS.inspect}<span data-i18n="dev.tab.inspect">Inspect</span></button>
+                <button type="button" class="debug-tab" role="tab" data-tab="debugger">${NAV_ICONS.debugger}<span data-i18n="dev.tab.debugger">Debugger</span></button>
+                <button type="button" class="debug-tab" role="tab" data-tab="playground">${NAV_ICONS.playground}<span data-i18n="dev.tab.playground">Playground</span></button>
+                <div class="debug-nav-group" data-i18n="dev.nav.studios">Studios</div>
+                <button type="button" class="debug-tab" role="tab" data-tab="studios">${NAV_ICONS.studios}<span data-i18n="dev.tab.studios">Studios</span></button>
+                <div class="debug-nav-group" id="debug-nav-ext-label" data-i18n="dev.nav.panels" hidden>Panels</div>
+                <div class="debug-nav-ext" id="debug-nav-ext" role="presentation"></div>
+            </nav>
             <div class="debug-content">
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid var(--bmm-s05); display:flex; gap:8px">
-                    <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; outline:none">
+                    <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:var(--debug-sunken); border:1px solid var(--debug-border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; outline:none">
                         <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" data-tasky="dev.tool.clearConsoleTip" data-tasky-icon="help">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
-                    <div id="console-logs" class="debug-fill-scroll"></div>
+                    <div id="console-logs" class="debug-fill-scroll debug-list" role="log" data-dbg-empty="dev.empty.console"></div>
                 </div>
                 <div class="debug-pane" id="pane-timeline">
                     <div class="timeline-filters" style="padding:8px; border-bottom:1px solid var(--bmm-s05); display:flex; gap:6px; align-items:center">
@@ -177,21 +233,21 @@ class DebugUI {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
-                    <div id="timeline-list" class="debug-fill-scroll"></div>
+                    <div id="timeline-list" class="debug-fill-scroll debug-list" data-dbg-empty="dev.empty.timeline"></div>
                 </div>
                 <div class="debug-pane" id="pane-debugger">
                     <div class="debugger-layout" style="display:flex; height:100%; flex-direction:column">
                         <!-- The JS debugger sub-tab was removed: the real Chrome DevTools
                              (button in the header) does everything the custom JS pane did,
                              better. RUST is now the default debugger sub-tab. -->
-                        <div class="debugger-subtabs" style="display:flex; border-bottom:1px solid var(--bmm-s05); background:rgba(0,0,0,0.1)">
-                            <div class="debug-subtab active" data-sub="rust" data-i18n="dev.subtab.rust">RUST</div>
-                            <div class="debug-subtab" data-sub="html" data-i18n="dev.subtab.html">HTML</div>
-                            <div class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</div>
+                        <div class="debugger-subtabs" style="display:flex; border-bottom:1px solid var(--bmm-s05); background:var(--debug-sunken)">
+                            <button type="button" class="debug-subtab active" data-sub="rust" data-i18n="dev.subtab.rust">RUST</button>
+                            <button type="button" class="debug-subtab" data-sub="html" data-i18n="dev.subtab.html">HTML</button>
+                            <button type="button" class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</button>
                         </div>
                         <div class="debugger-subcontent" style="flex:1; position:relative; overflow:hidden">
                             <div class="debug-subpane active" id="subpane-rust" style="height:100%; flex-direction:column; display:flex">
-                                <div style="padding:12px 16px; border-bottom:1px solid var(--bmm-s05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
+                                <div style="padding:12px 16px; border-bottom:1px solid var(--bmm-s05); display:flex; justify-content:space-between; align-items:center; background:var(--debug-sunken)">
                                     <div>
                                         <div style="font-size:13px; font-weight:600; color:var(--debug-text-primary); margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
                                         <div class="debug-label" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
@@ -217,7 +273,7 @@ class DebugUI {
                             </div>
                             <div class="debug-subpane" id="subpane-css" style="height:100%; display:flex; flex-direction:column; display:none">
                                 <div style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:16px">
-                                    <div style="background:rgba(0,0,0,0.2); border:1px solid var(--bmm-s05); border-radius:6px; padding:16px;">
+                                    <div style="background:var(--debug-sunken); border:1px solid var(--bmm-s05); border-radius:6px; padding:16px;">
                                         <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:16px; font-weight:700" data-i18n="dev.title.design">Design & Accessibility Tools</div>
                                         <div id="dbg-css-toggles-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:16px">
                                             <div class="debug-toggle-row">
@@ -315,10 +371,10 @@ class DebugUI {
                                     </div>
 
                                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px">
-                                        <select id="css-stylesheet-select" style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); color:var(--debug-text-primary); padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
+                                        <select id="css-stylesheet-select" style="background:var(--debug-sunken); border:1px solid var(--debug-border); color:var(--debug-text-primary); padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
                                             <option value="" data-i18n="dev.msg.selectStylesheet">Select a stylesheet...</option>
                                         </select>
-                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:var(--debug-text-primary); border-radius:4px; outline:none; width:120px">
+                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:var(--debug-sunken); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:var(--debug-text-primary); border-radius:4px; outline:none; width:120px">
                                     </div>
 
                                     <div style="flex:1; overflow-y:auto; min-height:100px" id="css-rules-container">
@@ -351,7 +407,7 @@ class DebugUI {
                                 <button id="playground-export" class="debug-btn debug-btn-ghost" style="color:var(--debug-success); font-size:10px; padding:2px 6px" data-i18n="dev.btn.exportPatch">EXPORT PATCH</button>
                             </div>
                         </div>
-                        <textarea id="playground-code" style="width:100%; height:120px; background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); border-radius:8px; color:var(--debug-accent); font-family:inherit; padding:12px; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.playground" placeholder="/* Enter CSS or JS here... */"></textarea>
+                        <textarea id="playground-code" style="width:100%; height:120px; background:var(--debug-sunken); border:1px solid var(--debug-border); border-radius:8px; color:var(--debug-accent); font-family:inherit; padding:12px; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.playground" placeholder="/* Enter CSS or JS here... */"></textarea>
                         <div style="margin-top:12px; display:flex; gap:8px">
                             <button class="debug-btn debug-btn-primary debug-fill" id="playground-apply-css" data-i18n="dev.btn.applyCss">APPLIQUER CSS</button>
                             <button class="debug-btn debug-btn-success debug-fill" id="playground-run-js" data-i18n="dev.btn.runJs">EXÉCUTER JS</button>
@@ -360,6 +416,33 @@ class DebugUI {
                         <div id="patch-tree" style="margin-top:8px; display:flex; flex-direction:column; gap:6px"></div>
                     </div>
                 </div>
+                <div class="debug-pane" id="pane-studios">
+                    <div class="debug-pane-pad">
+                        <p class="debug-pane-intro" data-i18n="dev.studios.intro">Each studio opens as its own floating panel over the app, and stays open after DevTools closes.</p>
+                        <div class="debug-studio-grid">
+                            <section class="debug-studio-card">
+                                <div class="debug-studio-head">
+                                    <span class="debug-studio-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>
+                                    <h4 data-i18n="rstudio.title">Replay Studio</h4>
+                                    <span class="debug-studio-state" id="debug-rstudio-state"></span>
+                                </div>
+                                <p class="debug-hint" data-i18n="dev.studios.replayDesc">Record a .bmmreplay or a video, with a movable frame, pause, trim and cuts.</p>
+                                <button type="button" class="debug-btn debug-btn-primary debug-btn-sm" id="debug-btn-rstudio" data-i18n="dev.studios.open">Open</button>
+                            </section>
+                            <section class="debug-studio-card">
+                                <div class="debug-studio-head">
+                                    <span class="debug-studio-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></span>
+                                    <h4 data-i18n="anim.title">Animation Studio</h4>
+                                    <span class="debug-studio-state" id="debug-anim-state"></span>
+                                </div>
+                                <p class="debug-hint" data-i18n="dev.studios.animDesc">Add GSAP animations to BMM elements, preview them, and save the ones that run on their own.</p>
+                                <button type="button" class="debug-btn debug-btn-primary debug-btn-sm" id="debug-btn-anim" data-i18n="dev.studios.open">Open</button>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+                <div id="debug-ext-panes"></div>
+            </div>
             </div>
             <div class="debug-footer">
                 <div class="metric-item"><span data-i18n="dev.metric.fps">FPS: </span><b id="dbg-fps">0</b></div>
@@ -369,7 +452,7 @@ class DebugUI {
             </div>
             <div class="debug-resizer"></div>
         `;
-        document.body.appendChild(div);
+        this._host().appendChild(div);
         this.container = div;
         // Modal components
         const modalOverlay = document.createElement('div'); // Declare modalOverlay here
@@ -379,7 +462,7 @@ class DebugUI {
                 <h3 id="debug-modal-title" style="margin:0 0 12px 0; font-size:18px; color:var(--text-primary); font-weight:800" data-i18n="dev.modal.confirmTitle">Confirm Action</h3>
                 <p id="debug-modal-text" style="margin:0 0 24px 0; font-size:14px; color:var(--text-secondary); line-height:1.6; opacity:0.8" data-i18n="dev.modal.confirmText">Are you sure?</p>
                 <div id="debug-modal-input-container" style="display:none; margin-bottom:24px">
-                    <input type="text" id="debug-modal-input" style="width:100%; padding:12px; background:rgba(0,0,0,0.4); border:1px solid var(--bmm-s10); border-radius:8px; color:var(--debug-text-primary); outline:none; font-family:'JetBrains Mono'">
+                    <input type="text" id="debug-modal-input" style="width:100%; padding:12px; background:var(--debug-sunken); border:1px solid var(--bmm-s10); border-radius:8px; color:var(--debug-text-primary); outline:none; font-family:'JetBrains Mono'">
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:12px">
                     <button id="debug-modal-cancel" class="debug-btn debug-btn-ghost" style="padding:10px 20px" data-i18n="common.cancel">Cancel</button>
@@ -388,6 +471,18 @@ class DebugUI {
             </div>
         `;
         this.modalOverlay = modalOverlay;
+        modalOverlay.setAttribute('role', 'dialog');
+        modalOverlay.setAttribute('aria-modal', 'true');
+        modalOverlay.setAttribute('aria-labelledby', 'debug-modal-title');
+        modalOverlay.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape')
+                return;
+            e.preventDefault();
+            e.stopPropagation();
+            const cancel = modalOverlay.querySelector('#debug-modal-cancel');
+            const ok = modalOverlay.querySelector('#debug-modal-confirm');
+            ((cancel && cancel.style.display !== 'none') ? cancel : ok)?.click();
+        });
         // Inside #app-window-outer, NOT body. The app window is an inset rounded card with
         // a transparent margin around it (the Tasky corner); an overlay on <body> paints
         // its dark blur over that margin and the rounded corners — the "shadow on the
@@ -402,17 +497,17 @@ class DebugUI {
         crashDiv.className = 'debug-crash-overlay bmm-no-record';
         crashDiv.innerHTML = `
             <div style="background: radial-gradient(circle at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%); position: absolute; top:0; left:0; right:0; bottom:0; z-index:-1; pointer-events:none;"></div>
-            <img src="assets/Tasky.png" style="width:120px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:32px; opacity:0.8; animation: pulse-tasky 4s infinite;">
+            <img src="assets/Tasky.png" alt="" style="width:72px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:16px; opacity:0.8; animation: pulse-tasky 4s infinite;">
             <div class="crash-title" style="letter-spacing: 0.2em; font-size: 28px; font-weight: 900; background: linear-gradient(to bottom, #ffffff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" data-i18n="dev.crash.title">SYSTEM HALT</div>
             <div class="crash-subtitle" style="color: var(--danger); font-weight: 800; font-family: var(--font-mono); margin-bottom: 24px; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);" data-i18n="dev.crash.subtitle">CRITICAL_LEVEL_EXCEPTION // KERNEL_PANIC_PREVENTED</div>
 
-            <div class="crash-details" id="crash-details" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 24px; margin: 20px 0; max-width: 600px; line-height: 1.6; font-size: 13px; color: #cbd5e1; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);" data-i18n="dev.crash.details">
+            <div class="crash-details" id="crash-details" style="background:var(--debug-sunken); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 24px; margin: 20px 0; max-width: 600px; line-height: 1.6; font-size: 13px; color: #cbd5e1; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);" data-i18n="dev.crash.details">
                 An unhandled exception has occurred. A debug dump has been saved to your local storage.
             </div>
 
-            <div style="display:flex; flex-direction:column; align-items:center; gap:24px; margin-top: 40px; width: 100%; max-width: 480px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top: 20px; width: 100%; max-width: 480px;">
                 <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:16px; width:100%;">
-                    <button class="debug-btn" style="flex:1; background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9)); color:var(--debug-text-primary); padding:16px; border-radius:12px; font-weight:800; border:1px solid rgba(248, 113, 113, 0.5); cursor:pointer; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 13px; backdrop-filter: blur(8px);" data-i18n="dev.crash.reload">
+                    <button class="debug-btn" style="flex:1; background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9)); color:#fff; padding:16px; border-radius:12px; font-weight:800; border:1px solid rgba(248, 113, 113, 0.5); cursor:pointer; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 13px; backdrop-filter: blur(8px);" data-i18n="dev.crash.reload">
                         RELOAD APPLICATION
                     </button>
                     <button class="debug-btn" style="flex:1; background: rgba(30,41,59,0.5); color:#f8fafc; padding:16px; border-radius:12px; border:1px solid var(--bmm-s10); cursor:pointer; font-weight: 700; backdrop-filter: blur(12px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 0.05em; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);" id="crash-copy-dump" data-i18n="dev.crash.copyDump">
@@ -425,7 +520,7 @@ class DebugUI {
                 </button>
             </div>
 
-            <div style="margin-top:60px; font-size:10px; color:rgba(255,255,255,0.2); font-family:var(--font-mono); border-top: 1px solid var(--bmm-s05); padding-top: 24px; letter-spacing: 1px; width: 80%; text-align: center;">BMM_OS_DEBUG_v0.9.8 // ${new Date().toISOString()}</div>
+            <div style="margin-top:24px; font-size:10px; color:rgba(255,255,255,0.2); font-family:var(--font-mono); border-top: 1px solid var(--bmm-s05); padding-top: 24px; letter-spacing: 1px; width: 80%; text-align: center;">BMM_OS_DEBUG_v0.9.8 // ${new Date().toISOString()}</div>
         `;
         this.container.appendChild(crashDiv); // Append to DevTools container
         this.crashOverlay = crashDiv;
@@ -561,13 +656,64 @@ class DebugUI {
     }
     attachListeners() {
         // Tab switching
-        this.container.querySelectorAll('.debug-tab').forEach(tab => {
-            tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
+        // Sidebar: click, plus the tablist keys (Up/Down, Home/End). Delegated on the nav so
+        // extension tabs added later are covered too.
+        const nav = this.container.querySelector('.debug-nav');
+        nav.addEventListener('click', (e) => {
+            const tab = e.target.closest('.debug-tab');
+            if (tab)
+                this.switchTab(tab.dataset.tab);
+        });
+        nav.addEventListener('keydown', (e) => {
+            const tabs = Array.from(nav.querySelectorAll('.debug-tab')).filter((x) => x.offsetParent !== null);
+            const i = tabs.indexOf(document.activeElement);
+            if (i < 0)
+                return;
+            let next = -1;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight')
+                next = (i + 1) % tabs.length;
+            else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')
+                next = (i - 1 + tabs.length) % tabs.length;
+            else if (e.key === 'Home')
+                next = 0;
+            else if (e.key === 'End')
+                next = tabs.length - 1;
+            if (next < 0)
+                return;
+            e.preventDefault();
+            tabs[next].focus();
+            this.switchTab(tabs[next].dataset.tab);
+        });
+        // Esc closes (after first leaving inspect mode or a debug dialog); Tab stays inside
+        // the panel while focus is in it. Scoped to the panel: Esc pressed in the app does
+        // not close DevTools behind your back.
+        this.container.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (this.isInspecting) {
+                    e.preventDefault();
+                    this.toggleInspector(false);
+                    return;
+                }
+                if (this.crashOverlay?.classList.contains('active')) {
+                    e.preventDefault();
+                    this.crashOverlay.classList.remove('active');
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggle(false);
+                return;
+            }
+            if (e.key === 'Tab')
+                this._trapTab(e);
         });
         // Live language update
         document.addEventListener('langChanged', () => {
             this.translateUI();
-        });
+        }, this._on());
+        // The studio cards say whether each studio is on screen; the studios announce
+        // opening and closing (including their own close button) with this event.
+        document.addEventListener('bmm-debug-studio', () => { void this._refreshStudioStates(); }, this._on());
         // Debugger Sub-tab switching
         this.container.querySelectorAll('.debug-subtab').forEach(t => {
             t.addEventListener('click', () => {
@@ -593,6 +739,7 @@ class DebugUI {
             catch (e) {
                 console.log('replay studio failed to open', e);
             }
+            this._refreshStudioStates();
         });
         // Animation Studio — inject/define GSAP animations on live BMM elements.
         this._get('debug-btn-anim')?.addEventListener('click', async () => {
@@ -602,6 +749,7 @@ class DebugUI {
             catch (e) {
                 console.log('animation studio failed to open', e);
             }
+            this._refreshStudioStates();
         });
         // Debugger Rust
         // The production tool: one JSON with build/version/uptime/memory + the same log
@@ -811,12 +959,13 @@ class DebugUI {
                     this.container.querySelector('#debug-btn-inspect')?.click();
                 }
             }
-        });
+        }, this._on());
         // Prevent keyboard events from inputs/textareas inside the devtools overlay
         // from propagating to global shortcuts (e.g. typing in REPL or search)
+        // Esc and Tab are let through: they are the panel's own keys (close, focus cycle).
         this.container.addEventListener('keydown', e => {
             const tag = e.target?.tagName?.toLowerCase();
-            if (tag === 'input' || tag === 'textarea') {
+            if ((tag === 'input' || tag === 'textarea') && e.key !== 'Escape' && e.key !== 'Tab') {
                 e.stopPropagation();
             }
         }, true);
@@ -832,7 +981,7 @@ class DebugUI {
                 return;
             const target = e.target.closest('button, .nav-item, input, select') || e.target;
             debugHub.recordAction('CLICK', target, target.innerText?.trim() || target.value || '');
-        }, true);
+        }, this._on({ capture: true }));
         this._get('inspect-btn-clear').addEventListener('click', () => this.clearSelection());
         this._get('playground-apply-css').addEventListener('click', () => {
             try {
@@ -914,8 +1063,9 @@ class DebugUI {
             startX = e.clientX;
             startY = e.clientY;
             const rect = this.container.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
+            const host = this._hostOrigin();
+            initialLeft = rect.left - host.left;
+            initialTop = rect.top - host.top;
             this.container.style.transition = 'none';
             this.container.style.bottom = 'auto';
             this.container.style.right = 'auto';
@@ -944,28 +1094,34 @@ class DebugUI {
                 const w = this.container.offsetWidth;
                 const KEEP = 160; // min visible width on either edge
                 const HDR = 44; // header height kept reachable
+                const area = this._hostOrigin();
                 let nx = initialLeft + dx;
                 let ny = initialTop + dy;
-                nx = Math.max(KEEP - w, Math.min(nx, window.innerWidth - KEEP));
-                ny = Math.max(0, Math.min(ny, window.innerHeight - HDR));
+                nx = Math.max(KEEP - w, Math.min(nx, area.width - KEEP));
+                ny = Math.max(0, Math.min(ny, area.height - HDR));
                 this.container.style.left = nx + 'px';
                 this.container.style.top = ny + 'px';
             }
             if (isResizing) {
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
-                this.container.style.width = (initialWidth + dx) + 'px';
-                this.container.style.height = (initialHeight + dy) + 'px';
+                const host = this._host().getBoundingClientRect();
+                const maxW = Math.max(320, host.width - 16);
+                const maxH = Math.max(220, host.height - 16);
+                this.container.style.width = Math.min(maxW, Math.max(320, initialWidth + dx)) + 'px';
+                this.container.style.height = Math.min(maxH, Math.max(220, initialHeight + dy)) + 'px';
             }
-        });
+        }, this._on());
         document.addEventListener('mouseup', () => {
             if (isDragging || isResizing) {
                 isDragging = false;
                 isResizing = false;
-                this.container.style.transition = '';
-                this.savePosition();
+                if (this.container) {
+                    this.container.style.transition = '';
+                    this.savePosition();
+                }
             }
-        });
+        }, this._on());
         // Debug Hub events. The callback is kept on the instance because destroy() must
         // hand this exact reference back to unsubscribe(): a close/open cycle rebuilds the
         // UI and would otherwise add a second, third, Nth permanent subscriber, each one
@@ -1019,7 +1175,7 @@ class DebugUI {
             if (el && !el.closest('#bmm-debug-overlay') && !el.classList.contains('debug-inspect-highlight')) {
                 this.highlightElement(el);
             }
-        });
+        }, this._on());
         document.addEventListener('click', e => {
             if (!this.isInspecting)
                 return;
@@ -1037,17 +1193,32 @@ class DebugUI {
             const playground = this._get('playground-code');
             if (playground)
                 playground.value = styleSnippet;
-        }, true);
+        }, this._on({ capture: true }));
     }
     translateUI() {
         if (!this.container)
             return;
         applyTranslations(this.container);
+        for (const root of [this.container, this.modalOverlay]) {
+            root?.querySelectorAll('[data-dbg-aria]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.dbgAria)));
+            root?.querySelectorAll('[data-dbg-empty]').forEach((el) => el.setAttribute('data-empty-text', t(el.dataset.dbgEmpty)));
+        }
+        for (const [, rec] of this._sections) {
+            const label = rec.tab?.querySelector('.debug-tab-label');
+            if (label)
+                label.textContent = t(rec.section.titleKey);
+        }
     }
     toggleInspector(force) {
         this.isInspecting = force !== undefined ? force : !this.isInspecting;
         const btn = this._get('debug-btn-inspect');
+        if (!btn) {
+            this.isInspecting = false;
+            document.body.style.cursor = '';
+            return;
+        }
         btn.classList.toggle('active', this.isInspecting);
+        btn.setAttribute('aria-pressed', String(this.isInspecting));
         document.body.style.cursor = this.isInspecting ? 'crosshair' : '';
         if (!this.isInspecting) {
             if (this.highlightEl)
@@ -1097,12 +1268,14 @@ class DebugUI {
     }
     updatePatchTree() {
         const list = this._get('patch-tree');
+        if (!list)
+            return;
         list.innerHTML = debugHub.patches.map(p => `
             <div class="patch-row" style="display:flex; justify-content:space-between; align-items:center; background:var(--bmm-s03); padding:6px 10px; border-radius:4px; font-size:10px">
                 <span style="color:var(--debug-accent)">${p.type}: ${p.id}</span>
                 <button class="patch-remove" data-id="${p.id}" style="background:none; border:none; color:var(--debug-error); cursor:pointer">REMOVE</button>
             </div>
-        `).join('') || '<div class="debug-hint">No active patches.</div>';
+        `).join('') || `<div class="debug-empty-state">${this.escapeHtml(t('dev.empty.patches'))}</div>`;
     }
     switchTab(tabId) {
         const wasTimeline = this.activeTab === 'timeline';
@@ -1113,24 +1286,35 @@ class DebugUI {
         if (tabId === 'timeline' && !wasTimeline)
             this.rebuildTimeline();
         this.container.querySelectorAll('.debug-tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.tab === tabId);
+            const on = t.dataset.tab === tabId;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', String(on));
+            // Roving tabindex: one tab stop for the whole list, arrows move within it.
+            t.tabIndex = on ? 0 : -1;
         });
         this.container.querySelectorAll('.debug-pane').forEach(p => {
             p.classList.toggle('active', p.id === `pane-${tabId}`);
         });
         this.savePosition();
+        if (tabId === 'studios')
+            this._refreshStudioStates();
+        if (tabId.startsWith('ext-'))
+            this._activateSection(tabId.slice(4));
         if (tabId === 'inspect-view' && !this.selectedEl) {
             this.clearSelection();
         }
         if (tabId === 'session') {
             const pane = this.container.querySelector('#pane-session');
             if (pane) {
-                void import('./session-pane.js').then((m) => m.mountSessionPane(pane));
+                this._sessionLoaded = true;
+                void import('./session-pane.js').then((m) => { if (this.isOpen)
+                    m.mountSessionPane(pane); }).catch(() => { });
             }
         }
-        else {
+        else if (this._sessionLoaded) {
             // Stop the 2s refresh as soon as it is off screen; the subscription stays so the
-            // counters keep meaning something when you come back.
+            // counters keep meaning something when you come back. Never loads the module
+            // just to say "stop" when the Session tab was not opened.
             void import('./session-pane.js').then((m) => m.unmountSessionPane()).catch(() => { });
         }
         if (tabId === 'debugger') {
@@ -1311,10 +1495,12 @@ class DebugUI {
             const isRPC = entry.querySelector('.rpc');
             const isAction = entry.querySelector('.action');
             const isError = entry.querySelector('.error');
+            // The buttons say ipc / logs / tasks / error; this used to test 'rpc' and 'action',
+            // names no button sends, so three of the four filters showed everything.
             let visible = true;
-            if (filter === 'rpc')
+            if (filter === 'ipc' || filter === 'rpc')
                 visible = !!isRPC;
-            else if (filter === 'action')
+            else if (filter === 'tasks' || filter === 'logs' || filter === 'action')
                 visible = !!isAction;
             else if (filter === 'error')
                 visible = !!isError;
@@ -1437,10 +1623,10 @@ class DebugUI {
             } })();
             // Escape — args/results may contain HTML/SVG (e.g. icon markup) that
             // must NOT be parsed as DOM, or the browser logs SVG-parse errors.
-            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span class="debug-hint">ARGS</span>\n${this.escapeHtml(argsJson)}\n<span class="debug-hint">RESULT</span>\n${this.escapeHtml(resultJson)}</div>`;
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:var(--debug-sunken);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span class="debug-hint">ARGS</span>\n${this.escapeHtml(argsJson)}\n<span class="debug-hint">RESULT</span>\n${this.escapeHtml(resultJson)}</div>`;
         }
         else if (item.details) {
-            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${this.escapeHtml(String(item.details).slice(0, 500))}</div>`;
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:var(--debug-sunken);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${this.escapeHtml(String(item.details).slice(0, 500))}</div>`;
         }
         const labelEsc = this.escapeHtml(String(label ?? ''));
         const statusLabelEsc = this.escapeHtml(String(statusLabel ?? ''));
@@ -1504,7 +1690,7 @@ class DebugUI {
                     </div>
                 </div>
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
-                <div style="color:var(--debug-success); font-family:'JetBrains Mono'; font-size:11px; background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:4px">${sourceGuess}</div>
+                <div style="color:var(--debug-success); font-family:'JetBrains Mono'; font-size:11px; background:var(--debug-sunken); padding:4px 8px; border-radius:4px">${sourceGuess}</div>
             </div>
 
             <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:8px; display:flex; align-items:baseline; gap:6px">
@@ -1532,7 +1718,7 @@ class DebugUI {
                                    class="style-edit-input"
                                    data-prop="${prop}"
                                    value="${value}"
-                                   style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
+                                   style="background:var(--debug-sunken); border:1px solid var(--border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
                             ${isColorOrBackground ? `<input type="color" class="style-color-helper" data-prop="${prop}" data-helper-prop="${helperProp}" style="width:16px; height:20px; padding:0; border:none; background:none; cursor:pointer" value="${colorValue.startsWith('rgb') ? this.rgbToHex(colorValue) : colorValue}">` : ''}
                         </div>
                     `;
@@ -1633,6 +1819,8 @@ class DebugUI {
     }
     updateStateView() {
         const pane = this._get('pane-state');
+        if (!pane)
+            return;
         const state = appState.state;
         // Nothing changed → nothing to rebuild. The pane repaints on a 1s timer whether or
         // not the state moved, and rebuilding identical markup still costs a full parse, a
@@ -1770,9 +1958,12 @@ class DebugUI {
         this.jsEvents = enabled;
         if (enabled) {
             document.querySelectorAll('*').forEach(el => {
-                if (el.hasAttribute('data-bmm-events') || el.onclick) {
+                if (el.closest('#bmm-debug-overlay'))
+                    return;
+                const types = getListenerTypes(el);
+                if (types.length || el.onclick) {
                     el.classList.add('bmm-js-event-node');
-                    const events = el.getAttribute('data-bmm-events') || 'inline click';
+                    const events = types.join(', ') || 'inline click';
                     el.title = `JS Events: ${events}`;
                 }
             });
@@ -1834,15 +2025,21 @@ class DebugUI {
         });
     }
     savePosition() {
+        if (!this.container)
+            return;
         const rect = this.container.getBoundingClientRect();
+        const host = this._hostOrigin();
         const data = {
-            top: rect.top,
-            left: rect.left,
+            top: rect.top - host.top,
+            left: rect.left - host.left,
             width: this.container.offsetWidth,
             height: this.container.offsetHeight,
             activeTab: this.activeTab
         };
-        localStorage.setItem('bmm-debug-ui', JSON.stringify(data));
+        try {
+            localStorage.setItem('bmm-debug-ui', JSON.stringify(data));
+        }
+        catch { /* storage full or blocked */ }
     }
     loadPosition() {
         try {
@@ -1855,15 +2052,18 @@ class DebugUI {
                     // shrunk, or it was saved while partly off-screen).
                     const w = data.width || this.container.offsetWidth || 320;
                     const KEEP = 160, HDR = 44;
-                    const left = Math.max(KEEP - w, Math.min(data.left, window.innerWidth - KEEP));
-                    const top = Math.max(0, Math.min(data.top, window.innerHeight - HDR));
+                    const area = this._hostOrigin();
+                    const left = Math.max(KEEP - w, Math.min(data.left, area.width - KEEP));
+                    const top = Math.max(0, Math.min(data.top, area.height - HDR));
                     this.container.style.top = top + 'px';
                     this.container.style.left = left + 'px';
                 }
+                // Never larger than the frame it lives in (the window may have shrunk).
+                const area = this._hostOrigin();
                 if (data.width)
-                    this.container.style.width = data.width + 'px';
+                    this.container.style.width = Math.min(data.width, Math.max(320, area.width - 16)) + 'px';
                 if (data.height)
-                    this.container.style.height = data.height + 'px';
+                    this.container.style.height = Math.min(data.height, Math.max(220, area.height - 16)) + 'px';
                 if (data.activeTab)
                     this.activeTab = data.activeTab;
             }
@@ -1921,9 +2121,10 @@ class DebugUI {
         const menu = document.createElement('div');
         menu.id = 'debug-context-menu';
         menu.style = 'position:fixed; display:none; background:rgba(30,30,30,0.95); backdrop-filter:blur(10px); border:1px solid var(--bmm-s10); border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:200000; padding:4px; min-width:140px; transform: scale(0.9); opacity: 0; transition: transform 0.1s, opacity 0.1s';
-        document.body.appendChild(menu);
+        menu.classList.add('bmm-no-record');
+        this._host().appendChild(menu);
         this.contextMenu = menu;
-        document.addEventListener('click', () => this.hideContextMenu());
+        document.addEventListener('click', () => this.hideContextMenu(), this._on());
     }
     showContextMenu(x, y, items) {
         this.contextMenu.innerHTML = items.map(item => `
@@ -1948,7 +2149,8 @@ class DebugUI {
             return;
         this.contextMenu.style.transform = 'scale(0.9)';
         this.contextMenu.style.opacity = '0';
-        setTimeout(() => this.contextMenu.style.display = 'none', 100);
+        setTimeout(() => { if (this.contextMenu)
+            this.contextMenu.style.display = 'none'; }, 100);
     }
     copyToClipboard(text) {
         if (text.startsWith('data:')) {
@@ -2108,48 +2310,265 @@ class DebugUI {
                 this.updateStateView();
         }, 1000);
     }
-    /** Fully unload the DevTools: remove all DOM + stop all timers/observers so
-     *  it returns to ~0 resource usage when closed. Rebuilt on next open. */
-    destroy() {
-        this.isOpen = false;
+    /** The frame's origin and size in viewport pixels. The panel is position:fixed INSIDE the
+     *  frame, and the frame (contain: paint) is its containing block, so `left/top` are
+     *  measured from here, not from the window. */
+    _hostOrigin() {
+        const host = this._host();
+        if (host === document.body)
+            return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+        const r = host.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height };
+    }
+    _tabExists(tabId) {
+        return !!(tabId && this.container?.querySelector(`.debug-tab[data-tab="${CSS.escape(tabId)}"]`));
+    }
+    _focusActiveTab() {
+        const tab = this.container?.querySelector('.debug-tab.active') || this.container?.querySelector('.debug-tab');
         try {
-            this.toggleInspector(false);
+            tab?.focus({ preventScroll: true });
         }
         catch { /* ignore */ }
-        // Free the heavy native WebView2 DevTools process when we close.
-        try {
-            invoke('close_devtools');
+    }
+    /** Keep Tab inside the panel while focus is in it: the last control wraps to the first. */
+    _trapTab(e) {
+        const items = Array.from(this.container.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])')).filter((el) => el.offsetParent !== null || el === document.activeElement);
+        if (!items.length)
+            return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
         }
-        catch { /* ignore */ }
-        if (this._updateInterval) {
-            clearInterval(this._updateInterval);
-            this._updateInterval = null;
+        else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
         }
-        if (this.a11yInterval) {
-            clearInterval(this.a11yInterval);
-            this.a11yInterval = null;
+    }
+    /** Public: bring a tab or a registered section to the front. */
+    showTab(id) {
+        if (!this.container)
+            return;
+        const tabId = this._tabExists(id) ? id : (this._tabExists('ext-' + id) ? 'ext-' + id : null);
+        if (tabId) {
+            this.switchTab(tabId);
+            this._focusActiveTab();
         }
-        // Was missing from this list: close DevTools with the hardcoded-text audit on and
-        // its 3s interval kept scanning a dead UI forever — one of the "ça mange" leaks.
-        if (this.hardcodedInterval) {
-            clearInterval(this.hardcodedInterval);
-            this.hardcodedInterval = null;
-        }
-        if (this.mutationObserver) {
-            try {
-                this.mutationObserver.disconnect();
+    }
+    /** "Open" / "Show" on each studio card, from whether the studio is on screen right now.
+     *  Only reads the modules if they are already loaded — never loads a studio to ask. */
+    async _refreshStudioStates() {
+        if (!this.container)
+            return;
+        const pairs = [
+            ['debug-rstudio-state', 'debug-btn-rstudio', () => import('./replay-studio.js').then((m) => m.isReplayStudioOpen())],
+            ['debug-anim-state', 'debug-btn-anim', () => import('./anim-studio.js').then((m) => m.isAnimStudioOpen())],
+        ];
+        for (const [stateId, btnId, ask] of pairs) {
+            let open = false;
+            // The studio modules are already in memory once a studio was opened this session;
+            // if not, the answer is "closed" and no import is needed.
+            if (document.querySelector(stateId === 'debug-rstudio-state' ? '.rstudio-bar' : '.anim-panel')) {
+                try {
+                    open = await ask();
+                }
+                catch {
+                    open = false;
+                }
             }
-            catch { }
-            this.mutationObserver = null;
+            const st = this._get(stateId);
+            const btn = this._get(btnId);
+            if (st) {
+                st.textContent = open ? t('dev.studios.running') : '';
+                st.classList.toggle('on', open);
+            }
+            if (btn)
+                btn.textContent = open ? t('dev.studios.show') : t('dev.studios.open');
         }
-        // The hub keeps subscribers in a Set that nothing else prunes, so a subscriber left
-        // behind here is permanent: every later log/ipc/action emit would fan out into this
-        // dead UI forever, and the closure would pin its DOM. This is the actual leak.
-        if (this._hubSub) {
-            debugHub.unsubscribe(this._hubSub);
-            this._hubSub = null;
+    }
+    // ── Extension sections (registerDebugSection) ───────────────────────────────────────
+    _wireSections() {
+        this._unwatchSections?.();
+        for (const sec of getDebugSections())
+            this._addSectionTab(sec);
+        this._unwatchSections = watchDebugSections((change) => {
+            if (!this.container)
+                return;
+            if (change.kind === 'add')
+                this._addSectionTab(change.section);
+            else
+                this._removeSectionTab(change.section.id);
+        });
+    }
+    _addSectionTab(section) {
+        if (!this.container)
+            return;
+        this._removeSectionTab(section.id);
+        const navExt = this._get('debug-nav-ext');
+        const panes = this._get('debug-ext-panes');
+        if (!navExt || !panes)
+            return;
+        const tabId = 'ext-' + section.id;
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'debug-tab';
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', 'false');
+        tab.tabIndex = -1;
+        tab.dataset.tab = tabId;
+        // The icon is trusted markup from our own code (see DebugSection.icon).
+        tab.innerHTML = `${section.icon || NAV_ICONS.section}<span class="debug-tab-label"></span>`;
+        tab.querySelector('.debug-tab-label').textContent = t(section.titleKey);
+        navExt.appendChild(tab);
+        const pane = document.createElement('div');
+        pane.className = 'debug-pane debug-pane-ext';
+        pane.id = 'pane-' + tabId;
+        pane.setAttribute('role', 'tabpanel');
+        panes.appendChild(pane);
+        this._sections.set(section.id, { section, tab, pane, mounted: false });
+        const label = this._get('debug-nav-ext-label');
+        if (label)
+            label.hidden = false;
+        if (this.activeTab === tabId)
+            this.switchTab(tabId);
+    }
+    _removeSectionTab(id) {
+        const rec = this._sections.get(id);
+        if (!rec)
+            return;
+        this._sections.delete(id);
+        if (rec.mounted) {
+            try {
+                rec.section.unmount?.();
+            }
+            catch (e) {
+                console.warn('[BMM-Debug] section unmount failed', id, e);
+            }
         }
-        for (const el of [this.container, this.modalOverlay, this.crashOverlay, this.highlightEl, this.tooltipEl]) {
+        const wasActive = rec.tab.classList.contains('active');
+        rec.tab.remove();
+        rec.pane.remove();
+        const label = this._get('debug-nav-ext-label');
+        if (label)
+            label.hidden = this._sections.size === 0;
+        if (wasActive)
+            this.switchTab('console');
+    }
+    async _activateSection(id) {
+        const rec = this._sections.get(id);
+        if (!rec || rec.mounted)
+            return;
+        rec.mounted = true;
+        rec.pane.textContent = '';
+        const host = document.createElement('div');
+        host.className = 'debug-section-host';
+        rec.pane.appendChild(host);
+        try {
+            await rec.section.mount(host);
+        }
+        catch (e) {
+            console.error('[BMM-Debug] section failed to mount', id, e);
+            host.textContent = '';
+            const msg = document.createElement('div');
+            msg.className = 'debug-empty debug-section-error';
+            msg.textContent = t('dev.section.failed') + ' ' + String(e?.message || e);
+            host.appendChild(msg);
+        }
+    }
+    /** Undo every effect the CSS / accessibility tools put on the APP. They live outside the
+     *  panel (classes on <body>, outlines on elements, a grid overlay, listeners), and the
+     *  panel is rebuilt with every switch OFF — so leaving them on after close meant an app
+     *  stuck in, say, the pink outline mode (every background forced transparent) with no
+     *  visible switch to turn it off. */
+    _undoGlobalTools() {
+        const steps = [
+            () => document.body.classList.remove('bmm-debug-pink', 'bmm-debug-interactive', 'bmm-show-events'),
+            () => document.documentElement.style.removeProperty('--bmm-dbg-color'),
+            () => document.querySelectorAll('.bmm-show-zindex').forEach((el) => { el.classList.remove('bmm-show-zindex'); delete el.dataset.bmmZIndex; }),
+            () => document.getElementById('bmm-layout-grid')?.remove(),
+            () => { if (this.a11yWarnings)
+                this.toggleA11yWarnings(false); },
+            () => { if (this.a11yReader)
+                this.toggleA11yReader(false); },
+            () => { if (this.jsEvents)
+                this.toggleJSEvents(false); },
+            () => { if (this.hardcodedDetector)
+                this.toggleHardcodedDetector(false); },
+            () => document.querySelectorAll('.bmm-hardcoded-error').forEach((el) => { el.classList.remove('bmm-hardcoded-error'); delete el.dataset.bmmHardcoded; }),
+        ];
+        for (const step of steps) {
+            try {
+                step();
+            }
+            catch (e) {
+                console.warn('[BMM-Debug] cleanup step failed', e);
+            }
+        }
+    }
+    /** Fully unload the DevTools: remove all DOM + stop all timers/observers/listeners so
+     *  it returns to ~0 resource usage when closed. Rebuilt on next open.
+     *
+     *  Idempotent, and every step runs even when an earlier one throws: a close that stops
+     *  half-way is exactly how a debug tool leaves the app it inspects altered. */
+    destroy() {
+        const wasOpen = this.isOpen;
+        this.isOpen = false;
+        const steps = [
+            () => this.toggleInspector(false),
+            // Free the heavy native WebView2 DevTools process when we close. A promise: a
+            // try/catch cannot see its rejection, and an unhandled one is reported as a crash.
+            () => { if (wasOpen)
+                Promise.resolve(invoke('close_devtools')).catch(() => { }); },
+            () => { if (this._updateInterval) {
+                clearInterval(this._updateInterval);
+                this._updateInterval = null;
+            } },
+            () => { if (this._tlFrame) {
+                cancelAnimationFrame(this._tlFrame);
+                this._tlFrame = 0;
+                this._tlQueue = [];
+            } },
+            () => this._undoGlobalTools(),
+            () => { if (this.mutationObserver) {
+                this.mutationObserver.disconnect();
+                this.mutationObserver = null;
+            } },
+            // The hub keeps subscribers in a Set that nothing else prunes, so a subscriber left
+            // behind here is permanent: every later emit would fan out into this dead UI.
+            () => { if (this._hubSub) {
+                debugHub.unsubscribe(this._hubSub);
+                this._hubSub = null;
+            } },
+            () => { this._unwatchSections?.(); this._unwatchSections = null; },
+            () => {
+                for (const [id, rec] of this._sections) {
+                    if (!rec.mounted)
+                        continue;
+                    try {
+                        rec.section.unmount?.();
+                    }
+                    catch (e) {
+                        console.warn('[BMM-Debug] section unmount failed', id, e);
+                    }
+                }
+                this._sections.clear();
+            },
+            // The Session pane's observer and 2 s refresh. Only if the module was ever loaded.
+            () => { if (this._sessionLoaded)
+                import('./session-pane.js').then((m) => m.disposeSessionPane()).catch(() => { }); },
+            // Every document/window listener this UI added, in one call.
+            () => { this._ac?.abort(); this._ac = null; },
+        ];
+        for (const step of steps) {
+            try {
+                step();
+            }
+            catch (e) {
+                console.warn('[BMM-Debug] close step failed', e);
+            }
+        }
+        for (const el of [this.container, this.modalOverlay, this.crashOverlay, this.highlightEl, this.tooltipEl, this.contextMenu]) {
             try {
                 el?.remove();
             }
@@ -2160,6 +2579,19 @@ class DebugUI {
         this.crashOverlay = null;
         this.highlightEl = null;
         this.tooltipEl = null;
+        this.contextMenu = null;
+        this.hoveredEl = null;
+        this.selectedEl = null;
+        this._sessionLoaded = false;
+        // Hand focus back to whatever opened the panel, if it is still there.
+        const opener = this._opener;
+        this._opener = null;
+        if (wasOpen && opener && opener.isConnected && typeof opener.focus === 'function') {
+            try {
+                opener.focus({ preventScroll: true });
+            }
+            catch { /* ignore */ }
+        }
     }
 }
 export const debugUI = new DebugUI();

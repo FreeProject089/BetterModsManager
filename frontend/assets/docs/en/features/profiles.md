@@ -61,7 +61,9 @@ A profile keeps its active mods in an **order**, and when two of them ship the s
 applied **last** wins it. A mod you enable goes to the end; the list icon on the profile card opens
 the order, where you drag mods (or use `Alt+↑` / `Alt+↓`), see who overrides whom, and **Apply
 order** — only the files that change hands are re-copied. The order travels with the profile in a
-backup and a `.DATABMM`. See [Activation order](doc-page:how-it-works/load-order).
+backup and a `.DATABMM`. Its **Lists** button keeps named orders that may include mods that are
+not active, applies one to several profiles, or turns a list's mods on in one step. See
+[Activation order](doc-page:how-it-works/load-order).
 
 ## Moving a profile somewhere else
 

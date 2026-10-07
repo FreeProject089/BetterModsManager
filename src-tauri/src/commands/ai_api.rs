@@ -73,7 +73,10 @@ pub fn not_running_because(cfg: &ApiConfig, ai_on: bool, killed: bool) -> Option
 fn engine(dir: PathBuf) -> Engine {
     let dir_for_hooks = dir.clone();
     Engine {
-        predict: Arc::new(|text: &str, qs: &[ai_core::LayaQuestion]| ai_embedded::Embedded.predict(text, qs)),
+        predict: Arc::new(|text: &str, qs: &[ai_core::LayaQuestion]| {
+            let _scope = ai_core::laya_scope("api");
+            ai_embedded::Embedded.predict(text, qs)
+        }),
         available: Arc::new(|| ai_embedded::Embedded.available()),
         guard: Arc::new(move || crate::commands::ai_ops::guard(&dir)),
         log: Arc::new(|line: String| crate::commands::crash::log_line(line)),

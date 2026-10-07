@@ -580,6 +580,8 @@ pub fn classify_tuned(ctx: &Ctx, text: &str, labels: &[tu::LabelDef], template: 
     let body: String = ai_core::neutralize(text).chars().take(ai_core::MAX_PROVIDER_TEXT).collect();
     let ask = |qs: &[LayaQuestion]| ai_core::ask_laya(ctx, provider, &body, qs).map_err(|e| ai_core::laya_note(provider, &e));
     let (mut probs, d) = tu::classify_labels(&ask, &L::choice_probs, labels, template, t)?;
+    // The debug panel: the outcome only — these labels may be the user's own words.
+    ai_core::note_decision(None, &[], d.abstained, d.uncertain);
     probs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     Ok((probs, d))
 }

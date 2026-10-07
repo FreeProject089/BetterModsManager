@@ -286,6 +286,38 @@ If the first two find nothing, the report goes straight out, as before. Otherwis
 again to send it the way you chose. Crash zips attached to a report were already stripped of
 secrets when they were written.
 
+## Laya while you write a report
+
+With AI on, the *Report a bug / Suggestion* dialog has a **Laya** box under the description. It
+proposes the **type** (suggestion, bug, crash), a **category**, a **severity**, the **part of the
+app** concerned and a few **tags**; it points at an **earlier report** that looks the same, and for
+a crash, at the **crash report on this PC** that fits what you wrote. Each proposal has **Apply**
+and **Ignore**: nothing changes until you click. What you applied is listed (and removable) and
+travels with the report; nothing else does.
+
+With the built-in Laya (or your own laya-serve on this PC) the proposals come while you type,
+since nothing leaves the PC. With BetterCommunity as classifier there is an **Ask Laya** button,
+and your text is masked first. Each answer goes through the *Bug reports* answer settings below:
+a doubtful one is marked *guess*, an abstention is no proposal.
+
+## Laya in Crash reports & sessions
+
+In **Settings → Crash reports → Manage & analyze**, Laya groups **similar crashes** (the same
+reason once numbers, addresses and paths are set aside) and, on **Find the causes**, labels one
+report per group with a **probable cause** (internal error, memory, file access, network, mod
+conflict, game launch, graphics, damaged data). The labels become filter chips. This runs on the
+built-in Laya or your own laya-serve only, from a masked excerpt of the log, through the *Crash
+reports* answer settings. **Explain** (in *Analyze*) appears only when a writing model is set up;
+with a remote one, the button says so before you click.
+
+## Laya in the debug menu
+
+The debug menu has a **Laya** section: engine state (installed, loaded, pinned model, runtime,
+size, runs, app memory), the AI and `--no-ai` switches, the answer settings in effect per
+feature, the last calls (feature, latency, outcome; **no text is recorded**, and the list lives in
+memory only), a **Classify this text** tester with raw scores, **Reload the model** and **Clear
+calls and cache**.
+
 ## Laya's answers: how sure, and your own tasks
 
 **Settings → Laya → Manage Laya → Answers** decides how sure Laya must be before BMM shows or
@@ -299,7 +331,7 @@ uses an answer. Nothing changes until you touch it: **Balanced** is BMM's usual 
 | **Custom** | Your own numbers, under *Fine settings* |
 
 *For* picks the feature: all of them, or one with its own settings (mod suggestions, Ask Laya,
-bug reports, library analysis, scheduled tasks and scripts, programs). *Fine settings*:
+bug reports, library analysis, scheduled tasks and scripts, programs, crash reports). *Fine settings*:
 
 | Setting | Meaning |
 |---|---|

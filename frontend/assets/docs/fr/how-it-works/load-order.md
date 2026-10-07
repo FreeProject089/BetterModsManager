@@ -154,8 +154,8 @@ son nom et sa version (et l'id local, pour un aller-retour sur le même PC).
 
 **Importer** lit chacune de ces formes, une liste `.mm` collée en entier, ou une simple liste de
 noms (un par ligne ; les puces `1.` et `-` sont acceptées). Chaque entrée est reliée par l'identité
-la plus forte qu'elle porte : id local, puis empreinte, puis id de dépôt, puis le nom quand un seul
-mod le porte (la version départage deux mods du même nom). L'aperçu indique ensuite :
+la plus forte qu'elle porte : id local, puis empreinte, puis id de dépôt, puis le nom (casse, espaces, `_` et
+`-` ignorés) quand un seul mod le porte (la version départage deux mods du même nom). L'aperçu indique ensuite :
 
 - où chaque mod actif atterrit, et de combien de places il bouge ;
 - combien de fichiers changeraient de gagnant ;
@@ -174,11 +174,61 @@ mode `keep`.
 
 ---
 
+## Listes d'ordre enregistrées
+
+La vue de l'ordre modifie ce qui est actif. Une **liste** (bouton **Listes** dans la vue de
+l'ordre) est un ordre nommé que vous gardez, et elle peut nommer *n'importe quel* mod : actif,
+installé mais désactivé, installé hors du profil, ou pas encore installé ici. Les listes sont
+enregistrées avec vos données, indépendamment des profils.
+
+- **Nouvelle liste**, **Depuis un profil** (les mods actifs du profil affiché, dans leur ordre) ou
+  **Importer** (un code, un lien, du JSON ou une liste de noms, lu comme une nouvelle liste à
+  vérifier avant de l'enregistrer).
+- **Ajouter des mods** cherche dans toute la bibliothèque, mods désactivés compris. Les lignes se
+  déplacent avec les flèches et se retirent avec la croix.
+- **Prévue pour** : cochez les profils concernés. Aucun coché donne une liste réutilisable, pour
+  n'importe quel profil. **État affiché pour** choisit le profil dont les lignes montrent l'état.
+
+Chaque entrée garde tous les identifiants de son mod : id BMM, empreinte de contenu, id et adresse
+du dépôt, nom, version. Elle est reliée par le plus fort qui répond encore, et la ligne dit
+lequel :
+
+| Pastille | Reconnu par |
+|---|---|
+| Même mod | son id BMM sur ce PC (il survit à un renommage) |
+| Empreinte | l'empreinte de son contenu |
+| Id du dépôt | l'id qu'il a dans son dépôt d'origine, même dépôt d'abord |
+| Nom + version | son nom, la version correspondant ou départageant des homonymes |
+| Nom seul | son nom seulement, casse, espaces, `_` et `-` ignorés : à vérifier d'un coup d'œil |
+| Ambigu | plusieurs mods portent ce nom et rien ne les distingue : aucun n'est choisi |
+| Introuvable | rien dans la bibliothèque ne répond : l'entrée **reste dans la liste** |
+
+À côté, l'état : **Actif, n°n** (sa place dans le profil), **Installé, désactivé**,
+**Désactivé, hors de ce profil**, ou **Non installé**. Rien n'est jamais retiré en silence. Une
+liste importée d'un autre PC passe par la même reconnaissance, sauf qu'un id BMM venu d'ailleurs ne
+compte qu'avec le même nom.
+
+Deux actions utilisent une liste enregistrée, chacune avec sa propre confirmation :
+
+- **Appliquer l'ordre…** à un ou plusieurs profils : dans chacun, les mods actifs que nomme la
+  liste prennent son ordre, aux places qu'ils occupent. Les autres gardent leur place, rien n'est
+  activé ni désactivé, et seuls les fichiers qui changent de mod sont copiés.
+- **Activer…** sur le profil actif. L'aperçu compte ce qui sera activé (dans l'ordre de la liste),
+  ce qui l'est déjà et ce qui est introuvable. Confirmer active chaque mod comme le ferait un clic
+  (dépendances, contrôle des conflits, contrôle d'intégrité, régulateur de ressources ; **Arrêter**
+  s'arrête après le mod en cours), puis place les mods de la liste en haut, dans son ordre : le
+  dernier gagne un fichier partagé. **Uniquement cette liste** désactive aussi, en un seul lot, les
+  mods actifs que la liste ne nomme pas et dont elle n'a pas besoin comme dépendances : le profil
+  devient la liste.
+
+---
+
 ## Gardé avec vos données
 
 L'ordre, c'est le `active_mods` du profil : un export des données, un export automatique et une
 sauvegarde complète (`.databmm`) gardent l'ordre de chaque profil, et les restaurer le ramène.
-Changer de profil ne change rien : chaque profil a son propre ordre.
+Changer de profil ne change rien : chaque profil a son propre ordre. Les listes d'ordre
+enregistrées font partie des mêmes données : elles voyagent avec.
 
 ---
 
@@ -193,4 +243,6 @@ Changer de profil ne change rien : chaque profil a son propre ordre.
 
 Un nouvel ordre doit contenir exactement les mods actifs : une liste avec un mod en moins ou en trop
 est refusée, parce que l'appliquer laisserait dans le jeu des fichiers que rien ne revendique. Import
-et placement ne peuvent pas enfreindre cette règle : ils ne déplacent que des mods déjà actifs.
+et placement ne peuvent pas enfreindre cette règle : ils ne déplacent que des mods déjà actifs. Les
+listes d'ordre enregistrées se gèrent dans l'application ; ces surfaces agissent sur l'ordre d'un
+profil.

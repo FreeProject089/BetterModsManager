@@ -147,8 +147,8 @@ local id, for a round trip on the same PC).
 
 **Import** reads any of them, a `.mm` list pasted whole, or a plain list of names (one per line;
 `1.` and `-` bullets are fine). Each entry is matched by the strongest identity it has: local id,
-then fingerprint, then repo id, then the name when exactly one mod has it (the version decides
-between two of the same name). The preview then says:
+then fingerprint, then repo id, then the name (case, spaces, `_` and `-` ignored) when exactly one mod has it (the
+version decides between two of the same name). The preview then says:
 
 - where each active mod lands, and by how many places it moves;
 - how many files would change winner;
@@ -165,11 +165,57 @@ mode, then puts the ones it names in the author's order, unless the mode is `kee
 
 ---
 
+## Saved order lists
+
+The order view edits what is active. A **list** (the **Lists** button in the order view) is a
+named order you keep, and it can name *any* mod: active, installed but off, installed outside the
+profile, or not installed here yet. Lists are saved with your app data, apart from any profile.
+
+- **New list**, **From a profile** (the active mods of the profile shown, in their order) or
+  **Import** (a code, a link, JSON or a list of names, read as a new list you check before saving).
+- **Add mods** searches the whole library, inactive mods included. Rows move with the arrows and
+  leave with the cross.
+- **Meant for**: tick the profiles a list is for. None ticked makes a reusable list, for any
+  profile. **State shown for** picks the profile whose state the rows show.
+
+Each entry keeps every identifier its mod has: BMM id, content fingerprint, repo id and repo,
+name, version. It is matched by the strongest one that still answers, and the row says which:
+
+| Chip | Found by |
+|---|---|
+| Same mod | its BMM id on this PC (it survives a rename) |
+| Fingerprint | its content fingerprint |
+| Repo id | the id it has in the repo it came from, same repo first |
+| Name + version | its name, the version agreeing or deciding between namesakes |
+| Name only | its name alone, case, spaces, `_` and `-` ignored: worth a glance |
+| Ambiguous | several mods carry the name and nothing tells them apart: none is picked |
+| Not found | nothing in the library answers: the entry **stays in the list** |
+
+Next to it, the state: **Active, #n** (its place in the profile), **Installed, off**, **Off,
+outside this profile**, or **Not installed**. Nothing is ever dropped silently. A list imported
+from another PC goes through the same matching, except that a BMM id from elsewhere only counts
+together with the same name.
+
+Two actions use a saved list, each with its own confirmation:
+
+- **Apply order…** to one or several profiles: in each, the active mods the list names take its
+  order, in the slots they hold. Mods it does not name keep their place, nothing is enabled or
+  disabled, and only the files that change hands are copied.
+- **Activate…** on the active profile. The preview counts what will be turned on (in the list's
+  order), what is already on and what is not found. Confirming turns each one on the way a click
+  does (dependencies, conflict checks, the integrity gate, the resource governor; **Stop** halts
+  after the current mod), then places the list's mods on top in its order: the last one wins a
+  shared file. **Only this list** also turns off, in one batch, the active mods the list neither
+  names nor needs as dependencies, so the profile ends up as the list.
+
+---
+
 ## Kept with your data
 
 The order is the profile's `active_mods`, so an app data export, an automatic export and a full
 backup (`.databmm`) keep every profile's order, and restoring them brings it back. Switching
-profiles changes nothing: each profile has its own order.
+profiles changes nothing: each profile has its own order. Saved order lists are part of the
+same data, so they travel with it too.
 
 ---
 
@@ -184,4 +230,5 @@ profiles changes nothing: each profile has its own order.
 
 A new order must contain exactly the active mods: a list with one missing or one extra is refused,
 because applying it would leave files in the game that nothing claims. Import and arrange cannot
-break that rule: they only move mods that are already active.
+break that rule: they only move mods that are already active. Saved order lists are managed in
+the app; these surfaces work on a profile's order.

@@ -718,7 +718,11 @@ pub fn predict_raw(state_text: &str, qs: &[Question]) -> Result<(Vec<Vec<f64>>, 
 /// Answer BMM's questions about `state_text`, in laya-serve's response shape.
 pub fn predict(state_text: &str, qs: &[ai_core::LayaQuestion]) -> Result<Value, String> {
     let questions = to_questions(qs)?;
-    let (probs, acts, rows) = predict_raw(state_text, &questions)?;
+    // The debug panel's « derniers appels »: latency and outcome only, no text (ai_core).
+    let started = Instant::now();
+    let raw = predict_raw(state_text, &questions);
+    ai_core::record_laya_call("embedded", started.elapsed().as_millis() as u64, questions.len(), raw.as_ref().err().map(|e| e.as_str()));
+    let (probs, acts, rows) = raw?;
     let mut answers = serde_json::Map::new();
     for (i, q) in questions.iter().enumerate() {
         answers.insert(q.id.clone(), answer_json(q, &probs[i], acts[i]));

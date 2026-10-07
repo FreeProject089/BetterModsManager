@@ -293,6 +293,12 @@
       "why": "governed (G3b): game_find_logs, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per entry"
     }
   },
+  "src/commands/ai_assist.rs": {
+    "spawn_blocking": {
+      "count": 5,
+      "why": "one-shot, user-clicked Laya request each: the feedback dialog's report assist (one inference over a 1500-character excerpt), the crash manager's digests (reads at most 60 managed report zips, 64 KB log tail + 16 KB stack each) and labels (at most 12 inferences, cached), « Expliquer » (one bounded generator request), and the debug panel's tester (one inference); off the async runtime, not bulk IO"
+    }
+  },
   "src/commands/ai.rs": {
     "spawn_blocking": {
       "count": 12,

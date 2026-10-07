@@ -307,6 +307,39 @@ Si les deux premiers ne trouvent rien, le rapport part directement, comme avant.
 à nouveau sur **Envoyer** pour l'envoyer comme vous l'avez choisi. Les zips de plantage joints
 à un rapport ont déjà été débarrassés de leurs secrets à leur écriture.
 
+## Laya pendant que vous écrivez un rapport
+
+Avec l'IA activée, la fenêtre *Signaler un bug / Suggestion* a un encadré **Laya** sous la
+description. Il propose le **type** (suggestion, bug, crash), une **catégorie**, une **gravité**,
+la **partie de l'app** concernée et quelques **tags** ; il signale un **rapport précédent** qui
+ressemble, et pour un crash, le **rapport de crash de ce PC** qui correspond à ce que vous avez
+écrit. Chaque proposition a **Appliquer** et **Ignorer** : rien ne change avant votre clic. Ce que
+vous avez appliqué est listé (et retirable) et part avec le rapport ; rien d'autre.
+
+Avec Laya intégré (ou votre laya-serve sur ce PC), les propositions arrivent pendant la frappe,
+puisque rien ne quitte le PC. Avec BetterCommunity comme classifieur, un bouton **Demander à
+Laya**, et votre texte est masqué d'abord. Chaque réponse passe par les réglages *Rapports de bug*
+ci-dessous : une réponse douteuse est marquée *hypothèse*, une abstention n'est pas proposée.
+
+## Laya dans Rapports de crash & sessions
+
+Dans **Paramètres → Rapports de crash → Gérer et analyser**, Laya regroupe les **crashs
+similaires** (même raison, une fois les nombres, adresses et chemins mis de côté) et, avec
+**Trouver les causes**, donne à un rapport par groupe une **cause probable** (erreur interne,
+mémoire, accès aux fichiers, réseau, conflit de mods, lancement du jeu, affichage, données
+endommagées). Les causes deviennent des filtres. Uniquement avec Laya intégré ou votre laya-serve,
+à partir d'un extrait masqué du journal, avec les réglages *Rapports de crash*. **Expliquer**
+(dans *Analyser*) n'apparaît que si un modèle de rédaction est configuré ; s'il est distant, le
+bouton le dit avant le clic.
+
+## Laya dans le menu de débogage
+
+Le menu de débogage a une section **Laya** : état du moteur (installé, chargé, modèle épinglé,
+moteur d'exécution, taille, exécutions, mémoire de l'app), les interrupteurs IA et `--no-ai`, les
+réglages des réponses appliqués par fonction, les derniers appels (fonction, latence, résultat ;
+**aucun texte n'est enregistré**, la liste reste en mémoire), un testeur **Classer ce texte** avec
+les scores bruts, **Recharger le modèle** et **Vider les appels et le cache**.
+
 ## Réponses de Laya : à quel point sûr, et vos propres tâches
 
 **Paramètres → Laya → Gérer Laya → Réponses** règle à quel point Laya doit être sûr avant que
@@ -321,7 +354,7 @@ le comportement habituel de BMM.
 | **Personnalisé** | Vos valeurs, dans *Réglages fins* |
 
 *Pour* choisit la fonction : toutes, ou une seule avec ses propres réglages (suggestions de mods,
-Ask Laya, rapports de bug, analyse de la bibliothèque, tâches planifiées et scripts, programmes).
+Ask Laya, rapports de bug, analyse de la bibliothèque, tâches planifiées et scripts, programmes, rapports de crash).
 *Réglages fins* :
 
 | Réglage | Sens |

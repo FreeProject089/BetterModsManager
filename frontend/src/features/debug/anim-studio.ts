@@ -81,13 +81,24 @@ function runOn(g: any, a: Anim, els: Element[]) {
   if (!els.length) return;
   try { PRESETS[a.preset]?.(g, els, a); } catch { /* ignore a bad tween */ }
 }
+// Elements a preview has animated, so closing the studio can stop their tweens and clear what
+// GSAP left inline. Weak, so a preview never keeps a removed element alive.
+let touched = new Set<WeakRef<Element>>();
+// A preview over more elements than this is refused. An EMPTY selector used to mean "every
+// element on the page": a `from({opacity:0})` with a stagger then set the whole app to
+// opacity 0 at once and brought it back one element every 60 ms — minutes of a blank BMM.
+const PREVIEW_MAX = 400;
+
 function preview(a: Anim, setStatus: (m: string) => void) {
-  const sel = a.selector || '*:not(html):not(body)';
+  const sel = (a.selector || '').trim();
+  if (!sel) { setStatus(t('anim.needselector') || 'Pick or type a target selector first.'); return; }
   if (!isValidSelector(sel)) { setStatus((t('anim.badselector') || 'Not a valid CSS selector:') + ` "${a.selector}"`); return; }
   ensureGsap().then((g) => {
-    const els = Array.from(document.querySelectorAll(sel));
+    // Never the studio's own panel, never the document roots.
+    const els = Array.from(document.querySelectorAll(sel)).filter((el) => el !== document.documentElement && el !== document.body && !el.closest('.anim-panel'));
     if (!els.length) { setStatus((t('anim.nomatch') || 'No element matches') + ` "${a.selector}"`); return; }
-    els.forEach((el) => { delete (el as HTMLElement).dataset.animDone; });
+    if (els.length > PREVIEW_MAX) { setStatus((t('anim.toomany') || 'Too many matches for a preview') + ` (${els.length} > ${PREVIEW_MAX})`); return; }
+    els.forEach((el) => { delete (el as HTMLElement).dataset.animDone; touched.add(new WeakRef(el)); });
     runOn(g, a, els);
     setStatus((t('anim.played') || 'Played on') + ` ${els.length}`);
   }).catch(() => setStatus(t('anim.nogsap') || 'GSAP unavailable'));
@@ -154,8 +165,8 @@ function makeHighlighter() {
   const box = document.createElement('div');
   box.setAttribute('data-bmm-no-record', '1');
   Object.assign(box.style, {
-    position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', border: '2px solid #3b82f6',
-    background: 'rgba(59,130,246,.12)', borderRadius: '4px', transition: 'all .05s linear', display: 'none',
+    position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', border: '2px solid var(--bmm-accent)',
+    background: 'color-mix(in srgb, var(--bmm-accent) 12%, transparent)', borderRadius: '4px', transition: 'all .05s linear', display: 'none',
   } as any);
   document.body.appendChild(box);
   return {
@@ -168,9 +179,21 @@ function makeHighlighter() {
   };
 }
 
+// The active picker's teardown, so closing the studio mid-pick cannot leave a capture-phase
+// click listener behind that swallows the app's next click.
+let cancelPick: (() => void) | null = null;
+
 function pickElement(cb: (sel: string) => void) {
+  cancelPick?.();
   const hi = makeHighlighter();
-  const finish = () => { document.removeEventListener('click', onClick, true); document.removeEventListener('mousemove', onMove, true); document.removeEventListener('keydown', onKey, true); hi.done(); };
+  const finish = () => {
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('mousemove', onMove, true);
+    document.removeEventListener('keydown', onKey, true);
+    hi.done();
+    if (cancelPick === finish) cancelPick = null;
+  };
+  cancelPick = finish;
   const onMove = (e: MouseEvent) => { const el = e.target as Element; hi.move(el && !el.closest('.anim-panel') ? el : null); };
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); finish(); status(t('anim.pickcancel') || 'Pick cancelled'); } };
   const onClick = (e: MouseEvent) => {
@@ -189,38 +212,49 @@ function pickElement(cb: (sel: string) => void) {
 let panel: HTMLElement | null = null;
 let editing: Anim | null = null;
 
+// Injected on first open so it costs nothing at boot. Theme tokens throughout: the panel
+// follows light and dark themes, on an opaque elevated surface so it reads over anything.
 function ensureStyles() {
   if (document.getElementById('anim-studio-styles')) return;
   const s = document.createElement('style');
   s.id = 'anim-studio-styles';
   s.textContent = `
   .anim-panel{position:fixed;right:20px;bottom:20px;z-index:2147483647;isolation:isolate;pointer-events:auto;
-    width:340px;max-width:94vw;max-height:70vh;overflow:auto;
-    background:#161b22;color:#e6edf3;border:1px solid #2a2f3a;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.5);
-    font:500 13px/1.35 system-ui,sans-serif;padding:12px;}
-  .anim-panel h3{margin:0 0 8px;font-size:14px;font-weight:800;color:#3b82f6;display:flex;justify-content:space-between;align-items:center;}
-  .anim-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid #2a2f3a;border-radius:10px;margin-bottom:6px;background:#0d1117;}
-  .anim-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
-  .anim-row .sel{font-size:11px;opacity:.6;}
-  .anim-btn{border:1px solid #2a2f3a;background:#0d1117;color:#e6edf3;border-radius:8px;padding:5px 9px;cursor:pointer;font:inherit;}
-  .anim-btn:hover{background:#1c2333;border-color:#3b82f6;}
-  .anim-primary{background:var(--bmm-accent,#3b82f6);border-color:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
-  .anim-primary:hover{background:#2563eb;}
+    width:340px;max-width:calc(100% - 40px);max-height:70%;overflow:auto;overscroll-behavior:contain;
+    background:var(--bmm-bg-elevated);color:var(--bmm-text-primary);border:1px solid var(--bmm-border-hover);border-radius:14px;
+    box-shadow:var(--bmm-shadow-modal);
+    font:500 13px/1.35 var(--bmm-font-sans,system-ui),sans-serif;padding:12px;}
+  /* Lifted above the Replay Studio bar when both are open, instead of under it. */
+  body:has(.rstudio-bar:not(.rstudio-mini)) .anim-panel{bottom:120px;}
+  .anim-panel h3{margin:0 0 10px;font-size:14px;font-weight:800;color:var(--bmm-accent);display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .anim-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--bmm-border-hover);border-radius:10px;margin-bottom:6px;background:var(--bmm-bg-base);}
+  .anim-row-main{flex:1;min-width:0;}
+  .anim-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+  .anim-row .sel{font-size:11px;color:var(--bmm-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .anim-empty{color:var(--bmm-text-muted);padding:10px 4px;font-size:12px;border:1px dashed var(--bmm-border-hover);border-radius:10px;text-align:center;}
+  .anim-btn{border:1px solid var(--bmm-border-hover);background:var(--bmm-bg-base);color:var(--bmm-text-primary);border-radius:8px;padding:5px 9px;cursor:pointer;font:inherit;}
+  .anim-btn:hover{background:var(--bmm-bg-hover);border-color:var(--bmm-accent);}
+  .anim-btn:focus-visible,.anim-form input:focus-visible,.anim-form select:focus-visible{outline:2px solid var(--bmm-accent);outline-offset:2px;}
+  .anim-primary{background:var(--bmm-accent);border-color:var(--bmm-accent);color:var(--bmm-text-on-accent);}
+  .anim-primary:hover{background:var(--bmm-accent);filter:brightness(1.1);}
+  .anim-x:hover{border-color:var(--bmm-danger);color:var(--bmm-danger);}
+  .anim-new{width:100%;margin-top:8px;}
   .anim-mini{padding:4px 7px;font-size:12px;}
-  .anim-form{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;padding-top:10px;border-top:1px solid #2a2f3a;}
-  .anim-form label{display:flex;flex-direction:column;gap:3px;font-size:11px;opacity:.8;}
+  .anim-form{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;padding-top:10px;border-top:1px solid var(--bmm-border-hover);}
+  .anim-form label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--bmm-text-secondary);}
   .anim-form .wide{grid-column:1/-1;}
-  .anim-form input,.anim-form select{background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:7px;padding:5px 7px;font:inherit;}
-  .anim-form .rowline{grid-column:1/-1;display:flex;gap:8px;align-items:center;justify-content:space-between;}
-  .anim-status{font-size:11px;opacity:.75;margin-top:6px;min-height:14px;}
-  /* The studio overlays deliberately keep their own dark chrome (they must stay readable on
-     top of ANY theme, including the light ones, while a recording is running). */
-  .anim-panel{--anim-warn:#f59e0b;}
-  .anim-match{font-size:10.5px;opacity:.7;margin-top:3px;min-height:13px;}
-  .anim-match.bad{color:var(--anim-warn);opacity:1;}
-  .anim-row-bad{border-color:var(--anim-warn);}
-  .anim-row-bad .sel{color:var(--anim-warn);opacity:.95;}
-  .anim-toggle{display:flex;align-items:center;gap:5px;font-size:11px;}
+  .anim-selrow{display:flex;gap:6px;}
+  .anim-selrow input{flex:1;min-width:0;}
+  .anim-form input,.anim-form select{background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--bmm-border-hover);border-radius:7px;padding:5px 7px;font:inherit;}
+  .anim-form .rowline{grid-column:1/-1;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+  .anim-status{font-size:11px;color:var(--bmm-text-secondary);margin-top:6px;min-height:14px;}
+  .anim-match{font-size:10.5px;color:var(--bmm-text-muted);margin-top:3px;min-height:13px;}
+  .anim-match.bad{color:var(--bmm-warning);}
+  .anim-row-bad{border-color:var(--bmm-warning);}
+  .anim-row-bad .sel{color:var(--bmm-warning);}
+  .anim-toggle{display:flex;align-items:center;gap:5px;font-size:11px;flex-direction:row !important;}
+  .anim-toggle-end{align-self:end;}
+  .anim-toggle input{accent-color:var(--bmm-accent);}
   `;
   document.head.appendChild(s);
 }
@@ -237,43 +271,43 @@ function render() {
     const bad = a.selector && !isValidSelector(a.selector);
     return `
     <div class="anim-row${bad ? ' anim-row-bad' : ''}" data-id="${esc(a.id)}">
-      <div style="flex:1;min-width:0">
+      <div class="anim-row-main">
         <div class="nm">${esc(a.name || a.preset)}${a.auto ? ' <span data-tooltip="Auto-runs when the target appears">⟳</span>' : ''}</div>
         <div class="sel">${bad ? '⚠ ' : ''}${esc(a.selector || '—')} · ${esc(a.preset)}</div>
       </div>
-      <button class="anim-btn anim-mini" data-act="play" data-id="${esc(a.id)}" data-tooltip="${t('anim.preview') || 'Preview'}">▶</button>
-      <button class="anim-btn anim-mini" data-act="edit" data-id="${esc(a.id)}" data-tooltip="${t('anim.edit') || 'Edit'}">✎</button>
-      <button class="anim-btn anim-mini" data-act="dup" data-id="${esc(a.id)}" data-tooltip="${t('anim.duplicate') || 'Duplicate'}">⧉</button>
-      <button class="anim-btn anim-mini" data-act="del" data-id="${esc(a.id)}" data-tooltip="${t('anim.delete') || 'Delete'}">✕</button>
+      <button class="anim-btn anim-mini" data-anim-act="play" data-id="${esc(a.id)}" data-tooltip="${t('anim.preview') || 'Preview'}">▶</button>
+      <button class="anim-btn anim-mini" data-anim-act="edit" data-id="${esc(a.id)}" data-tooltip="${t('anim.edit') || 'Edit'}">✎</button>
+      <button class="anim-btn anim-mini" data-anim-act="dup" data-id="${esc(a.id)}" data-tooltip="${t('anim.duplicate') || 'Duplicate'}">⧉</button>
+      <button class="anim-btn anim-mini" data-anim-act="del" data-id="${esc(a.id)}" data-tooltip="${t('anim.delete') || 'Delete'}">✕</button>
     </div>`;
-  }).join('') || `<div style="opacity:.6;padding:8px 2px">${t('anim.none') || 'No animations yet — add one below.'}</div>`;
+  }).join('') || `<div class="anim-empty">${t('anim.none') || 'No animations yet — add one below.'}</div>`;
 
   const e = editing;
   const form = e ? `
     <div class="anim-form">
       <label class="wide">${t('anim.name') || 'Name'}<input data-f="name" value="${esc(e.name)}" placeholder="Library cards"></label>
       <label class="wide">${t('anim.selector') || 'Target selector'}
-        <span style="display:flex;gap:6px"><input data-f="selector" value="${esc(e.selector)}" placeholder=".mod-item" style="flex:1">
-        <button class="anim-btn anim-mini" data-act="pick">${t('anim.pick') || 'Pick'}</button></span>
+        <span class="anim-selrow"><input data-f="selector" value="${esc(e.selector)}" placeholder=".mod-item">
+        <button class="anim-btn anim-mini" data-anim-act="pick">${t('anim.pick') || 'Pick'}</button></span>
         <span class="anim-match"></span></label>
       <label>${t('anim.preset') || 'Preset'}<select data-f="preset">${PRESET_KEYS.map((p) => `<option value="${p}" ${e.preset === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
       <label>${t('anim.ease') || 'Ease'}<input data-f="ease" value="${esc(e.ease)}"></label>
       <label>${t('anim.duration') || 'Duration (s)'}<input data-f="duration" type="number" step="0.05" value="${e.duration}"></label>
       <label>${t('anim.delay') || 'Delay (s)'}<input data-f="delay" type="number" step="0.05" value="${e.delay}"></label>
       <label>${t('anim.stagger') || 'Stagger (s)'}<input data-f="stagger" type="number" step="0.01" value="${e.stagger}"></label>
-      <label class="anim-toggle" style="align-self:end"><input type="checkbox" data-f="auto" ${e.auto ? 'checked' : ''}> ${t('anim.auto') || 'Auto-run on appear'}</label>
+      <label class="anim-toggle anim-toggle-end"><input type="checkbox" data-f="auto" ${e.auto ? 'checked' : ''}> ${t('anim.auto') || 'Auto-run on appear'}</label>
       <div class="rowline">
-        <span><button class="anim-btn" data-act="preview-edit">${t('anim.preview') || 'Preview'}</button>
-        <button class="anim-btn" data-act="reset-edit" data-tooltip="${t('anim.reset.tip') || 'Kill running tweens and clear the inline styles they left'}">${t('anim.reset.btn') || 'Reset'}</button></span>
-        <span><button class="anim-btn" data-act="cancel">${t('common.cancel') || 'Cancel'}</button>
-        <button class="anim-btn anim-primary" data-act="save">${t('anim.save') || 'Save'}</button></span>
+        <span><button class="anim-btn" data-anim-act="preview-edit">${t('anim.preview') || 'Preview'}</button>
+        <button class="anim-btn" data-anim-act="reset-edit" data-tooltip="${t('anim.reset.tip') || 'Kill running tweens and clear the inline styles they left'}">${t('anim.reset.btn') || 'Reset'}</button></span>
+        <span><button class="anim-btn" data-anim-act="cancel">${t('common.cancel') || 'Cancel'}</button>
+        <button class="anim-btn anim-primary" data-anim-act="save">${t('anim.save') || 'Save'}</button></span>
       </div>
-    </div>` : `<button class="anim-btn anim-primary" style="width:100%;margin-top:8px" data-act="new">＋ ${t('anim.new') || 'New animation'}</button>`;
+    </div>` : `<button class="anim-btn anim-primary anim-new" data-anim-act="new">＋ ${t('anim.new') || 'New animation'}</button>`;
 
   panel.innerHTML =
-    `<h3>${t('anim.title') || 'Animation Studio'} <button class="anim-btn anim-mini" data-act="close">✕</button></h3>` +
+    `<h3 id="anim-studio-title">${t('anim.title') || 'Animation Studio'} <button class="anim-btn anim-mini anim-x" data-anim-act="close" aria-label="${esc(t('common.close') || 'Close')}">✕</button></h3>` +
     rows + form +
-    `<div class="anim-status"></div>`;
+    `<div class="anim-status" role="status" aria-live="polite"></div>`;
 
   // Live feedback on the selector: how many elements it hits right now, or that it is invalid.
   // Without it you only found out by pressing Preview and reading an error.
@@ -315,11 +349,11 @@ function readForm(): Anim | null {
 }
 
 function onClick(ev: Event) {
-  const el = (ev.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+  const el = (ev.target as HTMLElement).closest('[data-anim-act]') as HTMLElement | null;
   if (!el) return;
   // Keep panel clicks on the panel — don't let them fall through to the app behind.
   ev.stopPropagation();
-  const act = el.getAttribute('data-act');
+  const act = el.getAttribute('data-anim-act');
   const id = el.getAttribute('data-id');
   const list = loadAnims();
   switch (act) {
@@ -358,21 +392,61 @@ function onClick(ev: Event) {
   }
 }
 
-/** Open the Animation Studio panel (from the DevTools menu). */
+/** Open the Animation Studio panel (from the DevTools menu). Idempotent. */
 export function openAnimStudio() {
   ensureStyles();
-  if (panel) { panel.style.display = 'block'; return; }
+  if (panel && panel.isConnected) { panel.style.display = 'block'; panel.querySelector<HTMLElement>('.anim-btn')?.focus(); return; }
   panel = document.createElement('div');
   panel.className = 'anim-panel bmm-no-record';
   panel.setAttribute('data-bmm-no-record', '1');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-labelledby', 'anim-studio-title');
   panel.addEventListener('click', onClick);
-  document.body.appendChild(panel);
+  // Esc inside the panel: first cancels an edit, then closes the studio.
+  panel.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault(); e.stopPropagation();
+    if (editing) { editing = null; render(); panel?.querySelector<HTMLElement>('.anim-btn')?.focus(); }
+    else closeAnimStudio();
+  });
+  // In the app frame like every other overlay (on <body> it spilled over the window margin).
+  (document.getElementById('app-window-outer') || document.body).appendChild(panel);
   editing = null;
   render();
+  panel.querySelector<HTMLElement>('.anim-btn')?.focus();
+  document.dispatchEvent(new CustomEvent('bmm-debug-studio'));
 }
 
+export function isAnimStudioOpen(): boolean {
+  return !!(panel && panel.isConnected);
+}
+
+/** Close the studio and undo what its previews did. Idempotent; every step runs even if an
+ *  earlier one throws. Saved auto-run animations are NOT touched — they are the user's. */
 export function closeAnimStudio() {
-  panel?.remove();
+  const steps: Array<() => unknown> = [
+    () => { cancelPick?.(); cancelPick = null; },
+    () => {
+      // Stop preview tweens still running and clear what they left inline, so no element
+      // is left half-faded or offset once the studio is gone.
+      const els: Element[] = [];
+      for (const ref of touched) { const el = ref.deref(); if (el && el.isConnected) els.push(el); }
+      touched = new Set();
+      if (!els.length) return;
+      const g = (window as any).gsap;
+      try { g?.killTweensOf?.(els); } catch { /* ignore */ }
+      els.forEach((el) => {
+        const st = (el as HTMLElement).style;
+        if (!st) return;
+        ['opacity', 'transform', 'translate', 'scale', 'rotate', 'visibility'].forEach((prop) => st.removeProperty(prop));
+      });
+    },
+    () => { panel?.remove(); },
+  ];
+  for (const step of steps) {
+    try { step(); } catch (e) { console.warn('[Animation Studio] close step failed', e); }
+  }
   panel = null;
   editing = null;
+  document.dispatchEvent(new CustomEvent('bmm-debug-studio'));
 }

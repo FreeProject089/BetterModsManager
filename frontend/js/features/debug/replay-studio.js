@@ -42,6 +42,12 @@ let bar = null;
 // time — you would minimise it and watch it reopen on the next meter tick.
 let minimized = false;
 let frameEl = null;
+// Everything the studio hangs on window/document (frame drag, element picker) is registered
+// with this signal, so closing the studio removes all of it in one call — closing used to
+// leave the frame's pointermove/pointerup on window for good, and a picker started before
+// closing kept eating the app's next click.
+let studioAC = null;
+let cancelPick = null;
 // ── frame geometry ──────────────────────────────────────────────────────────────
 function fullscreenRect() {
     return { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
@@ -85,6 +91,12 @@ function renderFrame() {
     frameEl.classList.toggle('rstudio-frame-locked', !editable);
 }
 function removeFrame() { frameEl?.remove(); frameEl = null; }
+// The studio's floating UI lives in the app frame like every other overlay (an overlay on
+// <body> spills over the transparent window margin). The capture FRAME stays on <body>:
+// its rectangle is in window coordinates, the same ones the recording uses.
+function uiHost() {
+    return document.getElementById('app-window-outer') || document.body;
+}
 // Drag to move + a bottom-right handle to resize (custom preset only).
 function makeDraggable(el) {
     const handle = document.createElement('div');
@@ -120,8 +132,9 @@ function makeDraggable(el) {
     };
     const up = () => { if (mode && S?.recording && !S.paused)
         pushRegion(); mode = ''; };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    const signal = studioAC?.signal;
+    window.addEventListener('pointermove', move, { signal });
+    window.addEventListener('pointerup', up, { signal });
 }
 // ── region timeline ──
 function pushRegion() {
@@ -140,10 +153,25 @@ async function takeSnapshot() {
 // serialises the live DOM for a snapshot, so hiding them just before the start snapshot keeps
 // them out of it entirely (no placeholder box). The later reveal is a mutation on a blocked
 // element, which rrweb ignores — so they stay absent from the whole recording.
+//
+// It restores EXACTLY what it changed. It used to reveal by writing display:'' onto every
+// no-record element in the document — including ones that were hidden on purpose by an
+// inline style (a closed DevTools dialog, a highlighter box), which then reappeared.
+const hiddenByStudio = new Map();
 function hideNoRecord(on) {
-    document.querySelectorAll('.bmm-no-record, [data-bmm-no-record]').forEach((el) => {
-        el.style.display = on ? 'none' : '';
-    });
+    if (on) {
+        document.querySelectorAll('.bmm-no-record, [data-bmm-no-record]').forEach((el) => {
+            if (hiddenByStudio.has(el))
+                return;
+            hiddenByStudio.set(el, el.style.display);
+            el.style.display = 'none';
+        });
+    }
+    else {
+        for (const [el, prev] of hiddenByStudio)
+            el.style.display = prev;
+        hiddenByStudio.clear();
+    }
 }
 // A stable-ish CSS selector for a picked element (id → a couple of classes → tag), skipping
 // our own studio classes so a pick never targets the toolbar.
@@ -159,8 +187,8 @@ function makeHighlighter() {
     const box = document.createElement('div');
     box.setAttribute('data-bmm-no-record', '1');
     Object.assign(box.style, {
-        position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', border: '2px solid #ef4444',
-        background: 'rgba(239,68,68,.12)', borderRadius: '4px', transition: 'all .05s linear', display: 'none',
+        position: 'fixed', zIndex: '2147483646', pointerEvents: 'none', border: '2px solid var(--bmm-danger)',
+        background: 'color-mix(in srgb, var(--bmm-danger) 12%, transparent)', borderRadius: '4px', transition: 'all .05s linear', display: 'none',
     });
     document.body.appendChild(box);
     return {
@@ -190,10 +218,14 @@ function pickToHide() {
         document.removeEventListener('mousemove', onMove, true);
         document.removeEventListener('keydown', onKey, true);
         hi.done();
+        if (cancelPick === finish)
+            cancelPick = null;
         if (S)
             S.picking = false;
         renderBar();
     };
+    cancelPick?.();
+    cancelPick = finish;
     const onMove = (e) => { const el = e.target; hi.move(el && !ownUI(el) ? el : null); };
     const onKey = (e) => { if (e.key === 'Escape') {
         e.preventDefault();
@@ -279,12 +311,35 @@ export async function studioStart() {
     catch { /* ignore */ }
     await setExtraBlockSelectors(S.hideSelectors);
     markStudioRecordable(!!S.showStudios);
-    if (!S.showStudios)
-        hideNoRecord(true);
-    await subscribeReplay(listener);
-    await takeSnapshot(); // seed the buffer with a self-contained full snapshot
-    if (!S.showStudios)
+    // The reveal is in `finally`: if the recorder fails to start, the studios (and DevTools)
+    // must not stay hidden with display:none — that left the UI gone with no way back.
+    try {
+        if (!S.showStudios)
+            hideNoRecord(true);
+        await subscribeReplay(listener);
+        await takeSnapshot(); // seed the buffer with a self-contained full snapshot
+    }
+    catch (e) {
+        console.warn('[Replay Studio] recorder failed to start', e);
+        if (listener) {
+            try {
+                await unsubscribeReplay(listener);
+            }
+            catch { /* ignore */ }
+            listener = null;
+        }
+        if (S)
+            S.recording = false;
+    }
+    finally {
         hideNoRecord(false); // reveal — a blocked-element mutation, ignored by the recorder
+    }
+    if (!S || !S.recording) {
+        markStudioRecordable(false);
+        renderBar();
+        setStatus(t('rstudio.startfail') || 'The recorder could not start.');
+        return;
+    }
     pushRegion(); // initial frame keyframe
     renderFrame();
     renderBar();
@@ -476,9 +531,9 @@ function renderBar() {
     if (!S || !bar)
         return;
     const rec = S.recording, paused = S.paused;
-    const btn = (id, label, cls = '') => `<button class="rstudio-btn ${cls}" data-act="${id}">${label}</button>`;
+    const btn = (id, label, cls = '') => `<button class="rstudio-btn ${cls}" data-rs-act="${id}">${label}</button>`;
     const presetSel = `
-    <select class="rstudio-sel" data-act="preset" ${rec ? 'disabled' : ''}>
+    <select class="rstudio-sel" data-rs-act="preset" ${rec ? 'disabled' : ''}>
       <option value="fullscreen" ${S.preset === 'fullscreen' ? 'selected' : ''}>${t('rstudio.fullscreen') || 'Fullscreen'}</option>
       <option value="main" ${S.preset === 'main' ? 'selected' : ''}>${t('rstudio.main') || 'Main window (no Tasky bar)'}</option>
       <option value="custom" ${S.preset === 'custom' ? 'selected' : ''}>${t('rstudio.custom') || 'Custom frame'}</option>
@@ -538,12 +593,12 @@ function renderBar() {
     // review/export state.
     const showHide = rec || S.events.length < 2;
     const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" data-tooltip="${esc(s)}">${esc(s)}<button data-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
-    const studioToggle = `<label class="rstudio-showstudios" data-tooltip="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
+    const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" data-tooltip="${esc(s)}">${esc(s)}<button data-rs-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
+    const studioToggle = `<label class="rstudio-showstudios" data-tooltip="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-rs-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
     const hideRow = showHide
-        ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
+        ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-rs-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
         : '';
-    bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-min" data-act="min" data-tooltip="${esc(t('rstudio.minimize') || 'Minimise — recording continues')}" aria-label="${esc(t('rstudio.minimize') || 'Minimise')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button><button class="rstudio-btn rstudio-x" data-act="close" aria-label="${esc(t('common.close') || 'Close')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>${hideRow}`;
+    bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-min" data-rs-act="min" data-tooltip="${esc(t('rstudio.minimize') || 'Minimise — recording continues')}" aria-label="${esc(t('rstudio.minimize') || 'Minimise')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button><button class="rstudio-btn rstudio-x" data-rs-act="close" aria-label="${esc(t('common.close') || 'Close')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>${hideRow}`;
     if (!bar.dataset.miniWired) {
         bar.dataset.miniWired = '1';
         bar.addEventListener('click', (e) => {
@@ -552,7 +607,7 @@ function renderBar() {
             // The buttons inside the pill still do their own job; only a click on the pill
             // ITSELF restores. Otherwise stopping the recording from the collapsed state
             // would also expand it, which is the opposite of what you asked for.
-            if (e.target.closest('[data-act]'))
+            if (e.target.closest('[data-rs-act]'))
                 return;
             minimized = false;
             renderBar();
@@ -588,7 +643,7 @@ function updateEstimate() {
     out.textContent = `≈ ${fmtMB(bytes)} · ${n} ${t('rstudio.events') || 'events'}`;
 }
 function onBarClick(e) {
-    // A cut chip removes itself. Handled before the [data-act] lookup because a chip is not a
+    // A cut chip removes itself. Handled before the [data-rs-act] lookup because a chip is not a
     // button — making it one would have put it in the toolbar's tab order between the fields
     // it sits next to.
     const chip = e.target.closest('[data-cut]');
@@ -601,12 +656,12 @@ function onBarClick(e) {
         }
         return;
     }
-    const el = e.target.closest('[data-act]');
+    const el = e.target.closest('[data-rs-act]');
     if (!el || !S)
         return;
     // Keep the click on the toolbar — never let it bubble to the app underneath.
     e.stopPropagation();
-    const act = el.getAttribute('data-act');
+    const act = el.getAttribute('data-rs-act');
     switch (act) {
         case 'start':
             studioStart();
@@ -702,7 +757,7 @@ function onBarChange(e) {
     const el = e.target;
     if (!S)
         return;
-    const act = el.getAttribute('data-act');
+    const act = el.getAttribute('data-rs-act');
     if (act === 'preset') {
         S.preset = el.value;
         S.frame = presetRect(S.preset);
@@ -713,7 +768,9 @@ function onBarChange(e) {
         S.showStudios = el.checked;
     }
 }
-// Self-contained styles (injected once) so the studio doesn't depend on the build's CSS.
+// Styles injected once, on first open, so they cost nothing at boot. Colours are the app's
+// theme tokens: the bar follows light and dark themes like the rest of BMM, on an opaque
+// elevated surface so it stays readable over whatever it floats on.
 function ensureStyles() {
     if (document.getElementById('rstudio-styles'))
         return;
@@ -723,103 +780,145 @@ function ensureStyles() {
   .rstudio-bar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;
     isolation:isolate;pointer-events:auto;
     display:flex;flex-direction:column;gap:8px;padding:8px 10px;border-radius:14px;
-    background:#161b22;color:#e6edf3;border:1px solid #2a2f3a;box-shadow:0 10px 40px rgba(0,0,0,.5);
-    font:600 13px/1.2 system-ui,sans-serif;
+    background:var(--bmm-bg-elevated);color:var(--bmm-text-primary);border:1px solid var(--bmm-border-hover);
+    box-shadow:var(--bmm-shadow-modal);
+    font:600 13px/1.2 var(--bmm-font-sans,system-ui),sans-serif;
     /* max-content, then capped. A fixed, shrink-to-fit flex container that is allowed to WRAP
-       computes a narrow preferred width and wraps early — it folded to 640px inside a 980px
-       budget and used three rows where two fit. Asking for max-content makes it take the room
-       it is allowed before wrapping at all. */
-    width:max-content;max-width:min(94vw,980px);}
-  /* Wraps to a second row instead of crushing its children. Without this the row could only
-     shrink, so "Add cut" and "Export .bmmreplay" broke across two lines INSIDE their buttons
-     and the inputs lost most of their width. */
+       computes a narrow preferred width and wraps early. Asking for max-content makes it take
+       the room it is allowed before wrapping at all. */
+    width:max-content;max-width:min(94%,980px);}
+  /* Wraps to a second row instead of crushing its children. */
   .rstudio-main{display:flex;align-items:center;flex-wrap:wrap;gap:8px;row-gap:8px;}
-  .rstudio-hide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:7px;border-top:1px solid #2a2f3a;}
-  .rstudio-hide-lbl{font-weight:700;opacity:.7;font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
-  .rstudio-hide-none{opacity:.5;font-weight:500;font-size:12px;}
-  .rstudio-showstudios{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11.5px;font-weight:600;opacity:.85;cursor:pointer;white-space:nowrap;}
-  .rstudio-showstudios input{cursor:pointer;}
-  .rstudio-chip{display:inline-flex;align-items:center;gap:5px;background:#0d1117;border:1px solid #2a2f3a;border-radius:999px;
-    padding:2px 4px 2px 9px;font:600 11px/1.4 ui-monospace,monospace;max-width:200px;}
+  .rstudio-hide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:7px;border-top:1px solid var(--bmm-border-hover);}
+  .rstudio-hide-lbl{font-weight:700;color:var(--bmm-text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
+  .rstudio-hide-none{color:var(--bmm-text-muted);font-weight:500;font-size:12px;}
+  .rstudio-showstudios{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11.5px;font-weight:600;color:var(--bmm-text-secondary);cursor:pointer;white-space:nowrap;}
+  .rstudio-showstudios input{cursor:pointer;accent-color:var(--bmm-accent);}
+  .rstudio-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bmm-bg-base);border:1px solid var(--bmm-border-hover);border-radius:999px;
+    padding:2px 4px 2px 9px;font:600 11px/1.4 var(--bmm-font-mono,ui-monospace),monospace;max-width:200px;}
   .rstudio-chip>span,.rstudio-chip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .rstudio-chip button{border:0;background:#2a2f3a;color:#e6edf3;border-radius:50%;width:15px;height:15px;line-height:1;cursor:pointer;font-size:10px;flex-shrink:0;}
-  .rstudio-chip button:hover{background:#ef4444;}
+  .rstudio-chip button{border:0;background:var(--bmm-s10);color:var(--bmm-text-primary);border-radius:50%;width:15px;height:15px;line-height:1;cursor:pointer;font-size:10px;flex-shrink:0;}
+  .rstudio-chip button:hover{background:var(--bmm-danger);color:var(--bmm-text-on-accent);}
   .rstudio-mini{padding:4px 8px;font-size:12px;}
-  .rstudio-title{font-weight:800;margin-right:2px;color:#3b82f6;display:flex;align-items:center;gap:6px;}
-  .rstudio-btn{border:1px solid #2a2f3a;background:#0d1117;color:#e6edf3;border-radius:9px;
+  .rstudio-title{font-weight:800;margin-right:2px;color:var(--bmm-accent);display:flex;align-items:center;gap:6px;}
+  .rstudio-btn{border:1px solid var(--bmm-border-hover);background:var(--bmm-bg-base);color:var(--bmm-text-primary);border-radius:9px;
     padding:6px 10px;cursor:pointer;font:inherit;white-space:nowrap;flex:0 0 auto;
     transition:background .12s,border-color .12s;}
-  /* Minimise + close ride to the right end of whatever row they land on, so they stay where
-     the hand expects them once the bar wraps. */
+  .rstudio-btn:focus-visible,.rstudio-sel:focus-visible{outline:2px solid var(--bmm-accent);outline-offset:2px;}
+  /* Minimise + close ride to the right end of whatever row they land on. */
   .rstudio-min{margin-left:auto;}
-  .rstudio-btn:hover{background:#1c2333;border-color:#3b82f6;}
-  .rstudio-primary{background:var(--bmm-accent,#3b82f6);border-color:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
-  .rstudio-primary:hover{background:#2563eb;}
-  .rstudio-x{padding:6px 9px;opacity:.7;}
-  .rstudio-sel{background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:9px;padding:6px 8px;font:inherit;}
-  .rstudio-status{opacity:.8;font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0;}
-  .rstudio-trim{display:flex;align-items:center;gap:6px;font-weight:500;opacity:.9;white-space:nowrap;flex:0 0 auto;}
-  /* The cut fields are styled WITH the trim field, not separately.
-     They had no rule at all — only markup — so they rendered as default OS number inputs: white
-     boxes, taller than everything else, in the middle of a dark bar. Styling them here rather
-     than in their own block is what stops the next field from being forgotten the same way. */
-  .rstudio-trim-in,.rstudio-cut-a,.rstudio-cut-b{width:56px;background:#0d1117;color:#e6edf3;
-    border:1px solid #2a2f3a;border-radius:7px;padding:4px 6px;font:inherit;flex:0 0 auto;}
-  .rstudio-trim-in:focus,.rstudio-cut-a:focus,.rstudio-cut-b:focus{outline:none;border-color:#3b82f6;}
-  .rstudio-cut-a::placeholder,.rstudio-cut-b::placeholder{color:#6b7280;font-weight:500;}
-  /* The cuts already added, as removable chips — also markup with no rule until now. */
+  .rstudio-btn:hover{background:var(--bmm-bg-hover);border-color:var(--bmm-accent);}
+  .rstudio-primary{background:var(--bmm-accent);border-color:var(--bmm-accent);color:var(--bmm-text-on-accent);}
+  .rstudio-primary:hover{background:var(--bmm-accent);filter:brightness(1.1);}
+  .rstudio-x{padding:6px 9px;color:var(--bmm-text-secondary);}
+  .rstudio-x:hover{border-color:var(--bmm-danger);color:var(--bmm-danger);}
+  .rstudio-sel{background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--bmm-border-hover);border-radius:9px;padding:6px 8px;font:inherit;}
+  .rstudio-status{color:var(--bmm-text-secondary);font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0;}
+  .rstudio-trim{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--bmm-text-secondary);white-space:nowrap;flex:0 0 auto;}
+  /* The cut fields are styled WITH the trim field, so the next field cannot be forgotten. */
+  .rstudio-trim-in,.rstudio-cut-a,.rstudio-cut-b{width:56px;background:var(--bmm-bg-base);color:var(--bmm-text-primary);
+    border:1px solid var(--bmm-border-hover);border-radius:7px;padding:4px 6px;font:inherit;flex:0 0 auto;}
+  .rstudio-trim-in:focus,.rstudio-cut-a:focus,.rstudio-cut-b:focus{outline:none;border-color:var(--bmm-accent);}
+  .rstudio-cut-a::placeholder,.rstudio-cut-b::placeholder{color:var(--bmm-text-muted);font-weight:500;}
   .rstudio-cuts{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-  .rstudio-cut-chip{display:inline-flex;align-items:center;gap:4px;background:#0d1117;
-    border:1px solid #2a2f3a;border-radius:999px;padding:3px 9px;cursor:pointer;
-    font:600 11px/1.4 ui-monospace,monospace;white-space:nowrap;}
-  .rstudio-cut-chip:hover{border-color:#ef4444;color:#ef4444;}
-  .rstudio-est{opacity:.65;font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .rstudio-cut-chip{display:inline-flex;align-items:center;gap:4px;background:var(--bmm-bg-base);
+    border:1px solid var(--bmm-border-hover);border-radius:999px;padding:3px 9px;cursor:pointer;
+    font:600 11px/1.4 var(--bmm-font-mono,ui-monospace),monospace;white-space:nowrap;}
+  .rstudio-cut-chip:hover{border-color:var(--bmm-danger);color:var(--bmm-danger);}
+  .rstudio-est{color:var(--bmm-text-muted);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
   /* Live meter: elapsed + buffered size, with a gauge against the memory budget. */
   .rstudio-meter{display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;}
-  .rstudio-meter-txt{font-size:11.5px;opacity:.85;white-space:nowrap;min-width:96px;}
-  .rstudio-gauge{width:54px;height:5px;border-radius:999px;background:#2a2f3a;overflow:hidden;}
-  .rstudio-gauge > i{display:block;height:100%;width:0;border-radius:999px;background:#3b82f6;transition:width .3s linear;}
-  .rstudio-bar{--rs-warn:#f59e0b;}
-  .rstudio-meter.warn .rstudio-gauge > i{background:var(--rs-warn);}
-  .rstudio-meter.warn .rstudio-meter-txt{color:var(--rs-warn);opacity:1;}
-  .rstudio-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:rstudio-pulse 1.4s infinite;}
-  .rstudio-dot.paused{background:#f59e0b;animation:none;}
-  @keyframes rstudio-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-  .rstudio-frame{position:fixed;z-index:2147482000;border:2px solid #3b82f6;border-radius:8px;
-    box-shadow:0 0 0 100vmax rgba(0,0,0,.35);pointer-events:none;}
-  .rstudio-frame-locked{box-shadow:0 0 0 2px rgba(59,130,246,.4);}
+  .rstudio-meter-txt{font-size:11.5px;color:var(--bmm-text-secondary);white-space:nowrap;min-width:96px;}
+  .rstudio-gauge{width:54px;height:5px;border-radius:999px;background:var(--bmm-s10);overflow:hidden;}
+  .rstudio-gauge > i{display:block;height:100%;width:0;border-radius:999px;background:var(--bmm-accent);transition:width .3s linear;}
+  .rstudio-meter.warn .rstudio-gauge > i{background:var(--bmm-warning);}
+  .rstudio-meter.warn .rstudio-meter-txt{color:var(--bmm-warning);}
+  .rstudio-dot{width:10px;height:10px;border-radius:50%;background:var(--bmm-danger);animation:rstudio-pulse 1.4s infinite;}
+  .rstudio-dot.paused{background:var(--bmm-warning);animation:none;}
+  @keyframes rstudio-pulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){.rstudio-dot{animation:none;}}
+  .rstudio-frame{position:fixed;z-index:2147482000;border:2px solid var(--bmm-accent);border-radius:8px;
+    box-shadow:0 0 0 100vmax var(--bmm-bg-overlay);pointer-events:none;}
+  .rstudio-frame-locked{box-shadow:0 0 0 2px var(--bmm-accent-dim);}
   .rstudio-frame-handle{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:50%;
-    background:#3b82f6;border:2px solid #fff;cursor:nwse-resize;}
+    background:var(--bmm-accent);border:2px solid var(--bmm-text-on-accent);cursor:nwse-resize;}
   `;
     document.head.appendChild(s);
 }
-/** Open the Replay Studio control bar (called from the DevTools menu). */
+/** Open the Replay Studio control bar (called from the DevTools menu). Idempotent. */
 export function openReplayStudio() {
     ensureStyles();
-    if (bar) {
+    if (bar && bar.isConnected) {
         bar.style.display = 'flex';
+        bar.querySelector('.rstudio-btn')?.focus();
         return;
     }
+    studioAC?.abort();
+    studioAC = new AbortController();
     S = { recording: false, paused: false, events: [], bytes: 0, warned: false, autoStopped: false, regions: [], pauses: [], startTs: 0, pauseStart: 0, preset: 'fullscreen', frame: presetRect('fullscreen'), hideSelectors: [], picking: false, showStudios: false };
+    cutRanges = [];
+    minimized = false;
     bar = document.createElement('div');
     bar.className = 'rstudio-bar bmm-no-record';
     bar.setAttribute('data-bmm-no-record', '1');
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', t('rstudio.title') || 'Replay Studio');
     bar.addEventListener('click', onBarClick);
     bar.addEventListener('change', onBarChange);
-    document.body.appendChild(bar);
+    // Esc inside the bar closes it, like every other panel. Not while a recording runs: one
+    // stray keypress must not end a take.
+    bar.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !(S?.recording)) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeReplayStudio();
+        }
+    });
+    uiHost().appendChild(bar);
     renderBar();
+    document.dispatchEvent(new CustomEvent('bmm-debug-studio'));
 }
+export function isReplayStudioOpen() {
+    return !!(bar && bar.isConnected);
+}
+/** Close the studio and undo everything it changed. Idempotent, and every step runs even if
+ *  an earlier one throws — a half-finished close is how a studio leaves the app altered. */
 export function closeReplayStudio() {
-    if (S?.recording && listener) {
-        unsubscribeReplay(listener);
-        listener = null;
+    const steps = [
+        () => { cancelPick?.(); cancelPick = null; },
+        () => stopMeter(),
+        () => {
+            if (listener) {
+                const l = listener;
+                listener = null;
+                if (S)
+                    S.recording = false;
+                void Promise.resolve(unsubscribeReplay(l)).catch(() => { });
+            }
+        },
+        // A video capture still running when the studio closes is stopped and SAVED, not dropped.
+        () => { if (isCapturing())
+            void stopCapture().catch(() => { }); },
+        // Never leave studio-only block rules on the shared recorder.
+        () => { void Promise.resolve(setExtraBlockSelectors([])).catch(() => { }); },
+        () => markStudioRecordable(false),
+        () => hideNoRecord(false),
+        () => removeFrame(),
+        () => { studioAC?.abort(); studioAC = null; },
+        () => { bar?.remove(); },
+    ];
+    for (const step of steps) {
+        try {
+            step();
+        }
+        catch (e) {
+            console.warn('[Replay Studio] close step failed', e);
+        }
     }
-    setExtraBlockSelectors([]); // never leave studio-only block rules on the shared recorder
-    markStudioRecordable(false);
-    hideNoRecord(false);
-    removeFrame();
-    bar?.remove();
     bar = null;
     S = null;
+    cutRanges = [];
+    minimized = false;
+    document.dispatchEvent(new CustomEvent('bmm-debug-studio'));
 }
 //# sourceMappingURL=replay-studio.js.map

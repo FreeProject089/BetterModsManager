@@ -8,6 +8,7 @@ pub mod resources_live;
 pub mod resources_rules;
 pub mod mod_order;
 pub mod order_share;
+pub mod order_lists;
 pub mod bmm_paths;
 pub mod bmm_paths_core;
 pub mod doc_sign;
@@ -95,3 +96,5 @@ pub mod ask_core;
 #[cfg(test)]
 mod ai_eval;
 pub mod ai;
+// Laya in the feedback dialog, the crash manager and the debug menu.
+pub mod ai_assist;

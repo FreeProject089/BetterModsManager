@@ -1,26 +1,73 @@
 // @ts-nocheck
 /**
- * debug-menu.js — Debug Menu Logic
+ * debug-menu.ts — the Settings debug card, and the small public face of DevTools.
+ *
+ * The DevTools UI itself (debug-ui.ts) is a large module and is only needed once somebody
+ * opens it, so nothing here imports it statically: openDebugUI / toggleDebugUI load it on
+ * first use. Code that only wants to ADD a panel imports registerDebugSection from here,
+ * which costs a few hundred bytes and never loads the UI.
  */
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { debugUI } from './debug-ui.js';
+export { registerDebugSection, getDebugSections } from './debug-sections.js';
+let _ui = null;
+let _loading = null;
+/** The DevTools UI module, loaded on first use. */
+function loadDebugUI() {
+    if (_ui)
+        return Promise.resolve(_ui);
+    if (!_loading) {
+        _loading = import('./debug-ui.js')
+            .then((m) => { _ui = m.debugUI; return _ui; })
+            .finally(() => { _loading = null; });
+    }
+    return _loading;
+}
+/** True while the DevTools panel is on screen. Never loads the UI to answer. */
+export function isDebugUIOpen() {
+    return !!(_ui && _ui.isOpen);
+}
+/** Same contract as the old debugUI.toggle(force): opening is gated on debug mode unless
+ *  force === true; closing always works. */
+export async function toggleDebugUI(force = undefined) {
+    // Closing something that was never built is a no-op — do not load it just to close it.
+    if (force === false && !_ui)
+        return;
+    try {
+        const ui = await loadDebugUI();
+        ui.toggle(force);
+    }
+    catch (e) {
+        console.error('[BMM-Debug] DevTools failed to load', e);
+    }
+}
+/** Open DevTools on a given tab or registered section id. */
+export async function openDebugUI(tabOrSectionId = undefined) {
+    try {
+        const ui = await loadDebugUI();
+        ui.toggle(true);
+        if (tabOrSectionId)
+            ui.showTab?.(tabOrSectionId);
+    }
+    catch (e) {
+        console.error('[BMM-Debug] DevTools failed to load', e);
+    }
+}
 export function initDebugMenu() {
     // Show/Hide based on app.cfg (Prod=false or FSDM=true)
     Promise.all([invoke('is_debug_mode'), invoke('is_fsdm_mode')]).then(([isDebug, isFSDM]) => {
         window.bmmDebugEnabled = isDebug || isFSDM;
         window.bmmFSDMEnabled = isFSDM;
-        // NOTE: do NOT eagerly init the Debug UI — it builds a heavy panel + a
-        // refresh loop. It is now lazily built on first open (debugUI.toggle)
-        // and fully unloaded when closed, so it takes ~0 resources until used.
+        // The DevTools UI is not built here: it is loaded and built on first open and
+        // fully unloaded on close, so it costs nothing until used.
         const card = document.getElementById('debug-menu-card');
         if (card) {
             // Manual hide by default (even if enabled) per user request
-            // Section is toggled via Alt+Shift+D (handled in user-logger.js)
+            // Section is toggled via Ctrl+D on the Settings page (user-logger.ts)
             card.style.display = 'none';
         }
-    });
+    }).catch(() => { });
     const genCrashBtn = document.getElementById('btn-debug-gen-crash');
     if (genCrashBtn) {
         genCrashBtn.addEventListener('click', async () => {
@@ -77,7 +124,7 @@ export function initDebugMenu() {
     const openDebugBtn = document.getElementById('btn-open-debug') || document.getElementById('dbg-open-menu');
     if (openDebugBtn) {
         openDebugBtn.addEventListener('click', () => {
-            debugUI.toggle(true); // Force open
+            void toggleDebugUI(true); // Force open
         });
     }
 }

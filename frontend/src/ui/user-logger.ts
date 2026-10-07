@@ -5,14 +5,9 @@
 import { invoke } from '../core/api.js';
 import { appState } from '../core/state.js';
 import { toast } from './app.js';
-import { debugUI } from '../features/debug/debug-ui.js';
-
-// The imported debugUI has its own types via @ts-nocheck'd file.
-// We use a type assertion interface to make this module compile cleanly.
-interface DebugUILike {
-    toggle(force?: boolean): void;
-}
-const _debugUI = debugUI as unknown as DebugUILike;
+// The DevTools UI is a large module loaded on first open; these two never load it to
+// answer "is it open?" and load it only when it must actually open.
+import { toggleDebugUI, isDebugUIOpen } from '../features/debug/debug-menu.js';
 
 export function initInteractionLogging(): void {
     document.addEventListener('click', (e: MouseEvent) => {
@@ -37,8 +32,8 @@ export function initInteractionLogging(): void {
             // If the overlay is already open (e.g. opened from a navbar button
             // without unlocking the Debug glass card), Ctrl+Alt+D must always be
             // able to CLOSE it. Only OPENING stays gated behind debug mode.
-            if ((_debugUI as any).isOpen || appState.get('debugMode')) {
-                _debugUI.toggle();
+            if (isDebugUIOpen() || appState.get('debugMode')) {
+                void toggleDebugUI();
             } else {
                 console.warn('[BMM-DEBUG] Access denied. Unlock Debug Mode in Settings (Ctrl+D) first.');
                 toast(((window as any).t ? (window as any).t('settings.devToolsLocked') : 'DevTools locked. Unlock in Settings.'), 'warning');
@@ -46,7 +41,7 @@ export function initInteractionLogging(): void {
         }
         else if (e.ctrlKey && e.shiftKey && key === 'f') {
             if ((window as any).bmmFSDMEnabled) {
-                _debugUI.toggle();
+                void toggleDebugUI();
             }
         }
         else if (e.ctrlKey && !e.altKey && !e.shiftKey && key === 'd') {

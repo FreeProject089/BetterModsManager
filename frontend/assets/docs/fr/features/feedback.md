@@ -42,6 +42,15 @@ d'utilisateur Windows. Il n'est pré-coché que pour les plantages, et tu peux l
 :::
 
 
+## Les propositions de Laya
+
+Avec l'IA activée, un encadré **Laya** sous la description propose le type, la catégorie, la
+gravité, la partie de l'app, des tags, un rapport précédent qui ressemble et, pour un crash, le
+rapport de crash correspondant. Rien n'est appliqué avant **Appliquer** ; seul ce que tu as
+appliqué est envoyé (comme étiquettes du rapport). Voir
+[IA : Laya pendant que vous écrivez un rapport](doc-page:features/ai.fr#laya-pendant-que-vous-ecrivez-un-rapport).
+
+
 ## Réponses : lié ou anonyme
 
 :::note[Lie ton compte]

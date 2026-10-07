@@ -107,6 +107,10 @@ pub struct OrderEntry {
     /// The id the mod has in the repo it came from, which survives version bumps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo_mod_id: Option<String>,
+    /// That repo, so two repos that both call a mod `core` are not mistaken for each other.
+    /// Absent from documents written before saved lists; the repo id alone still matches then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_repo: Option<String>,
     /// The local BMM id: only meaningful on the machine that wrote the document.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -139,6 +143,7 @@ pub struct LibMod {
     pub version: String,
     pub content_id: Option<String>,
     pub repo_mod_id: Option<String>,
+    pub source_repo: Option<String>,
 }
 
 impl LibMod {
@@ -149,6 +154,19 @@ impl LibMod {
             version: m.version.clone(),
             content_id: m.content_id.clone(),
             repo_mod_id: m.repo_mod_id.clone(),
+            source_repo: m.source_repo.clone(),
+        }
+    }
+
+    /// The entry that names this mod by everything that identifies it.
+    pub fn entry(&self) -> OrderEntry {
+        OrderEntry {
+            name: self.name.clone(),
+            version: self.version.clone(),
+            content_id: self.content_id.clone().filter(|s| !s.is_empty()),
+            repo_mod_id: self.repo_mod_id.clone().filter(|s| !s.is_empty()),
+            source_repo: self.source_repo.clone().filter(|s| !s.is_empty()),
+            id: Some(self.id.clone()),
         }
     }
 }
@@ -165,13 +183,7 @@ pub fn build_doc(order: &[String], lib: &[LibMod], name: Option<String>, game: O
         mods: order
             .iter()
             .map(|id| match by_id.get(id.as_str()) {
-                Some(m) => OrderEntry {
-                    name: m.name.clone(),
-                    version: m.version.clone(),
-                    content_id: m.content_id.clone().filter(|s| !s.is_empty()),
-                    repo_mod_id: m.repo_mod_id.clone().filter(|s| !s.is_empty()),
-                    id: Some(m.id.clone()),
-                },
+                Some(m) => m.entry(),
                 None => OrderEntry { name: id.clone(), id: Some(id.clone()), ..Default::default() },
             })
             .collect(),
@@ -283,57 +295,133 @@ pub fn parse_text(text: &str) -> Result<OrderDoc, String> {
     Ok(doc)
 }
 
-/// Each entry of the document → a library mod, or None. The strongest identity wins: local
-/// id (same machine), then content fingerprint, then repo id, then the name (case-insensitive,
-/// only when exactly one library mod has it). A library mod answers for one entry at most.
-pub fn resolve(doc: &OrderDoc, lib: &[LibMod]) -> Vec<Option<String>> {
+/// How an entry found its library mod, strongest first. The screen shows it: a match by name
+/// is a guess worth a glance, a match by fingerprint is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchKind {
+    /// The local BMM id (a list saved on this machine, or a round trip).
+    Id,
+    /// The content fingerprint: the same mod, whatever it is called here.
+    Content,
+    /// The id the mod has in the repo it came from (and that repo, when both sides know it).
+    Source,
+    /// The name, with the version deciding between mods that share it, or agreeing.
+    NameVersion,
+    /// The name alone (case, spaces, `_` and `-` ignored).
+    Name,
+    /// Several library mods carry that name and nothing decides: nobody is guessed.
+    Ambiguous,
+    /// Nothing in the library answers to it.
+    Missing,
+}
+
+/// One entry, resolved.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Resolution {
+    pub mod_id: Option<String>,
+    pub quality: MatchKind,
+    /// Library mods that carried the name when the name was asked (2+ when ambiguous).
+    pub candidates: usize,
+    /// Found by name while the entry names another version.
+    pub version_differs: bool,
+}
+
+/// A name as people mistype it: case, spaces, `_` and `-` do not count.
+pub fn norm_name(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_whitespace() && *c != '_' && *c != '-')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+fn some_str(o: &Option<String>) -> Option<&str> {
+    o.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
+fn same_repo(a: &str, b: &str) -> bool {
+    a.trim_end_matches('/').eq_ignore_ascii_case(b.trim_end_matches('/'))
+}
+
+/// Each entry → a library mod, with how it was found. The strongest identity wins, pass by
+/// pass over ALL entries, so a fingerprint claims its mod before a name could: local id, then
+/// content fingerprint, then repo id (same repo first), then the name, where the version
+/// decides between namesakes or nobody is guessed. A library mod answers for one entry at most.
+///
+/// `trust_ids`: a list saved on THIS machine names mods by their local id, which survives a
+/// rename. A document from elsewhere does not: there, a local id counts only alongside the same
+/// name, so an id that happens to exist here never pulls an unrelated mod in.
+pub fn resolve_entries(entries: &[OrderEntry], lib: &[LibMod], trust_ids: bool) -> Vec<Resolution> {
     let mut used: HashSet<String> = HashSet::new();
-    let mut out: Vec<Option<String>> = vec![None; doc.mods.len()];
-    let norm = |s: &str| s.trim().to_lowercase();
+    let missing = Resolution { mod_id: None, quality: MatchKind::Missing, candidates: 0, version_differs: false };
+    let mut out: Vec<Resolution> = vec![missing; entries.len()];
     let mut by_name: HashMap<String, Vec<&LibMod>> = HashMap::new();
     for m in lib {
-        by_name.entry(norm(&m.name)).or_default().push(m);
+        by_name.entry(norm_name(&m.name)).or_default().push(m);
     }
-    type Key = fn(&OrderEntry, &LibMod) -> bool;
-    let passes: [Key; 3] = [
-        |e, m| e.id.as_deref() == Some(m.id.as_str()) && e.name.trim().eq_ignore_ascii_case(m.name.trim()),
-        |e, m| e.content_id.as_deref().map_or(false, |c| !c.is_empty() && m.content_id.as_deref() == Some(c)),
-        |e, m| e.repo_mod_id.as_deref().map_or(false, |r| !r.is_empty() && m.repo_mod_id.as_deref() == Some(r)),
+    let by_id = |e: &OrderEntry, m: &LibMod| {
+        some_str(&e.id) == Some(m.id.as_str()) && (trust_ids || norm_name(&e.name) == norm_name(&m.name))
+    };
+    let by_content = |e: &OrderEntry, m: &LibMod| some_str(&e.content_id).map_or(false, |c| some_str(&m.content_id) == Some(c));
+    let by_repo_strict = |e: &OrderEntry, m: &LibMod| {
+        some_str(&e.repo_mod_id).map_or(false, |r| some_str(&m.repo_mod_id) == Some(r))
+            && matches!((some_str(&e.source_repo), some_str(&m.source_repo)), (Some(a), Some(b)) if same_repo(a, b))
+    };
+    // The repo id alone, when one side does not know the repo. Two repos naming different
+    // mods alike are told apart by the strict pass first, and never matched across here.
+    let by_repo_loose = |e: &OrderEntry, m: &LibMod| {
+        some_str(&e.repo_mod_id).map_or(false, |r| some_str(&m.repo_mod_id) == Some(r))
+            && !matches!((some_str(&e.source_repo), some_str(&m.source_repo)), (Some(a), Some(b)) if !same_repo(a, b))
+    };
+    let passes: [(&dyn Fn(&OrderEntry, &LibMod) -> bool, MatchKind); 4] = [
+        (&by_id, MatchKind::Id),
+        (&by_content, MatchKind::Content),
+        (&by_repo_strict, MatchKind::Source),
+        (&by_repo_loose, MatchKind::Source),
     ];
-    for pass in passes.iter() {
-        for (i, e) in doc.mods.iter().enumerate() {
-            if out[i].is_some() {
+    for (pass, kind) in passes.iter() {
+        for (i, e) in entries.iter().enumerate() {
+            if out[i].mod_id.is_some() {
                 continue;
             }
             if let Some(m) = lib.iter().find(|m| !used.contains(&m.id) && pass(e, m)) {
                 used.insert(m.id.clone());
-                out[i] = Some(m.id.clone());
+                out[i] = Resolution { mod_id: Some(m.id.clone()), quality: *kind, candidates: 1, version_differs: false };
             }
         }
     }
-    for (i, e) in doc.mods.iter().enumerate() {
-        if out[i].is_some() {
+    for (i, e) in entries.iter().enumerate() {
+        if out[i].mod_id.is_some() {
             continue;
         }
-        let cands: Vec<&&LibMod> = by_name
-            .get(&norm(&e.name))
-            .map(|v| v.iter().filter(|m| !used.contains(&m.id)).collect())
+        let cands: Vec<&LibMod> = by_name
+            .get(&norm_name(&e.name))
+            .map(|v| v.iter().copied().filter(|m| !used.contains(&m.id)).collect())
             .unwrap_or_default();
+        let v = e.version.trim();
+        let same_version: Vec<&LibMod> = cands.iter().copied().filter(|m| !v.is_empty() && m.version.trim() == v).collect();
         // Same name twice (two versions side by side): the version decides, or nobody does.
-        let pick = match cands.len() {
-            1 => Some(cands[0]),
-            0 => None,
-            _ => {
-                let same: Vec<&&LibMod> = cands.iter().copied().filter(|m| !e.version.is_empty() && m.version == e.version).collect();
-                if same.len() == 1 { Some(same[0]) } else { None }
-            }
+        let (pick, kind) = match (cands.len(), same_version.len()) {
+            (0, _) => (None, MatchKind::Missing),
+            (_, 1) => (Some(same_version[0]), MatchKind::NameVersion),
+            (1, _) => (Some(cands[0]), MatchKind::Name),
+            _ => (None, MatchKind::Ambiguous),
         };
+        out[i].candidates = cands.len();
+        out[i].quality = kind;
         if let Some(m) = pick {
             used.insert(m.id.clone());
-            out[i] = Some(m.id.clone());
+            out[i].mod_id = Some(m.id.clone());
+            out[i].version_differs = !v.is_empty() && m.version.trim() != v;
         }
     }
     out
+}
+
+/// Each entry of the document → a library mod, or None, as a document from elsewhere
+/// (`resolve_entries` with the local ids untrusted).
+pub fn resolve(doc: &OrderDoc, lib: &[LibMod]) -> Vec<Option<String>> {
+    resolve_entries(&doc.mods, lib, false).into_iter().map(|r| r.mod_id).collect()
 }
 
 /// `current` with the mods of `wanted` rearranged into `wanted`'s order, in the slots they

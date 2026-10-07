@@ -278,3 +278,49 @@
 .laya-body { overflow-y: auto; min-height: 0; flex: 1; }
 .laya-pane[hidden] { display: none; }
 .laya-pane-card > .card-title { font-size: 14px; margin-bottom: var(--space-2); }
+
+/* ── Laya in the feedback dialog, the crash manager and the debug menu (features/ai/laya-*.ts) ── */
+.laya-fb { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--bmm-radius-input); background: var(--bmm-s05); }
+.laya-fb[hidden] { display: none; }
+.laya-fb-head, .laya-crash-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.laya-fb-title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.laya-fb-list { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.laya-fb-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: 12.5px; min-width: 0; }
+.laya-fb-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.laya-fb-field, .laya-fb-conf { color: var(--text-secondary); }
+.laya-fb-row.is-guess .laya-fb-what b { font-style: italic; }
+.laya-fb-acts { display: flex; gap: 4px; flex: none; }
+.laya-fb-accepted { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: var(--space-1); }
+.laya-chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
+    border: 1px solid var(--border); background: var(--bmm-s05); color: var(--text-primary); font: inherit; font-size: 11.5px;
+}
+.laya-chip.is-guess { border-style: dashed; }
+.laya-chip button { border: none; background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0 2px; font: inherit; }
+.laya-chip-btn { cursor: pointer; }
+.laya-chip-btn:hover { background: var(--bg-hover); }
+.laya-chip-btn.is-on { border-color: var(--bmm-accent); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
+.laya-crash-strip { margin-bottom: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--bmm-radius-input); background: var(--bmm-s05); }
+.laya-crash-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: var(--space-1); }
+.laya-crash-chips:empty { display: none; }
+.laya-crash-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: var(--space-2); }
+.crashmgr-row[hidden], .crashmgr-group[hidden] { display: none; }
+.laya-explain { margin-bottom: var(--space-2); }
+.laya-explain-out:empty { display: none; }
+.laya-explain-out { margin-top: var(--space-1); font-size: 12.5px; line-height: 1.5; color: var(--text-primary); }
+.laya-explain-text { white-space: pre-wrap; margin: 0 0 4px; }
+.laya-dbg { display: flex; flex-direction: column; gap: var(--space-1); font-size: 12.5px; color: var(--text-primary); }
+.laya-dbg-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.laya-dbg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px var(--space-3); }
+.laya-dbg-kv { display: flex; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.laya-dbg-kv span { color: var(--text-secondary); }
+.laya-dbg-kv b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-weight: 600; }
+.laya-dbg-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.laya-dbg-table th { text-align: left; color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border); padding: 2px 6px; }
+.laya-dbg-table td { padding: 2px 6px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
+.laya-dbg-table tr.is-bad td { color: var(--danger); }
+.laya-dbg-text { width: 100%; }
+.laya-dbg-bars { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.laya-dbg-bars li { display: grid; grid-template-columns: minmax(80px, 160px) 1fr 64px; align-items: center; gap: var(--space-2); }
+.laya-dbg-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.laya-dbg-bar-fill { display: block; height: 100%; background: var(--bmm-accent); }

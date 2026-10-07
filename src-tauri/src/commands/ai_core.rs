@@ -232,6 +232,9 @@ pub enum Feature {
     /// A plain Laya classification of a text among labels (`ai_hybrid::classify`: scheduled
     /// tasks, scripts, the local API). Only the in-process or the user's own Laya.
     Classify,
+    /// « Expliquer » a crash in the crash manager: a written explanation of the masked excerpt,
+    /// only when the user configured a generator (local, or a remote one they chose).
+    CrashExplain,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,11 +267,12 @@ pub fn gate(s: &AiSettings, feature: Feature, killed: bool) -> Result<Provider, 
         Feature::TestConnection => true,
         Feature::AskAnswer => s.ask_generate,
         Feature::Classify => true,
+        Feature::CrashExplain => true,
     };
     if !feature_on {
         return Err("feature_off");
     }
-    if matches!(feature, Feature::DescriptionDraft | Feature::AskAnswer) {
+    if matches!(feature, Feature::DescriptionDraft | Feature::AskAnswer | Feature::CrashExplain) {
         return match s.generative.as_str() {
             "local" => Ok(Provider::LocalGen),
             "external" => Ok(Provider::External),
@@ -1947,8 +1951,139 @@ pub fn ask_laya(ctx: &Ctx, provider: Provider, text: &str, qs: &[LayaQuestion]) 
         }
         _ => {
             let url = laya_url(ctx)?;
-            ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, qs), ctx.settings.timeout_ms)
+            let started = std::time::Instant::now();
+            let r = ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, qs), ctx.settings.timeout_ms);
+            record_laya_call("laya", started.elapsed().as_millis() as u64, qs.len(), r.as_ref().err().map(|e| e.as_str()));
+            r
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recent Laya calls (the debug menu's « Laya » panel)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A small in-memory ring, never written to disk, never sent anywhere. One row per model call:
+// which feature asked (a fixed word from `laya_scope`), the provider, the latency, how many
+// questions, and — when the caller noted it — the decision. NO text: not the question, not
+// the report, not a label the user typed (`note_decision` only keeps a label from BMM's own
+// fixed vocabularies; anything else is recorded as accepted / guess / abstained).
+
+/// How many calls the ring keeps.
+pub const LAYA_CALLS_KEPT: usize = 50;
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct LayaCall {
+    pub seq: u64,
+    /// Unix milliseconds.
+    pub at: u64,
+    pub feature: &'static str,
+    /// "embedded" | "laya" (the user's own laya-serve).
+    pub provider: &'static str,
+    pub ms: u64,
+    pub questions: usize,
+    pub ok: bool,
+    /// A short reason code on failure ("embedded:absent", "laya:timeout"), never a message body.
+    pub error: Option<String>,
+    /// The accepted label when it comes from a fixed BMM vocabulary, else None.
+    pub decision: Option<String>,
+    pub abstained: Option<bool>,
+    pub uncertain: Option<bool>,
+}
+
+fn laya_calls() -> &'static Mutex<std::collections::VecDeque<LayaCall>> {
+    static R: OnceLock<Mutex<std::collections::VecDeque<LayaCall>>> = OnceLock::new();
+    R.get_or_init(|| Mutex::new(std::collections::VecDeque::with_capacity(LAYA_CALLS_KEPT)))
+}
+
+static LAYA_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    static LAYA_SCOPE: std::cell::Cell<&'static str> = const { std::cell::Cell::new("") };
+    static LAYA_LAST: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// While the guard lives, Laya calls made on this thread are recorded under `feature`.
+pub struct LayaScope(&'static str);
+
+impl Drop for LayaScope {
+    fn drop(&mut self) {
+        let prev = self.0;
+        LAYA_SCOPE.with(|s| s.set(prev));
+    }
+}
+
+/// Name the feature for the calls this thread makes until the guard drops (nested: innermost wins).
+pub fn laya_scope(feature: &'static str) -> LayaScope {
+    let prev = LAYA_SCOPE.with(|s| s.replace(feature));
+    LayaScope(prev)
+}
+
+/// A provider error as a short code: the first two `:`-separated words, bounded.
+pub fn short_code(e: &str) -> String {
+    let mut parts = e.splitn(3, ':');
+    let a = parts.next().unwrap_or("");
+    let code = match parts.next() {
+        Some(b) => format!("{}:{}", a, b.split_whitespace().next().unwrap_or("")),
+        None => a.split_whitespace().next().unwrap_or("").to_string(),
+    };
+    code.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.')).take(40).collect()
+}
+
+/// Record one model call (the embedded engine and the laya-serve request both end here).
+pub fn record_laya_call(provider: &'static str, ms: u64, questions: usize, error: Option<&str>) {
+    let feature = LAYA_SCOPE.with(|s| s.get());
+    let seq = LAYA_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let row = LayaCall {
+        seq,
+        at,
+        feature: if feature.is_empty() { "other" } else { feature },
+        provider,
+        ms,
+        questions,
+        ok: error.is_none(),
+        error: error.map(short_code),
+        decision: None,
+        abstained: None,
+        uncertain: None,
+    };
+    LAYA_LAST.with(|l| l.set(seq));
+    if let Ok(mut q) = laya_calls().lock() {
+        if q.len() >= LAYA_CALLS_KEPT {
+            q.pop_front();
+        }
+        q.push_back(row);
+    }
+}
+
+/// The decision taken on this thread's last call. `label` is kept only when it is one of
+/// `vocabulary` (BMM's fixed labels); a user-defined label is never recorded.
+pub fn note_decision(label: Option<&str>, vocabulary: &[&str], abstained: bool, uncertain: bool) {
+    let seq = LAYA_LAST.with(|l| l.get());
+    if seq == 0 {
+        return;
+    }
+    if let Ok(mut q) = laya_calls().lock() {
+        if let Some(row) = q.iter_mut().rev().find(|r| r.seq == seq) {
+            row.decision = label.filter(|l| vocabulary.contains(l) || *l == "none").map(str::to_string);
+            row.abstained = Some(abstained);
+            row.uncertain = Some(uncertain);
+        }
+    }
+}
+
+/// The last calls, newest first. (Unused by the CLI/MCP binary, which mounts this file too.)
+#[allow(dead_code)]
+pub fn recent_laya_calls(n: usize) -> Vec<LayaCall> {
+    laya_calls().lock().map(|q| q.iter().rev().take(n).cloned().collect()).unwrap_or_default()
+}
+
+/// Forget the recorded calls (the debug panel's « Clear »).
+#[allow(dead_code)]
+pub fn clear_laya_calls() {
+    if let Ok(mut q) = laya_calls().lock() {
+        q.clear();
     }
 }
 
@@ -2042,6 +2177,7 @@ pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, V
 pub fn classify_mod_in(ctx: &Ctx, text: &str, vocab: &Vocab, area: crate::commands::ai_tuning::Area) -> (Vec<Suggestion>, Vec<String>) {
     use crate::commands::ai_tuning as tu;
     let tune = ctx.settings.laya.resolve(area);
+    let _scope = laya_scope(area.key());
     let provider = match gate(ctx.settings, Feature::ModSuggest, ctx.killed) {
         Ok(p) => p,
         Err(why) => return (Vec::new(), vec![format!("classifier:{}", why)]),
@@ -2238,6 +2374,7 @@ pub struct Triage {
 /// their recent reports. The user still decides what is sent; this never changes the report.
 pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, String> {
     let provider = gate(ctx.settings, Feature::ReportTriage, ctx.killed).map_err(|w| format!("classifier:{}", w))?;
+    let _scope = laya_scope("triage");
     let known: Vec<&String> = known.iter().take(8).collect();
     let mut t = Triage::default();
     match provider {
@@ -2263,6 +2400,7 @@ pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, 
             // « Équilibré »: the best category at 0.30 or more, as before. The user's threshold,
             // margin and « je ne sais pas / meilleure hypothèse » otherwise.
             let d = tu::decide(&cat, &tu::Tuning { multi_label: false, ..tune.clone() }, None);
+            note_decision(d.labels.first().map(|l| l.id.as_str()), REPORT_CATEGORIES, d.abstained, d.uncertain);
             t.ranked = d.ranked.clone();
             if let Some(best) = d.labels.first() {
                 let (c, p) = (best.id.clone(), best.p);

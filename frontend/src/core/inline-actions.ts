@@ -204,6 +204,29 @@ function bindHoverStyles(): void {
     });
 }
 
+/** The function a `data-act` name calls, or null when it must call nothing.
+ *
+ *  Only functions the APP published on `window`. The browser's own window methods are on
+ *  the same object, under short common names, and a component that uses `data-act` as its
+ *  own private vocabulary collides with them. That is exactly what happened: the Replay
+ *  Studio and Animation Studio marked their ✕ button `data-act="close"` and handled it in
+ *  their own listener, but this delegate saw the same attribute first (capture phase) and
+ *  called `window.close()` — the whole BMM window closed. `data-act="stop"` called
+ *  `window.stop()` (aborting every in-flight load), `data-act="open"` opened a blank window.
+ *
+ *  A native method prints as `[native code]`; app functions do not. A BOUND app function
+ *  also prints as native code, but its name starts with "bound ", so it stays callable. */
+export function resolveAction(name: string): ((...a: unknown[]) => unknown) | null {
+    if (!name) return null;
+    let fn: unknown;
+    try { fn = (globalThis as any).window?.[name]; } catch { return null; }
+    if (typeof fn !== 'function') return null;
+    let srcText = '';
+    try { srcText = Function.prototype.toString.call(fn); } catch { return null; }
+    if (/\{\s*\[native code\]\s*\}\s*$/.test(srcText) && !String((fn as any).name || '').startsWith('bound ')) return null;
+    return fn as (...a: unknown[]) => unknown;
+}
+
 /** Click actions of the uniform `window.fn('arg', …)` shape.
  *
  *  Markup becomes `data-act="fnName"` plus `data-act-args='["a","b"]'` (JSON),
@@ -246,8 +269,8 @@ function bindActions(): void {
                 args = [];
             }
         }
-        const fn = (window as any)[name];
-        if (typeof fn === 'function') fn(...contextArgs(el, e), ...args);
+        const fn = resolveAction(name);
+        if (fn) fn(...contextArgs(el, e), ...args);
     };
 
     // `change`, for the select/checkbox handlers. A separate attribute rather than reusing

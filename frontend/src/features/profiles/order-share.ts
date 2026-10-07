@@ -25,7 +25,7 @@ function fill(key: string, vars: Record<string, string | number>): string {
     return s;
 }
 
-async function copy(text: string): Promise<boolean> {
+export async function copy(text: string): Promise<boolean> {
     try { await navigator.clipboard.writeText(text); return true; } catch { /* legacy route */ }
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -51,7 +51,7 @@ function ensureCss(): void {
 }
 
 /** A small modal above everything, with Escape, a focus trap and the focus given back. */
-function dialog(id: string, title: string, body: string, foot: string): { ov: HTMLElement; close: () => void; onClose: (fn: () => void) => void } {
+export function dialog(id: string, title: string, body: string, foot: string): { ov: HTMLElement; close: () => void; onClose: (fn: () => void) => void } {
     ensureCss();
     const opener = document.activeElement as HTMLElement | null;
     const ov = document.createElement('div');

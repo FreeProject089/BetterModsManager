@@ -8,3 +8,4 @@ pub mod modpack;
 pub mod launch_pack;
 pub mod plugin;
 pub mod app_catalog;
+pub mod order_list;

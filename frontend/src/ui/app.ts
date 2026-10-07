@@ -18,7 +18,6 @@ import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
 import { initDocsHub } from '../docs/docs-hub.js';
 import { mountLearnMoreLinks } from './learn-more-mount.js';
 import { initCommands } from '../core/commands.js';
-import { debugUI } from '../features/debug/debug-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';

@@ -20,7 +20,7 @@ use crate::commands::ai_core::{self, AiSettings, BcAuth, Ctx, HttpTransport, Mod
 use crate::commands::{ai_embedded, ai_hybrid, ai_tuning};
 use crate::state::AppState;
 
-fn data_dir(state: &AppState) -> PathBuf {
+pub(crate) fn data_dir(state: &AppState) -> PathBuf {
     state.data_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
 }
 
@@ -141,7 +141,7 @@ pub fn ai_check_url(url: String, kind: String, allow_remote: bool) -> Result<Val
 }
 
 /// Settings + the keys that may be SENT under them (each only to the origin it was saved for).
-fn ctx_owned(dir: &std::path::Path, bc: Option<BcAuth>) -> (AiSettings, Option<String>, Option<String>, Option<BcAuth>) {
+pub(crate) fn ctx_owned(dir: &std::path::Path, bc: Option<BcAuth>) -> (AiSettings, Option<String>, Option<String>, Option<BcAuth>) {
     let s = effective(dir);
     let lk = ai_core::bound_key(dir, "local_key", &s);
     let ek = ai_core::bound_key(dir, "external_key", &s);

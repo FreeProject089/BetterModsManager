@@ -104,10 +104,12 @@ pub enum Area {
     Library,
     Tasks,
     Api,
+    /// « Rapports de crash & sessions »: the probable cause of each crash.
+    Crashes,
 }
 
 impl Area {
-    pub const ALL: [Area; 6] = [Area::ModSuggest, Area::Ask, Area::Triage, Area::Library, Area::Tasks, Area::Api];
+    pub const ALL: [Area; 7] = [Area::ModSuggest, Area::Ask, Area::Triage, Area::Library, Area::Tasks, Area::Api, Area::Crashes];
     pub fn key(self) -> &'static str {
         match self {
             Area::ModSuggest => "mod_suggest",
@@ -116,6 +118,7 @@ impl Area {
             Area::Library => "library",
             Area::Tasks => "tasks",
             Area::Api => "api",
+            Area::Crashes => "crashes",
         }
     }
     #[cfg_attr(not(test), allow(dead_code))]
@@ -164,6 +167,7 @@ pub struct Overrides {
     pub library: Option<Tuning>,
     pub tasks: Option<Tuning>,
     pub api: Option<Tuning>,
+    pub crashes: Option<Tuning>,
 }
 
 impl Overrides {
@@ -175,10 +179,11 @@ impl Overrides {
             Area::Library => self.library.as_ref(),
             Area::Tasks => self.tasks.as_ref(),
             Area::Api => self.api.as_ref(),
+            Area::Crashes => self.crashes.as_ref(),
         }
     }
-    fn all_mut(&mut self) -> [&mut Option<Tuning>; 6] {
-        [&mut self.mod_suggest, &mut self.ask, &mut self.triage, &mut self.library, &mut self.tasks, &mut self.api]
+    fn all_mut(&mut self) -> [&mut Option<Tuning>; 7] {
+        [&mut self.mod_suggest, &mut self.ask, &mut self.triage, &mut self.library, &mut self.tasks, &mut self.api, &mut self.crashes]
     }
 }
 
@@ -287,7 +292,8 @@ pub fn builtin(area: Area) -> Tuning {
     let base = Tuning::default();
     match area {
         Area::ModSuggest | Area::Library => Tuning { threshold: crate::commands::ai_laya::TAG_THRESHOLD, top_k: 3, multi_label: true, max_labels: ai_core::MAX_TAGS_PER_MOD as u32, ..base },
-        Area::Triage => Tuning { threshold: crate::commands::ai_laya::CATEGORY_THRESHOLD, top_k: 3, ..base },
+        // A crash's probable cause: the report category's bar (a label, never an action).
+        Area::Triage | Area::Crashes => Tuning { threshold: crate::commands::ai_laya::CATEGORY_THRESHOLD, top_k: 3, ..base },
         // Ask Laya: top_k = the candidates Laya compares (ask_core::RERANK_K); no threshold —
         // only Laya's own « none of these » marks an answer as unsure.
         Area::Ask => Tuning { threshold: 0.0, top_k: crate::commands::ask_core::RERANK_K as u32, ..base },
@@ -466,7 +472,7 @@ impl LayaConfig {
             return Err("laya.cfg.badVersion".into());
         }
         self.global.check()?;
-        for t in [&self.features.mod_suggest, &self.features.ask, &self.features.triage, &self.features.library, &self.features.tasks, &self.features.api].into_iter().flatten() {
+        for t in [&self.features.mod_suggest, &self.features.ask, &self.features.triage, &self.features.library, &self.features.tasks, &self.features.api, &self.features.crashes].into_iter().flatten() {
             t.check()?;
         }
         if self.labels.mod_tags.len() > MAX_HINTS || self.labels.triage.len() > MAX_HINTS {

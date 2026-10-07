@@ -351,3 +351,103 @@
 .osh-land-move { flex: none; font-family: var(--font-mono); font-size: 10.5px; color: var(--bmm-text-secondary); }
 .osh-more summary { cursor: pointer; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .osh-more ul { margin: var(--space-1) 0 0; padding-left: 18px; font-size: 11.5px; color: var(--bmm-text-primary); }
+
+/* Saved order lists (features/profiles/order-lists.ts): a list of lists beside the open one.
+   The state and match chips follow the chip rule above: ink mixed with the text colour. */
+.olm-modal { max-width: 920px; width: 96%; }
+.olm-wrap { display: flex; gap: var(--space-3); min-height: 0; }
+.olm-side {
+    flex: 0 0 210px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    border-right: 1px solid var(--bmm-s08);
+    padding-right: var(--space-3);
+}
+.olm-side-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.olm-lists { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.olm-pick {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 6px var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--bmm-radius-badge, 5px);
+    background: transparent;
+    color: var(--bmm-text-primary);
+    text-align: left;
+    cursor: pointer;
+}
+.olm-pick:hover, .olm-pick:focus-visible { background: var(--bmm-s06); }
+.olm-pick.is-open { border-color: var(--bmm-border); background: var(--bmm-s08); }
+.olm-pick-name { font-size: 12px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olm-pick-meta { font-size: 10.5px; color: var(--bmm-text-secondary); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olm-none { font-size: 11.5px; color: var(--bmm-text-secondary); padding: 4px 0; }
+.olm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.olm-intro { margin-top: var(--space-2); }
+.olm-fields { display: flex; flex-direction: column; gap: 4px; }
+.olm-scope-set { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 2px; }
+.olm-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.olm-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--bmm-text-primary); }
+.olm-view { display: flex; align-items: center; gap: var(--space-2); }
+.olm-for { min-width: 180px; }
+.olm-h { margin: 0; font-size: 13.5px; color: var(--bmm-text-primary); }
+.olm-entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.olm-entry {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 4px var(--space-2);
+    border-radius: var(--bmm-radius-badge, 5px);
+    background: var(--bmm-s04);
+}
+.olm-entry.is-inactive .olm-entry-name, .olm-entry.is-missing .olm-entry-name { color: var(--bmm-text-secondary); }
+.olm-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.olm-entry-name { font-size: 12px; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olm-ver { font-family: var(--font-mono); font-size: 10.5px; color: var(--bmm-text-secondary); }
+.olm-now { font-size: 10.5px; color: var(--bmm-text-secondary); }
+.olm-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.olm-q, .olm-st {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--bmm-s08);
+    color: var(--bmm-text-secondary);
+    white-space: nowrap;
+}
+.olm-q.is-weak, .olm-q-ambiguous, .olm-q-missing, .olm-st.is-missing {
+    background: color-mix(in srgb, var(--bmm-warning) 16%, transparent);
+    color: color-mix(in srgb, var(--bmm-warning) 50%, var(--bmm-text-primary));
+}
+.olm-st.is-on {
+    background: color-mix(in srgb, var(--bmm-success) 16%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary));
+}
+.olm-add { display: flex; flex-direction: column; gap: 4px; }
+.olm-search { width: 100%; margin: 4px 0; font-size: 12px; }
+.olm-picks { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.olm-addone {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 3px var(--space-2);
+    border: 0;
+    border-radius: var(--bmm-radius-badge, 5px);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+.olm-addone:hover, .olm-addone:focus-visible { background: var(--bmm-s06); }
+.olm-addone .olm-entry-name { flex: 1; min-width: 0; }
+.olm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.olm-excl { margin-top: var(--space-1); }
+.olm-outcomes { margin: 0; padding-left: 18px; font-size: 11.5px; color: var(--bmm-text-primary); }
+@media (max-width: 700px) {
+    .olm-wrap { flex-direction: column; }
+    .olm-side { flex: none; border-right: 0; padding-right: 0; border-bottom: 1px solid var(--bmm-s08); padding-bottom: var(--space-2); }
+}

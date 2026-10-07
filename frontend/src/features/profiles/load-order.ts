@@ -136,6 +136,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
           <span class="lo-count" id="lo-count"></span>
           <button type="button" class="btn btn-ghost btn-sm" id="lo-share" title="${escAttr(t('order.share.tip'))}">${escHtml(t('order.share.btn'))}</button>
           <button type="button" class="btn btn-ghost btn-sm" id="lo-import" title="${escAttr(t('order.import.tip'))}">${escHtml(t('order.import.btn'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="lo-lists" title="${escAttr(t('orderList.openTip'))}">${escHtml(t('orderList.open'))}</button>
           <label class="lo-bulk-label" for="lo-bulk" title="${escAttr(t('order.mode.tip'))}">${escHtml(t('order.mode.label'))}</label>
           <select id="lo-bulk" class="lo-bulk" title="${escAttr(t('order.mode.tip'))}">
             ${(['top', 'bottom', 'keep'] as const).map((m) => `<option value="${m}"${bulkMode === m ? ' selected' : ''}>${escHtml(t(`order.mode.${m}`))}</option>`).join('')}
@@ -422,6 +423,27 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             });
         };
         ov.querySelector('#lo-import')?.addEventListener('click', () => importInto());
+        // Saved lists: orders that may name inactive mods, applied to several profiles or
+        // activated in one step (order-lists.ts). Coming back, the view re-reads the order only
+        // when nothing unapplied would be lost: a list may have changed it on disk.
+        ov.querySelector('#lo-lists')?.addEventListener('click', () => {
+            if (busy) return;
+            void import('./order-lists.js').then(async (m) => {
+                const changed = await m.openOrderLists(profileId ?? null, toast);
+                if (!changed || !sameOrder(saved, draft)) return;
+                try {
+                    const res = await invoke('mod_order_get', { profileId: profileId ?? null }) as [OrderedMod[], ContestedFile[]] | null;
+                    mods = Array.isArray(res?.[0]) ? res![0] : [];
+                    contested = Array.isArray(res?.[1]) ? res![1] : [];
+                    byId.clear();
+                    for (const x of mods) byId.set(x.id, x);
+                    saved = mods.map((x) => x.id);
+                    draft = saved.slice();
+                    selected = draft[0] ?? null;
+                    render();
+                } catch { /* the view keeps what it had; reopening it reads again */ }
+            });
+        });
         // The default placement of a bulk enable (modpack, "Enable all", a list, a task, a
         // script): a setting, saved at once. It never moves anything by itself.
         const bulkSel = ov.querySelector('#lo-bulk') as HTMLSelectElement | null;

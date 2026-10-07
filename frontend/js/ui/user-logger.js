@@ -4,8 +4,9 @@
 import { invoke } from '../core/api.js';
 import { appState } from '../core/state.js';
 import { toast } from './app.js';
-import { debugUI } from '../features/debug/debug-ui.js';
-const _debugUI = debugUI;
+// The DevTools UI is a large module loaded on first open; these two never load it to
+// answer "is it open?" and load it only when it must actually open.
+import { toggleDebugUI, isDebugUIOpen } from '../features/debug/debug-menu.js';
 export function initInteractionLogging() {
     document.addEventListener('click', (e) => {
         const target = e.target;
@@ -27,8 +28,8 @@ export function initInteractionLogging() {
             // If the overlay is already open (e.g. opened from a navbar button
             // without unlocking the Debug glass card), Ctrl+Alt+D must always be
             // able to CLOSE it. Only OPENING stays gated behind debug mode.
-            if (_debugUI.isOpen || appState.get('debugMode')) {
-                _debugUI.toggle();
+            if (isDebugUIOpen() || appState.get('debugMode')) {
+                void toggleDebugUI();
             }
             else {
                 console.warn('[BMM-DEBUG] Access denied. Unlock Debug Mode in Settings (Ctrl+D) first.');
@@ -37,7 +38,7 @@ export function initInteractionLogging() {
         }
         else if (e.ctrlKey && e.shiftKey && key === 'f') {
             if (window.bmmFSDMEnabled) {
-                _debugUI.toggle();
+                void toggleDebugUI();
             }
         }
         else if (e.ctrlKey && !e.altKey && !e.shiftKey && key === 'd') {

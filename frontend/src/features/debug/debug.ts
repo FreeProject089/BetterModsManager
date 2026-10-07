@@ -1,7 +1,19 @@
 import { invoke } from '../../core/api.js';
 import { appState } from '../../core/state.js';
 
-// Hook into addEventListener early to track listeners for the DevTools A11y Event Inspector
+// Hook into addEventListener early to track listeners for the DevTools Event Overlay.
+//
+// Kept in a WeakMap, not in a DOM attribute. This hook runs for every listener the app adds,
+// from boot, whether or not DevTools is ever opened; writing `data-bmm-events` onto the element
+// each time was a DOM mutation per listener — which every MutationObserver in the app (the
+// session recorder among them) then had to process and record. A WeakMap costs nothing the
+// DOM can see and lets a removed element be collected.
+const listenerTypes = new WeakMap<Element, Set<string>>();
+/** The event types a listener was registered for on this element (Event Overlay). */
+export function getListenerTypes(el: Element): string[] {
+    const set = listenerTypes.get(el);
+    return set ? [...set] : [];
+}
 const originalAddEventListener = EventTarget.prototype.addEventListener;
 EventTarget.prototype.addEventListener = function(
     this: EventTarget,
@@ -10,11 +22,10 @@ EventTarget.prototype.addEventListener = function(
     options?: boolean | AddEventListenerOptions
 ): void {
     try {
-        if (this instanceof Element && !this.classList.contains('debug-btn') && !(this as Element).closest?.('#bmm-debug-overlay')) {
-            const events = (this as Element).getAttribute('data-bmm-events') || '';
-            if (!events.includes(type)) {
-                (this as Element).setAttribute('data-bmm-events', events ? events + ', ' + type : type);
-            }
+        if (this instanceof Element) {
+            let set = listenerTypes.get(this);
+            if (!set) { set = new Set(); listenerTypes.set(this, set); }
+            set.add(type);
         }
     } catch (_e) { /* ignore */ }
     return originalAddEventListener.call(this, type, listener, options);
@@ -111,10 +122,12 @@ class DebugHub {
 
     subscribe(callback: DebugCallback): void {
         this.listeners.add(callback);
+        startPerfLoop();
     }
 
     unsubscribe(callback: DebugCallback): void {
         this.listeners.delete(callback);
+        if (this.listeners.size === 0) stopPerfLoop();
     }
 
     emit(type: string, data: any): void {
@@ -310,10 +323,18 @@ class DebugHub {
 export const debugHub = new DebugHub();
 
 // --- Performance Tracking ---
+//
+// The FPS/heap sampler is a requestAnimationFrame loop, and it used to start at module load
+// and run for the life of the app — sixty callbacks a second, every second BMM was open,
+// for a footer that is only on screen while DevTools is. It now runs only while something
+// is subscribed to the hub (the DevTools UI subscribes on open and unsubscribes on close),
+// and it pauses with the page when the window is hidden, as every rAF does.
 let frameCount = 0;
-let lastTime = performance.now();
+let lastTime = 0;
+let perfFrame = 0;
 
 function updatePerformance(): void {
+    perfFrame = 0;
     frameCount++;
     const now = performance.now();
     if (now >= lastTime + 1000) {
@@ -328,12 +349,20 @@ function updatePerformance(): void {
                 limit: (window.performance as any).memory.jsHeapSizeLimit
             };
         }
-        
+
         debugHub.emit('metrics', debugHub.metrics);
     }
-    requestAnimationFrame(updatePerformance);
+    if (debugHub.listeners.size > 0) perfFrame = requestAnimationFrame(updatePerformance);
 }
 
-if (typeof window !== 'undefined') {
-    requestAnimationFrame(updatePerformance);
+function startPerfLoop(): void {
+    if (perfFrame || typeof requestAnimationFrame !== 'function') return;
+    frameCount = 0;
+    lastTime = performance.now();
+    perfFrame = requestAnimationFrame(updatePerformance);
+}
+
+function stopPerfLoop(): void {
+    if (perfFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(perfFrame);
+    perfFrame = 0;
 }

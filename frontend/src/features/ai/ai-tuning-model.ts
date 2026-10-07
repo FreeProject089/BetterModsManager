@@ -7,12 +7,12 @@
 // wrong is refused by Rust; it is never trusted because this file said it was fine.
 
 export type Preset = 'prudent' | 'balanced' | 'permissive' | 'custom';
-export type Area = 'mod_suggest' | 'ask' | 'triage' | 'library' | 'tasks' | 'api';
+export type Area = 'mod_suggest' | 'ask' | 'triage' | 'library' | 'tasks' | 'api' | 'crashes';
 export type Abstain = 'unknown' | 'flag';
 export type Source = 'text' | 'file' | 'report' | 'mod_name' | 'mod_description' | 'mod_readme' | 'mod_all';
 export type Action = 'none' | 'tag' | 'category' | 'note';
 
-export const AREAS: readonly Area[] = ['mod_suggest', 'ask', 'triage', 'library', 'tasks', 'api'];
+export const AREAS: readonly Area[] = ['mod_suggest', 'ask', 'triage', 'library', 'tasks', 'api', 'crashes'];
 export const PRESETS: readonly Preset[] = ['prudent', 'balanced', 'permissive', 'custom'];
 export const SOURCES: readonly Source[] = ['mod_all', 'mod_name', 'mod_description', 'mod_readme', 'text', 'file', 'report'];
 export const ACTIONS: readonly Action[] = ['none', 'tag', 'category', 'note'];
@@ -76,7 +76,7 @@ export function defaultTuning(): Tuning {
 export function defaultConfig(): LayaConfig {
     return {
         version: LIMITS.version, global: defaultTuning(),
-        features: { mod_suggest: null, ask: null, triage: null, library: null, tasks: null, api: null },
+        features: { mod_suggest: null, ask: null, triage: null, library: null, tasks: null, api: null, crashes: null },
         labels: { mod_tags: [], triage: [], templates: { mod_tags: '', triage: '' } },
         tasks: [], allow_program_changes: false,
     };

@@ -153,6 +153,9 @@ function paintCard(): void {
 
 /** The summary card (after Privacy), the dialog, and the three cards in its panes. */
 export async function mountLayaHub(): Promise<void> {
+    // The debug menu's « Laya » section (features/ai/laya-debug.ts): registered once, at the
+    // same boot step as this card; a no-op until the debug menu exposes its registry.
+    void import('./laya-debug.js').then((m) => m.registerLayaDebug()).catch(() => {});
     const host = document.querySelector('#view-settings .settings-sections');
     if (!host) return;
     ensureAiCss();
