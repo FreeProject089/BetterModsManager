@@ -6,7 +6,8 @@
 //     nothing is not made, and accepting writes only the accepted field;
 //   · « already reported? » finds a recent look-alike and ignores old or unrelated reports;
 //   · the same crash on two runs lands in one group, a different one does not;
-//   · the label filter and the « attach this crash » pick;
+//   · the cause taxonomy (families, causes) matches Rust; the family/cause filters and the
+//     « attach this crash » pick; « Expliquer » is untrusted B.MD;
 //   · while typing, Laya only runs when nothing leaves the PC;
 //   · these screens never talk to the network themselves.
 import { test, describe } from 'node:test';
@@ -124,20 +125,68 @@ describe('crash groups and filters', () => {
     test('labels spread to the group, counts and filters read them, an abstention is « unknown »', () => {
         const g = M.groupCrashes(items);
         const byRep = new Map([
-            ['a.zip', { labels: [{ id: 'panic', p: 0.7 }], abstained: false, uncertain: false, showProbs: true }],
-            ['c.zip', { labels: [{ id: 'file_access', p: 0.3 }], abstained: false, uncertain: true, showProbs: false }],
+            ['a.zip', { labels: [{ id: 'internal_error', p: 0.7 }], abstained: false, uncertain: false, showProbs: true }],
+            ['c.zip', { labels: [{ id: 'permission', p: 0.3 }], abstained: false, uncertain: true, showProbs: false }],
             ['d.zip', { labels: [], abstained: true }],
         ]);
         const labels = M.spreadLabels(g, byRep);
         assert.equal(labels.get('b.zip'), byRep.get('a.zip'));
-        assert.deepEqual(M.labelCounts(labels), [{ id: 'panic', n: 2 }, { id: 'file_access', n: 1 }, { id: 'unknown', n: 1 }]);
-        assert.deepEqual(M.causeOf(labels.get('c.zip')), { id: 'file_access', p: null, uncertain: true });
+        assert.deepEqual(M.labelCounts(labels), [{ id: 'internal_error', n: 2 }, { id: 'permission', n: 1 }, { id: 'unknown', n: 1 }]);
+        assert.deepEqual(M.familyCounts(labels), [{ id: 'app_backend', n: 2 }, { id: 'disk', n: 1 }, { id: 'unknown', n: 1 }]);
+        assert.deepEqual(M.labelCounts(labels, 'disk'), [{ id: 'permission', n: 1 }]);
+        assert.deepEqual(M.causeOf(labels.get('c.zip')), { id: 'permission', family: 'disk', p: null, uncertain: true });
+        assert.deepEqual(M.causeOf(labels.get('d.zip')), { id: 'unknown', family: 'unknown', p: null, uncertain: false });
+        // A v1 label (the nine flat causes) is not a cause any more: it reads « unknown ».
+        assert.equal(M.causeOf({ labels: [{ id: 'file_access', p: 0.9 }] }).id, 'unknown');
         const groups = M.groupOf(g);
-        assert.equal(M.passes('b.zip', 'panic', labels, groups), true);
-        assert.equal(M.passes('c.zip', 'panic', labels, groups), false);
+        assert.equal(M.passes('b.zip', 'cause:internal_error', labels, groups), true);
+        assert.equal(M.passes('c.zip', 'cause:internal_error', labels, groups), false);
+        assert.equal(M.passes('b.zip', 'family:app_backend', labels, groups), true);
+        assert.equal(M.passes('c.zip', 'family:disk', labels, groups), true);
+        assert.equal(M.passes('d.zip', 'cause:unknown', labels, groups), true);
+        assert.equal(M.passes('d.zip', 'family:unknown', labels, groups), true);
+        assert.equal(M.passes('b.zip', 'internal_error', labels, groups), false, 'a bare id is not a filter');
         assert.equal(M.passes('b.zip', 'group:1', labels, groups), true);
         assert.equal(M.passes('c.zip', 'group:1', labels, groups), false);
         assert.equal(M.passes('c.zip', '', labels, groups), true);
+        assert.equal(M.filterFamily('cause:permission'), 'disk');
+        assert.equal(M.filterFamily('family:network'), 'network');
+        assert.equal(M.filterFamily('cause:unknown'), 'unknown');
+        assert.equal(M.filterFamily('group:2'), '');
+        // Evidence spreads like the label.
+        const ev = M.spreadLabels(g, new Map([['a.zip', M.evidenceOf({ words: ['index out of bounds'], lines: ['x'] })]]));
+        assert.deepEqual(ev.get('b.zip'), { words: ['index out of bounds'], lines: ['x'] });
+    });
+
+    test('evidence is bounded strings only', () => {
+        assert.deepEqual(M.evidenceOf(null), { words: [], lines: [] });
+        const e = M.evidenceOf({ words: ['a', 3, '', 'b', 'c', 'd', 'e', 'f', 'g'], lines: ['l'.repeat(500), {}, 'm', 'n', 'o'] });
+        assert.deepEqual(e.words, ['a', 'b', 'c', 'd', 'e', 'f']);
+        assert.equal(e.lines.length, 3);
+        assert.equal(e.lines[0].length, 200);
+    });
+
+    test('the page knows exactly the families and causes Rust asks about', () => {
+        const rs = readFileSync(join(ROOT, 'src-tauri/src/commands/ai_assist.rs'), 'utf8');
+        const famBlock = rs.slice(rs.indexOf('pub const CRASH_FAMILIES'), rs.indexOf('pub struct CrashCause'));
+        const fams = [...famBlock.matchAll(/^\s*\("([a-z_]+)",/gm)].map((m) => m[1]);
+        assert.deepEqual(fams, [...M.CRASH_FAMILIES]);
+        const causeBlock = rs.slice(rs.indexOf('pub const CRASH_CAUSES'), rs.indexOf('pub const LABEL_VERSION'));
+        const pairs = [...causeBlock.matchAll(/id: "([a-z_]+)",\s*family: "([a-z_]+)"/g)].map((m) => [m[1], m[2]]);
+        assert.deepEqual(Object.fromEntries(pairs), M.CAUSE_FAMILY);
+        assert.ok(pairs.length >= 10 && pairs.length <= 24, 'a reasonable number of causes');
+    });
+
+    test('every family, cause and next step has words in EN and FR', () => {
+        const words = readFileSync(join(ROOT, 'frontend/src/features/ai/laya-words.ts'), 'utf8');
+        for (const lang of ['en', 'fr']) {
+            const dict = JSON.parse(readFileSync(join(ROOT, `frontend/Lang/${lang}.json`), 'utf8'));
+            for (const f of M.CRASH_FAMILIES) assert.ok(dict[`laya.family.${f}`], `${lang}: laya.family.${f}`);
+            for (const c of [...M.CRASH_CAUSES, 'unknown']) assert.ok(dict[`laya.cause.${c}`], `${lang}: laya.cause.${c}`);
+            for (const c of M.CRASH_CAUSES) assert.ok(dict[`laya.cstep.${c}`], `${lang}: laya.cstep.${c}`);
+        }
+        for (const c of M.CRASH_CAUSES) assert.ok(words.includes(`'laya.cstep.${c}'`) && words.includes(`'laya.cause.${c}'`), `laya-words.ts names ${c}`);
+        for (const f of M.CRASH_FAMILIES) assert.ok(words.includes(`'laya.family.${f}'`), `laya-words.ts names ${f}`);
     });
 
     test('the crash report that fits the description is proposed, unless already attached', () => {
@@ -163,7 +212,7 @@ describe('when Laya runs', () => {
     });
 
     test('the Laya screens make no network call of their own', () => {
-        for (const f of ['laya-assist.ts', 'laya-crash.ts', 'laya-debug.ts', 'laya-assist-model.ts', 'laya-words.ts']) {
+        for (const f of ['laya-assist.ts', 'laya-crash.ts', 'laya-debug.ts', 'laya-assist-model.ts', 'laya-words.ts', 'laya-explain-md.ts']) {
             const src = readFileSync(join(ROOT, 'frontend/src/features/ai', f), 'utf8');
             assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/.test(src), `${f} talks to the network`);
         }
@@ -172,5 +221,39 @@ describe('when Laya runs', () => {
     test('the model file stays import-free', () => {
         const src = readFileSync(join(ROOT, 'frontend/src/features/ai/laya-assist-model.ts'), 'utf8');
         assert.ok(!/^import /m.test(src));
+    });
+});
+
+describe('« Expliquer » is untrusted B.MD', () => {
+    test('a script, a javascript: link, an image or an embed in the model output never becomes live markup', async () => {
+        globalThis.localStorage ??= { getItem: () => 'en', setItem() {} };
+        const X = await import(pathToFileURL(join(ROOT, 'frontend/js/features/ai/laya-explain-md.js')).href);
+        const { renderDocMarkdown } = await import(pathToFileURL(join(ROOT, 'frontend/js/docs/md-lite.js')).href);
+        const hostile = [
+            'Try this <script>alert(1)</script> now',
+            '[click me](javascript:alert(1)) or [this](JaVaScRiPt:alert(1))',
+            '<img src=x onerror=alert(1)>',
+            '![tracker](https://evil.example/pixel.png)',
+            ':::replay[T]{src=https://evil.example/x.bmmreplay}\n:::',
+            ':::card[C]{href=javascript:alert(1)}\nx\n:::',
+            'x :button[Go]{href=javascript:alert(1)}',
+        ].join('\n\n');
+        const src = X.explainSource(hostile);
+        assert.ok(!/</.test(src), 'no raw markup reaches the renderer');
+        assert.ok(!/^\s*::/m.test(src) && !/!\[/.test(src), 'no directive, no image');
+        // The renderer's own output (no sanitiser in node: this measures what it BUILDS).
+        const built = renderDocMarkdown(src, { trusted: true });
+        assert.ok(!/<script/i.test(built));
+        assert.ok(!/(href|src|data-ext)="\s*javascript:/i.test(built), built);
+        assert.ok(!/<(img|iframe|video|audio)\b/i.test(built));
+        assert.ok(!/<[a-z][^>]*\son[a-z]+\s*=/i.test(built.replace(/"[^"]*"|'[^']*'/g, '""')));
+        // The real path: untrusted render (DOMPurify, or escaped text when it is absent), no media.
+        const html = X.explainHtml(hostile);
+        assert.ok(!/<script/i.test(html), html);
+        assert.ok(!/(href|src|data-ext)="\s*javascript:/i.test(html), html);
+        assert.ok(!/<(img|iframe|video|audio|source)\b/i.test(html));
+        // Plain prose still reads as B.MD.
+        assert.match(renderDocMarkdown(X.explainSource('The **mod** failed.\n\n- check it'), { trusted: true }), /<b>mod<\/b>.*<li>check it<\/li>/);
+        assert.equal(X.explainHtml('   '), '');
     });
 });

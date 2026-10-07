@@ -324,13 +324,34 @@ ci-dessous : une réponse douteuse est marquée *hypothèse*, une abstention n'e
 ## Laya dans Rapports de crash & sessions
 
 Dans **Paramètres → Rapports de crash → Gérer et analyser**, Laya regroupe les **crashs
-similaires** (même raison, une fois les nombres, adresses et chemins mis de côté) et, avec
-**Trouver les causes**, donne à un rapport par groupe une **cause probable** (erreur interne,
-mémoire, accès aux fichiers, réseau, conflit de mods, lancement du jeu, affichage, données
-endommagées). Les causes deviennent des filtres. Uniquement avec Laya intégré ou votre laya-serve,
-à partir d'un extrait masqué du journal, avec les réglages *Rapports de crash*. **Expliquer**
-(dans *Analyser*) n'apparaît que si un modèle de rédaction est configuré ; s'il est distant, le
-bouton le dit avant le clic.
+similaires** (même raison, une fois les nombres, adresses et chemins mis de côté ; pour un crash de
+la fenêtre, sa propre erreur de script) et, avec **Trouver les causes**, donne à un rapport par
+groupe une **cause probable**, sur deux niveaux : une **famille**, puis une **cause** dans celle-ci.
+
+| Famille | Causes |
+|---|---|
+| Fichiers des mods | Archive de mod endommagée, Conflit de mods, Échec du déploiement |
+| Jeu | Lancement du jeu, Dossier du jeu modifié |
+| Disque et droits | Disque plein, Accès refusé, Fichier introuvable |
+| Réseau | Pas de connexion, Erreur du serveur |
+| Fenêtre de l'app | Erreur de l'interface, Affichage ou pilote graphique |
+| Moteur de l'app | Erreur interne, Tâche en arrière-plan, Données endommagées |
+| Laya (IA) | Moteur de Laya |
+| Mises à jour | Échec de la mise à jour |
+| Mémoire | Mémoire insuffisante |
+| Inconnue | Autre cause ; *Cause inconnue* quand Laya s'abstient |
+
+Chaque cause affiche sa **confiance** (une cause douteuse est marquée *hypothèse*), et dans
+**Analyser** une carte donne les **indices** (les mots et lignes du journal qui l'appuient, chemins
+masqués) et **la chose à faire** (un texte fixe par cause, comme *libérer de l'espace* ou *lancer
+BMM en administrateur*). Les familles deviennent des filtres avec leur nombre ; en choisir une
+affiche ses causes. Uniquement avec Laya intégré ou votre laya-serve, à partir d'un extrait masqué
+du journal, avec les réglages *Rapports de crash*. Les causes d'une ancienne version sont
+recalculées.
+
+**Expliquer** (dans *Analyser*) n'apparaît que si un modèle de rédaction est configuré ; s'il est
+distant, le bouton le dit avant le clic. Sa réponse s'affiche en B.MD, de façon sûre : ni images,
+ni intégrations, ni scripts, et elle peut se tromper.
 
 ## Laya dans le menu de débogage
 

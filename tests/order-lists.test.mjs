@@ -53,6 +53,34 @@ describe('the draft', () => {
     assert.equal(M.pickable(LIB, [], '', 1).length, 1, 'capped');
   });
 
+  test('the add panel search keeps listed mods, marked, and caps the results', () => {
+    const entries = M.addMods([], [LIB[0]]);
+    const rows = M.searchLibrary(LIB, entries, '');
+    assert.deepEqual(rows.map((r) => [r.mod.id, r.listed]), [['a', true], ['b', false], ['c', false]]);
+    assert.deepEqual(M.searchLibrary(LIB, entries, 'beta_mod').map((r) => r.mod.id), ['b']);
+    assert.equal(M.searchLibrary(LIB, [], '', 2).length, 2, 'capped');
+    assert.deepEqual(M.searchLibrary(LIB, [], 'nothing'), []);
+  });
+
+  test('a drop lands where the line was drawn', () => {
+    const e = ['a', 'b', 'c', 'd'];
+    const drop = (from, onto, after) => M.moveEntry(e, from, M.dropIndex(from, onto, after));
+    assert.deepEqual(drop(0, 2, false), ['b', 'a', 'c', 'd'], 'before c');
+    assert.deepEqual(drop(0, 2, true), ['b', 'c', 'a', 'd'], 'after c');
+    assert.deepEqual(drop(3, 0, false), ['d', 'a', 'b', 'c'], 'to the top');
+    assert.deepEqual(drop(1, 3, true), ['a', 'c', 'd', 'b'], 'to the bottom');
+    assert.deepEqual(drop(2, 2, true), e, 'onto itself: unchanged');
+  });
+
+  test('source host, safe colour and state counts', () => {
+    assert.equal(M.sourceHost(LIB[1]), 'r.example');
+    assert.equal(M.sourceHost(LIB[0]), null);
+    assert.equal(M.safeColor('#3b82f6'), '#3b82f6');
+    for (const bad of ['red', '#12', 'url(x)', '#fff;background:red', null, 5]) assert.equal(M.safeColor(bad), null, String(bad));
+    assert.deepEqual(M.stateCounts([{ state: 'active' }, { state: 'missing' }, { state: 'inactive' }, { state: 'active' }]), { active: 2, inactive: 1, missing: 1 });
+    assert.deepEqual(M.stateCounts(undefined), { active: 0, inactive: 0, missing: 0 });
+  });
+
   test('names compare as the Rust resolver compares them', () => {
     assert.equal(M.normName(' Gamma_Mod '), M.normName('gamma-mod'));
     assert.equal(M.normName('Gamma  Mod'), 'gammamod');

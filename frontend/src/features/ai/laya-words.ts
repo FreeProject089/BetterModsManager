@@ -1,5 +1,5 @@
 // laya-words.ts — the words for Laya's fixed vocabularies (report kinds, app areas, crash
-// causes, report categories, severities, the features a call comes from).
+// causes, their families and next steps, report categories, severities, the features a call comes from).
 //
 // Every key is written out so the i18n gates can see each one (a key built from a fragment is invisible
 // to them and renders as its own key on a miss). An id this file does not know is shown as is.
@@ -32,17 +32,70 @@ export function areaWord(id: string): string {
 
 export function causeWord(id: string): string {
     switch (id) {
-        case 'panic': return t('laya.cause.panic');
-        case 'out_of_memory': return t('laya.cause.out_of_memory');
-        case 'file_access': return t('laya.cause.file_access');
-        case 'network': return t('laya.cause.network');
+        case 'mod_archive': return t('laya.cause.mod_archive');
         case 'mod_conflict': return t('laya.cause.mod_conflict');
+        case 'mod_deploy': return t('laya.cause.mod_deploy');
         case 'game_launch': return t('laya.cause.game_launch');
-        case 'graphics': return t('laya.cause.graphics');
+        case 'game_files': return t('laya.cause.game_files');
+        case 'disk_full': return t('laya.cause.disk_full');
+        case 'permission': return t('laya.cause.permission');
+        case 'file_missing': return t('laya.cause.file_missing');
+        case 'network_offline': return t('laya.cause.network_offline');
+        case 'network_server': return t('laya.cause.network_server');
+        case 'ui_script': return t('laya.cause.ui_script');
+        case 'webview': return t('laya.cause.webview');
+        case 'internal_error': return t('laya.cause.internal_error');
+        case 'background_task': return t('laya.cause.background_task');
         case 'data_corrupt': return t('laya.cause.data_corrupt');
+        case 'ai_engine': return t('laya.cause.ai_engine');
+        case 'update_failed': return t('laya.cause.update_failed');
+        case 'out_of_memory': return t('laya.cause.out_of_memory');
         case 'other': return t('laya.cause.other');
         case 'unknown': return t('laya.cause.unknown');
         default: return id;
+    }
+}
+
+/** A crash cause family (`ai_assist::CRASH_FAMILIES`). */
+export function familyWord(id: string): string {
+    switch (id) {
+        case 'mod_files': return t('laya.family.mod_files');
+        case 'game': return t('laya.family.game');
+        case 'disk': return t('laya.family.disk');
+        case 'network': return t('laya.family.network');
+        case 'app_ui': return t('laya.family.app_ui');
+        case 'app_backend': return t('laya.family.app_backend');
+        case 'ai': return t('laya.family.ai');
+        case 'updater': return t('laya.family.updater');
+        case 'memory': return t('laya.family.memory');
+        case 'unknown': return t('laya.family.unknown');
+        default: return id;
+    }
+}
+
+/** The suggested next step of a crash cause: fixed text, never written by a model. */
+export function stepWord(id: string): string {
+    switch (id) {
+        case 'mod_archive': return t('laya.cstep.mod_archive');
+        case 'mod_conflict': return t('laya.cstep.mod_conflict');
+        case 'mod_deploy': return t('laya.cstep.mod_deploy');
+        case 'game_launch': return t('laya.cstep.game_launch');
+        case 'game_files': return t('laya.cstep.game_files');
+        case 'disk_full': return t('laya.cstep.disk_full');
+        case 'permission': return t('laya.cstep.permission');
+        case 'file_missing': return t('laya.cstep.file_missing');
+        case 'network_offline': return t('laya.cstep.network_offline');
+        case 'network_server': return t('laya.cstep.network_server');
+        case 'ui_script': return t('laya.cstep.ui_script');
+        case 'webview': return t('laya.cstep.webview');
+        case 'internal_error': return t('laya.cstep.internal_error');
+        case 'background_task': return t('laya.cstep.background_task');
+        case 'data_corrupt': return t('laya.cstep.data_corrupt');
+        case 'ai_engine': return t('laya.cstep.ai_engine');
+        case 'update_failed': return t('laya.cstep.update_failed');
+        case 'out_of_memory': return t('laya.cstep.out_of_memory');
+        case 'other': return t('laya.cstep.other');
+        default: return t('laya.cstep.other');
     }
 }
 

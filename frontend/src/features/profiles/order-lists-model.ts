@@ -138,6 +138,50 @@ export function pickable(mods: readonly LibraryMod[], entries: readonly OrderEnt
         .slice(0, limit);
 }
 
+/** One result of the add panel's search: the mod, and whether the list already names it. */
+export interface PickRow { mod: LibraryMod; listed: boolean }
+
+/**
+ * The add panel's results: every library mod matching `query` (name, spacing-insensitive),
+ * sorted by name. Unlike `pickable`, the mods already listed stay in the results, marked, so
+ * a search for a mod that is in the list says so instead of answering "nothing matches".
+ */
+export function searchLibrary(mods: readonly LibraryMod[], entries: readonly OrderEntry[], query: string, limit = 120): PickRow[] {
+    const have = new Set(entries.map((e) => e.id).filter(Boolean) as string[]);
+    const q = normName(query);
+    return mods
+        .filter((m) => m?.id && (!q || normName(m.name).includes(q)))
+        .slice()
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+        .slice(0, limit)
+        .map((mod) => ({ mod, listed: have.has(mod.id) }));
+}
+
+/** Where a library mod came from, for a one-word label: the repo's host, or null (local). */
+export function sourceHost(m: LibraryMod): string | null {
+    const raw = String(m?.source_repo || '').trim();
+    if (!raw) return null;
+    try { return new URL(raw).host || raw; } catch { return raw.slice(0, 40); }
+}
+
+/** A profile colour fit for a CSS custom property: a hex colour, or null. Nothing else passes. */
+export function safeColor(c: unknown): string | null {
+    return typeof c === 'string' && /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c.trim()) ? c.trim() : null;
+}
+
+/** Rows counted by where they stand in the profile shown (the list header's counts). */
+export function stateCounts(rows: readonly PlanRow[]): { active: number; inactive: number; missing: number } {
+    const out = { active: 0, inactive: 0, missing: 0 };
+    for (const r of rows || []) if (r && r.state in out) out[r.state]++;
+    return out;
+}
+
+/** Where entry `from` lands when dropped before (or after) entry `onto`: moveEntry's `to`. */
+export function dropIndex(from: number, onto: number, after: boolean): number {
+    const pos = after ? onto + 1 : onto;
+    return from < pos ? pos - 1 : pos;
+}
+
 /** A list as it would be saved: whether the draft differs from what is stored. */
 export function sameList(a: OrderList | null, b: OrderList | null): boolean {
     if (!a || !b) return a === b;

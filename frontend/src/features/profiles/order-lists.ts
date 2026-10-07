@@ -7,6 +7,14 @@
 // and where it stands in the chosen profile (active, inactive, missing). Nothing is dropped:
 // an entry that answers to nothing stays in the list, marked missing.
 //
+// Layout: saved lists on the left; on the right the open list's name and counts, the profiles
+// it is meant for (toggle chips; the eye on a chip picks whose state the rows show, so the two
+// questions "for whom" and "seen from where" are two different controls on the same chip),
+// the list itself (scrolls on its own, drag or the arrows to reorder) and, beside it, the add
+// panel (search the whole library, select several, keyboard ↑/↓/Enter, or append a profile's
+// current order). The actions live in the dialog's footer: Delete apart on the left, the rest
+// on the right with one primary.
+//
 // Two actions change the game, each behind its own confirmation:
 //   * Apply order: the ACTIVE mods the list names take its order in the selected profiles,
 //     in the slots they hold; nothing is enabled. Only the files that change hands are copied.
@@ -21,12 +29,13 @@ import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { dialog, copy } from './order-share.js';
 import {
     type OrderList, type OrderEntry, type ListPlan, type LibraryMod, type PlanRow,
-    addMods, moveEntry, removeEntry, pickable, sameList, activationCounts, qualityCounts, isWeakMatch,
+    addMods, moveEntry, removeEntry, searchLibrary, sameList, activationCounts, qualityCounts, isWeakMatch,
+    sourceHost, safeColor, stateCounts, dropIndex,
 } from './order-lists-model.js';
 
 type Notify = (message: string, type?: string, duration?: number) => void;
 
-interface ProfileLite { id: string; name: string; game_name?: string }
+interface ProfileLite { id: string; name: string; game_name?: string; color?: string | null; active_mods?: string[] }
 
 interface ActivateReport {
     enabled: number; already_active: number; missing: number; disabled: number;
@@ -43,11 +52,47 @@ function fill(key: string, vars: Record<string, string | number>): string {
     return s;
 }
 
+const svg = (w: number, body: string, extra = '') => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${body}</svg>`;
 const I = {
-    up: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
-    down: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
-    remove: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    up: svg(13, '<path d="m18 15-6-6-6 6"/>'),
+    down: svg(13, '<path d="m6 9 6 6 6-6"/>'),
+    remove: svg(13, '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'),
+    plus: svg(14, '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+    check: svg(11, '<polyline points="20 6 9 17 4 12"/>', ' stroke-width="3.2"'),
+    eye: svg(14, '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    search: svg(14, '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
+    list: svg(20, '<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
+    globe: svg(12, '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
+    grip: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
+
+// The list's notes are B.MD, rendered by the docs renderer on its UNTRUSTED path (DOMPurify,
+// no raw HTML passthrough): a list can come from someone else's share code. Loaded on first use.
+let mdRender: ((src: string) => string) | null = null;
+async function loadMd(): Promise<void> {
+    if (mdRender) return;
+    try {
+        const m = await import('../../docs/md-lite.js');
+        mdRender = (src: string) => m.renderDocMarkdown(src);
+    } catch { /* the notes show as plain text */ }
+}
+
+/** Notes as HTML: B.MD, sanitised, and nothing that fetches (remote images, media) kept. */
+function notesHtml(src: string): string {
+    const text = String(src || '').trim();
+    if (!text) return '';
+    if (!mdRender) return `<p>${escHtml(text)}</p>`;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = mdRender(text);
+    tpl.content.querySelectorAll('img, video, audio, source, picture, iframe, object, embed').forEach((el) => {
+        const alt = el.getAttribute('alt') || '';
+        el.replaceWith(document.createTextNode(alt));
+    });
+    tpl.content.querySelectorAll('[srcset], [poster], [background]').forEach((el) => {
+        el.removeAttribute('srcset'); el.removeAttribute('poster'); el.removeAttribute('background');
+    });
+    return tpl.innerHTML;
+}
 
 const blank = (): OrderList => ({ id: '', name: '', description: '', profile_ids: [], entries: [] });
 const clone = (l: OrderList): OrderList => JSON.parse(JSON.stringify(l));
@@ -71,6 +116,7 @@ export function openOrderLists(profileId: string | null = null, notify?: Notify)
                     invoke('get_all_mods') as Promise<LibraryMod[]>,
                     invoke('get_active_profile_id') as Promise<string | null>,
                 ]);
+                await loadMd();
             } catch (e) {
                 notify?.(fill('orderList.loadFailed', { e: t(String(e)) }), 'error', 7000);
                 resolve(false);
@@ -86,10 +132,11 @@ export function openOrderLists(profileId: string | null = null, notify?: Notify)
 }
 
 function run(
-    initial: OrderList[], profiles: ProfileLite[], library: LibraryMod[], activeId: string | null,
+    initial: OrderList[], initialProfiles: ProfileLite[], library: LibraryMod[], activeId: string | null,
     viewProfile: string | null, notify: Notify | undefined, resolve: (changed: boolean) => void,
 ): void {
     let lists = initial;
+    let profiles = initialProfiles;
     let saved: OrderList | null = null;   // the stored version of the open list (null = new)
     let draft: OrderList | null = null;
     let plan: ListPlan | null = null;
@@ -99,137 +146,268 @@ function run(
     let changedGame = false;
     let seq = 0;
     let query = '';
+    let adding = false;                    // the add panel is open
+    let notesOpen = false;                 // the notes editor is open
+    const picked = new Set<string>();      // mods selected in the add panel
+    let hi = -1;                           // the add panel's highlighted result
+    let applyTargets = new Set<string>();  // the profiles Apply order is about to touch
+    let pendingFocus: string | null = null;
     const nameOfProfile = (id: string) => profiles.find((p) => p.id === id)?.name || id;
 
     const { ov, close, onClose } = dialog('olm', t('orderList.title'), `
         <div class="olm-wrap">
           <aside class="olm-side">
+            <button type="button" class="btn btn-secondary btn-sm olm-new">${I.plus}<span>${escHtml(t('orderList.new'))}</span></button>
             <div class="olm-side-tools">
-              <button type="button" class="btn btn-secondary btn-sm olm-new">${escHtml(t('orderList.new'))}</button>
               <button type="button" class="btn btn-ghost btn-sm olm-from" title="${escAttr(t('orderList.fromProfileTip'))}">${escHtml(t('orderList.fromProfile'))}</button>
               <button type="button" class="btn btn-ghost btn-sm olm-import">${escHtml(t('orderList.import'))}</button>
             </div>
-            <ul class="olm-lists" aria-label="${escAttr(t('orderList.saved'))}"></ul>
+            <div class="olm-side-h"><span class="bms-label" id="olm-lists-h">${escHtml(t('orderList.savedLists'))}</span><span class="olm-side-n"></span></div>
+            <ul class="olm-lists" aria-labelledby="olm-lists-h"></ul>
           </aside>
-          <section class="olm-main" aria-live="polite"></section>
+          <section class="olm-main"></section>
         </div>`,
-        `<span class="osh-status olm-status" aria-live="polite"></span>
-         <button type="button" class="btn btn-primary btn-sm olm-done">${escHtml(t('common.close'))}</button>`);
+        `<div class="olm-foot"></div>`);
     ov.querySelector('.osh-modal')?.classList.add('olm-modal');
     onClose(() => resolve(changedGame));
     const side = ov.querySelector('.olm-lists') as HTMLElement;
+    const sideCount = ov.querySelector('.olm-side-n') as HTMLElement;
     const main = ov.querySelector('.olm-main') as HTMLElement;
-    const status = ov.querySelector('.olm-status') as HTMLElement;
-    const say = (m: string) => { status.textContent = m; };
+    const foot = ov.querySelector('.olm-foot') as HTMLElement;
+    let statusText = '';
+    const say = (m: string) => {
+        statusText = m;
+        const s = foot.querySelector('.olm-status');
+        if (s) s.textContent = m;
+    };
 
+    const dirty = () => !!draft && !sameList(saved, draft);
+    const viewed = () => profiles.find((p) => p.id === planFor) || null;
+    const swatch = (p: ProfileLite) => {
+        const c = safeColor(p.color);
+        return c ? ` style="--olm-pc:${escAttr(c)}"` : '';
+    };
+
+    // ── Left column ────────────────────────────────────────────────────────────────────────
     function renderSide(): void {
+        sideCount.textContent = lists.length ? String(lists.length) : '';
         side.innerHTML = lists.length ? lists.map((l) => {
+            const on = !!(draft && saved && saved.id === l.id);
+            const targets = l.profile_ids.map((id) => profiles.find((p) => p.id === id)).filter(Boolean) as ProfileLite[];
             const scope = l.profile_ids.length
-                ? l.profile_ids.map(nameOfProfile).join(', ')
-                : t('orderList.anyProfile');
-            const on = draft && saved && saved.id === l.id;
-            return `<li><button type="button" class="olm-pick${on ? ' is-open' : ''}" data-id="${escAttr(l.id)}">
-                <span class="olm-pick-name">${escHtml(l.name)}</span>
-                <span class="olm-pick-meta">${escHtml(fill('orderList.count', { n: l.entries.length }))} · ${escHtml(scope)}</span>
+                ? `<span class="olm-pick-dots" aria-hidden="true">${targets.slice(0, 4).map((p) => `<span class="olm-dot"${swatch(p)}></span>`).join('')}</span>
+                   <span class="olm-pick-scope">${escHtml(l.profile_ids.map(nameOfProfile).join(', '))}</span>`
+                : `<span class="olm-pick-any">${I.globe}<span>${escHtml(t('orderList.anyProfile'))}</span></span>`;
+            return `<li><button type="button" class="olm-pick${on ? ' is-open' : ''}" data-id="${escAttr(l.id)}"${on ? ' aria-current="true"' : ''}>
+                <span class="olm-pick-top">
+                  <span class="olm-pick-name">${escHtml(l.name)}</span>
+                  ${on && dirty() ? `<span class="olm-unsaved-dot" title="${escAttr(t('orderList.unsaved'))}"></span>` : ''}
+                  <span class="olm-pick-n">${escHtml(String(l.entries.length))}</span>
+                </span>
+                <span class="olm-pick-meta">${scope}</span>
               </button></li>`;
         }).join('') : `<li class="olm-none">${escHtml(t('orderList.none'))}</li>`;
     }
 
-    const dirty = () => !!draft && !sameList(saved, draft);
-
-    function chip(r: PlanRow): string {
-        const q = `<span class="olm-q olm-q-${escAttr(r.quality)}${isWeakMatch(r.quality, r.version_differs) ? ' is-weak' : ''}" title="${escAttr(t(`orderList.q.${r.quality}Tip`))}">${escHtml(t(`orderList.q.${r.quality}`))}</span>`;
+    // ── Chips ──────────────────────────────────────────────────────────────────────────────
+    function chips(r: PlanRow): string {
+        const p = viewed()?.name || '';
+        if (r.state === 'missing') {
+            // Not found / ambiguous: one chip says both how it was looked for and the outcome.
+            const key = r.quality === 'ambiguous' ? 'orderList.q.ambiguous' : 'orderList.st.missing';
+            return `<span class="olm-st is-missing" title="${escAttr(t(`orderList.q.${r.quality}Tip`))}">${escHtml(t(key))}</span>`;
+        }
+        const weak = isWeakMatch(r.quality, r.version_differs);
+        const q = `<span class="olm-q olm-q-${escAttr(r.quality)}${weak ? ' is-weak' : ''}" title="${escAttr(t(`orderList.q.${r.quality}Tip`))}">${escHtml(t(`orderList.q.${r.quality}`))}</span>`;
         const st = r.state === 'active'
-            ? `<span class="olm-st is-on">${escHtml(fill('orderList.st.active', { n: r.position }))}</span>`
-            : r.state === 'inactive'
-                ? `<span class="olm-st is-off">${escHtml(t(r.in_profile ? 'orderList.st.inactive' : 'orderList.st.outside'))}</span>`
-                : `<span class="olm-st is-missing">${escHtml(t(r.quality === 'ambiguous' ? 'orderList.st.ambiguous' : 'orderList.st.missing'))}</span>`;
-        return q + st;
+            ? `<span class="olm-st is-on" title="${escAttr(fill('orderList.st.activeTip', { p, n: r.position }))}">${escHtml(fill('orderList.st.active', { n: r.position }))}</span>`
+            : `<span class="olm-st is-off" title="${escAttr(fill(r.in_profile ? 'orderList.st.inactiveTip' : 'orderList.st.outsideTip', { p }))}">${escHtml(t(r.in_profile ? 'orderList.st.inactive' : 'orderList.st.outside'))}</span>`;
+        return st + q;
     }
 
+    /** A profile chip: the toggle (meant for it or not) and, apart, the eye (show its state). */
+    function profileChip(p: ProfileLite, on: boolean, cls: string, withEye: boolean): string {
+        const isActive = p.id === activeId;
+        const isViewed = withEye && p.id === planFor;
+        const sub = [p.game_name ? t(p.game_name) || p.game_name : '', isActive ? t('orderList.activeProfile') : ''].filter(Boolean).join(' · ');
+        return `<span class="olm-pc${on ? ' is-on' : ''}${isViewed ? ' is-viewed' : ''}"${swatch(p)}>
+            <button type="button" class="olm-pc-tog ${cls}" data-pid="${escAttr(p.id)}" aria-pressed="${on}">
+              <span class="olm-pc-box" aria-hidden="true">${I.check}</span>
+              <span class="olm-dot" aria-hidden="true"></span>
+              <span class="olm-pc-text">
+                <span class="olm-pc-name">${escHtml(p.name)}${isActive ? `<span class="olm-pc-active" aria-hidden="true"></span>` : ''}</span>
+                ${sub ? `<span class="olm-pc-sub">${escHtml(sub)}</span>` : ''}
+              </span>
+            </button>
+            ${withEye ? `<button type="button" class="olm-pc-eye" data-pid="${escAttr(p.id)}" aria-pressed="${isViewed}" title="${escAttr(fill('orderList.viewState', { p: p.name }))}" aria-label="${escAttr(fill('orderList.viewState', { p: p.name }))}">${I.eye}</button>` : ''}
+          </span>`;
+    }
+
+    // ── Edit view ──────────────────────────────────────────────────────────────────────────
     function renderEdit(): string {
         const d = draft!;
         const rows = plan?.rows || [];
+        const sc = stateCounts(rows);
         const qc = qualityCounts(rows);
-        const scopeBoxes = profiles.map((p) => `
-            <label class="olm-check"><input type="checkbox" class="olm-scope" value="${escAttr(p.id)}"${d.profile_ids.includes(p.id) ? ' checked' : ''}> ${escHtml(p.name)}</label>`).join('');
-        const picks = pickable(library, d.entries, query, 60);
+        const byName = qc.name + rows.filter((r) => r.quality === 'name_version' && r.version_differs).length;
+        const anyScope = !d.profile_ids.length;
+        const v = viewed();
+        const counts = `
+            <span class="bms-chip"><b>${rows.length || d.entries.length}</b>${escHtml(t('orderList.sum.total'))}</span>
+            ${plan ? `<span class="bms-chip bms-chip--ok" title="${escAttr(t('orderList.sum.activeTip'))}"><span class="bms-dot"></span>${escHtml(fill('orderList.sum.active', { n: sc.active }))}</span>` : ''}
+            ${plan ? `<span class="bms-chip" title="${escAttr(t('orderList.sum.inactiveTip'))}"><span class="bms-dot"></span>${escHtml(fill('orderList.sum.inactive', { n: sc.inactive }))}</span>` : ''}
+            ${plan && sc.missing ? `<span class="bms-chip bms-chip--warn" title="${escAttr(t('orderList.sum.missingTip'))}"><span class="bms-dot"></span>${escHtml(fill('orderList.sum.missing', { n: sc.missing }))}</span>` : ''}
+            ${plan && byName ? `<span class="bms-chip bms-chip--warn" title="${escAttr(t('orderList.q.nameTip'))}">${escHtml(fill('orderList.sum.byName', { n: byName }))}</span>` : ''}`;
         return `
-          <div class="olm-fields">
-            <label class="osh-label" for="olm-name">${escHtml(t('orderList.name'))}</label>
-            <input id="olm-name" class="form-input olm-name" maxlength="120" value="${escAttr(d.name)}" placeholder="${escAttr(t('orderList.namePlaceholder'))}">
-            <fieldset class="olm-scope-set">
-              <legend class="osh-label">${escHtml(t('orderList.scope'))}</legend>
-              <p class="osh-note">${escHtml(t('orderList.scopeHint'))}</p>
-              <div class="olm-checks">${scopeBoxes || `<span class="osh-note">${escHtml(t('orderList.noProfiles'))}</span>`}</div>
-            </fieldset>
+          <header class="olm-head">
+            <div class="olm-head-row">
+              <input id="olm-name" class="form-input olm-name" maxlength="120" value="${escAttr(d.name)}" placeholder="${escAttr(t('orderList.namePlaceholder'))}" aria-label="${escAttr(t('orderList.name'))}">
+              <span class="olm-unsaved"${dirty() ? '' : ' hidden'}${saved ? ` title="${escAttr(t('orderList.saveFirst'))}"` : ''}><span class="olm-unsaved-dot"></span>${escHtml(t('orderList.unsaved'))}</span>
+              <button type="button" class="btn btn-ghost btn-sm olm-notes-toggle" aria-expanded="${notesOpen}" aria-controls="olm-notes" title="${escAttr(t('orderList.notesTip'))}">${escHtml(t(notesOpen ? 'orderList.notesDone' : (d.description || '').trim() ? 'orderList.notesEdit' : 'orderList.notesAdd'))}</button>
+            </div>
+            <div class="olm-counts" aria-live="polite">${counts}</div>
+            ${!notesOpen && (d.description || '').trim() ? `<div class="olm-desc pa-doc">${notesHtml(d.description || '')}</div>` : ''}
+          </header>
+          ${notesOpen ? `
+          <section class="olm-notes" id="olm-notes">
+            <label class="bms-label" for="olm-notes-input">${escHtml(t('orderList.notes'))}</label>
+            <textarea id="olm-notes-input" class="form-input olm-notes-input" rows="3" maxlength="2000" placeholder="${escAttr(t('orderList.notesPlaceholder'))}">${escHtml(d.description || '')}</textarea>
+            <span class="bms-label">${escHtml(t('orderList.notesPreview'))}</span>
+            <div class="olm-notes-preview pa-doc">${notesHtml(d.description || '') || `<span class="osh-note">${escHtml(t('orderList.notesEmpty'))}</span>`}</div>
+          </section>` : ''}
+          <section class="olm-targets" aria-labelledby="olm-tg-h">
+            <div class="olm-targets-h">
+              <span class="bms-label" id="olm-tg-h">${escHtml(t('orderList.scope'))}</span>
+              <span class="olm-scope-state${anyScope ? ' is-any' : ''}">${anyScope ? `${I.globe}<span>${escHtml(t('orderList.scopeAny'))}</span>` : escHtml(fill('orderList.scopeSome', { n: d.profile_ids.length }))}</span>
+              <span class="bms-spacer"></span>
+              ${profiles.length ? `
+              <button type="button" class="btn btn-ghost btn-sm olm-scope-all"${d.profile_ids.length === profiles.length ? ' disabled' : ''}>${escHtml(t('orderList.scopeAll'))}</button>
+              <button type="button" class="btn btn-ghost btn-sm olm-scope-none"${anyScope ? ' disabled' : ''} title="${escAttr(t('orderList.scopeHint'))}">${escHtml(t('orderList.scopeNone'))}</button>` : ''}
+            </div>
+            <div class="olm-pchips" role="group" aria-labelledby="olm-tg-h">
+              ${profiles.map((p) => profileChip(p, d.profile_ids.includes(p.id), 'olm-scope', true)).join('') || `<span class="osh-note">${escHtml(t('orderList.noProfiles'))}</span>`}
+            </div>
+          </section>
+          <div class="olm-body${adding ? ' is-adding' : ''}">
+            <section class="olm-listpane" aria-labelledby="olm-list-h">
+              <div class="olm-list-h">
+                <span class="bms-label" id="olm-list-h">${escHtml(t('orderList.order'))}</span>
+                ${v ? `<span class="olm-viewing" title="${escAttr(t('orderList.viewingTip'))}"${swatch(v)}>${I.eye}<span>${escHtml(fill('orderList.viewingFor', { p: v.name }))}</span></span>` : ''}
+                <span class="bms-spacer"></span>
+                <button type="button" class="btn ${adding ? 'btn-ghost' : 'btn-secondary'} btn-sm olm-add-toggle" aria-expanded="${adding}" aria-controls="olm-addpane">${I.plus}<span>${escHtml(t('orderList.add'))}</span></button>
+              </div>
+              <div class="olm-scroll">
+                <div class="lo-edge">${escHtml(t('order.first'))}</div>
+                <ol class="olm-entries">
+                  ${d.entries.length ? d.entries.map((e, i) => {
+                      const r = rows[i];
+                      const renamed = r?.mod_name ? `<span class="olm-now">${escHtml(fill('orderList.nowCalled', { m: r.mod_name }))}</span>` : '';
+                      return `<li class="olm-entry${r && r.state !== 'active' ? ` is-${escAttr(r.state)}` : ''}" draggable="true" data-i="${i}">
+                        <span class="lo-grip olm-grip" title="${escAttr(t('orderList.dragTip'))}">${I.grip}</span>
+                        <span class="lo-pos">${i + 1}</span>
+                        <span class="olm-entry-main">
+                          <span class="olm-entry-line"><span class="olm-entry-name">${escHtml(e.name)}</span>${e.version ? `<span class="olm-ver">${escHtml(e.version)}</span>` : ''}</span>
+                          <span class="olm-chips">${r ? chips(r) : ''}${renamed}</span>
+                        </span>
+                        <span class="lo-moves olm-row-acts">
+                          <button type="button" class="lo-mv olm-up" data-i="${i}" title="${escAttr(t('order.moveUp'))}" aria-label="${escAttr(`${t('order.moveUp')}: ${e.name}`)}"${i === 0 ? ' disabled' : ''}>${I.up}</button>
+                          <button type="button" class="lo-mv olm-down" data-i="${i}" title="${escAttr(t('order.moveDown'))}" aria-label="${escAttr(`${t('order.moveDown')}: ${e.name}`)}"${i === d.entries.length - 1 ? ' disabled' : ''}>${I.down}</button>
+                          <button type="button" class="lo-mv olm-rm" data-i="${i}" title="${escAttr(t('orderList.remove'))}" aria-label="${escAttr(`${t('orderList.remove')}: ${e.name}`)}">${I.remove}</button>
+                        </span>
+                      </li>`;
+                  }).join('') : `<li class="olm-empty">
+                      <span class="bms-empty-ic">${I.list}</span>
+                      <span>${escHtml(t('orderList.emptyList'))}</span>
+                      ${adding ? '' : `<button type="button" class="btn btn-primary btn-sm olm-add-toggle">${I.plus}<span>${escHtml(t('orderList.add'))}</span></button>`}
+                    </li>`}
+                </ol>
+                <div class="lo-edge lo-edge-last">${escHtml(t('order.last'))}</div>
+              </div>
+            </section>
+            ${adding ? renderAddPane() : ''}
           </div>
-          <div class="olm-view">
-            <label class="osh-label" for="olm-for">${escHtml(t('orderList.viewFor'))}</label>
-            <select id="olm-for" class="olm-for">
-              ${profiles.map((p) => `<option value="${escAttr(p.id)}"${p.id === planFor ? ' selected' : ''}>${escHtml(p.name)}${p.id === activeId ? ` ${escHtml(t('orderList.activeMark'))}` : ''}</option>`).join('')}
-            </select>
-          </div>
-          <div class="osh-chips">
-            <span class="osh-chip">${escHtml(fill('orderList.count', { n: rows.length }))}</span>
-            ${plan ? `<span class="osh-chip is-ok">${escHtml(fill('orderList.sum.active', { n: plan.already_active }))}</span>` : ''}
-            ${plan && plan.to_activate.length ? `<span class="osh-chip">${escHtml(fill('orderList.sum.inactive', { n: plan.to_activate.length }))}</span>` : ''}
-            ${plan && plan.missing + plan.ambiguous ? `<span class="osh-chip is-warn">${escHtml(fill('orderList.sum.missing', { n: plan.missing + plan.ambiguous }))}</span>` : ''}
-            ${qc.name + qc.name_version ? `<span class="osh-chip">${escHtml(fill('orderList.sum.byName', { n: qc.name + qc.name_version }))}</span>` : ''}
-          </div>
-          <div class="lo-edge">${escHtml(t('order.first'))}</div>
-          <ol class="olm-entries">
-            ${d.entries.length ? d.entries.map((e, i) => {
-                const r = rows[i];
-                const renamed = r?.mod_name ? `<span class="olm-now">${escHtml(fill('orderList.nowCalled', { m: r.mod_name }))}</span>` : '';
-                return `<li class="olm-entry${r && r.state !== 'active' ? ` is-${escAttr(r.state)}` : ''}">
-                  <span class="lo-pos">${i + 1}</span>
-                  <span class="olm-entry-main">
-                    <span class="olm-entry-name">${escHtml(e.name)}${e.version ? ` <span class="olm-ver">${escHtml(e.version)}</span>` : ''}</span>
-                    ${renamed}
-                    <span class="olm-chips">${r ? chip(r) : ''}</span>
-                  </span>
-                  <span class="lo-moves">
-                    <button type="button" class="lo-mv olm-up" data-i="${i}" title="${escAttr(t('order.moveUp'))}" aria-label="${escAttr(t('order.moveUp'))}"${i === 0 ? ' disabled' : ''}>${I.up}</button>
-                    <button type="button" class="lo-mv olm-down" data-i="${i}" title="${escAttr(t('order.moveDown'))}" aria-label="${escAttr(t('order.moveDown'))}"${i === d.entries.length - 1 ? ' disabled' : ''}>${I.down}</button>
-                    <button type="button" class="lo-mv olm-rm" data-i="${i}" title="${escAttr(t('orderList.remove'))}" aria-label="${escAttr(t('orderList.remove'))}">${I.remove}</button>
-                  </span>
-                </li>`;
-            }).join('') : `<li class="lo-empty">${escHtml(t('orderList.emptyList'))}</li>`}
-          </ol>
-          <div class="lo-edge lo-edge-last">${escHtml(t('order.last'))}</div>
-          <details class="osh-more olm-add"${d.entries.length ? '' : ' open'}>
-            <summary>${escHtml(t('orderList.add'))}</summary>
-            <input type="search" class="form-input olm-search" value="${escAttr(query)}" placeholder="${escAttr(t('orderList.searchPlaceholder'))}" aria-label="${escAttr(t('orderList.searchPlaceholder'))}">
-            <ul class="olm-picks">
-              ${picks.map((m) => `<li><button type="button" class="olm-addone" data-id="${escAttr(m.id)}">
-                  <span class="olm-entry-name">${escHtml(m.name)}${m.version ? ` <span class="olm-ver">${escHtml(m.version)}</span>` : ''}</span>
-                  <span class="olm-st ${m.enabled ? 'is-on' : 'is-off'}">${escHtml(t(m.enabled ? 'orderList.pick.on' : 'orderList.pick.off'))}</span>
-                </button></li>`).join('') || `<li class="olm-none">${escHtml(t('orderList.pick.none'))}</li>`}
-            </ul>
-          </details>
-          <div class="olm-actions">
-            <button type="button" class="btn btn-primary btn-sm olm-save"${dirty() && draft!.name.trim() ? '' : ' disabled'}>${escHtml(t('orderList.save'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm olm-go-activate"${saved ? '' : ' disabled'} title="${escAttr(t('orderList.activateTip'))}">${escHtml(t('orderList.activate'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm olm-go-apply"${saved ? '' : ' disabled'} title="${escAttr(t('orderList.applyTip'))}">${escHtml(t('orderList.apply'))}</button>
-            <button type="button" class="btn btn-ghost btn-sm olm-share"${saved ? '' : ' disabled'}>${escHtml(t('order.share.btn'))}</button>
-            <button type="button" class="btn btn-ghost btn-sm olm-delete"${saved ? '' : ' disabled'}>${escHtml(t('orderList.delete'))}</button>
-          </div>
-          ${saved && dirty() ? `<p class="osh-note">${escHtml(t('orderList.saveFirst'))}</p>` : ''}`;
+          `;
     }
 
-    function renderApply(): string {
-        const pre = new Set(saved!.profile_ids.length ? saved!.profile_ids : [planFor || '']);
+    function renderAddPane(): string {
+        const v = viewed();
         return `
-          <h4 class="olm-h">${escHtml(fill('orderList.applyTitle', { m: saved!.name }))}</h4>
-          <p class="osh-note">${escHtml(t('orderList.applyLede'))}</p>
-          <div class="olm-checks">${profiles.map((p) => `
-            <label class="olm-check"><input type="checkbox" class="olm-target" value="${escAttr(p.id)}"${pre.has(p.id) ? ' checked' : ''}> ${escHtml(p.name)}</label>`).join('')}
-          </div>
-          <div class="olm-result"></div>
-          <div class="olm-actions">
-            <button type="button" class="btn btn-primary btn-sm olm-apply-go">${escHtml(t('orderList.applyGo'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm olm-back">${escHtml(t('common.cancel'))}</button>
+          <section class="olm-addpane" id="olm-addpane" aria-labelledby="olm-add-h">
+            <div class="olm-add-h">
+              <span class="bms-label" id="olm-add-h">${escHtml(t('orderList.add'))}</span>
+              <span class="bms-spacer"></span>
+              <button type="button" class="lo-mv olm-add-close" title="${escAttr(t('common.close'))}" aria-label="${escAttr(t('common.close'))}">${I.remove}</button>
+            </div>
+            <label class="olm-searchbox" title="${escAttr(t('orderList.pick.hint'))}">
+              ${I.search}
+              <input type="search" class="olm-search" value="${escAttr(query)}" placeholder="${escAttr(t('orderList.searchPlaceholder'))}" aria-label="${escAttr(t('orderList.searchPlaceholder'))}"
+                role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="olm-picks">
+            </label>
+            <div class="olm-add-meta"><span class="olm-pick-count"></span><span class="olm-pick-hint">${escHtml(t('orderList.pick.hint'))}</span></div>
+            <ul class="olm-picks" id="olm-picks" role="listbox" aria-multiselectable="true" aria-label="${escAttr(t('orderList.add'))}"></ul>
+            <div class="olm-add-foot">
+              ${v ? `<button type="button" class="btn btn-ghost btn-sm olm-add-profile" title="${escAttr(fill('orderList.addFromProfileTip', { p: v.name }))}">${escHtml(fill('orderList.addFromProfile', { p: v.name }))}</button>` : ''}
+              <span class="bms-spacer"></span>
+              <button type="button" class="btn btn-primary btn-sm olm-add-sel" disabled></button>
+            </div>
+          </section>`;
+    }
+
+    /** The results only: typing in the search box redraws this, never the whole view. */
+    function renderPicks(): void {
+        const ul = main.querySelector<HTMLElement>('.olm-picks');
+        if (!ul || !draft) return;
+        const rows = searchLibrary(library, draft.entries, query);
+        const v = viewed();
+        const activeSet = new Set(v?.active_mods || []);
+        const isOn = (m: LibraryMod) => (v && Array.isArray(v.active_mods) ? activeSet.has(m.id) : !!m.enabled);
+        if (hi >= rows.length) hi = rows.length - 1;
+        ul.innerHTML = rows.length ? rows.map(({ mod: m, listed }, i) => {
+            const host = sourceHost(m);
+            const sel = picked.has(m.id);
+            return `<li id="olm-pk-${i}" role="option" class="olm-pk${i === hi ? ' is-hi' : ''}${listed ? ' is-listed' : ''}" data-id="${escAttr(m.id)}"
+                aria-selected="${sel}"${listed ? ' aria-disabled="true"' : ''}>
+                <span class="olm-pc-box" aria-hidden="true">${I.check}</span>
+                <span class="olm-pk-main">
+                  <span class="olm-entry-line"><span class="olm-entry-name">${escHtml(m.name || m.id)}</span>${m.version ? `<span class="olm-ver">${escHtml(m.version)}</span>` : ''}</span>
+                  <span class="olm-pk-src">${host ? escHtml(host) : escHtml(t('orderList.pick.local'))}</span>
+                </span>
+                ${listed
+                    ? `<span class="olm-st is-listed">${escHtml(t('orderList.pick.inList'))}</span>`
+                    : `<span class="olm-st ${isOn(m) ? 'is-on' : 'is-off'}">${escHtml(t(isOn(m) ? 'orderList.pick.on' : 'orderList.pick.off'))}</span>`}
+              </li>`;
+        }).join('') : `<li class="olm-pk-empty" role="presentation">${I.search}<span>${escHtml(t(library.length ? 'orderList.pick.none' : 'orderList.pick.emptyLib'))}</span></li>`;
+        const count = main.querySelector('.olm-pick-count');
+        if (count) count.textContent = fill('orderList.pick.results', { n: rows.length });
+        const q = main.querySelector<HTMLInputElement>('.olm-search');
+        if (q) {
+            if (hi >= 0 && rows.length) q.setAttribute('aria-activedescendant', `olm-pk-${hi}`);
+            else q.removeAttribute('aria-activedescendant');
+        }
+        const btn = main.querySelector<HTMLButtonElement>('.olm-add-sel');
+        if (btn) {
+            btn.disabled = !picked.size;
+            btn.textContent = fill('orderList.addSelected', { n: picked.size });
+        }
+        ul.querySelector('.is-hi')?.scrollIntoView({ block: 'nearest' });
+    }
+
+    // ── Apply / Activate views ─────────────────────────────────────────────────────────────
+    function renderApply(): string {
+        return `
+          <div class="olm-step">
+            <h4 class="olm-h">${escHtml(fill('orderList.applyTitle', { m: saved!.name }))}</h4>
+            <p class="osh-note">${escHtml(t('orderList.applyLede'))}</p>
+            <div class="olm-targets-h">
+              <span class="bms-label" id="olm-ap-h">${escHtml(t('orderList.applyTo'))}</span>
+              <span class="bms-spacer"></span>
+              <button type="button" class="btn btn-ghost btn-sm olm-target-all"${applyTargets.size === profiles.length ? ' disabled' : ''}>${escHtml(t('orderList.scopeAll'))}</button>
+              <button type="button" class="btn btn-ghost btn-sm olm-target-none"${applyTargets.size ? '' : ' disabled'}>${escHtml(t('orderList.scopeNone'))}</button>
+            </div>
+            <div class="olm-pchips olm-pchips-free" role="group" aria-labelledby="olm-ap-h">
+              ${profiles.map((p) => profileChip(p, applyTargets.has(p.id), 'olm-target', false)).join('')}
+            </div>
+            <div class="olm-result"></div>
           </div>`;
     }
 
@@ -238,37 +416,101 @@ function run(
         const names = (xs: { name: string }[]) => xs.map((x) => `<li>${escHtml(x.name)}</li>`).join('');
         const missingRows = (p?.rows || []).filter((r) => r.state === 'missing');
         return `
-          <h4 class="olm-h">${escHtml(fill('orderList.activateTitle', { m: saved!.name, p: activeId ? nameOfProfile(activeId) : '' }))}</h4>
-          <p class="osh-note">${escHtml(t('orderList.activateLede'))}</p>
-          ${!p ? `<p class="osh-note">${escHtml(t('order.import.reading'))}</p>` : `
-          <div class="osh-chips">
-            <span class="osh-chip${c.enable ? ' is-ok' : ''}">${escHtml(fill('orderList.act.enable', { n: c.enable }))}</span>
-            <span class="osh-chip">${escHtml(fill('orderList.act.already', { n: c.already }))}</span>
-            ${c.missing ? `<span class="osh-chip is-warn">${escHtml(fill('orderList.act.missing', { n: c.missing }))}</span>` : ''}
-            ${c.disable ? `<span class="osh-chip is-warn">${escHtml(fill('orderList.act.disable', { n: c.disable }))}</span>` : ''}
-          </div>
-          ${c.enable ? `<details class="osh-more" open><summary>${escHtml(fill('orderList.act.enableList', { n: c.enable }))}</summary><ol>${names(p.to_activate)}</ol></details>` : ''}
-          ${c.missing ? `<details class="osh-more"><summary>${escHtml(fill('orderList.act.missingList', { n: c.missing }))}</summary><ul>${names(missingRows)}</ul></details>` : ''}
-          <label class="olm-check olm-excl"><input type="checkbox" class="olm-exclusive"${exclusive ? ' checked' : ''}> ${escHtml(t('orderList.exclusive'))}</label>
-          ${c.disable ? `<details class="osh-more" open><summary>${escHtml(fill('orderList.act.disableList', { n: c.disable }))}</summary><ul>${names(p.to_deactivate)}</ul></details>` : ''}`}
-          <div class="olm-result"></div>
-          <div class="olm-actions">
-            <button type="button" class="btn btn-primary btn-sm olm-activate-go"${p && (c.enable || c.disable || p.order_changed || c.already) ? '' : ' disabled'}>${escHtml(exclusive ? t('orderList.activateOnlyGo') : t('orderList.activateGo'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm olm-back">${escHtml(t('common.cancel'))}</button>
-            <button type="button" class="btn btn-ghost btn-sm olm-cancel-op" hidden>${escHtml(t('orderList.stop'))}</button>
+          <div class="olm-step">
+            <h4 class="olm-h">${escHtml(fill('orderList.activateTitle', { m: saved!.name, p: activeId ? nameOfProfile(activeId) : '' }))}</h4>
+            <p class="osh-note">${escHtml(t('orderList.activateLede'))}</p>
+            ${!p ? `<p class="osh-note">${escHtml(t('order.import.reading'))}</p>` : `
+            <div class="olm-counts">
+              <span class="bms-chip${c.enable ? ' bms-chip--ok' : ''}"><span class="bms-dot"></span>${escHtml(fill('orderList.act.enable', { n: c.enable }))}</span>
+              <span class="bms-chip"><span class="bms-dot"></span>${escHtml(fill('orderList.act.already', { n: c.already }))}</span>
+              ${c.missing ? `<span class="bms-chip bms-chip--warn"><span class="bms-dot"></span>${escHtml(fill('orderList.act.missing', { n: c.missing }))}</span>` : ''}
+              ${c.disable ? `<span class="bms-chip bms-chip--warn"><span class="bms-dot"></span>${escHtml(fill('orderList.act.disable', { n: c.disable }))}</span>` : ''}
+            </div>
+            ${c.enable ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.act.enableList', { n: c.enable }))}</summary><ol>${names(p.to_activate)}</ol></details>` : ''}
+            ${c.missing ? `<details class="osh-more olm-card"><summary>${escHtml(fill('orderList.act.missingList', { n: c.missing }))}</summary><ul>${names(missingRows)}</ul></details>` : ''}
+            <label class="olm-excl${exclusive ? ' is-on' : ''}"><input type="checkbox" class="olm-exclusive"${exclusive ? ' checked' : ''}><span>${escHtml(t('orderList.exclusive'))}</span></label>
+            ${c.disable ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.act.disableList', { n: c.disable }))}</summary><ul>${names(p.to_deactivate)}</ul></details>` : ''}`}
+            <div class="olm-result"></div>
           </div>`;
+    }
+
+    // ── Footer ─────────────────────────────────────────────────────────────────────────────
+    function renderFoot(): void {
+        const status = `<span class="osh-status olm-status" aria-live="polite">${escHtml(statusText)}</span>`;
+        const closeBtn = `<button type="button" class="btn btn-ghost btn-sm olm-done">${escHtml(t('common.close'))}</button>`;
+        let start = '';
+        let end = '';
+        if (draft && mode === 'edit') {
+            const d = dirty();
+            start = `<button type="button" class="btn btn-outline-danger btn-sm olm-delete${confirmDelete ? ' is-armed' : ''}"${saved ? '' : ' disabled'}>${escHtml(t('orderList.delete'))}</button>`;
+            end = `
+              <button type="button" class="btn btn-ghost btn-sm olm-share"${saved ? '' : ' disabled'}>${escHtml(t('order.share.btn'))}</button>
+              <button type="button" class="btn btn-secondary btn-sm olm-go-apply"${saved ? '' : ' disabled'} title="${escAttr(t('orderList.applyTip'))}">${escHtml(t('orderList.apply'))}</button>
+              <span class="olm-foot-sep" aria-hidden="true"></span>
+              <button type="button" class="btn ${d ? 'btn-primary' : 'btn-secondary'} btn-sm olm-save"${d && draft.name.trim() ? '' : ' disabled'}>${escHtml(t('orderList.save'))}</button>
+              <button type="button" class="btn ${d ? 'btn-secondary' : 'btn-primary'} btn-sm olm-go-activate"${saved ? '' : ' disabled'} title="${escAttr(t('orderList.activateTip'))}">${escHtml(t('orderList.activate'))}</button>`;
+        } else if (draft && mode === 'apply') {
+            end = `
+              <button type="button" class="btn btn-secondary btn-sm olm-back">${escHtml(t('common.cancel'))}</button>
+              <button type="button" class="btn btn-primary btn-sm olm-apply-go"${applyTargets.size ? '' : ' disabled'}>${escHtml(t('orderList.applyGo'))}</button>`;
+        } else if (draft && mode === 'activate') {
+            const c = activationCounts(activePlan, exclusive);
+            const p = activePlan;
+            end = `
+              <button type="button" class="btn btn-ghost btn-sm olm-cancel-op"${busy ? '' : ' hidden'}>${escHtml(t('orderList.stop'))}</button>
+              <button type="button" class="btn btn-secondary btn-sm olm-back">${escHtml(t('common.cancel'))}</button>
+              <button type="button" class="btn btn-primary btn-sm olm-activate-go"${!busy && p && (c.enable || c.disable || p.order_changed || c.already) ? '' : ' disabled'}>${escHtml(exclusive ? t('orderList.activateOnlyGo') : t('orderList.activateGo'))}</button>`;
+        }
+        foot.innerHTML = `
+          <div class="olm-foot-start">${start}</div>
+          ${status}
+          <div class="olm-foot-end">${end}${end ? '<span class="olm-foot-sep" aria-hidden="true"></span>' : ''}${closeBtn}</div>`;
     }
 
     let exclusive = false;
     let activePlan: ListPlan | null = null;
+    let confirmDelete = false;
+
+    /** A selector that finds the focused control again after a redraw. */
+    function focusSelector(): string | null {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || !ov.contains(el)) return null;
+        if (el.id) return `#${CSS.escape(el.id)}`;
+        const cls = [...el.classList].find((c) => c.startsWith('olm-') && c !== 'olm-pc-tog');
+        const tog = el.classList.contains('olm-pc-tog') ? [...el.classList].find((c) => c === 'olm-scope' || c === 'olm-target') : null;
+        const name = tog || cls;
+        if (!name) return null;
+        const key = el.dataset.i != null ? `[data-i="${CSS.escape(el.dataset.i)}"]` : el.dataset.pid != null ? `[data-pid="${CSS.escape(el.dataset.pid)}"]` : '';
+        return `.${name}${key}`;
+    }
 
     function render(): void {
+        const sel = pendingFocus || focusSelector();
+        pendingFocus = null;
+        const keep = ['.olm-scroll', '.olm-pchips', '.olm-lists'].map((s) => [s, ov.querySelector(s)?.scrollTop || 0] as const);
         renderSide();
+        main.classList.toggle('is-edit', !!draft && mode === 'edit');
         if (!draft) {
-            main.innerHTML = `<p class="osh-note olm-intro">${escHtml(t('orderList.intro'))}</p>`;
-            return;
+            main.innerHTML = `
+              <div class="bms-empty olm-intro">
+                <span class="bms-empty-ic">${I.list}</span>
+                <span class="bms-empty-t">${escHtml(t('orderList.introTitle'))}</span>
+                <span class="olm-intro-text">${escHtml(t('orderList.intro'))}</span>
+                <button type="button" class="btn btn-primary btn-sm olm-new-main">${I.plus}<span>${escHtml(t('orderList.new'))}</span></button>
+              </div>`;
+        } else {
+            main.innerHTML = mode === 'apply' ? renderApply() : mode === 'activate' ? renderActivate(activePlan, exclusive) : renderEdit();
+            if (mode === 'edit' && adding) renderPicks();
         }
-        main.innerHTML = mode === 'apply' ? renderApply() : mode === 'activate' ? renderActivate(activePlan, exclusive) : renderEdit();
+        renderFoot();
+        for (const [s, top] of keep) { const el = ov.querySelector(s); if (el) el.scrollTop = top; }
+        if (sel) {
+            const el = ov.querySelector<HTMLElement>(sel);
+            if (el && !(el as HTMLButtonElement).disabled) {
+                el.focus({ preventScroll: true });
+                if (el instanceof HTMLInputElement && (el.type === 'search' || el.type === 'text')) el.setSelectionRange(el.value.length, el.value.length);
+            }
+        }
     }
 
     async function refreshPlan(): Promise<void> {
@@ -283,16 +525,7 @@ function run(
             plan = null;
             say(t(String(e)));
         }
-        if (mode === 'edit') {
-            // Keep the focus where it was across the redraw (the search box, a move button).
-            const focusQ = document.activeElement?.classList.contains('olm-search');
-            render();
-            if (focusQ) {
-                const q = main.querySelector<HTMLInputElement>('.olm-search');
-                q?.focus();
-                q?.setSelectionRange(q.value.length, q.value.length);
-            }
-        }
+        if (mode === 'edit') render();
     }
 
     function open(l: OrderList | null, asNew?: OrderList): void {
@@ -301,6 +534,11 @@ function run(
         plan = null;
         mode = 'edit';
         query = '';
+        picked.clear();
+        hi = -1;
+        confirmDelete = false;
+        adding = !draft.entries.length;
+        notesOpen = false;
         render();
         void refreshPlan();
         main.querySelector<HTMLInputElement>('.olm-name')?.focus();
@@ -308,8 +546,20 @@ function run(
 
     function edit(next: OrderList): void {
         draft = next;
+        confirmDelete = false;
         render();
         void refreshPlan();
+    }
+
+    function addPicked(ids: string[]): void {
+        if (!draft || !ids.length) return;
+        const byId = new Map(library.map((m) => [m.id, m]));
+        const mods = ids.map((id) => byId.get(id)).filter(Boolean) as LibraryMod[];
+        const next = addMods(draft.entries, mods);
+        const n = next.length - draft.entries.length;
+        picked.clear();
+        say(fill('orderList.addedN', { n }));
+        edit({ ...draft, entries: next });
     }
 
     async function save(): Promise<boolean> {
@@ -332,16 +582,34 @@ function run(
         }
     }
 
+    /** The active mods of the profile shown, in its current order, as library mods. */
+    async function profileOrder(): Promise<LibraryMod[]> {
+        const res = await invoke('mod_order_get', { profileId: planFor }) as [{ id: string }[], unknown];
+        const ids = (Array.isArray(res?.[0]) ? res[0] : []).map((m) => m.id);
+        const byId = new Map(library.map((m) => [m.id, m]));
+        return ids.map((id) => byId.get(id)).filter(Boolean) as LibraryMod[];
+    }
+
     async function fromProfile(): Promise<void> {
         try {
-            const res = await invoke('mod_order_get', { profileId: planFor }) as [{ id: string }[], unknown];
-            const ids = (Array.isArray(res?.[0]) ? res[0] : []).map((m) => m.id);
-            const byId = new Map(library.map((m) => [m.id, m]));
-            const mods = ids.map((id) => byId.get(id)).filter(Boolean) as LibraryMod[];
+            const mods = await profileOrder();
             const base = blank();
             base.name = planFor ? fill('orderList.fromProfileName', { p: nameOfProfile(planFor) }) : '';
             if (planFor) base.profile_ids = [planFor];
             open(null, { ...base, entries: addMods([], mods) });
+        } catch (e) {
+            say(t(String(e)));
+        }
+    }
+
+    async function addFromProfile(): Promise<void> {
+        if (!draft) return;
+        try {
+            const mods = await profileOrder();
+            if (!draft) return;
+            const next = addMods(draft.entries, mods);
+            say(fill('orderList.addedN', { n: next.length - draft.entries.length }));
+            edit({ ...draft, entries: next });
         } catch (e) {
             say(t(String(e)));
         }
@@ -419,10 +687,16 @@ function run(
         }
     }
 
-    let confirmDelete = false;
     async function del(): Promise<void> {
         if (!saved || busy) return;
-        if (!confirmDelete) { confirmDelete = true; say(fill('orderList.deleteConfirm', { m: saved.name })); return; }
+        if (!confirmDelete) {
+            confirmDelete = true;
+            say(fill('orderList.deleteConfirm', { m: saved.name }));
+            pendingFocus = '.olm-delete';
+            renderFoot();
+            foot.querySelector<HTMLElement>('.olm-delete')?.focus();
+            return;
+        }
         confirmDelete = false;
         try {
             await invoke('order_list_delete', { id: saved.id });
@@ -431,9 +705,18 @@ function run(
             draft = null;
             say(t('orderList.deleted'));
             render();
+            (ov.querySelector('.olm-new') as HTMLElement | null)?.focus();
         } catch (e) {
             say(t(String(e)));
         }
+    }
+
+    function goApply(): void {
+        if (!saved) return;
+        applyTargets = new Set(saved.profile_ids.length ? saved.profile_ids : planFor ? [planFor] : []);
+        mode = 'apply';
+        render();
+        main.querySelector<HTMLElement>('.olm-target')?.focus();
     }
 
     async function goActivate(): Promise<void> {
@@ -450,13 +733,18 @@ function run(
         if (mode === 'activate') render();
     }
 
+    /** The profiles again (their active mods changed): the picker's on/off reads them. */
+    async function reloadProfiles(): Promise<void> {
+        try {
+            const p = await invoke('get_profiles') as ProfileLite[];
+            if (Array.isArray(p)) profiles = p;
+        } catch { /* keep the old ones */ }
+    }
+
     async function activate(): Promise<void> {
         if (!saved || busy) return;
         busy = true;
-        const go = main.querySelector<HTMLButtonElement>('.olm-activate-go');
-        const stop = main.querySelector<HTMLButtonElement>('.olm-cancel-op');
-        if (go) go.disabled = true;
-        if (stop) stop.hidden = false;
+        renderFoot();
         say(t('orderList.activating'));
         try {
             const r = await invoke('order_list_activate', { id: saved.id, exclusive, profileId: activeId, bypassSha: false }) as ActivateReport;
@@ -465,24 +753,24 @@ function run(
             notify?.(msg, r.failed.length || r.cancelled ? 'warning' : 'success', 6000);
             const failed = r.failed.map((f) => `<li>${escHtml(f.name)}: ${escHtml(f.error.startsWith('MISSING_SHA|') ? t('orderList.failedSha') : t(f.error))}</li>`).join('');
             const res = main.querySelector('.olm-result');
-            if (res) res.innerHTML = `<p class="osh-note">${escHtml(msg)}</p>${failed ? `<details class="osh-more" open><summary>${escHtml(fill('orderList.failed', { n: r.failed.length }))}</summary><ul>${failed}</ul></details>` : ''}`;
+            if (res) res.innerHTML = `<p class="osh-note">${escHtml(msg)}</p>${failed ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.failed', { n: r.failed.length }))}</summary><ul>${failed}</ul></details>` : ''}`;
             say(msg);
             dispatchBmmAction(BMM_ACTIONS.ORDER_APPLIED, { moved: r.moved });
             refreshMods();
+            void reloadProfiles();
             activePlan = await invoke('order_list_plan', { entries: saved.entries, profileId: activeId }).catch(() => activePlan) as ListPlan | null;
         } catch (e) {
             say(fill('orderList.activateFailed', { e: t(String(e)) }));
         } finally {
             busy = false;
             try { await invoke('clear_mod_op_cancel'); } catch { /* best-effort */ }
-            if (stop) stop.hidden = true;
-            if (go) go.disabled = false;
+            renderFoot();
         }
     }
 
     async function apply(): Promise<void> {
         if (!saved || busy) return;
-        const ids = [...main.querySelectorAll<HTMLInputElement>('.olm-target:checked')].map((c) => c.value);
+        const ids = profiles.map((p) => p.id).filter((id) => applyTargets.has(id));
         if (!ids.length) { say(t('orderList.errNoProfile')); return; }
         busy = true;
         say(t('order.applying'));
@@ -490,7 +778,7 @@ function run(
             const out = await invoke('order_list_apply', { id: saved.id, profileIds: ids }) as ApplyOutcome[];
             changedGame = true;
             const res = main.querySelector('.olm-result');
-            if (res) res.innerHTML = `<ul class="olm-outcomes">${out.map((o) => `<li>${escHtml(o.profile_name || o.profile_id)}: ${escHtml(o.error
+            if (res) res.innerHTML = `<ul class="olm-outcomes">${out.map((o) => `<li class="${o.error ? 'is-bad' : 'is-ok'}"><span class="bms-dot"></span><b>${escHtml(o.profile_name || o.profile_id)}</b> ${escHtml(o.error
                 ? fill('orderList.applyOneFailed', { e: t(o.error) })
                 : fill('orderList.applyOne', { n: o.placed, f: o.moved }))}</li>`).join('')}</ul>`;
             const bad = out.filter((o) => o.error).length;
@@ -504,69 +792,206 @@ function run(
         }
     }
 
+    function toggleAdding(open: boolean): void {
+        adding = open;
+        if (!open) { picked.clear(); hi = -1; }
+        pendingFocus = open ? '.olm-search' : '.olm-add-toggle';
+        render();
+    }
+
+    function setView(pid: string): void {
+        if (!pid || pid === planFor) return;
+        planFor = pid;
+        plan = null;
+        render();
+        void refreshPlan();
+    }
+
     // ── Wiring (delegated on the dialog: the view is redrawn often) ────────────────────────
     ov.querySelector('.olm-new')?.addEventListener('click', () => open(null));
     ov.querySelector('.olm-from')?.addEventListener('click', () => { void fromProfile(); });
     ov.querySelector('.olm-import')?.addEventListener('click', importList);
-    ov.querySelector('.olm-done')?.addEventListener('click', close);
     side.addEventListener('click', (e) => {
         const b = (e.target as HTMLElement).closest<HTMLButtonElement>('.olm-pick');
         const l = b && lists.find((x) => x.id === b.dataset.id);
         if (l) open(l);
     });
-    main.addEventListener('click', (e) => {
-        const el = e.target as HTMLElement;
-        const btn = el.closest<HTMLButtonElement>('button');
-        if (!btn || !draft) return;
+
+    foot.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
+        if (!btn) return;
         const c = btn.classList;
-        const i = Number(btn.dataset.i);
-        if (c.contains('olm-up')) edit({ ...draft, entries: moveEntry(draft.entries, i, i - 1) });
-        else if (c.contains('olm-down')) edit({ ...draft, entries: moveEntry(draft.entries, i, i + 1) });
-        else if (c.contains('olm-rm')) edit({ ...draft, entries: removeEntry(draft.entries, i) });
-        else if (c.contains('olm-addone')) {
-            const m = library.find((x) => x.id === btn.dataset.id);
-            if (m) edit({ ...draft, entries: addMods(draft.entries, [m]) });
-        }
-        else if (c.contains('olm-save')) void save();
+        if (c.contains('olm-done')) close();
+        if (!draft) return;
+        if (c.contains('olm-save')) void save();
         else if (c.contains('olm-delete')) void del();
         else if (c.contains('olm-share')) void share();
-        else if (c.contains('olm-go-apply')) { mode = 'apply'; render(); }
+        else if (c.contains('olm-go-apply')) goApply();
         else if (c.contains('olm-go-activate')) void goActivate();
         else if (c.contains('olm-back')) { if (!busy) { mode = 'edit'; render(); void refreshPlan(); } }
         else if (c.contains('olm-apply-go')) void apply();
         else if (c.contains('olm-activate-go')) void activate();
         else if (c.contains('olm-cancel-op')) { void invoke('cancel_mod_ops').catch(() => {}); say(t('orderList.stopping')); }
     });
+
+    main.addEventListener('click', (e) => {
+        const el = e.target as HTMLElement;
+        if (el.closest('.olm-new-main')) { open(null); return; }
+        if (!draft) return;
+        const opt = el.closest<HTMLElement>('.olm-pk');
+        if (opt) {
+            const id = opt.dataset.id || '';
+            if (!id || opt.classList.contains('is-listed')) return;
+            if (picked.has(id)) picked.delete(id); else picked.add(id);
+            hi = Number(opt.id.replace('olm-pk-', ''));
+            renderPicks();
+            main.querySelector<HTMLInputElement>('.olm-search')?.focus({ preventScroll: true });
+            return;
+        }
+        const btn = el.closest<HTMLButtonElement>('button');
+        if (!btn) return;
+        const c = btn.classList;
+        const i = Number(btn.dataset.i);
+        if (c.contains('olm-up')) { pendingFocus = i - 1 > 0 ? `.olm-up[data-i="${i - 1}"]` : `.olm-down[data-i="${i - 1}"]`; edit({ ...draft, entries: moveEntry(draft.entries, i, i - 1) }); }
+        else if (c.contains('olm-down')) { pendingFocus = i + 1 < draft.entries.length - 1 ? `.olm-down[data-i="${i + 1}"]` : `.olm-up[data-i="${i + 1}"]`; edit({ ...draft, entries: moveEntry(draft.entries, i, i + 1) }); }
+        else if (c.contains('olm-rm')) {
+            const left = draft.entries.length - 1;
+            pendingFocus = left ? `.olm-rm[data-i="${Math.min(i, left - 1)}"]` : '.olm-add-toggle';
+            edit({ ...draft, entries: removeEntry(draft.entries, i) });
+        }
+        else if (c.contains('olm-scope')) {
+            const pid = btn.dataset.pid || '';
+            const ids = draft.profile_ids.includes(pid) ? draft.profile_ids.filter((x) => x !== pid) : [...draft.profile_ids, pid];
+            draft = { ...draft, profile_ids: profiles.map((p) => p.id).filter((id) => ids.includes(id)) };
+            render();
+        }
+        else if (c.contains('olm-scope-all')) { draft = { ...draft, profile_ids: profiles.map((p) => p.id) }; pendingFocus = '.olm-scope-none'; render(); }
+        else if (c.contains('olm-scope-none')) { draft = { ...draft, profile_ids: [] }; pendingFocus = '.olm-scope-all'; render(); }
+        else if (c.contains('olm-pc-eye')) { pendingFocus = `.olm-pc-eye[data-pid="${CSS.escape(btn.dataset.pid || '')}"]`; setView(btn.dataset.pid || ''); }
+        else if (c.contains('olm-target')) {
+            const pid = btn.dataset.pid || '';
+            if (applyTargets.has(pid)) applyTargets.delete(pid); else applyTargets.add(pid);
+            render();
+        }
+        else if (c.contains('olm-target-all')) { applyTargets = new Set(profiles.map((p) => p.id)); pendingFocus = '.olm-target-none'; render(); }
+        else if (c.contains('olm-target-none')) { applyTargets = new Set(); pendingFocus = '.olm-target-all'; render(); }
+        else if (c.contains('olm-notes-toggle')) { notesOpen = !notesOpen; pendingFocus = notesOpen ? '#olm-notes-input' : '.olm-notes-toggle'; render(); }
+        else if (c.contains('olm-add-toggle')) toggleAdding(!adding);
+        else if (c.contains('olm-add-close')) toggleAdding(false);
+        else if (c.contains('olm-add-sel')) addPicked([...picked]);
+        else if (c.contains('olm-add-profile')) void addFromProfile();
+    });
+
+    main.addEventListener('dblclick', (e) => {
+        const opt = (e.target as HTMLElement).closest<HTMLElement>('.olm-pk');
+        if (!opt || !draft || opt.classList.contains('is-listed') || !opt.dataset.id) return;
+        picked.delete(opt.dataset.id);
+        pendingFocus = '.olm-search';
+        addPicked([opt.dataset.id]);
+    });
+
     main.addEventListener('input', (e) => {
         const el = e.target as HTMLInputElement;
         if (!draft) return;
         if (el.classList.contains('olm-name')) {
             draft = { ...draft, name: el.value };
-            const s = main.querySelector<HTMLButtonElement>('.olm-save');
-            if (s) s.disabled = !(dirty() && draft.name.trim());
+            const mark = main.querySelector<HTMLElement>('.olm-unsaved');
+            if (mark) mark.hidden = !dirty();
+            renderFoot();
+        } else if (el.classList.contains('olm-notes-input')) {
+            draft = { ...draft, description: el.value };
+            const pv = main.querySelector<HTMLElement>('.olm-notes-preview');
+            if (pv) pv.innerHTML = notesHtml(el.value) || `<span class="osh-note">${escHtml(t('orderList.notesEmpty'))}</span>`;
+            const mark = main.querySelector<HTMLElement>('.olm-unsaved');
+            if (mark) mark.hidden = !dirty();
+            renderFoot();
         } else if (el.classList.contains('olm-search')) {
             query = el.value;
-            render();
-            const q = main.querySelector<HTMLInputElement>('.olm-search');
-            q?.focus();
-            q?.setSelectionRange(q.value.length, q.value.length);
+            hi = query ? 0 : -1;
+            renderPicks();
         }
     });
+
+    main.addEventListener('keydown', (e) => {
+        const el = e.target as HTMLElement;
+        if (!draft) return;
+        // The search box drives the results (combobox): ↑/↓ move, Enter adds.
+        if (el.classList.contains('olm-search')) {
+            const opts = [...main.querySelectorAll<HTMLElement>('.olm-pk')];
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if (!opts.length) return;
+                e.preventDefault();
+                hi = e.key === 'ArrowDown' ? Math.min(opts.length - 1, hi + 1) : Math.max(0, hi - 1);
+                renderPicks();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (picked.size) { pendingFocus = '.olm-search'; addPicked([...picked]); return; }
+                const opt = opts[hi];
+                if (opt && !opt.classList.contains('is-listed') && opt.dataset.id) { pendingFocus = '.olm-search'; addPicked([opt.dataset.id]); }
+            } else if (e.key === ' ' && hi >= 0 && e.ctrlKey) {
+                // Ctrl+Space selects the highlighted result (a plain space is typed).
+                e.preventDefault();
+                const id = opts[hi]?.dataset.id;
+                if (id && !opts[hi].classList.contains('is-listed')) { if (picked.has(id)) picked.delete(id); else picked.add(id); renderPicks(); }
+            }
+            return;
+        }
+        // Alt+↑/↓ on a row's controls moves the row, like the order view.
+        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            const row = el.closest<HTMLElement>('.olm-entry');
+            if (!row) return;
+            const i = Number(row.dataset.i);
+            const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+            if (j < 0 || j >= draft.entries.length) return;
+            e.preventDefault();
+            const cls = [...el.classList].find((c) => c === 'olm-up' || c === 'olm-down' || c === 'olm-rm') || 'olm-rm';
+            pendingFocus = `.${cls}[data-i="${j}"]`;
+            edit({ ...draft, entries: moveEntry(draft.entries, i, j) });
+        }
+    });
+
     main.addEventListener('change', (e) => {
         const el = e.target as HTMLInputElement;
         if (!draft) return;
-        if (el.classList.contains('olm-scope')) {
-            const ids = [...main.querySelectorAll<HTMLInputElement>('.olm-scope:checked')].map((x) => x.value);
-            draft = { ...draft, profile_ids: ids };
-            render();
-        } else if (el.classList.contains('olm-for')) {
-            planFor = el.value || planFor;
-            void refreshPlan();
-        } else if (el.classList.contains('olm-exclusive')) {
+        if (el.classList.contains('olm-exclusive')) {
             exclusive = el.checked;
+            pendingFocus = '.olm-exclusive';
             render();
         }
     });
+
+    // Drag and drop on the rows: the drop line goes above or below the row under the pointer.
+    let dragFrom = -1;
+    const clearMarks = () => main.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+    main.addEventListener('dragstart', (e) => {
+        const row = (e.target as HTMLElement).closest<HTMLElement>('.olm-entry');
+        if (!row || !draft || busy) { if (row) e.preventDefault(); return; }
+        dragFrom = Number(row.dataset.i);
+        row.classList.add('is-dragging');
+        try { e.dataTransfer?.setData('text/plain', String(dragFrom)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; } catch { /* some hosts refuse */ }
+    });
+    main.addEventListener('dragover', (e) => {
+        if (dragFrom < 0) return;
+        const row = (e.target as HTMLElement).closest<HTMLElement>('.olm-entry');
+        if (!row) return;
+        e.preventDefault();
+        const r = row.getBoundingClientRect();
+        clearMarks();
+        row.classList.add(e.clientY > r.top + r.height / 2 ? 'drop-after' : 'drop-before');
+    });
+    main.addEventListener('drop', (e) => {
+        if (dragFrom < 0 || !draft) return;
+        e.preventDefault();
+        const row = (e.target as HTMLElement).closest<HTMLElement>('.olm-entry');
+        const from = dragFrom;
+        dragFrom = -1;
+        clearMarks();
+        if (!row) return;
+        const r = row.getBoundingClientRect();
+        const to = dropIndex(from, Number(row.dataset.i), e.clientY > r.top + r.height / 2);
+        if (to !== from) edit({ ...draft, entries: moveEntry(draft.entries, from, to) });
+    });
+    main.addEventListener('dragend', () => { dragFrom = -1; clearMarks(); main.querySelectorAll('.is-dragging').forEach((x) => x.classList.remove('is-dragging')); });
 
     render();
     (ov.querySelector('.olm-new') as HTMLElement | null)?.focus();

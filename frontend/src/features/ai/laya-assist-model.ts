@@ -15,7 +15,22 @@
 
 export const REPORT_KINDS = ['feedback', 'bug', 'crash'] as const;
 export const APP_AREAS = ['mods', 'profiles', 'load_order', 'downloads', 'launch', 'settings', 'interface', 'performance', 'ai', 'other'] as const;
-export const CRASH_CAUSES = ['panic', 'out_of_memory', 'file_access', 'network', 'mod_conflict', 'game_launch', 'graphics', 'data_corrupt', 'other'] as const;
+/** Crash cause families, then each cause with its family. Mirrors `ai_assist::CRASH_FAMILIES` /
+ *  `CRASH_CAUSES` (tests/laya-assist.test.mjs reads the Rust file and compares). */
+export const CRASH_FAMILIES = ['mod_files', 'game', 'disk', 'network', 'app_ui', 'app_backend', 'ai', 'updater', 'memory', 'unknown'] as const;
+export const CAUSE_FAMILY: Readonly<Record<string, string>> = {
+    mod_archive: 'mod_files', mod_conflict: 'mod_files', mod_deploy: 'mod_files',
+    game_launch: 'game', game_files: 'game',
+    disk_full: 'disk', permission: 'disk', file_missing: 'disk',
+    network_offline: 'network', network_server: 'network',
+    ui_script: 'app_ui', webview: 'app_ui',
+    internal_error: 'app_backend', background_task: 'app_backend', data_corrupt: 'app_backend',
+    ai_engine: 'ai',
+    update_failed: 'updater',
+    out_of_memory: 'memory',
+    other: 'unknown',
+};
+export const CRASH_CAUSES = Object.keys(CAUSE_FAMILY);
 export const SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 export type ReportKind = typeof REPORT_KINDS[number];
@@ -267,40 +282,73 @@ export function groupOf(groups: CrashGroup[]): Map<string, number> {
     return m;
 }
 
-/** Each member gets its representative's label (one Laya call per group). */
-export function spreadLabels(groups: CrashGroup[], byRep: Map<string, LayaDecision>): Map<string, LayaDecision> {
-    const out = new Map<string, LayaDecision>();
+/** Each member gets its representative's answer (one Laya call per group): its label, its evidence. */
+export function spreadLabels<T>(groups: CrashGroup[], byRep: Map<string, T>): Map<string, T> {
+    const out = new Map<string, T>();
     for (const g of groups) {
         const d = byRep.get(g.rep);
-        if (d) for (const p of g.members) out.set(p, d);
+        if (d !== undefined) for (const p of g.members) out.set(p, d);
     }
     return out;
 }
 
-/** The label a crash shows: its cause, `uncertain` kept, `unknown` when Laya abstained. */
-export function causeOf(d: LayaDecision | null | undefined): { id: string; p: number | null; uncertain: boolean } | null {
+export interface CrashCause { id: string; family: string; p: number | null; uncertain: boolean }
+
+/** The label a crash shows: its cause and family, `uncertain` kept, `unknown` when Laya abstained. */
+export function causeOf(d: LayaDecision | null | undefined): CrashCause | null {
     if (!d) return null;
     const top = decided(d, CRASH_CAUSES);
-    if (!top) return { id: 'unknown', p: null, uncertain: false };
-    return { id: top.id, p: d.showProbs === false ? null : top.p, uncertain: top.uncertain };
+    if (!top) return { id: 'unknown', family: 'unknown', p: null, uncertain: false };
+    return { id: top.id, family: CAUSE_FAMILY[top.id] || 'unknown', p: d.showProbs === false ? null : top.p, uncertain: top.uncertain };
 }
 
-/** The filter chips: each cause present, with its count, most frequent first. */
-export function labelCounts(labels: Map<string, LayaDecision>): Array<{ id: string; n: number }> {
+/** The evidence of a label as sent by Rust, bounded again and reduced to strings (shown as text). */
+export interface Evidence { words: string[]; lines: string[] }
+export function evidenceOf(raw: unknown): Evidence {
+    const list = (v: unknown, n: number, len: number): string[] => (Array.isArray(v) ? v : [])
+        .filter((x) => typeof x === 'string' && x.trim()).slice(0, n).map((x: string) => x.trim().slice(0, len));
+    const r = (raw && typeof raw === 'object' ? raw : {}) as { words?: unknown; lines?: unknown };
+    return { words: list(r.words, 6, 60), lines: list(r.lines, 3, 200) };
+}
+
+const byCount = (counts: Map<string, number>) => [...counts].map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n || a.id.localeCompare(b.id));
+
+/** The cause chips: each cause present (in `family`, when given), with its count, most frequent first. */
+export function labelCounts(labels: Map<string, LayaDecision>, family = ''): Array<{ id: string; n: number }> {
     const counts = new Map<string, number>();
     for (const d of labels.values()) {
         const c = causeOf(d);
-        if (c) counts.set(c.id, (counts.get(c.id) || 0) + 1);
+        if (c && (!family || c.family === family)) counts.set(c.id, (counts.get(c.id) || 0) + 1);
     }
-    return [...counts].map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n || a.id.localeCompare(b.id));
+    return byCount(counts);
 }
 
-/** Does a row pass the filter? `filter` = '' (all), a cause id, or `group:<key>`. */
+/** The family chips: each family present, with its count, most frequent first. */
+export function familyCounts(labels: Map<string, LayaDecision>): Array<{ id: string; n: number }> {
+    const counts = new Map<string, number>();
+    for (const d of labels.values()) {
+        const c = causeOf(d);
+        if (c) counts.set(c.family, (counts.get(c.family) || 0) + 1);
+    }
+    return byCount(counts);
+}
+
+/** The family a filter is in: `family:x` → x, `cause:y` → y's family, else ''. */
+export function filterFamily(filter: string): string {
+    if (filter.startsWith('family:')) return filter.slice(7);
+    if (filter.startsWith('cause:')) { const id = filter.slice(6); return id === 'unknown' ? 'unknown' : (CAUSE_FAMILY[id] || ''); }
+    return '';
+}
+
+/** Does a row pass the filter? `filter` = '' (all), `family:<id>`, `cause:<id>` or `group:<key>`. */
 export function passes(path: string, filter: string, labels: Map<string, LayaDecision>, groups: Map<string, number>): boolean {
     if (!filter) return true;
     if (filter.startsWith('group:')) return String(groups.get(path) ?? '') === filter.slice(6);
     const c = causeOf(labels.get(path));
-    return !!c && c.id === filter;
+    if (!c) return false;
+    if (filter.startsWith('family:')) return c.family === filter.slice(7);
+    if (filter.startsWith('cause:')) return c.id === filter.slice(6);
+    return false;
 }
 
 /**

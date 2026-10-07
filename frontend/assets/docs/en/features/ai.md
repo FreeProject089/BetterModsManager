@@ -303,12 +303,33 @@ a doubtful one is marked *guess*, an abstention is no proposal.
 ## Laya in Crash reports & sessions
 
 In **Settings → Crash reports → Manage & analyze**, Laya groups **similar crashes** (the same
-reason once numbers, addresses and paths are set aside) and, on **Find the causes**, labels one
-report per group with a **probable cause** (internal error, memory, file access, network, mod
-conflict, game launch, graphics, damaged data). The labels become filter chips. This runs on the
-built-in Laya or your own laya-serve only, from a masked excerpt of the log, through the *Crash
-reports* answer settings. **Explain** (in *Analyze*) appears only when a writing model is set up;
-with a remote one, the button says so before you click.
+reason once numbers, addresses and paths are set aside; for a crash of the window, its own script
+error) and, on **Find the causes**, labels one report per group with a **probable cause**, in two
+levels: a **family**, then a **cause** inside it.
+
+| Family | Causes |
+|---|---|
+| Mod files | Damaged mod archive, Mod conflict, Mod deploy failed |
+| Game | Game launch, Game folder changed |
+| Disk & permissions | Disk full, Access denied, File not found |
+| Network | No connection, Server error |
+| App window | Interface error, Web view or graphics |
+| App engine | Internal error, Background task, Damaged data |
+| Laya (AI) | Laya engine |
+| Updates | Update failed |
+| Memory | Out of memory |
+| Unknown | Other cause; *Cause unknown* when Laya abstains |
+
+Each label shows its **confidence** (a doubtful one is marked *guess*), and in **Analyze** a card
+gives the **evidence** (the keywords and log lines that back it up, paths masked) and a **next
+step** (fixed text per cause, such as *free space on the disk* or *run BMM as administrator*).
+The families become filter chips with their counts; choosing one shows its causes. This runs on
+the built-in Laya or your own laya-serve only, from a masked excerpt of the log, through the
+*Crash reports* answer settings. Labels from an older version are computed again.
+
+**Explain** (in *Analyze*) appears only when a writing model is set up; with a remote one, the
+button says so before you click. Its answer is shown as B.MD, the safe way: no images, embeds or
+scripts, and it can be wrong.
 
 ## Laya in the debug menu
 

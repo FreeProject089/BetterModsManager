@@ -146,7 +146,7 @@ export async function openCrashManager(): Promise<void> {
         }).join('');
         body.querySelectorAll('.crashmgr-row [data-cm-act]').forEach(b => b.addEventListener('click', () => onReportAction(b as HTMLElement)));
         // Laya (features/ai/laya-crash.ts): groups of similar crashes, a probable cause per
-        // crash on click, filters. Draws nothing when AI is off.
+        // crash on click (family, cause, evidence, next step), filters. Nothing when AI is off.
         void import('../ai/laya-crash.js').then(m => m.mountCrashInsights(body, reports)).catch(() => {});
     }
 
@@ -191,8 +191,9 @@ export async function openCrashManager(): Promise<void> {
                         <div class="crashmgr-filelist">${filesList}</div>
                         <div class="crashmgr-fileview" data-fileview hidden></div>
                     </details>`;
-                // « Expliquer » — only when the user configured a generator.
-                void import('../ai/laya-crash.js').then(m => m.mountExplain(detail, path)).catch(() => {});
+                // Laya's cause card (once labelled: family, cause, confidence, evidence, next
+                // step) and « Expliquer » (only when the user configured a generator).
+                void import('../ai/laya-crash.js').then(m => m.mountDetail(detail, path)).catch(() => {});
                 detail.querySelector('[data-play]')?.addEventListener('click', async () => {
                     try { const json = await invoke('read_crash_session', { path }) as string; await playReplayJson(json); }
                     catch (e) { toast(String(e), 'error'); }
