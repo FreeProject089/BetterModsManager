@@ -237,6 +237,25 @@ export function applyTranslations(root = document) {
     root.querySelectorAll('[data-i18n-tooltip]').forEach((el) => {
         const key = el.dataset.i18nTooltip;
         el.setAttribute('data-tooltip', t(key));
+        // An icon-only button has no text for a screen reader: its tooltip IS its name. Mirrored
+        // only where nobody wrote a label, and refreshed with the language (data-i18n-aria-auto).
+        if (/^(BUTTON|A)$/.test(el.tagName) && !/\w/.test(el.textContent || '')
+            && (!el.hasAttribute('aria-label') || el.hasAttribute('data-i18n-aria-auto'))) {
+            el.setAttribute('aria-label', t(key));
+            el.setAttribute('data-i18n-aria-auto', '');
+        }
+    });
+    // Same for the Tasky hint key on an icon-only button (the title bar, copy/reveal buttons).
+    root.querySelectorAll('button[data-tasky]').forEach((el) => {
+        if (/\w/.test(el.textContent || ''))
+            return;
+        if (el.hasAttribute('aria-label') && !el.hasAttribute('data-i18n-aria-auto'))
+            return;
+        const v = t(el.dataset.tasky);
+        if (v && v !== el.dataset.tasky) {
+            el.setAttribute('aria-label', v);
+            el.setAttribute('data-i18n-aria-auto', '');
+        }
     });
     // Substitute the default API port in docs/examples with the EFFECTIVE port
     // (settings.api_port may differ from 51274). Covers static HTML examples

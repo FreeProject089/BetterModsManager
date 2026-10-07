@@ -1,7 +1,17 @@
+// Mod activation as it runs today: every toggle, order list or modpack becomes a background job
+// (core/activation-jobs.ts), one mod at a time; Cancel undoes the mod in flight. No colours here:
+// the renderer (interactive-docs.ts) themes the diagram from the live tokens.
 export const modActivation = {
     titleKey: 'docs.diagram.modact.title',
     definition: `
 graph TD
+    subgraph JOB_G ["<div class='group-label' data-cluster-id='MJOB'><i class='icon-list'></i> {{docs.diagram.modact.cl.JOB}}</div>"]
+        direction LR
+        START["<div class='node-content'><i class='icon-toggle'></i> {{docs.diagram.modact.node.START}}</div>"]
+        QUEUE["<div class='node-content'><i class='icon-time'></i> {{docs.diagram.modact.node.QUEUE}}</div>"]
+        CANCEL["<div class='node-content'><i class='icon-stop'></i> {{docs.diagram.modact.node.CANCEL}}</div>"]
+    end
+
     subgraph ENABLE_G ["<div class='group-label' data-cluster-id='ACTIVATE'><i class='icon-check'></i> {{docs.diagram.cluster.ACTIVATE}}</div>"]
         ENABLE["<div class='node-content'><i class='icon-plus'></i> {{docs.diagram.modact.node.ENABLE}}</div>"]
         CHECK_OWNER["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.modact.node.CHECK_OWNER}}</div>"]
@@ -21,6 +31,10 @@ graph TD
         DONE_OFF["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.modact.node.DONE_OFF}}</div>"]
     end
 
+    START --> QUEUE
+    CANCEL -.-> QUEUE
+    QUEUE -- "<span class='label-success'>{{docs.diagram.modact.lbl.on}}</span>" --> ENABLE
+    QUEUE -- "<span class='label-warning'>{{docs.diagram.modact.lbl.off}}</span>" --> DISABLE
     ENABLE -- "<span class='label-info'>{{docs.diagram.label.perFile}}</span>" --> CHECK_OWNER
     CHECK_OWNER -- "<span class='label-success'>{{docs.diagram.label.free}}</span>" --> BACKUP
     CHECK_OWNER -- "<span class='label-warning'>{{docs.diagram.label.alreadyOwned}}</span>" --> COPY
@@ -36,22 +50,6 @@ graph TD
     RESTORE_MOD --> DONE_OFF
     RESTORE_ORIG --> DONE_OFF
     DELETE --> DONE_OFF
-
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#10b981,stroke-width:2px;
-    linkStyle 2 stroke:#f59e0b,stroke-width:2px;
-    linkStyle 3 stroke:#6b7280,stroke-width:1.5px;
-    linkStyle 4 stroke:#10b981,stroke-width:2px;
-    linkStyle 5 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 6 stroke:#6b7280,stroke-width:1.5px;
-    linkStyle 7 stroke:#10b981,stroke-width:2px;
-    linkStyle 8 stroke:#f59e0b,stroke-width:2px;
-    linkStyle 9 stroke:#10b981,stroke-width:2px;
-    linkStyle 10 stroke:#ef4444,stroke-width:2px;
-    linkStyle 11 stroke:#10b981,stroke-width:2px;
-    linkStyle 12 stroke:#10b981,stroke-width:2px;
-    linkStyle 13 stroke:#ef4444,stroke-width:2px;
 `,
     explanationPrefix: 'docs.diagram.modact.node.'
 };

@@ -27,6 +27,7 @@ import {
     loadTargets, saveTarget, deleteTarget, sshTargetNames, explainSsh, DEFAULT_TARGET,
     type SshTarget,
 } from './repo-ssh.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /** Everyone who drew a profile list wants to know when one is added or removed. */
 const listeners = new Set<() => void>();
@@ -73,7 +74,7 @@ export function openSshServers(focus?: string): void {
       <div class="modal glass modal--lg">
         <div class="modal-header">
           <h2 class="modal-title">${escHtml(t('sshsrv.title'))}</h2>
-          <button class="modal-close" id="sshsrv-close" aria-label="${escAttr(t('common.close'))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <button class="modal-close" id="sshsrv-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 20)}</button>
         </div>
         <div class="modal-body" style="display:grid; grid-template-columns:180px 1fr; gap:16px; align-items:start">
           <div>

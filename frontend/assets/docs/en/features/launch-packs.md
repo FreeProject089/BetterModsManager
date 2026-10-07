@@ -19,22 +19,31 @@ Add a custom icon if you like — it's converted to a proper `.ico`.
 ## Running it
 
 - **From the card** in Settings — every app starts **silently**: no console windows flashing.
-- **From the desktop** — each pack also gets its own generated **shortcut**, so you can launch
-  the whole group without opening BMM.
+- **From a shortcut** — each pack also gets its own generated `.lnk` **shortcut**, kept in the
+  pack's folder (the card's folder button opens it); copy it to your desktop to launch the whole
+  group without opening BMM.
 
 Under the hood, creating a pack generates a tiny `launcher.vbs` that starts each executable
 invisibly, and a `.lnk` shortcut pointing at it:
 
 ```mermaid
-graph TD
-    START((Launch trigger)) --> USER_SELECT["Run pack (card or desktop shortcut)"]
-    USER_SELECT --> FETCH_PACK["Read pack definition"]
-    FETCH_PACK --> ITER_APPS["For each executable"]
-    ITER_APPS --> CHECK_PATH{File exists?}
-    CHECK_PATH -- no --> LOG_ERR["Log + error notification"]
-    CHECK_PATH -- yes --> VBS_BRIDGE["VBScript bridge"]
-    VBS_BRIDGE --> SILENT_LAUNCH["Silent launch (no console window)"]
+flowchart TD
+    subgraph SAVE["When you save the pack"]
+        DEF["Programs, name, icon"] --> VBS[("launcher.vbs<br/>one hidden line each")]
+        VBS --> LNK[("Pack shortcut .lnk")]
+    end
+    subgraph RUN["When you run it"]
+        CARD(["Card, link or API"]) --> CMD[["run_launch_pack"]]
+        CMD --> HAS{"launcher.vbs<br/>present?"}
+        HAS -- "no" --> ERR(["Error toast"])
+        HAS -- "yes" --> WS["wscript, no window"]
+        WS --> APPS(["Every program starts,<br/>none awaited"])
+    end
+    LNK -- "double-click" --> WS
 ```
+
+Running a pack does not check the programs again; that check happens only when a pack is
+imported, which lists the programs it could not find.
 
 !!! tip "Edit any time"
 

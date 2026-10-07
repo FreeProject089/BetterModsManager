@@ -58,19 +58,23 @@ Le mappeur est construit autour d'une zone de préparation, pour que tu puisses 
 bordélique en une dizaine d'étapes et voir le résultat avant qu'un seul fichier bouge.
 
 ```mermaid
-flowchart TB
-    subgraph Draft["Brouillon (en mémoire seulement)"]
-        MV["déplacements en attente"]
-        DEL["suppressions en attente"]
-        NEW["nouveaux dossiers en attente"]
+flowchart TD
+    subgraph DRAFT["Brouillon (en mémoire seulement)"]
+        direction LR
+        NEW["Nouveaux dossiers"]
+        MV["Déplacements"]
+        DEL["Suppressions"]
     end
-    TREE["Arbre du mod"] --> VIRT["Arbre virtuel —<br/>le mod TEL QU'IL SERA"]
+    TREE[("Dossier du mod<br/>sur le disque")] --> VIRT["Arbre virtuel<br/>le mod tel qu'il sera"]
+    NEW --> VIRT
     MV --> VIRT
     DEL --> VIRT
-    NEW --> VIRT
     VIRT --> SAVE{"Sauvegarder ?"}
-    SAVE -- "non" --> DISCARD["rien n'est touché sur le disque"]
-    SAVE -- "oui" --> APPLY["appliquer dans l'ordre :<br/>1. créer les dossiers<br/>2. déplacer les éléments<br/>3. supprimer les éléments"]
+    SAVE -- "non" --> KEEP(["Disque intact"])
+    SAVE -- "oui" --> C1[["1. create_mod_folder"]]
+    C1 --> C2[["2. restructure_mod_item"]]
+    C2 --> C3[["3. delete_mod_item"]]
+    C3 --> REREAD(["Arbre relu depuis le disque"])
 ```
 
 Le volet de gauche affiche toujours l'**arbre virtuel** — tes changements en attente composés par-dessus
@@ -85,8 +89,8 @@ supprimer quelque chose dont un déplacement en attente a encore besoin).
 
     Les trois phases s'exécutent comme une séquence d'opérations individuelles, pas comme une
     transaction. Si l'une échoue — fichier verrouillé, erreur de permission — celles déjà faites restent
-    faites, et tu reçois l'erreur. L'arbre est alors relu depuis le disque, donc ce que tu vois ensuite
-    est la vérité ; remets en attente ce qui reste.
+    faites, et tu reçois l'erreur. L'arbre n'est pas relu et la file reste
+    telle quelle, étapes déjà faites comprises : vérifie le dossier du mod avant de sauvegarder à nouveau.
 
 ---
 

@@ -34,10 +34,18 @@ Two actions are easy to confuse, and only one of them touches your files:
 - **Enabling or disabling a mod** is the only thing that touches the destination folder.
 
 ```mermaid
-flowchart TB
-    SW([Switch active profile]) --> PTR["Selection changes — no file I/O,<br/>deployed mods stay put"]
-    EN([Enable a mod]) --> DEPLOY["Copy its files into the destination folder<br/>(back up whatever real game file it replaces)"]
-    DIS([Disable a mod]) --> REMOVE["Remove its files — restore from the next<br/>mod that has them, or from _original/"]
+flowchart TD
+    subgraph SWITCH["Switching the active profile"]
+        SW(["Pick another profile"]) --> PTR["Selection changes,<br/>no file touched"]
+    end
+    subgraph TOGGLE["Enabling or disabling a mod"]
+        TOG(["Enable or disable"]) --> JOB[["Activation job<br/>(queued, one at a time)"]]
+        JOB --> MODE{"Which one?"}
+        MODE -- "enable" --> DEP["Back up game originals,<br/>copy the mod's files"]
+        MODE -- "disable" --> REM["Restore the mod below,<br/>the original, or delete"]
+        DEP --> GAME[("Destination folder")]
+        REM --> GAME
+    end
 ```
 
 !!! warning "This is the single biggest source of confusion"
@@ -56,22 +64,21 @@ in two of them at once, because there is only one destination folder underneath 
 given path.
 
 ```mermaid
-flowchart TB
-    subgraph Same["Same game + mods folders"]
-        P1["Profile A"] <--> P2["Profile B"]
-    end
-    subgraph Sep["Different folders"]
-        P3["Profile C"]
-        P4["Profile D"]
-    end
-    Same --> NOTE["active lists stay in sync —<br/>one physical destination folder"]
-    Sep --> NOTE2["fully independent setups"]
+flowchart TD
+    PAIR(["Two profiles"]) --> SG{"Same game folder?"}
+    SG -- "no" --> IND["Fully independent"]
+    SG -- "yes" --> ONE["A mod is on in<br/>one of them at most"]
+    ONE --> SM{"Same mods folder?"}
+    SM -- "yes" --> SYNC["One active list,<br/>kept in sync"]
+    SM -- "no" --> SEP["Separate lists,<br/>one destination folder"]
 ```
 
 There is a related detail in the backup logic: when deciding whether a file it is about to overwrite
-is a *genuine game file*, BMM looks at the mods enabled in **every profile sharing that destination folder** —
-not just the active one. Otherwise switching profiles could make it mistake another profile's mod file
-for an original and back it up as one. See [Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
+is a *genuine game file*, BMM looks at the files of the mods enabled in the **active profile** (plus
+the ones the same enable has just placed, for a dependency chain). Profiles that share both folders
+have that same list, so switching between them changes nothing. A profile that shares only the game
+folder is **not** consulted: one of its mod files sitting in the game folder can be taken for an
+original and backed up as one. See [Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
 
 **So: to keep genuinely separate loadouts, give each profile its own mods folder.** Sharing folders is
 supported, but it is one setup with several views, not two setups.
@@ -85,9 +92,7 @@ Your library keeps its pristine copy, always.
 
 ```mermaid
 flowchart LR
-    LIBFILE["Mods/ModX/file.lua<br/>(original, untouched)"]
-    GAMEFILE["Game/.../file.lua<br/>(a real copy)"]
-    LIBFILE == "copy" ==> GAMEFILE
+    LIBFILE[("Mods/ModX/file.lua<br/>original, untouched")] == "copy" ==> GAMEFILE[("Game/.../file.lua<br/>a real copy")]
 ```
 
 !!! warning "There are no hard-links or symlinks anywhere"

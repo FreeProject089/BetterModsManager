@@ -13,6 +13,7 @@ import { bcRoot, bcApi } from '../../core/links-config.js';
 import { openBetterCommunity } from '../../ui/bettercommunity-modal.js';
 import { ALL_TAGS, PROJ_LOGO, blogTags, effectiveTag, tagOf } from './blog-tags.js';
 import { learnMore } from '../../core/learn-more.js';
+import { uiIcon } from '../../ui/icons.js';
 // BetterCommunity base resolution is centralized in links-config.ts and driven by
 // app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
 // `bettercommunity` link. Loaded once at startup (loadBcConfig), so bcRoot() is sync.
@@ -263,7 +264,7 @@ function render() {
             : (t('community.serverDown') || 'BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working.');
         bodyHtml = `<div class="community-empty">
       <div class="kit-callout ${offline ? 'kit-callout-info' : 'kit-callout-warning'}" style="max-width:520px;margin:0 auto 14px;text-align:left">
-        <span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+        <span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
         <div class="kit-callout-body">${escHtml(msg)}</div>
       </div>
       <button class="btn btn-secondary" id="community-retry">${escHtml(t('community.retry') || 'Retry')}</button></div>`;
@@ -293,15 +294,15 @@ function render() {
              is a feed from a place the app never named, and sending somebody to a browser to
              find out what that place is was the only answer available. -->
         <button class="btn btn-secondary" id="community-about" style="gap:6px;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          ${uiIcon('info', 16)}
           ${escHtml(t('community.about') || 'What is BetterCommunity?')}
         </button>
         <button class="btn btn-secondary" id="community-open-web" style="gap:6px;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          ${uiIcon('external', 16)}
           ${escHtml(t('community.openWeb') || 'Open website')}
         </button>
         <button class="btn btn-secondary" id="community-refresh" data-tooltip="${escAttr(t('community.refresh') || 'Refresh')}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
         ${learnMore('community')}
       </div>
@@ -310,7 +311,7 @@ function render() {
       <div class="community-filters">${tagPicker}</div>
       <div class="community-toolbar-right">
         <div class="community-search-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ${uiIcon('search', 14)}
           <input class="community-search" id="community-search" placeholder="${escAttr(t('community.search') || 'Search posts…')}" value="${escAttr(_search)}" />
         </div>
         <select class="community-lang" id="community-lang" data-tooltip="${escAttr(t('community.lang') || 'Blog language')}">
@@ -502,7 +503,7 @@ function edition(list) {
 // `tags` is null while there is no feed (loading, offline, server down): the control is then
 // shown disabled on "All" rather than removed, so the toolbar does not change shape when the
 // posts arrive.
-const ALL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>';
+const ALL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>';
 function tagLabel(label) { return label ?? t('community.filter.community'); }
 function tagCount(n) { return n === 1 ? t('community.filter.countOne') : t('community.filter.count', { n: String(n) }); }
 // The tag's mark, at dropdown size. A bundled logo or the page's own icon when there is one;
@@ -584,7 +585,7 @@ function openLightbox(src) {
         return;
     const ov = document.createElement('div');
     ov.className = 'community-lightbox';
-    ov.innerHTML = `<img src="${escAttr(src)}" alt="" /><button class="community-lightbox-close" aria-label="${escAttr(t('community.close') || 'Close')}">✕</button>`;
+    ov.innerHTML = `<img src="${escAttr(src)}" alt="" /><button class="community-lightbox-close" aria-label="${escAttr(t('community.close') || 'Close')}">${uiIcon('close', 14)}</button>`;
     appFrame().appendChild(ov);
     const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
     ov.addEventListener('click', close); // click the backdrop OR the image → shrink back
@@ -630,7 +631,7 @@ async function openPost(slug) {
     const body = (fr && post.bodyFr) || post.body || '';
     const untranslated = !translated
         ? `<div class="community-untranslated" role="note">
-         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+         ${uiIcon('warning', 16)}
          <span><b>${escHtml(t('community.untranslatedTag') || 'Non traduit')}</b> — ${escHtml(t('community.untranslated') || "cet article n'est pas encore traduit en français ; version anglaise affichée.")}</span>
        </div>`
         : '';
@@ -646,7 +647,7 @@ async function openPost(slug) {
     _view.innerHTML = `
     <div class="community-article">
       <button class="btn btn-secondary community-back">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         ${escHtml(t('community.back') || 'Back')}
       </button>
       ${post.cover ? `<div class="community-article-cover" style="background-image:url('${escAttr(absUrl(post.cover))}')"></div>` : ''}
@@ -655,7 +656,7 @@ async function openPost(slug) {
       <div class="community-article-meta">
         ${authorsHtml}
         <span>·</span>
-        <button class="community-article-date" data-tooltip="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
+        <button class="community-article-date" data-tooltip="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
       </div>
       ${untranslated}
       <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
@@ -703,7 +704,7 @@ async function openHistory(postId) {
     const ov = document.createElement('div');
     ov.className = 'community-history-overlay';
     ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">${uiIcon('close', 14)}</button></div>
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
@@ -820,7 +821,7 @@ async function openComments(postId) {
     const ov = document.createElement('div');
     ov.className = 'community-history-overlay';
     ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">${uiIcon('close', 14)}</button></div>
     <div class="community-comments-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
@@ -877,7 +878,7 @@ async function openCommentHistory(postId, cid, L) {
     const ov = document.createElement('div');
     ov.className = 'community-history-overlay community-history-overlay--nested';
     ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.history)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.history)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">${uiIcon('close', 14)}</button></div>
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;

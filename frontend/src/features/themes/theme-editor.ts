@@ -19,16 +19,17 @@ import {
 } from './theme-engine.js';
 import type { BmmTheme, CustomElement, HtmlSwap } from './theme-engine.js';
 import { learnMore } from '../../core/learn-more.js';
+import { uiIcon } from '../../ui/icons.js';
 
 // ── Icons (lucide outline set, consistent across the editor) ────────────────────
 const ICON = {
-    eyedropper: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L21 6l-3 3-3-3Z"/></svg>`,
-    reset: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
-    close: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
-    palette: (s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg>`,
-    plus: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
-    trash: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
-    edit: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`,
+    eyedropper: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L21 6l-3 3-3-3Z"/></svg>`,
+    reset: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+    close: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
+    palette: (s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg>`,
+    plus: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
+    trash: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    edit: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`,
 };
 
 /** Escape a string for safe use inside a single-quoted JS string that itself
@@ -329,7 +330,7 @@ function buildPanel(): void {
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
                 ${learnMore('making-themes', { compact: true, className: 'bte-tool' })}
-                <button class="bte-tool" id="bte-dock" data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg></button>
+                <button class="bte-tool" id="bte-dock" data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}">${uiIcon('panel-right', 14)}</button>
                 <button class="bte-tool" id="bte-pick-token" data-tooltip="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
                 <button class="bte-tool" id="bte-reset" data-tooltip="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
                 <button class="bte-close" id="bte-close">${ICON.close(14)}</button>
@@ -356,7 +357,7 @@ function buildPanel(): void {
                 <span class="bte-file-menu-wrap">
                     <button class="btn btn-ghost btn-sm" id="bte-file-menu-btn">${t('themes.fileMenu')||'File'} ▾</button>
                     <span class="bte-file-menu" id="bte-file-menu" hidden>
-                        <button class="btn btn-ghost btn-sm" id="bte-import-file">${t('themes.import')||'Import .bmmtheme / .json'}</button>
+                        <button class="btn btn-ghost btn-sm" id="bte-import-file">${uiIcon('import', 14)} ${t('themes.import')||'Import .bmmtheme / .json'}</button>
                         <button class="btn btn-ghost btn-sm" id="bte-share">${t('themes.share')||'Share'}</button>
                         <button class="btn btn-ghost btn-sm" id="bte-export">${t('themes.export')||'Export'} .bmmtheme</button>
                     </span>
@@ -800,35 +801,35 @@ function buildChangesPanel(): string {
         rows.push(`<div class="bte-chg-row" data-chg="var" data-key="${escAttr(k)}">
             ${sw}<span class="bte-chg-name">${escHtml(labelOf(k))}</span>
             <code class="bte-chg-val">${escHtml(String(v).slice(0, 22))}</code>
-            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}" aria-label="${t('themes.revert')||'Revert'}">${uiIcon('reset', 14)}</button>
         </div>`);
     }
     for (const o of (_draft.element_overrides || [])) {
         rows.push(`<div class="bte-chg-row" data-chg="ov" data-key="${escAttr(o.selector)}">
             <span class="bte-chg-name">${gi('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>')} <code>${escHtml(o.selector.slice(0, 30))}</code></span>
             <span class="bte-chg-val">${Object.keys(o.props).length} ${t('themes.props')||'props'}</span>
-            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}" aria-label="${t('themes.revert')||'Revert'}">${uiIcon('reset', 14)}</button>
         </div>`);
     }
     for (const k of Object.keys(_draft.assets || {})) {
         rows.push(`<div class="bte-chg-row" data-chg="asset" data-key="${escAttr(k)}">
             <span class="bte-chg-name">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${escHtml(k)}</span>
             <span class="bte-chg-val">${t('themes.custom')||'custom'}</span>
-            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}" aria-label="${t('themes.revert')||'Revert'}">${uiIcon('reset', 14)}</button>
         </div>`);
     }
     for (const s of (_draft.html_swaps || [])) {
         rows.push(`<div class="bte-chg-row" data-chg="swap" data-key="${escAttr(s.selector)}">
             <span class="bte-chg-name">${gi('<path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/>')} <code>${escHtml(s.selector.slice(0, 30))}</code></span>
             <span class="bte-chg-val">${t('themes.iconSwap')||'icon'}</span>
-            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}" aria-label="${t('themes.revert')||'Revert'}">${uiIcon('reset', 14)}</button>
         </div>`);
     }
     if (_draft.global_css) {
         rows.push(`<div class="bte-chg-row" data-chg="globalcss" data-key="">
             <span class="bte-chg-name">⌨ ${t('themes.customCssLabel')||'Custom CSS'}</span>
             <span class="bte-chg-val"></span>
-            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}" aria-label="${t('themes.revert')||'Revert'}">${uiIcon('reset', 14)}</button>
         </div>`);
     }
     if (!rows.length) return '';
@@ -838,7 +839,7 @@ function buildChangesPanel(): string {
                 <span class="bte-group-title">${gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>')} ${t('themes.yourChanges')||'Your changes'}</span>
                 <span class="bte-group-badge">${rows.length}</span>
                 <button class="bte-chg-revert-all" data-tooltip="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
-                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                ${uiIcon('chevron-down', 12, { cls: 'bte-group-chevron' })}
             </div>
             <div class="bte-group-body">${rows.join('')}</div>
         </div>`;
@@ -847,7 +848,7 @@ function buildChangesPanel(): string {
 // Friendly per-group descriptions + icons
 /** Small lucide-style group icon (monochrome, follows currentColor — no emoji). */
 const gi = (paths: string) =>
-    `<svg class="bte-gi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+    `<svg class="bte-gi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 const GROUP_INFO: Record<string, { icon: string; desc: string }> = {
     'Background':     { icon: gi('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>'), desc: 'Colours behind the whole app, cards and bars.' },
     'Accent':         { icon: gi('<path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z"/>'), desc: 'Highlight colours — buttons, active items, states.' },
@@ -899,7 +900,7 @@ function buildSimpleTab(): string {
             </div>
             <div class="bte-asset-actions">
                 <button class="btn btn-xs btn-secondary bte-asset-pick" data-asset="${key}" data-accept="${accept}" data-video="${isVideo}">${t('themes.choose')||'Choose…'}</button>
-                ${assets[key] ? `<button class="btn btn-xs btn-ghost bte-asset-clear" data-asset="${key}">✕</button>` : ''}
+                ${assets[key] ? `<button class="btn btn-xs btn-ghost bte-asset-clear" data-asset="${key}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>` : ''}
             </div>
         </div>`;
 
@@ -910,7 +911,7 @@ function buildSimpleTab(): string {
             <button class="bte-group-head" type="button">
                 <span class="bte-group-title">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${t('themes.assets')||'Assets (images / video)'}</span>
                 ${assetsCount ? `<span class="bte-group-badge">${assetsCount}</span>` : ''}
-                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                ${uiIcon('chevron-down', 12, { cls: 'bte-group-chevron' })}
             </button>
             <div class="bte-group-body">
                 <p class="bte-group-desc">${t('themes.assetsDesc')||'Replace BMM built-in images. Files are embedded into your theme.'}</p>
@@ -932,7 +933,7 @@ function buildSimpleTab(): string {
             <button class="bte-group-head" type="button">
                 <span class="bte-group-title">${info.icon} ${escHtml(grp)}</span>
                 ${customCount ? `<span class="bte-group-badge">${customCount}</span>` : ''}
-                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                ${uiIcon('chevron-down', 12, { cls: 'bte-group-chevron' })}
             </button>
             <div class="bte-group-body">
             ${info.desc ? `<p class="bte-group-desc">${escHtml(info.desc)}</p>` : ''}
@@ -951,7 +952,7 @@ function buildSimpleTab(): string {
                 } else if (tok.type === 'image') {
                     inp = `<div class="bte-img-wrap">
                         <input type="text" class="bte-var-inp" data-var="${tok.key}" value="${escHtml(custom)}" placeholder="${escHtml(currentLabel(tok.key, tok.type))}">
-                        ${custom ? `<button class="bte-img-clear" data-var="${tok.key}">✕</button>` : ''}
+                        ${custom ? `<button class="bte-img-clear" data-var="${tok.key}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>` : ''}
                     </div>`;
                 } else if (tok.type === 'font') {
                     const presets = tok.key === '--bmm-font-mono' ? MONO_PRESETS : FONT_PRESETS;
@@ -968,7 +969,7 @@ function buildSimpleTab(): string {
                         data-tasky="${escJs(tok.desc)}" data-tasky-literal="1">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
-                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" data-tooltip="${t('themes.resetToDefault')||'Reset to default'}">↩</button>` : liveLabel}
+                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" data-tooltip="${t('themes.resetToDefault')||'Reset to default'}" aria-label="${t('themes.resetToDefault')||'Reset to default'}">${uiIcon('reset', 14)}</button>` : liveLabel}
                     </div>
                 </div>`;
             }).join('')}
@@ -996,7 +997,7 @@ function buildSimpleTab(): string {
         <div class="bte-group">
             <button class="bte-group-head" type="button">
                 <span class="bte-group-title">${gi('<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/>')} ${t('themes.modalsTargets')||'Modals & shared elements'}</span>
-                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                ${uiIcon('chevron-down', 12, { cls: 'bte-group-chevron' })}
             </button>
             <div class="bte-group-body">
                 <p class="bte-group-desc">${t('themes.modalsHint')||'Click any element to edit it directly (colours, hover, CSS) — no need to open it first.'}</p>
@@ -1519,7 +1520,7 @@ function buildInstalledTab(): string {
                         <button class="btn btn-xs${isActive?' btn-accent':' btn-ghost'} bte-activate" data-id="${th.id}">${isActive?`✓ ${t('themes.active')||'Active'}`:(t('themes.apply')||'Apply')}</button>
                         ${!isBuiltin?`<button class="btn btn-xs btn-ghost bte-export-theme" data-id="${th.id}">${t('themes.export')||'Export'}</button>`:''}
                         ${!isBuiltin
-                            ? `<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}">✕</button>`
+                            ? `<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}" aria-label="${t('common.delete')}">${uiIcon('delete', 14)}</button>`
                             : `<button class="btn btn-xs btn-ghost bte-hide-builtin" data-id="${th.id}" data-tooltip="${escAttr(t('themes.uninstall')||'Uninstall')}">${t('themes.uninstall')||'Uninstall'}</button>`}
                     </div>
                 </div>`;
@@ -1865,7 +1866,7 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         <label class="bte-elov-row">
             <span>${label}</span>
             <input type="color" data-prop="${prop}" value="#000000">
-            <button class="bte-elov-clear" data-prop="${prop}" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
+            <button class="bte-elov-clear" data-prop="${prop}" data-tooltip="${t('themes.clear')||'Clear'}" aria-label="${t('themes.clear')||'Clear'}">${uiIcon('close', 14)}</button>
         </label>`;
     pop.innerHTML = `
         <div class="bte-elov-head">
@@ -1902,12 +1903,12 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
                     <option value="border">${escHtml(t('themes.gradTargetBorder'))}</option>
                 </select>
                 <button class="btn btn-secondary btn-xs bte-grad-apply">${t('themes.applyGradient')||'Apply'}</button>
-                <button class="btn btn-ghost btn-xs bte-grad-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
+                <button class="btn btn-ghost btn-xs bte-grad-clear" data-tooltip="${t('themes.clear')||'Clear'}" aria-label="${t('themes.clear')||'Clear'}">${uiIcon('close', 14)}</button>
             </div>
             <p class="bte-elov-hint bte-grad-hint" hidden></p>
             <div class="bte-elov-imgrow">
                 <button class="btn btn-secondary btn-xs bte-elov-img">${t('themes.replaceImage')||'Set / replace image'}</button>
-                <button class="btn btn-ghost btn-xs bte-elov-img-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
+                <button class="btn btn-ghost btn-xs bte-elov-img-clear" data-tooltip="${t('themes.clear')||'Clear'}" aria-label="${t('themes.clear')||'Clear'}">${uiIcon('close', 14)}</button>
             </div>
             <label class="bte-elov-csslabel">${t('themes.replaceIcon')||'Replace icon (paste SVG)'}</label>
             <textarea class="bte-elov-svg" spellcheck="false" placeholder='<svg viewBox="0 0 24 24" ...>…</svg>'></textarea>

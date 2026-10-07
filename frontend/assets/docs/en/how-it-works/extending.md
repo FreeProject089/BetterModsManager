@@ -6,46 +6,56 @@ to **plugins, scripts and AI clients** — so anything BMM does, you can automat
 ## Three ways in
 
 ```mermaid
-flowchart TB
-    subgraph Clients
+flowchart TD
+    subgraph CLIENTS["Clients"]
         PLUG["Plugins"]
-        SCRIPT["Scripts / CLI"]
-        AI["AI client<br/>(MCP)"]
-        PAGE["Custom pages<br/>(bmmpage://)"]
+        SCRIPT["Scripts"]
+        AI["AI client"]
+        PAGE["Custom pages<br/>bmmpage://"]
     end
-    subgraph BMM
-        API["Local HTTP API"]
-        MCP["MCP server"]
+    MCP[["MCP server + CLI<br/>(sidecar)"]]
+    subgraph APP["BMM app"]
+        API[["Local HTTP API"]]
         BROKER["Permission broker"]
-        CORE["Core commands"]
+        CORE[["Core commands"]]
     end
-    PLUG --> API
-    SCRIPT --> API
-    AI --> MCP
-    PAGE --> BROKER
+    DATA[("data.json")]
+    PLUG -- "plugin token" --> API
+    SCRIPT -- "API token" --> API
+    AI -- "stdio" --> MCP
+    MCP -- "live actions" --> API
+    MCP -- "offline edits" --> DATA
+    PAGE -- "postMessage" --> BROKER
     API --> CORE
-    MCP --> CORE
-    BROKER --> CORE
+    BROKER -- "granted only" --> CORE
 ```
 
 - **Local API** — a small HTTP server on your machine. Plugins and scripts call it to scan,
   activate, build packs, read state, and more.
 - **MCP server** — the same capabilities exposed as Model Context Protocol tools, so an AI assistant
-  can drive BMM conversationally. It runs over stdio, not a public port.
+  can drive BMM conversationally. It runs over stdio, not a public port, as a separate
+  process: live actions go through the local API, and offline commands edit `data.json` directly.
 - **Custom pages** — sandboxed `bmmpage://` mini-apps you pin to the navbar. They talk to BMM only
   through a **permission broker**, so a page gets exactly the access you grant it and nothing more.
 
 ## Deeplinks
 
 Buttons on the web ("Install this mod in BMM") work through **deeplinks** — a URL scheme BMM
-registers with the OS. Clicking one hands the request to the running app, which confirms and acts.
+registers with the OS. Clicking one hands the request to BMM (the running copy, or a new one if none
+is open). A link past the hard limits is refused outright; anything that changes, downloads or
+runs asks you first.
 
 ```mermaid
-flowchart LR
-    WEB["Web button"] --> LINK["bmm:// deeplink"]
-    LINK --> APP["BMM (running)"]
-    APP --> CONFIRM{"confirm"}
-    CONFIRM -- yes --> ACT["install / add source"]
+flowchart TD
+    WEB(["Web button"]) --> LINK["bmm:// link"]
+    LINK --> APP["Running BMM,<br/>or a fresh start"]
+    APP --> LIMITS{"Within the<br/>hard limits?"}
+    LIMITS -- "no" --> REFUSE(["Refused"])
+    LIMITS -- "yes" --> WRITES{"Changes, downloads<br/>or runs anything?"}
+    WRITES -- "no" --> ACT(["Action runs"])
+    WRITES -- "yes" --> CONFIRM{"You confirm?"}
+    CONFIRM -- "yes" --> ACT
+    CONFIRM -- "no" --> CANCEL(["Nothing done"])
 ```
 
 !!! info "See it in the app"
@@ -67,12 +77,14 @@ instead of silent.
   search** in the command palette and the docs.
 
 ```mermaid
-graph TD
-    LANGFILES["Lang/*.json (+ _info, _synonyms)"] --> DICTS["In-memory dictionaries"]
-    DICTS --> T["t(key)"]
-    T --> CUR{Key in current language?}
-    CUR -- yes --> OUT["Translated string"]
-    CUR -- no --> FRFALL["French fallback"] --> RAWKEY["Raw key shown"]
+flowchart TD
+    LANGFILES[("Lang/*.json")] --> DICTS["Dictionaries<br/>in memory"]
     SWITCH["setLang()"] --> DICTS
-    SYN["_synonyms"] --> SEARCH["Semantic search"]
+    DICTS --> T["t(key)"]
+    T --> CUR{"In the active<br/>language?"}
+    CUR -- "yes" --> OUT(["Translated text"])
+    CUR -- "no" --> FR{"In French?"}
+    FR -- "yes" --> OUT
+    FR -- "no" --> RAW(["Raw key shown"])
+    LANGFILES -- "_synonyms" --> SEARCH["Semantic search"]
 ```

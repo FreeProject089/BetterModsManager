@@ -5,6 +5,7 @@ import { showTaskyHelp, hideTaskyHelp } from '../../docs/interactive-docs.js';
 import { bindModal, ensureModalShellCss } from '../../ui/modal-shell.js';
 import { BOOT_KEY, REC_EVENT, EXPAND_EVENT, CLOSED_EVENT } from './mini-window.js';
 import { viewBounds } from './bench-view.js';
+import { uiIcon } from '../../ui/icons.js';
 let benchmarkData = [];
 let isAdvancedMode = false;
 let isLiveView = true;
@@ -376,14 +377,14 @@ export async function openAdvancedPerfModal() {
     const content = document.createElement('div');
     content.className = 'modal bms modal--xl';
     const I = {
-        pulse: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
-        x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        pulse: (uiIcon('activity', 20)),
+        x: (uiIcon('close', 18)),
         mini: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M13 13h6v6h-6z"/></svg>',
-        play: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
-        stop: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
-        up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
-        down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-        plus: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+        play: (uiIcon('play', 16)),
+        stop: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+        up: (uiIcon('upload', 14)),
+        down: (uiIcon('download', 14)),
+        plus: (uiIcon('add', 12)),
         dot: '<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg>',
     };
     const stat = (key, label, swatch, valId, auxId, spark) => `
@@ -822,9 +823,9 @@ export async function openAdvancedPerfModal() {
     const sourcesPanel = content.querySelector('#bench-sources');
     const srcList = content.querySelector('#bench-src-list');
     const shortPath = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2).join('/');
-    const folderIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-    const xIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-    const checkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="flex-shrink:0;" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+    const folderIcon = (uiIcon('folder', 12, { style: 'flex-shrink:0;' }));
+    const xIcon = (uiIcon('close', 12, { style: 'flex-shrink:0;' }));
+    const checkIcon = (uiIcon('check', 12, { style: 'flex-shrink:0;' }));
     const renderSrcChips = () => {
         if (!srcList)
             return;
@@ -1519,10 +1520,10 @@ function toggleMiniMonitor(active) {
                 <div class="pf-mini-btns">
                     <button type="button" id="mini-startstop" class="pf-mini-btn is-stop"></button>
                     <button type="button" id="mini-back" class="pf-mini-btn" aria-label="${escB(t('bench.title') || 'Benchmark')}" data-tooltip="${escB(t('bench.title') || 'Benchmark')}">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
                     </button>
                     <button type="button" id="mini-close" class="pf-mini-btn" aria-label="${escB(t('common.close') || 'Close')}">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        ${uiIcon('close', 16)}
                     </button>
                 </div>
             </div>

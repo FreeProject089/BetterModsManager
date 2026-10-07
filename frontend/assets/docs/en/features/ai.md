@@ -233,16 +233,18 @@ Only when **you** click: *Suggest details* on a mod, *Also ask for a description
 - **Never:** the contents of your files, your keys, your mod list, anything while the switch is off.
 
 ```mermaid
-graph TD
-    CLICK["You click Suggest"] --> FILES["Read the mod's files (always, offline)"]
-    FILES --> GATE{"AI on, feature on, provider chosen?"}
-    GATE -- "no" --> ROWS["Suggestions: files only"]
-    GATE -- "yes" --> MASK["Mask paths / e-mails / IPs, cap 4 000 chars"]
-    MASK --> PROV["Laya (local or BetterCommunity) / external API"]
-    PROV --> ROWS2["+ ranked tags, language hint, draft"]
-    ROWS --> PICK["You tick fields"]
-    ROWS2 --> PICK
-    PICK --> APPLY["Apply writes the ticked fields only"]
+flowchart TD
+    CLICK(["You click Suggest"]) --> FILES["Read the mod's files<br/>(always, offline)"]
+    FILES --> ROWS["File rows, plus<br/>a language hint"]
+    ROWS --> GATE{"AI on, feature on,<br/>provider chosen?"}
+    GATE -- "no" --> PICK["You tick fields"]
+    GATE -- "yes" --> MASK["Mask personal data,<br/>cap 4 000 chars"]
+    MASK --> PROV["Tag classifier: Laya<br/>or BetterCommunity"]
+    MASK -- "if asked" --> DRAFT["Description draft:<br/>local or external model"]
+    PROV --> PICK
+    DRAFT --> PICK
+    PICK --> APPLY[["ai_apply_mod_metadata"]]
+    APPLY --> DONE(["Ticked fields written"])
 ```
 
 ## Suggesting a mod's details

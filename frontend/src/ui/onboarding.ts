@@ -9,6 +9,7 @@
 import { t, getLang, setLang, getLanguages } from '../core/i18n.js';
 import { openTutorialHub } from './tutorial-hub.js';
 import { isDialogOnScreen, whenDialogsClear } from './dialog-traffic.js';
+import { uiIcon } from './icons.js';
 
 let _langStep = false;
 
@@ -112,7 +113,7 @@ function _renderLangStep() {
           <button class="nav-lang-btn" id="onboarding-lang-toggle" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid var(--border)">
             <span class="nav-lang-flag">${getFlag(current)}</span>
             <span class="nav-lang-name">${current.name}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+            ${uiIcon('chevron-up', 12, { cls: 'nav-lang-chevron' })}
           </button>
 
           <div class="settings-lang-menu" id="onboarding-lang-menu" style="position:absolute; bottom:100%; left:0; right:0; margin-bottom:8px; top:auto; z-index:10001">
@@ -120,7 +121,7 @@ function _renderLangStep() {
               <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
                 <span class="nav-lang-flag">${getFlag(l)}</span>
                 <span>${l.name}</span>
-                ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent);margin-left:auto' })) : ''}
               </button>
             `).join('')}
           </div>

@@ -148,6 +148,10 @@ const HARMLESS = {
     // Library cards' activation look (mods-job-anim.ts): a render cache on app-built .mod-card
     // elements under #mod-list-viewport, reset on langChanged so the labels redraw; no action.
     'data-job-sig': 'mods-job-anim render cache on Library cards, reset on langChanged; no action',
+    // .bmms review dialog (bmmscript-open.ts): the footer button the dialog builds itself, bound
+    // with ov.querySelector (not document-wide); the probe reaches it through the 3000-char window
+    // after the named `onKey` handler.
+    'data-import': 'bmms review dialog footer button, own dialog',
 };
 
 function documentListenerAttrs() {

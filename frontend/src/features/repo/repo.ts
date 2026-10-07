@@ -137,8 +137,7 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
         const folded = catStripFolded(urls.length);
         host.innerHTML = urls.length
             ? `<button type="button" class="repo-cat-fold${folded ? ' is-folded' : ''}" data-cat-fold>
-                 <svg class="repo-cat-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                 ${uiIcon('chevron-down', 12, { cls: 'repo-cat-chev' })}
                  ${escHtml(t('repo.cat.followedN').replace('{n}', String(urls.length)))}
                </button>
                <div class="repo-cat-srcs"${folded ? ' hidden' : ''}>${urls.map((u) => {
@@ -159,7 +158,7 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
                     ${from ? `<span class="repo-cat-via" title="${escAttr(from)}">${escHtml(
                         (t('repo.cat.via') || 'via') + ' ' + originLabel(from))}</span>` : ''}
                     <button class="repo-cat-del" data-u="${escAttr(u)}"
-                            aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button>
+                            aria-label="${escAttr(t('common.remove') || 'Remove')}">${uiIcon('close', 14)}</button>
                 </div>`;
             }).join('')}</div>`
             : '';
@@ -300,7 +299,7 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
         <div class="modal glass modal--lg">
             <div class="modal-header">
                 <h3 class="modal-title">${escHtml(t('repo.cat.b.title') || 'Build a repo catalogue')}</h3>
-                <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button class="modal-close" type="button" data-x>${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body">
                 <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.name') || 'Catalogue name')}</label>
@@ -521,6 +520,7 @@ export const copyToClipboard = async (text, successMsg) => {
 // into this module's scope, and repo.ts calls showConfirm itself. tsc is told to skip this
 // file, so nothing said so — check-undefined-names did.
 import { showConfirm } from '../../ui/confirm.js';
+import { uiIcon } from '../../ui/icons.js';
 export { showConfirm };
 
 // --- Profile Checklist (exportable function) ---
@@ -538,7 +538,7 @@ export const loadProfilesForExport = async (profilesListEl) => {
         if (!profiles || profiles.length === 0) {
             // A real empty state, not a grey line: what is missing and what puts something here.
             profilesListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
-                <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+                <div class="empty-icon" style="opacity:.45;">${uiIcon('user', 24)}</div>
                 <p class="empty-title" style="font-size:13px;">${escHtml(t('repo.noProfiles'))}</p>
                 <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.export.noProfilesHint'))}</p>
                 <div class="rp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-rp-go="profiles">${escHtml(t('repo.export.goProfiles'))}</button>${learnMore('profiles')}</div>
@@ -582,7 +582,7 @@ export const loadModpacksForExport = async (modpacksListEl) => {
         modpacksListEl.innerHTML = '';
         if (!modpacks || modpacks.length === 0) {
             modpacksListEl.innerHTML = `<div class="empty-state" style="padding:18px 12px;">
-                <div class="empty-icon" style="opacity:.45;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+                <div class="empty-icon" style="opacity:.45;">${uiIcon('box', 24)}</div>
                 <p class="empty-title" style="font-size:13px;">${escHtml(t('modpack.noMods') || 'No modpack available')}</p>
                 <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.export.noModpacksHint'))}</p>
                 <div class="rp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-rp-go="modpacks">${escHtml(t('repo.export.goModpacks'))}</button>${learnMore('modpacks')}</div>
@@ -1246,7 +1246,7 @@ export function initRepo() {
                     return `
                         <div class="repo-history-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:12px; display:flex; gap:12px; align-items:flex-start;">
                             <div style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(251,146,60,0.1); border-radius:6px; flex-shrink:0;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" aria-hidden="true">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <polyline points="12 6 12 12 16 14"></polyline>
                                 </svg>
@@ -1257,9 +1257,7 @@ export function initRepo() {
                                     <div style="display:flex; align-items:center; gap:8px;">
                                         ${repoStarBtn(entry.url)}
                                         <div style="display:flex; align-items:center; gap:4px;" class="repo-history-ping-container" data-url="${escAttr(entry.url)}">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" class="repo-history-ping-icon">
-                                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                                            </svg>
+                                            ${uiIcon('activity', 12, { cls: 'repo-history-ping-icon', style: 'color:var(--text-muted)' })}
                                             <span style="font-size:10px; color:var(--text-muted); font-weight:600;" class="repo-history-ping-text">Pinging...</span>
                                         </div>
                                         <span style="font-size:10px; color:var(--text-muted);">${dateStr}</span>
@@ -1269,20 +1267,14 @@ export function initRepo() {
                                     <span style="font-size:10px; padding:2px 8px; background:${categoryColor}20; color:${categoryColor}; border-radius:100px; font-weight:600;">${categoryLabel}</span>
                                     ${entry.game ? `
                                         <span style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px;">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;">
-                                                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                                <path d="M8 21h8M12 17v4"/>
-                                            </svg>
+                                            ${uiIcon('monitor', 12, { style: 'opacity:0.7;' })}
                                             ${escHtml(entry.game)}
                                         </span>
                                     ` : ''}
                                 </div>
                                 ${entry.author ? `
                                     <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px; width:fit-content;">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;">
-                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                            <circle cx="12" cy="7" r="4"/>
-                                        </svg>
+                                        ${uiIcon('user', 12, { style: 'opacity:0.7;' })}
                                         ${escHtml(entry.author)}
                                     </div>
                                 ` : ''}
@@ -1578,11 +1570,7 @@ export function initRepo() {
                 contentEl.style.display = 'block';
                 listEl.innerHTML = `
                     <div style="text-align:center; padding:40px; color:var(--text-muted);">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.5;">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
+                        ${uiIcon('globe', 48, { style: 'opacity:0.5;' })}
                         <p style="margin-top:16px; font-size:13px;">${escHtml(reason.title)}</p>
                         <p style="font-size:11px; opacity:0.7;">${escHtml(reason.detail)}</p>
                     </div>
@@ -1670,11 +1658,11 @@ export function initRepo() {
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
                                 ${isBoosted(repo) ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(245,158,11,0.15); color:var(--bmm-warning); border:1px solid rgba(245,158,11,0.35); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.boostedServer') || 'Boosted — featured on BetterCommunity'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> Boosted</span>` : ''}
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:var(--bmm-success);' : repo.category === 'community' ? 'background:color-mix(in srgb, var(--bmm-warning) 15%, transparent); color:var(--bmm-warning);' : 'background:rgba(59,130,246,0.15); color:var(--bmm-accent);'}">${escHtml(repo.category)}</span>${repo.claimed_category ? `<span class="repo-claim-badge" title="${escAttr((t('repo.claimHint') || 'This catalogue calls it that. BMM did not — a repo\u2019s tier comes from the list it was fetched from, not from what that list says about itself.'))}">\u26a0 ${escHtml((t('repo.claims') || 'claims “{c}”').replace('{c}', repo.claimed_category))}</span>` : ''}${repo.source_catalog ? `<span class="repo-src-tag" title="${escAttr(repo.source_catalog)}">${escHtml(originLabel(repo.source_catalog))}</span>` : ''}
-                                ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:var(--bmm-success); border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.verifiedServer') || 'Verified server — hash validated by the BMM team'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>` : ''}
+                                ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:var(--bmm-success); border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.verifiedServer') || 'Verified server — hash validated by the BMM team'}">${uiIcon('check', 12)} Verified</span>` : ''}
                                 ${repo.whitelist_enabled === true
-                                    ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(34,197,94,0.12); color:var(--bmm-success); border:1px solid rgba(34,197,94,0.3); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.whitelistServer') || 'This server uses a whitelist — access is restricted'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Whitelist</span>`
+                                    ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(34,197,94,0.12); color:var(--bmm-success); border:1px solid rgba(34,197,94,0.3); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.whitelistServer') || 'This server uses a whitelist — access is restricted'}">${uiIcon('lock', 12)} Whitelist</span>`
                                     : repo.whitelist_enabled === false
-                                    ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(239,68,68,0.08); color:color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary)); border:1px solid rgba(239,68,68,0.2); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.openServer') || 'This server has no whitelist — open access'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Open</span>`
+                                    ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(239,68,68,0.08); color:color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary)); border:1px solid rgba(239,68,68,0.2); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.openServer') || 'This server has no whitelist — open access'}">${uiIcon('unlock', 12)} Open</span>`
                                     : ''
                                 }
                             </div>
@@ -1688,7 +1676,7 @@ export function initRepo() {
                                      otherwise would put the entry back on the next fetch. -->
                                 <button class="repo-hide-btn" data-hide-url="${escAttr(repo.url)}"
                                         data-tooltip="${escAttr(t('repo.hideOne'))}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                                 </button>
                                 <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
                             </div>
@@ -1702,41 +1690,25 @@ export function initRepo() {
                     </div>
                     <div style="display:flex; gap:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-                                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                <path d="M8 21h8M12 17v4"/>
-                            </svg>
+                            ${uiIcon('monitor', 12, { style: 'color:var(--accent)' })}
                             <span style="font-size:11px; color:var(--text-secondary);"><span style="color:var(--accent); font-weight:600;">${repo.mods_count || 0}</span> mods</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
+                            ${uiIcon('download', 12, { style: 'color:var(--cyan)' })}
                             <span style="font-size:11px; color:var(--text-secondary);">${formatBytes(repo.size || 0)}</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polyline points="12 6 12 12 16 14"/>
-                            </svg>
+                            ${uiIcon('clock', 12, { style: 'color:var(--text-muted)' })}
                             <span style="font-size:11px; color:var(--text-muted);">${escHtml(repo.last_update || 'Unknown')}</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:6px;" class="repo-ping-container" data-url="${escAttr(repo.url)}">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" class="repo-ping-icon">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                            </svg>
+                            ${uiIcon('activity', 12, { cls: 'repo-ping-icon', style: 'color:var(--text-muted)' })}
                             <span style="font-size:11px; color:var(--text-muted); font-weight:600;" class="repo-ping-text">Pinging...</span>
                         </div>
                         <div style="display:flex; gap:4px; margin-left:auto;">
                             ${repo.website_link ? `
                             <a href="${escAttr(repo.website_link)}" target="_blank" style="width:20px; height:20px; display:flex; align-items:center; justify-content:center; background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); border-radius:4px; text-decoration:none; color:var(--cyan);" >
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <line x1="2" y1="12" x2="22" y2="12"/>
-                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                                </svg>
+                                ${uiIcon('globe', 12)}
                             </a>
                             ` : ''}
                             ${repo.discord_link ? `
@@ -1752,13 +1724,7 @@ export function initRepo() {
                     ${repo.changelog_link ? `
                     <div style="margin-top:8px;">
                         <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px; padding:3px 8px; background:rgba(59,130,246,0.1); border-radius:4px; width:fit-content;">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                                <line x1="16" y1="13" x2="8" y2="13"/>
-                                <line x1="16" y1="17" x2="8" y2="17"/>
-                                <polyline points="10 9 9 9 8 9"/>
-                            </svg>
+                            ${uiIcon('file-text', 12)}
                             Changelog
                         </a>
                     </div>
@@ -2532,9 +2498,7 @@ export function initRepo() {
                         repos.map(r => `
                         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;gap:12px;">
                             <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:0;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" style="flex-shrink:0;">
-                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                </svg>
+                                ${uiIcon('folder', 18, { style: 'color:var(--cyan);flex-shrink:0;' })}
                                 <div style="flex:1; min-width:0;">
                                     <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(r.name)}</div>
                                     <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-repo-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json">${r.folder === '.' ? '(hub root)' : escHtml(r.folder)}/repo.json</div>
@@ -2542,7 +2506,7 @@ export function initRepo() {
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
                                 <button class="repo-hub-copy-btn" data-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json" data-folder="${escAttr(r.folder)}" style="padding:6px 10px;font-size:11px;background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" data-hover="background:rgba(6,182,212,0.25)" data-tasky="repo.hub.copyPath" data-tasky-icon="copy" data-hover-out="background:rgba(6,182,212,0.15)">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:4px;vertical-align:-1px;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:4px;vertical-align:-1px;" aria-hidden="true">
                                         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
                                         <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
                                     </svg>
@@ -2947,8 +2911,8 @@ export function initRepo() {
             const isPass = elements.inputZipPass.type === 'password';
             elements.inputZipPass.type = isPass ? 'text' : 'password';
             elements.btnToggleZipPass.innerHTML = isPass
-                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>'
-                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+                ? (uiIcon('eye-off', 14))
+                : (uiIcon('eye', 14));
         });
     }
 

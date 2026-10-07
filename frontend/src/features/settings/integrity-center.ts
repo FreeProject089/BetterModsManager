@@ -21,6 +21,7 @@ import { learnMore } from '../../core/learn-more.js';
 import { appState } from '../../core/state.js';
 import { openModal, type ModalHandle } from '../../ui/modal-shell.js';
 import { STATES, stateOf, stateName, countStates, filterRows, hashAlgo, shortHash, reportLine, reportJson, reportCsv, type HashRow, type HashState, type Report } from './integrity-model.js';
+import { uiIcon, type IconName, type IconSize } from '../../ui/icons.js';
 
 export type IntegrityToast = (message: string, type?: 'info' | 'success' | 'error' | 'warning', ms?: number) => void;
 
@@ -31,15 +32,9 @@ const esc = escHtml;
 /** How many rows are drawn at once: a search narrows the rest. */
 const ROW_CAP = 250;
 
-const ICON = {
-    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
-    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-    chevron: '<path d="m9 18 6-6-6-6"/>',
-    search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
-    export: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
-    rehash: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
-};
-const svg = (paths: string, size = 14) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+// Glyphs from the shared registry (ui/icons.ts): the same shield, copy and export as everywhere.
+const ICON = { shield: 'shield-check', copy: 'copy', chevron: 'chevron-right', search: 'search', export: 'export', rehash: 'reapply' } as const;
+const svg = (name: IconName, size: IconSize = 14) => uiIcon(name, size);
 
 /** This feature's stylesheet, linked the first time the card or the dialog needs it. */
 export function ensureIntegrityCss(): void {
@@ -253,7 +248,7 @@ export async function openIntegrityCenter(toast: IntegrityToast, opts: { state?:
                 <div class="shc-row-name"><span class="shc-name" title="${escAttr(r.name)}">${esc(r.name)}</span>${r.version ? `<span class="shc-ver">${esc(r.version)}</span>` : ''}${r.enabled ? `<span class="shc-on">${esc(tr('sha.enabled', 'enabled'))}</span>` : ''}${busy ? `<span class="shc-busy">${esc(busy)}</span>` : ''}</div>
                 <div class="shc-row-meta">${esc(meta)}${rep ? ` · <span class="shc-rep ${rep.isValid ? 'is-ok' : 'is-bad'}">${esc(reportLine(rep, t))}</span>` : ''}</div>
             </div>
-            ${r.content_id ? `<span class="shc-cid" title="${escAttr(tr('sha.cidTip', 'Content id: the fingerprint of the whole mod. {id}').replace('{id}', r.content_id))}"><code>${esc(shortHash(r.content_id))}</code><button type="button" class="shc-icon-btn" data-copy="${escAttr(r.content_id)}" aria-label="${escAttr(tr('sha.copyCid', 'Copy the content id'))}">${svg(ICON.copy, 13)}</button></span>` : '<span class="shc-cid is-none" aria-hidden="true"></span>'}
+            ${r.content_id ? `<span class="shc-cid" title="${escAttr(tr('sha.cidTip', 'Content id: the fingerprint of the whole mod. {id}').replace('{id}', r.content_id))}"><code>${esc(shortHash(r.content_id))}</code><button type="button" class="shc-icon-btn" data-copy="${escAttr(r.content_id)}" aria-label="${escAttr(tr('sha.copyCid', 'Copy the content id'))}">${svg(ICON.copy, 14)}</button></span>` : '<span class="shc-cid is-none" aria-hidden="true"></span>'}
             <div class="shc-row-acts">
                 <button type="button" class="btn btn-sm btn-ghost" data-act="verify"${!r.files || run ? ' disabled' : ''}>${esc(tr('sha.verify', 'Verify'))}</button>
                 <button type="button" class="btn btn-sm btn-ghost" data-act="rehash"${isQueued || isHashing ? ' disabled' : ''}>${esc(r.files ? tr('sha.rehash', 'Re-hash') : tr('sha.hash', 'Hash'))}</button>
@@ -332,7 +327,7 @@ export async function openIntegrityCenter(toast: IntegrityToast, opts: { state?:
                 <code class="shc-file-path" title="${escAttr(p)}">${esc(p)}</code>
                 <span class="shc-algo">${hashAlgo(h)}</span>
                 <code class="shc-hash" title="${escAttr(h)}">${esc(shortHash(h))}</code>
-                <button type="button" class="shc-icon-btn" data-copy="${escAttr(h.startsWith('b3:') ? h.slice(3) : h)}" aria-label="${escAttr(tr('sha.copyHash', 'Copy the hash of {f}').replace('{f}', p))}">${svg(ICON.copy, 13)}</button>
+                <button type="button" class="shc-icon-btn" data-copy="${escAttr(h.startsWith('b3:') ? h.slice(3) : h)}" aria-label="${escAttr(tr('sha.copyHash', 'Copy the hash of {f}').replace('{f}', p))}">${svg(ICON.copy, 14)}</button>
             </div>`).join('') + (entries.length > 300 ? `<div class="shc-more">${esc(tr('sha.andMore', 'and {n} more').replace('{n}', String(entries.length - 300)))}</div>` : '');
         } catch (err) {
             if (target) target.innerHTML = `<div class="stm-msg is-err">${esc(String(err))}</div>`;

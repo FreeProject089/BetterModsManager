@@ -17,6 +17,7 @@ import { t } from '../../core/i18n.js';
 import { learnMore } from '../../core/learn-more.js';
 import { pausedAllText, pushHistory, sparkPoints, gameHeadline, gameDetail, profileFolders, normGameDir, humanSubject, isKnownNonGame, type PausedAll, type GameView, type GameOptions } from './resources-spark.js';
 import { LiveFeed, reconcileKeyed, setAttr, setText, type FrameScheduler } from './storage-live.js';
+import { uiIcon } from '../../ui/icons.js';
 
 export interface Ticket { id: number; kind: string; subject: string; state: 'waiting' | 'running' | 'paused'; bytes_read: number; bytes_written: number; age_ms: number; }
 export interface Sample { t_ms: number; cpu_bmm: number; cpu_system: number; read_mbps: number; write_mbps: number; effective: string; game_active: boolean; task: { preset: string; remaining_ms: number } | null; tickets: Ticket[]; paused_all?: PausedAll | null; game?: GameView; }
@@ -352,7 +353,7 @@ export function mountGamePanel(host: HTMLElement, st: Status | null, profiles: G
     const paintExes = () => {
         if (!exesHost) return;
         exesHost.innerHTML = exes.length
-            ? exes.map((x, i) => `<span class="stm-pill stm-game-exe" title="${esc(x)}">${esc(x)}<button type="button" class="stm-pill-x" data-i="${i}" aria-label="${esc(tr('stm.game.remove', 'Remove') + ' ' + x)}">×</button></span>`).join('')
+            ? exes.map((x, i) => `<span class="stm-pill stm-game-exe" title="${esc(x)}">${esc(x)}<button type="button" class="stm-pill-x" data-i="${i}" aria-label="${esc(tr('stm.game.remove', 'Remove') + ' ' + x)}">${uiIcon('close', 14)}</button></span>`).join('')
             : `<span class="stm-help">${esc(tr('stm.game.noneAdded', 'None yet.'))}</span>`;
     };
     paintExes();

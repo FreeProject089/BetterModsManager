@@ -4,10 +4,11 @@
 // `#view-settings .glass-card` that has a direct `.card-title` — inject a chevron,
 // toggle a `bmm-collapsed` class, and remember the state per card in localStorage.
 
+import { uiIcon } from './icons.js';
 const KEY_PREFIX = 'bmm_fold_';
 
 const CHEVRON =
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    (uiIcon('chevron-down', 14));
 
 /** Stable per-card key: prefer the card id, else the title's i18n key, else its text. */
 function cardKey(card: HTMLElement, title: HTMLElement): string {

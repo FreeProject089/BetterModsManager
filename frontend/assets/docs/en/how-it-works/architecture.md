@@ -12,23 +12,28 @@ quoted rationale below is a comment from the source, not a reconstruction.
 ## The three layers
 
 ```mermaid
-flowchart TB
-    subgraph UI["UI — TypeScript (webview)"]
-        VIEWS["Views &amp; components"]
-        BRIDGE["api.ts bridge<br/>(invoke)"]
+flowchart TD
+    subgraph UI["Interface (TypeScript webview)"]
+        VIEWS["Views and components"] --> BRIDGE["api.ts bridge<br/>invoke()"]
     end
-    subgraph CORE["Core — Rust (native)"]
-        CMDS["~345 commands<br/>(scan, deploy, hash…)"]
-        WORK["Worker subprocess<br/>(heavy I/O)"]
-        HTTP["Local API + MCP sidecar"]
+    subgraph CORE["Rust core (bmm.exe)"]
+        CMDS[["~585 commands"]]
+        API[["Local API<br/>127.0.0.1 only"]]
+        WORK[["Mod worker<br/>(--mod-worker)"]]
     end
-    OS["Filesystem · Network · OS"]
-
-    VIEWS --> BRIDGE
-    BRIDGE -- "invoke('cmd', args)" --> CMDS
-    CMDS --> WORK --> OS
-    CMDS --> HTTP
-    HTTP --> OS
+    MCP[["MCP and CLI sidecar<br/>bmm-mcp-server"]]
+    subgraph DISK["Disk"]
+        DATA[("data.json")]
+        FILES[("Mod and game folders")]
+    end
+    BRIDGE -- "invoke" --> CMDS
+    API --> CMDS
+    MCP -- "HTTP + token" --> API
+    MCP -- "offline edits" --> DATA
+    CMDS --> DATA
+    CMDS -- "deploy" --> WORK
+    WORK --> FILES
+    CMDS -- "scan, hash" --> FILES
 ```
 
 - **UI (TypeScript)** — everything you see. It never touches the disk directly; it asks the core

@@ -12,20 +12,20 @@ qu'elles ferment.
 ## Frontières de confiance
 
 ```mermaid
-flowchart TB
-    subgraph Untrusted["Non fiable"]
+flowchart TD
+    subgraph UNTRUSTED["Non fiable"]
         WV["UI webview"]
-        NET["Catalogues / dépôts / archives distants"]
+        NET["Catalogues, dépôts,<br/>archives distants"]
         PAGE["Pages personnalisées"]
-        PLUG["Plugins (via l'API locale)"]
+        PLUG["Plugins"]
     end
-    subgraph Trusted["Cœur fiable (Rust)"]
-        GUARD["Gardes de chemin · assainissement des noms ·<br/>identité par token · contrôle de signature"]
-        CORE["Opérations fichiers &amp; processus"]
+    subgraph TRUSTED["Cœur fiable (Rust)"]
+        GUARD["Gardes : chemins, noms,<br/>tokens, signatures"]
+        CORE[["Opérations fichiers<br/>et processus"]]
     end
-    WV -- "invoke(args)" --> GUARD
+    WV -- "invoke" --> GUARD
     NET -- "octets téléchargés" --> GUARD
-    PAGE -- "via le broker de permissions" --> GUARD
+    PAGE -- "via le broker" --> GUARD
     PLUG -- "token Bearer" --> GUARD
     GUARD --> CORE
 ```
@@ -85,12 +85,15 @@ que c'en est un, plutôt que de supposer que la portée étroite est toujours en
 ## L'API locale résout l'identité depuis le token, jamais depuis un en-tête
 
 ```mermaid
-flowchart LR
-    REQ["Requête<br/>Authorization: Bearer …"] --> LOOK["chercher le token dans<br/>la map des tokens de plugins"]
-    HDR["En-tête X-BMM-Plugin-Id"] -. "ignoré pour l'identité" .-> LOOK
-    LOOK --> PERM{"ce plugin détient-il<br/>la permission ?"}
-    PERM -- non --> F403["403, en nommant le droit manquant"]
-    PERM -- oui --> RUN["exécuter"]
+flowchart TD
+    REQ(["Requête avec<br/>token Bearer"]) --> ADMIN{"Token admin ?"}
+    ADMIN -- "oui" --> RUN(["Exécutée"])
+    ADMIN -- "non" --> LOOK{"Token dans la map des<br/>tokens de plugins ?"}
+    HDR["En-tête X-BMM-Plugin-Id"] -. "ignoré" .-> LOOK
+    LOOK -- "non" --> F401(["401"])
+    LOOK -- "oui" --> PERM{"Ce plugin détient<br/>la permission ?"}
+    PERM -- "oui" --> RUN
+    PERM -- "non" --> F403(["403 en nommant<br/>le droit manquant"])
 ```
 
 > *« CWE-862/863 : l'API résout l'identité d'un appelant (et donc ses permissions) depuis CETTE map par
@@ -152,14 +155,16 @@ livré »*.
 ## Les mises à jour échouent en mode fermé
 
 ```mermaid
-flowchart LR
-    PKG["Paquet de mise à jour"] --> KEY{"clé d'éditeur<br/>fournie ?"}
-    KEY -- oui --> SIG{"signature Ed25519<br/>valide pour cette clé ?"}
-    SIG -- non --> REJ["refusé AVANT que le dossier<br/>d'installation soit touché"]
-    SIG -- oui --> SNAP["instantané"] --> INST["installation"]
-    INST --> ERR{"erreur ?"}
-    ERR -- oui --> RB["rollback"]
-    ERR -- non --> OK["terminé"]
+flowchart TD
+    PKG(["Paquet<br/>BetterInstaller"]) --> KEY{"Clé d'éditeur<br/>épinglée ?"}
+    KEY -- "oui" --> SIG{"Signature Ed25519<br/>valide ?"}
+    KEY -- "non (ancien mode)" --> SNAP["Instantané du<br/>dossier d'installation"]
+    SIG -- "non" --> REJ(["Refusé, dossier<br/>d'installation intact"])
+    SIG -- "oui" --> SNAP
+    SNAP --> INST["Extraction du<br/>nouveau paquet"]
+    INST --> ERR{"Erreur ?"}
+    ERR -- "oui" --> RB(["Instantané restauré"])
+    ERR -- "non" --> OK(["Instantané supprimé"])
 ```
 
 > *« le paquet DOIT porter une signature Ed25519 valide pour cette clé ou la mise à jour est refusée

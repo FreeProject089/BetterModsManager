@@ -24,6 +24,7 @@ import {
     type OrderedMod, type ContestedFile, type SortKey,
     sameOrder, moveId, dropAt, sortOrder, handoverCount, rivalsUnder,
 } from './load-order-model.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /** How a message reaches the user. The callers hand in ui/app.ts's toast(): importing app.ts
  *  from here would close an import cycle (app → profiles → … → commands → load-order → app).
@@ -49,11 +50,11 @@ function ensureCss(): void {
 
 const I = {
     grip: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
-    top: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14"/><path d="m7 14 5-5 5 5"/><path d="M12 9v11"/></svg>',
-    up: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
-    down: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
-    bottom: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14"/><path d="m7 10 5 5 5-5"/><path d="M12 15V4"/></svg>',
-    close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    top: (uiIcon('move-top', 14)),
+    up: (uiIcon('chevron-up', 14)),
+    down: (uiIcon('chevron-down', 14)),
+    bottom: (uiIcon('move-bottom', 14)),
+    close: (uiIcon('close', 20)),
     lists: tool('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><line x1="14" y1="5.5" x2="21" y2="5.5"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="16.5" x2="21" y2="16.5"/><line x1="14" y1="20" x2="19" y2="20"/>', 16),
     sort: tool('<path d="M3 6h11"/><path d="M3 12h8"/><path d="M3 18h5"/><path d="m17 8 3-3 3 3"/><path d="M20 5v14"/>'),
     share: tool('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'),

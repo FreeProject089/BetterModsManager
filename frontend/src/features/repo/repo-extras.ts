@@ -18,6 +18,7 @@ import { toast } from '../../ui/app.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { pendingExtras, setPendingExtras, applyExtrasToRepo,
     type RepoExtra, type ExtraCandidate } from './repo-pending.js';
+import { uiIcon } from '../../ui/icons.js';
 export { pendingExtras, setPendingExtras, applyPendingExtras, applyExtrasToRepo,
     type RepoExtra, type ExtraCandidate } from './repo-pending.js';
 
@@ -85,7 +86,7 @@ export function renderRepoExtras(extras: RepoExtra[] | undefined, container: HTM
     const group = document.createElement('div');
     group.className = 'repo-sync-profile-group glass-card repo-extras';
     group.innerHTML = `<h4 class="repo-extras-title">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+        ${uiIcon('sliders', 14)}
         ${esc(t('repo.extras.title'))}
     </h4>
     <p class="repo-extras-lede">${esc(t('repo.extras.lede'))}</p>`;
@@ -553,11 +554,7 @@ export function mountExtrasButton(host: HTMLElement | null, dirHint: () => strin
     btn.type = 'button';
     btn.className = 'btn btn-secondary btn-sm repo-extras-btn';
     btn.style.cssText = 'width:100%;justify-content:center;margin-top:8px;';
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <path d="M20 7h-9"/><path d="M14 17H5"/>
-            <circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
-        </svg><span>${escHtml(t('repo.extras.pick') || 'Include in the repo\u2026')}</span>`;
+    btn.innerHTML = `${uiIcon('sliders', 12)}<span>${escHtml(t('repo.extras.pick') || 'Include in the repo\u2026')}</span>`;
     host.appendChild(btn);
     wireExtrasButton(btn, dirHint);
 }
@@ -723,7 +720,7 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         ov.innerHTML = `<div class="modal glass cm-modal rx-modal">
             <div class="modal-header">
                 <h3 class="modal-title">${esc(t('repo.extras.pickTitle'))}</h3>
-                <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body rx-body">
                 <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>

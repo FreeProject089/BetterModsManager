@@ -5,6 +5,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
+import { uiIcon } from '../../ui/icons.js';
 // Browsing community MODPACK catalogues.
 //
 // A modpack catalogue is the same idea as a theme catalogue: a feed listing downloadable
@@ -257,7 +258,7 @@ async function renderBuilder(ov) {
         <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${escHtml(a.kind === 'link' ? t('catpub.link') : t('catpub.embed'))}</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted)"
               title="${escAttr(a.kind === 'link' ? a.url : a.path)}">${escHtml(a.kind === 'link' ? a.url : a.path.replace(/^.*[/\\]/, ''))}</span>
-        <button type="button" class="btn btn-xs btn-ghost" data-drop-added="${j}">×</button>
+        <button type="button" class="btn btn-xs btn-ghost" data-drop-added="${j}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
       </div>`).join('');
     listEl.querySelectorAll('[data-drop-added]').forEach((b) => b.addEventListener('click', () => {
         _added.splice(Number(b.dataset.dropAdded), 1);

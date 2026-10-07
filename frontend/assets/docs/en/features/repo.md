@@ -191,8 +191,8 @@ Hosting comes with two host-side tools, both on the Server Repo screen:
 **Monitoring** — a live table refreshed every second: each connected client's IP, creator ID,
 protocol (**Local / LAN / WAN**), the file being downloaded with progress and speed, plus idle
 sessions and totals (clients, combined speed, active files). From any row you can **whitelist**
-or **ban** that client in one click. It also aggregates a running standalone server's
-`monitoring.json`, so both servers show in one place.
+or **ban** that client in one click. It also merges the `monitoring.json` that a
+hybrid standalone server writes into the same folder, so both servers show in one place.
 
 **Whitelist & bans** — two managers with search, manual add (by IP and/or creator key),
 one-click removal and JSON export. The whitelist has a master on/off switch: off = everyone may
@@ -210,20 +210,36 @@ The built-in server (hosting from BMM itself) publishes the same aggregate `moni
 who is downloading is shown only in BMM's Monitoring table, on the host's machine.
 
 ```mermaid
-graph LR
-    subgraph Host["Host (BMM)"]
-        MON["Monitoring table (1 s refresh)"]
-        WL["Whitelist / bans managers"]
+flowchart TD
+    subgraph HOST["Host (BMM)"]
+        BUILTIN[["Built-in server"]]
+        MON["Monitoring table<br/>(every second)"]
+        WL["Whitelist and<br/>ban managers"]
     end
-    subgraph Server["Generated server"]
-        MJSON["/monitoring.json"]
-        ADMIN["/admin/* (password)"]
-        GATE["Access gate: bans → login → whitelist → download password"]
+    subgraph SRV["Standalone server"]
+        GATE{"Access gate"}
+        SERVE["Send the file"]
+        ADMIN["/admin/*<br/>(admin password)"]
     end
-    MJSON --> MON
-    WL -- "push config" --> ADMIN
-    CLIENT["Subscriber"] --> GATE
+    subgraph DIR["Served folder"]
+        LISTS[("bans.json<br/>whitelist.json")]
+        MJSON[("monitoring.json")]
+    end
+    CLIENT(["Subscriber"]) --> GATE
+    GATE -- "pass" --> SERVE
+    SERVE -- "hybrid only" --> MJSON
+    GATE -- "reads" --> LISTS
+    ADMIN -- "writes" --> LISTS
+    BUILTIN -- "live state" --> MON
+    MON -- "reads" --> MJSON
+    WL -- "writes" --> LISTS
 ```
+
+The managers write `bans.json` and `whitelist.json` into the served folder, and the standalone
+server re-reads them on every request. It checks, in order: bans, the login requirement, the
+whitelist, then the download password and any key access; requests from its own machine skip the
+gate. The built-in server checks the download password and key access first, then the login
+requirement, then bans and the whitelist.
 
 ### Publishing a new version
 

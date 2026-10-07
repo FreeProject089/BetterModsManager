@@ -8,9 +8,10 @@ import { t } from '../core/i18n.js';
 import { actAttrs, actAttrsStop } from '../core/inline-actions.js';
 import { renderTagChip } from './icon-pack.js';
 import { escHtml, escAttr, escJs, truncate } from '../core/utils.js';
+import { uiIcon } from './icons.js';
 
 export function getLoadingOverlayHTML() {
-  return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
+  return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px">${uiIcon('loader', 24, { style: 'color:var(--accent);animation:spin 1s linear infinite' })}</div></div>`;
 }
 
 /**
@@ -47,11 +48,11 @@ export function getModCardHTML(mod, ctx) {
     const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
     const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
 
-    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
-    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
 
-    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
-    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer">${uiIcon('globe', 12)}Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer">${uiIcon('globe', 12)}Inter</div>`;
   }
 
   // "Update available" tag — driven by the last update check (window.__bmmModUpdates)
@@ -62,7 +63,7 @@ export function getModCardHTML(mod, ctx) {
     if (info) {
       const tip = (info.current_version && info.new_version)
         ? `${info.current_version} → ${info.new_version}` : (t('mod.updateAvailable') || 'Update available');
-      updateHtml = `<div class="tag-mod-update" ${actAttrsStop('bmmShowModUpdates')} data-tasky="${escAttr(escJs(tip))}" data-tasky-icon="package" data-tasky-literal="1" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:var(--bmm-success);border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
+      updateHtml = `<div class="tag-mod-update" ${actAttrsStop('bmmShowModUpdates')} data-tasky="${escAttr(escJs(tip))}" data-tasky-icon="package" data-tasky-literal="1" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:var(--bmm-success);border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;">${uiIcon('refresh', 12)}${t('mod.updateTag') || 'Update'}</div>`;
     }
   } catch {}
 
@@ -87,10 +88,10 @@ export function getModCardHTML(mod, ctx) {
                      data-tasky="${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}" data-tasky-icon="${isShaInvalid ? 'alert' : 'shield'}"
                     
                      style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')};opacity:${isMissing ? '0.5' : '0.9'}; transition: all 0.2s ease;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    ${uiIcon('shield', 12)}
                 </div>
                 ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" data-tasky="mod.activationOrderTip" data-tasky-icon="help">#${mod.activation_order}</span>` : ''}
-                ${/\.(zip|rar|7z|tar|gz|tgz)$/i.test(mod.mod_folder_path || '') ? `<span class="mod-archive-badge" data-tasky="mod.archiveBadgeTip" data-tasky-icon="package"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>${t('mod.archiveBadge') || 'Archive'}</span>` : ''}
+                ${/\.(zip|rar|7z|tar|gz|tgz)$/i.test(mod.mod_folder_path || '') ? `<span class="mod-archive-badge" data-tasky="mod.archiveBadgeTip" data-tasky-icon="package">${uiIcon('box', 12)}${t('mod.archiveBadge') || 'Archive'}</span>` : ''}
                 ${conflictHtml}
                 ${updateHtml}
             </div>
@@ -100,7 +101,7 @@ export function getModCardHTML(mod, ctx) {
                     ${tagsHtml}
                 </div>
                 <div class="mod-author-container" style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:${mod.author ? 'flex' : 'none'};align-items:center;gap:4px;cursor:help" data-tasky="${escAttr(mod.author || '')}" data-tasky-icon="user" data-tasky-literal="1">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    ${uiIcon('user', 12, { style: 'opacity:0.7' })}
                     <span class="mod-author-name">${escHtml(truncate(mod.author || '', 50))}</span>
                 </div>
             </div>
@@ -113,7 +114,7 @@ export function getModCardHTML(mod, ctx) {
                 data-tasky="mod.moreActionsTip" data-tasky-icon="help";"
                 
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         <polyline points="6 9 12 15 18 9" stroke-width="2.5" style="opacity: 0.8; transform: scale(0.6); transform-origin: center; translate: 0 4px;"/>
                     </svg>
@@ -122,7 +123,7 @@ export function getModCardHTML(mod, ctx) {
                     <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}" 
                          data-tasky="mod.openActiveFolderTip" data-tasky-icon="folder" 
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" aria-hidden="true">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                             <path d="m9 13 2 2 4-4"/>
                         </svg>
@@ -131,7 +132,7 @@ export function getModCardHTML(mod, ctx) {
                     <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}" 
                          data-tasky="mod.openBackupFolderTip" data-tasky-icon="folder" 
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" aria-hidden="true">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                             <path d="M12 10v4l2 2"/>
                         </svg>
@@ -141,17 +142,14 @@ export function getModCardHTML(mod, ctx) {
                     <div class="dropdown-item btn-open-folder" data-id="${mod.id}"
                          data-tasky="mod.openSourceFolderTip" data-tasky-icon="folder"
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        ${uiIcon('open-folder', 14, { style: 'color:var(--accent)' })}
                         <span data-i18n="mod.openSourceFolder">${t('mod.openSourceFolder')}</span>
                     </div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item btn-copy-id" data-id="${mod.id}"
                          data-tasky="mod.copyIdTip" data-tasky-icon="icon-copy"
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
+                        ${uiIcon('copy', 14, { style: 'color:var(--text-muted)' })}
                         <span>Copy ID</span>
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);opacity:0.55;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(mod.id.slice(0, 8))}…</span>
                     </div>
@@ -159,10 +157,7 @@ export function getModCardHTML(mod, ctx) {
                          data-tasky="mod.copyContentIdTip" data-tasky-icon="icon-copy"
                         
                          style="${!mod.content_id ? 'opacity:0.4;pointer-events:none;' : ''}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
+                        ${uiIcon('copy', 14, { style: 'color:var(--accent)' })}
                         <span>Copy Content ID</span>
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--accent);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mod.content_id ? escHtml(mod.content_id.slice(0, 8)) + '…' : 'N/A'}</span>
                     </div>
@@ -170,10 +165,7 @@ export function getModCardHTML(mod, ctx) {
                     <div class="dropdown-item btn-copy-repo-mod-id" data-repo-mod-id="${escAttr(mod.repo_mod_id || mod.id)}"
                          data-tasky="mod.copyRepoModIdTip" data-tasky-icon="icon-copy"
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
+                        ${uiIcon('copy', 14, { style: 'color:var(--cyan)' })}
                         <span data-i18n="mod.copyRepoModId">${t('mod.copyRepoModId') || 'Copy repo_mod_id'}</span>
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--cyan);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((mod.repo_mod_id || mod.id).slice(0, 8))}…</span>
                     </div>
@@ -181,29 +173,26 @@ export function getModCardHTML(mod, ctx) {
                     <div class="dropdown-item" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}
                          data-tasky="mod.checkUpdateTip" data-tasky-icon="refresh"
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                        ${uiIcon('refresh', 14, { style: 'color:var(--cyan)' })}
                         <span data-i18n="mod.checkUpdate">${t('mod.checkUpdate') || 'Check for updates'}</span>
                     </div>
                     <div class="dropdown-item" ${actAttrsStop('bmmMenuOpenModUpdateConfig', mod.id)}
                          data-tasky="mod.updateConfigTip" data-tasky-icon="package"
                         >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                        ${uiIcon('sliders', 14, { style: 'color:var(--success)' })}
                         <span data-i18n="mod.updateConfig">${t('mod.updateConfig') || 'Configure updates'}</span>
                     </div>
                 </div>
             </div>
             
             <button class="btn btn-sm btn-icon btn-edit-mod" data-tasky="mod.editTip" data-tasky-icon="edit" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M12 20h9"/>
                     <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3l-12 12L3 20l1.5-4.5z"/>
                 </svg>
             </button>
             <button class="btn btn-danger btn-sm btn-icon btn-remove-mod" data-tasky="mod.removeTip" data-tasky-icon="trash" data-id="${mod.id}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                </svg>
+                ${uiIcon('delete', 12)}
             </button>
         </div>
 
@@ -256,7 +245,7 @@ export function getModDetailHTML(mod, ctx) {
       <div class="collapsible-section ${isExpanded ? '' : 'collapsed'}" id="section-${id}">
         <div class="collapsible-header" ${actAttrs('toggleDetailSection', id)}>
           <h4>${icon} ${title}</h4>
-          <svg class="collapsible-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          ${uiIcon('chevron-down', 14, { cls: 'collapsible-chevron' })}
         </div>
         <div class="collapsible-content">
           ${content}
@@ -273,7 +262,7 @@ export function getModDetailHTML(mod, ctx) {
                 <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" 
                       style="cursor:pointer" 
                       ${actAttrs('openGlobalConflictModal', mod.id)}>
-                   ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
+                   ${c.category === 'Intra' ? (uiIcon('home', 12, { style: 'margin-right:4px' })) : (uiIcon('globe', 12, { style: 'margin-right:4px' }))}
                    ${c.category}
                 </span>
                 <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
@@ -316,7 +305,7 @@ export function getModDetailHTML(mod, ctx) {
 
       <!-- Tags Selection -->
       <div class="detail-section" id="detail-tags-container" style="margin-top:10px">
-        <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
+        <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px">${uiIcon('tag', 12)} Tags</label>
         <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
         <!-- A native <select> cannot draw a tag: an <option> is text, so the icon and the
              colour — the two things that tell tags apart at a glance — were invisible in the
@@ -325,7 +314,7 @@ export function getModDetailHTML(mod, ctx) {
           <button type="button" id="detail-tag-open" class="input-field"
                   style="width:100%;padding:6px;font-size:11px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px">
             <span>— ${t('detail.selectTag')} —</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div id="detail-tag-menu" class="bmm-tag-menu" style="display:none"></div>
         </div>
@@ -334,7 +323,7 @@ export function getModDetailHTML(mod, ctx) {
       <!-- Dependencies Section -->
       <div class="detail-section" style="margin-top:10px">
         <label class="detail-label" style="display:flex;align-items:center;gap:4px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            ${uiIcon('link', 12)}
             ${t('mod.dependencies')}
         </label>
         <div id="detail-deps-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
@@ -346,7 +335,7 @@ export function getModDetailHTML(mod, ctx) {
 
       <div class="detail-section" style="margin-top:12px">
         <label class="detail-label" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            ${uiIcon('shield', 14, { style: 'color:var(--accent)' })}
             <span style="font-weight:700; color:var(--text-primary); font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${t('settings.shaTitle')}</span>
         </label>
         <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px; border:1px solid var(--border); box-shadow:inset 0 0 10px rgba(0,0,0,0.1)">
@@ -361,10 +350,10 @@ export function getModDetailHTML(mod, ctx) {
             </div>
             <div style="display:flex; gap:6px">
                 <button class="btn btn-sm btn-icon" ${actAttrs('deleteModHashes', mod.id)} data-tasky="mods.sha.delete" data-tasky-icon="trash" style="background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    ${uiIcon('delete', 14)}
                 </button>
                 <button class="btn btn-sm btn-icon" id="btn-recalculate-sha" ${actAttrs('recalculateModSha', mod.id)} data-tasky="mods.sha.recalculate" data-tasky-icon="refresh" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    ${uiIcon('reapply', 14)}
                 </button>
             </div>
         </div>
@@ -372,7 +361,7 @@ export function getModDetailHTML(mod, ctx) {
 
       <div class="detail-section" style="margin-top:10px">
         <label class="detail-label" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          ${uiIcon('link', 14, { style: 'color:var(--accent)' })}
           <span style="font-weight:700; color:var(--text-primary); font-size:11px; text-transform:uppercase; letter-spacing:0.5px">Content ID</span>
         </label>
         <div id="content-id-box" style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px; border:1px solid var(--border); box-shadow:inset 0 0 10px rgba(0,0,0,0.1); transition:border-color 0.2s">
@@ -389,14 +378,11 @@ export function getModDetailHTML(mod, ctx) {
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
             ${hasContentId ? `
             <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}"  style="background:rgba(139,92,246,0.12);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
+              ${uiIcon('copy', 12)}
             </button>` : ''}
             ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
             <button id="btn-compute-content-id" class="btn btn-sm btn-icon" ${actAttrs('recalculateModSha', mod.id)}  style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              ${uiIcon('reapply', 14)}
             </button>` : ''}
           </div>
         </div>
@@ -432,11 +418,11 @@ export function getModDetailHTML(mod, ctx) {
         </div>
         <div class="detail-files-actions" style="margin-top:10px">
           <button class="btn btn-xs btn-secondary" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            ${uiIcon('refresh', 12)}
             ${escHtml(t('mod.checkUpdate') || 'Check for updates')}
           </button>
           <button class="btn btn-xs btn-secondary" ${actAttrsStop('bmmMenuOpenModUpdateConfig', mod.id)}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            ${uiIcon('settings', 12)}
             ${escHtml(t('mod.updateConfig') || 'Configure updates')}
           </button>
         </div>
@@ -453,18 +439,18 @@ export function getModDetailHTML(mod, ctx) {
           <span class="detail-files-count">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
           <div class="detail-files-actions">
             <button id="btn-browse-archive" class="btn btn-xs btn-secondary">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              ${uiIcon('download', 12)}
               ${t('mod.exploreArchive')}
             </button>
             <button id="btn-verify-mod-integrity" class="btn btn-xs btn-secondary">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              ${uiIcon('success', 12)}
               ${t('mod.verifyIntegrityDeep')}
             </button>
           </div>
         </div>
         ${mod.installed_files && mod.installed_files.length > 0 ? `
           <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">
-            ${mod.installed_files.slice(0, 50).map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
+            ${mod.installed_files.slice(0, 50).map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uiIcon('file', 12)}${escHtml(f)}</div>`).join('')}
             ${mod.installed_files.length > 50 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic">${t('mod.archiveMoreFiles', { count: mod.installed_files.length - 50 })}</div>` : ''}
           </div>
         ` : `<div style="font-size:12px;color:var(--text-muted);font-style:italic">${t('detail.noFiles')}</div>`}
@@ -472,12 +458,12 @@ export function getModDetailHTML(mod, ctx) {
 
   const linksContent = `
         <div style="font-size:10px;background:rgba(59,130,246,0.1);color:var(--accent);padding:6px 8px;border-radius:6px;margin-bottom:8px;line-height:1.4;border:1px solid rgba(59,130,246,0.2)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          ${uiIcon('info', 12, { style: 'vertical-align:middle;margin-right:2px;margin-top:-2px' })}
           <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs fonctionnent.'}</span>
         </div>
         ${ctx.repoLink ? `
         <div class="detail-repo-link">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex:none"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/><rect x="3" y="7" width="18" height="6" rx="1"/><rect x="3" y="15" width="18" height="6" rx="1"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none" aria-hidden="true"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/><rect x="3" y="7" width="18" height="6" rx="1"/><rect x="3" y="15" width="18" height="6" rx="1"/></svg>
           <span class="detail-repo-link-label">${escHtml(t('detail.fromRepo') || 'From server repo')}</span>
           <a href="#" class="detail-repo-link-url" data-open-url="${escAttr(ctx.repoLink)}" title="${escAttr(ctx.repoLink)}">${escHtml(ctx.repoLink)}</a>
         </div>` : ''}
@@ -505,7 +491,7 @@ export function getModDetailHTML(mod, ctx) {
               </select>
               <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
               <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" value="${escAttr(dl.label || '')}" placeholder="Label" data-index="${i}" />
-              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center">${uiIcon('close', 14)}</button>
             </div>
           `).join('')}
         </div>
@@ -531,18 +517,18 @@ export function getModDetailHTML(mod, ctx) {
           </span>
         </div>
       </div>
-      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;margin-left:auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;margin-left:auto">${uiIcon('close', 16)}</button>
     </div>
 
     <div class="detail-body" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:0 4px;overflow-y:auto;max-height:calc(100vh - 180px);scrollbar-width:thin">
-      ${renderSection('info', t('detail.sectionGeneral') || 'Général', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>', infoContent, true)}
-      ${renderSection('conflicts', t('detail.sectionConflicts') || 'Conflits', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', conflictsContent, false)}
-      ${renderSection('links', t('detail.sectionLinks') || 'Liens', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', linksContent, false)}
-      ${renderSection('updates', t('detail.sectionUpdates'), '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>', updatesContent, false)}
-      ${renderSection('files', t('detail.sectionFiles') || 'Files', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>', filesContent, false)}
+      ${renderSection('info', t('detail.sectionGeneral') || 'Général', (uiIcon('info', 12)), infoContent, true)}
+      ${renderSection('conflicts', t('detail.sectionConflicts') || 'Conflits', (uiIcon('warning', 12)), conflictsContent, false)}
+      ${renderSection('links', t('detail.sectionLinks') || 'Liens', (uiIcon('link', 12)), linksContent, false)}
+      ${renderSection('updates', t('detail.sectionUpdates'), (uiIcon('refresh', 12)), updatesContent, false)}
+      ${renderSection('files', t('detail.sectionFiles') || 'Files', (uiIcon('file', 12)), filesContent, false)}
 
       <button id="btn-save-detail" class="btn btn-primary" style="margin-top:12px;width:100%;height:38px;font-weight:700;flex-shrink:0">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 
+        ${uiIcon('save', 14, { style: 'margin-right:8px' })} 
         ${t('detail.save') || 'SAUVEGARDER'}
       </button>
     </div>

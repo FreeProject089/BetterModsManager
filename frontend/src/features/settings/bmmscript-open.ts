@@ -26,6 +26,7 @@ import { toast } from '../../ui/app.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { grantedPermissions } from './bmmpa-inspect.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /** The capabilities a task must be granted are RISK_KEYS (bmmpa-inspect.ts), read through
  *  `grantedPermissions` there. This screen kept its own list once, written before
@@ -149,7 +150,7 @@ function showReview(path: string, source: string, task: any): void {
     <div class="modal glass modal--lg">
         <div class="modal-header">
             <h3 class="modal-title">${escHtml(t('bms.title') || 'Run this script?')}</h3>
-            <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="modal-close" type="button" data-x>${uiIcon('close', 16)}</button>
         </div>
         <div class="modal-body">
             <div class="bms-file">${escHtml(fileName(path))}</div>

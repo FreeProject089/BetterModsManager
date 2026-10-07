@@ -6,6 +6,7 @@ import { invoke, saveFile, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { importReplayFromPath, playReplayJson } from './replay-watcher.js';
+import { uiIcon } from '../../ui/icons.js';
 
 interface CrashEntry { name: string; path: string; size: number; date: string; category: string; }
 interface SavedReplay { name: string; path: string; size: number; ts: number; }
@@ -50,7 +51,7 @@ export async function openCrashManager(): Promise<void> {
         <div class="modal glass modal--lg modal--tall crashmgr-modal">
             <div class="modal-header">
                 <h3 class="modal-title">${t('crashmgr.title') || 'Crash Reports & Sessions'}</h3>
-                <button type="button" class="modal-close" id="crashmgr-close" aria-label="${t('common.close') || 'Close'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="crashmgr-close" aria-label="${t('common.close') || 'Close'}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-toolbar crashmgr-bar">
             <div class="crashmgr-tabs">
@@ -126,7 +127,7 @@ export async function openCrashManager(): Promise<void> {
             const openByDefault = cat === 'Crash' || cat === 'Session';
             return `<details class="crashmgr-group" ${openByDefault ? 'open' : ''}>
                 <summary class="crashmgr-gsum">
-                    <svg class="crashmgr-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 6 15 12 9 18"/></svg>
+                    ${uiIcon('chevron-right', 14, { cls: 'crashmgr-chev' })}
                     <span class="crashmgr-dot ${catClass(cat)}"></span>
                     <span class="crashmgr-gtitle">${esc(cat)}</span>
                     <span class="crashmgr-gcount">${list.length}</span>
@@ -186,7 +187,7 @@ export async function openCrashManager(): Promise<void> {
                     : `<span class="crashmgr-file crashmgr-file-bin" data-tooltip="${esc(t('crashmgr.notText') || 'Not a readable text file')}">${esc(fn)}</span>`
                 ).join('');
                 detail.innerHTML = `
-                    ${r.hasSession ? `<button class="btn btn-xs btn-accent" data-play style="margin-bottom:8px">${t('crashmgr.playSession') || '▶ Play session'}</button>` : ''}
+                    ${r.hasSession ? `<button class="btn btn-xs btn-accent" data-play style="margin-bottom:8px">${uiIcon('play', 14)} ${t('crashmgr.playSession') || 'Play session'}</button>` : ''}
                     ${r.metadata ? `<h5>metadata</h5><pre class="crashmgr-pre">${esc(r.metadata)}</pre>` : ''}
                     ${r.logs ? `<h5>app logs (tail)</h5><pre class="crashmgr-pre">${esc(r.logs)}</pre>` : ''}
                     ${r.systemInfo ? `<details class="crashmgr-sub"><summary>system_info</summary><pre class="crashmgr-pre">${esc(r.systemInfo)}</pre></details>` : ''}
@@ -245,7 +246,7 @@ export async function openCrashManager(): Promise<void> {
                     <span class="crashmgr-meta">${new Date(s.ts).toLocaleString()} · ${fmtSize(s.size)}</span>
                 </div>
                 <div class="crashmgr-row-actions">
-                    <button class="btn btn-xs btn-accent" data-sact="play" data-p="${esc(s.path)}">${t('crashmgr.play') || '▶ Play'}</button>
+                    <button class="btn btn-xs btn-accent" data-sact="play" data-p="${esc(s.path)}">${uiIcon('play', 14)} ${t('crashmgr.play') || 'Play'}</button>
                     <button class="btn btn-xs btn-ghost" data-sact="export" data-p="${esc(s.path)}" data-n="${esc(s.name)}">${t('crashmgr.export') || 'Export'}</button>
                     <button class="btn btn-xs btn-ghost crashmgr-del" data-sact="delete" data-p="${esc(s.path)}">${t('common.delete') || 'Delete'}</button>
                 </div>

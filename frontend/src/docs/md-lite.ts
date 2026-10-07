@@ -36,6 +36,7 @@ import { replaceEmoji } from '../core/emoji.js';
 // Rendering is untrusted by default — see md-safe.ts for what that costs and why.
 import { sanitizeDocHtml, safeDocUrl } from './md-safe.js';
 import { isoIconUrl } from '../core/icon-cdn.js';
+import { uiIcon } from '../ui/icons.js';
 
 const CALLOUT_KIND: Record<string, string> = {
   note: 'info', info: 'info', hint: 'tip', tip: 'tip', success: 'success', check: 'success',
@@ -84,7 +85,7 @@ function esc(s: string): string {
 
 // One sheet of paper with a folded corner. Used by the `:::file` card and by the inline
 // `:file[…]` chip — written once, because two copies of an icon drift into two icons.
-const FILE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const FILE_SVG = (uiIcon('file', 16));
 
 /** `{href=… size=sm outline}` on an INLINE leaf. The block form has its own parser. */
 function leafAttrs(raw: string | undefined): Record<string, string> {
@@ -815,7 +816,7 @@ function renderDirective(dir: { name: string; label: string; attrs: Record<strin
     // handler reads. A player is a thing that follows a link.
     const raw = attrs.src || '';
     const src = safeDocUrl(raw) ? raw : '';
-    return `<figure class="dh-media"><button class="dh-replay" data-replay="${escRaw(src)}">▶ <span>${esc(label || attrs.title || 'Play recording')}</span></button></figure>`;
+    return `<figure class="dh-media"><button class="dh-replay" data-replay="${escRaw(src)}">${uiIcon('play', 14)} <span>${esc(label || attrs.title || 'Play recording')}</span></button></figure>`;
   }
   // unknown directive → render its body plainly so nothing is lost
   return inner();

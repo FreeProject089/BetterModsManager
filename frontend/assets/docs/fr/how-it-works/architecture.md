@@ -12,23 +12,28 @@ Chaque justification citée ci-dessous est un commentaire du code source, pas un
 ## Les trois couches
 
 ```mermaid
-flowchart TB
-    subgraph UI["UI — TypeScript (webview)"]
-        VIEWS["Vues &amp; composants"]
-        BRIDGE["pont api.ts<br/>(invoke)"]
+flowchart TD
+    subgraph UI["Interface (TypeScript, webview)"]
+        VIEWS["Vues et composants"] --> BRIDGE["pont api.ts<br/>invoke()"]
     end
-    subgraph CORE["Cœur — Rust (natif)"]
-        CMDS["~345 commandes<br/>(scan, déploiement, hash…)"]
-        WORK["Sous-processus worker<br/>(I/O lourdes)"]
-        HTTP["API locale + sidecar MCP"]
+    subgraph CORE["Cœur Rust (bmm.exe)"]
+        CMDS[["~585 commandes"]]
+        API[["API locale<br/>127.0.0.1 seulement"]]
+        WORK[["Worker de mods<br/>(--mod-worker)"]]
     end
-    OS["Système de fichiers · Réseau · OS"]
-
-    VIEWS --> BRIDGE
-    BRIDGE -- "invoke('cmd', args)" --> CMDS
-    CMDS --> WORK --> OS
-    CMDS --> HTTP
-    HTTP --> OS
+    MCP[["Sidecar MCP et CLI<br/>bmm-mcp-server"]]
+    subgraph DISK["Disque"]
+        DATA[("data.json")]
+        FILES[("Dossiers des mods et du jeu")]
+    end
+    BRIDGE -- "invoke" --> CMDS
+    API --> CMDS
+    MCP -- "HTTP + token" --> API
+    MCP -- "modifs hors ligne" --> DATA
+    CMDS --> DATA
+    CMDS -- "déploiement" --> WORK
+    WORK --> FILES
+    CMDS -- "scan, hash" --> FILES
 ```
 
 - **UI (TypeScript)** — tout ce que tu vois. Elle ne touche jamais au disque directement ; elle

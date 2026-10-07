@@ -32,6 +32,7 @@ import { sourceAccessHtml, wireSourceAccess } from '../core/source-access.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../core/catalog-publish.js';
 import { looksLikeCatalog } from '../core/catalog-bundle.js';
 import { raiseAboveAll } from './layer.js';
+import { uiIcon } from './icons.js';
 
 /** One thing a followed catalogue offers, flattened for showing in a list. */
 export interface BrowseEntry {
@@ -477,7 +478,7 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 <div class="cm-src">
                     <span class="cm-src-kind">${escHtml(u.startsWith('bundle:') ? t('cm.kindFile') : t('cm.kindLink'))}</span>
                     <span class="cm-src-url" title="${escAttr(u)}">${escHtml(sourceLabel(u))}</span>
-                    <button type="button" class="btn btn-xs btn-ghost" data-drop="${escAttr(u)}">×</button>
+                    <button type="button" class="btn btn-xs btn-ghost" data-drop="${escAttr(u)}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
                 </div>`).join('')
               : `<p class="cm-empty">${escHtml(t('cm.noSources'))}</p>`}
         </div>`;
@@ -567,7 +568,7 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                     <h3 class="modal-title">${escHtml(spec.title)}</h3>
                     ${spec.subtitle ? `<p class="cm-sub">${escHtml(spec.subtitle)}</p>` : ''}
                 </div>
-                <button class="modal-close" type="button" data-x><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button class="modal-close" type="button" data-x>${uiIcon('close', 16)}</button>
             </div>
             <div class="cm-tabs" role="tablist">
                 ${spec.browse ? `<button type="button" class="cm-tab${tab === 'browse' ? ' on' : ''}" data-tab="browse"

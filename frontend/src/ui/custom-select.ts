@@ -16,6 +16,7 @@
 //    focused themselves, so the focus never lands in a menu that is about to be detached.
 
 import { t } from '../core/i18n.js';
+import { uiIcon } from './icons.js';
 
 let _openCsel: any = null;
 let _cselSeq = 0; // unique ids for aria-controls / aria-activedescendant
@@ -103,7 +104,7 @@ function enhance(sel: HTMLSelectElement): void {
     // beside its label (the blog's tag dropdown shows the tag's logo, as BCWEB does).
     const triggerIcon = sel.dataset.cselTriggerIcon === 'on';
     trigger.innerHTML = (triggerIcon ? '<span class="bmm-csel-trigger-icon" hidden></span>' : '')
-        + `<span class="bmm-csel-label"></span><svg class="bmm-csel-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+        + `<span class="bmm-csel-label"></span>${uiIcon('chevron-down', 12, { cls: 'bmm-csel-arrow' })}`;
     ui.appendChild(trigger);
 
     // Menu lives in <body> while open; parked (detached) while closed.

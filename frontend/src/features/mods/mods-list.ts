@@ -14,6 +14,8 @@ import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { smartRank } from '../ai/ai-smart-state.js';
 import { runActivationJob } from '../../core/activation-jobs.js';
 import { applyCardActivity } from './mods-job-anim.js';
+import { uiIcon } from '../../ui/icons.js';
+import { askMissingHash } from './integrity-report.js';
 
 /**
  * One mod (and, for a disable, the mods it takes with it) through the app's activation queue
@@ -391,21 +393,13 @@ export function createModCard(mod) {
         
         toggle.checked = false;
         
-        const ok = await window.confirmCustom(
-          t('mods.sha.missingTitle') || 'Missing Integrity Hash',
-          (t('mods.sha.missingDesc') || 'The mod "{name}" does not have a valid SHA hash. For security reasons, it is recommended to calculate the hash before enabling.').replace('{name}', `<strong>${mName}</strong>`),
-          'warning',
-          { 
-            yesLabel: t('mods.sha.calculateAndEnable') || 'Calculate & Enable',
-            noLabel: t('mods.sha.enableAnyway') || 'Enable Anyway'
-          }
-        );
-        
-        if (ok) {
+        // Dismissing the question leaves the mod off (it used to mean "enable anyway").
+        const answer = await askMissingHash(mName);
+        if (answer === 'hash') {
            toast(t('mods.sha.calculating') || 'Calculating...', 'info');
            await invoke('recalculate_mod_sha', { modId: mId });
            toast(t('mods.sha.queued') || 'Mod added to calculation queue', 'success');
-        } else {
+        } else if (answer === 'anyway') {
            // Retry with bypass
            try {
                await runCardJob([{ id: mod.id, name: mod.name }], 'enable', true);
@@ -637,9 +631,9 @@ export function ensureModCancelContextMenu(): void {
       return el;
     };
 
-    const ICstop = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
-    const ICtrash = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>`;
-    const ICSpin  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+    const ICstop = `${uiIcon('error', 12)}`;
+    const ICtrash = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>`;
+    const ICSpin  = `${uiIcon('loader', 12, { style: 'animation:spin 1s linear infinite' })}`;
 
     const header = document.createElement('div');
     header.style.cssText = 'padding:5px 14px 8px;font-size:10px;color:var(--bmm-text-muted);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px;display:flex;align-items:center;gap:6px;';

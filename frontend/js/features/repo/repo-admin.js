@@ -5,6 +5,7 @@ import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { showConfirm, copyToClipboard } from './repo.js';
+import { uiIcon } from '../../ui/icons.js';
 let currentBans = { banned_ips: [], banned_keys: [] };
 let currentWhitelist = { enabled: false, ips: [], keys: [] };
 export function initRepoAdmin(elements) {
@@ -20,7 +21,7 @@ export function initRepoAdmin(elements) {
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        ${uiIcon('copy', 14)}
                     </button>
                     <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
                         ${t('common.delete')}
@@ -142,7 +143,7 @@ export function initRepoAdmin(elements) {
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        ${uiIcon('copy', 14)}
                     </button>
                     <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
                         ${t('common.delete')}

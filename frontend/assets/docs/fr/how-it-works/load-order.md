@@ -23,8 +23,11 @@ profil existant s'ouvre avec son ordre actuel, et rien ne change pour qui n'y to
 
 ```mermaid
 flowchart LR
-    A["1 · Enhanced Textures<br/>fournit data/sky.dds"] --> B["2 · Weather Overhaul<br/>fournit data/sky.dds"]
-    B --> DISK["sur le disque : le sky.dds de Weather Overhaul<br/>(appliqué plus tard, il gagne)"]
+    subgraph ORDER["Ordre d'activation"]
+        direction TB
+        A["1 · Enhanced Textures<br/>fournit data/sky.dds"] --> B["2 · Weather Overhaul<br/>fournit data/sky.dds"]
+    end
+    B -- "appliqué en dernier" --> DISK[("Dossier du jeu : le<br/>sky.dds de Weather Overhaul")]
 ```
 
 ---

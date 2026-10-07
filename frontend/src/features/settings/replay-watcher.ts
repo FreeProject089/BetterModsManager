@@ -11,6 +11,7 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
+import { uiIcon } from '../../ui/icons.js';
 
 const ON = 'bmm_watcher_on';
 const FULL = 'bmm_watcher_full';
@@ -409,7 +410,7 @@ export function openReplayList(): void {
           <span style="font-size:14px;font-weight:600;color:var(--text-primary,#e2e8f0)">${r.name}</span>
           <span style="font-size:12px;color:var(--text-muted,#8a8f98)">${new Date(r.at).toLocaleString()}</span>
         </button>
-        <button class="rw-del" data-i="${i}" style="color:var(--danger,#ef4444);font-size:16px;background:none;border:none;cursor:pointer;padding:4px;opacity:0.8;transition:opacity 0.2s" data-hover="opacity:1" data-hover-out="opacity:0.8" data-tooltip="${t('common.delete') || 'Supprimer'}">✖</button>
+        <button class="rw-del" data-i="${i}" style="color:var(--danger,#ef4444);font-size:16px;background:none;border:none;cursor:pointer;padding:4px;opacity:0.8;transition:opacity 0.2s" data-hover="opacity:1" data-hover-out="opacity:0.8" data-tooltip="${t('common.delete') || 'Supprimer'}" aria-label="${t('common.delete') || 'Supprimer'}">${uiIcon('delete', 14)}</button>
       </div>`).join('')
     : `<div style="font-size:13px;color:var(--text-muted,#8a8f98);padding:16px;text-align:center">${t('watcher.noImports') || "Aucun replay récent pour l'instant."}</div>`;
   overlay.innerHTML = `
@@ -479,7 +480,7 @@ async function playBundle(bundle: any): Promise<void> {
         <div id="rw-logs" style="width:320px;border-left:1px solid var(--bmm-border);overflow:auto;font-family:var(--font-mono,monospace);font-size:10.5px;padding:8px;color:var(--text-secondary)"></div>
       </div>
       <div class="modal-footer" style="flex-wrap:nowrap">
-        <button id="rw-play" class="btn btn-sm" style="width:34px;min-width:0">⏸</button>
+        <button id="rw-play" class="btn btn-sm" style="width:34px;min-width:0" aria-label="${t('common.pause')}">${uiIcon('pause', 14)}</button>
         <div style="position:relative;flex:1">
           <div id="rw-marks" style="position:relative;height:10px;margin-bottom:2px"></div>
           <input id="rw-seek" type="range" min="0" max="1000" value="0" style="width:100%;accent-color:var(--accent,#5b8cff)" />
@@ -586,7 +587,8 @@ async function playBundle(bundle: any): Promise<void> {
 
   let playing = true;
   const playBtn = overlay.querySelector('#rw-play') as HTMLButtonElement;
-  playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); playBtn.textContent = '⏸'; } else { rep.pause(); playBtn.textContent = '▶'; } };
+  const setPlayGlyph = (on: boolean) => { playBtn.innerHTML = uiIcon(on ? 'pause' : 'play', 14); playBtn.setAttribute('aria-label', on ? t('common.pause') : t('common.play')); };
+  playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); setPlayGlyph(true); } else { rep.pause(); setPlayGlyph(false); } };
   const close = () => {
     // Closing mid-export must end the capture, or the screen keeps being recorded after the
     // window that started it is gone — with nothing left on screen to stop it.
@@ -642,7 +644,7 @@ async function playBundle(bundle: any): Promise<void> {
     // and a clip that never stops is worse than one that ends a beat late.
     rep.play(0);
     playing = true;
-    playBtn.textContent = '⏸';
+    setPlayGlyph(true);
     const tail = 400;   // let the final frame land before cutting
     exportTimer = window.setTimeout(async () => {
       exportTimer = null;

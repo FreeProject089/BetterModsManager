@@ -224,6 +224,36 @@
 .shc-choice-text b { font-size: 13px; }
 .shc-choice-text span { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
 
+/* ── One check's report (#modal-integrity) and the missing-hash question ─────────────────────
+   features/mods/integrity-report.ts: the same pills, tiles and file lists as the dialog, so a
+   mismatch reads the same wherever it is reported. The tiles here are counts, not filters. */
+.shc-report { gap: 12px; }
+.shc-report-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.shc-report-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.shc-report-name { font-size: 14px; font-weight: 800; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.shc-report-meta { font-size: 12px; color: var(--bmm-text-secondary); }
+.shc-tiles.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shc-tile.is-static, .shc-tile.is-static:hover { cursor: default; background: var(--bmm-s02); border-color: var(--bmm-border); }
+.shc-tile.is-mod:not(.is-zero) .shc-tile-n { color: var(--shc-bad-ink); }
+.shc-tile.is-miss:not(.is-zero) .shc-tile-n { color: var(--shc-warn-ink); }
+.shc-tile.is-add:not(.is-zero) .shc-tile-n { color: var(--shc-accent-ink); }
+.shc-issues.is-add ul { border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border)); }
+.shc-lead { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
+.shc-ok {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border));
+    background: var(--bmm-success-dim);
+    color: var(--shc-ok-ink);
+}
+.shc-ok-t { font-size: 13.5px; font-weight: 800; }
+.shc-ok-d { margin-top: 2px; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+#integrity-open-center { display: inline-flex; align-items: center; gap: 6px; }
+#integrity-open-center[hidden] { display: none; }
+
 @media (max-width: 900px) {
     .shc-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .shc-row { grid-template-columns: 22px minmax(0, 1fr) auto; }

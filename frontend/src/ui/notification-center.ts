@@ -172,13 +172,13 @@ const ICONS: Record<NotifEntry['type'], string> = {
 
 function entryHTML(e: NotifEntry): string {
     return `<li class="nc-item ${e.type}${e.read ? '' : ' unread'}" data-id="${e.id}">
-        <span class="nc-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${ICONS[e.type] || ICONS.info}</svg></span>
+        <span class="nc-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[e.type] || ICONS.info}</svg></span>
         <span class="nc-body">
             <span class="nc-msg">${escHtml(e.message)}</span>
             <span class="nc-meta"><span class="nc-src">${escHtml(e.source)}</span><span class="nc-dot">·</span><time datetime="${new Date(e.ts).toISOString()}">${escHtml(relTime(e.ts))}</time></span>
         </span>
         <button class="nc-del" data-del="${e.id}" title="${escHtml(t('notif.remove') || 'Remove')}" aria-label="${escHtml(t('notif.remove') || 'Remove')}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
     </li>`;
 }
@@ -209,7 +209,7 @@ function panelHTML(): string {
                <p class="nc-empty-sub">${escHtml(t('notif.noMatchSub') || 'Try a different word, or clear the filter.')}</p>
            </div>`
         : `<div class="nc-empty">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
                <p>${escHtml(t('notif.empty') || 'Nothing yet.')}</p>
                <p class="nc-empty-sub">${escHtml(t('notif.emptySub') || 'Everything BMM tells you will be kept here.')}</p>
            </div>`;

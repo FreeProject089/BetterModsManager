@@ -12,6 +12,7 @@ import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
 
 interface DiscoveredMod {
     id: string;
@@ -75,8 +76,9 @@ async function discover() {
         const close = document.createElement('button');
         close.className = 'btn btn-ghost btn-sm';
         close.style.cssText = 'float:right;margin:-2px 0 0 8px;padding:2px 8px;line-height:1';
-        close.textContent = '×';
+        close.innerHTML = uiIcon('close', 14);
         close.title = t('common.close') || 'Close';
+        close.setAttribute('aria-label', close.title);
         close.addEventListener('click', () => { box.textContent = ''; box.style.display = 'none'; });
         box.append(close);
 

@@ -11,20 +11,20 @@ Every guard below is a real one in the code, most of them tagged with the weakne
 ## Trust boundaries
 
 ```mermaid
-flowchart TB
-    subgraph Untrusted
+flowchart TD
+    subgraph UNTRUSTED["Untrusted"]
         WV["Webview UI"]
-        NET["Remote catalogs / repos / archives"]
+        NET["Remote catalogs,<br/>repos, archives"]
         PAGE["Custom pages"]
-        PLUG["Plugins (via the local API)"]
+        PLUG["Plugins"]
     end
-    subgraph Trusted["Trusted core (Rust)"]
-        GUARD["Path guards · name sanitising ·<br/>token identity · signature checks"]
-        CORE["Filesystem &amp; process ops"]
+    subgraph TRUSTED["Trusted core (Rust)"]
+        GUARD["Guards: paths, names,<br/>tokens, signatures"]
+        CORE[["File and<br/>process operations"]]
     end
-    WV -- "invoke(args)" --> GUARD
+    WV -- "invoke" --> GUARD
     NET -- "downloaded bytes" --> GUARD
-    PAGE -- "via the permission broker" --> GUARD
+    PAGE -- "via the broker" --> GUARD
     PLUG -- "Bearer token" --> GUARD
     GUARD --> CORE
 ```
@@ -82,12 +82,15 @@ setting, rather than assuming the narrow scope is always in force.
 ## The local API resolves identity from the token, never a header
 
 ```mermaid
-flowchart LR
-    REQ["Request<br/>Authorization: Bearer …"] --> LOOK["look the token up<br/>in the plugin-token map"]
-    HDR["X-BMM-Plugin-Id header"] -. "ignored for identity" .-> LOOK
-    LOOK --> PERM{"does that plugin<br/>hold the permission?"}
-    PERM -- no --> F403["403, naming the missing grant"]
-    PERM -- yes --> RUN["run it"]
+flowchart TD
+    REQ(["Request with<br/>Bearer token"]) --> ADMIN{"Admin token?"}
+    ADMIN -- "yes" --> RUN(["Run it"])
+    ADMIN -- "no" --> LOOK{"Token in the<br/>plugin-token map?"}
+    HDR["X-BMM-Plugin-Id header"] -. "ignored" .-> LOOK
+    LOOK -- "no" --> F401(["401"])
+    LOOK -- "yes" --> PERM{"That plugin holds<br/>the permission?"}
+    PERM -- "yes" --> RUN
+    PERM -- "no" --> F403(["403 naming<br/>the missing grant"])
 ```
 
 > *"CWE-862/863: the API resolves a caller's identity (and thus permissions) from THIS map by token,
@@ -143,14 +146,16 @@ against the **compiled** output *"so it exercises exactly what ships"*.
 ## Updates fail closed
 
 ```mermaid
-flowchart LR
-    PKG["Update package"] --> KEY{"publisher key<br/>supplied?"}
-    KEY -- yes --> SIG{"valid Ed25519<br/>signature for that key?"}
-    SIG -- no --> REJ["refused BEFORE the<br/>install dir is touched"]
-    SIG -- yes --> SNAP["snapshot"] --> INST["install"]
-    INST --> ERR{"error?"}
-    ERR -- yes --> RB["roll back"]
-    ERR -- no --> OK["done"]
+flowchart TD
+    PKG(["BetterInstaller<br/>package"]) --> KEY{"Publisher key<br/>pinned?"}
+    KEY -- "yes" --> SIG{"Valid Ed25519<br/>signature?"}
+    KEY -- "no (legacy)" --> SNAP["Snapshot the<br/>install dir"]
+    SIG -- "no" --> REJ(["Refused, install<br/>dir untouched"])
+    SIG -- "yes" --> SNAP
+    SNAP --> INST["Extract the<br/>new package"]
+    INST --> ERR{"Error?"}
+    ERR -- "yes" --> RB(["Snapshot restored"])
+    ERR -- "no" --> OK(["Snapshot dropped"])
 ```
 
 > *"the package MUST carry a valid Ed25519 signature for that key or the update is refused *before*

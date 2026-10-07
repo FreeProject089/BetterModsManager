@@ -39,17 +39,29 @@ the buffer, the pause and the parallelism: see [Presets](doc-page:how-it-works/r
 ## Never saturate the machine
 
 ```mermaid
-flowchart TB
-    JOB["Deploy / copy job<br/>(Balanced preset)"] --> SYS{"game or backup folder<br/>on the OS drive?"}
-    SYS -- yes --> ONE["one file at a time"]
-    SYS -- no --> TWO["the Deploy pool<br/>2 threads (Smart I/O on)"]
-    ONE --> LIM{"a MB/s limit<br/>on this disk?"}
-    TWO --> LIM
-    LIM -- yes --> THR["throttled path<br/>128 KiB, shared disk budget"]
-    LIM -- no --> SM["Smart I/O path<br/>1 MiB + budget yield"]
+flowchart TD
+    subgraph FAN["How many files at once"]
+        SYS{"Game or backup folder<br/>on the OS drive?"}
+        SYS -- "yes" --> ONE["One at a time"]
+        SYS -- "no" --> SIO{"Smart I/O on?"}
+        SIO -- "yes" --> POOL[["Deploy pool,<br/>2 threads"]]
+        SIO -- "no" --> GLOB[["Global rayon pool"]]
+    end
+    subgraph EACHF["How each file is copied"]
+        LIM{"MB/s limit on the<br/>destination disk?"}
+        LIM -- "yes" --> THR["Throttled: 128 KiB,<br/>shared disk budget"]
+        LIM -- "no" --> SIO2{"Smart I/O on?"}
+        SIO2 -- "yes" --> SM["1 MiB chunks,<br/>yield every 16 MiB"]
+        SIO2 -- "no" --> FULL["Plain std::fs::copy"]
+    end
+    JOB(["Deploy, Balanced preset"]) --> SYS
+    ONE --> LIM
+    POOL --> LIM
+    GLOB --> LIM
 ```
 
-Under Balanced, a deploy copies on **2 threads**, so file copies never saturate every CPU core,
+Under Balanced with Smart I/O on, a deploy copies on **2 threads** (with Smart I/O off, on the
+capped global pool), so file copies never saturate every CPU core,
 which is what freezes a window into *Not responding*. And if either the destination folder or the
 backup folder lives on the OS drive, it copies **one file at a time**, so Windows itself stays
 responsive during a big mod copy. **Quiet** copies one file at a time everywhere; **Everything for
@@ -71,11 +83,23 @@ small strings (paths, hash entries) during normal use.
 ## Getting the heavy work out of the window
 
 ```mermaid
-flowchart LR
-    UI["Main window"] -- "spawn --mod-worker" --> W["Worker process<br/>BACKGROUND IO priority"]
-    W --> OS[("Game / mods / backup")]
-    UI -- "cancel = taskkill /T" --> W
-    W -. "exit 0 / non-zero / 3 = cancelled" .-> UI
+sequenceDiagram
+    participant A as BMM app
+    participant W as Worker process
+    participant U as Undo worker
+    participant D as Game and backup folders
+    A->>W: start --mod-worker with an input file
+    W->>D: apply or unapply, background priority
+    W-->>A: bytes written, on stdout
+    alt finished
+        W-->>A: exit 0 and the output file
+    else cancelled
+        A->>W: taskkill /T (or the worker exits 3)
+        A->>U: start the inverse operation
+        U->>D: revert the partial copy
+    else failed
+        W-->>A: another exit code and the error
+    end
 ```
 
 Big applies and unapplies do not run in the app at all. They run in a **separate process** — the

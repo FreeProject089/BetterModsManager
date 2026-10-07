@@ -20,10 +20,11 @@ import { ensureAiCss } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
+import { uiIcon } from '../../ui/icons.js';
 
 const CARD_ID = 'settings-ai-section';
 
-const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const IC = (uiIcon('ai', 16));
 
 type Tab = 'general' | 'answers' | 'tasks' | 'api';
 const TABS: Tab[] = ['general', 'answers', 'tasks', 'api'];

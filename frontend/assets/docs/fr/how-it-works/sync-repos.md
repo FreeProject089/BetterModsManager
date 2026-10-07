@@ -59,12 +59,15 @@ les cas en HTTP — **le HTTPS est fortement recommandé**.
     détection des mises à jour, un téléchargement direct ne portant aucune version.
 
 ```mermaid
-flowchart LR
-    PROF["Profil"] --> COPY["Copier les fichiers de mods<br/>dans le dossier de sortie"]
-    COPY --> GEN["Construire repo.json<br/>(fichiers + SHA-256 + hachages de blocs)"]
-    GEN --> SIGN["Signer (author_id ed25519)"]
-    SIGN --> SERVE["Servir en HTTP(S)<br/>(mini-serveur ou autonome)"]
-    SERVE --> LINK["Partager le lien"]
+flowchart TD
+    PROF(["Profil"]) --> COPY["Copier ou zipper<br/>les fichiers de mods"]
+    COPY --> GEN["Construire repo.json<br/>SHA-256 + hachages de blocs"]
+    GEN --> SIGN["Signer le manifeste<br/>(Ed25519)"]
+    SIGN --> OUT[("Dossier de sortie")]
+    OUT --> HOW{"Qui le sert ?"}
+    HOW -- "BMM" --> MINI[["Serveur intégré"]]
+    HOW -- "ta machine" --> STAND["Serveur autonome"]
+    HOW -- "tout hébergeur" --> STATIC["Hébergement web statique"]
 ```
 
 ### Contrôle d'accès (auto-hébergé)
@@ -88,14 +91,14 @@ qu'il possède.
 
 ```mermaid
 sequenceDiagram
-    participant Host as Dépôt serveur
     participant Client as BMM de l'abonné
-    Client->>Host: GET repo.json (fichiers + SHA-256)
+    participant Host as Dépôt serveur
+    Client->>Host: GET repo.json (mot de passe, identité)
     Host-->>Client: manifeste
-    Note over Client: ignorer les fichiers dont le SHA-256 correspond déjà
-    Client->>Host: pour un fichier modifié, demander seulement les blocs de 4 Mo différents (HTTP Range)
-    Host-->>Client: ces blocs
-    Note over Client: vérifier le SHA-256 de chaque fichier, puis déployer
+    Note over Client: refuser les chemins dangereux, ignorer les fichiers dont le SHA-256 correspond
+    Client->>Host: fichier modifié : blocs de 4 Mo différents (Range), sinon fichier entier
+    Host-->>Client: blocs ou fichier
+    Note over Client: re-hacher chaque fichier, puis mettre à jour la bibliothèque et le profil
 ```
 
 Une **chaîne de version** sur le dépôt pilote la *détection* des mises à jour : BMM signale un mod

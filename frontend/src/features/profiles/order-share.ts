@@ -14,6 +14,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { installFocusTrap } from '../../ui/focus-trap.js';
 import { type ImportPlan, landings, planCounts, pastedKind } from './order-share-model.js';
+import { uiIcon } from '../../ui/icons.js';
 
 type Notify = (message: string, type?: string, duration?: number) => void;
 
@@ -38,7 +39,7 @@ export async function copy(text: string): Promise<boolean> {
     return ok;
 }
 
-const CLOSE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+const CLOSE = (uiIcon('close', 20));
 
 /** The order view's stylesheet (same id as load-order.ts, so it is linked once). */
 function ensureCss(): void {

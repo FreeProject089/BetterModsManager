@@ -20,15 +20,15 @@ governor exists so that one number means one number.
 ## The shape of it
 
 ```mermaid
-flowchart TB
-    OP["A heavy operation<br/>(deploy, install, hash...)"] --> T["Take a ticket for its kind<br/>(waits for a free slot)"]
-    T --> P["Resolve the policy<br/>for this kind on this disk"]
-    P --> POOL["Run on the kind's<br/>thread pool"]
-    P --> COPY["Copy through the<br/>governed copy"]
-    COPY --> BUCKET[("One speed budget<br/>per disk")]
-    T -. "checkpoint between files<br/>and between chunks" .-> CP{"cancelled? paused?<br/>background behind foreground?"}
-    CP -- "go on" --> COPY
-    CP -- "cancelled" --> STOP["Stop, remove the<br/>half-written file"]
+flowchart TD
+    OP(["Heavy operation"]) --> T[["Ticket for its kind<br/>(waits for a slot)"]]
+    T --> P["Resolve the policy:<br/>preset + disk rules"]
+    P --> RUN["Run on the kind's pool<br/>or one at a time"]
+    RUN --> CP{"Checkpoint<br/>(holds while paused)"}
+    CP -- "go on" --> COPY["Governed copy,<br/>chunk by chunk"]
+    CP -- "cancelled" --> STOP(["Stop, partial<br/>file removed"])
+    COPY --> BUCKET[("Disk speed budget")]
+    COPY -. "next chunk<br/>or file" .-> CP
 ```
 
 Three ideas carry the whole design:
@@ -91,14 +91,14 @@ While it runs, an operation calls a **checkpoint** between files, and the govern
 between chunks. A checkpoint asks three questions, in this order:
 
 ```mermaid
-flowchart LR
-    C["Checkpoint"] --> X{"Cancelled?"}
-    X -- yes --> E["Stop.<br/>The caller removes<br/>its partial output"]
-    X -- no --> PZ{"Paused, this ticket<br/>or everything?"}
-    PZ -- yes --> W1["Wait until resumed<br/>or cancelled"]
-    PZ -- no --> BG{"Background work while<br/>foreground work runs?"}
-    BG -- yes --> W2["Wait until the<br/>foreground work ends"]
-    BG -- no --> GO["Carry on"]
+flowchart TD
+    C(["Checkpoint"]) --> X{"Cancelled?"}
+    X -- "yes" --> E(["Stop: the caller removes<br/>its partial output"])
+    X -- "no" --> PZ{"Paused: this ticket<br/>or everything?"}
+    PZ -- "yes" --> W1["Wait until resumed<br/>or cancelled"]
+    PZ -- "no" --> BG{"Background work while<br/>foreground work runs?"}
+    BG -- "yes" --> W2["Wait until the<br/>foreground work ends"]
+    BG -- "no" --> GO(["Carry on"])
     W1 --> C
     W2 --> C
 ```
@@ -146,10 +146,10 @@ sets it:
 
 ```mermaid
 flowchart LR
-    A["This disk,<br/>this operation"] -->|"not set"| B["This disk,<br/>all operations"]
-    B -->|"not set"| C["All disks,<br/>this operation"]
-    C -->|"not set"| D["All disks,<br/>all operations"]
-    D -->|"not set"| E["The preset"]
+    A["This disk,<br/>this operation"] -- "not set" --> B["This disk,<br/>all operations"]
+    B -- "not set" --> C["All disks,<br/>this operation"]
+    C -- "not set" --> D["All disks,<br/>all operations"]
+    D -- "not set" --> E(["The preset"])
 ```
 
 Field by field means a rule that only sets *how many at once* for hashing on `D:` still inherits
@@ -224,10 +224,10 @@ sequenceDiagram
     participant B as Copy 2 (backup)
     participant K as Budget for d:\ (40 MB/s)
     participant D as Disk d:\
-    A->>K: may I write 1 MiB?
+    A->>K: may I write 128 KiB?
     K-->>A: yes
     A->>D: write
-    B->>K: may I write 1 MiB?
+    B->>K: may I write 128 KiB?
     K-->>B: wait until the budget refills
     B->>D: write
     Note over K,D: the two copies together stay at 40 MB/s
@@ -249,11 +249,12 @@ an NVMe disk is paced by the NVMe disk's rule.
 Game mode is "a game is running: get out of the way". While it is on:
 
 ```mermaid
-flowchart TB
-    GM{"Game mode on?"} -- no --> N["Every kind: the preset in force"]
-    GM -- yes --> Q["The preset becomes Quiet"]
-    Q --> BG["the kinds you ticked (hash, maintenance by default):<br/>PAUSED until game mode ends"]
-    Q --> FG["deploy, install, backup and every unticked kind:<br/>SLOWED, never paused"]
+flowchart TD
+    GM{"Game mode on?"} -- "no" --> N["Every kind: the<br/>preset in force"]
+    GM -- "yes" --> Q["The preset in force<br/>becomes Quiet"]
+    Q --> TICK{"Kind ticked in<br/>the Game mode tab?"}
+    TICK -- "yes" --> PAUSED["Paused until<br/>game mode ends"]
+    TICK -- "no" --> SLOW["Slowed by Quiet,<br/>never paused"]
 ```
 
 Which kinds wait is yours to choose in the Game mode tab: hashing and maintenance (disk
@@ -319,14 +320,14 @@ look every 5 seconds is about 0.25 % of one processor core.
 ### Who wins
 
 ```mermaid
-flowchart TB
-    S["Which preset is in force?"] --> T1{"A task preset that may<br/>override game mode?"}
-    T1 -- yes --> R1["That task's preset"]
-    T1 -- no --> G{"Game mode on?"}
-    G -- yes --> R2["Quiet"]
-    G -- no --> T2{"A task preset?"}
-    T2 -- yes --> R3["That task's preset"]
-    T2 -- no --> R4["Your preset"]
+flowchart TD
+    S(["Which preset is in force?"]) --> T1{"Task preset allowed to<br/>override game mode?"}
+    T1 -- "yes" --> R1["That task's preset"]
+    T1 -- "no" --> G{"Game mode on?"}
+    G -- "yes" --> R2["Quiet"]
+    G -- "no" --> T2{"A task preset?"}
+    T2 -- "yes" --> R3["That task's preset"]
+    T2 -- "no" --> R4["Your preset"]
 ```
 
 Your manual choice decides whether game mode is on; game mode beats a preset a task asked for,
@@ -363,13 +364,13 @@ reads and writes in MB/s), the preset in force and why, game mode, and the queue
 
 ```mermaid
 sequenceDiagram
-    participant UI as Storage Manager card
+    participant UI as Storage Manager
     participant S as Sampler (1 Hz)
-    UI->>S: subscribe (the card is on screen)
+    UI->>S: resources_subscribe (open, live tab, window visible)
     loop once a second, while anyone is subscribed
         S-->>UI: bmm://governor-tick (CPU, MB/s, queue, preset, game mode)
     end
-    UI->>S: unsubscribe (modal closed or card re-drawn)
+    UI->>S: resources_unsubscribe (closed, other tab or window hidden)
     Note over S: no subscriber: the thread ends,<br/>not a single counter is read
 ```
 

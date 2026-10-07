@@ -3,6 +3,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { explainSsh, type SshTarget } from './repo-ssh.js';
+import { uiIcon } from '../../ui/icons.js';
 
 // Walking a server's folders, once, for everybody who needs to.
 //
@@ -67,9 +68,9 @@ function crumbs(path: string): { label: string; path: string }[] {
     return out;
 }
 
-const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
-const FILE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-const UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
+const FILE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>';
 
 /**
  * Browse `target` and resolve to the chosen folder, or `null` if it was cancelled.
@@ -96,7 +97,7 @@ export function browseRemoteFolder(
             <h3 class="modal-title">${escHtml(t('sshbr.title'))}</h3>
             <div class="ssh-br-who">${escHtml(`${target.user}@${target.host}`)}${target.port && target.port !== 22 ? escHtml(`:${target.port}`) : ''}</div>
           </div>
-          <button class="modal-close" id="sshbr-x" aria-label="${escAttr(t('common.close'))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <button class="modal-close" id="sshbr-x" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 20)}</button>
         </div>
         <div class="modal-body ssh-br-body">
           <div class="ssh-br-crumbs" id="sshbr-crumbs"></div>

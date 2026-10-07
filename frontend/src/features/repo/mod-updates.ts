@@ -17,6 +17,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { appState } from '../../core/state.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { uiIcon } from '../../ui/icons.js';
 
 let _checking = false;
 let _autoTimer: any = null;
@@ -249,7 +250,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
                     <div style="display:flex;align-items:center;gap:7px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" style="flex-shrink:0;"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0;" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
                         <span style="font-weight:700;font-size:12.5px;color:var(--bmm-warning);">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
                     </div>
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-top:5px;">${escHtml(m.name)}</div>
@@ -282,14 +283,11 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
         <div class="modal glass modal--md">
             <div class="modal-header">
                 <div class="bms-icon bms-icon--ok" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                        <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                    </svg>
+                    ${uiIcon('refresh', 18)}
                 </div>
                 <div class="bms-titles"><h2 class="modal-title">${updates.length === 0 && reDownloadSources.length > 0 ? (t('repo.directReDownloadTitle') || 'Direct download') : (t('repo.updatesTitle') || 'Mod updates available')}</h2></div>
                 ${updates.length > 0 ? `<span class="bms-chip bms-chip--ok"><b>${updates.length}</b></span>` : ''}
-                <button type="button" class="modal-close" id="mod-updates-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="mod-updates-close" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body" style="display:block">
                 ${updates.length > 0 ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.updatesDesc') || 'These installed mods have a newer version in a repository they are linked to. Updating re-syncs only the changed files.'}</p>` : ''}
@@ -466,7 +464,7 @@ export function openModUpdateConfig(modId: string): void {
                 <input type="checkbox" class="muc-src-protected" ${s.protected ? 'checked' : ''} />
                 ${escHtml(t('repo.cfgProtected'))}
             </label>
-            <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:var(--bmm-danger);cursor:pointer;font-weight:700;">✕</button>
+            <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:var(--bmm-danger);cursor:pointer;font-weight:700;" aria-label="${escAttr(t('common.remove') || 'Remove')}">${uiIcon('close', 14)}</button>
         </div>`;
     };
 
@@ -477,7 +475,7 @@ export function openModUpdateConfig(modId: string): void {
                     <h2 class="modal-title">${t('repo.cfgTitle') || 'Update sources'}</h2>
                     <p class="bms-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(mod.name)}</p>
                 </div>
-                <button type="button" class="modal-close" id="muc-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="muc-close" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body" style="display:block">
                 <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.cfgDesc') || 'Link this mod to one or more repos so BMM can detect updates for it. The repo_mod_id is the mod\'s stable id inside that repo (visible in "Update an existing repo").'}</p>

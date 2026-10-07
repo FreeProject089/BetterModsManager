@@ -16,6 +16,7 @@ import { initLayaTelemetry } from './laya-telemetry.js';
 import { categoryOf, parseStoredCategories, allOn, anyOn, TELEMETRY_CATEGORIES, type CategoryChoice, type TelemetryCategory } from './telemetry-model.js';
 import { openModal } from '../ui/modal-shell.js';
 import { raiseAboveAll } from '../ui/layer.js';
+import { uiIcon } from '../ui/icons.js';
 
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
@@ -1270,7 +1271,7 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
       <div class="modal glass modal--md tc-modal" role="dialog" aria-modal="true" aria-labelledby="tc-title">
         <div class="modal-header">
             <h2 class="modal-title tc-title" id="tc-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                ${uiIcon('activity', 20, { style: 'color:var(--accent)' })}
                 ${escHtml(t('analytics.consentTitle'))}
             </h2>
         </div>

@@ -20,6 +20,7 @@ import { hydrateMdLite } from './md-hydrate.js';
 import { BMMS_REFERENCE } from './bmms-reference.gen.js';
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 import { mermaidTheme, fitDiagram } from './md-mermaid.js';
+import { uiIcon } from '../ui/icons.js';
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
 /**
@@ -132,7 +133,7 @@ const ICON = {
     clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>',
     check: '<polyline points="20 6 9 17 4 12"/>',
 };
-const svg = (name, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[name] || ''}</svg>`;
+const svg = (name, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name] || ''}</svg>`;
 // ── the documentation content ────────────────────────────────────────────────────
 const CATEGORIES = [
     // ═══════════════════════ USER PART ═══════════════════════
@@ -3581,14 +3582,14 @@ function pageReaderView(path) {
         <div class="dh-aside-box${asideFolded('toc') ? ' is-folded' : ''}" data-box="toc">
           <button type="button" class="dh-aside-h" data-fold="toc"
                   aria-expanded="${!asideFolded('toc')}">
-            <span>${tr({ en: 'On this page', fr: 'Sur cette page' })}</span><svg class="dh-fold-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <span>${tr({ en: 'On this page', fr: 'Sur cette page' })}</span>${uiIcon('chevron-down', 12, { cls: 'dh-fold-chev' })}
           </button>
           <div class="dh-toc" data-toc></div>
         </div>
         <div class="dh-aside-box${asideFolded('nav') ? ' is-folded' : ''}" data-box="nav">
           <button type="button" class="dh-aside-h" data-fold="nav"
                   aria-expanded="${!asideFolded('nav')}">
-            <span>${tr({ en: 'Documentation', fr: 'Documentation' })}</span><svg class="dh-fold-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <span>${tr({ en: 'Documentation', fr: 'Documentation' })}</span>${uiIcon('chevron-down', 12, { cls: 'dh-fold-chev' })}
           </button>
           <div class="dh-nav">${navList(path)}</div>
         </div>

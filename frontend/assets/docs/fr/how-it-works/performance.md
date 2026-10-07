@@ -41,18 +41,29 @@ ce qu'il dit. Les autres presets changent le tampon, la pause et le parallélism
 ## Ne jamais saturer la machine
 
 ```mermaid
-flowchart TB
-    JOB["Tâche de déploiement / copie<br/>(preset Équilibré)"] --> SYS{"dossier du jeu ou de sauvegarde<br/>sur le disque système ?"}
-    SYS -- oui --> ONE["un fichier à la fois"]
-    SYS -- non --> TWO["le pool Déploiement<br/>2 threads (Smart I/O activé)"]
-    ONE --> LIM{"une limite Mo/s<br/>sur ce disque ?"}
-    TWO --> LIM
-    LIM -- oui --> THR["chemin bridé<br/>128 Kio, budget du disque partagé"]
-    LIM -- non --> SM["chemin Smart I/O<br/>1 Mio + yield budgété"]
+flowchart TD
+    subgraph FAN["Combien de fichiers à la fois"]
+        SYS{"Dossier du jeu ou de sauvegarde<br/>sur le disque système ?"}
+        SYS -- "oui" --> ONE["Un à la fois"]
+        SYS -- "non" --> SIO{"Smart I/O activé ?"}
+        SIO -- "oui" --> POOL[["Pool Déploiement,<br/>2 threads"]]
+        SIO -- "non" --> GLOB[["Pool rayon global"]]
+    end
+    subgraph EACHF["Comment chaque fichier est copié"]
+        LIM{"Limite Mo/s sur le<br/>disque de destination ?"}
+        LIM -- "oui" --> THR["Bridé : 128 Kio,<br/>budget du disque partagé"]
+        LIM -- "non" --> SIO2{"Smart I/O activé ?"}
+        SIO2 -- "oui" --> SM["Blocs de 1 Mio,<br/>pause toutes les 16 Mio"]
+        SIO2 -- "non" --> FULL["Simple std::fs::copy"]
+    end
+    JOB(["Déploiement, preset Équilibré"]) --> SYS
+    ONE --> LIM
+    POOL --> LIM
+    GLOB --> LIM
 ```
 
-Sous Équilibré, un déploiement copie sur **2 threads**, pour que les copies de fichiers ne saturent
-jamais tous les cœurs CPU, ce qui fige une fenêtre en *Ne répond pas*. Et si le dossier de
+Sous Équilibré avec Smart I/O activé, un déploiement copie sur **2 threads** (Smart I/O désactivé,
+sur le pool global plafonné), pour que les copies de fichiers ne saturent jamais tous les cœurs CPU, ce qui fige une fenêtre en *Ne répond pas*. Et si le dossier de
 destination ou le dossier de sauvegarde vit sur le disque système, il copie **un fichier à la fois**,
 pour que Windows lui-même reste réactif pendant une grosse copie de mods. **Silencieux** copie un
 fichier à la fois partout ; **Tout pour BMM** lève ces deux plafonds, sauf sur un disque dur.
@@ -73,11 +84,23 @@ et libère énormément de petites chaînes (chemins, entrées de hash) en usage
 ## Sortir le travail lourd de la fenêtre
 
 ```mermaid
-flowchart LR
-    UI["Fenêtre principale"] -- "spawn --mod-worker" --> W["Processus worker<br/>priorité I/O BACKGROUND"]
-    W --> OS[("Jeu / mods / sauvegarde")]
-    UI -- "annuler = taskkill /T" --> W
-    W -. "sortie 0 / non nulle / 3 = annulé" .-> UI
+sequenceDiagram
+    participant A as App BMM
+    participant W as Processus worker
+    participant U as Worker d'annulation
+    participant D as Dossiers du jeu et de sauvegarde
+    A->>W: lancement de --mod-worker avec un fichier d'entrée
+    W->>D: application ou retrait, priorité d'arrière-plan
+    W-->>A: octets écrits, sur stdout
+    alt terminé
+        W-->>A: sortie 0 et le fichier de sortie
+    else annulé
+        A->>W: taskkill /T (ou le worker sort avec 3)
+        A->>U: lancer l'opération inverse
+        U->>D: défaire la copie partielle
+    else échec
+        W-->>A: autre code de sortie et l'erreur
+    end
 ```
 
 Les grosses applications et désapplications ne tournent pas du tout dans l'app. Elles tournent dans un

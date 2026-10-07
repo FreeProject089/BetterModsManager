@@ -13,6 +13,7 @@ import { registerSearchProvider, searchAll, type SearchHit, type HitKind } from 
 import { learnMore, LEARN_MORE_EVENT } from './learn-more.js';
 import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
 import { ORDER_KEYS, orderKeysActive, orderKeyRun, LIB_ORDER_KEYS, libOrderKeysActive, libOrderKeyRun } from '../features/profiles/load-order-keys.js';
+import { uiIcon } from '../ui/icons.js';
 
 type L = { en: string; fr: string };
 const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
@@ -224,7 +225,7 @@ export function openCommandPalette() {
   overlay.innerHTML = `
     <div class="cp-box" role="dialog" aria-modal="true">
       <div class="cp-search">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        ${uiIcon('search', 18)}
         <input class="cp-input" type="text" autocomplete="off" spellcheck="false" placeholder="${tr({ en: 'Type a command or search…', fr: 'Tapez une commande ou recherchez…' })}">
         <div class="cp-modes">
           <button class="cp-mode ${pMode === 'classic' ? 'on' : ''}" data-mode="classic">${tr({ en: 'Classic', fr: 'Classique' })}</button>
@@ -288,7 +289,7 @@ export function renderShortcutsManager(container: HTMLElement) {
       <span class="sk-label">${tr(c.title)}</span>
       <button class="sk-chord ${ch ? '' : 'sk-none'}" data-act="record">${ch ? chordToStr(ch) : tr({ en: 'Not set', fr: 'Non défini' })}</button>
       <button class="sk-reset" data-act="reset" data-tooltip="${tr({ en: 'Reset to default', fr: 'Réinitialiser' })}">⟲</button>
-      <button class="sk-clear" data-act="clear" data-tooltip="${tr({ en: 'Clear', fr: 'Effacer' })}">✕</button>
+      <button class="sk-clear" data-act="clear" data-tooltip="${tr({ en: 'Clear', fr: 'Effacer' })}" aria-label="${tr({ en: 'Clear', fr: 'Effacer' })}">${uiIcon('close', 14)}</button>
     </div>`;
   };
   container.innerHTML = groups.map((g) => {

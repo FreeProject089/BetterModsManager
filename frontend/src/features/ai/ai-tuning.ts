@@ -17,6 +17,7 @@ import {
     newTask, taskProblem, forSave, exportText, parseImport, bars, summary, usedLabels,
     type Area, type LayaConfig, type PresetTable, type Tuning, type CustomTask, type LabelDef, type Preset,
 } from './ai-tuning-model.js';
+import { uiIcon } from '../../ui/icons.js';
 
 const CARD_ID = 'laya-tuning-card';
 /** « Mes tâches », its own tab: the same draft, rendered into a second card. */
@@ -235,7 +236,7 @@ function labelRowsHtml(labels: LabelDef[], scope: string, fixedIds = false): str
         ${fixedIds ? `<span class="lt-label-id">${escHtml(l.id)}</span>` : `<input class="form-input lt-l-id" data-f="id" value="${escAttr(l.id)}" maxlength="${LIMITS.labelId}" placeholder="${escAttr(t('ai.lt.ph.label'))}" aria-label="${escAttr(t('ai.lt.ph.label'))}" spellcheck="false">`}
         <input class="form-input lt-l-desc" data-f="description" value="${escAttr(l.description)}" maxlength="${LIMITS.description}" placeholder="${escAttr(t('ai.lt.ph.desc'))}" aria-label="${escAttr(t('ai.lt.ph.desc'))}">
         <input class="form-input lt-l-ex" data-f="examples" value="${escAttr(examplesText(l.examples))}" placeholder="${escAttr(t('ai.lt.ph.examples'))}" aria-label="${escAttr(t('ai.lt.ph.examples'))}">
-        ${fixedIds ? '' : `<button type="button" class="btn btn-ghost btn-xs lt-l-del" data-l-del="${j}" aria-label="${escAttr(t('ai.lt.delLabel'))}">×</button>`}
+        ${fixedIds ? '' : `<button type="button" class="btn btn-ghost btn-xs lt-l-del" data-l-del="${j}" aria-label="${escAttr(t('ai.lt.delLabel'))}">${uiIcon('delete', 14)}</button>`}
       </div>`).join('');
 }
 

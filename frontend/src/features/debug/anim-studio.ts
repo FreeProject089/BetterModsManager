@@ -12,6 +12,7 @@
 // window.gsap; we just make sure it's loaded, then drive it. Persists to localStorage.
 
 import { t } from '../../core/i18n.js';
+import { uiIcon } from '../../ui/icons.js';
 
 type Preset = 'fadeIn' | 'slideUp' | 'slideDown' | 'pop' | 'pulse' | 'flyInLeft' | 'flyInRight' | 'stagger';
 interface Anim {
@@ -275,10 +276,10 @@ function render() {
         <div class="nm">${esc(a.name || a.preset)}${a.auto ? ' <span data-tooltip="Auto-runs when the target appears">⟳</span>' : ''}</div>
         <div class="sel">${bad ? '⚠ ' : ''}${esc(a.selector || '—')} · ${esc(a.preset)}</div>
       </div>
-      <button class="anim-btn anim-mini" data-anim-act="play" data-id="${esc(a.id)}" data-tooltip="${t('anim.preview') || 'Preview'}">▶</button>
-      <button class="anim-btn anim-mini" data-anim-act="edit" data-id="${esc(a.id)}" data-tooltip="${t('anim.edit') || 'Edit'}">✎</button>
+      <button class="anim-btn anim-mini" data-anim-act="play" data-id="${esc(a.id)}" data-tooltip="${t('anim.preview') || 'Preview'}" aria-label="${t('anim.preview') || 'Preview'}">${uiIcon('play', 14)}</button>
+      <button class="anim-btn anim-mini" data-anim-act="edit" data-id="${esc(a.id)}" data-tooltip="${t('anim.edit') || 'Edit'}" aria-label="${t('anim.edit') || 'Edit'}">${uiIcon('edit', 14)}</button>
       <button class="anim-btn anim-mini" data-anim-act="dup" data-id="${esc(a.id)}" data-tooltip="${t('anim.duplicate') || 'Duplicate'}">⧉</button>
-      <button class="anim-btn anim-mini" data-anim-act="del" data-id="${esc(a.id)}" data-tooltip="${t('anim.delete') || 'Delete'}">✕</button>
+      <button class="anim-btn anim-mini" data-anim-act="del" data-id="${esc(a.id)}" data-tooltip="${t('anim.delete') || 'Delete'}" aria-label="${t('anim.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
     </div>`;
   }).join('') || `<div class="anim-empty">${t('anim.none') || 'No animations yet — add one below.'}</div>`;
 
@@ -305,7 +306,7 @@ function render() {
     </div>` : `<button class="anim-btn anim-primary anim-new" data-anim-act="new">＋ ${t('anim.new') || 'New animation'}</button>`;
 
   panel.innerHTML =
-    `<h3 id="anim-studio-title">${t('anim.title') || 'Animation Studio'} <button class="anim-btn anim-mini anim-x" data-anim-act="close" aria-label="${esc(t('common.close') || 'Close')}">✕</button></h3>` +
+    `<h3 id="anim-studio-title">${t('anim.title') || 'Animation Studio'} <button class="anim-btn anim-mini anim-x" data-anim-act="close" aria-label="${esc(t('common.close') || 'Close')}">${uiIcon('close', 14)}</button></h3>` +
     rows + form +
     `<div class="anim-status" role="status" aria-live="polite"></div>`;
 

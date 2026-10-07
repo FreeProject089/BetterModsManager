@@ -22,6 +22,7 @@
 //   LEARN_MORE                   → the registry itself (read-only)
 import { t } from './i18n.js';
 import { escAttr } from './utils.js';
+import { uiIcon } from '../ui/icons.js';
 
 export interface LearnTarget {
     /** A docs-hub article id (`id:` in docs/docs-hub.ts). The fallback when there is no page. */
@@ -125,7 +126,7 @@ export interface LearnMoreOpts {
     className?: string;
 }
 
-const ICON = '<svg class="lm-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+const ICON = (uiIcon('book', 12, { cls: 'lm-ico' }));
 
 /** The stylesheet is this helper's own file, linked the first time a link is drawn. */
 function ensureCss(): void {

@@ -7,32 +7,36 @@ l'automatiser.
 ## Trois portes d'entrée
 
 ```mermaid
-flowchart TB
-    subgraph Clients
+flowchart TD
+    subgraph CLIENTS["Clients"]
         PLUG["Plugins"]
-        SCRIPT["Scripts / CLI"]
-        AI["Client IA<br/>(MCP)"]
-        PAGE["Pages personnalisées<br/>(bmmpage://)"]
+        SCRIPT["Scripts"]
+        AI["Client IA"]
+        PAGE["Pages personnalisées<br/>bmmpage://"]
     end
-    subgraph BMM
-        API["API HTTP locale"]
-        MCP["Serveur MCP"]
+    MCP[["Serveur MCP + CLI<br/>(sidecar)"]]
+    subgraph APP["App BMM"]
+        API[["API HTTP locale"]]
         BROKER["Courtier de permissions"]
-        CORE["Commandes du cœur"]
+        CORE[["Commandes du cœur"]]
     end
-    PLUG --> API
-    SCRIPT --> API
-    AI --> MCP
-    PAGE --> BROKER
+    DATA[("data.json")]
+    PLUG -- "token de plugin" --> API
+    SCRIPT -- "token d'API" --> API
+    AI -- "stdio" --> MCP
+    MCP -- "actions en direct" --> API
+    MCP -- "modifs hors ligne" --> DATA
+    PAGE -- "postMessage" --> BROKER
     API --> CORE
-    MCP --> CORE
-    BROKER --> CORE
+    BROKER -- "accordé seulement" --> CORE
 ```
 
 - **API locale** — un petit serveur HTTP sur votre machine. Plugins et scripts l'appellent pour
   scanner, activer, construire des packs, lire l'état, etc.
 - **Serveur MCP** — les mêmes capacités exposées comme outils Model Context Protocol, pour qu'un
-  assistant IA pilote BMM en conversation. Il fonctionne via stdio, pas un port public.
+  assistant IA pilote BMM en conversation. Il fonctionne via stdio, pas un port public, dans un
+  processus à part : les actions en direct passent par l'API locale, les commandes hors ligne
+  modifient `data.json` directement.
 - **Pages personnalisées** — des mini-apps `bmmpage://` en sandbox que vous épinglez à la barre de
   navigation. Elles ne parlent à BMM qu'à travers un **courtier de permissions**, donc une page
   obtient exactement l'accès que vous accordez, et rien de plus.
@@ -40,15 +44,21 @@ flowchart TB
 ## Deeplinks
 
 Les boutons sur le web (« Installer ce mod dans BMM ») fonctionnent via des **deeplinks** — un schéma
-d'URL que BMM enregistre auprès de l'OS. Cliquer sur l'un transmet la requête à l'app en cours, qui
-confirme et agit.
+d'URL que BMM enregistre auprès de l'OS. Cliquer sur l'un transmet la requête à BMM (l'app en cours, ou
+une nouvelle si aucune n'est ouverte). Un lien hors des limites strictes est refusé d'office ; tout
+ce qui modifie, télécharge ou lance quelque chose vous demande d'abord.
 
 ```mermaid
-flowchart LR
-    WEB["Bouton web"] --> LINK["deeplink bmm://"]
-    LINK --> APP["BMM (en cours)"]
-    APP --> CONFIRM{"confirmer"}
-    CONFIRM -- oui --> ACT["installer / ajouter source"]
+flowchart TD
+    WEB(["Bouton web"]) --> LINK["lien bmm://"]
+    LINK --> APP["BMM en cours,<br/>ou démarrage"]
+    APP --> LIMITS{"Dans les<br/>limites strictes ?"}
+    LIMITS -- "non" --> REFUSE(["Refusé"])
+    LIMITS -- "oui" --> WRITES{"Modifie, télécharge<br/>ou lance quelque chose ?"}
+    WRITES -- "non" --> ACT(["L'action s'exécute"])
+    WRITES -- "oui" --> CONFIRM{"Vous confirmez ?"}
+    CONFIRM -- "oui" --> ACT
+    CONFIRM -- "non" --> CANCEL(["Rien n'est fait"])
 ```
 
 !!! info "À voir dans l'app"
@@ -70,12 +80,14 @@ pour qu'une traduction manquante soit visible plutôt que silencieuse.
   la **recherche sémantique** de la palette de commandes et des docs.
 
 ```mermaid
-graph TD
-    LANGFILES["Lang/*.json (+ _info, _synonyms)"] --> DICTS["Dictionnaires en mémoire"]
-    DICTS --> T["t(clé)"]
-    T --> CUR{Clé dans la langue active ?}
-    CUR -- oui --> OUT["Texte traduit"]
-    CUR -- non --> FRFALL["Repli français"] --> RAWKEY["Clé brute affichée"]
+flowchart TD
+    LANGFILES[("Lang/*.json")] --> DICTS["Dictionnaires<br/>en mémoire"]
     SWITCH["setLang()"] --> DICTS
-    SYN["_synonyms"] --> SEARCH["Recherche sémantique"]
+    DICTS --> T["t(clé)"]
+    T --> CUR{"Dans la langue<br/>active ?"}
+    CUR -- "oui" --> OUT(["Texte traduit"])
+    CUR -- "non" --> FR{"En français ?"}
+    FR -- "oui" --> OUT
+    FR -- "non" --> RAW(["Clé brute affichée"])
+    LANGFILES -- "_synonyms" --> SEARCH["Recherche sémantique"]
 ```

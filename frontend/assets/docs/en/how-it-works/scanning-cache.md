@@ -27,18 +27,24 @@ mod folder's modification time, and if it equals what was stored, reuse the stor
 without touching the disk further.
 
 ```mermaid
-flowchart TB
-    START([Load a mod]) --> META["read the folder's mtime"]
-    META --> CMP{"same as stored,<br/>and non-zero?"}
-    CMP -- yes --> REUSE["reuse cached_files<br/>(no directory walk)"]
-    CMP -- no --> WALK["walk the folder,<br/>store the new list + mtime"]
-    REUSE --> IDX[(index)]
-    WALK --> IDX
+flowchart TD
+    START(["Load a mod"]) --> META["Read the folder's mtime"]
+    META --> CMP{"Same as stored,<br/>and non-zero?"}
+    CMP -- "yes" --> REUSE["Reuse cached_files"]
+    CMP -- "no" --> GONE{"Folder mod<br/>unreachable?"}
+    GONE -- "yes" --> KEEP["Keep the stored list"]
+    GONE -- "no" --> LIST["Walk the folder or<br/>read the archive index"]
+    LIST --> STORE["Store list + mtime"]
+    STORE -. "had hashes" .-> SHA[["Re-hash queue"]]
+    REUSE --> IDX[("File cache +<br/>conflict index")]
+    KEEP --> IDX
+    STORE --> IDX
 ```
 
 The `and non-zero` matters: if reading the metadata fails, BMM logs it and **resets the stored mtime**
 rather than trusting a zero — *"Fragile mtime invalidation check … Resetting mtime"*. A failure
-becomes a re-scan, never a false cache hit.
+is never a false cache hit: the mod's list is made again, or, when its folder is not there at all
+(a drive unplugged), the stored list is kept as is until it comes back (see below).
 
 !!! warning "A folder's mtime does not always change when a file inside it does"
 

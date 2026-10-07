@@ -9,6 +9,8 @@ import { escHtml } from '../../core/utils.js';
 import { refreshMods } from './mods.js';
 import { updateCardState, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
 import { isActivationBusy, markCurrentSkipped, cancelAllActivationJobs, announceExternal, clearAnnounced, registerExternalCancel } from '../../core/activation-jobs.js';
+import { uiIcon } from '../../ui/icons.js';
+import { gameReportHtml, showIntegrityModal } from './integrity-report.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -185,7 +187,7 @@ async function _drainRevertQueue() {
     _updateCancelBtn();
 }
 // ── Cancel button visual state ────────────────────────────────────────────────
-const _CANCEL_SPINNER_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.7s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+const _CANCEL_SPINNER_SVG = `${uiIcon('loader', 12, { style: 'animation:spin 0.7s linear infinite' })}`;
 let _cancelBtnOriginalHTML = null;
 function _setCancelBtnState(active, spinning) {
     const btn = document.getElementById('btn-cancel-mod-ops');
@@ -253,7 +255,7 @@ export async function confirmAddMod() {
     const btn = document.getElementById('btn-confirm-add-mod');
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.processing') || 'Copie en cours...'}`;
+    btn.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px' })} ${t('common.processing') || 'Copie en cours...'}`;
     const modal = document.getElementById('modal-add-mod');
     const download_links = modal?._pendingLinks || null;
     const dependencies = document.getElementById('mod-dependency-input')?._selectedDeps || [];
@@ -311,14 +313,14 @@ export async function toggleAllMods(forcedEnable = null) {
     if (altBtn)
         altBtn.disabled = true;
     if (btn)
-        btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? t('common.enabling') : t('common.disabling')}`;
+        btn.innerHTML = `${uiIcon('loader', 16, { style: 'animation:spin 1s linear infinite;margin-right:6px' })} ${enable ? t('common.enabling') : t('common.disabling')}`;
     try {
         await invoke('toggle_all_mods', { enable, bypassSha: false });
         await refreshMods();
         if (_cancelRequested) {
             // Revert: restore each mod to its snapshot state
             if (btn)
-                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.reverting') || 'Annulation…'}`;
+                btn.innerHTML = `${uiIcon('loader', 16, { style: 'animation:spin 1s linear infinite;margin-right:6px' })} ${t('common.reverting') || 'Annulation…'}`;
             // Clear the backend cancel flag so the revert IPCs themselves run.
             try {
                 await invoke('clear_mod_op_cancel');
@@ -544,22 +546,7 @@ export async function verifyIntegrity() {
     try {
         const alteredFiles = await invoke('verify_integrity');
         dismiss();
-        const modal = document.getElementById('modal-integrity');
-        const content = document.getElementById('integrity-report-content');
-        if (!modal || !content)
-            return;
-        if (alteredFiles.length === 0) {
-            content.innerHTML = `<div style="color:var(--success);padding:20px;text-align:center;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><br><h3>${t('integrity.ok')}</h3><p style="font-size:13px;color:var(--text-muted);margin-top:8px">${t('integrity.okDesc')}</p></div>`;
-        }
-        else {
-            let html = `<div style="color:var(--warning);padding:10px 0;"><h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> ${t('integrity.issues')}</h3><p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${t('integrity.issuesDesc')}</p><ul style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;list-style:none;margin:0;border:1px solid var(--border)">`;
-            alteredFiles.forEach(f => {
-                html += `<li style="font-size:12px;font-family:var(--font-mono);margin-bottom:6px;word-break:break-all;color:var(--text-primary)"><span style="color:var(--accent)">></span> ${String(f).replace(/</g, '&lt;')}</li>`;
-            });
-            html += `</ul><div style="margin-top:16px;font-size:12px;color:var(--text-secondary)">${t('integrity.tip')}</div></div>`;
-            content.innerHTML = html;
-        }
-        modal.classList.add('open');
+        showIntegrityModal(gameReportHtml(Array.isArray(alteredFiles) ? alteredFiles : []), t('integrity.gameSub'), false);
         dispatchBmmAction(BMM_ACTIONS.INTEGRITY_CHECK);
     }
     catch (err) {

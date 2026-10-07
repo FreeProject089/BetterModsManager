@@ -17,20 +17,20 @@ La fenêtre a quatre boutons, et rien d'autre ne compte comme réponse (un clic 
 | **Plus tard** (ou Échap) | Rien d'enregistré, rien d'envoyé ; la question revient au prochain lancement |
 
 ```mermaid
-graph TD
-    CONSENT{Consentement opt-in ?} -- "refusé / pas demandé" --> NOTHING["Rien de collecté"]
-    CONSENT -- "accepté" --> EVENTS["Événements : pages, clics, perf, erreurs"]
-    REPLAY["Replay de session (masqué par défaut)"] --> EVENTS
-
-    EVENTS --> QUEUE["File locale (jsonl, plafond 10 Mo)"]
-    QUEUE --> ENDPOINT{Endpoint configuré ?}
-    ENDPOINT -- non --> LOCAL["Reste sur le disque"]
-    ENDPOINT -- oui --> GZIP["Lot gzip + id de paquet"]
-    GZIP --> ALLOWLIST["Liste blanche HTTPS uniquement"]
-    ALLOWLIST --> SERVER["Serveur de télémétrie"]
-
-    GDPR["Export / suppression par paquet (72 h)"] --> SERVER
-    GDPR --> QUEUE
+flowchart TD
+    CONSENT{"Télémétrie<br/>acceptée ?"} -- "non ou pas demandé" --> NOTHING(["Rien de collecté"])
+    CONSENT -- "oui" --> EVENTS["Événements : pages, clics,<br/>perf, erreurs"]
+    CONSENT -- "oui" --> REPLAY["Replay masqué<br/>(interrupteur à part)"]
+    EVENTS --> QUEUE[("File locale<br/>jsonl, plafond 10 Mo")]
+    REPLAY --> QUEUE
+    QUEUE -- "Exporter" --> EXPORT(["Fichier JSON"])
+    QUEUE --> ENDPOINT{"Endpoint HTTPS<br/>configuré ?"}
+    ENDPOINT -- "non" --> LOCAL(["Reste sur le disque"])
+    ENDPOINT -- "oui" --> GZIP["Lot gzip<br/>+ id de paquet"]
+    GZIP --> SERVER(["Serveur de télémétrie"])
+    GZIP -- "listé" --> SENT[("Paquets envoyés")]
+    SENT --> DEL["Demande de suppression<br/>(sous 72 h)"]
+    DEL --> SERVER
 ```
 
 ## Si tu acceptes
@@ -123,21 +123,23 @@ est activée : couper la télémétrie l'arrête et efface ce qui attendait d'ê
   nom de ton PC sont retirés avant tout envoi. Le serveur de télémétrie les retire une seconde fois
   à l'arrivée.
 - **Regroupé, pas répété.** La même erreur dans les 10 minutes ajoute seulement 1 à un compteur.
-  Au plus 60 nouvelles erreurs par heure sont envoyées, la file d'attente est limitée à 200 lignes
+  Au plus 60 nouvelles erreurs par heure sont envoyées, la file d'attente est limitée à 200 erreurs distinctes
   et gardée sur disque, pour qu'un PC hors ligne l'envoie plus tard.
 - **Pas relié à ta télémétrie.** Le rapport porte une empreinte à sens unique de ton identifiant
   d'installation, que le tableau de bord ne peut rapprocher de rien d'autre. Une demande d'accès
   ou d'effacement le couvre quand même.
 
 ```mermaid
-graph TD
-    ERR["Erreur, plantage, commande en échec"] --> SWITCH{"Télémétrie ET Envoyer les erreurs en direct ?"}
-    SWITCH -- non --> DROP["Rien"]
-    SWITCH -- oui --> CLEAN["Secrets, noms de dossiers, e-mails, IP retirés"]
-    CLEAN --> GROUP["Regroupé par empreinte, compté"]
-    GROUP --> DISK["File sur disque, 200 lignes max"]
-    DISK --> SEND["Envoyé en quelques secondes, HTTPS"]
-    SEND --> SERVER["Serveur de télémétrie : Issues"]
+flowchart TD
+    ERR(["Erreur, plantage,<br/>commande en échec"]) --> SWITCH{"Télémétrie ET Envoyer<br/>les erreurs en direct ?"}
+    SWITCH -- "non" --> DROP(["Rien"])
+    SWITCH -- "oui" --> CLEAN["Secrets, noms de dossiers,<br/>e-mails, IP retirés"]
+    CLEAN --> SEEN{"Même empreinte<br/>en attente ?"}
+    SEEN -- "oui" --> COUNT["Son compteur + 1"]
+    SEEN -- "non" --> QUEUE[("File sur disque<br/>200 erreurs max")]
+    COUNT --> QUEUE
+    QUEUE --> SEND[["Envoi : nouvelles en 3 s,<br/>autres toutes les 60 s"]]
+    SEND --> SERVER(["Serveur de télémétrie :<br/>Issues"])
 ```
 
 ## Statistiques d'usage de Laya
@@ -170,23 +172,21 @@ que si *toi* tu l'exportes ou l'envoies.
 BMM ne se fie pas au simple drapeau « connecté » de l'OS — il **sonde** deux endpoints légers ;
 si aucun ne répond sous 5 secondes, tu es hors ligne.
 
-- Un **bandeau « pas de connexion »** discret apparaît, et les fonctions réseau (synchros de
-  dépôts, catalogues, vérifs de mise à jour) se mettent en pause avec un toast d'avertissement
-  au lieu d'échouer cryptiquement.
+- Un **bandeau « pas de connexion »** discret apparaît. C'est un avis, pas un verrou : les
+  fonctions réseau (synchros de dépôts, catalogues, vérifs de mise à jour) ne sont pas coupées,
+  donc celle que tu lances hors ligne échoue avec sa propre erreur.
 - **Tout le local continue de fonctionner** — bibliothèque, profils, activation, mapper, thèmes.
-- La reprise est automatique : hors ligne, BMM re-sonde toutes les **15 secondes** ; en ligne,
-  une re-vérification toutes les 2 minutes attrape les connexions mortes en silence.
+- La reprise est automatique : hors ligne, BMM re-sonde toutes les **15 secondes**, et une
+  re-vérification toutes les 2 minutes, en ligne ou non, attrape les connexions mortes en silence.
 
 ```mermaid
-graph TD
-    NAVIGATOR["navigator.onLine + événements"] --> PROBE{Sonde 2 endpoints}
-    PROBE -- "l'un répond" --> ONLINE["En ligne"]
-    PROBE -- "les deux échouent" --> OFFLINE["État hors ligne"]
-
-    OFFLINE --> BANNER["Bandeau « pas de connexion »"]
-    OFFLINE --> GATES["Fonctions en ligne en pause (toast)"]
-    OFFLINE --> FAST["Re-sonde toutes les 15 s"]
-    FAST --> PROBE
-    ONLINE --> SLOW["Re-vérification toutes les 120 s"]
-    SLOW --> PROBE
+flowchart TD
+    START(["Démarrage ou<br/>événement online"]) --> NAV{"navigator.onLine ?"}
+    TIMER["Re-vérif : 15 s hors ligne,<br/>120 s toujours"] --> NAV
+    NAV -- "vrai" --> PROBE{"gstatic, puis Cloudflare :<br/>réponse sous 5 s ?"}
+    NAV -- "faux" --> OFF["Hors ligne"]
+    OSOFF(["Événement offline de l'OS"]) --> OFF
+    PROBE -- "oui" --> ON(["En ligne, bandeau masqué"])
+    PROBE -- "non" --> OFF
+    OFF --> BANNER(["Bandeau « pas de connexion »"])
 ```

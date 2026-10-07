@@ -4,6 +4,7 @@ import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
 export function initRepoServer(elements) {
     const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, cbDocker, dockerOptions, dockerHostSelect, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
     let isServerRunning = false;
@@ -18,9 +19,9 @@ export function initRepoServer(elements) {
     // one, a wall socket on another, a colour photograph on a third — and none of them match the
     // rest of a window drawn in 2px strokes. `toast()` has taken an SVG since it was written; the
     // server notifications were the last place still passing a character.
-    const ICON_PLUG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg>';
-    const ICON_DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>';
-    const ICON_DONE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    const ICON_PLUG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg>';
+    const ICON_DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>';
+    const ICON_DONE = (uiIcon('check', 14));
     // ── Subscribe to server-side events ──────────────────────────────────────
     async function subscribeServerEvents() {
         if (!window.__TAURI__)
@@ -153,7 +154,7 @@ export function initRepoServer(elements) {
                     if (loadingBar)
                         loadingBar.style.display = 'block';
                     btnToggleServer.disabled = true;
-                    btnToggleServer.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('repo.initServer') || 'Initialisation...'}</span>`;
+                    btnToggleServer.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;margin-right:8px' })} <span>${t('repo.initServer') || 'Initialisation...'}</span>`;
                     const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
                     if (inputServerPort)
                         inputServerPort.disabled = true;
@@ -434,7 +435,7 @@ export function initRepoServer(elements) {
             }
             finally {
                 btnGenMiniServer.disabled = false;
-                btnGenMiniServer.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg> <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate')}</span>`;
+                btnGenMiniServer.innerHTML = `${uiIcon('add', 12, { style: 'margin-right:6px' })} <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate')}</span>`;
             }
         });
     }

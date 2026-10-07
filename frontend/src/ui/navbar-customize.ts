@@ -7,6 +7,7 @@ import { attachHighlight, type CodeEditorHandle } from './code-editor.js';
 import { invoke, pickFile, pickFiles, pickFolder, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
 import { showConfirm } from './confirm.js';
+import { uiIcon } from './icons.js';
 
 const LS_KEY = 'bmm_navbar_config';
 
@@ -354,7 +355,7 @@ const ICONS: Record<string, string> = {
     wrench: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.5 2.5-2-2 2.5-2.5z"/>',
 };
 function svgWrap(inner: string): string {
-    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">${inner}</svg>`;
+    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${inner}</svg>`;
 }
 /**
  * All icons available to custom buttons: the built-in set above PLUS every icon
@@ -748,7 +749,7 @@ export function openNavbarEditor(): void {
                 <span class="nbe-grip" data-tooltip="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
                 <span class="nbe-section-tag">${t('navedit.section') || 'SECTION'}</span>
                 <input class="nbe-name input" value="${escAttr(label)}" placeholder="${t('navedit.sectionName') || 'Section name'}">
-                <button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>
+                <button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
             </div>`;
         }
         const el = items().find(e => idOf(e) === id);
@@ -765,7 +766,7 @@ export function openNavbarEditor(): void {
             <button class="nbe-eye ${hidden ? 'is-hidden' : ''}" data-tooltip="${t('navedit.toggle') || 'Show / hide'}" ${prot ? 'disabled' : ''}>
                 ${hidden ? eyeOff() : eyeOn()}
             </button>
-            ${isCustom ? `<button class="nbe-edit" data-edit="${id}" data-tooltip="${t('navedit.editBtn') || 'Edit'}">✎</button><button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>` : ''}
+            ${isCustom ? `<button class="nbe-edit" data-edit="${id}" data-tooltip="${t('navedit.editBtn') || 'Edit'}" aria-label="${t('navedit.editBtn') || 'Edit'}">${uiIcon('edit', 14)}</button><button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>` : ''}
         </div>`;
     }).join('');
 
@@ -776,7 +777,7 @@ export function openNavbarEditor(): void {
                     <h2 class="modal-title" id="nbe-title">${t('navedit.title') || 'Customize navigation'}</h2>
                     <p class="bms-sub">${t('navedit.sub') || 'Drag to reorder, rename, or hide items.'}</p>
                 </div>
-                <button type="button" class="modal-close" id="nbe-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="nbe-close" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body">
             <div class="nbe-scroll">
@@ -992,7 +993,7 @@ export function openNavbarEditor(): void {
                     <span class="nbe-name">${escAttr(p.name)}</span>
                     <button class="btn btn-xs btn-ghost nbe-editpage" data-editpage="${escAttr(p.id)}">${t('navedit.editBtn') || 'Edit'}</button>
                     <button class="btn btn-xs btn-ghost nbe-importfile" data-importpage="${escAttr(p.id)}">${t('navedit.importFile') || 'Import file (.wasm…)'}</button>
-                    <button class="nbe-del" data-delpage="${escAttr(p.id)}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>
+                    <button class="nbe-del" data-delpage="${escAttr(p.id)}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
                 </div>
                 <div class="nbe-presets">
                     <span class="nbe-preset-lbl">${t('navedit.preset') || 'Preset'}:</span>
@@ -1537,8 +1538,8 @@ function escAttr(s: string): string {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 function eyeOn(): string {
-    return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    return (uiIcon('eye', 16));
 }
 function eyeOff(): string {
-    return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    return (uiIcon('eye-off', 16));
 }

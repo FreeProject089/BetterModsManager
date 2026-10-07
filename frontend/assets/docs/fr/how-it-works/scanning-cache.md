@@ -27,18 +27,25 @@ bon marché : lire la date de modification du dossier du mod, et si elle égale 
 la liste stockée telle quelle sans toucher davantage au disque.
 
 ```mermaid
-flowchart TB
-    START([Charger un mod]) --> META["lire la mtime du dossier"]
-    META --> CMP{"identique à celle stockée,<br/>et non nulle ?"}
-    CMP -- oui --> REUSE["réutiliser cached_files<br/>(pas de parcours de dossier)"]
-    CMP -- non --> WALK["parcourir le dossier,<br/>stocker la nouvelle liste + mtime"]
-    REUSE --> IDX[(index)]
-    WALK --> IDX
+flowchart TD
+    START(["Charger un mod"]) --> META["Lire la mtime du dossier"]
+    META --> CMP{"Identique à celle stockée,<br/>et non nulle ?"}
+    CMP -- "oui" --> REUSE["Réutiliser cached_files"]
+    CMP -- "non" --> GONE{"Dossier du mod<br/>injoignable ?"}
+    GONE -- "oui" --> KEEP["Garder la liste stockée"]
+    GONE -- "non" --> LIST["Parcourir le dossier ou<br/>lire l'index de l'archive"]
+    LIST --> STORE["Stocker liste + mtime"]
+    STORE -. "avait des empreintes" .-> SHA[["File de re-hachage"]]
+    REUSE --> IDX[("Cache de fichiers +<br/>index de conflits")]
+    KEEP --> IDX
+    STORE --> IDX
 ```
 
 Le « et non nulle » compte : si la lecture des métadonnées échoue, BMM le journalise et **remet à zéro
 la mtime stockée** plutôt que de faire confiance à un zéro — *« Contrôle d'invalidation mtime fragile
-… Réinitialisation de la mtime »*. Un échec devient un re-scan, jamais un faux succès de cache.
+… Réinitialisation de la mtime »*. Un échec n'est jamais un faux succès de cache : la liste du mod est refaite, ou, quand son dossier
+n'est pas là du tout (un disque débranché), la liste stockée est gardée telle quelle jusqu'à son
+retour (voir plus bas).
 
 !!! warning "La mtime d'un dossier ne change pas toujours quand un fichier dedans change"
 

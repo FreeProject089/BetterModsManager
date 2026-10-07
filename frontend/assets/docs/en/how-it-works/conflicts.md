@@ -18,21 +18,27 @@ BMM keeps **two in-memory maps**, and neither is ever written to `data.json`:
 | File cache | mod → its set of files | "what does this mod ship?" |
 | Conflict index | file → the mods claiming it | "who else claims this path?" |
 
-The second is just the first inverted. Any path claimed by more than one enabled mod is a conflict,
-so finding conflicts is a grouping operation over data already in RAM — no filesystem access at all.
+The second is just the first inverted, and it covers every mod in the library, enabled or not. Any
+path claimed by more than one mod is a conflict: **active** when both are enabled in the profile,
+**potential** otherwise, reported for the same profile (*Intra*) or for another profile that deploys
+to the same game folder (*Inter*). Finding conflicts is a grouping operation over data already in
+RAM — no filesystem access at all.
 
 ```mermaid
-flowchart TB
-    subgraph Enabled["Enabled mods"]
-        A["Mod A → data/file.x"]
-        B["Mod B → data/file.x"]
-        C["Mod C → sound.ogg"]
+flowchart TD
+    subgraph LIB["File cache (every mod)"]
+        A["Mod A: data/file.x"]
+        B["Mod B: data/file.x"]
+        C["Mod C: sound.ogg"]
     end
-    A --> G{"inverted index<br/>file → mods"}
-    B --> G
-    C --> G
-    G -- "data/file.x: A, B" --> CONF["⚠ conflict"]
-    G -- "sound.ogg: C" --> OK["clean"]
+    A --> IDX[("Conflict index<br/>file → mods")]
+    B --> IDX
+    C --> IDX
+    IDX --> SHARED{"Path claimed by<br/>2 mods or more?"}
+    SHARED -- "no" --> OK["No conflict"]
+    SHARED -- "yes" --> BOTH{"Both enabled?"}
+    BOTH -- "yes" --> ACT["Active conflict"]
+    BOTH -- "no" --> POT["Potential conflict"]
 ```
 
 Being in-memory only is a design decision, not an omission: the index is rebuilt from the file cache
@@ -60,9 +66,9 @@ and re-copies only the files that change hands.
 
 ```mermaid
 flowchart LR
-    E1["enable Mod A"] --> E2["enable Mod B (later)"]
-    E2 --> DEPLOY["deploy in enable order"]
-    DEPLOY --> WIN["B's data/file.x is on disk<br/>(it overwrote A's)"]
+    E1["Enable Mod A"] --> E2["Enable Mod B<br/>(goes last)"]
+    E2 --> DEPLOY["Deploy in<br/>activation order"]
+    DEPLOY --> WIN[("Game folder:<br/>B's data/file.x")]
 ```
 
 This is a genuine simplification compared to managers with priority trees. It buys you one thing:
@@ -84,14 +90,21 @@ filling up with copies of mods you already have, and what stops a "restore" from
 mod's file back where the game's file belonged.
 
 ```mermaid
-flowchart TB
-    APPLY([Enable a mod]) --> EACH["for each file it ships"]
-    EACH --> HAVE{"already in<br/>_original/ ?"}
-    HAVE -- yes --> COPY
-    HAVE -- no --> WHOSE{"is the file currently<br/>there another mod's?"}
-    WHOSE -- yes --> COPY["copy the mod file<br/>into the destination folder"]
-    WHOSE -- no --> BK["back it up to _original/"] --> COPY
+flowchart TD
+    APPLY(["Enable a mod"]) --> EACH["For each file it ships"]
+    EACH --> HAVE{"Already in<br/>_original/?"}
+    HAVE -- "no" --> THERE{"File in the<br/>game folder?"}
+    THERE -- "yes" --> WHOSE{"Another enabled<br/>mod's file?"}
+    WHOSE -- "no" --> BK["Back it up<br/>to _original/"]
+    HAVE -- "yes" --> COPY["Copy the mod file<br/>(overwrite)"]
+    THERE -- "no" --> COPY
+    WHOSE -- "yes" --> COPY
+    BK --> COPY
+    COPY --> GAME[("Destination folder")]
 ```
+
+*Another enabled mod's file* means a file shipped by a mod enabled in the active profile, or one this
+same enable has just placed (a dependency chain). The mod's copy always overwrites.
 
 ---
 
@@ -101,12 +114,12 @@ Disabling is where last-wins stops being a problem. For every file the mod is re
 three questions in order:
 
 ```mermaid
-flowchart TB
-    REM(["file to remove"]) --> OTHER{"does another enabled mod<br/>also ship this file?"}
-    OTHER -- yes --> FROMMOD["restore from the LAST one<br/>in the activation order that has it"]
-    OTHER -- no --> ORIG{"is it in _original/ ?"}
-    ORIG -- yes --> FROMORIG["restore the game file,<br/>then delete the backup copy"]
-    ORIG -- no --> DEL["the mod added this file —<br/>delete it"]
+flowchart TD
+    REM(["File to remove"]) --> OTHER{"Another enabled mod<br/>ships it?"}
+    OTHER -- "yes" --> FROMMOD["Copy it from the last<br/>such mod in the order"]
+    OTHER -- "no" --> ORIG{"In _original/?"}
+    ORIG -- "yes" --> FROMORIG["Restore the game file,<br/>delete the backup"]
+    ORIG -- "no" --> DEL["Delete it<br/>(the mod added it)"]
 ```
 
 1. **Another enabled mod ships it** → restore from that mod: the **last** one in the activation
@@ -136,7 +149,7 @@ Two safety details in that cleanup:
 |---|---|
 | Mod B's version of a shared file | Put B **below** A in the [activation order](doc-page:how-it-works/load-order) (or enable it after A) |
 | To see what actually overlaps | Open the conflict view — the file list is exact, and free to compute |
-| To undo everything | Disable in any order; each file falls back to the next mod that has it, then to the game's original |
+| To undo everything | Disable in any order; each file falls back to the mod under it that has it, then to the game's original |
 | Per-file cherry-picking | Not supported — use the [Mapper](doc-page:how-it-works/mapper) to change what a mod ships, or edit the mod folder |
 
 !!! info "See it in the app"

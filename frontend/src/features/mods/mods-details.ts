@@ -12,6 +12,8 @@ import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js'
 import { renderModList, updateCardState } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { uiIcon } from '../../ui/icons.js';
+import { modReportHtml, reportIsValid, showIntegrityModal, type ModReport } from './integrity-report.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -250,11 +252,11 @@ export async function renderModDetail(modId) {
                     data-tooltip="${escAttr(t('conflict.openFor') || 'Open the conflict view for this mod')}">
               <span class="mdc-top">
                 <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}">
-                   ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
+                   ${c.category === 'Intra' ? (uiIcon('home', 12, { style: 'margin-right:4px' })) : (uiIcon('globe', 12, { style: 'margin-right:4px' }))}
                    ${c.category}
                 </span>
                 <span class="mdc-files">${c.file_count} f.</span>
-                <svg class="mdc-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
+                ${uiIcon('chevron-right', 12, { cls: 'mdc-chev' })}
               </span>
               <span class="mdc-name">${escHtml(c.other_mod_name)}</span>
               <span class="mdc-profile">${escHtml(t('mod.profilLabel'))}${escHtml(c.other_profile_name)}</span>
@@ -296,7 +298,7 @@ export async function renderModDetail(modId) {
           // But get_mod_integrity in Rust will report all files as "added" if no hash exists.
       }
       toast(t('integrity.checking'), 'info');
-      const report = await invoke('get_mod_integrity', { modId: mod.id });
+      const report = await invoke('get_mod_integrity', { modId: mod.id }) as ModReport;
       showIntegrityReport(mod, report);
     } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
   });
@@ -372,7 +374,7 @@ export async function renderModDetail(modId) {
     aiBtn.className = 'btn btn-ghost';
     aiBtn.style.cssText = 'margin-top:12px;width:100%;height:34px;font-weight:600;flex-shrink:0';
     aiBtn.title = t('ai.suggest.tip');
-    aiBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:8px" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>'
+    aiBtn.innerHTML = (uiIcon('ai', 14, { style: 'margin-right:8px' }))
       + `<span>${escHtml(t('ai.suggest.button'))}</span>`;
     aiBtn.onclick = async () => {
       try {
@@ -453,7 +455,7 @@ export async function renderModDetail(modId) {
             </select>
             <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" placeholder="URL" />
             <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" placeholder="Label" />
-            <button class="btn-remove-link" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="btn-remove-link" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center">${uiIcon('close', 14)}</button>
         `;
     row.querySelector('.btn-remove-link').onclick = () => row.remove();
     list.appendChild(row);
@@ -468,7 +470,7 @@ export async function openArchiveExplorer(mod) {
 
   initArchiveContextMenu();
 
-  container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:12px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>Scan en cours...</div>`;
+  container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">${uiIcon('loader', 32, { style: 'animation:spin 1s linear infinite;margin-bottom:12px' })}<br>Scan en cours...</div>`;
   modal.classList.add('open');
 
   try {
@@ -504,8 +506,8 @@ function renderTree(nodes) {
   keys.forEach(key => {
     const node = nodes[key];
     const isFolder = node._isFolder;
-    const arrow = isFolder ? `<span class="tree-node-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></span>` : '<span style="width:16px"></span>';
-    const icon = isFolder ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+    const arrow = isFolder ? `<span class="tree-node-arrow">${uiIcon('chevron-down', 12)}</span>` : '<span style="width:16px"></span>';
+    const icon = isFolder ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>` : `${uiIcon('file', 14, { style: 'opacity:0.6' })}`;
     html += `<div class="tree-node ${isFolder ? 'collapsed' : ''}" data-path="${escAttr(node._relPath)}" data-full="${escAttr(node._fullPath)}" data-type="${isFolder ? 'folder' : 'file'}">${arrow}<span class="tree-node-icon">${icon}</span><span class="tree-node-label">${escHtml(key)}</span></div>`;
     if (isFolder) html += `<div class="tree-children">${renderTree(node.children)}</div>`;
   });
@@ -532,30 +534,18 @@ function setupTreeInteractions(mod) {
   });
 }
 
-export function showIntegrityReport(mod: any, report: any) {
-  const modal = document.getElementById('modal-integrity');
-  const content = document.getElementById('integrity-report-content');
-  if (!modal || !content) return;
-
-  // Update local mod object and global state
-  const is_valid = report.is_valid;
-  mod.file_hashes_invalid = !is_valid;
-  
-  // Find the mod in appState and update it there too
+export function showIntegrityReport(mod: any, report: ModReport) {
+  // Rust sends `isValid` (serde camelCase). This read `report.is_valid`, which never exists, so
+  // every Verify from the details panel flagged the mod as tampered, clean or not.
+  const isValid = reportIsValid(report);
+  mod.file_hashes_invalid = !isValid;
   const stateMod = appState.state.allMods.find(m => m.id === mod.id);
-  if (stateMod) stateMod.file_hashes_invalid = !is_valid;
+  if (stateMod) stateMod.file_hashes_invalid = !isValid;
 
   // Refresh only the mod list UI (non-blocking)
   if (window._refreshModsFn) window._refreshModsFn(false, true);
 
-  const hasIssues = report.missing.length > 0 || report.modified.length > 0 || report.added.length > 0;
-  if (!hasIssues) {
-    content.innerHTML = `<div style="color:var(--success);padding:20px;text-align:center;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:16px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><h3>${t('integrity.ok')}</h3><p style="font-size:13px;color:var(--text-muted)">${t('integrity.modClean')}</p></div>`;
-  } else {
-    const renderSec = (title, items, color) => items.length === 0 ? '' : `<div><div style="font-size:11px;font-weight:700;color:${color}">${title} (${items.length})</div><ul style="background:rgba(0,0,0,0.25);padding:10px;border-radius:8px;list-style:none">${items.map(f => `<li style="font-size:11px;font-family:var(--font-mono);color:var(--text-primary)">> ${escHtml(f)}</li>`).join('')}</ul></div>`;
-    content.innerHTML = `<div style="padding:10px 0;"><h3 style="color:var(--warning)">${t('integrity.issues')}</h3><p>Mod: <strong>${escHtml(mod.name)}</strong></p>${renderSec(t('integrity.missing'), report.missing, 'var(--danger)')}${renderSec(t('integrity.modified'), report.modified, 'var(--warning)')}${renderSec(t('integrity.added'), report.added, 'var(--accent)')}</div>`;
-  }
-  modal.classList.add('open');
+  showIntegrityModal(modReportHtml(mod.name, report), t('integrity.modSub'), true);
 }
 
 /**

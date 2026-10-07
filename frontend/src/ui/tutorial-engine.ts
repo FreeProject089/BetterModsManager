@@ -20,6 +20,7 @@ import {
     savePosition, markStepComplete, markStepPartial, getStepStatus,
 } from './tutorial-store.js';
 import type { TutorialDef, TutorialPart, TutorialStep } from './tutorial-types.js';
+import { uiIcon } from './icons.js';
 
 // ── Nav page label / icon map ─────────────────────────────────────────────────
 
@@ -36,15 +37,15 @@ const NAV_LABELS: Record<string, string> = {
 };
 
 const NAV_ICONS: Record<string, string> = {
-    profiles:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-    library:   `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
-    mapper:    `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`,
-    modpacks:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`,
-    modlists:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
-    repo:      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>`,
-    apps:      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg>`,
-    plugins:   `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
-    settings:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+    profiles:  `${uiIcon('user', 12)}`,
+    library:   `${uiIcon('book', 12)}`,
+    mapper:    `${uiIcon('map', 12)}`,
+    modpacks:  `${uiIcon('hexagon', 12)}`,
+    modlists:  `${uiIcon('share', 12)}`,
+    repo:      `${uiIcon('network', 12)}`,
+    apps:      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg>`,
+    plugins:   `${uiIcon('tag', 12)}`,
+    settings:  `${uiIcon('settings', 12)}`,
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -447,8 +448,8 @@ function _refreshNavHint(): void {
     const viewKey = _VIEW_ALIAS[nav] ?? nav;
     const active = (document.querySelector('.nav-item.active') as HTMLElement | null)?.dataset.view;
     const onPage = active === viewKey;
-    const check = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.85"><polyline points="20 6 9 17 4 12"/></svg>`;
-    const chev  = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+    const check = `${uiIcon('check', 12, { style: 'opacity:0.85' })}`;
+    const chev  = `${uiIcon('chevron-right', 12, { style: 'margin-left:2px;opacity:0.5' })}`;
     btn.classList.toggle('on-page', onPage);
     btn.style.cursor = onPage ? 'default' : 'pointer';
     btn.setAttribute('data-tooltip', onPage ? (t('hub.alreadyHere') || 'You are already here') : t('hub.goTo') + ' ' + t(NAV_LABELS[nav]));
@@ -564,10 +565,10 @@ function _renderMinimizedPill(): void {
                 <span class="tut-min-sub" style="color:${tut.color}">${t(tut.title_key)} &middot; ${t('hub.step').replace('{current}', String(_stepIndex + 1)).replace('{total}', String(_totalSteps()))}</span>
             </div>
             <button class="tut-min-restore-btn" id="btn-tut-restore" data-tooltip="${t('common.resume')}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 15 12 8 19 15"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="5 15 12 8 19 15"/></svg>
             </button>
             <button class="tut-x-btn" id="btn-tut-close-min" data-tooltip="${t('hub.close')}">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                ${uiIcon('close', 12)}
             </button>
         </div>
     `;
@@ -619,7 +620,7 @@ function _renderStep(): void {
         const isDone   = done === p.steps.length;
         const chipStyle = isActive ? `background:${tut.color}1a;border-color:${tut.color}55;color:${tut.color}` : '';
         return `<button class="tut-part-chip ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" data-pi="${i}" data-tooltip="${t(p.title_key)}" ${chipStyle ? `style="${chipStyle}"` : ''}>
-            ${isDone ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+            ${isDone ? (uiIcon('check', 12)) : ''}
             <span class="tut-part-chip-label">${t(p.title_key)}</span>
         </button>`;
     }).join('');
@@ -659,8 +660,8 @@ function _renderStep(): void {
     const _navViewKey = step.nav ? (_VIEW_ALIAS[step.nav] ?? step.nav) : '';
     const _activeView = (document.querySelector('.nav-item.active') as HTMLElement | null)?.dataset.view;
     const _onPage = !!step.nav && _activeView === _navViewKey;
-    const _checkSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.85"><polyline points="20 6 9 17 4 12"/></svg>`;
-    const _chevSvg = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+    const _checkSvg = `${uiIcon('check', 12, { style: 'opacity:0.85' })}`;
+    const _chevSvg = `${uiIcon('chevron-right', 12, { style: 'margin-left:2px;opacity:0.5' })}`;
     const navHintHtml = step.nav && NAV_LABELS[step.nav] ? `
         <button class="tut-nav-hint${_onPage ? ' on-page' : ''}" id="btn-tut-nav-hint" data-nav="${step.nav}"
             style="border-color:${tut.color}33;background:${tut.color}0d;cursor:${_onPage ? 'default' : 'pointer'}"
@@ -692,7 +693,7 @@ function _renderStep(): void {
     panel.innerHTML = `
         <div class="tut-card-topbar">
             <button class="tut-back-hub-btn" id="btn-tut-back-hub">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
                 ${t('hub.back')}
             </button>
 
@@ -702,13 +703,13 @@ function _renderStep(): void {
 
             <div class="tut-topbar-right">
                 <button class="tut-min-btn" id="btn-tut-side" data-tooltip="${t('tut.dockSide') || 'Dock left / right / bottom'}">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
                 </button>
                 <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${t('common.minimize')}">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    ${uiIcon('remove', 12)}
                 </button>
                 <button class="tut-x-btn" id="btn-tut-close" data-tooltip="${t('hub.close')}">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    ${uiIcon('close', 12)}
                 </button>
             </div>
         </div>
@@ -753,7 +754,7 @@ function _renderStep(): void {
             <div class="tut-footer-btns">
                 <div style="display:flex;align-items:center;gap:8px">
                     ${!isFirst ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>` : ''}
-                    ${hasTarget ? `<button class="tut-showme-btn" id="btn-tut-showme" data-tooltip="${t('tut.showMe.tip') || 'Show me where to interact'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></svg>${t('tut.showMe') || 'Show me'}</button>` : ''}
+                    ${hasTarget ? `<button class="tut-showme-btn" id="btn-tut-showme" data-tooltip="${t('tut.showMe.tip') || 'Show me where to interact'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></svg>${t('tut.showMe') || 'Show me'}</button>` : ''}
                 </div>
                 <div style="display:flex;align-items:center;gap:8px">
                     <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${t('tut.skip.title')}">${t('tut.skip')}</button>
@@ -959,7 +960,7 @@ function _renderStep(): void {
             if (box) {
                 box.className = 'tut-action-box done';
                 box.innerHTML = `
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    ${uiIcon('check', 18, { style: 'color:var(--success)' })}
                     <span class="tut-action-label" style="color:var(--success)">${t('hub.action.complete')}</span>
                 `;
             }
@@ -1072,7 +1073,7 @@ function _showUnsavedWarning(onContinue: () => void): void {
     const host = document.getElementById('app-window-outer') || document.body;
     ov.innerHTML = `
         <div class="tut-unsaved-box">
-            <div class="tut-unsaved-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-warning)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+            <div class="tut-unsaved-icon">${uiIcon('warning', 24, { style: 'color:var(--bmm-warning)' })}</div>
             <h3>${t('tut.unsaved.title') || 'Unsaved changes'}</h3>
             <p>${t('tut.unsaved.text') || "You started editing here but didn't save. Continue anyway? Your changes in this dialog will be discarded."}</p>
             <label class="tut-unsaved-remember"><input type="checkbox" id="tut-unsaved-remember" /> <span>${t('tut.unsaved.remember') || "Don't remind me again during this tutorial"}</span></label>
@@ -1108,7 +1109,7 @@ function _finishTutorial(): void {
         <div class="tut-finish-screen">
             <div class="tut-finish-glow" style="background:${tut.color}"></div>
             <div class="tut-finish-mascot tut-finish-check" style="color:${tut.color}">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                ${uiIcon('success', 48)}
             </div>
             <div class="tut-finish-text-col">
                 <h2 class="tut-finish-title">${t('hub.done')}</h2>
@@ -1163,7 +1164,7 @@ const TUT_ICONS: Record<string, string> = {
  *  should be visible, not silently erased. */
 export function expandTutIcons(text: string): string {
     return String(text ?? '').replace(/:(tip|warn|ok|heart):/g, (_m, k: string) =>
-        `<svg class="tut-ico tut-ico-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TUT_ICONS[k]}</svg>`);
+        `<svg class="tut-ico tut-ico-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TUT_ICONS[k]}</svg>`);
 }
 
 function _startTypewriter(text: string): void {
@@ -1976,7 +1977,7 @@ function _renderScrollHint(dir: 'up' | 'down' | 'left' | 'right' | 'behind' | nu
         : dir === 'down' ? t('tut.scroll.down')
         : dir === 'left' ? t('tut.scroll.left')
         : t('tut.scroll.right');
-    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${arrows[arrowDir]}</svg><span>${label}</span>`;
+    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${arrows[arrowDir]}</svg><span>${label}</span>`;
     // Scrolling into view fixes an off-screen target; for one behind the sidebar it nudges any
     // horizontal scroll container, and the label already tells the reader what is in the way.
     (hint as any).onclick = () => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });

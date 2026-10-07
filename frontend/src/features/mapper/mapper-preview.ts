@@ -11,6 +11,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, formatBytes } from '../../core/utils.js';
 import { bindModal, MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { buildPreview, gameFileSet, middleEllipsis, matchesQuery, matchesFilter, visibleRange, type PvItem, type PvModel, type PvFilter, type PvFile } from './mapper-preview-model.js';
+import { uiIcon } from '../../ui/icons.js';
 
 export interface PreviewOpts {
     gamePath: string;
@@ -27,9 +28,9 @@ export interface PreviewOpts {
 const ROW_H = 32;
 const IC = {
     folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>',
-    chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
-    warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-    search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+    chev: (uiIcon('chevron-right', 12)),
+    warn: (uiIcon('warning', 14)),
+    search: (uiIcon('search', 14)),
 };
 
 type Row = { kind: 'group'; name: string; count: number; bytes: number; overwrites: number; open: boolean } | { kind: 'file'; it: PvItem; rel: string };

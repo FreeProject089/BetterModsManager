@@ -15,6 +15,7 @@ import { claimDockSpace, releaseDockSpace, makeDock } from '../../ui/dock-space.
 import { getAllTranslations, getLang, t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
 
 let _allTrans: Record<string, Record<string, string>> = {};
 let _allKeys: string[] = [];
@@ -524,12 +525,12 @@ async function renderDetail(key: string): Promise<void> {
         <div class="i18x-ed-head">
             <button type="button" class="i18x-keyname" id="i18n-copy-key" data-tooltip="${escAttr(t('i18n.copyKey'))}">
                 <code>${escHtml(key)}</code>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                ${uiIcon('copy', 12)}
             </button>
             <div class="i18x-ed-nav">
                 <span class="i18x-pos">${at >= 0 ? `${at + 1} / ${_visible.length}` : ''}</span>
-                <button type="button" class="i18x-iconbtn" id="i18n-prev-key" data-tooltip="${escAttr(t('i18n.prevKey'))}"${at <= 0 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
-                <button type="button" class="i18x-iconbtn" id="i18n-next-key" data-tooltip="${escAttr(t('i18n.nextKey'))}"${at < 0 || at >= _visible.length - 1 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <button type="button" class="i18x-iconbtn" id="i18n-prev-key" data-tooltip="${escAttr(t('i18n.prevKey'))}"${at <= 0 ? ' disabled' : ''}>${uiIcon('chevron-up', 14)}</button>
+                <button type="button" class="i18x-iconbtn" id="i18n-next-key" data-tooltip="${escAttr(t('i18n.nextKey'))}"${at < 0 || at >= _visible.length - 1 ? ' disabled' : ''}>${uiIcon('chevron-down', 14)}</button>
             </div>
         </div>
         <div class="i18x-chips" id="i18n-chips">${chips}</div>
@@ -560,7 +561,7 @@ async function renderDetail(key: string): Promise<void> {
                 <span>${escHtml(t('i18n.testToast'))}</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" id="i18n-test-tip">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                ${uiIcon('message', 12)}
                 <span>${escHtml(t('i18n.testTip'))}</span>
             </button>
             <button type="button" class="btn btn-ghost btn-sm" id="i18n-preview-live">${escHtml(t('i18n.previewLive'))}</button>
@@ -774,7 +775,7 @@ function renderHardcoded(): void {
         }).join('');
         return `<div class="i18x-hcfile">
             <button type="button" class="i18x-hcfile-head" data-file="${escAttr(file)}" aria-expanded="${!folded}" title="${escAttr(file)}">
-                <svg class="i18x-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                <svg class="i18x-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
                 <span class="i18x-hcfile-name"><span class="i18x-hcfile-dir">${escHtml(dir)}</span>${escHtml(base)}</span>
                 <span class="i18x-n">${idx.length}</span>
             </button>

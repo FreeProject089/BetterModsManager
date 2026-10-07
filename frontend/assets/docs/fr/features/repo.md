@@ -202,8 +202,8 @@ L'hébergement s'accompagne de deux outils côté hôte, tous deux sur l'écran 
 creator ID, protocole (**Local / LAN / WAN**), fichier en cours avec progression et vitesse,
 plus les sessions inactives et les totaux (clients, vitesse cumulée, fichiers actifs). Depuis
 chaque ligne, tu peux **autoriser** (liste blanche) ou **bannir** ce client en un clic. Il
-agrège aussi le `monitoring.json` d'un serveur autonome en cours — les deux serveurs au même
-endroit.
+fusionne aussi le `monitoring.json` qu'un serveur autonome hybride écrit dans le même dossier —
+les deux serveurs au même endroit.
 
 **Liste blanche & bans** — deux gestionnaires avec recherche, ajout manuel (par IP et/ou clé
 créateur), retrait en un clic et export JSON. La liste blanche a un interrupteur on/off :
@@ -222,20 +222,36 @@ Le serveur intégré (l'hébergement depuis BMM) publie le même `monitoring.jso
 télécharge n'est affiché que dans le tableau Monitoring de BMM, sur la machine de l'hôte.
 
 ```mermaid
-graph LR
-    subgraph Host["Hôte (BMM)"]
-        MON["Tableau de monitoring (rafraîchi 1 s)"]
-        WL["Gestionnaires liste blanche / bans"]
+flowchart TD
+    subgraph HOST["Hôte (BMM)"]
+        BUILTIN[["Serveur intégré"]]
+        MON["Tableau de monitoring<br/>(chaque seconde)"]
+        WL["Gestionnaires liste<br/>blanche et bans"]
     end
-    subgraph Server["Serveur généré"]
-        MJSON["/monitoring.json"]
-        ADMIN["/admin/* (mot de passe)"]
-        GATE["Porte d'accès : bans → login → liste blanche → mot de passe de téléchargement"]
+    subgraph SRV["Serveur autonome"]
+        GATE{"Porte d'accès"}
+        SERVE["Envoi du fichier"]
+        ADMIN["/admin/*<br/>(mot de passe admin)"]
     end
-    MJSON --> MON
-    WL -- "pousse la config" --> ADMIN
-    CLIENT["Abonné"] --> GATE
+    subgraph DIR["Dossier servi"]
+        LISTS[("bans.json<br/>whitelist.json")]
+        MJSON[("monitoring.json")]
+    end
+    CLIENT(["Abonné"]) --> GATE
+    GATE -- "passe" --> SERVE
+    SERVE -- "hybride seulement" --> MJSON
+    GATE -- "lit" --> LISTS
+    ADMIN -- "écrit" --> LISTS
+    BUILTIN -- "état en direct" --> MON
+    MON -- "lit" --> MJSON
+    WL -- "écrit" --> LISTS
 ```
+
+Les gestionnaires écrivent `bans.json` et `whitelist.json` dans le dossier servi, et le serveur
+autonome les relit à chaque requête. Il vérifie, dans l'ordre : les bans, l'obligation de
+connexion, la liste blanche, puis le mot de passe de téléchargement et l'accès par clé ; les
+requêtes venant de sa propre machine passent sans contrôle. Le serveur intégré vérifie d'abord le
+mot de passe et l'accès par clé, puis l'obligation de connexion, puis les bans et la liste blanche.
 
 ### Publier une nouvelle version
 

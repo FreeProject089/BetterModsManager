@@ -29,6 +29,7 @@ import { checkCondition } from './tutorial-expr.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { getCustomDoc, type CustomTutorialDoc, saveCustomTutorial } from './tutorial-custom.js';
+import { uiIcon } from './icons.js';
 import { BMM_ACTIONS } from './tutorial-events.js';
 import { pickElement } from './tutorial-pick.js';
 
@@ -88,7 +89,8 @@ export function openTutorialCreator(editId: string | null, onSaved: () => void):
         head.append(el('h2', 'tutc-title', editId ? t('tutc.titleEdit') : t('tutc.titleNew')));
         const close = el('button', 'modal-close');
         close.setAttribute('type', 'button');
-        close.textContent = '×';
+        close.innerHTML = uiIcon('close', 16);
+        close.setAttribute('aria-label', t('common.close') || 'Close');
         close.addEventListener('click', () => overlay.remove());
         head.append(close);
         panel.append(head);

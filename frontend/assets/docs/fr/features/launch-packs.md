@@ -21,22 +21,31 @@ Ajoute une icône personnalisée si tu veux — elle est convertie en vrai `.ico
 
 - **Depuis la carte** dans Paramètres — chaque appli démarre **silencieusement** : aucune
   fenêtre de console qui clignote.
-- **Depuis le bureau** — chaque pack reçoit aussi son propre **raccourci** généré, pour lancer
+- **Depuis un raccourci** — chaque pack reçoit aussi son propre **raccourci** `.lnk`, rangé dans
+  le dossier du pack (le bouton dossier de la carte l'ouvre) ; copie-le sur le bureau pour lancer
   tout le groupe sans ouvrir BMM.
 
 Sous le capot, créer un pack génère un minuscule `launcher.vbs` qui démarre chaque exécutable
 de façon invisible, et un raccourci `.lnk` qui pointe dessus :
 
 ```mermaid
-graph TD
-    START((Déclencheur)) --> USER_SELECT["Lancer le pack (carte ou raccourci bureau)"]
-    USER_SELECT --> FETCH_PACK["Lecture de la définition du pack"]
-    FETCH_PACK --> ITER_APPS["Pour chaque exécutable"]
-    ITER_APPS --> CHECK_PATH{Fichier présent ?}
-    CHECK_PATH -- non --> LOG_ERR["Journal + notification d'erreur"]
-    CHECK_PATH -- oui --> VBS_BRIDGE["Pont VBScript"]
-    VBS_BRIDGE --> SILENT_LAUNCH["Lancement silencieux (aucune console)"]
+flowchart TD
+    subgraph SAVE["À l'enregistrement du pack"]
+        DEF["Programmes, nom, icône"] --> VBS[("launcher.vbs<br/>une ligne cachée chacun")]
+        VBS --> LNK[("Raccourci .lnk du pack")]
+    end
+    subgraph RUN["Au lancement"]
+        CARD(["Carte, lien ou API"]) --> CMD[["run_launch_pack"]]
+        CMD --> HAS{"launcher.vbs<br/>présent ?"}
+        HAS -- "non" --> ERR(["Toast d'erreur"])
+        HAS -- "oui" --> WS["wscript, sans fenêtre"]
+        WS --> APPS(["Chaque programme démarre,<br/>sans attente"])
+    end
+    LNK -- "double-clic" --> WS
 ```
+
+Lancer un pack ne revérifie pas les programmes ; cette vérification n'a lieu qu'à l'import d'un
+pack, qui liste les programmes introuvables.
 
 !!! tip "Modifiable à tout moment"
 

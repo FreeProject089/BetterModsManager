@@ -35,11 +35,18 @@ function it runs; the palette renders it as a search result and the shortcuts pa
 bindable row.
 
 ```mermaid
-flowchart LR
-    REG["Command registry<br/>(title · keywords · action)"] --> PAL["Ctrl+K palette<br/>classic + semantic search"]
-    REG --> KEY["Settings → Keyboard shortcuts<br/>rebind · reset · clear"]
-    NAV["Custom navbar pages"] --> REG
+flowchart TD
+    CORE["Built-in commands"] --> REG["Command registry<br/>title, keywords, action"]
+    NAV["Live navbar<br/>(custom pages too)"] --> REG
+    REG --> PAL["Ctrl+K palette<br/>classic or semantic"]
+    OTHER["Mods, profiles,<br/>settings, docs"] --> PAL
+    REG --> KEY["Keyboard shortcuts<br/>rebind, reset, clear"]
+    KEY -- "saves" --> BIND[("Bindings<br/>localStorage")]
+    BIND --> DISP["Key dispatcher<br/>runs the command"]
 ```
+
+The palette searches more than commands (mods, profiles, themes, plugins, settings and docs
+too), but only commands get a shortcut.
 
 That is why a custom page you added yesterday is searchable *and* bindable today without registering
 anything by hand, and why a command can never appear in one place and be missing from the other.

@@ -31,6 +31,7 @@ import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';
 import { initCardReorder } from './card-order.js';
 import { renderCspEditor, bindCspEditor } from './csp-editor.js';
+import { uiIcon } from '../../ui/icons.js';
 
 
 // ── GitHub PAT helper ─────────────────────────────────────
@@ -475,7 +476,7 @@ async function initLanguageSettings() {
             <button class="nav-lang-btn" id="settings-lang-toggle" style="width: 240px; background: rgba(0,0,0,0.3);">
                 <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
                 <span class="nav-lang-name">${current.name}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+                ${uiIcon('chevron-up', 12, { cls: 'nav-lang-chevron' })}
             </button>
             <div class="settings-lang-menu" id="settings-lang-menu">
                 ${languages.map(l => {
@@ -485,14 +486,14 @@ async function initLanguageSettings() {
                         <button class="nav-lang-option" data-lang="${l.code}" style="flex:1;">
                             <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
                             <span>${l.name}</span>
-                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                            ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent);margin-left:auto' })) : ''}
                         </button>
                         ${protectedLang ? '' : `
                             <button class="nav-lang-dl" data-lang-dl="${l.code}" data-tooltip="${t('settings.langDownload') || 'Download .json'}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                ${uiIcon('download', 12)}
                             </button>
                             <button class="nav-lang-del" data-lang-del="${l.code}" data-lang-name="${escHtml(l.name)}" data-tooltip="${t('settings.langRemove') || 'Remove language'}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                ${uiIcon('delete', 12)}
                             </button>`}
                     </div>`;
                 }).join('')}
@@ -643,7 +644,7 @@ export async function renderSettingsTags() {
             const wrap = document.createElement('div');
             wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
             wrap.innerHTML = iconMod.renderTagChip(tag, { fontSize: 12, pad: '4px 10px' })
-                + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;opacity:0.7">✎</button>`
+                + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;opacity:0.7" aria-label="${escHtml(t('common.edit') || 'Edit')}">${uiIcon('edit', 14)}</button>`
                 + `<button data-id="${tag.id}" class="btn-del-tag" data-tasky="settings.tagDeleteTip" data-tasky-icon="trash" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
             list.appendChild(wrap);
         });
@@ -1554,7 +1555,7 @@ async function initCatalogIndexSettings() {
                 <div class="cix-added-row">
                     <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`))}</span>
                     <span class="cix-added-url">${escHtml(e.url)}</span>
-                    <button type="button" class="btn btn-xs btn-ghost cix-drop" data-i="${i}">×</button>
+                    <button type="button" class="btn btn-xs btn-ghost cix-drop" data-i="${i}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
                 </div>`).join('');
             addedEl.querySelectorAll<HTMLElement>('.cix-drop').forEach((b) => b.addEventListener('click', () => {
                 extra.splice(Number(b.dataset.i), 1);
@@ -1782,7 +1783,7 @@ async function initCatalogIndexSettings() {
                   <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
                   ${e.via ? `<span class="cat-index-from" title="${escAttr(e.via)}">${escHtml(originLabel(e.via))}</span>` : ''}
                   ${gone ? `<button class="btn btn-ghost btn-sm cat-index-readd" data-t="${escAttr(e.type)}" data-u="${escAttr(e.url)}" data-v="${escAttr(e.via || '')}">${escHtml(t('settings.catIndex.readd') || 'Bring back')}</button>` : ''}
-                  <button class="btn btn-ghost btn-sm cat-index-forget" data-i="${i}" title="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}">×</button>
+                  <button class="btn btn-ghost btn-sm cat-index-forget" data-i="${i}" title="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}" aria-label="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}">${uiIcon('close', 14)}</button>
                </div>`;
             }).join('')
             // Two different empty states. "Nothing yet" over a history that has 90 lines and a
@@ -2049,17 +2050,17 @@ export async function initSettings() {
 
             content.innerHTML = `
                 <div class="modal-header">
-                    <div class="bms-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+                    <div class="bms-icon">${uiIcon('export', 18)}</div>
                     <h3 class="modal-title">${t('settings.exportTitle')}</h3>
                     <button type="button" class="modal-close" aria-label="${escAttr(t('common.close'))}" data-remove-closest=".modal-overlay">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        ${uiIcon('close', 18)}
                     </button>
                 </div>
                 
                 <div class="modal-body">
                     <div class="exp-opt-list">
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportProfiles')}</span>
                                 <span class="exp-opt-desc">${t('settings.exportProfilesDesc') || 'Game profiles, paths and active mod lists'}</span>
@@ -2070,7 +2071,7 @@ export async function initSettings() {
                             </label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportMods')}</span>
                                 <span class="exp-opt-desc">${t('settings.exportModsDesc') || 'Scanned mod entries and metadata'}</span>
@@ -2081,7 +2082,7 @@ export async function initSettings() {
                             </label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportTags')}</span>
                                 <span class="exp-opt-desc">${t('settings.exportTagsDesc') || 'Your custom tags assigned to mods'}</span>
@@ -2092,7 +2093,7 @@ export async function initSettings() {
                             </label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportSettings')}</span>
                                 <span class="exp-opt-desc">${t('settings.exportSettingsDesc') || 'App preferences and configuration'}</span>
@@ -2103,7 +2104,7 @@ export async function initSettings() {
                             </label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportPlugins') || 'Plugins'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportPluginsDesc') || 'Installed plugins and their permissions'}</span>
@@ -2111,7 +2112,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-plugins" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportModpacks') || 'Modpacks & Launch Packs'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportModpacksDesc') || 'Your .BMP modpacks and application launch packs'}</span>
@@ -2119,7 +2120,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-modpacks" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportThemes') || 'Themes'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportThemesDesc') || 'Your installed custom themes'}</span>
@@ -2127,7 +2128,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-themes" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportTranslations') || 'Translations'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportTranslationsDesc') || 'Custom & imported language files'}</span>
@@ -2135,7 +2136,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-translations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportApps') || 'App Catalog & favourites'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportAppsDesc') || 'Community catalog sources, favourites, installed apps & server-repo favourites'}</span>
@@ -2146,7 +2147,7 @@ export async function initSettings() {
                              in the archive: a JSON export can carry them only by inlining, which turns a
                              40 MB recording into a 55 MB string inside a document nothing can stream. -->
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportAutomations') || 'Automations'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportAutomationsDesc') || 'Your scheduled tasks, exactly as the scheduler saved them'}</span>
@@ -2154,7 +2155,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-automations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportReplays') || 'Session recordings'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportReplaysDesc') || 'Everything the recorder kept (.bmmreplay) — often the largest part'}</span>
@@ -2162,7 +2163,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-replays"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportNavigation') || 'Navigation & custom pages'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportNavigationDesc') || 'Your navbar layout plus every custom page — source, permissions and stored data'}</span>
@@ -2170,7 +2171,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-navigation" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportCrashes') || 'Crash reports'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportCrashesDesc') || 'Reports and their archive — what a maintainer asks for after a crash'}</span>
@@ -2178,7 +2179,7 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-crashes"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportDiagnostics') || 'Diagnostics'}</span>
                                 <span class="exp-opt-desc">${t('settings.exportDiagnosticsDesc') || 'The diagnostic files BMM writes when something goes wrong'}</span>
@@ -2190,7 +2191,7 @@ export async function initSettings() {
                              afternoon of setup; this one loses you the thing that proves you
                              are you. -->
                         <label class="exp-opt exp-opt-danger">
-                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m17 6 3 3"/></svg></span>
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m17 6 3 3"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${escHtml(t('settings.exportKeys'))}</span>
                                 <span class="exp-opt-desc">${escHtml(t('settings.exportKeysDesc'))}</span>
@@ -2211,7 +2212,7 @@ export async function initSettings() {
                     </div>
 
                     <div class="exp-note">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        ${uiIcon('info', 16)}
                         <span>${t('settings.exportNote2') || 'Writes one .DATABMM file — an archive holding everything you ticked, with a manifest saying what went in.'}</span>
                     </div>
                 </div>

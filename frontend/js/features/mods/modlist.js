@@ -27,6 +27,7 @@ function newRunId() {
 let _installRun = null;
 // Re-exporting toast from app.js for now or until moved to a better place
 import { toast, toastSaved } from '../../ui/app.js';
+import { uiIcon } from '../../ui/icons.js';
 /**
  * The origins the mods in the ACTIVE profile update from.
  *
@@ -377,7 +378,7 @@ export function initModlist() {
         const createProfile = document.getElementById('chk-import-as-profile')?.checked || false;
         installBtn.disabled = true;
         installBtn.classList.add('loading');
-        installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.installing')}`;
+        installBtn.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px' })} ${t('common.installing')}`;
         // Show progress UI
         const progressOverlay = document.getElementById('imported-progress-overlay');
         const progressList = document.getElementById('imported-progress-list');
@@ -389,7 +390,7 @@ export function initModlist() {
         const cancelBtn = document.getElementById('btn-cancel-import-dl');
         if (cancelBtn) {
             cancelBtn.disabled = false;
-            cancelBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> ${t('prof.cancel').toUpperCase()}`;
+            cancelBtn.innerHTML = `${uiIcon('close', 12, { style: 'margin-right:6px' })} ${t('prof.cancel').toUpperCase()}`;
         }
         // Clear previous results
         const existingResults = previewCard.querySelectorAll('.install-results-container');
@@ -458,7 +459,7 @@ export function initModlist() {
                 _installRun = null;
             installBtn.disabled = false;
             installBtn.classList.remove('loading');
-            installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection') || t('mm.installAll')}`;
+            installBtn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installSelection') || t('mm.installAll')}`;
             // Closed when Cancel was pressed; otherwise left up briefly so the last state reads.
             if (progressOverlay && !run.cancelled) {
                 setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
@@ -555,10 +556,10 @@ function updateInstallBtnText() {
     if (!btn)
         return;
     if (count === total) {
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
+        btn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installAll')}`;
     }
     else {
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection')} (${count})`;
+        btn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installSelection')} (${count})`;
     }
 }
 export function renderImportedModlist(modlist) {
@@ -615,13 +616,13 @@ export function renderImportedModlist(modlist) {
         </div>
 
         <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(0,255,255,0.03); border-radius:8px; border:1px solid rgba(6,182,212,0.1); margin-top:10px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            ${uiIcon('folder', 14, { style: 'color:var(--cyan)' })}
             <div style="flex:1; min-width:0">
                 <div data-i18n="mm.installPath" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
                 <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
             </div>
             <button class="btn btn-sm btn-ghost" id="btn-override-import-path" data-tooltip="${t('modlist.overrideImportPath') || 'Change destination folder'}" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
-                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                 ${uiIcon('edit', 14)}
             </button>
         </div>
         
@@ -670,7 +671,7 @@ export function renderImportedModlist(modlist) {
           ${m.install_notes ? `
             <div style="background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); border-radius:8px; padding:10px; margin-top:4px">
                 <div style="font-size:10px; font-weight:800; color:var(--bmm-warning); text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    ${uiIcon('file-text', 12)}
                     Installation Notes
                 </div>
                 <p style="font-size:11.5px; color:var(--text-secondary); margin:0; line-height:1.5">${escHtml(m.install_notes)}</p>
@@ -702,7 +703,7 @@ export function renderImportedModlist(modlist) {
             return `
             <details style="margin-top:4px">
               <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; font-family:var(--font-mono); display:flex; align-items:center; gap:6px; user-select:none">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                ${uiIcon('chevron-right', 12)}
                 ${t('mm.fileTree').replace('{count}', fileCount)}
                 ${allHashed
                 ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
@@ -741,14 +742,14 @@ export function renderImportedModlist(modlist) {
             <div id="imported-progress-overlay" style="display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(10,14,23,0.9); z-index:100; border-radius:12px; flex-direction:column; padding:24px; backdrop-filter:blur(8px)">
                 <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px">
                     <div style="width:40px; height:40px; background:var(--accent-dim); border-radius:10px; display:flex; align-items:center; justify-content:center">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        ${uiIcon('loader', 24, { style: 'color:var(--accent);animation:spin 2s linear infinite' })}
                     </div>
                     <div>
                         <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">${t('mm.installingTitle')}</h4>
                         <p style="margin:0; font-size:12px; color:var(--text-muted)">${t('mm.installingDesc')}</p>
                     </div>
                     <button class="btn btn-danger btn-sm" id="btn-cancel-import-dl" style="margin-left:auto; height:32px; padding:0 16px; font-size:11px; font-weight:800">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        ${uiIcon('close', 12, { style: 'margin-right:6px' })}
                         ${t('prof.cancel').toUpperCase()}
                     </button>
                 </div>
@@ -759,7 +760,7 @@ export function renderImportedModlist(modlist) {
 
             <div style="padding:0 4px">
                 <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:8px">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    ${uiIcon('list', 12)}
                     ${t('mm.installPreview')}
                     
                     <div style="margin-left:auto; display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-secondary); cursor:pointer; user-select:none">
@@ -776,15 +777,15 @@ function getLinkIcon(type) {
     const style = 'width:14px;height:14px;vertical-align:middle;margin-right:6px;opacity:0.8';
     switch (type) {
         case 'github':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
         case 'google_drive':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M22 10L14 10L14 2L22 10Z"/><path d="M6 22L14 22L22 10L14 10L6 22Z"/><path d="M2 10L10 10L6 22L2 10Z"/></svg>`;
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M22 10L14 10L14 2L22 10Z"/><path d="M6 22L14 22L22 10L14 10L6 22Z"/><path d="M2 10L10 10L6 22L2 10Z"/></svg>`;
         case 'mega':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M12 3l9 4v10l-9 4-9-4V7l9-4z"/><path d="M12 8v8M8 12h8"/></svg>`;
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M12 3l9 4v10l-9 4-9-4V7l9-4z"/><path d="M12 8v8M8 12h8"/></svg>`;
         case 'direct':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
         default:
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
     }
 }
 /**

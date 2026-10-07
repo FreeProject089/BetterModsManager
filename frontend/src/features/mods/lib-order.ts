@@ -22,6 +22,7 @@ import { appState } from '../../core/state.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { type OrderedMod, type Rival, moveId, sameOrder } from '../profiles/load-order-model.js';
 import { bindLibOrderKeys } from '../profiles/load-order-keys.js';
+import { uiIcon } from '../../ui/icons.js';
 
 type Where = -1 | 1 | 'top' | 'bottom';
 
@@ -32,11 +33,11 @@ let toast: Notify = () => { /* not mounted yet */ };
 const S = appState.state as any;
 
 const I = {
-    list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>',
-    top: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14"/><path d="m7 14 5-5 5 5"/><path d="M12 9v11"/></svg>',
-    up: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
-    down: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
-    bottom: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14"/><path d="m7 10 5 5 5-5"/><path d="M12 15V4"/></svg>',
+    list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>',
+    top: (uiIcon('move-top', 12)),
+    up: (uiIcon('chevron-up', 12)),
+    down: (uiIcon('chevron-down', 12)),
+    bottom: (uiIcon('move-bottom', 12)),
 };
 
 /** `{n}` / `{m}` / `{t}` / `{f}` placeholders, as load-order.ts fills them. */

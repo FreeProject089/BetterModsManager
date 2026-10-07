@@ -55,12 +55,15 @@ HTTP — **HTTPS is strongly recommended**.
     since a direct download carries no version.
 
 ```mermaid
-flowchart LR
-    PROF["Profile"] --> COPY["Copy the mod files<br/>into the output dir"]
-    COPY --> GEN["Build repo.json<br/>(files + SHA-256 + chunk hashes)"]
-    GEN --> SIGN["Sign (ed25519 author_id)"]
-    SIGN --> SERVE["Serve over HTTP(S)<br/>(mini-server or standalone)"]
-    SERVE --> LINK["Share the link"]
+flowchart TD
+    PROF(["Profile"]) --> COPY["Copy or zip<br/>the mod files"]
+    COPY --> GEN["Build repo.json<br/>SHA-256 + chunk hashes"]
+    GEN --> SIGN["Sign the manifest<br/>(Ed25519)"]
+    SIGN --> OUT[("Output folder")]
+    OUT --> HOW{"Who serves it?"}
+    HOW -- "BMM" --> MINI[["Built-in server"]]
+    HOW -- "your machine" --> STAND["Standalone server"]
+    HOW -- "any host" --> STATIC["Static web host"]
 ```
 
 ### Access control (self-hosted)
@@ -82,14 +85,14 @@ The client never blindly re-downloads. It fetches the manifest and reconciles it
 
 ```mermaid
 sequenceDiagram
-    participant Host as Server repo
     participant Client as Subscriber's BMM
-    Client->>Host: GET repo.json (files + SHA-256)
+    participant Host as Server repo
+    Client->>Host: GET repo.json (password, identity)
     Host-->>Client: manifest
-    Note over Client: skip files whose SHA-256 already matches
-    Client->>Host: for a changed file, request only the mismatched 4 MB chunks (HTTP Range)
-    Host-->>Client: those chunks
-    Note over Client: verify each file's SHA-256, then deploy
+    Note over Client: refuse unsafe paths, skip files whose SHA-256 matches
+    Client->>Host: changed file: mismatched 4 MB chunks (Range), else whole file
+    Host-->>Client: chunks or file
+    Note over Client: re-hash each file, then update the library and profile
 ```
 
 A **version string** on the repo drives update *detection*: BMM flags a mod when the repo's published

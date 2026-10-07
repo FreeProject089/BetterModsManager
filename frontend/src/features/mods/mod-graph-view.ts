@@ -13,6 +13,7 @@ import {
     buildTree, findRoots, renderTreeText, missingDependencies,
     type GraphMod, type GraphConflict, type TreeNode,
 } from './mod-graph.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /**
  * `get_all_mod_conflicts` returns { modId: ConflictReport[] } — one entry per side, so the
@@ -99,7 +100,7 @@ export async function showModGraph(rootId?: string): Promise<void> {
                     <button class="btn btn-ghost btn-sm" id="mg-copy"
                         data-tooltip="${escAttr(t('mg.copyTip') || 'Copy the tree as text — searchable and quotable, unlike a screenshot')}">${esc(t('mg.copy') || 'Copy as text')}</button>
                 </div>
-                <button type="button" class="modal-close" id="mg-close" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="mg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
             <div class="modal-body">
             ${missing.length ? `<div class="mg-warn">${esc((t('mg.missingSummary')

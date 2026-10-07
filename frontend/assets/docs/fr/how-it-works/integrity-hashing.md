@@ -80,16 +80,18 @@ Vérifier un mod compare sa baseline stockée à ce qui est sur le disque mainte
 listes :
 
 ```mermaid
-flowchart TB
-    START([Vérifier un mod]) --> BASE{"une baseline<br/>existe ?"}
-    BASE -- non --> INIT["Tout hacher maintenant,<br/>stocker comme baseline<br/>→ rapport valide"]
-    BASE -- oui --> WALK["Pour chaque entrée de la baseline"]
-    WALK --> EX{"fichier toujours<br/>là ?"}
-    EX -- non --> MISS["missing[]"]
-    EX -- oui --> CMP{"le hash correspond ?<br/>(b3: ou sha256 legacy)"}
-    CMP -- non --> MOD["modified[]"]
+flowchart TD
+    START([Vérifier un mod]) --> BASE{"Référence<br/>existante ?"}
+    BASE -- non --> INIT["Hacher chaque fichier,<br/>l'enregistrer"]
+    INIT --> VALID([Rapport valide])
+    BASE -- oui --> WALK["Chaque entrée<br/>de la référence"]
+    WALK --> EX{"Fichier encore<br/>là ?"}
+    EX -- non --> MISS["missing"]
+    EX -- oui --> CMP{"Hash identique ?"}
+    CMP -- non --> MOD["modified"]
     CMP -- oui --> OK["ok"]
-    WALK --> NEW["Fichiers sur le disque sans<br/>entrée de baseline → added[]"]
+    BASE -- oui --> DISK["Fichiers sans entrée<br/>dans la référence"]
+    DISK --> ADD["added"]
 ```
 
 | Champ | Signification |
@@ -120,6 +122,42 @@ IDENTIQUES pour un mod archivé et son jumeau décompressé »*.
 
 ---
 
+## La fenêtre Intégrité
+
+Paramètres → Hachages / SHA & Intégrité → **Vérifier l'intégrité** (aussi *Statistiques de hachage*
+dans la palette de commandes, et le raccourci de la barre de navigation) ouvre une seule fenêtre
+qui fait tout ce qui précède pour un profil, ou pour tous :
+
+- **Cinq tuiles** : *Tous les mods*, *Vérifié* (les fichiers correspondent), *Différence* (un fichier a
+  changé, est apparu ou a disparu), *Sans hash* (jamais haché) et *Non vérifié* (haché,
+  jamais comparé). Chaque tuile sert aussi de filtre pour la liste.
+- **Une ligne d'activité** : la file de hachage en arrière-plan et le mod en cours, ou la
+  vérification en cours avec **Arrêter**. La liste reste utilisable pendant ce temps. L'interrupteur
+  à côté est *Hacher les nouveaux mods en arrière-plan*.
+- **La liste**, une ligne par mod : son état, son nombre de fichiers, la date du hachage, son
+  `content_id` (raccourci, avec un bouton copier), **Vérifier** et **Re-hacher**, et à la demande
+  chaque fichier avec son empreinte, les fichiers modifiés signalés.
+- **Actions groupées** : *Vérifier les N affichés*, *Vérifier la sélection*, *Hacher N
+  manquant(s)*, *Re-hacher…*, et **Exporter le rapport** en JSON ou CSV.
+
+Une vérification traite **un mod à la fois** (`get_mod_integrity`) : Arrêter agit entre deux mods
+et une longue vérification ne fige jamais la fenêtre. La liste elle-même vient de
+`get_hash_overview`, qui lit les états sans transporter les tables d'empreintes.
+
+!!! warning "Recalculer veut dire : accepter ces fichiers"
+
+    Recalculer enregistre les fichiers tels qu'ils sont **maintenant** comme nouvelle référence.
+    Après un écart, regarde d'abord les fichiers listés ; ne recalcule qu'une fois que tu sais
+    pourquoi ils ont changé.
+
+Le **rapport d'un mod** (détails du mod → *Vérifier l'intégrité*) et le **contrôle du dossier du
+jeu** (Bibliothèque → *Vérifier l'intégrité*) affichent leur résultat dans la même langue
+visuelle : les mêmes pastilles d'état, les mêmes compteurs modifiés / manquants / ajoutés et les
+mêmes listes de fichiers. Le rapport d'un mod a un bouton *Ouvrir Intégrité…* qui mène à la
+fenêtre complète.
+
+---
+
 ## Où les hashs sont réellement appliqués
 
 Ça vaut la peine d'être précis — qu'un hash existe n'est pas la même chose qu'un hash qui bloque
@@ -132,17 +170,26 @@ quelque chose.
 | **Synchro de dépôt — par chunk** | Les gros fichiers portent des SHA-256 par chunk, donc un transfert reprisé ou partiel ne re-télécharge que les chunks qui diffèrent |
 | **Synchro de dépôt — après téléchargement** | Le fichier téléchargé est re-haché et comparé. Une divergence est une erreur, pas un avertissement |
 | **Application d'un modpack** | Le contrôle d'intégrité tourne, sauf si ce modpack a *ignorer le contrôle d'intégrité* |
-| **Activation d'un mod à la main** | Tu reçois la question si quelque chose ne colle pas |
+| **Activation d'un mod à la main** | Avec **Enforcement Strict de l'Intégrité** (Paramètres → Hachages), un mod sans référence est refusé et BMM demande : *Calculer d'abord* (le met en file, le laisse désactivé) ou *Activer quand même*. Fermer la question le laisse désactivé. Un mod dont le dernier contrôle a échoué garde son icône d'avertissement mais n'est pas bloqué |
 | **Activation depuis le planificateur** | **Le contrôle est contourné** — une exécution de fond ne peut pas s'arrêter pour te demander. Active à la main si tu veux la question |
 
 ```mermaid
-flowchart TB
-    DL([Téléchargement]) --> V1{"le hash correspond<br/>à ce qui était promis ?"}
-    V1 -- non --> HALT["erreur — non installé"]
-    V1 -- oui --> LIB[(Bibliothèque)]
-    LIB --> CHK([Contrôle d'intégrité]) --> V2{"la baseline<br/>correspond au disque ?"}
-    V2 -- non --> FLAG["missing / modified / added<br/>+ icône d'avertissement persistée"]
-    V2 -- oui --> GAME["déploiement sûr"]
+flowchart TD
+    subgraph IN["Obtenir un mod"]
+        DL([Téléchargement]) --> V1{"Hash conforme<br/>à la promesse ?"}
+        V1 -- non --> HALT["Erreur, non installé"]
+        V1 -- oui --> LIB[(Bibliothèque)]
+    end
+    subgraph USE["L'utiliser"]
+        LIB --> CHK[[Contrôle d'intégrité]]
+        CHK --> V2{"Référence<br/>= disque ?"}
+        V2 -- non --> FLAG["Écart, marque gardée"]
+        V2 -- oui --> SAFE["Vérifié"]
+        LIB --> EN{"Activer : strict<br/>et pas de référence ?"}
+        EN -- oui --> ASK["Demander : calculer<br/>ou activer quand même"]
+        EN -- non --> GAME([Déployé])
+        ASK -- quand même --> GAME
+    end
 ```
 
 Parce que le contrôle porte sur le contenu, il attrape une corruption qu'aucun contrôle de nom ou de

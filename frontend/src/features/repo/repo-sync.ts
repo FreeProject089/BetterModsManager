@@ -30,6 +30,7 @@ let lastRepoPassword: string | null = null;
 // tsc says nothing, so the first 401 would have been a ReferenceError. check-undefined-names
 // caught it; that is the gate's whole job.
 import { promptRepoPassword } from '../../ui/ask-one.js';
+import { uiIcon } from '../../ui/icons.js';
 export { promptRepoPassword };
 
 // Pre-seed the session download password (e.g. from a deeplink / API-driven sync that
@@ -274,8 +275,8 @@ function _openRepoVerifyDetail(repo: any, isVerified: boolean, reason?: string):
         statusIcon.style.background = isVerified ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)';
         statusIcon.style.border     = isVerified ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(231,76,60,0.3)';
         statusIcon.innerHTML = isVerified
-            ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
-            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+            ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`
+            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
     }
     if (statusLabel) {
         statusLabel.textContent = isVerified ? (t('repo.verified') || 'Vérifié') : (t('repo.unverified') || 'Non vérifié');
@@ -306,8 +307,8 @@ function _openRepoVerifyDetail(repo: any, isVerified: boolean, reason?: string):
         sigBox.style.borderColor  = isVerified ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.2)';
         sigBox.style.background   = isVerified ? 'rgba(46,204,113,0.06)' : 'rgba(231,76,60,0.06)';
         sigIcon.innerHTML = isVerified
-            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
-            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
         if (isVerified) {
             sigTitle.textContent = t('repo.verifyDetail.sigOk') || 'Signature Ed25519 valide';
             sigDesc.textContent  = t('repo.verifyDetail.sigOkDesc') || "Le contenu de ce dépôt a été signé par l'auteur et n'a pas été altéré.";
@@ -750,7 +751,7 @@ export function initRepoSync(elements) {
                         mpGroup.style.border = '1px solid rgba(255,255,255,0.08)';
                         mpGroup.style.borderRadius = '8px';
                         mpGroup.innerHTML = `<h4 style="margin:0 0 12px; font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            ${uiIcon('box', 14)}
                             ${t('modpack.sharedModpacks') || 'Modpacks Partagés'}
                         </h4>`;
 
@@ -1024,12 +1025,12 @@ export function initRepoSync(elements) {
                     await invoke('resume_repo_sync');
                     pausedBadge.style.display = 'none';
                     pauseText.textContent = t('repo.pauseSync');
-                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>${t('repo.pauseSync')}</span>`;
+                    btnPauseSync.innerHTML = `${uiIcon('pause', 12)} <span>${t('repo.pauseSync')}</span>`;
                 } else {
                     await invoke('pause_repo_sync');
                     pausedBadge.style.display = 'block';
                     pauseText.textContent = t('repo.resumeSync');
-                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${t('repo.resumeSync')}</span>`;
+                    btnPauseSync.innerHTML = `${uiIcon('play', 12)} <span>${t('repo.resumeSync')}</span>`;
                 }
             } catch (err) {
                 toast(t('repo.syncError') + err, 'error');
@@ -1083,7 +1084,7 @@ export function showSyncSummary(summary) {
     if (!summary || !summary.profiles || summary.profiles.length === 0) {
         // "Nothing to do" is a result, not an absence — say what was checked and what it means.
         body.innerHTML = `<div class="empty-state" style="padding:22px 12px;">
-            <div class="empty-icon" style="opacity:.55;color:var(--success);"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 6 9 17l-5-5"/></svg></div>
+            <div class="empty-icon" style="opacity:.55;color:var(--success);">${uiIcon('check', 32)}</div>
             <p class="empty-title" style="font-size:13px;">${escHtml(t('repo.noChanges'))}</p>
             <p class="empty-desc" style="font-size:11.5px;">${escHtml(t('repo.noChangesHint') || 'Every mod in this repo matches what you already have — nothing to download, nothing to remove.')}</p>
         </div>`;

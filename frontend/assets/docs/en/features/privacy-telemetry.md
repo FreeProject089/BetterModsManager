@@ -17,20 +17,20 @@ The dialog has four buttons and nothing else counts as an answer (a click beside
 | **Later** (or Escape) | Nothing saved, nothing sent; asked again at the next launch |
 
 ```mermaid
-graph TD
-    CONSENT{Opt-in consent?} -- "declined / not asked" --> NOTHING["Nothing collected"]
-    CONSENT -- "accepted" --> EVENTS["Events: pages, clicks, perf, errors"]
-    REPLAY["Session replay (masked by default)"] --> EVENTS
-
-    EVENTS --> QUEUE["Local queue (jsonl, 10 MB cap)"]
-    QUEUE --> ENDPOINT{Endpoint configured?}
-    ENDPOINT -- no --> LOCAL["Stays on disk"]
-    ENDPOINT -- yes --> GZIP["Gzip batch + packet id"]
-    GZIP --> ALLOWLIST["HTTPS-only allow-list"]
-    ALLOWLIST --> SERVER["Telemetry server"]
-
-    GDPR["Export / per-packet deletion (72 h)"] --> SERVER
-    GDPR --> QUEUE
+flowchart TD
+    CONSENT{"Telemetry<br/>accepted?"} -- "no or not asked" --> NOTHING(["Nothing collected"])
+    CONSENT -- "yes" --> EVENTS["Events: pages, clicks,<br/>perf, errors"]
+    CONSENT -- "yes" --> REPLAY["Masked replay<br/>(own switch)"]
+    EVENTS --> QUEUE[("Local queue<br/>jsonl, 10 MB cap")]
+    REPLAY --> QUEUE
+    QUEUE -- "Export" --> EXPORT(["JSON file"])
+    QUEUE --> ENDPOINT{"HTTPS endpoint<br/>configured?"}
+    ENDPOINT -- "no" --> LOCAL(["Stays on disk"])
+    ENDPOINT -- "yes" --> GZIP["Gzip batch<br/>+ packet id"]
+    GZIP --> SERVER(["Telemetry server"])
+    GZIP -- "listed" --> SENT[("Sent packets")]
+    SENT --> DEL["Deletion request<br/>(within 72 h)"]
+    DEL --> SERVER
 ```
 
 ## If you opt in
@@ -117,20 +117,22 @@ stops it and deletes what was waiting to be sent.
   your user-folder name, e-mail addresses, IP addresses and your PC name are removed before
   anything leaves. The telemetry server removes them a second time on arrival.
 - **Grouped, not repeated.** The same error again within 10 minutes only adds 1 to a counter. At
-  most 60 new errors an hour are sent, the waiting list is capped at 200 lines, and it is kept on
+  most 60 new errors an hour are sent, the waiting list is capped at 200 distinct errors, and it is kept on
   disk so an offline PC sends it later.
 - **Not linked to your other telemetry.** The report carries a one-way hash of your install id,
   which the dashboard cannot match to anything else. A data request or an erasure still covers it.
 
 ```mermaid
-graph TD
-    ERR["Error, crash, failed command"] --> SWITCH{"Telemetry AND Send errors live?"}
-    SWITCH -- no --> DROP["Nothing"]
-    SWITCH -- yes --> CLEAN["Secrets, folder names, e-mails, IPs removed"]
-    CLEAN --> GROUP["Grouped by fingerprint, counted"]
-    GROUP --> DISK["Queue on disk, 200 lines max"]
-    DISK --> SEND["Sent within seconds, HTTPS"]
-    SEND --> SERVER["Telemetry server: Issues"]
+flowchart TD
+    ERR(["Error, crash,<br/>failed command"]) --> SWITCH{"Telemetry and<br/>Send errors live?"}
+    SWITCH -- "no" --> DROP(["Nothing"])
+    SWITCH -- "yes" --> CLEAN["Secrets, folder names,<br/>e-mails, IPs removed"]
+    CLEAN --> SEEN{"Same fingerprint<br/>waiting?"}
+    SEEN -- "yes" --> COUNT["Its count + 1"]
+    SEEN -- "no" --> QUEUE[("Queue on disk<br/>200 errors max")]
+    COUNT --> QUEUE
+    QUEUE --> SEND[["Sender: new in 3 s,<br/>others every 60 s"]]
+    SEND --> SERVER(["Telemetry server:<br/>Issues"])
 ```
 
 ## Laya usage statistics
@@ -161,22 +163,21 @@ Crash reports and saved session replays stay **local** under retention limits yo
 BMM doesn't just trust the OS "connected" flag — it **probes** two lightweight endpoints; if
 neither answers within 5 seconds, you're offline.
 
-- A discreet **"no connection" banner** appears, and network features (repo syncs, catalogs,
-  update checks) pause with a warning toast instead of failing cryptically.
+- A discreet **"no connection" banner** appears. It is a notice, not a lock: network features
+  (repo syncs, catalogs, update checks) are not switched off, so one you start while offline fails
+  with its own error.
 - **Everything local keeps working** — library, profiles, activation, the mapper, themes.
-- Recovery is automatic: while offline BMM re-probes every **15 seconds**; online, a 2-minute
-  re-check catches connections that died silently.
+- Recovery is automatic: while offline BMM re-probes every **15 seconds**, and a re-check every
+  2 minutes, online or not, catches connections that died silently.
 
 ```mermaid
-graph TD
-    NAVIGATOR["navigator.onLine + events"] --> PROBE{Probe 2 endpoints}
-    PROBE -- "any responds" --> ONLINE[Online]
-    PROBE -- "both fail" --> OFFLINE[Offline state]
-
-    OFFLINE --> BANNER["'No connection' banner"]
-    OFFLINE --> GATES["Online features paused (toast)"]
-    OFFLINE --> FAST["Re-probe every 15 s"]
-    FAST --> PROBE
-    ONLINE --> SLOW["Re-check every 120 s"]
-    SLOW --> PROBE
+flowchart TD
+    START(["Startup or<br/>online event"]) --> NAV{"navigator.onLine?"}
+    TIMER["Re-check: 15 s offline,<br/>120 s always"] --> NAV
+    NAV -- "true" --> PROBE{"gstatic, then Cloudflare:<br/>answer within 5 s?"}
+    NAV -- "false" --> OFF["Offline"]
+    OSOFF(["OS offline event"]) --> OFF
+    PROBE -- "yes" --> ON(["Online, banner hidden"])
+    PROBE -- "no" --> OFF
+    OFF --> BANNER(["No connection banner"])
 ```

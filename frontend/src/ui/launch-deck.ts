@@ -29,6 +29,7 @@ import {
     collectEligible, orderSteps, maxReachable, closeTarget,
     type LaunchContext, type StepLike,
 } from './launch-logic.js';
+import { uiIcon } from './icons.js';
 
 export type { LaunchContext } from './launch-logic.js';
 
@@ -172,7 +173,7 @@ function ensureCss(): Promise<void> {
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
-const X_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+const X_ICON = (uiIcon('close', 16));
 
 function mount(initial: LaunchStep[], ctx: LaunchContext, onClosed: () => void): void {
     const steps: LaunchStep[] = initial.slice();

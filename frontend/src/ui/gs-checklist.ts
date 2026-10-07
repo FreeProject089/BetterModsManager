@@ -10,8 +10,9 @@
 // is mostly looked at early, when those signals fire constantly.
 
 import { invoke } from '../core/api.js';
+import { uiIcon } from './icons.js';
 
-const CHECK = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const CHECK = `${uiIcon('check', 12)}`;
 
 type StepId = 'lang' | 'profile' | 'mod' | 'bc';
 

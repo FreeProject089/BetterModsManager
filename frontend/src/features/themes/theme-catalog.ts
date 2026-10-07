@@ -19,6 +19,7 @@ import { installTheme, activateTheme, getInstalledThemes, getActiveTheme, isLigh
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
 import { openModal } from '../../ui/modal-shell.js';
+import { uiIcon } from '../../ui/icons.js';
 
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
@@ -35,9 +36,9 @@ let _selId: string | null = null;
 let _loading = false;
 let _presetsDir = '';
 
-const PALETTE_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>';
-const MOON_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
-const SUN_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const PALETTE_SVG = (uiIcon('palette', 18));
+const MOON_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+const SUN_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 
 // ── Init & open ───────────────────────────────────────────────────────────────
 export function initThemeCatalog(): void {
@@ -82,7 +83,7 @@ function buildModal(): void {
             </div>`,
         footer: `<div class="modal-footer-start">
                 <button type="button" class="btn btn-ghost btn-sm" id="theme-cat-reset" title="${escAttr(t('themes.resetDefaultTip'))}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    ${uiIcon('reset', 12)}
                     ${escHtml(t('themes.resetDefault'))}
                 </button>
                 <span class="tcg-presets" id="tcg-presets" hidden>
@@ -101,13 +102,13 @@ function buildModal(): void {
     bar.className = 'modal-toolbar tcg-toolbar';
     bar.innerHTML = `
         <label class="tcg-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            ${uiIcon('search', 14)}
             <input id="theme-cat-search" class="form-input" type="search" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('themes.searchPh'))}" aria-label="${escAttr(t('themes.searchPh'))}">
         </label>
         ${seg('tcg-src', [['all', escHtml(t('themes.filterAll'))], ['mine', escHtml(t('themes.mine'))], ['builtin', escHtml(t('themes.srcBuiltin'))], ['catalog', escHtml(t('themes.catalogThemes'))]], _src)}
         ${seg('tcg-mode', [['any', escHtml(t('themes.modeAny'))], ['dark', `${MOON_SVG}<span>${escHtml(t('themes.modeDark'))}</span>`], ['light', `${SUN_SVG}<span>${escHtml(t('themes.modeLight'))}</span>`]], _mode)}
         <button type="button" class="btn btn-ghost btn-sm tcg-refresh" id="theme-cat-refresh" title="${escAttr(t('common.refresh'))}" aria-label="${escAttr(t('common.refresh'))}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            ${uiIcon('reapply', 14)}
         </button>`;
     m.dialog.insertBefore(bar, m.body);
     m.body.classList.add('modal-body--flush');

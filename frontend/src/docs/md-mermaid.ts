@@ -4,6 +4,15 @@
 // bounds after layout; both were written for the docs hub (docs-hub.ts) and live here so a
 // second surface, a saved order list's notes, draws a diagram that looks like the docs' one
 // instead of mermaid's defaults. Import-light on purpose: the vendor loader and nothing else.
+//
+// How a diagram is written (BMM Docs and the in-app diagrams follow the same rules, so they read
+// the same in light and dark and at the docs width):
+//   · `flowchart LR` for a short pipeline (≤ 6 steps), `flowchart TD` for decisions and longer
+//     flows, `sequenceDiagram` for a request/response between ≤ 5 participants;
+//   · ≤ ~14 nodes, grouped with `subgraph ID["Title"]` by layer or phase;
+//   · labels of 2–5 words (one `<br/>` at most), edge labels of 1–3 words, the detail in prose;
+//   · shapes mean something: ([start/end]) {decision} [(store)] [[Rust command / worker]];
+//   · NO colours (`style`, `classDef`, `linkStyle`, hex, %%{init}%%): this theme paints them.
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 
 // mermaid derives most of its palette from the few colours it is handed, using real colour
@@ -88,7 +97,9 @@ export function mermaidTheme(securityLevel: 'loose' | 'strict' = 'loose') {
     // Baking the line-height into the SVG's own stylesheet makes both passes agree wherever the
     // diagram ends up.
     themeCSS: '.nodeLabel,.edgeLabel,.label,.actor,.messageText,.noteText,.loopText'
-      + '{line-height:1.35;} .nodeLabel p,.edgeLabel p{margin:0;}',
+      + '{line-height:1.35;} .nodeLabel p,.edgeLabel p{margin:0;}'
+      // Subgraph titles read as headings, edge labels as annotations.
+      + ' .cluster-label .nodeLabel,.cluster-label span{font-weight:600;} .edgeLabel{font-size:12px;}',
     // Tell mermaid which way round the surface is, so anything it still derives itself lands on
     // the readable side. Getting this wrong is how light themes ended up with white-on-white.
     darkMode: luma(base) < 0.5,

@@ -75,16 +75,18 @@ Checking a mod compares its stored baseline against what is on disk right now, a
 lists:
 
 ```mermaid
-flowchart TB
-    START([Check a mod]) --> BASE{"baseline<br/>exists?"}
-    BASE -- no --> INIT["Hash everything now,<br/>store it as the baseline<br/>→ report is valid"]
-    BASE -- yes --> WALK["For each baseline entry"]
-    WALK --> EX{"file still<br/>there?"}
-    EX -- no --> MISS["missing[]"]
-    EX -- yes --> CMP{"hash matches?<br/>(b3: or legacy sha256)"}
-    CMP -- no --> MOD["modified[]"]
+flowchart TD
+    START([Check a mod]) --> BASE{"Baseline<br/>exists?"}
+    BASE -- no --> INIT["Hash every file,<br/>store as baseline"]
+    INIT --> VALID([Valid report])
+    BASE -- yes --> WALK["Each baseline entry"]
+    WALK --> EX{"File still<br/>there?"}
+    EX -- no --> MISS["missing"]
+    EX -- yes --> CMP{"Hash matches?"}
+    CMP -- no --> MOD["modified"]
     CMP -- yes --> OK["ok"]
-    WALK --> NEW["Files on disk with no<br/>baseline entry → added[]"]
+    BASE -- yes --> DISK["Files with no<br/>baseline entry"]
+    DISK --> ADD["added"]
 ```
 
 | Field | Meaning |
@@ -115,6 +117,40 @@ mod and its unpacked twin"*.
 
 ---
 
+## The Integrity dialog
+
+Settings → Hashes / SHA & Integrity → **Check integrity** (also the command palette's *Hashing
+statistics* and the navbar shortcut) opens one dialog that does all of the above for a whole
+profile, or for every profile:
+
+- **Five tiles**: *All mods*, *Verified* (files match), *Mismatch* (a file changed, appeared or
+  vanished), *No hash* (never hashed) and *Not checked* (hashed, never compared). Each tile is
+  also the filter for the list under it.
+- **An activity line**: the background hashing queue and the mod being hashed, or the check in
+  progress with **Stop**. The list stays usable while either runs. The switch beside it is
+  *Hash new mods in the background*.
+- **The list**, one row per mod: its state, file count, when it was hashed, its `content_id`
+  (shortened, with a copy button), **Verify** and **Re-hash**, and on demand every file with its
+  hash, the changed ones marked.
+- **Bulk actions**: *Verify N shown*, *Verify selected*, *Hash N missing*, *Re-hash…*, and
+  **Export report** as JSON or CSV.
+
+A check runs **one mod at a time** (`get_mod_integrity`), so Stop takes effect between two mods
+and a long check never freezes the window. The list itself comes from `get_hash_overview`,
+which reads states only and does not ship hash maps.
+
+!!! warning "Re-hash means: accept these files"
+
+    Re-hashing records the files as they are **now** as the new reference. After a mismatch,
+    look at the files listed first; re-hash only once you know why they changed.
+
+The **per-mod report** (mod details → *Verify integrity*) and the **game-folder check**
+(Library → *Verify integrity*) show their result in the same language: the same state pills,
+the same changed / missing / added counts and file lists. The per-mod report has an
+*Open Integrity…* button that takes you to the full dialog.
+
+---
+
 ## Where hashes are actually enforced
 
 This is worth being precise about — a hash existing is not the same as a hash blocking something.
@@ -126,17 +162,26 @@ This is worth being precise about — a hash existing is not the same as a hash 
 | **Repo sync — per chunk** | Large files carry per-chunk SHA-256s, so a resumed or partial transfer re-fetches only the chunks that differ |
 | **Repo sync — after downloading** | The downloaded file is re-hashed and compared. A mismatch is an error, not a warning |
 | **Applying a modpack** | The integrity check runs, unless that modpack has *skip integrity check* set |
-| **Enabling a mod by hand** | You get the prompt if something looks off |
+| **Enabling a mod by hand** | With **Strict Integrity Enforcement** on (Settings → Hashes), a mod with no baseline is refused and BMM asks: *Hash it first* (queues it, leaves it off) or *Enable anyway*. Closing the question leaves it off. A mod whose last check failed shows its warning icon but is not blocked |
 | **Enabling from the scheduler** | **The check is bypassed** — a background run can't stop to ask you. Enable by hand if you want the prompt |
 
 ```mermaid
-flowchart TB
-    DL([Download]) --> V1{"hash matches<br/>what was promised?"}
-    V1 -- no --> HALT["error — not installed"]
-    V1 -- yes --> LIB[(Library)]
-    LIB --> CHK([Integrity check]) --> V2{"baseline<br/>matches disk?"}
-    V2 -- no --> FLAG["missing / modified / added<br/>+ warning icon persisted"]
-    V2 -- yes --> GAME["safe to deploy"]
+flowchart TD
+    subgraph IN["Getting a mod"]
+        DL([Download]) --> V1{"Hash matches<br/>the promise?"}
+        V1 -- no --> HALT["Error, not installed"]
+        V1 -- yes --> LIB[(Library)]
+    end
+    subgraph USE["Using it"]
+        LIB --> CHK[[Integrity check]]
+        CHK --> V2{"Baseline<br/>matches disk?"}
+        V2 -- no --> FLAG["Mismatch, flag kept"]
+        V2 -- yes --> SAFE["Verified"]
+        LIB --> EN{"Enable: strict<br/>and no baseline?"}
+        EN -- yes --> ASK["Ask: hash first<br/>or enable anyway"]
+        EN -- no --> GAME([Deployed])
+        ASK -- anyway --> GAME
+    end
 ```
 
 Because the check is content-based, it catches corruption no filename or size check would — two

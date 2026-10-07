@@ -63,6 +63,7 @@ import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProble
 import { regexWithBudget } from './regex-budget.js';
 import { fieldProblem } from './sched-feed.js';
 import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -72,7 +73,7 @@ import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
  * webview. The preset chips were the last place in the scheduler still using them.
  */
 const SVG16 = (d: string): string =>
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -1189,7 +1190,7 @@ export async function openRunLog(taskId: string): Promise<void> {
     ov.className = 'modal-overlay open';
     ov.innerHTML = `<div class="modal glass cm-modal modal--lg">
         <div class="modal-header"><h3 class="modal-title">${escHtml(t('sched.runlog.title') || 'Run log')}</h3>
-            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
         <div class="modal-body"><p style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.runlog.lede') || 'The last 50 runs, each action with its duration and, when it failed, why. Secrets are removed before anything is written.')}</p>${body}</div>
         <div class="modal-footer"><button class="btn btn-sm btn-ghost" data-clear>${escHtml(t('sched.runlog.clear') || 'Clear the log')}</button><button class="btn btn-sm" data-x>${escHtml(t('common.close'))}</button></div>
     </div>`;
@@ -4292,7 +4293,7 @@ function evalExpr(expr: string, ctx: RunCtx): number {
 // ── List rendering (glass-card) ───────────────────────────────────────────────
 /** Inline SVG icon for a trigger type (clock family / rocket / hand). */
 function triggerIcon(tr: Trigger): string {
-    const P = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const P = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     switch (tr.type) {
         case 'once':      return P('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');
         case 'interval':
@@ -4383,7 +4384,7 @@ export function renderScheduleList(): void {
         // Modern empty state: icon tile + message + hint, instead of a bare line.
         container.innerHTML = `
             <div class="sched-empty">
-                <div class="sched-empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="sched-empty-icon">${uiIcon('clock', 20)}</div>
                 <strong>${t('sched.emptyTitle') || 'No scheduled tasks yet'}</strong>
                 <span>${t('sched.empty') || 'Create one to automate BMM — sync a repo at night, switch profile before a session, launch your tools in one click.'}</span>
             </div>`;
@@ -4436,7 +4437,7 @@ export function renderScheduleList(): void {
         }
     }
 
-    const I = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const I = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     for (const task of shown) {
         const row = document.createElement('div');
         row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}`;
@@ -6046,7 +6047,7 @@ function renderModal(modal: HTMLElement): void {
       <div class="modal glass bms modal--full sched-modal">
         <div class="modal-header sched-head">
             <div class="sched-head-main">
-                <div class="bms-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="bms-icon" aria-hidden="true">${uiIcon('clock', 18)}</div>
                 <div class="bms-titles">
                     <div class="sched-head-line">
                         <h2 class="modal-title sched-head-name" id="sched-head-name">${escHtml(_draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')))}</h2>
@@ -6064,30 +6065,30 @@ function renderModal(modal: HTMLElement): void {
                     <span class="sched-mode-glider" aria-hidden="true"></span>
                     <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
                             data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
                         <span>${t('sched.modeBricks') || 'Blocks'}</span>
                     </button>
                     <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
                             data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        ${uiIcon('code', 12)}
                         <span>${t('sched.modeCode') || 'Code'}</span>
                     </button>
                     <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
                             data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
                         <span>${t('sched.modeFlow') || 'Flow'}</span>
                     </button>
                 </span>
                 <span class="sched-head-sep" aria-hidden="true"></span>
                 <button class="btn btn-sm btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>${escHtml(t('sched.prev.run'))}</span></button>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>${escHtml(t('sched.prev.run'))}</span></button>
                 <button class="btn btn-sm btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg><span>${escHtml(t('sched.dbg.run'))}</span></button>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg><span>${escHtml(t('sched.dbg.run'))}</span></button>
                 <button class="btn btn-sm btn-secondary sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>${t('sched.testRun') || 'Test run'}</span></button>
+                    ${uiIcon('play', 12)}<span>${t('sched.testRun') || 'Test run'}</span></button>
                 <button class="btn btn-sm btn-primary" id="sched-save-stay" data-tooltip="${escAttr(t('sched.head.saveTip'))}">${escHtml(t('common.save') || 'Save')}</button>
             </div>
-            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
         </div>
         <div class="sched-layout">
             <aside class="sched-side">
@@ -6249,12 +6250,12 @@ function renderModal(modal: HTMLElement): void {
                         <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false"
                             data-tasky="sched.outline.tip" data-tasky-icon="list">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
                             ${escHtml(t('sched.outline.toggle'))}
                         </button>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false"
                             data-tasky="sched.ref.insertHint" data-tasky-icon="icon-info">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
                             ${escHtml(t('sched.ref.toggle'))}
                         </button>
 
@@ -7354,7 +7355,7 @@ function askEditorMode(): Promise<EditorMode | null | 'away'> {
         ov.className = 'modal-overlay open sched-modeask';
         ov.innerHTML = `<div class="modal glass sched-modeask-card" role="dialog" aria-modal="true" aria-labelledby="sched-modeask-h">
             <div class="modal-header"><h3 class="modal-title" id="sched-modeask-h">${escHtml(t('sched.modes.askTitle'))}</h3>
-                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
             <div class="modal-body">
                 <p class="sched-modeask-lede">${escHtml(t('sched.modes.askLede'))}</p>
                 <div class="sched-modeask-list" role="radiogroup" aria-labelledby="sched-modeask-h">
@@ -7399,7 +7400,7 @@ function askEditorMode(): Promise<EditorMode | null | 'away'> {
 }
 
 function modeIcon(m: EditorMode): string {
-    const P = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const P = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     if (m === 'flow') return P('<rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/>');
     if (m === 'code') return P('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>');
     return P('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>');
@@ -7968,7 +7969,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 cb.className = 'sched-branch';
                 cb.innerHTML = `<div class="sched-branch-label" style="display:flex;align-items:center;gap:8px">${t('sched.switchCase') || 'CASE'} ${ci + 1}
                         <span class="sched-cond sched-sw-cond" style="flex:1"></span>
-                        <button class="btn btn-xs sched-chip sched-sw-delcase">✕</button></div>
+                        <button class="btn btn-xs sched-chip sched-sw-delcase" aria-label="${t('common.delete')}">${uiIcon('delete', 14)}</button></div>
                     <div class="sched-sw-case-steps"></div><div class="sched-sw-case-add"></div>`;
                 cb.querySelector('.sched-sw-cond')?.appendChild(conditionEditor(c.condition));
                 renderStepsEditor(cb.querySelector('.sched-sw-case-steps') as HTMLElement, c.steps, depth + 1);
@@ -8000,10 +8001,10 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             tools.className = 'sched-tools';
             const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
             tools.innerHTML = `
-                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.test.btnTip'))}" aria-label="${escAttr(t('sched.test.btn'))}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.test.btnTip'))}" aria-label="${escAttr(t('sched.test.btn'))}">${uiIcon('play', 12)}</button>
                 <button class="sched-tool sched-bp" aria-pressed="false" data-tooltip="${escAttr(t('sched.bp.add'))}" aria-label="${escAttr(t('sched.bp.add'))}"><svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg></button>
-                <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
+                <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}">${uiIcon('copy', 12)}</button>
+                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}">${uiIcon('power', 12)}</button>
                 <button class="sched-tool sched-del2" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
             headEl.appendChild(tools);
             tools.querySelector('.sched-run1')?.addEventListener('click', async (e) => {
@@ -8056,7 +8057,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         if (i > 0) {
             const ins = document.createElement('div');
             ins.className = 'sched-insert';
-            ins.innerHTML = `<button class="sched-insert-btn" data-tooltip="${escAttr(t('sched.insertHere') || 'Insert a step here')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>`;
+            ins.innerHTML = `<button class="sched-insert-btn" data-tooltip="${escAttr(t('sched.insertHere') || 'Insert a step here')}">${uiIcon('add', 12)}</button>`;
             ins.querySelector('.sched-insert-btn')?.addEventListener('click', () => {
                 if (ins.querySelector('.sched-insert-picker')) { ins.querySelector('.sched-insert-picker')?.remove(); return; }
                 const picker = document.createElement('div');
@@ -8154,38 +8155,38 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
 // "look"/"system"/"logic" icons were busy compound paths that read as a blur
 // at tile size — this was the "ugly action-type icons" complaint).
 const GROUP_ICON: Record<string, string> = {
-    mods:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
-    repo:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a3 3 0 0 1-3 3H9"/></svg>',
-    apps:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
-    look:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
-    perf:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
-    privacy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-    system:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
-    logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
+    mods:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+    repo:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a3 3 0 0 1-3 3H9"/></svg>',
+    apps:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+    look:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+    perf:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
+    privacy: (uiIcon('shield', 14)),
+    system:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+    logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
     // A paper plane: something leaves BMM for somewhere else.
-    notify:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
+    notify:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
-const SCHED_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+const SCHED_X = (uiIcon('close', 12));
 // One icon per step kind — used by the head tiles, the add-chips and the pickers.
 const KIND_ICON: Record<string, string> = {
-    action:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
-    if:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a6 6 0 0 0 6 6h6M14 9l4 3-4 3"/></svg>',
-    repeat:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21.9 3 18l4-3.9"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    waitFor: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
-    delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
-    forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
-    switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
-    try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    action:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+    if:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 6 6h6M14 9l4 3-4 3"/></svg>',
+    repeat:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21.9 3 18l4-3.9"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    waitFor: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
+    delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
+    forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
+    switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
+    try:     (uiIcon('warning', 12)),
     // Two lines running side by side, then meeting: the whole idea of the step.
-    parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
+    parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
     // A circular arrow with a small warning break: try again, because it went wrong.
-    retry:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
-    ensure:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M8.5 12.2l2.7 2.7L21 5.5"/></svg>',
-    signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
+    retry:   (uiIcon('reapply', 12)),
+    ensure:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M8.5 12.2l2.7 2.7L21 5.5"/></svg>',
+    signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
     // A box with an arrow going into it — the body lives elsewhere and is brought in here.
-    call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
+    call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
 };
 /** Kind-coloured icon tile that opens every step head (the visual anchor). */
 function _kindTile(kind: string): string {
@@ -8194,7 +8195,7 @@ function _kindTile(kind: string): string {
 // Fold chevron for collapsible control blocks (if / loop / wait until) — a
 // small rounded chip (not a bare ghost button) so it reads as a control at a
 // glance instead of a stray dot.
-const SCHED_CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+const SCHED_CHEV = (uiIcon('chevron-down', 12));
 // Fold button + a short summary shown only while collapsed.
 function _foldBtn(step: any): string {
     let sum = '';
@@ -8761,7 +8762,7 @@ function openKindPicker(anchor: HTMLElement, groups: PickGroup[], items: PickIte
     pop.className = 'skp';
     pop.setAttribute('role', 'dialog');
     pop.innerHTML = `
-        <div class="skp-top"><input type="search" class="skp-search input" placeholder="${escAttr(t('sched.pick.search') || 'Search…')}" autocomplete="off" spellcheck="false"><button type="button" class="skp-close" aria-label="close">✕</button></div>
+        <div class="skp-top"><input type="search" class="skp-search input" placeholder="${escAttr(t('sched.pick.search') || 'Search…')}" autocomplete="off" spellcheck="false"><button type="button" class="skp-close" aria-label="close">${uiIcon('close', 14)}</button></div>
         <div class="skp-body"></div>`;
     const body = pop.querySelector('.skp-body') as HTMLElement;
     const input = pop.querySelector('.skp-search') as HTMLInputElement;
@@ -10225,7 +10226,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             const arr: string[] = params.sources;
             chips.innerHTML = arr.length ? arr.map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;max-width:100%">
                 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" data-tooltip="${escAttr(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
-                <button type="button" class="sched-b-rm" data-i="${i}" style="background:none;border:0;color:var(--text-muted);cursor:pointer;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="sched-b-rm" data-i="${i}" style="background:none;border:0;color:var(--text-muted);cursor:pointer;display:inline-flex">${uiIcon('close', 12)}</button>
             </span>`).join('') : `<span style="font-size:11px;color:var(--text-muted)">${t('bench.noProfile') || 'Pick profiles / folders (else sandbox is used)'}</span>`;
             chips.querySelectorAll('.sched-b-rm').forEach(b => b.addEventListener('click', () => { params.sources.splice(Number((b as HTMLElement).dataset.i), 1); renderChips(); }));
         };
@@ -11107,8 +11108,9 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
                 const del = document.createElement('button');
                 del.type = 'button';
                 del.className = 'btn btn-xs btn-ghost sched-cond-del';
-                del.textContent = '✕';
-                del.title = t('common.delete') || 'Remove';
+                del.innerHTML = uiIcon('close', 14);
+                del.title = t('common.remove') || 'Remove';
+                del.setAttribute('aria-label', del.title);
                 del.addEventListener('click', () => { _snapshot(); (p.of as Condition[]).splice(i, 1); draw(); });
                 row.appendChild(conditionEditor(sub));
                 row.appendChild(del);
@@ -12059,7 +12061,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:12px;">
                     <div class="bms-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                     </div>
                     <div>
                         <h2 class="modal-title">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
@@ -12067,7 +12069,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     </div>
                 </div>
                 <button class="modal-close" id="sched-pc-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    ${uiIcon('close', 18)}
                 </button>
             </div>
             <div class="sched-pc-body">
@@ -12846,7 +12848,7 @@ async function pickBmmPath(): Promise<string | null> {
         }).join('');
         ov.innerHTML = `<div class="modal glass cm-modal pp-modal">
             <div class="modal-header"><h3 class="modal-title">${escHtml(t('paths.pickTitle'))}</h3>
-                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
             <p class="pp-lede">${escHtml(t('paths.pickLede'))}</p>
             <input type="search" class="input pp-q" id="pp-q" placeholder="${escAttr(t('common.search') || 'Search')}" spellcheck="false">
             <div class="pp-list" id="pp-list">${rows}</div>
@@ -13000,7 +13002,7 @@ async function openPreview(): Promise<void> {
     ov.innerHTML = `<div class="modal glass cm-modal pv-modal">
         <div class="modal-header">
             <h3 class="modal-title">${escHtml(t('sched.prev.title'))}</h3>
-            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
         </div>
         <p class="pv-lede">${escHtml(t('sched.prev.lede')
             .replace('{c}', String(changes))

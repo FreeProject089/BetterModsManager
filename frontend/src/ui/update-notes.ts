@@ -14,6 +14,7 @@ import { getLinks } from '../core/links-config.js';
 import { expandDocBlocks, headingSlug } from './rich-markdown.js';
 // Imported for its side effect: it registers the delegated `:::tabs` handler.
 import '../docs/md-hydrate.js';
+import { uiIcon } from './icons.js';
 
 // Persistence for expanded folders in the release notes tree
 const expandedFolders = new Set<string>();
@@ -85,7 +86,7 @@ export async function openUpdateNotesModal() {
                 return `
                     <div class="tree-folder" style="padding-left:${paddingLeft}px">
                         <div class="tree-folder-header ${isExpanded ? 'expanded' : ''}" data-folder="${escAttr(fullPath)}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0'}); transition: transform 0.2s;"><path d="M9 18l6-6-6-6"/></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform: rotate(${isExpanded ? '90deg' : '0'}); transition: transform 0.2s;" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
                             ${escHtml(item.name)}
                         </div>
                         <div class="tree-folder-children" style="display:${isExpanded ? 'block' : 'none'}">
@@ -98,7 +99,7 @@ export async function openUpdateNotesModal() {
             const note = allNotes.find(n => n.path === fullPath);
             return `
                 <div class="ptb-sidebar-item ${allNotes.length > 0 && note === defaultNote ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent; min-width:0;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    ${uiIcon('file', 14, { style: 'flex-shrink:0;' })}
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${escHtml(item.name)}</span>
                 </div>
             `;
@@ -108,12 +109,12 @@ export async function openUpdateNotesModal() {
     const renderHeader = () => `
         <div class="ptb-header-title">
             <div class="ptb-header-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                ${uiIcon('file', 18)}
             </div>
             <span>${t('update.title')}</span>
         </div>
         <button class="ptb-modal-close" id="close-update-notes">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            ${uiIcon('close', 18)}
         </button>
     `;
 
@@ -278,7 +279,7 @@ export function initUpdateNotes() {
 window.copyCodeToClipboard = (text, btn) => {
     navigator.clipboard.writeText(text).then(() => {
         const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> ' + (t('update.copied') || 'Copied!');
+        btn.innerHTML = (uiIcon('check', 14) + ' ') + (t('update.copied') || 'Copied!');
         btn.classList.add('copied');
         setTimeout(() => {
             btn.innerHTML = originalHtml;
@@ -850,7 +851,7 @@ function showUpdateAvailableModal(info) {
                     <h2 class="modal-title" id="upd-title">${t('settings.updateAvailableTitle') || 'Update Available!'}</h2>
                     <p class="bms-sub">${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}</p>
                 </div>
-                <button type="button" class="modal-close" id="close-update-modal" aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <button type="button" class="modal-close" id="close-update-modal" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
 
             <div class="modal-body">
@@ -861,7 +862,7 @@ function showUpdateAvailableModal(info) {
                         <div class="upd-ver-num">v${escHtml(info.current_version)}</div>
                     </div>
                     <div class="upd-arrow" aria-hidden="true">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </div>
                     <div class="upd-ver is-new">
                         <div class="upd-ver-label">${t('settings.latestVersion') || 'LATEST'}</div>
@@ -873,7 +874,7 @@ function showUpdateAvailableModal(info) {
                 ${releaseNotes ? `
                 <div class="upd-notes">
                     <div class="upd-notes-head">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        ${uiIcon('file', 12)}
                         ${t('settings.releaseNotes') || "WHAT'S NEW"}
                         <span style="flex:1;"></span>
                         <span class="upd-notes-v">v${escHtml(info.latest_version)}</span>
@@ -898,7 +899,7 @@ function showUpdateAvailableModal(info) {
 
                 ${info.major_bump ? `
                 <div class="upd-major">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
                     <div>${t('update.majorManual') || 'This is a <b>major version</b>. It installs by hand: download the installer below and run it — it migrates your existing data and settings. There is no in-place quick update for a major version.'}</div>
                 </div>
                 ` : ''}
@@ -910,12 +911,12 @@ function showUpdateAvailableModal(info) {
                 </div>
                 <button type="button" class="btn btn-ghost" id="btn-update-later">${t('settings.later') || 'Later'}</button>
                 <button type="button" class="btn ${info.manifest_url && !info.major_bump ? 'btn-secondary' : 'btn-primary'}" id="btn-download-install-update">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    ${uiIcon('download', 12)}
                     ${t('update.fullInstaller') || 'Full Installer (.msi)'}
                 </button>
                 ${info.manifest_url && !info.major_bump ? `
                 <button type="button" class="btn btn-primary" id="btn-incremental-update" data-tooltip="${escAttr(t('update.recommended') || 'Recommended')}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                     <span>${t('update.quickUpdate') || 'Quick Update'}</span>
                 </button>
                 ` : ''}
@@ -1008,7 +1009,7 @@ function showUpdateAvailableModal(info) {
         downloadBtn.addEventListener('click', async () => {
             const originalContent = downloadBtn.innerHTML;
             downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ' + (t('update.downloading') || 'Downloading...');
+            downloadBtn.innerHTML = (uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite' }) + ' ') + (t('update.downloading') || 'Downloading...');
             try {
                 // Prefer BetterInstaller's updater (delta + signature + rollback via the
                 // bundled <install>/uninstall.exe). On success it spawns the updater and
@@ -1106,12 +1107,12 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
     const renderHeader = () => `
         <div class="ptb-header-title">
             <div class="ptb-header-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                ${uiIcon('file', 18)}
             </div>
             <span>${t('settings.notesTitle')}</span>
         </div>
         <button class="update-modal-close" id="close-ptb-modal">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            ${uiIcon('close', 18)}
         </button>
     `;
 
@@ -1122,7 +1123,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
                 return `
                     <div class="tree-folder" style="padding-left:${paddingLeft}px">
                         <div class="tree-folder-header" data-folder="${escAttr(item.path)}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            ${uiIcon('folder', 12)}
                             ${escHtml(item.name)}
                         </div>
                         <div class="tree-folder-children" style="display:none">
@@ -1134,7 +1135,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
                 const note = allNotes.find(n => n.path === item.path);
                 return `
                     <div class="ptb-sidebar-item ${allNotes.length > 0 && note === activeNote ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent; min-width:0;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        ${uiIcon('file', 14, { style: 'flex-shrink:0;' })}
                         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${escHtml(item.name)}</span>
                     </div>
                 `;
@@ -1493,7 +1494,7 @@ async function openLangSelectModal(): Promise<void> {
                 ">
                     <span id="lang-select-flag">${getFlag(current)}</span>
                     <span id="lang-select-name" style="flex:1; text-align:left">${current ? current.name : ''}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="lang-select-chevron" style="transition:transform 0.2s"><polyline points="18 15 12 9 6 15"/></svg>
+                    ${uiIcon('chevron-up', 12, { style: 'transition:transform 0.2s', id: 'lang-select-chevron' })}
                 </button>
 
                 <div id="lang-select-menu" style="
@@ -1514,7 +1515,7 @@ async function openLangSelectModal(): Promise<void> {
                         ">
                             ${getFlag(l)}
                             <span style="flex:1;text-align:left">${l.name}</span>
-                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                            ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent)' })) : ''}
                         </button>
                     `).join('')}
                 </div>

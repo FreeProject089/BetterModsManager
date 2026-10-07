@@ -5,13 +5,14 @@ import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
 import { getDebugSections, watchDebugSections } from './debug-sections.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /**
  * debug-ui.js — UI Logic for BMM DevTools
  */
 
 // Sidebar icons. Inline and tiny, decorative (aria-hidden): the label beside each says it.
-const NAV_ICON = (d) => `<svg class="debug-tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const NAV_ICON = (d) => `<svg class="debug-tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const NAV_ICONS = {
     console:    NAV_ICON('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
     timeline:   NAV_ICON('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
@@ -183,25 +184,25 @@ class DebugUI {
         div.innerHTML = `
             <div class="debug-header">
                 <div class="debug-title" id="debug-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/></svg>
                     <span>BMM DevTools</span>
                 </div>
                 <div class="debug-controls" role="toolbar" data-dbg-aria="dev.aria.toolbar">
                     <button type="button" class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" data-dbg-aria="dev.btn.openDevtools" data-tasky="dev.msg.jsDesc" data-tasky-icon="icon-help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        ${uiIcon('code', 14)}
                     </button>
                     <button type="button" class="debug-btn" id="debug-btn-inspect" aria-pressed="false" data-dbg-aria="dev.aria.inspect" data-tasky="dev.tool.inspectTip" data-tasky-icon="icon-help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     </button>
                     <button type="button" class="debug-btn" id="debug-btn-export" data-dbg-aria="dev.aria.export" data-tasky="dev.tool.exportTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     </button>
                     <span class="debug-controls-sep" aria-hidden="true"></span>
                     <button type="button" class="debug-btn" id="dbg-clear-all" data-dbg-aria="dev.aria.clearAll" data-tasky="dev.tool.clearAllTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                        ${uiIcon('delete', 14)}
                     </button>
                     <button type="button" class="debug-btn" id="debug-btn-close" data-dbg-aria="dev.aria.close" data-tasky="dev.tool.closeTip" data-tasky-icon="help">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        ${uiIcon('close', 14)}
                     </button>
                 </div>
             </div>
@@ -226,7 +227,7 @@ class DebugUI {
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid var(--bmm-s05); display:flex; gap:8px">
                     <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:var(--debug-sunken); border:1px solid var(--debug-border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; outline:none">
                         <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" data-tasky="dev.tool.clearConsoleTip" data-tasky-icon="help">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                            ${uiIcon('delete', 12)}
                         </button>
                     </div>
                     <div id="console-logs" class="debug-fill-scroll debug-list" role="log" data-dbg-empty="dev.empty.console"></div>
@@ -240,7 +241,7 @@ class DebugUI {
                         <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
                         <div class="debug-fill"></div>
                         <button class="debug-btn" id="timeline-clear-manual" data-i18n-tooltip="dev.btn.clearHistory" data-tasky="dev.tool.clearHistoryTip" data-tasky-icon="help">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                            ${uiIcon('delete', 12)}
                         </button>
                     </div>
                     <div id="timeline-list" class="debug-fill-scroll debug-list" data-dbg-empty="dev.empty.timeline"></div>
@@ -457,7 +458,7 @@ class DebugUI {
                         <div class="debug-studio-grid">
                             <section class="debug-studio-card">
                                 <div class="debug-studio-head">
-                                    <span class="debug-studio-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>
+                                    <span class="debug-studio-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>
                                     <h4 data-i18n="rstudio.title">Replay Studio</h4>
                                     <span class="debug-studio-state" id="debug-rstudio-state"></span>
                                 </div>
@@ -466,7 +467,7 @@ class DebugUI {
                             </section>
                             <section class="debug-studio-card">
                                 <div class="debug-studio-head">
-                                    <span class="debug-studio-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></span>
+                                    <span class="debug-studio-icon" aria-hidden="true">${uiIcon('run', 16)}</span>
                                     <h4 data-i18n="anim.title">Animation Studio</h4>
                                     <span class="debug-studio-state" id="debug-anim-state"></span>
                                 </div>
@@ -1644,13 +1645,13 @@ class DebugUI {
             : 'info';
 
         // Type-specific icon
-        const ipcIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`;
-        const clickIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 9l-4 11 3.5-1.5L10.5 22l4-11"/><path d="M17 2l-1 7 3 1"/></svg>`;
-        const navIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
-        const patchIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+        const ipcIcon = `${uiIcon('activity', 12)}`;
+        const clickIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 9l-4 11 3.5-1.5L10.5 22l4-11"/><path d="M17 2l-1 7 3 1"/></svg>`;
+        const navIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+        const patchIcon = `${uiIcon('code', 12)}`;
         const actionIcon = item.type?.startsWith('PATCH') ? patchIcon
             : (item.type === 'CLICK' ? clickIcon : (item.type === 'NAV' ? navIcon
-            : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>`));
+            : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>`));
 
         const icon = isIPC ? ipcIcon : actionIcon;
         const label = isIPC ? item.command : item.type;
@@ -1728,8 +1729,8 @@ class DebugUI {
                         <div class="debug-hint">${target.id ? '#' + target.id : ''} ${Array.from(target.classList).map(c => '.' + c).join(' ')}</div>
                     </div>
                     <div style="display:flex; gap:4px">
-                        <button class="debug-btn" id="inspect-copy-node" data-tooltip="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                        <button class="debug-btn" id="inspect-send-playground" data-tooltip="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
+                        <button class="debug-btn" id="inspect-copy-node" data-tooltip="Copy HTML" style="padding:4px">${uiIcon('copy', 12)}</button>
+                        <button class="debug-btn" id="inspect-send-playground" data-tooltip="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
                     </div>
                 </div>
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
@@ -1756,7 +1757,7 @@ class DebugUI {
                             <div style="color:var(--debug-accent); font-family:'JetBrains Mono'; font-size:10px; display:flex; align-items:center; gap:4px">
                                 ${prop}
                                 <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/${prop}" target="_blank" style="opacity:0.4; color:inherit; text-decoration:none">
-                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-10h7v7m-11 4L22 2"/></svg>
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-10h7v7m-11 4L22 2"/></svg>
                                 </a>
                             </div>
                             <input type="text"

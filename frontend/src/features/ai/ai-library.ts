@@ -15,6 +15,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { rowsFromSuggestions, toggleRow, buildFields, pct, providerBlock, type SuggestionRow, type AiSuggestion } from './ai-model.js';
 import { ensureAiCss, loadAiView, sourceLabel, fieldLabel, reasonText } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
+import { uiIcon } from '../../ui/icons.js';
 
 export interface LibraryOpts {
     /** The library as the page holds it (id, name, description, tags…). */
@@ -26,7 +27,7 @@ export interface LibraryOpts {
 
 interface Item { id: string; name: string; rows: SuggestionRow[]; notes: string[]; done: boolean; error?: string }
 
-const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const IC = (uiIcon('ai', 16));
 
 let _overlay: HTMLElement | null = null;
 let _opener: HTMLElement | null = null;
@@ -77,7 +78,7 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
           <div class="modal-header">
             <div class="bms-icon" aria-hidden="true">${IC}</div>
             <h2 class="modal-title" id="ail-title">${escHtml(t('ai.lib.title'))}</h2>
-            <button type="button" class="modal-close" id="ail-close" aria-label="${escAttr(t('common.close'))}" ${_running ? 'disabled' : ''}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button type="button" class="modal-close" id="ail-close" aria-label="${escAttr(t('common.close'))}" ${_running ? 'disabled' : ''}>${uiIcon('close', 16)}</button>
           </div>
           <div class="modal-body ai-body">${body}</div>
           <div class="modal-footer ai-foot">${foot}</div>

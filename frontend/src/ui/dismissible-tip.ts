@@ -15,6 +15,7 @@
 // animation, a keyboard affordance, syncing the state across views — lands once.
 
 import { t } from '../core/i18n.js';
+import { uiIcon } from './icons.js';
 
 export function wireDismissibleTip(opts: {
     /** The banner itself. */
@@ -90,7 +91,7 @@ export function wireTipDismissal(root: ParentNode = document): void {
         btn.setAttribute('aria-label', t('settings.tipHide'));
         btn.dataset.i18nTooltip = 'settings.tipHide';
         btn.dataset.tooltip = t('settings.tipHide');
-        btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+        btn.innerHTML = `${uiIcon('close', 12)}`;
         btn.addEventListener('click', () => {
             try { localStorage.setItem(TIP_KEY(id), '1'); } catch { /* preference only */ }
             tip.classList.add('tip-dismissed');

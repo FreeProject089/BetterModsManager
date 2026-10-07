@@ -21,6 +21,7 @@
 
 import { focusStops, wrapIndex, ownsFocus } from './focus-trap.js';
 import { raiseAboveAll } from './layer.js';
+import { uiIcon } from './icons.js';
 
 const CSS_ID = 'modal-shell-css';
 
@@ -317,7 +318,7 @@ export type ModalTone = 'accent' | 'danger' | 'warn' | 'ok';
 
 /** The × every dialog uses (an icon, not a glyph: "×" sits on the font's baseline and drifts
  *  from theme to theme). */
-export const MODAL_CLOSE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+export const MODAL_CLOSE_SVG = (uiIcon('close', 16));
 
 /** The class list of the card for a size / extra classes. Pure. */
 export function modalClassName(size: ModalSize = 'md', extra = '', tall = false): string {

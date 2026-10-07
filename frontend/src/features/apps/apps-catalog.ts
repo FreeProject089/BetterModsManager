@@ -15,6 +15,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { learnMore } from '../../core/learn-more.js';
+import { uiIcon } from '../../ui/icons.js';
 
 // Renders a labelled, fully-visible (wrapping) + copyable hash block for the
 // checksum warning modals. Inline styles so it works inside the generic confirm
@@ -92,24 +93,24 @@ let _collections: FavCollection[] = loadCollections();
 
 // ── SVG icon helpers ──────────────────────────────────────────────────────────
 const IC = {
-    lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
-    download: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-    play:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
-    trash:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
-    folder:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
-    star:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    lock: (uiIcon('lock', 14)),
+    download: `${uiIcon('download', 12)}`,
+    play:     `${uiIcon('play', 12)}`,
+    trash:    `${uiIcon('delete', 12)}`,
+    folder:   `${uiIcon('open-folder', 12)}`,
+    star:     `${uiIcon('star', 12)}`,
     starFill: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-    refresh:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>`,
-    close:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-    plus:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-    link:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
-    check:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`,
-    info:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-    histInstall: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-    histLaunch:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
-    histRemove:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-    monitor:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-    replace:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-replace-icon lucide-replace"><path d="M14 4a1 1 0 0 1 1-1"/><path d="M15 10a1 1 0 0 1-1-1"/><path d="M21 4a1 1 0 0 0-1-1"/><path d="M21 9a1 1 0 0 1-1 1"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a2 2 0 0 1 2-2h2"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`,
+    refresh:  `${uiIcon('refresh', 14)}`,
+    close:    `${uiIcon('close', 18)}`,
+    plus:     `${uiIcon('add', 12)}`,
+    link:     `${uiIcon('external', 12)}`,
+    check:    `${uiIcon('check', 12)}`,
+    info:     `${uiIcon('alert', 12)}`,
+    histInstall: `${uiIcon('download', 14)}`,
+    histLaunch:  `${uiIcon('play', 14)}`,
+    histRemove:  `${uiIcon('error', 14)}`,
+    monitor:  `${uiIcon('monitor', 12)}`,
+    replace:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-replace-icon lucide-replace" aria-hidden="true"><path d="M14 4a1 1 0 0 1 1-1"/><path d="M15 10a1 1 0 0 1-1-1"/><path d="M21 4a1 1 0 0 0-1-1"/><path d="M21 9a1 1 0 0 1-1 1"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a2 2 0 0 1 2-2h2"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`,
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -167,10 +168,7 @@ function renderShell(view: HTMLElement) {
     <div class="apps-root">
       <div class="apps-header">
         <div class="apps-header-left">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/>
-            <rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/>
-          </svg>
+          ${uiIcon('grid', 20)}
           <div>
             <h2 class="apps-title" data-i18n="apps.title">App Catalog</h2>
             <p class="apps-subtitle" data-i18n="apps.subtitle">Browse &amp; install apps in one click</p>
@@ -192,7 +190,7 @@ function renderShell(view: HTMLElement) {
 
       <div class="apps-toolbar" id="apps-toolbar" style="${_activeTab === 'browse' ? '' : 'display:none'}">
         <div class="apps-search-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ${uiIcon('search', 14)}
           <input class="apps-search" id="apps-search" type="text" placeholder="${t('common.search') || 'Search...'}" value="${escAttr(_searchQ)}">
         </div>
         <select class="apps-filter" id="apps-filter-cat">
@@ -238,12 +236,12 @@ function renderShell(view: HTMLElement) {
 
 function tabIcon(tab: string) {
     const icons: Record<string, string> = {
-        browse:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
-        installed: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`,
-        favorites: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-        history:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5"/></svg>`,
-        sources:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
-        create:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+        browse:    `${uiIcon('search', 14)}`,
+        installed: `${uiIcon('check', 14)}`,
+        favorites: `${uiIcon('star', 14)}`,
+        history:   `${uiIcon('history', 14)}`,
+        sources:   `${uiIcon('globe', 14)}`,
+        create:    `${uiIcon('edit', 14)}`,
     };
     return icons[tab] || '';
 }
@@ -399,7 +397,7 @@ function renderBrowse() {
     }
 
     if (!apps.length) {
-        html += `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>${_searchQ || _filterTag !== 'all' ? (t('apps.noResults')||'No results') : (t('apps.emptyBrowse')||'Catalog is empty')}</p></div>`;
+        html += `<div class="apps-empty">${uiIcon('search', 48, { style: 'opacity:0.4' })}<p>${_searchQ || _filterTag !== 'all' ? (t('apps.noResults')||'No results') : (t('apps.emptyBrowse')||'Catalog is empty')}</p></div>`;
     } else {
         html += `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
     }
@@ -563,9 +561,9 @@ function catLabel(cat: string): string {
 
 /** Small (badge-sized) category icon — drawn at 12px via CSS. */
 function catIconSm(cat: string) {
-    if (cat === 'game') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".7" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r=".7" fill="currentColor" stroke="none"/></svg>`;
-    if (cat === 'utility') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>`;
+    if (cat === 'game') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".7" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r=".7" fill="currentColor" stroke="none"/></svg>`;
+    if (cat === 'utility') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>`;
 }
 
 /**
@@ -595,9 +593,9 @@ function claimChip(app: any): string {
 }
 
 function thumbIcon(cat: string) {
-    if (cat === 'game') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4"/><circle cx="16" cy="10" r="1" fill="currentColor"/><circle cx="18" cy="12" r="1" fill="currentColor"/></svg>`;
-    if (cat === 'utility') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
-    return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`;
+    if (cat === 'game') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4"/><circle cx="16" cy="10" r="1" fill="currentColor"/><circle cx="18" cy="12" r="1" fill="currentColor"/></svg>`;
+    if (cat === 'utility') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`;
 }
 
 // ── Shared uninstall flow (used by Installed tab + detail modal) ───────────────
@@ -656,7 +654,7 @@ function renderInstalled() {
     const apps = Object.values(_state.installed);
 
     if (!apps.length) {
-        content.innerHTML = `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><polyline points="20 6 9 17 4 12"/></svg><p>${t('apps.noneInstalled')||'No apps installed yet'}</p></div>`;
+        content.innerHTML = `<div class="apps-empty">${uiIcon('check', 48, { style: 'opacity:0.4' })}<p>${t('apps.noneInstalled')||'No apps installed yet'}</p></div>`;
         return;
     }
 
@@ -777,7 +775,7 @@ function renderFavorites() {
     let apps = _catalog.filter(a => _state.favorites.includes(a.id));
 
     if (!apps.length) {
-        content.innerHTML = `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><p>${t('apps.noFavorites')||'No favorites yet'}</p></div>`;
+        content.innerHTML = `<div class="apps-empty">${uiIcon('star', 48, { style: 'opacity:0.4' })}<p>${t('apps.noFavorites')||'No favorites yet'}</p></div>`;
         return;
     }
 
@@ -807,7 +805,7 @@ function renderFavorites() {
     content.innerHTML = `
     <div class="apps-fav-toolbar">
       <div class="apps-fav-search-wrap">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        ${uiIcon('search', 12)}
         <input class="apps-fav-search" id="fav-search" type="text" placeholder="${t('common.search')||'Search...'}" value="${escAttr(_favSearch)}">
       </div>
       ${allCats.length > 1 ? `<select class="apps-filter" id="fav-filter-cat">
@@ -822,13 +820,13 @@ function renderFavorites() {
 
     <div class="apps-collections">
       <div class="apps-collection-row${_favCollection==='all'?' active':''}" data-coll="all">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        ${uiIcon('star', 12)}
         <span class="apps-collection-name">${t('apps.fav.allFavs')||'All favorites'}</span>
         <span class="apps-collection-count">${_state.favorites.length}</span>
       </div>
       ${_collections.map(col => `
       <div class="apps-collection-row${_favCollection===col.id?' active':''}" data-coll="${escAttr(col.id)}">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        ${uiIcon('folder', 12)}
         <span class="apps-collection-name">${escHtml(col.name)}</span>
         <span class="apps-collection-count">${col.appIds.filter(id => _state.favorites.includes(id)).length}</span>
         <button class="btn btn-xs btn-ghost btn-danger-ghost" data-del-coll="${escAttr(col.id)}" style="margin-left:auto">${IC.trash}</button>
@@ -915,7 +913,7 @@ function renderAppCardWithCollMenu(app: AppEntry) {
     return base.replace('</div>\n    </div>', `
       <div style="margin-top:4px;position:relative">
         <button class="apps-tag-chip" id="btn-${menuId}" data-tooltip="${t('apps.fav.addToCollection')||'Add to collection'}">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          ${uiIcon('folder', 12)}
           ${inColls.length ? inColls.map(c => escHtml(c.name)).join(', ') : (t('apps.fav.addToCollection')||'Collection')}
         </button>
         <div id="${menuId}" style="display:none;position:absolute;bottom:28px;left:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:100;min-width:140px">
@@ -969,7 +967,7 @@ function renderHistory() {
 
     if (!all.length) {
         content.innerHTML = `<div class="apps-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5"/></svg>
+          ${uiIcon('history', 48, { style: 'opacity:0.3' })}
           <p>${t('apps.noHistory')||'No activity yet'}</p>
         </div>`;
         return;
@@ -1068,7 +1066,7 @@ function renderSources() {
       <div class="apps-sources-list">
         ${_state.community_sources.map(url => `
         <div class="apps-source-row${isDisabled(url) ? ' is-off' : ''}">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          ${uiIcon('globe', 14)}
           <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
           ${httpChip(url, 'apps-source-label')}
           ${(() => {
@@ -2080,9 +2078,9 @@ function openDetailModal(appId: string) {
         ${app.md_link ? `
         <div class="adm-readme">
           <button class="adm-readme-toggle" id="adm-readme-toggle" data-md="${escAttr(app.md_link)}" data-open="0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            ${uiIcon('file', 14)}
             <span>README</span>
-            <svg class="adm-readme-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            ${uiIcon('chevron-down', 14, { cls: 'adm-readme-chevron' })}
           </button>
           <div class="adm-readme-content" id="adm-readme-content"></div>
         </div>` : ''}
@@ -2349,7 +2347,7 @@ function openInstallModal(app: AppEntry) {
       ${app.requirements ? `<div class="apps-install-req">${IC.info} ${escHtml(app.requirements)}</div>` : ''}
 
       ${isSetup ? `<div class="apps-install-setup-note">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          ${uiIcon('alert', 14)}
           ${t('apps.install.setupAuto')||'This app uses its own installer. Just click through its wizard — BMM detects the result automatically.'}
         </div>` : `
       <label class="apps-install-label">${t('apps.installPath')||'Install folder'}</label>
@@ -2531,7 +2529,7 @@ function showLauncherPicker(appId: string, exes: { name: string; path: string; s
       <div class="modal glass modal--md">
         <div class="modal-header">
           <h2 class="modal-title">${escHtml(t('apps.pickLauncher')||'Choose launcher')}</h2>
-          <button class="modal-close" id="alp-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <button class="modal-close" id="alp-close">${uiIcon('close', 20)}</button>
         </div>
         <div class="modal-body">
           <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;">${escHtml(t('apps.pickLauncherDesc')||'This app contains several executables. Pick the one to launch, or keep BMM auto choice.')}</p>

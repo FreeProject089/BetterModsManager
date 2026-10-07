@@ -37,10 +37,18 @@ Deux actions faciles à confondre, et une seule touche tes fichiers :
 - **Activer ou désactiver un mod** est la seule chose qui touche au dossier de destination.
 
 ```mermaid
-flowchart TB
-    SW([Changer de profil actif]) --> PTR["La sélection change — aucune I/O,<br/>les mods déployés restent en place"]
-    EN([Activer un mod]) --> DEPLOY["Copier ses fichiers dans le dossier de destination<br/>(sauvegarder le vrai fichier de jeu remplacé)"]
-    DIS([Désactiver un mod]) --> REMOVE["Retirer ses fichiers — restaurer depuis le mod<br/>suivant qui les a, ou depuis _original/"]
+flowchart TD
+    subgraph SWITCH["Changer de profil actif"]
+        SW(["Choisir un autre profil"]) --> PTR["La sélection change,<br/>aucun fichier touché"]
+    end
+    subgraph TOGGLE["Activer ou désactiver un mod"]
+        TOG(["Activer ou désactiver"]) --> JOB[["Tâche d'activation<br/>(en file, une à la fois)"]]
+        JOB --> MODE{"Laquelle ?"}
+        MODE -- "activer" --> DEP["Sauvegarder les originaux,<br/>copier les fichiers du mod"]
+        MODE -- "désactiver" --> REM["Remettre le mod du dessous,<br/>l'original, ou supprimer"]
+        DEP --> GAME[("Dossier de destination")]
+        REM --> GAME
+    end
 ```
 
 !!! warning "C'est la plus grosse source de confusion"
@@ -59,23 +67,22 @@ mod ne peut pas être activé dans deux d'entre eux à la fois, parce qu'il n'y 
 en dessous et qu'un seul fichier peut occuper un chemin donné.
 
 ```mermaid
-flowchart TB
-    subgraph Same["Mêmes dossiers jeu + mods"]
-        P1["Profil A"] <--> P2["Profil B"]
-    end
-    subgraph Sep["Dossiers différents"]
-        P3["Profil C"]
-        P4["Profil D"]
-    end
-    Same --> NOTE["listes actives synchronisées —<br/>un seul dossier de destination physique"]
-    Sep --> NOTE2["installations totalement indépendantes"]
+flowchart TD
+    PAIR(["Deux profils"]) --> SG{"Même dossier de jeu ?"}
+    SG -- "non" --> IND["Totalement indépendants"]
+    SG -- "oui" --> ONE["Un mod n'est actif que<br/>dans l'un des deux"]
+    ONE --> SM{"Même dossier mods ?"}
+    SM -- "oui" --> SYNC["Une liste active,<br/>synchronisée"]
+    SM -- "non" --> SEP["Listes séparées,<br/>un seul dossier de destination"]
 ```
 
 Il y a un détail lié dans la logique de sauvegarde : pour décider si un fichier qu'il va écraser est un
-*véritable fichier de jeu*, BMM regarde les mods activés dans **tous les profils partageant ce dossier
-de jeu** — pas seulement l'actif. Sinon, changer de profil pourrait lui faire prendre le fichier de mod
-d'un autre profil pour un original et le sauvegarder comme tel. Voir [Conflits](doc-page:how-it-works/conflicts) pour la
-règle de sauvegarde complète.
+*véritable fichier de jeu*, BMM regarde les fichiers des mods activés dans le **profil actif** (plus
+ceux que la même activation vient de poser, pour une chaîne de dépendances). Les profils qui partagent
+les deux dossiers ont cette même liste, donc passer de l'un à l'autre ne change rien. Un profil qui ne
+partage que le dossier de jeu n'est **pas** consulté : un fichier de l'un de ses mods présent dans le
+dossier de jeu peut être pris pour un original et sauvegardé comme tel. Voir [Conflits](doc-page:how-it-works/conflicts)
+pour la règle de sauvegarde complète.
 
 **Donc : pour garder des loadouts vraiment séparés, donne à chaque profil son propre dossier mods.**
 Partager des dossiers est supporté, mais c'est une seule installation avec plusieurs vues, pas deux
@@ -89,9 +96,7 @@ Le déploiement ne *déplace* jamais tes originaux hors du dossier mods — il l
 
 ```mermaid
 flowchart LR
-    LIBFILE["Mods/ModX/file.lua<br/>(original, intact)"]
-    GAMEFILE["Game/.../file.lua<br/>(une vraie copie)"]
-    LIBFILE == "copie" ==> GAMEFILE
+    LIBFILE[("Mods/ModX/file.lua<br/>original, intact")] == "copie" ==> GAMEFILE[("Game/.../file.lua<br/>une vraie copie")]
 ```
 
 !!! warning "Il n'y a aucun hard-link ni lien symbolique"

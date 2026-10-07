@@ -38,11 +38,18 @@ titre, ses mots-clés et la fonction qu'elle exécute ; la palette l'affiche com
 et la page des raccourcis comme ligne réassignable.
 
 ```mermaid
-flowchart LR
-    REG["Registre de commandes<br/>(titre · mots-clés · action)"] --> PAL["Palette Ctrl+K<br/>recherche classique + sémantique"]
-    REG --> KEY["Réglages → Raccourcis clavier<br/>réassigner · défaut · effacer"]
-    NAV["Pages de navbar perso"] --> REG
+flowchart TD
+    CORE["Commandes intégrées"] --> REG["Registre de commandes<br/>titre, mots-clés, action"]
+    NAV["Navbar en direct<br/>(pages perso incluses)"] --> REG
+    REG --> PAL["Palette Ctrl+K<br/>classique ou sémantique"]
+    OTHER["Mods, profils,<br/>réglages, docs"] --> PAL
+    REG --> KEY["Raccourcis clavier<br/>réassigner, défaut, effacer"]
+    KEY -- "enregistre" --> BIND[("Raccourcis<br/>localStorage")]
+    BIND --> DISP["Répartiteur de touches<br/>lance la commande"]
 ```
+
+La palette cherche plus que des commandes (mods, profils, thèmes, plugins, réglages et docs
+aussi), mais seules les commandes ont un raccourci.
 
 C'est pour ça qu'une page perso ajoutée hier est cherchable *et* assignable aujourd'hui sans rien
 enregistrer à la main, et pourquoi une commande ne peut jamais apparaître d'un côté et manquer de

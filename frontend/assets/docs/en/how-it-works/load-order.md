@@ -21,8 +21,11 @@ its current order and nothing changes for somebody who never touches it.
 
 ```mermaid
 flowchart LR
-    A["1 · Enhanced Textures<br/>ships data/sky.dds"] --> B["2 · Weather Overhaul<br/>ships data/sky.dds"]
-    B --> DISK["on disk: Weather Overhaul's sky.dds<br/>(applied later, it wins)"]
+    subgraph ORDER["Activation order"]
+        direction TB
+        A["1 · Enhanced Textures<br/>ships data/sky.dds"] --> B["2 · Weather Overhaul<br/>ships data/sky.dds"]
+    end
+    B -- "applied last" --> DISK[("Game folder: Weather<br/>Overhaul's sky.dds")]
 ```
 
 ---

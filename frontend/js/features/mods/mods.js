@@ -14,6 +14,7 @@ import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
 import { initLibOrder } from './lib-order.js';
 import { initCardActivityAnimation } from './mods-job-anim.js';
+import { uiIcon } from '../../ui/icons.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -542,7 +543,7 @@ function renderHistoryModal(history) {
                        ${actAttrs('openHistoryDetail', cacheKey)}>
                       <span style="opacity:0.7">${t('history.action.Modified') || 'Modifié'}: </span>
                       ${fieldBadges}
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>
+                      ${uiIcon('chevron-right', 12, { style: 'margin-left:2px;opacity:0.5' })}
                   </div>
                 </div>
               `;
@@ -637,14 +638,14 @@ window.openHistoryDetail = (cacheKey) => {
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border)">
                         <div style="background:rgba(0,0,0,0.2); padding:15px; min-height:60px">
                             <div style="font-size:9px; color:var(--danger); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                ${uiIcon('close', 12)}
                                 ${t('history.before') || 'BEFORE'}
                             </div>
                             <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); white-space:pre-wrap; word-break:break-all; line-height:1.5">${escHtml(oldVal)}</pre>
                         </div>
                         <div style="background:rgba(16,185,129,0.03); padding:15px; min-height:60px">
                             <div style="font-size:9px; color:var(--success); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                ${uiIcon('check', 12)}
                                 ${t('history.after') || 'AFTER'}
                             </div>
                             <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-primary); white-space:pre-wrap; word-break:break-all; line-height:1.5; font-weight:500">${escHtml(newVal)}</pre>
@@ -660,7 +661,7 @@ window.openHistoryDetail = (cacheKey) => {
             const isModified = item.action === 'Modified';
             footer.innerHTML = `
                 ${isModified ? `<button class="btn btn-primary" ${actAttrs('revertHistoryAction', cacheKey)} style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:var(--bmm-text-on-accent); cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
                         ${t('history.revert') || 'REVERT'}
                     </button>` : ''}
                 <button class="btn btn-primary" style="padding:8px 25px" data-close-modal="#modal-history-detail" data-i18n="common.close">${t('common.close') || 'Close'}</button>

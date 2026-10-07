@@ -16,20 +16,24 @@ holding that line.
 
 ```mermaid
 flowchart LR
-    subgraph Yours["Your data (source of truth)"]
-        LIB["Library<br/>every mod you own"]
-        PROF["Profiles<br/>which mods are on"]
+    subgraph YOURS["Your data (source of truth)"]
+        direction TB
+        LIB[("Library<br/>every mod you own")]
+        PROF[("Profiles<br/>which mods are on")]
     end
-    subgraph Engine["BMM engine (Rust)"]
-        SCAN["Scan &amp; index"]
+    subgraph ENGINE["BMM engine (Rust)"]
+        direction TB
+        SCAN["Scan and index"]
         HASH["Integrity<br/>(BLAKE3)"]
-        DEPLOY["Deploy<br/>(link / copy)"]
+        DEPLOY[["Deploy<br/>(copy)"]]
     end
-    GAME["Destination folder<br/>(disposable output)"]
-
+    GAME[("Destination folder<br/>disposable output")]
+    BAK[("Game originals<br/>backed up")]
     LIB --> SCAN --> HASH
+    SCAN --> DEPLOY
     PROF --> DEPLOY
-    HASH --> DEPLOY --> GAME
+    DEPLOY --> GAME
+    DEPLOY --> BAK
     GAME -. "rebuilt any time" .-> DEPLOY
 ```
 

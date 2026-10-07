@@ -14,6 +14,7 @@ import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { MODAL_CLOSE_SVG, openModal } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
+import { uiIcon } from '../../ui/icons.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -286,11 +287,11 @@ function _renderModpackList(container) {
         </div>
         <div style="display:flex; align-items:center; gap:10px; flex:0 1 auto; justify-content: flex-end; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
             <div class="search-box" id="mp-search-wrap" style="display:flex;align-items:center;gap:8px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:10px;padding:8px 12px;transition:border-color 0.2s; max-width: 250px; width: 100%;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                ${uiIcon('search', 14, { style: 'color:var(--text-muted);flex-shrink:0;' })}
                 <input type="text" id="modpack-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
             </div>
             <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 18px; font-size:12px; font-weight:700; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; flex-shrink:0;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                ${uiIcon('add', 16, { style: 'flex-shrink:0;' })}
                 <span>${t('modpack.create')}</span>
             </button>
         </div>
@@ -312,10 +313,7 @@ function _renderModpackList(container) {
         empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
         empty.innerHTML = `
             <div style="width:64px; height:64px; border-radius:20px; background:var(--bmm-s02); display:flex; align-items:center; justify-content:center; border:1px dashed var(--bmm-s10);">
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>            </div>
+ ${uiIcon('folders', 18)}            </div>
             <div style="font-size:14px; font-weight:600; color:var(--text-secondary);">${t('modpack.noMods')}</div>
             <p style="font-size:12px; max-width:300px; line-height:1.5;">${t('modpack.noModsDesc')}</p>
         `;
@@ -342,8 +340,8 @@ function _renderModpackList(container) {
         });
 
         const applyIcon = anyEnabled
-            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>'
-            : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>'
+            : (uiIcon('check', 16));
         const applyTitle = anyEnabled ? t('modpack.deactivate') || 'Désactiver le modpack' : t('modpack.apply');
         const applyClass = anyEnabled ? 'btn-apply active' : 'btn-apply';
         const applyColor = anyEnabled ? 'color: var(--success);' : '';
@@ -376,9 +374,9 @@ function _renderModpackList(container) {
                 </div>
             </div>
             <div class="modpack-card-actions">
-                <button class="btn btn-icon btn-ghost btn-export"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-                <button class="btn btn-icon btn-ghost btn-edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-export">${uiIcon('export', 16)}</button>
+                <button class="btn btn-icon btn-ghost btn-edit">${uiIcon('edit', 16)}</button>
+                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" >${uiIcon('delete', 16)}</button>
             </div>
         `;
 
@@ -428,7 +426,7 @@ async function _openEditor(container, pack) {
         <div style="display:flex; flex-direction:column; gap:4px;">
             <div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
                 <span style="cursor:pointer;" id="bc-home">${t('modpack.title')}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                ${uiIcon('chevron-right', 12)}
                 <span style="color:var(--accent);">${pack ? t('modpack.edit') : t('modpack.create')}</span>
             </div>
             <h2 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary);">${pack ? escHtml(pack.name) : t('modpack.newPack')}</h2>
@@ -436,7 +434,7 @@ async function _openEditor(container, pack) {
         <div style="display:flex; gap:8px; align-items:center; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
             <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid var(--bmm-s05); display:inline-flex; align-items:center; justify-content:center; height:38px; padding:0 16px;">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="editor-save" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:120px; height:38px; padding:0 18px; white-space:nowrap;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                ${uiIcon('save', 16, { style: 'flex-shrink:0;' })}
                 <span>${t('modpack.save')}</span>
             </button>
         </div>
@@ -457,7 +455,7 @@ async function _openEditor(container, pack) {
     leftCol.className = 'editor-section-card';
     leftCol.innerHTML = `
         <div class="editor-section-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="13 2 13 8 20 8"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="13 2 13 8 20 8"/></svg>
             ${t('modpack.generalInfo')}
         </div>
     `;
@@ -554,13 +552,10 @@ async function _openEditor(container, pack) {
     rightCol.innerHTML = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
             <div class="editor-section-title">
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>                ${t('modpack.modsManagement')}
+ ${uiIcon('folders', 18)}                ${t('modpack.modsManagement')}
             </div>
             <button class="btn btn-secondary btn-sm" id="btn-add-mods-pack" style="font-size:11px; height:32px; border-radius:8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                ${uiIcon('add', 14, { style: 'margin-right:6px;' })}
                 ${t('modpack.addMods')}
             </button>
         </div>
@@ -631,10 +626,7 @@ function _renderPackModList(listEl) {
         const empty = document.createElement('div');
         empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed var(--bmm-s08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
         empty.innerHTML = `
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>            <span style="font-size:12px;">${t('modpack.noMods')}</span>
+                            ${uiIcon('folders', 18)}            <span style="font-size:12px;">${t('modpack.noMods')}</span>
         `;
         listEl.appendChild(empty);
         return;
@@ -658,8 +650,8 @@ function _renderPackModList(listEl) {
         card.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px;">
                 <span class="mp-order-btns">
-                    <button type="button" class="btn btn-icon btn-ghost mp-up" title="${escHtml(t('order.moveUp'))}" aria-label="${escHtml(t('order.moveUp'))}" ${idx === 0 ? 'disabled' : ''}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6"/></svg></button>
-                    <button type="button" class="btn btn-icon btn-ghost mp-down" title="${escHtml(t('order.moveDown'))}" aria-label="${escHtml(t('order.moveDown'))}" ${idx === _packMods.length - 1 ? 'disabled' : ''}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+                    <button type="button" class="btn btn-icon btn-ghost mp-up" title="${escHtml(t('order.moveUp'))}" aria-label="${escHtml(t('order.moveUp'))}" ${idx === 0 ? 'disabled' : ''}>${uiIcon('chevron-up', 12)}</button>
+                    <button type="button" class="btn btn-icon btn-ghost mp-down" title="${escHtml(t('order.moveDown'))}" aria-label="${escHtml(t('order.moveDown'))}" ${idx === _packMods.length - 1 ? 'disabled' : ''}>${uiIcon('chevron-down', 12)}</button>
                 </span>
                 <span class="mp-order-pos" title="${escHtml(t('order.position').replace('{n}', String(idx + 1)))}">${idx + 1}</span>
                 <div style="flex:1; min-width:0;">
@@ -670,7 +662,7 @@ function _renderPackModList(listEl) {
                         <span style="color:var(--text-secondary);">${escHtml(pm.profile_name || t('modpack.global') || 'Global')}</span>
                     </div>
                 </div>
-                <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;">${uiIcon('delete', 14)}</button>
             </div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding-top:8px; border-top:1px solid var(--bmm-s03);">
@@ -788,10 +780,7 @@ function _openMultiSelectModal(listEl) {
     const header = content;
     content.innerHTML = `
         <div class="modal-header">
-            <div class="bms-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-            </svg></div>
+            <div class="bms-icon" aria-hidden="true">${uiIcon('folders', 18)}</div>
             <div class="bms-titles">
                 <h2 class="modal-title">${escHtml(t('modpack.selectMods'))}</h2>
                 <p class="bms-sub" id="ms-count-label"></p>
@@ -800,7 +789,7 @@ function _openMultiSelectModal(listEl) {
         </div>
         <div class="modal-toolbar">
             <div class="mp-ms-search" id="ms-search-wrap">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                ${uiIcon('search', 14)}
                 <input type="text" id="ms-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
             </div>
         </div>
@@ -839,10 +828,7 @@ function _openMultiSelectModal(listEl) {
 
     if (availableMods.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3; margin-bottom: 4px;">
-                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-            </svg>
+            ${uiIcon('folders', 48, { style: 'opacity:0.3; margin-bottom: 4px;' })}
             <span>${t('modpack.noMoreMods')}</span>
         </div>`;
     }
@@ -935,7 +921,7 @@ function _openMultiSelectModal(listEl) {
         </div>
             <button class="btn btn-ghost" id="ms-cancel">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="ms-confirm" style="opacity:0.5; transition:opacity 0.2s;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
+                ${uiIcon('check', 14, { style: 'margin-right:6px;' })}
                 ${t('modpack.addMod')}
             </button>
     `;
@@ -950,12 +936,12 @@ function _openMultiSelectModal(listEl) {
             footerCount.textContent = '';
             confirmBtn.style.opacity = '0.5';
             confirmBtn.disabled = true;
-            confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px; animation: bmm-loading-spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.loading')}`;
+            confirmBtn.innerHTML = `${uiIcon('loader', 14, { style: 'margin-right:8px; animation: bmm-loading-spin 1s linear infinite;' })} ${t('common.loading')}`;
             return;
         }
 
         // Restore buttons if we just finished
-        confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg> ${t('modpack.addMod')}`;
+        confirmBtn.innerHTML = `${uiIcon('check', 14, { style: 'margin-right:6px;' })} ${t('modpack.addMod')}`;
         footer.querySelector('#ms-cancel').disabled = false;
         header.querySelector('#ms-close').disabled = false;
 
@@ -1173,7 +1159,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
     content.innerHTML = `
         <div class="modal-header">
             <div class="bms-icon bms-icon--warn" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             </div>
             <div class="bms-titles">
                 <h2 class="modal-title">${t('modpack.repair.title') || 'Repair needed'}</h2>
@@ -1486,7 +1472,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             ? `<div class="mp-del-desc">${escHtml(pack.description)}</div>`
             : '';
         let result: 'delete' | 'edit' | null = null;
-        const TRASH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+        const TRASH = (uiIcon('delete', 20));
         const m = openModal({
             title: t('modpack.deleteTitle') || 'Delete the launchpack',
             subtitle: t('modpack.deleteSubtitle') || 'This cannot be undone. The pack will be deleted for good.',
@@ -1497,7 +1483,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             body: `
             <div class="mp-del-card">
                 <div class="mp-del-row">
-                    <div class="mp-del-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg></div>
+                    <div class="mp-del-ic">${uiIcon('folders', 16)}</div>
                     <div style="min-width:0;">
                         <div class="mp-del-name">${escHtml(pack.name)}</div>
                         <div class="mp-del-meta">${modsCount} mod${modsCount !== 1 ? 's' : ''}${gameLine}</div>
@@ -1509,7 +1495,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             footer: `
                 <div class="modal-footer-start">
                     <button type="button" class="btn btn-ghost" id="dmod-edit">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        ${uiIcon('edit', 12)}
                         ${t('modpack.edit') || 'Edit'}
                     </button>
                 </div>
@@ -1542,7 +1528,7 @@ export async function openQuickApplyModal() {
     const header = content;
     content.innerHTML = `
         <div class="modal-header">
-            <div class="bms-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="bms-icon" aria-hidden="true">${uiIcon('run', 18)}</div>
             <div class="bms-titles">
                 <h2 class="modal-title">${t('modpack.quickApplyTitle') || 'Activate a modpack'}</h2>
                 <p class="bms-sub">${_modpacks.length} ${t('modpack.available') || 'available'}</p>
@@ -1551,7 +1537,7 @@ export async function openQuickApplyModal() {
         </div>
         <div class="modal-toolbar">
             <div class="mp-ms-search" id="qa-search-wrap">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                ${uiIcon('search', 14)}
                 <input type="text" id="qa-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
             </div>
             <select id="qa-filter" class="form-input" style="flex:none;width:auto;">
@@ -1571,10 +1557,7 @@ export async function openQuickApplyModal() {
 
     if (_modpacks.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
- <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
-                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>            <span>${t('modpack.noModpacks') || 'No modpack found'}</span>
+ ${uiIcon('folders', 18)}            <span>${t('modpack.noModpacks') || 'No modpack found'}</span>
         </div>`;
     }
 

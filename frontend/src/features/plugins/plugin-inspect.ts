@@ -16,6 +16,7 @@ import { raiseAboveAll } from '../../ui/layer.js';
 import { permDomains } from './plugin-perms.js';
 import { humanSize, treeRows, treeSummary, visibleRows, allFolders, countUnder,
     type TreeEntry } from './plugin-tree.js';
+import { uiIcon } from '../../ui/icons.js';
 export { humanSize, treeRows, treeSummary, type TreeEntry } from './plugin-tree.js';
 
 /** A modal shell shared by both dialogs. Escape closes; the backdrop closes. */
@@ -25,7 +26,7 @@ function shell(title: string, sub: string, bodyHtml: string, footHtml = ''): HTM
     ov.innerHTML = `<div class="modal glass cm-modal pi-modal">
         <div class="modal-header">
             <h3 class="modal-title">${escHtml(title)}</h3>
-            <button class="modal-close" type="button" data-pi-close aria-label="${escAttr(t('common.close') || 'Close')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            <button class="modal-close" type="button" data-pi-close aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
         </div>
         <div class="modal-body pi-body">
             ${sub ? `<p class="pi-sub">${escHtml(sub)}</p>` : ''}
@@ -273,7 +274,7 @@ export function wireTree(host: HTMLElement, entries: TreeEntry[]): void {
         const head = `<div class="pi-preview-head">
             <b>${escHtml(rel)}</b>
             <span>${escHtml(humanSize(r.size) || '0 B')}</span>
-            <button type="button" class="btn btn-xs btn-ghost pi-preview-close">✕</button>
+            <button type="button" class="btn btn-xs btn-ghost pi-preview-close" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
         </div>`;
         let body: string;
         if (r.kind === 'text') {

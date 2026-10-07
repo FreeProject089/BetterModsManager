@@ -102,6 +102,7 @@ import { recordNotification, initNotificationCenter } from './notification-cente
 // installed at boot to be worth anything, and pulling the whole DevTools surface
 // onto the boot path to get it would trade one diagnostic for a slower start.
 import { initWebviewErrorTrap } from '../features/debug/webview-env.js';
+import { uiIcon } from './icons.js';
 
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 
@@ -487,7 +488,7 @@ function initNavigation() {
                     if (modCard) {
                         const shaIcon = modCard.querySelector('.sha-status-icon') as HTMLElement;
                         if (shaIcon) {
-                            shaIcon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+                            shaIcon.innerHTML = (uiIcon('shield', 12));
                             if (payload.status === 'done') {
                                 shaIcon.style.color = 'var(--success)';
                                 shaIcon.style.opacity = '0.9';
@@ -502,7 +503,7 @@ function initNavigation() {
                     const btn = document.getElementById('btn-recalculate-sha');
                     if (btn) {
                         btn.classList.remove('loading');
-                        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg><span data-i18n="mods.sha.recalculate">Recalculate SHA</span>';
+                        btn.innerHTML = (uiIcon('reapply', 14) + '<span data-i18n="mods.sha.recalculate">Recalculate SHA</span>');
                         const { applyTranslations } = await import('../core/i18n.js');
                         applyTranslations(btn);
                     }
@@ -597,14 +598,14 @@ export function initNavbarLangDropdown() {
                 <button class="nav-lang-btn" id="nav-lang-toggle">
                     <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
                     <span class="nav-lang-name">${current.name}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+                    ${uiIcon('chevron-up', 12, { cls: 'nav-lang-chevron' })}
                 </button>
                 <div class="nav-lang-menu" id="nav-lang-menu">
                     ${langs.map(l => `
                         <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
                             <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
                             <span>${l.name}</span>
-                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                            ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent);margin-left:auto' })) : ''}
                         </button>
                     `).join('')}
                 </div>
@@ -2013,7 +2014,7 @@ const stackGroupBlurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; retur
             </section>`);
         }
         list.innerHTML = html.join('') || `<div class="bms-empty stk-state">
-            <div class="bms-empty-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+            <div class="bms-empty-ic">${uiIcon('search', 18)}</div>
             <div class="bms-empty-t">${escHtml(t('credits.stackNoMatch'))}</div>
             ${q ? `<button type="button" class="btn btn-ghost btn-sm" data-stk-clear>${escHtml(t('credits.stackClear'))}</button>` : ''}
         </div>`;
@@ -2025,7 +2026,7 @@ const stackGroupBlurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; retur
     const fact = (label: string, value: string) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
     const docsLink = `<div class="stk-docs">
         <span>${escHtml(t('credits.stackDocsBlurb'))}</span>
-        <button type="button" class="btn btn-secondary btn-sm" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>${escHtml(t('credits.stackDocsCta'))} ↗</button>
+        <button type="button" class="btn btn-secondary btn-sm" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>${escHtml(t('credits.stackDocsCta'))} ${uiIcon('external', 14)}</button>
     </div>`;
 
     const renderDetail = () => {
@@ -2088,7 +2089,7 @@ const stackGroupBlurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; retur
                 ${it.licenseFrom && it.licenseFrom !== it.source ? fact(t('credits.stackLicenseFrom'), it.licenseFrom) : ''}
             </dl>
             <div class="stk-d-actions">
-                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open>${escHtml(t('credits.stackOpenPage'))} ↗</button>` : ''}
+                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open>${escHtml(t('credits.stackOpenPage'))} ${uiIcon('external', 14)}</button>` : ''}
                 <button type="button" class="btn btn-ghost btn-sm" data-stk-back>${escHtml(t('credits.stackOverview'))}</button>
             </div>`;
     };
@@ -2194,13 +2195,13 @@ const stackGroupBlurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; retur
         <div class="contributor-modal-links">
             ${c.github ? `
                 <a href="${c.github}" ${actAttrs('openExternal', c.github)} data-act-prevent="1" class="contributor-link-btn" style="cursor:pointer">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
                     GitHub
                 </a>
             ` : ''}
             ${c.website ? `
                 <a href="${c.website}" ${actAttrs('openExternal', c.website)} data-act-prevent="1" class="contributor-link-btn" style="cursor:pointer">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    ${uiIcon('globe', 20)}
                     Website
                 </a>
             ` : ''}

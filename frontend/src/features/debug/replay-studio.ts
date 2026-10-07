@@ -18,6 +18,7 @@ import { planCuts, applyCuts, shiftPastCuts, type CutRange } from './replay-cut.
 import { t } from '../../core/i18n.js';
 import { loadRrweb, subscribeReplay, unsubscribeReplay, isFullReplay, setExtraBlockSelectors, type ReplaySubscriber } from '../../core/replay-recorder.js';
 import { captureSupport, startCapture, stopCapture, isCapturing } from './video-capture.js';
+import { uiIcon } from '../../ui/icons.js';
 
 type Rect = { x: number; y: number; w: number; h: number };
 type RegionKey = { t: number; rect: Rect }; // t = ms from recording start (post-compression)
@@ -547,12 +548,12 @@ function renderBar() {
   // review/export state.
   const showHide = rec || S.events.length < 2;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" data-tooltip="${esc(s)}">${esc(s)}<button data-rs-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
+  const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" data-tooltip="${esc(s)}">${esc(s)}<button data-rs-act="unhide" data-sel="${esc(s)}" aria-label="remove">${uiIcon('close', 14)}</button></span>`).join('');
   const studioToggle = `<label class="rstudio-showstudios" data-tooltip="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-rs-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
   const hideRow = showHide
     ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-rs-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
     : '';
-  bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-min" data-rs-act="min" data-tooltip="${esc(t('rstudio.minimize') || 'Minimise — recording continues')}" aria-label="${esc(t('rstudio.minimize') || 'Minimise')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button><button class="rstudio-btn rstudio-x" data-rs-act="close" aria-label="${esc(t('common.close') || 'Close')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>${hideRow}`;
+  bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-min" data-rs-act="min" data-tooltip="${esc(t('rstudio.minimize') || 'Minimise — recording continues')}" aria-label="${esc(t('rstudio.minimize') || 'Minimise')}">${uiIcon('remove', 12)}</button><button class="rstudio-btn rstudio-x" data-rs-act="close" aria-label="${esc(t('common.close') || 'Close')}">${uiIcon('close', 12)}</button></div>${hideRow}`;
   if (!bar.dataset.miniWired) {
     bar.dataset.miniWired = '1';
     bar.addEventListener('click', (e) => {

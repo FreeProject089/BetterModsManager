@@ -19,22 +19,27 @@ BMM garde **deux maps en mémoire**, et aucune n'est jamais écrite dans `data.j
 | Cache de fichiers | mod → son ensemble de fichiers | « que livre ce mod ? » |
 | Index de conflits | fichier → les mods qui le réclament | « qui d'autre réclame ce chemin ? » |
 
-La seconde est juste l'inverse de la première. Tout chemin réclamé par plus d'un mod activé est un
-conflit : trouver les conflits est donc un regroupement sur des données déjà en RAM — aucun accès au
-système de fichiers.
+La seconde est juste l'inverse de la première, et elle couvre tous les mods de la bibliothèque,
+activés ou non. Tout chemin réclamé par plus d'un mod est un conflit : **actif** quand les deux sont
+activés dans le profil, **potentiel** sinon, signalé pour le même profil (*Intra*) ou pour un autre
+profil qui déploie dans le même dossier de jeu (*Inter*). Trouver les conflits est donc un
+regroupement sur des données déjà en RAM — aucun accès au système de fichiers.
 
 ```mermaid
-flowchart TB
-    subgraph Enabled["Mods activés"]
-        A["Mod A → data/file.x"]
-        B["Mod B → data/file.x"]
-        C["Mod C → sound.ogg"]
+flowchart TD
+    subgraph LIB["Cache de fichiers (tous les mods)"]
+        A["Mod A : data/file.x"]
+        B["Mod B : data/file.x"]
+        C["Mod C : sound.ogg"]
     end
-    A --> G{"index inversé<br/>fichier → mods"}
-    B --> G
-    C --> G
-    G -- "data/file.x : A, B" --> CONF["⚠ conflit"]
-    G -- "sound.ogg : C" --> OK["propre"]
+    A --> IDX[("Index de conflits<br/>fichier → mods")]
+    B --> IDX
+    C --> IDX
+    IDX --> SHARED{"Chemin réclamé par<br/>2 mods ou plus ?"}
+    SHARED -- "non" --> OK["Pas de conflit"]
+    SHARED -- "oui" --> BOTH{"Les deux activés ?"}
+    BOTH -- "oui" --> ACT["Conflit actif"]
+    BOTH -- "non" --> POT["Conflit potentiel"]
 ```
 
 Être en mémoire seulement est une décision de conception, pas un oubli : l'index est reconstruit depuis
@@ -64,9 +69,9 @@ changent de main.
 
 ```mermaid
 flowchart LR
-    E1["activer Mod A"] --> E2["activer Mod B (plus tard)"]
-    E2 --> DEPLOY["déploiement dans l'ordre d'activation"]
-    DEPLOY --> WIN["le data/file.x de B est sur le disque<br/>(il a écrasé celui de A)"]
+    E1["Activer Mod A"] --> E2["Activer Mod B<br/>(va à la fin)"]
+    E2 --> DEPLOY["Déployer dans<br/>l'ordre d'activation"]
+    DEPLOY --> WIN[("Dossier du jeu :<br/>le data/file.x de B")]
 ```
 
 C'est une vraie simplification par rapport aux gestionnaires à arbre de priorités. Elle t'achète une
@@ -91,14 +96,21 @@ déjà, et ce qui évite qu'une « restauration » remette un jour le fichier d'
 fichier du jeu.
 
 ```mermaid
-flowchart TB
-    APPLY([Activer un mod]) --> EACH["pour chaque fichier livré"]
-    EACH --> HAVE{"déjà dans<br/>_original/ ?"}
-    HAVE -- oui --> COPY
-    HAVE -- non --> WHOSE{"le fichier présent est-il<br/>celui d'un autre mod ?"}
-    WHOSE -- oui --> COPY["copier le fichier du mod<br/>dans le dossier de destination"]
-    WHOSE -- non --> BK["le sauvegarder dans _original/"] --> COPY
+flowchart TD
+    APPLY(["Activer un mod"]) --> EACH["Pour chaque fichier livré"]
+    EACH --> HAVE{"Déjà dans<br/>_original/ ?"}
+    HAVE -- "non" --> THERE{"Fichier présent dans<br/>le dossier du jeu ?"}
+    THERE -- "oui" --> WHOSE{"Fichier d'un autre<br/>mod activé ?"}
+    WHOSE -- "non" --> BK["Le sauvegarder<br/>dans _original/"]
+    HAVE -- "oui" --> COPY["Copier le fichier du mod<br/>(écrasement)"]
+    THERE -- "non" --> COPY
+    WHOSE -- "oui" --> COPY
+    BK --> COPY
+    COPY --> GAME[("Dossier de destination")]
 ```
+
+*Fichier d'un autre mod activé* veut dire un fichier livré par un mod activé dans le profil actif, ou
+posé juste avant par la même activation (une chaîne de dépendances). La copie du mod écrase toujours.
 
 ---
 
@@ -108,12 +120,12 @@ La désactivation est l'endroit où le « dernier gagne » cesse d'être un prob
 que le mod retire, BMM pose trois questions dans l'ordre :
 
 ```mermaid
-flowchart TB
-    REM(["fichier à retirer"]) --> OTHER{"un autre mod activé<br/>livre-t-il aussi ce fichier ?"}
-    OTHER -- oui --> FROMMOD["restaurer depuis le DERNIER<br/>de l'ordre d'activation qui l'a"]
-    OTHER -- non --> ORIG{"est-il dans _original/ ?"}
-    ORIG -- oui --> FROMORIG["restaurer le fichier du jeu,<br/>puis supprimer la copie de sauvegarde"]
-    ORIG -- non --> DEL["le mod a ajouté ce fichier —<br/>le supprimer"]
+flowchart TD
+    REM(["Fichier à retirer"]) --> OTHER{"Un autre mod activé<br/>le livre ?"}
+    OTHER -- "oui" --> FROMMOD["Le copier depuis le dernier<br/>de l'ordre qui l'a"]
+    OTHER -- "non" --> ORIG{"Dans _original/ ?"}
+    ORIG -- "oui" --> FROMORIG["Restaurer le fichier du jeu,<br/>supprimer la sauvegarde"]
+    ORIG -- "non" --> DEL["Le supprimer<br/>(le mod l'a ajouté)"]
 ```
 
 1. **Un autre mod activé le livre** → restaurer depuis ce mod : le **dernier** de l'ordre
@@ -146,7 +158,7 @@ Deux détails de sûreté dans ce nettoyage :
 |---|---|
 | La version du fichier partagé de Mod B | Mets B **sous** A dans l'[ordre d'activation](doc-page:how-it-works/load-order) (ou active-le après A) |
 | Voir ce qui se recouvre réellement | Ouvre la vue des conflits — la liste est exacte, et gratuite à calculer |
-| Tout annuler | Désactive dans n'importe quel ordre ; chaque fichier retombe sur le mod suivant qui l'a, puis sur l'original du jeu |
+| Tout annuler | Désactive dans n'importe quel ordre ; chaque fichier retombe sur le mod du dessous qui l'a, puis sur l'original du jeu |
 | Choisir fichier par fichier | Non supporté — utilise le [Mapper](doc-page:how-it-works/mapper) pour changer ce qu'un mod livre, ou édite le dossier du mod |
 
 !!! info "À voir dans l'app"

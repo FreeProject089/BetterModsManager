@@ -17,20 +17,24 @@ découle de cette règle.
 
 ```mermaid
 flowchart LR
-    subgraph Yours["Vos données (source de vérité)"]
-        LIB["Bibliothèque<br/>tous vos mods"]
-        PROF["Profils<br/>quels mods sont actifs"]
+    subgraph YOURS["Vos données (source de vérité)"]
+        direction TB
+        LIB[("Bibliothèque<br/>tous vos mods")]
+        PROF[("Profils<br/>quels mods sont actifs")]
     end
-    subgraph Engine["Moteur BMM (Rust)"]
-        SCAN["Scan &amp; index"]
+    subgraph ENGINE["Moteur BMM (Rust)"]
+        direction TB
+        SCAN["Scan et index"]
         HASH["Intégrité<br/>(BLAKE3)"]
-        DEPLOY["Déploiement<br/>(lien / copie)"]
+        DEPLOY[["Déploiement<br/>(copie)"]]
     end
-    GAME["Dossier de destination<br/>(sortie jetable)"]
-
+    GAME[("Dossier de destination<br/>sortie jetable")]
+    BAK[("Originaux du jeu<br/>sauvegardés")]
     LIB --> SCAN --> HASH
+    SCAN --> DEPLOY
     PROF --> DEPLOY
-    HASH --> DEPLOY --> GAME
+    DEPLOY --> GAME
+    DEPLOY --> BAK
     GAME -. "reconstruit à volonté" .-> DEPLOY
 ```
 

@@ -16,12 +16,13 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { groupHits, topPick, rankedModIds, type AskAnswer, type AskHit } from './ai-model.js';
 import { ensureAiCss, loadAiView, offerInstall, installPromptHtml, wireInstallPrompt, reasonText } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
+import { uiIcon } from '../../ui/icons.js';
 
 let _overlay: HTMLElement | null = null;
 let _opener: HTMLElement | null = null;
 let _seq = 0;
 
-const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const IC = (uiIcon('ai', 16));
 
 function overlay(): HTMLElement {
     if (_overlay && _overlay.isConnected) return _overlay;
@@ -132,7 +133,7 @@ export async function openAskLaya(question = ''): Promise<void> {
         <div class="modal-header">
           <div class="bms-icon" aria-hidden="true">${IC}</div>
             <h2 class="modal-title" id="aia-title">${escHtml(t('ai.ask.title'))}</h2>
-          <button type="button" class="modal-close" id="aia-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <button type="button" class="modal-close" id="aia-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
         </div>
         <div class="modal-body ai-body">
           <p class="ai-lead">${escHtml(t('ai.ask.lead'))}</p>

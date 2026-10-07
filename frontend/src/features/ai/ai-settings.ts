@@ -13,11 +13,12 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { fmtBytes, embState, fmtSpeed, fmtEta, parseNoSpace, type AiSettings, type EmbLive, type EmbState } from './ai-model.js';
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
 import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
+import { uiIcon } from '../../ui/icons.js';
 
 // Lives in the « Laya » dialog (laya-hub.ts); Settings keeps one summary card.
 const CARD_ID = 'laya-general-card';
 
-const IC = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const IC = (uiIcon('ai', 20));
 /** A book: the « How AI works in BMM » link-button. */
 const DOC_IC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
 

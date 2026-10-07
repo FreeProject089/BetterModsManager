@@ -20,6 +20,7 @@ import { invoke, pickFolder } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
 
 type Mode = 'folder' | 'profile';
 
@@ -98,7 +99,7 @@ function renderFolders() {
         <div style="display:flex; align-items:center; gap:6px; padding:3px 0;">
             <span class="manifest-folder-path" style="flex:1; font-size:11px; color:var(--text); word-break:break-all;"></span>
             <button class="btn btn-sm manifest-folder-drop" data-index="${i}"
-                style="height:22px; padding:0 8px; font-size:10px; font-weight:700;">✕</button>
+                style="height:22px; padding:0 8px; font-size:10px; font-weight:700;" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
         </div>`).join('');
     // Paths are data — assigned as text, never interpolated into markup.
     list.querySelectorAll<HTMLElement>('.manifest-folder-path').forEach((el, i) => {

@@ -22,15 +22,15 @@ de leur côté. Le gouverneur existe pour qu'un chiffre veuille dire un chiffre.
 ## Vue d'ensemble
 
 ```mermaid
-flowchart TB
-    OP["Une opération lourde<br/>(déploiement, installation, empreintes...)"] --> T["Prendre un ticket pour sa sorte<br/>(attend un créneau libre)"]
-    T --> P["Résoudre la politique<br/>pour cette sorte sur ce disque"]
-    P --> POOL["Tourner sur le pool<br/>de threads de sa sorte"]
-    P --> COPY["Copier par la<br/>copie gouvernée"]
-    COPY --> BUCKET[("Un budget de vitesse<br/>par disque")]
-    T -. "point de contrôle entre fichiers<br/>et entre blocs" .-> CP{"annulé ? en pause ?<br/>fond derrière premier plan ?"}
-    CP -- "on continue" --> COPY
-    CP -- "annulé" --> STOP["Arrêt, le fichier<br/>à moitié écrit est supprimé"]
+flowchart TD
+    OP(["Opération lourde"]) --> T[["Ticket pour sa sorte<br/>(attend un créneau)"]]
+    T --> P["Résoudre la politique :<br/>preset + règles du disque"]
+    P --> RUN["Tourner sur le pool de<br/>sa sorte ou un par un"]
+    RUN --> CP{"Point de contrôle<br/>(attend si en pause)"}
+    CP -- "on continue" --> COPY["Copie gouvernée,<br/>bloc par bloc"]
+    CP -- "annulé" --> STOP(["Arrêt, fichier<br/>partiel supprimé"])
+    COPY --> BUCKET[("Budget de vitesse<br/>du disque")]
+    COPY -. "bloc ou<br/>fichier suivant" .-> CP
 ```
 
 Trois idées portent tout le reste :
@@ -97,14 +97,14 @@ copie gouvernée en appelle un entre deux blocs. Un point de contrôle pose troi
 ordre :
 
 ```mermaid
-flowchart LR
-    C["Point de contrôle"] --> X{"Annulé ?"}
-    X -- oui --> E["Arrêt.<br/>L'appelant supprime<br/>ce qu'il a commencé"]
-    X -- non --> PZ{"En pause, ce ticket<br/>ou tout ?"}
-    PZ -- oui --> W1["Attendre la reprise<br/>ou l'annulation"]
-    PZ -- non --> BG{"Travail de fond pendant<br/>un travail de premier plan ?"}
-    BG -- oui --> W2["Attendre la fin du<br/>premier plan"]
-    BG -- non --> GO["Continuer"]
+flowchart TD
+    C(["Point de contrôle"]) --> X{"Annulé ?"}
+    X -- "oui" --> E(["Arrêt : l'appelant supprime<br/>ce qu'il a commencé"])
+    X -- "non" --> PZ{"En pause : ce ticket<br/>ou tout ?"}
+    PZ -- "oui" --> W1["Attendre la reprise<br/>ou l'annulation"]
+    PZ -- "non" --> BG{"Travail de fond pendant<br/>un travail de premier plan ?"}
+    BG -- "oui" --> W2["Attendre la fin du<br/>premier plan"]
+    BG -- "non" --> GO(["Continuer"])
     W1 --> C
     W2 --> C
 ```
@@ -155,10 +155,10 @@ le fixe :
 
 ```mermaid
 flowchart LR
-    A["Ce disque,<br/>cette opération"] -->|"non réglé"| B["Ce disque,<br/>toutes les opérations"]
-    B -->|"non réglé"| C["Tous les disques,<br/>cette opération"]
-    C -->|"non réglé"| D["Tous les disques,<br/>toutes les opérations"]
-    D -->|"non réglé"| E["Le preset"]
+    A["Ce disque,<br/>cette opération"] -- "non réglé" --> B["Ce disque,<br/>toutes les opérations"]
+    B -- "non réglé" --> C["Tous les disques,<br/>cette opération"]
+    C -- "non réglé" --> D["Tous les disques,<br/>toutes les opérations"]
+    D -- "non réglé" --> E(["Le preset"])
 ```
 
 Champ par champ, cela veut dire qu'une règle qui ne fixe que le *en même temps* des empreintes sur
@@ -236,10 +236,10 @@ sequenceDiagram
     participant B as Copie 2 (sauvegarde)
     participant K as Budget de d:\ (40 Mo/s)
     participant D as Disque d:\
-    A->>K: puis-je écrire 1 Mio ?
+    A->>K: puis-je écrire 128 Kio ?
     K-->>A: oui
     A->>D: écriture
-    B->>K: puis-je écrire 1 Mio ?
+    B->>K: puis-je écrire 128 Kio ?
     K-->>B: attends que le budget se remplisse
     B->>D: écriture
     Note over K,D: les deux copies ensemble restent à 40 Mo/s
@@ -261,11 +261,12 @@ un disque NVMe est cadencée par la règle du disque NVMe.
 Le mode jeu, c'est « un jeu tourne : pousse-toi ». Tant qu'il est actif :
 
 ```mermaid
-flowchart TB
-    GM{"Mode jeu actif ?"} -- non --> N["Chaque sorte : le preset en vigueur"]
-    GM -- oui --> Q["Le preset devient Silencieux"]
-    Q --> BG["les sortes que tu as cochées (hash, maintenance par défaut) :<br/>EN PAUSE jusqu'à la fin du mode jeu"]
-    Q --> FG["deploy, install, backup et toute sorte non cochée :<br/>RALENTIES, jamais en pause"]
+flowchart TD
+    GM{"Mode jeu actif ?"} -- "non" --> N["Chaque sorte : le<br/>preset en vigueur"]
+    GM -- "oui" --> Q["Le preset en vigueur<br/>devient Silencieux"]
+    Q --> TICK{"Sorte cochée dans<br/>l'onglet Mode jeu ?"}
+    TICK -- "oui" --> PAUSED["En pause jusqu'à la<br/>fin du mode jeu"]
+    TICK -- "non" --> SLOW["Ralentie par Silencieux,<br/>jamais en pause"]
 ```
 
 Ce qui attend, c'est toi qui le choisis dans l'onglet Mode jeu : les empreintes et la maintenance
@@ -336,14 +337,14 @@ décision 0,3 ms. Un coup d'œil toutes les 5 secondes, c'est environ 0,25 % d'u
 ### Qui l'emporte
 
 ```mermaid
-flowchart TB
-    S["Quel preset est en vigueur ?"] --> T1{"Un preset de tâche autorisé<br/>à passer outre le mode jeu ?"}
-    T1 -- oui --> R1["Le preset de cette tâche"]
-    T1 -- non --> G{"Mode jeu actif ?"}
-    G -- oui --> R2["Silencieux"]
-    G -- non --> T2{"Un preset de tâche ?"}
-    T2 -- oui --> R3["Le preset de cette tâche"]
-    T2 -- non --> R4["Ton preset"]
+flowchart TD
+    S(["Quel preset est en vigueur ?"]) --> T1{"Preset de tâche autorisé à<br/>passer outre le mode jeu ?"}
+    T1 -- "oui" --> R1["Le preset de cette tâche"]
+    T1 -- "non" --> G{"Mode jeu actif ?"}
+    G -- "oui" --> R2["Silencieux"]
+    G -- "non" --> T2{"Un preset de tâche ?"}
+    T2 -- "oui" --> R3["Le preset de cette tâche"]
+    T2 -- "non" --> R4["Ton preset"]
 ```
 
 Ton choix manuel décide si le mode jeu est actif ; le mode jeu l'emporte sur un preset demandé par
@@ -382,13 +383,13 @@ la file avec *Suspendre*, *Reprendre* et *Annuler* sur chaque opération.
 
 ```mermaid
 sequenceDiagram
-    participant UI as Carte du Gestionnaire de Stockage
+    participant UI as Gestionnaire de Stockage
     participant S as Échantillonneur (1 Hz)
-    UI->>S: abonnement (la carte est à l'écran)
+    UI->>S: resources_subscribe (ouvert, onglet en direct, fenêtre visible)
     loop une fois par seconde, tant qu'il y a un abonné
         S-->>UI: bmm://governor-tick (CPU, Mo/s, file, preset, mode jeu)
     end
-    UI->>S: désabonnement (fenêtre fermée ou carte redessinée)
+    UI->>S: resources_unsubscribe (fermé, autre onglet ou fenêtre cachée)
     Note over S: aucun abonné : le thread s'arrête,<br/>aucun compteur n'est lu
 ```
 

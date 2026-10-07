@@ -249,16 +249,18 @@ de description*, ou *Obtenir un indice IA* sur un rapport. Jamais en arrière-pl
   que l'interrupteur est éteint.
 
 ```mermaid
-graph TD
-    CLICK["Vous cliquez sur Suggérer"] --> FILES["Lecture des fichiers du mod (toujours, hors ligne)"]
-    FILES --> GATE{"IA activée, fonction activée, fournisseur choisi ?"}
-    GATE -- "non" --> ROWS["Suggestions : fichiers seulement"]
-    GATE -- "oui" --> MASK["Masquage chemins / e-mails / IP, 4 000 caractères max"]
-    MASK --> PROV["Laya (local ou BetterCommunity) / API externe"]
-    PROV --> ROWS2["+ tags classés, indication de langue, brouillon"]
-    ROWS --> PICK["Vous cochez des champs"]
-    ROWS2 --> PICK
-    PICK --> APPLY["Appliquer n'écrit que les champs cochés"]
+flowchart TD
+    CLICK(["Vous cliquez sur Suggérer"]) --> FILES["Lecture des fichiers du mod<br/>(toujours, hors ligne)"]
+    FILES --> ROWS["Lignes des fichiers,<br/>plus un indice de langue"]
+    ROWS --> GATE{"IA activée, fonction activée,<br/>fournisseur choisi ?"}
+    GATE -- "non" --> PICK["Vous cochez des champs"]
+    GATE -- "oui" --> MASK["Masquage des données perso,<br/>4 000 caractères max"]
+    MASK --> PROV["Classement des tags :<br/>Laya ou BetterCommunity"]
+    MASK -- "si demandé" --> DRAFT["Brouillon de description :<br/>modèle local ou externe"]
+    PROV --> PICK
+    DRAFT --> PICK
+    PICK --> APPLY[["ai_apply_mod_metadata"]]
+    APPLY --> DONE(["Champs cochés écrits"])
 ```
 
 ## Suggérer les infos d'un mod

@@ -201,7 +201,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 5496,
+      "words": 5570,
       "diagrams": 1,
       "fr": true
     },
@@ -351,7 +351,7 @@
         "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
         "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
       },
-      "words": 742,
+      "words": 762,
       "diagrams": 1,
       "fr": true
     },
@@ -381,7 +381,7 @@
         "en": "A launch pack is a named group of applications started together in one click — your game plus the companion tools you always open with it (a voice app, a…",
         "fr": "Un launch pack est un groupe nommé d'applications lancées ensemble en un clic — ton jeu plus les outils compagnons que tu ouvres toujours avec (une appli…"
       },
-      "words": 752,
+      "words": 793,
       "diagrams": 1,
       "fr": true
     },
@@ -411,7 +411,7 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 1099,
+      "words": 1117,
       "diagrams": 3,
       "fr": true
     },
@@ -516,7 +516,7 @@
         "en": "A profile is a small record — a name, three folders, and an ordered list of which mods are on. It stores no mod files itself.",
         "fr": "Un profil est un petit enregistrement — un nom, trois dossiers, et une liste ordonnée des mods activés. Il ne stocke aucun fichier de mod."
       },
-      "words": 1255,
+      "words": 1290,
       "diagrams": 3,
       "fr": true
     },
@@ -531,7 +531,7 @@
         "en": "The first time BMM sees your mods folder it builds an index: for every mod, its file list, and for every file a content hash.",
         "fr": "La première fois que BMM voit ton dossier de mods, il construit un index : pour chaque mod, sa liste de fichiers, et pour chaque fichier un hash de contenu."
       },
-      "words": 757,
+      "words": 786,
       "diagrams": 1,
       "fr": true
     },
@@ -546,7 +546,7 @@
         "en": "A mod is only useful if it's the right bytes. A truncated download, a flaky drive, or a tampered file should never reach your game silently.",
         "fr": "Un mod n'est utile que s'il contient les bons octets. Un téléchargement tronqué, un disque capricieux ou un fichier altéré ne doivent jamais atteindre ton jeu…"
       },
-      "words": 805,
+      "words": 1101,
       "diagrams": 2,
       "fr": true
     },
@@ -561,7 +561,7 @@
         "en": "Two mods are in conflict when they ship the same file. Some managers let one silently overwrite the other.",
         "fr": "Deux mods sont en conflit quand ils livrent le même fichier. Certains gestionnaires laissent l'un écraser l'autre en silence."
       },
-      "words": 781,
+      "words": 850,
       "diagrams": 4,
       "fr": true
     },
@@ -606,7 +606,7 @@
         "en": "BMM deploys a mod by mirroring its folder tree into the game. That only works if the mod has the right tree.",
         "fr": "BMM déploie un mod en recopiant son arborescence dans le jeu. Cela ne marche que si le mod possède la bonne arborescence."
       },
-      "words": 774,
+      "words": 781,
       "diagrams": 1,
       "fr": true
     },
@@ -636,7 +636,7 @@
         "en": "Modding means moving a lot of bytes. BMM's job is to do that fast and keep your machine usable while it happens — and when those two fight, responsiveness wins.",
         "fr": "Modder, c'est déplacer beaucoup d'octets. Le rôle de BMM est de le faire vite et de garder ta machine utilisable pendant ce temps — et quand ces deux…"
       },
-      "words": 1078,
+      "words": 1093,
       "diagrams": 2,
       "fr": true
     },
@@ -681,7 +681,7 @@
         "en": "Everything the UI can do, it does by asking the core through one channel.",
         "fr": "Tout ce que l'interface sait faire, elle le fait en demandant au cœur via un unique canal."
       },
-      "words": 299,
+      "words": 340,
       "diagrams": 3,
       "fr": true
     },

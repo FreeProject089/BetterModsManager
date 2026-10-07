@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { t } from '../core/i18n.js';
 import { ensureMermaid, ensureSvgPanZoom } from '../ui/lazy-vendor.js';
+import { mermaidTheme } from './md-mermaid.js';
 import { resumableDownloads } from './diagrams/resumable-downloads.js';
 import { modSync } from './diagrams/mod-sync.js';
 import { profileSystem } from './diagrams/profile-system.js';
@@ -173,24 +174,21 @@ export async function openDiagram(id, highlightNodeId = null) {
         if (!mermaid?.render)
             throw new Error('mermaid unavailable');
         const { render } = mermaid;
+        // The same palette as the docs hub and every ```mermaid block (md-mermaid.ts), built from
+        // the live tokens. Without it the modal drew with whatever configuration the last caller
+        // left behind, so the same diagram changed colours depending on what was opened first.
+        try {
+            mermaid.initialize({ ...mermaidTheme('loose'), flowchart: { ...mermaidTheme('loose').flowchart, useMaxWidth: true } });
+        }
+        catch { /* keep the previous configuration */ }
         // Pre-translate definitions (handles {{key}} placeholders)
         const translatedDefinition = diagram.definition.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (match, key) => t(key));
         const { svg } = await render('mermaid-svg-' + id, translatedDefinition);
         container.innerHTML = svg;
-        // Make ALL diagrams theme-aware: mermaid injects classDef colours as high
-        // specificity !important rules inside the SVG's own <style>. Rewrite the
-        // generic "default" node colours to theme tokens so every diagram follows
-        // the active theme (semantic colours like rust/shield are left intact).
-        container.querySelectorAll('svg style').forEach(styleEl => {
-            styleEl.textContent = (styleEl.textContent || '')
-                .replace(/#1e293b/gi, 'var(--bmm-diagram-node)')
-                .replace(/#0a0e17/gi, 'var(--bmm-bg-base)')
-                .replace(/#111827/gi, 'var(--bmm-bg-elevated)')
-                .replace(/#475569/gi, 'var(--bmm-diagram-node-border)')
-                .replace(/#f1f5f9/gi, 'var(--bmm-diagram-node-text)')
-                .replace(/#e2e8f0/gi, 'var(--bmm-diagram-node-text)')
-                .replace(/#94a3b8/gi, 'var(--bmm-text-secondary)');
-        });
+        // Make ALL diagrams theme-aware: the generic node colours AND the semantic ones the
+        // definitions hard-code (linkStyle / style / classDef hex), which used to stay dark-theme
+        // hex on a light theme (white text on a pale fill, near-black boxes on white).
+        retintDiagram(container);
         // Initialize Pan & Zoom
         await initPanZoom();
         // Fix Cluster Labels Layout (Mermaid Centering override)
@@ -210,6 +208,77 @@ export async function openDiagram(id, highlightNodeId = null) {
         console.error('[Docs] Mermaid render error:', err);
         container.innerHTML = `<p style="color:var(--danger)">${t('common.error')}: Mermaid render error</p>`;
     }
+}
+/**
+ * Rewrite the hex colours a diagram definition hard-codes into theme tokens, in the SVG's own
+ * <style> (classDef) and in the inline styles mermaid writes for `style` / `linkStyle`.
+ *
+ * Each known hex belongs to a family (success, accent, warning, danger, purple, cyan, neutral).
+ * A stroke or text colour becomes the family token (text walked toward the node ink so it stays
+ * readable on light themes); a SOLID fill becomes a tint of the family over the node colour, so
+ * a "highlighted" node keeps its hue without turning into a block of white-on-colour; a dark
+ * panel fill becomes the node colour; white text/strokes become the node ink/border.
+ */
+const HEX_FAMILY = {
+    '10b981': 'success', '22c55e': 'success', '2ecc71': 'success', '14532d': 'success-deep', '134e4a': 'success-deep',
+    '3b82f6': 'info', '6366f1': 'accent', '5865f2': 'accent',
+    'f59e0b': 'warning', 'f97316': 'warning', 'eab308': 'warning',
+    'ef4444': 'danger',
+    '8b5cf6': 'purple', 'a855f7': 'purple', 'bc74ff': 'purple',
+    '06b6d4': 'cyan', '22d3ee': 'cyan',
+    '6b7280': 'muted', '475569': 'border', '94a3b8': 'muted',
+    '0d1117': 'panel', '0a1220': 'panel', '0a1628': 'panel', '1e293b': 'panel', '0a0e17': 'panel', '111827': 'panel',
+    'ffffff': 'ink', 'fff': 'ink', 'e6edf3': 'ink', 'd1fae5': 'ink', 'f1f5f9': 'ink', 'e2e8f0': 'ink',
+};
+const FAMILY_VAR = {
+    success: 'var(--bmm-success)', info: 'var(--bmm-info)', accent: 'var(--bmm-accent)', warning: 'var(--bmm-warning)',
+    danger: 'var(--bmm-danger)', purple: 'var(--bmm-purple)', cyan: 'var(--bmm-cyan)', 'success-deep': 'var(--bmm-success)',
+};
+function themedColour(prop, hex, alpha) {
+    const fam = HEX_FAMILY[hex.toLowerCase()];
+    if (!fam)
+        return null;
+    const node = 'var(--bmm-diagram-node)';
+    if (fam === 'ink')
+        return prop === 'fill' ? node : prop === 'stroke' ? 'var(--bmm-diagram-node-border)' : 'var(--bmm-diagram-node-text)';
+    if (fam === 'panel')
+        return prop === 'fill' || prop === 'background' || prop === 'background-color' ? node : 'var(--bmm-diagram-node-border)';
+    if (fam === 'muted')
+        return 'var(--bmm-text-muted)';
+    if (fam === 'border')
+        return prop === 'fill' ? node : 'var(--bmm-diagram-node-border)';
+    const v = FAMILY_VAR[fam];
+    if (prop === 'fill' || prop === 'background' || prop === 'background-color') {
+        const pct = alpha ? Math.max(6, Math.round(parseInt(alpha, 16) / 255 * 100)) : fam === 'success-deep' ? 16 : 22;
+        return `color-mix(in srgb, ${v} ${pct}%, ${node})`;
+    }
+    if (prop === 'color')
+        return `color-mix(in srgb, ${v} 62%, var(--bmm-diagram-node-text))`;
+    return v;
+}
+function retintCss(css) {
+    return css.replace(/(fill|stroke|color|background-color|background)\s*:\s*#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3})\b/gi, (m, prop, hex) => {
+        const base = hex.length === 8 ? hex.slice(0, 6) : hex;
+        const alpha = hex.length === 8 ? hex.slice(6) : undefined;
+        const out = themedColour(prop.toLowerCase(), base, alpha);
+        return out ? `${prop}:${out}` : m;
+    })
+        // The generic node colours mermaid derives from its defaults.
+        .replace(/#1e293b/gi, 'var(--bmm-diagram-node)')
+        .replace(/#0a0e17/gi, 'var(--bmm-bg-base)')
+        .replace(/#111827/gi, 'var(--bmm-bg-elevated)')
+        .replace(/#475569/gi, 'var(--bmm-diagram-node-border)')
+        .replace(/#f1f5f9/gi, 'var(--bmm-diagram-node-text)')
+        .replace(/#e2e8f0/gi, 'var(--bmm-diagram-node-text)')
+        .replace(/#94a3b8/gi, 'var(--bmm-text-secondary)');
+}
+export function retintDiagram(host) {
+    host.querySelectorAll('svg style').forEach((el) => { el.textContent = retintCss(el.textContent || ''); });
+    host.querySelectorAll('svg [style]').forEach((el) => {
+        const st = el.getAttribute('style') || '';
+        if (/#[0-9a-f]{3,8}/i.test(st))
+            el.setAttribute('style', retintCss(st));
+    });
 }
 /**
  * Robustly fix cluster (subgraph) label positioning.

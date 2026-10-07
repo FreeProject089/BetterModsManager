@@ -56,19 +56,23 @@ The mapper is built around a staging area, so you can restructure a messy mod in
 the result before a single file moves.
 
 ```mermaid
-flowchart TB
-    subgraph Draft["Draft (in memory only)"]
-        MV["pending moves"]
-        DEL["pending deletions"]
-        NEW["pending new folders"]
+flowchart TD
+    subgraph DRAFT["Draft (memory only)"]
+        direction LR
+        NEW["New folders"]
+        MV["Moves"]
+        DEL["Deletions"]
     end
-    TREE["Mod tree"] --> VIRT["Virtual tree —<br/>the mod AS IT WILL BE"]
+    TREE[("Mod folder<br/>on disk")] --> VIRT["Virtual tree<br/>the mod as it will be"]
+    NEW --> VIRT
     MV --> VIRT
     DEL --> VIRT
-    NEW --> VIRT
     VIRT --> SAVE{"Save?"}
-    SAVE -- "no" --> DISCARD["nothing touched on disk"]
-    SAVE -- "yes" --> APPLY["apply in order:<br/>1. create folders<br/>2. move items<br/>3. delete items"]
+    SAVE -- "no" --> KEEP(["Disk untouched"])
+    SAVE -- "yes" --> C1[["1. create_mod_folder"]]
+    C1 --> C2[["2. restructure_mod_item"]]
+    C2 --> C3[["3. delete_mod_item"]]
+    C3 --> REREAD(["Tree re-read from disk"])
 ```
 
 The left pane always renders the **virtual tree** — your pending changes composed on top of the real
@@ -82,7 +86,8 @@ The commit order matters and is fixed: **new folders first** (so a move can targ
 
     The three phases run as a sequence of individual operations, not as a transaction. If one fails —
     a locked file, a permission error — the ones already done stay done, and you get the error. The
-    tree is then re-read from disk, so what you see afterwards is the truth; re-stage what is left.
+    tree is not re-read and the queue is kept as it was, steps already done included, so check the
+    mod's folder before you save again.
 
 ---
 

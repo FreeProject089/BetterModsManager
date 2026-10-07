@@ -24,7 +24,7 @@ interface ApiActionPayload { method: string; path: string; status: number; }
 interface ApiLogEntry { time: number; method: string; path: string; status: number; ok: boolean; label: string; icon: string; }
 
 /** Inline feather-style SVG icons (stroke = currentColor) — no unicode emoji. */
-const sv = (p: string) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const sv = (p: string) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const ICN = {
     check:   sv('<path d="M20 6 9 17l-5-5"/>'),
     ban:     sv('<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>'),

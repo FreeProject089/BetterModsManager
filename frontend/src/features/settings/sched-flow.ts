@@ -23,6 +23,7 @@ import {
 } from './sched-flow-model.js';
 import { bindFlowKeys, FLOW_KEYS, type FlowScope } from './sched-flow-keys.js';
 import { varsOfStep } from './sched-debug-map.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /** What a one-step test came back with (scheduler.ts testOneStep → sched-test.ts). */
 export interface StepTestResult { ok: boolean; status?: number; excerpt?: string; message: string; skipped?: boolean }
@@ -135,21 +136,21 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
         </div>
         <div class="sflow-bar" role="toolbar" aria-label="${escAttr(t('sched.flow.toolbar'))}">
             <button type="button" class="sflow-tb sflow-tb-add" data-act="add" data-tooltip="${escAttr(tip('sched.flow.add', 'sched.flow.addNode'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                ${uiIcon('add', 14)}
                 <span>${escHtml(t('sched.flow.add'))}</span></button>
             <span class="sflow-tb-sep"></span>
             <button type="button" class="sflow-tb" data-act="zoomOut" aria-label="${escAttr(t('sched.flow.zoomOut'))}" data-tooltip="${escAttr(tip('sched.flow.zoomOut', 'sched.flow.zoomOut'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                ${uiIcon('remove', 14)}</button>
             <span class="sflow-zoom" aria-live="polite">100%</span>
             <button type="button" class="sflow-tb" data-act="zoomIn" aria-label="${escAttr(t('sched.flow.zoomIn'))}" data-tooltip="${escAttr(tip('sched.flow.zoomIn', 'sched.flow.zoomIn'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+                ${uiIcon('add', 14)}</button>
             <button type="button" class="sflow-tb" data-act="fit" aria-label="${escAttr(t('sched.flow.fit'))}" data-tooltip="${escAttr(tip('sched.flow.fit', 'sched.flow.fit'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
             <button type="button" class="sflow-tb" data-act="layout" aria-label="${escAttr(t('sched.flow.autoLayout'))}" data-tooltip="${escAttr(tip('sched.flow.autoLayout', 'sched.flow.autoLayout'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6M18 9v6"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6M18 9v6"/></svg></button>
             <span class="sflow-tb-sep"></span>
             <button type="button" class="sflow-tb" data-act="keys" aria-label="${escAttr(t('sched.flow.keys'))}" data-tooltip="${escAttr(t('sched.flow.keys'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
             <span class="sflow-run" hidden></span>
         </div>
         <div class="sflow-mini" aria-label="${escAttr(t('sched.flow.minimap'))}"></div>
@@ -384,7 +385,7 @@ function render(): void {
         if (n.type === 'add') {
             const lbl = n.id.endsWith('#end') ? t('sched.flow.addEnd') : t('sched.flow.addHere');
             html.push(`<button type="button" class="sflow-addnode" style="left:${n.x}px;top:${n.y}px" data-slot="${escAttr(n.slot || '')}" data-index="${n.index || 0}"
-                aria-label="${escAttr(lbl)}" data-tooltip="${escAttr(lbl)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>`);
+                aria-label="${escAttr(lbl)}" data-tooltip="${escAttr(lbl)}">${uiIcon('add', 14)}</button>`);
             continue;
         }
         html.push(nodeHtml(n, draft, needsAt.get(n.id) || []));
@@ -407,7 +408,7 @@ function render(): void {
             const mx = e.kind === 'lane' ? x2 - 22 : (x1 + x2) / 2;
             const my = e.kind === 'lane' ? y2 : (y1 + y2) / 2;
             html.push(`<button type="button" class="sflow-edgeadd" style="left:${mx - 10}px;top:${my - 10}px" data-slot="${escAttr(e.insert.slot)}" data-index="${e.insert.index}"
-                aria-label="${escAttr(t('sched.flow.addHere'))}" data-tooltip="${escAttr(t('sched.flow.addHere'))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>`);
+                aria-label="${escAttr(t('sched.flow.addHere'))}" data-tooltip="${escAttr(t('sched.flow.addHere'))}">${uiIcon('add', 12)}</button>`);
         }
     }
     if (!(draft.steps || []).length) {
@@ -963,7 +964,7 @@ function openPaletteAt(at: { slot: string; index: number; x?: number; y?: number
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', t('sched.flow.add'));
     el.innerHTML = `<div class="sflow-pal-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="search" class="sflow-pal-q" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('sched.flow.search'))}" aria-label="${escAttr(t('sched.flow.search'))}">
         </div>
         <div class="sflow-pal-list" role="listbox"></div>

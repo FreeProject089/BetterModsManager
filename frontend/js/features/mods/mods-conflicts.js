@@ -6,6 +6,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, escJs } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
+import { uiIcon } from '../../ui/icons.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -53,8 +54,8 @@ export function updateConflictBadgeOnCard(modId) {
         const hasInterActive = reports.some(c => c.category === 'Inter' && c.status === 'Active');
         const hasInterPotential = reports.some(c => c.category === 'Inter' && c.status === 'Potential');
         let conflictHtml = '';
-        const intraSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
-        const interSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+        const intraSvg = (uiIcon('home', 12));
+        const interSvg = (uiIcon('globe', 12));
         if (hasIntraActive)
             conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
         else if (hasIntraPotential)
@@ -102,7 +103,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
         if (!activeId)
             return toast(t('prof.noneActive'), 'error');
         modal.classList.add('open');
-        container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>${t('conflict.loading') || 'Analyse des conflits...'}</div>`;
+        container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">${uiIcon('loader', 32, { style: 'animation:spin 1s linear infinite' })}<br>${t('conflict.loading') || 'Analyse des conflits...'}</div>`;
         let allConflicts = [];
         const allModsGlobal = await invoke('get_all_mods').catch(() => []);
         Object.keys(S.conflictCache).forEach(mid => {
@@ -231,7 +232,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                     return `
              <div class="cflt-target-group">
                ${showProfileRows ? `<div class="cflt-target-head">
-                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                 ${uiIcon('user', 12, { style: 'color:var(--text-muted)' })}
                  <span class="cflt-target-name">${escHtml(pName)}</span>
                  <span class="cflt-target-count">${grps.length} ${grps.length > 1 ? (t('conflict.conflicts') || 'conflicts') : (t('conflict.conflict') || 'conflict')}</span>
                </div>` : ''}
@@ -249,9 +250,9 @@ export async function openGlobalConflictModal(preselectModId = null) {
                      ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" data-tooltip="${t('conflict.activationOrder') || 'Activation order'}">#${r.activation_order}</span>` : ''}
                      <button class="cflt-files-btn" ${actAttrs('showConflictContextMenu', item.sourceModId, r.other_mod_id)} data-act-with="event"
                              data-tooltip="${escAttr(t('conflict.filesTip') || 'See which files overlap, and choose which mod wins')}">
-                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                       ${uiIcon('folder', 12)}
                        <span>${r.file_count} ${t('conflict.files') || 'files'}</span>
-                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="cflt-files-chev"><polyline points="9 18 15 12 9 6"/></svg>
+                       ${uiIcon('chevron-right', 12, { cls: 'cflt-files-chev' })}
                      </button>
                      ${mixedStatus ? `<span class="cflt-row-status" style="color:${statusColor};border-color:${statusColor};background:${statusBg}">${isActive ? (t('conflict.active') || 'ACTIVE') : (t('conflict.potential') || 'POTENTIAL')}</span>` : ''}
                    </div>`;
@@ -269,7 +270,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
           <div class="conflict-group-card cflt-card${open ? ' is-open' : ''}" data-cflt-card="${escAttr(item.sourceModId)}">
              <button type="button" class="cflt-card-head" aria-expanded="${open ? 'true' : 'false'}"
                      data-cflt-toggle="${escAttr(item.sourceModId)}">
-               <svg class="cflt-card-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="9 18 15 12 9 6"/></svg>
+               ${uiIcon('chevron-right', 12, { cls: 'cflt-card-chev' })}
                <span class="cflt-card-dot" style="background:${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'};box-shadow:0 0 6px ${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'}"></span>
                <span class="cflt-card-name"
                      data-tooltip="${escAttr(item.sourceModName)}"
@@ -290,7 +291,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                 // the shape of the problem is the sort of thing a panel should do for you.
                 const allOpen = rendered.length > 0 && survivors.every(sv => openCards.has(sv.item.sourceModId));
                 const summaryBar = `<div class="cflt-summary">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${totalActive > 0 ? 'var(--danger)' : 'var(--warning)'}" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${totalActive > 0 ? 'var(--danger)' : 'var(--warning)'}" stroke-width="2" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
           <span class="cflt-summary-main">${rendered.length} ${t('conflict.modsInConflict') || 'mods in conflict'}</span>
           ${totalActive > 0 ? `<span class="cflt-summary-active">— ${totalActive} ${t('conflict.active') || 'active'}</span>` : ''}
           ${totalPotential > 0 ? `<span class="cflt-summary-potential">— ${totalPotential} ${t('conflict.potential') || 'potential'}</span>` : ''}
@@ -319,7 +320,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                 // things. Saying the reassuring one while four filters are on is the panel lying.
                 const hiddenByFilters = anyFilterOn && totalModsWithConflicts > 0;
                 container.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-muted)">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.25;margin-bottom:12px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          ${uiIcon('warning', 40, { style: 'opacity:0.25;margin-bottom:12px' })}
           <div>${hiddenByFilters
                     ? escHtml((t('conflict.allFiltered') || 'Nothing matches these filters — {n} mod(s) do have conflicts.').replace('{n}', String(totalModsWithConflicts)))
                     : escHtml(t('conflict.empty') || 'No conflicts detected.')}</div>
@@ -506,7 +507,7 @@ export async function openConflictTree(mod1Id, mod2Id) {
            data-hover-out="background:transparent;border-left:none"
            ${actAttrs('showFileConflictSelector', f, mod1Id, mod2Id)} data-act-with="event"
            data-tooltip="${escAttr(f)}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        ${uiIcon('file', 14, { style: 'flex-shrink:0;color:var(--accent)' })}
         <span style="flex:1;min-width:0;display:flex;flex-direction:column">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--text-primary)">${escHtml(base)}</span>
           ${dir ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px;color:var(--text-muted)">${escHtml(dir)}</span>` : ''}
@@ -584,10 +585,7 @@ export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id)
           <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(modName)}</div>
           <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px">${escHtml(modId)}</div>
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent);opacity:0.6">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
+        ${uiIcon('home', 16, { style: 'flex-shrink:0;color:var(--accent);opacity:0.6' })}
       </label>
     `;
     }).join('');
