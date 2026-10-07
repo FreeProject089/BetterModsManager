@@ -117,6 +117,37 @@ Un plugin ne peut donc pas s'élever en forgeant ou en omettant cet en-tête. D�
 
 ---
 
+<a id="custom-pages-review"></a>
+## Pages personnalisées : rien n'est accordé sans ta coche
+Une page personnalisée, c'est du HTML, du CSS et du JavaScript écrits par quelqu'un, exécutés
+dans un cadre isolé. Elle n'atteint BMM qu'à travers le courtier de permissions, et chaque
+permission (stockage, notifications, infos de l'app, presse-papiers, internet, infos système)
+reste coupée tant que tu ne l'actives pas.
+
+**Importer un `.bmmnav` partagé n'accorde rien à lui seul.** Le fichier liste ce que ses pages
+détenaient sur la machine qui l'a exporté ; BMM lit ces listes comme des demandes. Chaque page
+est créée neuve, sans permission ni site internet, et une étape de vérification s'ouvre :
+
+- chaque permission demandée, avec une ligne sur ce qu'elle permet à la page ;
+- chaque site que la page veut contacter (utilisé seulement si tu accordes aussi internet) ;
+- rien de coché, et **N'en accorder aucune** par défaut : Entrée, Échap et la fermeture de la
+  fenêtre veulent tous dire « aucune ».
+
+Seul ce que tu coches est appliqué, et la page note que ses permissions viennent de ta
+vérification. Un import n'écrit jamais dans une page que tu as déjà : réimporter le même fichier
+ne peut pas élever les permissions d'une page existante. Une page dont la vérification a été
+interrompue ne détient rien et affiche un bouton **Vérifier** dans l'éditeur de navigation.
+
+**Chaque permission est revérifiée dans le cœur.** Les commandes qu'une page atteint (son
+stockage, la requête internet, les infos système, et les permissions que le courtier sert
+lui-même) revérifient en Rust que l'identifiant est celui d'une page installée et que la
+permission fait partie de ses droits effectifs ; sinon elles refusent avec `permission_denied`
+ou `unknown_page`. L'identifiant est celui que le courtier a déduit du cadre qui a envoyé le
+message, jamais une valeur fournie par la page, et un appel venant d'un cadre de page lui-même
+est refusé.
+
+---
+
 ## Jamais de shell
 
 Les commandes personnalisées du planificateur *« n'invoquent jamais un shell (les arguments sont passés

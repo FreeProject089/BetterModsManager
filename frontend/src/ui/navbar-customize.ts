@@ -6,6 +6,8 @@ import { t } from '../core/i18n.js';
 import { attachHighlight, type CodeEditorHandle } from './code-editor.js';
 import { invoke, pickFile, pickFiles, pickFolder, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
+import { runNavBundleImport, reviewAnswer } from './nav-bundle-import.js';
+import { openGrantReview } from './nav-grant-review.js';
 import { showConfirm } from './confirm.js';
 import { uiIcon } from './icons.js';
 
@@ -418,6 +420,8 @@ function exportNavCode(): string {
 // ── .bmmnav file: the FULL portable bundle (navbar config + custom icons +
 //    custom pages' source/permissions). The bmm:// code link can't carry page
 //    bundles or uploaded icons, so sharing those uses this file. ──
+// `grants` / `netOrigins` are what the page held where it was exported. On import they are
+// REQUESTS shown in the review step (nav-bundle-import.ts), never applied as they are.
 interface NavBundlePage { id: string; name: string; html: string; css: string; js: string; grants: string[]; netOrigins: string[]; }
 interface NavBundle { format: 'bmmnav'; version: 1; navbar: NavbarConfig; pages: NavBundlePage[]; }
 
@@ -453,9 +457,10 @@ async function importNavBundle(): Promise<void> {
     // Check the signature BEFORE creating anything.
     //
     // Export signs this file precisely because of what the next twenty lines do: create pages
-    // from somebody else's HTML/CSS/JS and hand them the capabilities and network origins the
-    // file asks for. Signing it and then not reading the signature is the same as not signing
-    // it — the check has to sit in front of the grants, not beside them.
+    // from somebody else's HTML/CSS/JS, and the review that follows shows what the file asks
+    // for: both mean something only if the file is what its author wrote. Signing it and then
+    // not reading the signature is the same as not signing it — the check has to sit in front
+    // of the review, not beside it.
     //
     // UNSIGNED is not refused. Every .bmmnav written before signing existed is unsigned, and
     // so is one built by hand; refusing those would break sharing to protect nothing. What is
@@ -473,20 +478,19 @@ async function importNavBundle(): Promise<void> {
         }
     } catch (e) { console.warn('[nav] signature check failed', e); }
 
-    // Recreate each shared page (new ids), then remap the custom buttons' targets.
-    const idMap: Record<string, string> = {};
-    for (const p of bundle.pages || []) {
-        try {
-            const meta = await invoke('create_custom_page', { name: p.name, html: p.html, css: p.css, js: p.js }) as { id: string };
-            idMap[p.id] = meta.id;
-            for (const cap of p.grants || []) { try { await invoke('page_set_grant', { id: meta.id, cap, granted: true }); } catch { /* unknown cap */ } }
-            if (p.netOrigins?.length) { try { await invoke('page_set_net_origins', { id: meta.id, origins: p.netOrigins }); } catch { /* ignore */ } }
-        } catch { /* skip a bad page */ }
-    }
+    // Recreate each shared page as a NEW page holding nothing, ask the user which of the
+    // permissions and sites the file asks for to grant ("Grant none" is the default), apply
+    // only that answer, then remap the custom buttons' targets. The file's lists are requests:
+    // nothing here sets a grant or an origin directly, and an existing page is never written
+    // to, so re-importing a file cannot raise any page's grants.
+    const { idMap, applied } = await runNavBundleImport(bundle, { invoke, review: openGrantReview });
+    for (const id of Object.values(idMap)) await refreshGrants(id);
+    const anyGranted = Object.values(applied).some(a => a.caps.length > 0);
     const cfg: NavbarConfig = { ...EMPTY_CFG, ...bundle.navbar };
     for (const c of cfg.custom || []) { if (c.kind === 'page' && idMap[c.target]) c.target = idMap[c.target]; }
     save(cfg); applyNavbarConfig();
-    (window as any).toast?.(t('navedit.bundleImported') || 'Navigation imported', 'success');
+    (window as any).toast?.(!Object.keys(applied).length ? (t('navedit.bundleImported') || 'Navigation imported')
+        : anyGranted ? t('navedit.reviewDoneSome') : t('navedit.reviewDoneNone'), 'success');
     openNavbarEditor();
 }
 
@@ -986,6 +990,15 @@ export function openNavbarEditor(): void {
             let origins: string[] = [];
             try { grants = new Set((await invoke('page_grants_get', { id: p.id })) as string[]); } catch { /* deny */ }
             try { origins = (await invoke('page_net_origins_get', { id: p.id })) as string[]; } catch { /* none */ }
+            // How the grants were set: an imported page awaiting its review holds NOTHING (the
+            // backend enforces it) and says so; one set in the review says that too.
+            let review: { source?: string; requested?: string[]; requestedOrigins?: string[] } = {};
+            try { review = (await invoke('page_grant_review_get', { id: p.id })) as typeof review; } catch { /* none */ }
+            const reviewNote = review.source === 'import-pending'
+                ? `<div class="nbe-review-note nbe-review-pending">${escAttr(t('navedit.reviewPending'))} <button class="btn btn-xs btn-secondary" data-reviewpage="${escAttr(p.id)}">${escAttr(t('navedit.reviewBtn'))}</button></div>`
+                : review.source === 'import-review'
+                    ? `<div class="nbe-review-note">${escAttr(t('navedit.reviewedNote'))}</div>`
+                    : '';
             const cap = (c: string, lbl: string) =>
                 `<label class="nbe-cap"><input type="checkbox" data-cap="${c}" data-pg="${escAttr(p.id)}" ${grants.has(c) ? 'checked' : ''}> ${lbl}</label>`;
             return `<div class="nbe-page-block">
@@ -995,6 +1008,7 @@ export function openNavbarEditor(): void {
                     <button class="btn btn-xs btn-ghost nbe-importfile" data-importpage="${escAttr(p.id)}">${t('navedit.importFile') || 'Import file (.wasm…)'}</button>
                     <button class="nbe-del" data-delpage="${escAttr(p.id)}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
                 </div>
+                ${reviewNote}
                 <div class="nbe-presets">
                     <span class="nbe-preset-lbl">${t('navedit.preset') || 'Preset'}:</span>
                     <button class="btn btn-xs btn-ghost" data-preset="strict" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetStrictTip') || 'Fully isolated — no permissions'}">${t('navedit.presetStrict') || 'Strict'}</button>
@@ -1034,6 +1048,18 @@ export function openNavbarEditor(): void {
                 const list = el.value.split(',').map(s => s.trim()).filter(Boolean);
                 try { await invoke('page_set_net_origins', { id: el.dataset.pg, origins: list }); }
                 catch (err) { (window as any).toast?.(String(err), 'error'); }
+            }));
+        pagesListEl.querySelectorAll('[data-reviewpage]').forEach(b =>
+            b.addEventListener('click', async () => {
+                const id = (b as HTMLElement).dataset.reviewpage!;
+                try {
+                    const r = (await invoke('page_grant_review_get', { id })) as { requested?: string[]; requestedOrigins?: string[] };
+                    const pending = { id, name: _pagesCache.find(x => x.id === id)?.name || id, requested: r.requested || [], requestedOrigins: r.requestedOrigins || [], unknown: [] };
+                    const ans = reviewAnswer(pending, (await openGrantReview([pending])).get(id));
+                    await invoke('page_apply_reviewed_grants', { id, caps: ans.caps, origins: ans.origins });
+                    await refreshGrants(id);
+                    await renderPagesList();
+                } catch (err) { (window as any).toast?.(String(err), 'error'); }
             }));
         // Permission presets: one click sets all capabilities to a safe level.
         const PRESETS: Record<string, string[]> = {

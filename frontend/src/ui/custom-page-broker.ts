@@ -3,7 +3,9 @@
 // on its own; it can only `postMessage` to the parent, where this broker:
 //   1. confirms the message comes from a known *page* iframe (not a URL iframe
 //      or any random frame) — matched by contentWindow, never by origin,
-//   2. confirms the requested capability is GRANTED for that page (default-deny),
+//   2. confirms the requested capability is GRANTED for that page (default-deny) — asked
+//      of the backend every time (page_require_grant), which also re-checks it inside every
+//      Rust command a page reaches (page_storage_*, page_fetch, page_system_info),
 //   3. dispatches to a small, frozen, hand-written API table — NEVER a generic
 //      `invoke` passthrough. Every method is scoped to the verified page id.
 //
@@ -113,12 +115,20 @@ export function initPageBroker(): void {
         const reply = (m: Record<string, unknown>) => {
             try { (e.source as Window | null)?.postMessage({ __bmmReply: true, reqId: d.reqId, ...m }, '*'); } catch { /* gone */ }
         };
-        const grants = grantsCache.get(pageId) || new Set<string>();
-        if (typeof d.cap !== 'string' || !grants.has(d.cap)) {
+        // The backend decides, for every capability (page_require_grant): the id must be an
+        // installed page and the capability in its EFFECTIVE grants, which are empty while an
+        // imported page awaits its review. The cache only answers "no" without a round trip;
+        // it never answers "yes" on its own.
+        const cap = typeof d.cap === 'string' ? d.cap : '';
+        let granted = !!cap && (grantsCache.get(pageId)?.has(cap) ?? true);
+        if (granted) {
+            try { await invoke('page_require_grant', { id: pageId, cap }, { quiet: true }); }
+            catch { granted = false; }
+        }
+        if (!granted) {
             // Surface the missing permission so the user knows what to grant.
-            const cap = typeof d.cap === 'string' ? d.cap : '?';
-            (window as any).toast?.(`${t('navedit.permMissing') || 'Custom page is missing permission'}: "${cap}"`, 'warning');
-            return reply({ error: 'permission_denied', cap });
+            (window as any).toast?.(`${t('navedit.permMissing') || 'Custom page is missing permission'}: "${cap || '?'}"`, 'warning');
+            return reply({ error: 'permission_denied', cap: cap || '?' });
         }
         const handler = API[d.cap]?.[String(d.method)];
         if (!handler) return reply({ error: 'unknown_method' });

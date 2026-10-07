@@ -303,6 +303,10 @@ cartes passent sous la liste. L'ensemble voyage en code `bmm://` ou en bundle �
 sur les sauvegardes plus haut : la disposition, la source de chaque page et ses permissions
 sont trois choses séparées.
 
+Importer un `.bmmnav` partagé crée ses pages **sans aucune permission** : une vérification
+liste ce que chaque page demande, rien de coché, et seul ce que tu coches est accordé — voir
+[Modèle de sécurité](doc-page:how-it-works/security#custom-pages-review).
+
 ### Enregistreur de session (local)
 
 Enregistre ce qui se passe à l'écran — tes actions plus les logs JS et Rust — pour qu'un

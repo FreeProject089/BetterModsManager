@@ -112,6 +112,35 @@ So a plugin cannot escalate by forging or omitting that header. Supporting detai
 
 ---
 
+<a id="custom-pages-review"></a>
+## Custom pages: nothing is granted that you did not tick
+A custom page is someone's HTML, CSS and JavaScript running in a sandboxed frame. It reaches BMM
+only through the permission broker, and each permission (storage, notifications, app info,
+clipboard, internet, system info) is off until you turn it on.
+
+**Importing a shared `.bmmnav` grants nothing by itself.** The file lists what its pages held on
+the machine that exported them; BMM reads those lists as requests. Each page is created new,
+holding no permission and no internet site, and a review step opens:
+
+- every permission the file asks for, with one line on what it lets the page do;
+- every site the page wants to contact (used only if you also grant internet);
+- nothing ticked, and **Grant none** as the default: Enter, Escape and closing the dialog all
+  mean "none".
+
+Only what you tick is applied, and the page records that its permissions came from your review.
+An import never writes to a page you already have, so importing the same file again cannot raise
+an existing page's permissions. A page whose review was interrupted holds nothing and shows a
+**Review** button in the navbar editor.
+
+**Every permission is checked again in the core.** The commands a page reaches (its storage, the
+internet fetch, system info, and the permissions the broker serves itself) re-check in Rust that
+the page id is an installed page and that the permission is in its effective grants; otherwise
+they refuse with `permission_denied` or `unknown_page`. The id is the one the broker resolved
+from the frame that sent the message, never a value the page supplies, and a call that comes
+from a page frame itself is refused.
+
+---
+
 ## No shell, ever
 
 Scheduler custom commands *"never invoke a shell (args are passed separately…), avoiding CWE-78"* —

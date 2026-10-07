@@ -11,15 +11,19 @@
 //!  - the page calls the `bmm.js` SDK (`PAGE_SDK_JS`, written into every bundle), which
 //!    `postMessage`s the parent; the broker (`frontend/src/ui/custom-page-broker.ts`)
 //!    answers only for a capability in the page's grants (`grants.json`, `page_set_grant`:
-//!    ticked in the navbar editor, or re-applied from a `.bmmnav` bundle on import;
-//!    `KNOWN_CAPS` is the whole list):
+//!    ticked in the navbar editor, or chosen item by item in the review step of a `.bmmnav`
+//!    import, which creates the page with nothing and records the answer in
+//!    `grants_meta.json`; `KNOWN_CAPS` is the whole list):
 //!    `storage` (a per-page key-value file, quota-capped), `notifications`, `network`,
 //!    `read` (app name/version/platform, current theme), `clipboard` (done by the parent
 //!    frame) and `system` (aggregate OS/hardware facts, never names, files or processes);
 //!  - `network` is further limited to the page's own origin allow-list
 //!    (`net_origins.json`, `clean_origin`): those origins are added to the page's CSP, and
 //!    `page_fetch` re-checks the grant and the origin itself, follows redirects only within
-//!    the list and caps the body. `page_system_info` re-checks its grant too;
+//!    the list and caps the body;
+//!  - every command that acts for a page (`page_storage_*`, `page_fetch`, `page_system_info`,
+//!    `page_require_grant`) re-checks on the Rust side through `require_cap`: the id must be an
+//!    installed page, the capability in its EFFECTIVE grants, and the caller not a page frame;
 //!  - grants, storage and origins live outside the read-only bundle, in
 //!    `<app_data>/custom_pages_data/<id>/`, and `delete_custom_page` removes them with it.
 //!
@@ -436,6 +440,39 @@ pub fn create_custom_page<R: Runtime>(
         runtime: runtime.into(),
         entry: "index.html".into(),
     })
+}
+
+/// Create a page from a shared `.bmmnav` file. The page is created with NO capability and NO
+/// network origin, whatever the file lists: `requested` and `requested_origins` are only
+/// recorded (`grants_meta.json`, `import-pending`) so the import review can show them, and
+/// nothing is effective until the user answers it (`page_apply_reviewed_grants`). Always a
+/// NEW page: an import never writes to an existing one, so re-importing a file cannot raise
+/// the grants of a page already installed.
+#[tauri::command]
+pub fn create_imported_custom_page<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+    html: String,
+    css: String,
+    js: Option<String>,
+    requested: Vec<String>,
+    requested_origins: Vec<String>,
+) -> Result<ImportedPage, String> {
+    let meta = create_custom_page(app.clone(), name, html, css, js)?;
+    let dir = pages_data_root(&app).join(&meta.id);
+    match mark_import_pending_in(&dir, &requested, &requested_origins) {
+        Ok(review) => Ok(ImportedPage { page: meta, review }),
+        Err(e) => {
+            let _ = delete_custom_page(app, meta.id);
+            Err(e)
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ImportedPage {
+    pub page: PageMeta,
+    pub review: GrantsMeta,
 }
 
 /// Copy a picked file (e.g. a `.wasm` module, image, or `.js`) into a page's
@@ -936,25 +973,179 @@ fn pages_data_root<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("custom_pages_data")
 }
+/// The page's data folder, created. Only for the editor's own writes (grants, origins):
+/// every command that acts FOR a page goes through `require_cap`, which never creates
+/// anything for an id that is not an installed page.
 fn page_data_dir<R: Runtime>(app: &AppHandle<R>, id: &str) -> Option<PathBuf> {
-    let id = sanitize_id(id)?;
+    let id = page_installed_in(&pages_root(app), id)?;
     let dir = pages_data_root(app).join(&id);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
 
-fn read_kv<R: Runtime>(app: &AppHandle<R>, id: &str) -> std::collections::BTreeMap<String, String> {
-    page_data_dir(app, id)
-        .and_then(|d| std::fs::read_to_string(d.join("storage.json")).ok())
+// ── Who granted what: the review record ───────────────────────────────────
+//
+// `grants.json` says WHAT a page holds; `grants_meta.json` says HOW it came to hold it.
+// The distinction exists because of `.bmmnav` import: the file used to list capabilities
+// and origins and the importer re-granted every one of them with nothing shown, so a shared
+// navbar was a way to hand a stranger's script `network` + `system` + `clipboard` on a
+// machine whose owner never ticked a box. An imported page is now created in the
+// `import-pending` state, in which its effective grants and origins are EMPTY whatever the
+// files on disk say, and it leaves that state only through the user's review
+// (`page_apply_reviewed_grants`, recorded as `import-review`) or the user's own ticks in
+// the editor (`user`).
+
+const GRANTS_META: &str = "grants_meta.json";
+/// Imported, not reviewed yet: nothing is effective.
+const SRC_IMPORT_PENDING: &str = "import-pending";
+/// Set by the user in the import review step.
+const SRC_IMPORT_REVIEW: &str = "import-review";
+/// Ticked by the user in the navbar editor.
+const SRC_USER: &str = "user";
+
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantsMeta {
+    /// `import-pending` | `import-review` | `user`; empty for a page that predates the record.
+    #[serde(default)]
+    pub source: String,
+    /// What the imported file asked for (known capabilities only, cleaned origins). Kept after
+    /// the review so the editor can say what was asked and what was refused.
+    #[serde(default)]
+    pub requested: Vec<String>,
+    #[serde(default)]
+    pub requested_origins: Vec<String>,
+    /// Unix seconds of the user's review.
+    #[serde(default)]
+    pub reviewed_at: Option<u64>,
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// The id as an INSTALLED page: a well-formed slug with a bundle and a manifest. Anything
+/// else — a traversal, an id that was never created, one that was deleted — is not a page,
+/// and nothing is read, created or granted for it.
+fn page_installed_in(pages_root: &std::path::Path, id: &str) -> Option<String> {
+    let id = sanitize_id(id)?;
+    pages_root.join(&id).join("manifest.json").is_file().then_some(id)
+}
+
+fn read_meta_in(dir: &std::path::Path) -> GrantsMeta {
+    std::fs::read_to_string(dir.join(GRANTS_META))
+        .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default()
 }
-fn write_kv<R: Runtime>(
-    app: &AppHandle<R>,
+fn write_meta_in(dir: &std::path::Path, meta: &GrantsMeta) -> Result<(), String> {
+    std::fs::write(dir.join(GRANTS_META), serde_json::to_string(meta).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
+}
+
+/// `grants.json` as stored, limited to known capabilities and de-duplicated.
+fn stored_grants_in(dir: &std::path::Path) -> Vec<String> {
+    let raw: Vec<String> = std::fs::read_to_string(dir.join("grants.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let mut out: Vec<String> = Vec::new();
+    for c in raw {
+        if KNOWN_CAPS.contains(&c.as_str()) && !out.contains(&c) {
+            out.push(c);
+        }
+    }
+    out
+}
+fn stored_origins_in(dir: &std::path::Path) -> Vec<String> {
+    // Cleaned on READ as well as on write: the file can arrive by a `.DATABMM` restore
+    // (navigation/pages-data) without ever passing page_set_net_origins.
+    std::fs::read_to_string(dir.join("net_origins.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|o| clean_origin(o))
+        .collect()
+}
+
+/// What the page actually holds: nothing while an import awaits its review.
+fn effective_grants_in(dir: &std::path::Path) -> Vec<String> {
+    if read_meta_in(dir).source == SRC_IMPORT_PENDING {
+        return Vec::new();
+    }
+    stored_grants_in(dir)
+}
+fn effective_origins_in(dir: &std::path::Path) -> Vec<String> {
+    if read_meta_in(dir).source == SRC_IMPORT_PENDING {
+        return Vec::new();
+    }
+    stored_origins_in(dir)
+}
+
+/// The Rust-side gate of every command that acts FOR a page. The page id must be an
+/// installed page and the capability must be in its EFFECTIVE grants. Returns the page's
+/// data folder (created only once both hold).
+///
+/// The broker checks the same thing from its cache first; this is the check that counts.
+/// Before it, `page_storage_*` trusted the broker entirely: anything able to invoke them
+/// read and wrote any page's store with no grant at all, and an id like `p1` for a page
+/// that never existed created a data folder for it.
+fn require_cap_in(
+    pages_root: &std::path::Path,
+    data_root: &std::path::Path,
     id: &str,
-    kv: &std::collections::BTreeMap<String, String>,
-) -> Result<(), String> {
-    let dir = page_data_dir(app, id).ok_or("invalid id")?;
+    cap: &str,
+) -> Result<PathBuf, String> {
+    let id = page_installed_in(pages_root, id).ok_or_else(|| "unknown_page: not an installed custom page".to_string())?;
+    if !KNOWN_CAPS.contains(&cap) {
+        return Err(format!("permission_denied: unknown capability \"{cap}\""));
+    }
+    let dir = data_root.join(&id);
+    if !effective_grants_in(&dir).iter().any(|c| c == cap) {
+        return Err(format!("permission_denied: this page does not hold the \"{cap}\" permission"));
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+fn require_cap<R: Runtime>(app: &AppHandle<R>, id: &str, cap: &str) -> Result<PathBuf, String> {
+    require_cap_in(&pages_root(app), &pages_data_root(app), id, cap)
+}
+
+/// Is this IPC caller a custom page's own frame? A page runs at an opaque origin (`null`,
+/// sandbox without allow-same-origin) served from `bmmpage`. It has no invoke key and should
+/// never reach IPC at all; if a webview change ever let it, the page could name any page id
+/// it liked. So the commands that act for a page refuse a page caller outright and only
+/// accept the id from BMM's own frame, where the broker resolved it from the iframe element
+/// that sent the message (`pageIdFor`, by contentWindow — never by what the page says).
+fn caller_is_page_frame(origin: Option<&str>) -> bool {
+    let Some(o) = origin.map(|o| o.trim().to_ascii_lowercase()) else { return false };
+    if o == "null" || o.starts_with("bmmpage:") {
+        return true;
+    }
+    reqwest::Url::parse(&o)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h == "bmmpage.localhost" || h.ends_with(".bmmpage.localhost")))
+        .unwrap_or(false)
+}
+fn refuse_page_caller(request: &tauri::ipc::Request<'_>) -> Result<(), String> {
+    let origin = request.headers().get("Origin").and_then(|v| v.to_str().ok());
+    if caller_is_page_frame(origin) {
+        return Err("permission_denied: a custom page cannot call this directly".into());
+    }
+    Ok(())
+}
+
+fn read_kv_in(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
+    std::fs::read_to_string(dir.join("storage.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+fn write_kv_in(dir: &std::path::Path, kv: &std::collections::BTreeMap<String, String>) -> Result<(), String> {
     let txt = serde_json::to_string(kv).map_err(|e| e.to_string())?;
     if txt.len() > MAX_STORAGE_BYTES {
         return Err("storage quota exceeded".into());
@@ -963,53 +1154,127 @@ fn write_kv<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn page_storage_get<R: Runtime>(app: AppHandle<R>, id: String, key: String) -> Option<String> {
-    read_kv(&app, &id).get(&key).cloned()
+pub fn page_storage_get<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
+    app: AppHandle<R>,
+    id: String,
+    key: String,
+) -> Result<Option<String>, String> {
+    refuse_page_caller(&request)?;
+    let dir = require_cap(&app, &id, "storage")?;
+    Ok(read_kv_in(&dir).get(&key).cloned())
 }
 #[tauri::command]
 pub fn page_storage_set<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
     app: AppHandle<R>,
     id: String,
     key: String,
     value: String,
 ) -> Result<(), String> {
+    refuse_page_caller(&request)?;
+    let dir = require_cap(&app, &id, "storage")?;
     if key.len() > 512 {
         return Err("key too long".into());
     }
-    let mut kv = read_kv(&app, &id);
+    let mut kv = read_kv_in(&dir);
     kv.insert(key, value);
-    write_kv(&app, &id, &kv)
+    write_kv_in(&dir, &kv)
 }
 #[tauri::command]
 pub fn page_storage_remove<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
     app: AppHandle<R>,
     id: String,
     key: String,
 ) -> Result<(), String> {
-    let mut kv = read_kv(&app, &id);
+    refuse_page_caller(&request)?;
+    let dir = require_cap(&app, &id, "storage")?;
+    let mut kv = read_kv_in(&dir);
     kv.remove(&key);
-    write_kv(&app, &id, &kv)
+    write_kv_in(&dir, &kv)
 }
 #[tauri::command]
-pub fn page_storage_keys<R: Runtime>(app: AppHandle<R>, id: String) -> Vec<String> {
-    read_kv(&app, &id).keys().cloned().collect()
+pub fn page_storage_keys<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
+    app: AppHandle<R>,
+    id: String,
+) -> Result<Vec<String>, String> {
+    refuse_page_caller(&request)?;
+    let dir = require_cap(&app, &id, "storage")?;
+    Ok(read_kv_in(&dir).keys().cloned().collect())
 }
 #[tauri::command]
-pub fn page_storage_clear<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), String> {
-    write_kv(&app, &id, &std::collections::BTreeMap::new())
+pub fn page_storage_clear<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
+    app: AppHandle<R>,
+    id: String,
+) -> Result<(), String> {
+    refuse_page_caller(&request)?;
+    let dir = require_cap(&app, &id, "storage")?;
+    write_kv_in(&dir, &std::collections::BTreeMap::new())
+}
+
+/// The broker's authoritative check for the capabilities it serves itself (notifications,
+/// clipboard, app info): the same gate as the Rust-served ones, so the broker's cache is a
+/// shortcut and never the decision.
+#[tauri::command]
+pub fn page_require_grant<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
+    app: AppHandle<R>,
+    id: String,
+    cap: String,
+) -> Result<(), String> {
+    refuse_page_caller(&request)?;
+    require_cap(&app, &id, &cap).map(|_| ())
 }
 
 fn read_grants<R: Runtime>(app: &AppHandle<R>, id: &str) -> Vec<String> {
-    page_data_dir(app, id)
-        .and_then(|d| std::fs::read_to_string(d.join("grants.json")).ok())
-        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
-        .unwrap_or_default()
+    match page_installed_in(&pages_root(app), id) {
+        Some(id) => effective_grants_in(&pages_data_root(app).join(id)),
+        None => Vec::new(),
+    }
 }
 
+/// The page's EFFECTIVE grants (empty while an import awaits review).
 #[tauri::command]
 pub fn page_grants_get<R: Runtime>(app: AppHandle<R>, id: String) -> Vec<String> {
     read_grants(&app, &id)
 }
+
+/// How the page's grants were set, and what an imported file asked for.
+#[tauri::command]
+pub fn page_grant_review_get<R: Runtime>(app: AppHandle<R>, id: String) -> GrantsMeta {
+    match page_installed_in(&pages_root(&app), &id) {
+        Some(id) => read_meta_in(&pages_data_root(&app).join(id)),
+        None => GrantsMeta::default(),
+    }
+}
+
+/// A user's own tick in the editor. On a page still awaiting its import review the stored
+/// grants are empty (written so by `mark_import_pending_in`), so this starts from nothing,
+/// and the page leaves the pending state as `user`: what it holds is what the user ticked.
+fn set_grant_in(dir: &std::path::Path, cap: &str, granted: bool) -> Result<Vec<String>, String> {
+    if !KNOWN_CAPS.contains(&cap) {
+        return Err("unknown capability".into());
+    }
+    let mut meta = read_meta_in(dir);
+    let mut grants = if meta.source == SRC_IMPORT_PENDING { Vec::new() } else { stored_grants_in(dir) };
+    grants.retain(|c| c != cap);
+    if granted {
+        grants.push(cap.to_string());
+    }
+    std::fs::write(dir.join("grants.json"), serde_json::to_string(&grants).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    if meta.source == SRC_IMPORT_PENDING {
+        // The origins the file asked for were never approved: drop them with the state.
+        std::fs::write(dir.join("net_origins.json"), "[]").map_err(|e| e.to_string())?;
+    }
+    meta.source = SRC_USER.into();
+    write_meta_in(dir, &meta)?;
+    Ok(grants)
+}
+
 #[tauri::command]
 pub fn page_set_grant<R: Runtime>(
     app: AppHandle<R>,
@@ -1017,24 +1282,91 @@ pub fn page_set_grant<R: Runtime>(
     cap: String,
     granted: bool,
 ) -> Result<Vec<String>, String> {
-    if !KNOWN_CAPS.contains(&cap.as_str()) {
-        return Err("unknown capability".into());
-    }
     let dir = page_data_dir(&app, &id).ok_or("invalid id")?;
-    let mut grants: Vec<String> = std::fs::read_to_string(dir.join("grants.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default();
-    grants.retain(|c| c != &cap);
-    if granted {
-        grants.push(cap);
+    set_grant_in(&dir, &cap, granted)
+}
+
+/// An imported page starts here: no grants, no origins, whatever its file listed, and a
+/// record of what the file asked for so the review can show it.
+fn mark_import_pending_in(
+    dir: &std::path::Path,
+    requested: &[String],
+    requested_origins: &[String],
+) -> Result<GrantsMeta, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut caps: Vec<String> = Vec::new();
+    for c in requested {
+        if KNOWN_CAPS.contains(&c.as_str()) && !caps.contains(c) {
+            caps.push(c.clone());
+        }
     }
-    std::fs::write(
-        dir.join("grants.json"),
-        serde_json::to_string(&grants).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(grants)
+    let mut origins: Vec<String> = Vec::new();
+    for o in requested_origins.iter().filter_map(|o| clean_origin(o)) {
+        if !origins.iter().any(|x| x.eq_ignore_ascii_case(&o)) {
+            origins.push(o);
+        }
+    }
+    std::fs::write(dir.join("grants.json"), "[]").map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("net_origins.json"), "[]").map_err(|e| e.to_string())?;
+    let meta = GrantsMeta { source: SRC_IMPORT_PENDING.into(), requested: caps, requested_origins: origins, reviewed_at: None };
+    write_meta_in(dir, &meta)?;
+    Ok(meta)
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct ReviewedGrants {
+    pub grants: Vec<String>,
+    pub origins: Vec<String>,
+}
+
+/// Apply the user's answer to the import review. Only on a page still pending, only
+/// capabilities and origins the file asked for, origins only alongside `network`. An empty
+/// answer ("grant none") is the normal case and leaves the page with nothing.
+fn apply_review_in(dir: &std::path::Path, caps: &[String], origins: &[String]) -> Result<ReviewedGrants, String> {
+    let mut meta = read_meta_in(dir);
+    if meta.source != SRC_IMPORT_PENDING {
+        return Err("review_not_pending: this page has no import review waiting".into());
+    }
+    let mut grants: Vec<String> = Vec::new();
+    for c in caps {
+        if !meta.requested.contains(c) {
+            return Err(format!("not_requested: the imported file did not ask for \"{c}\""));
+        }
+        if !grants.contains(c) {
+            grants.push(c.clone());
+        }
+    }
+    let mut kept: Vec<String> = Vec::new();
+    if grants.iter().any(|c| c == "network") {
+        for raw in origins {
+            let o = clean_origin(raw).ok_or_else(|| format!("not_requested: \"{raw}\" is not an origin"))?;
+            if !meta.requested_origins.iter().any(|r| r.eq_ignore_ascii_case(&o)) {
+                return Err(format!("not_requested: the imported file did not ask for {o}"));
+            }
+            if !kept.iter().any(|k| k.eq_ignore_ascii_case(&o)) {
+                kept.push(o);
+            }
+        }
+    }
+    std::fs::write(dir.join("grants.json"), serde_json::to_string(&grants).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("net_origins.json"), serde_json::to_string(&kept).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    meta.source = SRC_IMPORT_REVIEW.into();
+    meta.reviewed_at = Some(now_secs());
+    write_meta_in(dir, &meta)?;
+    Ok(ReviewedGrants { grants, origins: kept })
+}
+
+#[tauri::command]
+pub fn page_apply_reviewed_grants<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    caps: Vec<String>,
+    origins: Vec<String>,
+) -> Result<ReviewedGrants, String> {
+    let dir = page_data_dir(&app, &id).ok_or("invalid id")?;
+    apply_review_in(&dir, &caps, &origins)
 }
 
 // ── Network capability: per-page allow-listed origins + a guarded fetch ───
@@ -1044,16 +1376,13 @@ pub fn page_set_grant<R: Runtime>(
 // allow-list before performing a plain GET. No headers/cookies from BMM are
 // forwarded; the response is size-capped and returned as text.
 
+/// The page's EFFECTIVE origins (empty while an import awaits review, or for an id that is
+/// not an installed page).
 fn read_net_origins<R: Runtime>(app: &AppHandle<R>, id: &str) -> Vec<String> {
-    // Cleaned on READ as well as on write: the file can arrive by a `.DATABMM` restore
-    // (navigation/pages-data) without ever passing page_set_net_origins.
-    page_data_dir(app, id)
-        .and_then(|d| std::fs::read_to_string(d.join("net_origins.json")).ok())
-        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|o| clean_origin(o))
-        .collect()
+    match page_installed_in(&pages_root(app), id) {
+        Some(id) => effective_origins_in(&pages_data_root(app).join(id)),
+        None => Vec::new(),
+    }
 }
 
 /// `scheme://host[:port]` rebuilt from a parse, or `None`.
@@ -1094,6 +1423,12 @@ pub fn page_set_net_origins<R: Runtime>(
     origins: Vec<String>,
 ) -> Result<Vec<String>, String> {
     let dir = page_data_dir(&app, &id).ok_or("invalid id")?;
+    set_origins_in(&dir, &origins)
+}
+
+/// A user's own origin list from the editor. Like `set_grant_in`, it ends a pending import
+/// review as `user` — the grants stay empty until the user ticks one.
+fn set_origins_in(dir: &std::path::Path, origins: &[String]) -> Result<Vec<String>, String> {
     // Keep only well-formed http(s) origins (scheme://host[:port], no path). See clean_origin.
     let clean: Vec<String> = origins.iter().filter_map(|o| clean_origin(o)).collect();
     std::fs::write(
@@ -1101,6 +1436,12 @@ pub fn page_set_net_origins<R: Runtime>(
         serde_json::to_string(&clean).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    let mut meta = read_meta_in(dir);
+    if meta.source == SRC_IMPORT_PENDING {
+        std::fs::write(dir.join("grants.json"), "[]").map_err(|e| e.to_string())?;
+    }
+    meta.source = SRC_USER.into();
+    write_meta_in(dir, &meta)?;
     Ok(clean)
 }
 
@@ -1200,15 +1541,14 @@ mod page_network_tests {
 
 #[tauri::command]
 pub async fn page_fetch<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
     app: AppHandle<R>,
     id: String,
     url: String,
 ) -> Result<FetchResult, String> {
-    // 1) The page must have been granted `network`.
-    let grants = page_grants_get(app.clone(), id.clone());
-    if !grants.iter().any(|c| c == "network") {
-        return Err("permission_denied".into());
-    }
+    // 1) The caller is BMM's frame, the id an installed page, and that page holds `network`.
+    refuse_page_caller(&request)?;
+    require_cap(&app, &id, "network")?;
     // 2) The URL's origin must be on this page's explicit allow-list.
     let origin = url_origin(&url).ok_or("invalid url")?;
     let allowed = read_net_origins(&app, &id);
@@ -1241,10 +1581,13 @@ pub async fn page_fetch<R: Runtime>(
 /// file system, processes, env vars, or any way to run code. The page must hold
 /// the `system` grant (re-checked here, defence-in-depth).
 #[tauri::command]
-pub fn page_system_info<R: Runtime>(app: AppHandle<R>, id: String) -> Result<String, String> {
-    if !read_grants(&app, &id).iter().any(|c| c == "system") {
-        return Err("permission_denied".into());
-    }
+pub fn page_system_info<R: Runtime>(
+    request: tauri::ipc::Request<'_>,
+    app: AppHandle<R>,
+    id: String,
+) -> Result<String, String> {
+    refuse_page_caller(&request)?;
+    require_cap(&app, &id, "system")?;
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
     sys.refresh_cpu();
@@ -1407,5 +1750,203 @@ pub fn bmmpage_protocol<R: Runtime>(
             Err(_) => not_found(),
         },
         _ => not_found(),
+    }
+}
+
+#[cfg(test)]
+mod page_grant_review_tests {
+    use super::*;
+    use std::path::Path;
+
+    /// An installed page `id` under `pages`.
+    fn install(pages: &Path, id: &str) {
+        let d = pages.join(id);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("manifest.json"), r#"{"name":"t"}"#).unwrap();
+    }
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+    fn roots() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let t = tempfile::tempdir().unwrap();
+        let pages = t.path().join("custom_pages");
+        let data = t.path().join("custom_pages_data");
+        std::fs::create_dir_all(&pages).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
+        (t, pages, data)
+    }
+
+    /// The defect: a `.bmmnav` listing capabilities and origins had every one of them applied
+    /// on import. Now nothing is effective until the review, even if the files on disk say
+    /// otherwise (a grants.json already there, e.g. from a restore under the same id).
+    #[test]
+    fn an_import_grants_nothing_until_it_is_reviewed() {
+        let (_t, pages, data) = roots();
+        install(&pages, "pimp");
+        let dir = data.join("pimp");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("grants.json"), r#"["network","system","storage"]"#).unwrap();
+        let meta = mark_import_pending_in(
+            &dir,
+            &s(&["network", "system", "storage", "shell", "network"]),
+            &s(&["https://evil.example", "https://a.example; worker-src *"]),
+        )
+        .unwrap();
+        assert_eq!(meta.source, "import-pending");
+        assert_eq!(meta.requested, s(&["network", "system", "storage"]), "unknown caps and duplicates are not recorded");
+        assert_eq!(meta.requested_origins, s(&["https://evil.example"]), "a non-origin is not recorded");
+        assert!(effective_grants_in(&dir).is_empty());
+        assert!(effective_origins_in(&dir).is_empty());
+        for cap in ["storage", "network", "system", "clipboard"] {
+            let e = require_cap_in(&pages, &data, "pimp", cap).unwrap_err();
+            assert!(e.starts_with("permission_denied"), "{cap}: {e}");
+        }
+        // Even if something rewrote grants.json while pending, pending still means nothing.
+        std::fs::write(dir.join("grants.json"), r#"["storage"]"#).unwrap();
+        assert!(require_cap_in(&pages, &data, "pimp", "storage").is_err());
+    }
+
+    #[test]
+    fn grant_none_is_a_review_and_leaves_nothing() {
+        let (_t, pages, data) = roots();
+        install(&pages, "pnone");
+        let dir = data.join("pnone");
+        mark_import_pending_in(&dir, &s(&["storage", "network"]), &s(&["https://api.example"])).unwrap();
+        let r = apply_review_in(&dir, &[], &[]).unwrap();
+        assert!(r.grants.is_empty() && r.origins.is_empty());
+        let meta = read_meta_in(&dir);
+        assert_eq!(meta.source, "import-review", "recorded as the user's review");
+        assert!(meta.reviewed_at.is_some());
+        assert_eq!(meta.requested, s(&["storage", "network"]), "what was asked stays on record");
+        assert!(require_cap_in(&pages, &data, "pnone", "storage").is_err());
+    }
+
+    #[test]
+    fn a_partial_review_grants_only_what_was_ticked() {
+        let (_t, pages, data) = roots();
+        install(&pages, "ppart");
+        let dir = data.join("ppart");
+        mark_import_pending_in(
+            &dir,
+            &s(&["storage", "network", "system"]),
+            &s(&["https://a.example", "https://b.example"]),
+        )
+        .unwrap();
+        let r = apply_review_in(&dir, &s(&["storage", "network"]), &s(&["https://A.example/"])).unwrap();
+        assert_eq!(r.grants, s(&["storage", "network"]));
+        assert_eq!(r.origins, s(&["https://a.example"]));
+        assert!(require_cap_in(&pages, &data, "ppart", "storage").is_ok());
+        assert!(require_cap_in(&pages, &data, "ppart", "network").is_ok());
+        assert!(require_cap_in(&pages, &data, "ppart", "system").is_err(), "not ticked");
+        assert_eq!(effective_origins_in(&dir), s(&["https://a.example"]));
+    }
+
+    #[test]
+    fn origins_need_network_and_must_have_been_asked_for() {
+        let (_t, _pages, data) = roots();
+        let dir = data.join("porig");
+        mark_import_pending_in(&dir, &s(&["storage", "network"]), &s(&["https://a.example"])).unwrap();
+        // Ticking an origin without `network` keeps no origin.
+        let r = apply_review_in(&dir, &s(&["storage"]), &s(&["https://a.example"])).unwrap();
+        assert!(r.origins.is_empty());
+
+        let dir = data.join("porig2");
+        mark_import_pending_in(&dir, &s(&["network"]), &s(&["https://a.example"])).unwrap();
+        let e = apply_review_in(&dir, &s(&["network"]), &s(&["https://other.example"])).unwrap_err();
+        assert!(e.starts_with("not_requested"), "{e}");
+        let e = apply_review_in(&dir, &s(&["system"]), &[]).unwrap_err();
+        assert!(e.starts_with("not_requested"), "a capability the file never asked for: {e}");
+        assert!(effective_grants_in(&dir).is_empty(), "a refused review applies nothing");
+    }
+
+    /// Re-importing cannot escalate: an import never writes to an installed page (it always
+    /// creates a new one), and the review entry point refuses a page that is not pending, so
+    /// it cannot be used to raise the grants of a page the user already reviewed.
+    #[test]
+    fn a_second_review_cannot_escalate() {
+        let (_t, _pages, data) = roots();
+        let dir = data.join("pre");
+        mark_import_pending_in(&dir, &s(&["storage", "network", "system"]), &s(&["https://a.example"])).unwrap();
+        apply_review_in(&dir, &s(&["storage"]), &[]).unwrap();
+        let e = apply_review_in(&dir, &s(&["storage", "network", "system"]), &s(&["https://a.example"])).unwrap_err();
+        assert!(e.starts_with("review_not_pending"), "{e}");
+        assert_eq!(effective_grants_in(&dir), s(&["storage"]));
+        assert!(effective_origins_in(&dir).is_empty());
+    }
+
+    #[test]
+    fn a_user_tick_on_a_pending_page_starts_from_nothing() {
+        let (_t, _pages, data) = roots();
+        let dir = data.join("ptick");
+        mark_import_pending_in(&dir, &s(&["storage", "network"]), &s(&["https://a.example"])).unwrap();
+        std::fs::write(dir.join("grants.json"), r#"["network"]"#).unwrap();
+        std::fs::write(dir.join("net_origins.json"), r#"["https://a.example"]"#).unwrap();
+        let g = set_grant_in(&dir, "storage", true).unwrap();
+        assert_eq!(g, s(&["storage"]), "the file's network did not ride along");
+        assert!(effective_origins_in(&dir).is_empty(), "the file's origins were dropped");
+        assert_eq!(read_meta_in(&dir).source, "user");
+
+        let dir = data.join("ptick2");
+        mark_import_pending_in(&dir, &s(&["network"]), &s(&["https://a.example"])).unwrap();
+        std::fs::write(dir.join("grants.json"), r#"["network"]"#).unwrap();
+        set_origins_in(&dir, &s(&["https://b.example"])).unwrap();
+        assert!(effective_grants_in(&dir).is_empty(), "typing an origin grants nothing");
+    }
+
+    #[test]
+    fn storage_is_refused_without_the_grant() {
+        let (_t, pages, data) = roots();
+        install(&pages, "pstore");
+        let e = require_cap_in(&pages, &data, "pstore", "storage").unwrap_err();
+        assert!(e.starts_with("permission_denied"), "{e}");
+        let dir = data.join("pstore");
+        std::fs::create_dir_all(&dir).unwrap();
+        set_grant_in(&dir, "storage", true).unwrap();
+        assert_eq!(require_cap_in(&pages, &data, "pstore", "storage").unwrap(), dir);
+        set_grant_in(&dir, "storage", false).unwrap();
+        assert!(require_cap_in(&pages, &data, "pstore", "storage").is_err(), "revoked");
+    }
+
+    /// A page id the backend does not know is refused, and nothing is created for it.
+    #[test]
+    fn a_forged_page_id_is_refused() {
+        let (_t, pages, data) = roots();
+        install(&pages, "preal");
+        let dir = data.join("preal");
+        std::fs::create_dir_all(&dir).unwrap();
+        set_grant_in(&dir, "storage", true).unwrap();
+        for forged in ["pfake", "../preal", "preal/..", "preal\\x", "", "preal ", "preal\u{0}"] {
+            let e = require_cap_in(&pages, &data, forged, "storage").unwrap_err();
+            assert!(e.starts_with("unknown_page"), "{forged:?}: {e}");
+        }
+        assert!(!data.join("pfake").exists(), "no data folder for an id that is not a page");
+        // A real page without the grant cannot borrow another page's.
+        install(&pages, "pother");
+        assert!(require_cap_in(&pages, &data, "pother", "storage").is_err());
+        // A capability name that is not one is refused, not looked up.
+        assert!(require_cap_in(&pages, &data, "preal", "fs").is_err());
+    }
+
+    #[test]
+    fn a_page_frame_cannot_be_the_caller() {
+        for o in ["null", "NULL", "bmmpage://preal", "http://bmmpage.localhost", "https://bmmpage.localhost/preal/"] {
+            assert!(caller_is_page_frame(Some(o)), "{o}");
+        }
+        for o in ["http://tauri.localhost", "tauri://localhost", "http://localhost:1420", "http://bmmpage.localhost.evil.example"] {
+            assert!(!caller_is_page_frame(Some(o)), "{o}");
+        }
+        assert!(!caller_is_page_frame(None), "no Origin header: the invoke key is the gate");
+    }
+
+    #[test]
+    fn legacy_pages_keep_their_grants() {
+        // A page from before the review record (no grants_meta.json) is not pending.
+        let (_t, pages, data) = roots();
+        install(&pages, "plegacy");
+        let dir = data.join("plegacy");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("grants.json"), r#"["storage","bogus"]"#).unwrap();
+        assert_eq!(effective_grants_in(&dir), s(&["storage"]));
+        assert!(require_cap_in(&pages, &data, "plegacy", "storage").is_ok());
     }
 }

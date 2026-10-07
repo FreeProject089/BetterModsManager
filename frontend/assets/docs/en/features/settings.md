@@ -284,6 +284,10 @@ window the two cards fold under the list. The whole layout travels as a `bmm://`
 bundle — see the backup note above: the layout, each page's source and its permissions are
 three separate things.
 
+Importing a `.bmmnav` someone shared creates its pages with **no permission**: a review lists
+what each page asks for, nothing ticked, and only what you tick is granted — see
+[Security model](doc-page:how-it-works/security#custom-pages-review).
+
 ### Session recorder (local)
 
 Records what happens on screen — your actions plus the JS and Rust logs — so a problem can be
