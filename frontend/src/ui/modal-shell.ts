@@ -67,6 +67,38 @@ export function topOverlay(): HTMLElement | null {
     return i < 0 ? null : list[i];
 }
 
+/** Whether a control takes typed text (an input that is not a box, a radio, a slider or a
+ *  button; a textarea; an editable region). Pure on its three facts, for the tests. */
+export function isTextEntry(tag: string, type: string | null, editable: boolean): boolean {
+    if (editable) return true;
+    const t = tag.toLowerCase();
+    if (t === 'textarea') return true;
+    if (t !== 'input') return false;
+    return !/^(checkbox|radio|range|color|file|button|submit|reset|image|hidden)$/i.test(type || 'text');
+}
+
+// How the last interaction came: a dialog opened by a click must not land the caret in its
+// first text field (the field lights up as if someone had picked it); one opened from the
+// keyboard should, so the user can type at once. A dialog that wants its field focused either
+// way says so (initialFocus) or focuses it itself.
+let lastWasPointer = false;
+if (typeof document !== 'undefined') {
+    document.addEventListener('pointerdown', () => { lastWasPointer = true; }, true);
+    document.addEventListener('keydown', () => { lastWasPointer = false; }, true);
+}
+
+/** What takes the focus when `host` opens and nobody chose: its first control (body first,
+ *  then the ×) — unless that is a text field and the dialog was opened with the pointer, when
+ *  the dialog itself takes it (no ring, Tab then enters the field). */
+function openingFocus(host: HTMLElement): HTMLElement | null {
+    const first = focusStops(host.querySelector<HTMLElement>('.modal-body') || host)[0]
+        || host.querySelector<HTMLElement>('.modal-close');
+    if (!first || !lastWasPointer) return first;
+    if (!isTextEntry(first.tagName, first.getAttribute('type'), first.isContentEditable)) return first;
+    if (!host.hasAttribute('tabindex')) host.setAttribute('tabindex', '-1');
+    return host;
+}
+
 export interface BindOptions {
     /** The feature's own close. Called by Escape (when this overlay is on top). */
     onClose: () => void;
@@ -115,9 +147,7 @@ export function bindModal(overlay: HTMLElement, opts: BindOptions): () => void {
 
     requestAnimationFrame(() => {
         if (!overlay.isConnected || dialog.contains(document.activeElement)) return;
-        const first = opts.initialFocus
-            || focusStops(dialog.querySelector<HTMLElement>('.modal-body') || dialog)[0]
-            || dialog.querySelector<HTMLElement>('.modal-close');
+        const first = opts.initialFocus || openingFocus(dialog);
         first?.focus({ preventScroll: true });
     });
 
@@ -240,9 +270,7 @@ export function installGlobalModalKeys(closeLabel: () => string): void {
         requestAnimationFrame(() => {
             if (!isPainted(o) || o.contains(document.activeElement)) return;
             const host = dialog || o;
-            const first = focusStops(host.querySelector<HTMLElement>('.modal-body') || host)[0]
-                || host.querySelector<HTMLElement>('.modal-close');
-            first?.focus({ preventScroll: true });
+            openingFocus(host)?.focus({ preventScroll: true });
         });
     };
     const closed = (o: HTMLElement): void => {

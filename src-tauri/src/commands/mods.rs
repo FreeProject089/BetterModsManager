@@ -3548,6 +3548,48 @@ pub fn get_hashing_stats(state: State<AppState>, profile_id: Option<String>) -> 
     })
 }
 
+/// One mod's integrity state without its hash map: what the Integrity dialog lists. The map
+/// itself stays in Rust (a library ships thousands of entries per mod); `get_mod_hashes` reads
+/// one mod's when its row is opened.
+#[derive(Serialize)]
+pub struct HashOverviewRow {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub enabled: bool,
+    /// Files in the baseline (0 = no baseline).
+    pub files: usize,
+    pub hashed_at: Option<String>,
+    /// None = never checked against the files, Some(true) = the last check found a difference.
+    pub invalid: Option<bool>,
+    pub content_id: Option<String>,
+}
+
+/// Read only. The same profile filter as `get_hashing_stats` (None, or an unknown id: every mod).
+#[tauri::command]
+pub fn get_hash_overview(state: State<AppState>, profile_id: Option<String>) -> Result<Vec<HashOverviewRow>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let root = profile_id
+        .as_ref()
+        .and_then(|pid| data.profiles.iter().find(|p| &p.id == pid))
+        .map(|p| p.mods_path.clone());
+    Ok(data
+        .mods
+        .iter()
+        .filter(|m| root.as_ref().map_or(true, |r| m.mod_folder_path.starts_with(r)))
+        .map(|m| HashOverviewRow {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            version: m.version.clone(),
+            enabled: m.enabled,
+            files: m.file_hashes.as_ref().map_or(0, |h| h.len()),
+            hashed_at: m.file_hashes_timestamp.clone(),
+            invalid: m.file_hashes_invalid,
+            content_id: m.content_id.clone(),
+        })
+        .collect())
+}
+
 #[tauri::command]
 pub fn recalculate_all_hashes(state: State<'_, AppState>, profile_id: Option<String>, only_missing: bool) -> Result<(), String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());

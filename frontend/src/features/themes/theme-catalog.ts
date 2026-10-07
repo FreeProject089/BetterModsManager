@@ -1,8 +1,12 @@
 // @ts-nocheck
 // ── BMM Theme Catalogue ───────────────────────────────────────────────────────
-// Fetches official / partner / community theme lists (same pattern as app-catalog)
-// and displays a gallery with preview, install & apply buttons.
-
+// Fetches official / partner / community theme lists (same pattern as app-catalog) and shows
+// them as a gallery: a card per theme with a miniature of the app painted in ITS colours, a
+// toolbar to search and filter (source, dark/light), and a preview pane on the right with the
+// palette and the action that fits (Apply, Install, Edit, Uninstall, Reinstall).
+//
+// The dialog is the house shell (openModal, modal--xl modal--tall); css/themes.css holds its
+// content rules (.tcg-*).
 
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
@@ -11,19 +15,29 @@ import { toast } from '../../ui/app.js';
 // a build error — scripts/check-undefined-names.mjs is what catches one.
 import { enabledOnly } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
+import { installTheme, activateTheme, getInstalledThemes, getActiveTheme, isLightTheme, BmmTheme } from './theme-engine.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
+import { openModal } from '../../ui/modal-shell.js';
 
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
 const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
 
-let _modal: HTMLElement | null = null;
+let _handle: any = null;                          // the open dialog (openModal handle), or null
 let _catalog: BmmTheme[] = [];
 let _builtins: any[] = [];   // all built-in presets incl. hidden (_hidden flag)
 let _filter = '';
 let _communitySources: string[] = [];
+let _src: 'all' | 'mine' | 'builtin' | 'catalog' = 'all';
+let _mode: 'any' | 'dark' | 'light' = 'any';
+let _selId: string | null = null;
+let _loading = false;
+let _presetsDir = '';
+
+const PALETTE_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>';
+const MOON_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+const SUN_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 
 // ── Init & open ───────────────────────────────────────────────────────────────
 export function initThemeCatalog(): void {
@@ -34,93 +48,191 @@ export function initThemeCatalog(): void {
 }
 
 export async function openCatalog(): Promise<void> {
-    if (!_modal) buildModal();
-    _modal!.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (_handle) { _handle.q('#theme-cat-search')?.focus(); return; }
+    buildModal();
+    _loading = true;
+    renderCatalog();
     await fetchCatalog();
+    _loading = false;
+    if (!_selId) _selId = getActiveTheme()?.id || null;
     renderCatalog();
 }
 
 function closeModal(): void {
-    _modal?.classList.remove('open');
-    document.body.style.overflow = '';
+    _handle?.close();
 }
 
-// ── Modal HTML ────────────────────────────────────────────────────────────────
+// ── The dialog ────────────────────────────────────────────────────────────────
 function buildModal(): void {
-    _modal = document.createElement('div');
-    _modal.className = 'modal-overlay';
-    _modal.id = 'modal-theme-catalog';
-    _modal.innerHTML = `
-        <div class="modal glass modal--lg">
-            <div class="modal-header">
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <div class="bms-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-                    </div>
-                    <div>
-                        <!-- t(), not data-i18n. applyTranslations() runs once at boot and this
-                             modal is built long after — so the two attributes here were never
-                             read, and the header sat in English inside a French app while every
-                             other string in this file, which uses t(), was translated. -->
-                        <h2 class="modal-title">${escHtml(t('themes.catalogue'))}</h2>
-                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${escHtml(t('themes.catalogueSub'))}</p>
-                    </div>
-                </div>
-                <button class="modal-close" id="theme-catalog-close">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    const seg = (id: string, items: [string, string][], cur: string) => `<div class="bms-seg" role="group" id="${id}">${items.map(([v, label]) =>
+        `<button type="button" class="bms-seg-btn" data-v="${escAttr(v)}" aria-pressed="${v === cur}">${label}</button>`).join('')}</div>`;
+    _handle = openModal({
+        id: 'modal-theme-catalog',
+        title: t('themes.catalogue'),
+        subtitle: t('themes.catalogueSub'),
+        icon: PALETTE_SVG,
+        size: 'xl',
+        tall: true,
+        className: 'tcg-modal',
+        closeLabel: t('common.close'),
+        initialFocus: '#theme-cat-search',
+        body: `<style id="tcg-paints"></style><div class="tcg-layout">
+                <div class="tcg-gridwrap"><div class="tcg-grid" id="theme-cat-list" role="listbox" aria-label="${escAttr(t('themes.catalogue'))}"></div></div>
+                <aside class="tcg-detail" id="tcg-detail" aria-live="polite"></aside>
+            </div>`,
+        footer: `<div class="modal-footer-start">
+                <button type="button" class="btn btn-ghost btn-sm" id="theme-cat-reset" title="${escAttr(t('themes.resetDefaultTip'))}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    ${escHtml(t('themes.resetDefault'))}
                 </button>
+                <span class="tcg-presets" id="tcg-presets" hidden>
+                    <button type="button" class="btn btn-ghost btn-sm" id="tcg-presets-open">${escHtml(t('themes.presetsFolder'))}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="tcg-presets-rescan">${escHtml(t('themes.dropinRescan'))}</button>
+                </span>
             </div>
-            <div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:10px;align-items:center;flex-shrink:0;">
-                <div style="flex:1;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0 10px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    <input id="theme-cat-search" placeholder="${t('common.search') || 'Search...'}" style="flex:1;border:none;background:transparent;padding:8px 0;font-size:12.5px;color:var(--bmm-text-primary);">
-                </div>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-reset" title="${escAttr(t('themes.resetDefaultTip') || 'Revert to the built-in default look')}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                    ${t('themes.resetDefault') || 'Default theme'}
-                </button>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-refresh">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                    ${t('common.refresh') || 'Refresh'}
-                </button>
-            </div>
-            <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
-            <div class="modal-footer" style="font-size:11px; color:var(--bmm-text-muted)">
-                <span id="theme-cat-count"></span>
-                <div style="flex:1"></div>
-                <!-- The way in, so it looks like one. Following and making a catalogue were a
-                     ghost button in the corner, beside a second ghost button that does a
-                     different job — two footnotes where one is the whole feature. -->
-                <button class="btn btn-accent btn-sm" id="theme-cat-build">${escHtml(t('themes.catalogues'))}</button>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme / .json file'}</button>
-            </div>
-        </div>`;
-
-    const host = document.getElementById('app-window-outer') || document.body;
-    host.appendChild(_modal);
-
-    _modal.querySelector('#theme-catalog-close')!.addEventListener('click', closeModal);
-    _modal.addEventListener('click', e => { if (e.target === _modal) closeModal(); });
-    _modal.querySelector('#theme-cat-search')!.addEventListener('input', (e) => {
-        _filter = (e.target as HTMLInputElement).value.toLowerCase();
-        renderCatalog();
+            <button type="button" class="btn btn-secondary btn-sm" id="theme-cat-import-file">${escHtml(t('themes.importFile'))}</button>
+            <button type="button" class="btn btn-primary btn-sm" id="theme-cat-build">${escHtml(t('themes.catalogues'))}</button>`,
+        onClose: () => { _handle = null; _paints.clear(); },
     });
-    _modal.querySelector('#theme-cat-reset')!.addEventListener('click', async () => {
+    const m = _handle;
+
+    // The search and the filters are the toolbar band, between the header and the gallery.
+    const bar = document.createElement('div');
+    bar.className = 'modal-toolbar tcg-toolbar';
+    bar.innerHTML = `
+        <label class="tcg-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="theme-cat-search" class="form-input" type="search" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('themes.searchPh'))}" aria-label="${escAttr(t('themes.searchPh'))}">
+        </label>
+        ${seg('tcg-src', [['all', escHtml(t('themes.filterAll'))], ['mine', escHtml(t('themes.mine'))], ['builtin', escHtml(t('themes.srcBuiltin'))], ['catalog', escHtml(t('themes.catalogThemes'))]], _src)}
+        ${seg('tcg-mode', [['any', escHtml(t('themes.modeAny'))], ['dark', `${MOON_SVG}<span>${escHtml(t('themes.modeDark'))}</span>`], ['light', `${SUN_SVG}<span>${escHtml(t('themes.modeLight'))}</span>`]], _mode)}
+        <button type="button" class="btn btn-ghost btn-sm tcg-refresh" id="theme-cat-refresh" title="${escAttr(t('common.refresh'))}" aria-label="${escAttr(t('common.refresh'))}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>`;
+    m.dialog.insertBefore(bar, m.body);
+    m.body.classList.add('modal-body--flush');
+
+    const search = m.q<HTMLInputElement>('#theme-cat-search')!;
+    search.value = _filter;
+    search.addEventListener('input', () => { _filter = search.value.toLowerCase().trim(); renderCatalog(); });
+    search.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowDown') return;
+        const first = m.q<HTMLElement>('.tcg-card[aria-selected="true"]') || m.q<HTMLElement>('.tcg-card');
+        if (!first) return;
+        e.preventDefault();
+        first.focus();
+    });
+    m.q('#tcg-src')!.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-v]');
+        if (b) { _src = b.dataset.v as any; renderCatalog(); }
+    });
+    m.q('#tcg-mode')!.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-v]');
+        if (b) { _mode = b.dataset.v as any; renderCatalog(); }
+    });
+    m.q('#theme-cat-reset')!.addEventListener('click', async () => {
         try {
             const { resetTheme } = await import('./theme-engine.js');
             resetTheme();                                     // clears the frontend + the ACTIVE_KEY boot reads
             await invoke('set_active_theme', { themeId: '' }).catch(() => {}); // best-effort clear the backend copy too
-            toast(t('themes.resetDone') || 'Reverted to the default theme', 'success');
+            toast(t('themes.resetDone'), 'success');
             renderCatalog();
         } catch (e) { toast(String(e), 'error'); }
     });
-    _modal.querySelector('#theme-cat-refresh')!.addEventListener('click', async () => {
+    m.q('#theme-cat-refresh')!.addEventListener('click', async () => {
+        _loading = true; renderCatalog();
         await fetchCatalog(true);
-        renderCatalog();
+        _loading = false; renderCatalog();
     });
-    _modal.querySelector('#theme-cat-import-file')!.addEventListener('click', importFromFile);
-    _modal.querySelector('#theme-cat-build')!.addEventListener('click', openThemeCatalogues);
+    m.q('#theme-cat-import-file')!.addEventListener('click', importFromFile);
+    m.q('#theme-cat-build')!.addEventListener('click', openThemeCatalogues);
+
+    // ── Drop-in presets: say where the folder is, and rescan without a restart ──
+    //
+    // The scan only ran at boot, and the folder's path is different on every OS (it moved
+    // once already, when the bundle id changed). "Put your themes in the presets folder"
+    // is not actionable advice without the path and a way to pick them up now.
+    (async () => {
+        try { _presetsDir = await invoke('theme_presets_dir') as string; } catch { _presetsDir = ''; }
+        const box = m.q<HTMLElement>('#tcg-presets');
+        if (!_presetsDir || !box || !_handle) return;
+        box.hidden = false;
+        const open = m.q<HTMLElement>('#tcg-presets-open')!;
+        open.title = `${t('themes.dropinTitle')}: ${_presetsDir}`;
+        open.addEventListener('click', () => { void invoke('open_folder', { path: _presetsDir }); });
+        m.q('#tcg-presets-rescan')!.addEventListener('click', async () => {
+            const before = _builtins.length;
+            await refreshBuiltins();
+            const added = _builtins.length - before;
+            toast(added > 0
+                ? t('themes.dropinFound').replace('{n}', String(added))
+                : t('themes.dropinNone'),
+                added > 0 ? 'success' : 'info');
+        });
+    })();
+
+    // The gallery: a click selects, a double-click applies, the arrows walk the grid.
+    const grid = m.q<HTMLElement>('#theme-cat-list')!;
+    grid.addEventListener('click', (e) => {
+        const restore = (e.target as HTMLElement).closest('#btc-restore-all');
+        if (restore) { void restoreAllDefaults(); return; }
+        if ((e.target as HTMLElement).closest('[data-tcg-clear]')) { clearFilters(); return; }
+        const card = (e.target as HTMLElement).closest<HTMLElement>('.tcg-card');
+        if (card?.dataset.id) select(card.dataset.id);
+    });
+    grid.addEventListener('dblclick', (e) => {
+        const card = (e.target as HTMLElement).closest<HTMLElement>('.tcg-card');
+        const entry = card?.dataset.id ? entryById(card.dataset.id) : null;
+        if (entry && canApply(entry)) void doApply(entry);
+    });
+    grid.addEventListener('keydown', (e) => {
+        if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+        const cards = [...grid.querySelectorAll<HTMLElement>('.tcg-card')];
+        const at = cards.indexOf(document.activeElement as HTMLElement);
+        if (at < 0 || !cards.length) return;
+        e.preventDefault();
+        let to = at;
+        if (e.key === 'ArrowRight') to = Math.min(cards.length - 1, at + 1);
+        else if (e.key === 'ArrowLeft') to = Math.max(0, at - 1);
+        else if (e.key === 'Home') to = 0;
+        else if (e.key === 'End') to = cards.length - 1;
+        else {
+            // Up / down: the nearest card in the next row, measured, since sections break rows.
+            const r0 = cards[at].getBoundingClientRect();
+            const down = e.key === 'ArrowDown';
+            let best = -1, bestScore = Infinity;
+            cards.forEach((c, i) => {
+                const r = c.getBoundingClientRect();
+                const dy = down ? r.top - r0.top : r0.top - r.top;
+                if (dy < 4) return;
+                const score = dy * 4 + Math.abs(r.left - r0.left);
+                if (score < bestScore) { bestScore = score; best = i; }
+            });
+            if (best < 0) return;
+            to = best;
+        }
+        cards[to].focus();
+        cards[to].scrollIntoView({ block: 'nearest' });
+        if (cards[to].dataset.id) select(cards[to].dataset.id, false);
+    });
+    m.q('#tcg-detail')!.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
+        const entry = _selId ? entryById(_selId) : null;
+        if (!b || !entry) return;
+        const act = b.dataset.act;
+        if (act === 'apply') void doApply(entry);
+        else if (act === 'install') void doInstall(entry, b as HTMLButtonElement);
+        else if (act === 'edit') { closeModal(); (window as any).openThemeEditor?.(entry.th.id); }
+        else if (act === 'uninstall') void setBuiltinHidden(entry.th.id, true);
+        else if (act === 'reinstall') void setBuiltinHidden(entry.th.id, false);
+    });
+}
+
+function clearFilters(): void {
+    _filter = ''; _src = 'all'; _mode = 'any';
+    const box = _handle?.q('#theme-cat-search') as HTMLInputElement | null;
+    if (box) { box.value = ''; box.focus(); }
+    renderCatalog();
 }
 
 // ── Theme-catalog BUILDER ─────────────────────────────────────────────────────
@@ -238,9 +350,6 @@ async function resolveThemeBody(entry: BmmTheme): Promise<BmmTheme> {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 async function fetchCatalog(force = false): Promise<void> {
-    const listEl = document.getElementById('theme-cat-list');
-    if (listEl) listEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--bmm-text-muted);font-size:13px;">${t('common.loading') || 'Loading…'}</div>`;
-
     try {
         const isUrl = (s: string) => /^https?:\/\//i.test(s);
         // Filtered BEFORE the url/file split, not after. Local catalogs are read through a
@@ -302,258 +411,281 @@ async function fetchCatalog(force = false): Promise<void> {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
-function renderCatalog(): void {
-    const listEl = document.getElementById('theme-cat-list');
-    const countEl = document.getElementById('theme-cat-count');
-    if (!listEl) return;
+type Src = 'mine' | 'builtin' | 'catalog';
+interface Entry { th: any; src: Src; hidden: boolean; installed: boolean }
 
-    const installed = new Set(getInstalledThemes().map(t => t.id));
-    const filtered = _catalog.filter(th =>
-        !_filter || th.name.toLowerCase().includes(_filter) || (th.author || '').toLowerCase().includes(_filter) || (th.description || '').toLowerCase().includes(_filter)
-    );
-
-    // ── Built-in / default themes section (apply · uninstall · reinstall) ──────
-    const builtinsFiltered = _builtins.filter(th =>
-        !_filter || (th.name || '').toLowerCase().includes(_filter));
-    const builtinsHtml = builtinsFiltered.map(th => {
-        const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
-        const hidden = !!th._hidden;
-        return `
-            <div class="btc-card${hidden ? ' btc-card-hidden' : ''}" data-theme-id="${escAttr(th.id)}">
-                <div class="btc-preview">
-                    <div class="btc-preview-placeholder" style="background:linear-gradient(135deg,${accentColor}22 0%,${accentColor}08 100%);">
-                        <div class="btc-preview-swatches">
-                            ${Object.values(th.vars || {}).slice(0, 5).filter((v: any) => typeof v === 'string' && (v.startsWith('#') || v.startsWith('rgb'))).map((c: any) => `<span class="btc-swatch" style="background:${c}"></span>`).join('')}
-                        </div>
-                        <span class="btc-preview-name">${escHtml(th.name)}</span>
-                    </div>
-                </div>
-                <div class="btc-info">
-                    <div class="btc-name">${escHtml(th.name)} <span class="btc-builtin-tag">${t('themes.builtin') || 'Default'}</span></div>
-                    <div class="btc-author">${escHtml(th.author || 'BMM')}</div>
-                </div>
-                <div class="btc-actions">
-                    ${hidden
-                        ? `<button class="btn btn-xs btn-secondary btc-reinstall" data-id="${escAttr(th.id)}">${t('themes.reinstall') || 'Reinstall'}</button>`
-                        : `<button class="btn btn-xs btn-accent btc-activate" data-id="${escAttr(th.id)}">${t('themes.activate') || 'Apply'}</button>
-                           <button class="btn btn-xs btn-ghost btc-uninstall" data-id="${escAttr(th.id)}" style="color:var(--danger)">${t('themes.uninstall') || 'Uninstall'}</button>`}
-                </div>
-            </div>`;
-    }).join('');
-
-    // ── YOUR themes ───────────────────────────────────────────────────────────
-    //
-    // Installed themes that are in no catalogue and are not built in: the ones made in the
-    // editor, and the ones imported from a .bmmtheme file. They had no row anywhere in this
-    // modal — `installed` was read only to LABEL a catalogue entry as installed, so a theme
-    // that came from nowhere but this machine matched nothing and simply was not drawn.
-    // Which reads, correctly, as "my themes are gone".
+/** Every theme the gallery can show, once: yours (installed, in no catalogue, not built in),
+ *  the built-in presets (hidden ones included, to reinstall), then the catalogues.
+ *
+ *  "Yours" exists because installed themes that came from nowhere but this machine (made in
+ *  the editor, imported from a file) used to have no row anywhere in this dialog, which
+ *  reads, correctly, as "my themes are gone". */
+function allEntries(): Entry[] {
+    const installed = new Set(getInstalledThemes().map((x) => x.id));
     const builtinIds = new Set(_builtins.map((b: any) => b.id));
     const catalogIds = new Set(_catalog.map((c: any) => c.id));
-    const mine = getInstalledThemes()
-        .filter((th) => !builtinIds.has(th.id) && !catalogIds.has(th.id))
-        .filter((th) => !_filter
-            || (th.name || '').toLowerCase().includes(_filter)
-            || (th.author || '').toLowerCase().includes(_filter));
+    const out: Entry[] = [];
+    for (const th of getInstalledThemes()) {
+        if (!builtinIds.has(th.id) && !catalogIds.has(th.id)) out.push({ th, src: 'mine', hidden: false, installed: true });
+    }
+    for (const th of _builtins) out.push({ th, src: 'builtin', hidden: !!th._hidden, installed: !th._hidden });
+    for (const th of _catalog) out.push({ th, src: 'catalog', hidden: false, installed: installed.has(th.id) });
+    return out;
+}
+const entryById = (id: string) => allEntries().find((e) => e.th.id === id) || null;
 
-    const mineHtml = mine.map((th: any) => {
-        const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
-        return `
-            <div class="btc-card" data-theme-id="${escAttr(th.id)}">
-                <div class="btc-preview">
-                    ${th.preview
-                        ? `<img class="btc-preview-img" src="${escAttr(th.preview)}" alt="">`
-                        : `<div class="btc-preview-placeholder" style="background:linear-gradient(135deg,${accentColor}22 0%,${accentColor}08 100%);">
-                            <div class="btc-preview-swatches">
-                                ${Object.values(th.vars || {}).slice(0, 5).filter((v: any) => typeof v === 'string' && (v.startsWith('#') || v.startsWith('rgb'))).map((c: any) => `<span class="btc-swatch" style="background:${c}"></span>`).join('')}
-                            </div>
-                            <span class="btc-preview-name">${escHtml(th.name || th.id)}</span>
-                        </div>`}
-                </div>
-                <div class="btc-info">
-                    <div class="btc-name">${escHtml(th.name || th.id)}</div>
-                    <div class="btc-author">${escHtml(th.author || '')}</div>
-                </div>
-                <div class="btc-actions">
-                    <button class="btn btn-xs btn-accent btc-activate" data-id="${escAttr(th.id)}">${escHtml(t('themes.activate') || 'Apply')}</button>
-                    <button class="btn btn-xs btn-ghost btc-edit-mine" data-id="${escAttr(th.id)}">${escHtml(t('themes.edit'))}</button>
-                </div>
-            </div>`;
-    }).join('');
+/** Light, dark, or unknown (a linked catalogue entry carries no colours until installed). */
+function modeOf(th: any): 'light' | 'dark' | null {
+    if (th.mode === 'light' || th.mode === 'dark') return th.mode;
+    if (th.vars && (th.vars['--bmm-bg-base'] || Object.keys(th.vars).length === 0)) return isLightTheme(th) ? 'light' : 'dark';
+    return null;
+}
 
-    if (!filtered.length && !builtinsFiltered.length && !mine.length) {
-        listEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--bmm-text-muted);">${t('themes.noCatalog') || 'No themes found.'}</div>`;
-        if (countEl) countEl.textContent = '';
+const matchesText = (th: any) => !_filter
+    || (th.name || th.id || '').toLowerCase().includes(_filter)
+    || (th.author || '').toLowerCase().includes(_filter)
+    || (th.description || '').toLowerCase().includes(_filter);
+const matchesMode = (th: any) => _mode === 'any' || modeOf(th) === _mode;
+
+// A theme's colours go into a style attribute, so only values that ARE colours get there:
+// a catalogue is somebody else's JSON, and `red;background:url(…)` is a string too.
+const COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.\s,%/]+\)|hsla?\(\s*[\d.\s,%/deg]+\))$/i;
+// BMM's own dark defaults (css/tokens.css), for the slots a theme leaves to them.
+const DEFAULT_SWATCH = { bg: '#0a0e17', side: '#0d1117', card: '#111827', acc: '#3b82f6', tx: '#f1f5f9', tx2: '#94a3b8' };
+function swatchOf(th: any): typeof DEFAULT_SWATCH {
+    const v = th.vars || {};
+    const pick = (keys: string[], dflt: string) => {
+        for (const k of keys) { const c = String(v[k] || '').trim(); if (COLOR_RE.test(c)) return c; }
+        return dflt;
+    };
+    const bg = pick(['--bmm-bg-base'], DEFAULT_SWATCH.bg);
+    return {
+        bg,
+        side: pick(['--bmm-bg-sidebar', '--bmm-bg-base'], DEFAULT_SWATCH.side),
+        card: pick(['--bmm-bg-elevated', '--bmm-bg-card'], DEFAULT_SWATCH.card),
+        acc: pick(['--bmm-accent'], DEFAULT_SWATCH.acc),
+        tx: pick(['--bmm-text-primary'], DEFAULT_SWATCH.tx),
+        tx2: pick(['--bmm-text-secondary'], DEFAULT_SWATCH.tx2),
+    };
+}
+
+/** A miniature of the app in the theme's colours: sidebar with its accent pill, a title bar
+ *  with a button, two cards with two lines of text. */
+// The colours go into ONE <style> owned by the dialog, as a class per palette, never into a
+// style attribute: the light-theme patches in theme-engine match [style*="#0a0e17"] and the
+// like, and would repaint a dark theme's miniature in the CURRENT theme's colours.
+const _paints = new Map<string, string>();
+function paintClass(th: any): string {
+    const s = swatchOf(th);
+    const decl = `--m-bg:${s.bg};--m-side:${s.side};--m-card:${s.card};--m-acc:${s.acc};--m-tx:${s.tx};--m-tx2:${s.tx2}`;
+    let cls = _paints.get(decl);
+    if (!cls) {
+        cls = `tcg-p${_paints.size}`;
+        _paints.set(decl, cls);
+        const el = _handle?.q('#tcg-paints') as HTMLStyleElement | null;
+        // Every value passed COLOR_RE in swatchOf, so nothing here can close the rule.
+        if (el) el.textContent += `.${cls}{${decl}}` + String.fromCharCode(10);
+    }
+    return cls;
+}
+
+function mockHtml(th: any, big = false): string {
+    return `<span class="tcg-mock ${paintClass(th)}${big ? ' is-big' : ''}" aria-hidden="true">
+        <span class="tcg-mock-side"><i class="is-acc"></i><i></i><i></i><i></i></span>
+        <span class="tcg-mock-main">
+            <span class="tcg-mock-top"><i class="tcg-mock-title"></i><i class="tcg-mock-btn"></i></span>
+            <span class="tcg-mock-card"><i></i><i class="is-short"></i></span>
+            <span class="tcg-mock-card"><i></i><i class="is-short"></i></span>
+        </span>
+    </span>`;
+}
+const safePreview = (u: any) => (typeof u === 'string' && /^(https:\/\/|data:image\/(png|jpe?g|webp|gif);)/i.test(u) ? u : '');
+function thumbHtml(th: any, big = false): string {
+    const img = safePreview(th.preview);
+    // A shipped screenshot wins when the theme carries no colours to paint (a linked entry).
+    if (img && !(th.vars && Object.keys(th.vars).length)) return `<img class="tcg-img" src="${escAttr(img)}" alt="" loading="lazy">`;
+    return mockHtml(th, big);
+}
+
+function badgesHtml(e: Entry, activeId: string | null): string {
+    const md = modeOf(e.th);
+    const out: string[] = [];
+    if (md) out.push(`<span class="tcg-badge" title="${escAttr(md === 'light' ? t('themes.modeLight') : t('themes.modeDark'))}">${md === 'light' ? SUN_SVG : MOON_SVG}</span>`);
+    if (e.th.id === activeId) out.push(`<span class="tcg-badge is-active">${escHtml(t('themes.active'))}</span>`);
+    else if (e.hidden) out.push(`<span class="tcg-badge is-muted">${escHtml(t('themes.hiddenBadge'))}</span>`);
+    else if (e.src === 'catalog' && e.installed) out.push(`<span class="tcg-badge is-ok">${escHtml(t('themes.installed'))}</span>`);
+    return out.join('');
+}
+
+function cardHtml(e: Entry, activeId: string | null): string {
+    const th = e.th;
+    const name = th.name || th.id;
+    const sel = th.id === _selId;
+    return `<button type="button" class="tcg-card${th.id === activeId ? ' is-active' : ''}${e.hidden ? ' is-hidden' : ''}" role="option"
+            data-id="${escAttr(th.id)}" aria-selected="${sel}" tabindex="${sel ? 0 : -1}" title="${escAttr(name)}">
+        <span class="tcg-thumb">${thumbHtml(th)}</span>
+        <span class="tcg-meta">
+            <span class="tcg-name">${escHtml(name)}</span>
+            <span class="tcg-sub">${escHtml(th.author || (e.src === 'builtin' ? 'BMM' : ''))}</span>
+        </span>
+        <span class="tcg-badges">${badgesHtml(e, activeId)}</span>
+    </button>`;
+}
+
+function renderCatalog(): void {
+    if (!_handle) return;
+    const listEl = _handle.q('#theme-cat-list') as HTMLElement | null;
+    if (!listEl) return;
+    const activeId = getActiveTheme()?.id || null;
+    const all = allEntries();
+
+    // The source buttons count what the search and the mode filter leave.
+    const base = all.filter((e) => matchesText(e.th) && matchesMode(e.th));
+    const counts: Record<string, number> = { all: base.length, mine: 0, builtin: 0, catalog: 0 };
+    for (const e of base) counts[e.src]++;
+    _handle.dialog.querySelectorAll('#tcg-src [data-v]').forEach((b: HTMLElement) => {
+        b.setAttribute('aria-pressed', String(b.dataset.v === _src));
+        const n = counts[b.dataset.v || ''] ?? 0;
+        let c = b.querySelector('.tcg-n');
+        if (!c) { c = document.createElement('span'); c.className = 'tcg-n'; b.appendChild(c); }
+        c.textContent = String(n);
+    });
+    _handle.dialog.querySelectorAll('#tcg-mode [data-v]').forEach((b: HTMLElement) => b.setAttribute('aria-pressed', String(b.dataset.v === _mode)));
+
+    if (_loading && !all.length) {
+        listEl.innerHTML = Array.from({ length: 8 }, () => `<span class="tcg-card is-skeleton" aria-hidden="true"><span class="tcg-thumb"></span><span class="tcg-meta"><span class="tcg-skel"></span><span class="tcg-skel is-short"></span></span></span>`).join('');
+        renderDetail(null, activeId);
         return;
     }
 
-    if (countEl) countEl.textContent = `${filtered.length + builtinsFiltered.length + mine.length} ${t('themes.themes') || 'theme(s)'}`;
-    const sectionHead = (label: string) => `<div class="btc-section-head" style="grid-column:1/-1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-text-muted);margin:6px 0 2px;">${escHtml(label)}</div>`;
-    const catalogHtml = filtered.map(th => {
-        const isInstalled = installed.has(th.id);
-        const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
-        return `
-            <div class="btc-card" data-theme-id="${escAttr(th.id)}">
-                <div class="btc-preview">
-                    ${th.preview
-                        ? `<img src="${escAttr(th.preview)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0;">`
-                        : `<div class="btc-preview-placeholder" style="background:linear-gradient(135deg,${accentColor}22 0%,${accentColor}08 100%);">
-                               <div class="btc-preview-swatches">
-                                   ${Object.values(th.vars || {}).slice(0, 5).filter(v => v.startsWith('#') || v.startsWith('rgb')).map(c => `<span class="btc-swatch" style="background:${c}"></span>`).join('')}
-                               </div>
-                               <span class="btc-preview-name">${escHtml(th.name)}</span>
-                           </div>`}
-                </div>
-                <div class="btc-info">
-                    <div class="btc-name">${escHtml(th.name)}</div>
-                    <div class="btc-author">${escHtml(th.author || '')}</div>
-                    ${th.description ? `<div class="btc-desc">${escHtml(th.description)}</div>` : ''}
-                </div>
-                <div class="btc-actions">
-                    ${isInstalled
-                        ? `<button class="btn btn-xs btn-accent btc-activate" data-id="${escAttr(th.id)}">${t('themes.activate') || 'Apply'}</button>`
-                        : `<button class="btn btn-xs btn-secondary btc-install" data-id="${escAttr(th.id)}">${t('themes.install') || 'Install'}</button>`}
-                    ${isInstalled ? `<span class="btc-installed-badge">${t('themes.installed') || 'Installed'}</span>` : ''}
-                </div>
-            </div>`;
-    }).join('');
+    const shown = base.filter((e) => _src === 'all' || e.src === _src);
+    if (!shown.length) {
+        listEl.innerHTML = `<div class="bms-empty tcg-empty">
+            <div class="bms-empty-ic">${PALETTE_SVG}</div>
+            <div class="bms-empty-t">${escHtml(all.length ? t('themes.noMatch') : t('themes.noCatalog'))}</div>
+            ${all.length ? `<button type="button" class="btn btn-ghost btn-sm" data-tcg-clear>${escHtml(t('themes.clearFilters'))}</button>` : ''}
+        </div>`;
+        renderDetail(null, activeId);
+        return;
+    }
+    if (!_selId || !shown.some((e) => e.th.id === _selId)) _selId = (shown.find((e) => e.th.id === activeId) || shown[0]).th.id;
 
-    const anyHidden = _builtins.some(b => b._hidden);
-    const defaultHead = `<div class="btc-section-head" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin:6px 0 2px;">
-        <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-text-muted)">${escHtml(t('themes.defaultThemes') || 'Default themes')}</span>
-        ${anyHidden ? `<button class="btn btn-xs btn-ghost" id="btc-restore-all">${escHtml(t('themes.restoreAll') || 'Restore all defaults')}</button>` : ''}
-    </div>`;
-    listEl.innerHTML =
-        // Yours first: it is the section you came to find, and the one that was missing.
-        (mine.length ? sectionHead(t('themes.mine')) + mineHtml : '') +
-        (builtinsFiltered.length || anyHidden ? defaultHead + builtinsHtml : '') +
-        (filtered.length ? sectionHead(t('themes.catalogThemes') || 'Catalogue') + catalogHtml : '');
-
-    listEl.querySelectorAll<HTMLElement>('.btc-edit-mine').forEach((b) => b.addEventListener('click', () => {
-        closeModal();
-        (window as any).openThemeEditor?.(b.dataset.id);
-    }));
-
-    listEl.querySelector('#btc-restore-all')?.addEventListener('click', async () => {
-        try {
-            const hidden: string[] = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]')
-                .filter((b: any) => b._hidden).map((b: any) => b.id);
-            for (const id of hidden) await invoke('set_builtin_hidden', { themeId: id, hidden: false });
-            const { loadBuiltinThemes } = await import('./theme-engine.js');
-            await loadBuiltinThemes();
-            _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]');
-            toast(t('themes.restoredAll') || 'All default themes restored', 'success');
-            renderCatalog();
-        } catch (e) { toast(String(e), 'error'); }
-    });
-
-    // ── Built-in uninstall / reinstall ────────────────────────────────────────
-    const refreshBuiltins = async () => {
-        try { _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]'); } catch {}
-        const { loadBuiltinThemes } = await import('./theme-engine.js');
-        await loadBuiltinThemes(); // refresh the BUILTIN_THEMES used by every selector
-        renderCatalog();
+    const anyHidden = _builtins.some((b) => b._hidden);
+    const section = (src: Src, label: string, extra = '') => {
+        const items = shown.filter((e) => e.src === src);
+        if (!items.length) return '';
+        return `<div class="tcg-sec" role="presentation"><span class="bms-label">${escHtml(label)}</span><span class="tcg-n">${items.length}</span>${extra}</div>`
+            + items.map((e) => cardHtml(e, activeId)).join('');
     };
-    // ── Drop-in presets: say where the folder is, and rescan without a restart ──
-    //
-    // The scan only ran at boot, and the folder's path is different on every OS (it moved
-    // once already, when the bundle id changed). "Put your themes in the presets folder"
-    // is not actionable advice without the path and a way to pick them up now.
-    (async () => {
-        let dir = '';
-        try { dir = await invoke('theme_presets_dir') as string; } catch { return; }
-        const bar = document.createElement('div');
-        bar.className = 'btc-dropin';
-        // Quieter than the catalogue it sits above. It is a side note about a folder, and it
-        // was reading as a section header: a raised surface, a bordered box and a button in
-        // the default (light) variant, which is the loudest button in the app.
-        bar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
-            + 'margin:0 0 14px;padding:8px 10px;border:1px solid var(--border);'
-            + 'border-radius:8px;background:var(--bmm-s02)';
+    listEl.innerHTML =
+        // Yours first: it is the section you came to find.
+        section('mine', t('themes.mine'))
+        + section('builtin', t('themes.defaultThemes'), anyHidden ? `<button type="button" class="btn btn-ghost btn-xs" id="btc-restore-all">${escHtml(t('themes.restoreAll'))}</button>` : '')
+        + section('catalog', t('themes.catalogThemes'))
+        + (_loading ? `<div class="tcg-sec tcg-loading" role="presentation">${escHtml(t('common.loading'))}</div>` : '');
+    if (!listEl.querySelector('.tcg-card[tabindex="0"]')) listEl.querySelector('.tcg-card')?.setAttribute('tabindex', '0');
+    renderDetail(entryById(_selId), activeId);
+}
 
-        const label = document.createElement('div');
-        label.style.cssText = 'flex:1;min-width:200px;font-size:11px;color:var(--text-muted)';
-        const strong = document.createElement('strong');
-        strong.style.cssText = 'display:block;color:var(--text-secondary);font-size:11px;'
-            + 'font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px';
-        strong.textContent = t('themes.dropinTitle') || 'Drop-in presets';
-        const path = document.createElement('code');
-        // One line, ellipsised, full text on hover. word-break:break-all wrapped a long
-        // Windows path onto three lines and made a side note the tallest thing above the
-        // catalogue it is a side note TO.
-        path.style.cssText = 'display:block;font-size:11px;opacity:.85;overflow:hidden;'
-            + 'text-overflow:ellipsis;white-space:nowrap';
-        path.title = dir;
-        // textContent: a path is user data and this is not a place to interpolate markup.
-        path.textContent = dir;
-        label.append(strong, path);
-
-        const open = document.createElement('button');
-        // btn-secondary, not the bare default: an unvariant .btn is the light one, which made
-        // "Open folder" the brightest thing on a screen full of theme cards.
-        open.className = 'btn btn-xs btn-secondary';
-        open.textContent = t('themes.dropinOpen') || 'Open folder';
-        open.addEventListener('click', () => { void invoke('open_folder', { path: dir }); });
-
-        const rescan = document.createElement('button');
-        rescan.className = 'btn btn-xs btn-secondary';
-        rescan.textContent = t('themes.dropinRescan') || 'Rescan';
-        rescan.addEventListener('click', async () => {
-            const before = _builtins.length;
-            await refreshBuiltins();
-            const added = _builtins.length - before;
-            toast(added > 0
-                ? (t('themes.dropinFound') || 'Presets found').replace('{n}', String(added))
-                : (t('themes.dropinNone') || 'No new presets in that folder'),
-                added > 0 ? 'success' : 'info');
-        });
-
-        bar.append(label, open, rescan);
-        // Rescan calls renderCatalog(), which re-runs this block — so the previous bar
-        // has to go, or every rescan would leave another copy stacked above the list.
-        listEl.parentElement?.querySelectorAll('.btc-dropin').forEach((el) => el.remove());
-        listEl.parentElement?.insertBefore(bar, listEl);
-    })();
-
-    listEl.querySelectorAll('.btc-uninstall').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            await invoke('set_builtin_hidden', { themeId: (btn as HTMLElement).dataset.id!, hidden: true });
-            toast(t('themes.uninstalled') || 'Theme uninstalled', 'success');
-            await refreshBuiltins();
-        });
+function select(id: string, focusCard = true): void {
+    _selId = id;
+    const listEl = _handle?.q('#theme-cat-list') as HTMLElement | null;
+    listEl?.querySelectorAll<HTMLElement>('.tcg-card').forEach((c) => {
+        const on = c.dataset.id === id;
+        c.setAttribute('aria-selected', String(on));
+        c.tabIndex = on ? 0 : -1;
+        if (on && focusCard && document.activeElement !== c) c.focus({ preventScroll: true });
     });
-    listEl.querySelectorAll('.btc-reinstall').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            await invoke('set_builtin_hidden', { themeId: (btn as HTMLElement).dataset.id!, hidden: false });
-            toast(t('themes.reinstalled') || 'Theme reinstalled', 'success');
-            await refreshBuiltins();
-        });
-    });
+    renderDetail(entryById(id), getActiveTheme()?.id || null);
+}
 
-    // Wire actions
-    listEl.querySelectorAll('.btc-install').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const id = (btn as HTMLElement).dataset.id!;
-            const entry = _catalog.find(th => th.id === id);
-            if (!entry) return;
-            (btn as HTMLButtonElement).textContent = t('common.loading') || 'Installing…';
-            (btn as HTMLButtonElement).disabled = true;
-            try {
-                const theme = await resolveThemeBody(entry);
-                await installTheme(theme);
-                toast(`${t('themes.installed') || 'Installed'}: ${theme.name}`, 'success');
-            } catch (e) {
-                toast(`${t('themes.fetchFailed') || 'Could not fetch that theme'}: ${e}`, 'error');
-            }
-            renderCatalog();
-        });
-    });
-    listEl.querySelectorAll('.btc-activate').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            await activateTheme((btn as HTMLElement).dataset.id!);
-            closeModal();
-        });
-    });
+const canApply = (e: Entry) => !e.hidden && (e.src !== 'catalog' || e.installed);
+
+function renderDetail(e: Entry | null, activeId: string | null): void {
+    const el = _handle?.q('#tcg-detail') as HTMLElement | null;
+    if (!el) return;
+    if (!e) {
+        el.innerHTML = `<div class="bms-empty"><div class="bms-empty-t">${escHtml(_loading ? t('common.loading') : t('themes.pickOne'))}</div></div>`;
+        return;
+    }
+    const th = e.th;
+    const md = modeOf(th);
+    const isActive = th.id === activeId;
+    const srcLabel = e.src === 'mine' ? t('themes.mine') : e.src === 'builtin' ? t('themes.builtin') : t('themes.catalogThemes');
+    const sw = (slot: string, label: string) => `<span class="tcg-sw"><span class="tcg-sw-dot is-${slot}"></span><span>${escHtml(label)}</span></span>`;
+    let primary = '';
+    if (isActive) primary = `<button type="button" class="btn btn-secondary btn-sm" disabled>${escHtml(t('themes.active'))}</button>`;
+    else if (e.hidden) primary = `<button type="button" class="btn btn-primary btn-sm" data-act="reinstall">${escHtml(t('themes.reinstall'))}</button>`;
+    else if (e.src === 'catalog' && !e.installed) primary = `<button type="button" class="btn btn-primary btn-sm" data-act="install">${escHtml(t('themes.install'))}</button>`;
+    else primary = `<button type="button" class="btn btn-primary btn-sm" data-act="apply">${escHtml(t('themes.activate'))}</button>`;
+    const secondary = [
+        e.src === 'mine' ? `<button type="button" class="btn btn-secondary btn-sm" data-act="edit">${escHtml(t('themes.edit'))}</button>` : '',
+        e.src === 'builtin' && !e.hidden && !isActive ? `<button type="button" class="btn btn-ghost btn-sm tcg-danger" data-act="uninstall">${escHtml(t('themes.uninstall'))}</button>` : '',
+    ].join('');
+    el.innerHTML = `
+        <div class="tcg-hero">${thumbHtml(th, true)}</div>
+        <div class="tcg-d-head">
+            <h3 class="tcg-d-name">${escHtml(th.name || th.id)}</h3>
+            <div class="tcg-d-sub">${escHtml([th.author || (e.src === 'builtin' ? 'BMM' : ''), th.version ? `v${th.version}` : ''].filter(Boolean).join(' · '))}</div>
+        </div>
+        <div class="tcg-d-badges">
+            <span class="bms-chip">${escHtml(srcLabel)}</span>
+            ${md ? `<span class="bms-chip">${md === 'light' ? SUN_SVG : MOON_SVG}${escHtml(md === 'light' ? t('themes.modeLight') : t('themes.modeDark'))}</span>` : ''}
+            ${isActive ? `<span class="bms-chip bms-chip--accent"><span class="bms-dot"></span>${escHtml(t('themes.active'))}</span>`
+                : e.installed && e.src === 'catalog' ? `<span class="bms-chip bms-chip--ok"><span class="bms-dot"></span>${escHtml(t('themes.installed'))}</span>` : ''}
+        </div>
+        ${th.description ? `<p class="tcg-d-desc">${escHtml(th.description)}</p>` : ''}
+        ${th.vars && Object.keys(th.vars).length ? `<div class="tcg-d-block">
+            <div class="bms-label">${escHtml(t('themes.palette'))}</div>
+            <div class="tcg-palette ${paintClass(th)}">
+                ${sw('bg', t('themes.swBackground'))}${sw('card', t('themes.swSurface'))}${sw('acc', t('themes.swAccent'))}${sw('tx', t('themes.swText'))}
+            </div>
+        </div>` : ''}
+        <div class="tcg-d-actions">${secondary}<span class="bms-spacer"></span>${primary}</div>`;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function doApply(e: Entry): Promise<void> {
+    await activateTheme(e.th.id);
+    // The dialog stays open and repaints in the new colours: the preview IS the answer.
+    renderCatalog();
+}
+
+async function doInstall(e: Entry, btn?: HTMLButtonElement): Promise<void> {
+    if (btn) { btn.disabled = true; btn.textContent = t('common.loading'); }
+    try {
+        const theme = await resolveThemeBody(e.th);
+        await installTheme(theme);
+        toast(`${t('themes.installed')}: ${theme.name}`, 'success');
+    } catch (err) {
+        toast(`${t('themes.fetchFailed')}: ${err}`, 'error');
+    }
+    renderCatalog();
+}
+
+async function refreshBuiltins(): Promise<void> {
+    try { _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]'); } catch {}
+    const { loadBuiltinThemes } = await import('./theme-engine.js');
+    await loadBuiltinThemes(); // refresh the BUILTIN_THEMES used by every selector
+    renderCatalog();
+}
+
+async function setBuiltinHidden(id: string, hidden: boolean): Promise<void> {
+    try {
+        await invoke('set_builtin_hidden', { themeId: id, hidden });
+        toast(hidden ? t('themes.uninstalled') : t('themes.reinstalled'), 'success');
+    } catch (err) { toast(String(err), 'error'); }
+    await refreshBuiltins();
+}
+
+async function restoreAllDefaults(): Promise<void> {
+    try {
+        const hidden: string[] = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]')
+            .filter((b: any) => b._hidden).map((b: any) => b.id);
+        for (const id of hidden) await invoke('set_builtin_hidden', { themeId: id, hidden: false });
+        await refreshBuiltins();
+        toast(t('themes.restoredAll'), 'success');
+    } catch (e) { toast(String(e), 'error'); }
 }
 
 // ── Community sources ─────────────────────────────────────────────────────────

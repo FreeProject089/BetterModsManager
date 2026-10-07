@@ -382,24 +382,107 @@
 /* An action row with nothing to show (no pause offered, no message) takes no room. */
 .stm-game-now .stm-row:has(> .stm-game-pause[hidden]):has(> .stm-msg:empty) { display: none; }
 
-/* ── Rules per disk: the presets for this PC (storage-presets.ts) ─────────────────────────── */
-.stp { gap: 14px; }
-.stp-head { display: flex; align-items: flex-start; gap: var(--stm-row-gap); flex-wrap: wrap; }
-.stp-head-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.stp .stm-more { background: none; }
-.stp-pc > summary { padding-block: 8px; font-size: 12.5px; }
-.stp-drives { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.stp-drive { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); }
-.stp-drive-name { min-width: 2.5em; font-weight: 700; color: var(--bmm-text-primary); }
-.stp-drive-free { font-variant-numeric: tabular-nums; }
-.stp-drive-free.is-low { color: var(--bmm-danger); font-weight: 700; }
-.stp-drive-roles { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); color: var(--bmm-text-primary); }
-.stp-why { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-accent-dim); font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-primary); }
-.stp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--stm-row-gap); }
-.stp-card {
+
+/* ── Rules per disk: the rhythm of the whole tab ───────────────────────────────────────────
+   Two sections, the presets card then "Your own rules", each a column with the modal's own
+   gaps. .res-matrix was a bare block before: the lead, the legend expander, the disk row and
+   the table header sat on each other with no space between them. */
+.res-matrix { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stm-panel[data-panel="rules"] { gap: 28px; }
+.stm-section-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-inline: 2px; }
+.stm-legend-more > summary { padding-block: 9px; font-size: 12.5px; }
+.stm-legend-more .stm-more-body { padding-top: 4px; gap: 12px; }
+
+/* The table in one framed card, its disk filter as a toolbar band above the header row. */
+.stm-table-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    min-width: 0;
+    border: 1px solid var(--bmm-border);
+    border-radius: 12px;
+    background: var(--bmm-s02);
+}
+.stm-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding: 10px 12px 10px var(--stm-pad-x);
+    border-bottom: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    border-radius: 12px 12px 0 0;
+}
+.stm-toolbar-field { display: inline-flex; align-items: center; gap: 10px; min-width: 0; margin: 0; }
+.stm-toolbar-label { font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); }
+.stm-toolbar .res-m-disk { min-width: 150px; max-width: 220px; }
+.stm-toolbar .res-m-msg { flex: 1 1 auto; min-width: 0; text-align: right; }
+.stm-toolbar .res-m-reset { display: inline-flex; align-items: center; gap: 6px; }
+.stm-table-card .stm-table-wrap { padding: 4px 6px 8px; }
+.stm-table-card .stm-table th { padding-top: 10px; padding-bottom: 10px; }
+.stm-table-card .stm-table td { padding-top: 6px; padding-bottom: 6px; }
+
+/* ── Rules per disk: the presets for this PC (storage-presets.ts) ─────────────────────────── */
+.stp { gap: 20px; padding: 18px var(--stm-pad-x) var(--stm-pad-x); }
+.stp .stm-card-title { font-size: 14px; }
+.stp-head { display: flex; align-items: flex-start; gap: var(--stm-row-gap) 16px; flex-wrap: wrap; }
+.stp-head-text { flex: 1 1 280px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stp-head-text .stm-help { max-width: 72ch; }
+.stp-undo { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* A small heading for each step of the card, with a quiet note on the right. */
+.stp-block { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stp-sub { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.stp-sub-meta { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* This PC: drive tiles. */
+.stp-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.stp-drive {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 10px;
+    background: var(--bmm-s02);
+}
+.stp-drive.is-used { background: var(--bmm-s04); }
+.stp-drive.is-low { border-color: color-mix(in srgb, var(--bmm-danger) 45%, var(--bmm-border)); }
+.stp-drive-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.stp-drive-name { font-size: 15px; font-weight: 800; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stp-kind { flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--bmm-border); background: var(--bmm-s05); color: var(--bmm-text-secondary); white-space: nowrap; }
+.stp-kind.is-nvme, .stp-kind.is-ssd { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); color: var(--stm-accent-ink); }
+.stp-kind.is-hdd { border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); color: var(--bmm-text-primary); }
+.stp-drive-bar { height: 6px; }
+.stp-drive-free { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--bmm-text-secondary); }
+.stp-drive.is-low .stp-drive-free { color: var(--bmm-danger); font-weight: 700; }
+.stp-drive-roles { font-size: 12px; font-weight: 600; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.stp-drive-idle { font-weight: 400; color: var(--bmm-text-secondary); }
+
+/* The recommendation: a highlighted callout with its reason. */
+.stp-rec {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    border: 1px solid var(--bmm-border-accent);
+    border-left-width: 3px;
+    border-radius: 10px;
+    background: var(--bmm-accent-dim);
+}
+.stp-rec-ic { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; background: var(--bmm-s05); color: var(--stm-accent-ink); }
+.stp-rec-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stp-rec-title { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.stp-rec-why { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+
+/* The presets: selectable cards, icon + name + one line + what applying would do. */
+.stp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.stp-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     min-width: 0;
     padding: 12px 14px;
     border: 1px solid var(--bmm-border);
@@ -411,22 +494,50 @@
     cursor: pointer;
     transition: border-color var(--bmm-transition-fast, .15s), background var(--bmm-transition-fast, .15s);
 }
-.stp-card:hover { background: var(--bmm-s05); }
+.stp-card:hover { background: var(--bmm-s05); border-color: var(--bmm-border-hover); }
 .stp-card:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
 .stp-card[aria-checked="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
-.stp-card[aria-disabled="true"] { opacity: .6; }
+.stp-card.is-off { opacity: .62; }
+.stp-card-ic { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); color: var(--bmm-text-secondary); }
+.stp-card[aria-checked="true"] .stp-card-ic { border-color: var(--bmm-border-accent); color: var(--stm-accent-ink); }
+.stp-card-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .stp-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .stp-card-name { font-size: 13px; font-weight: 700; }
 .stp-card-desc { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
-.stp-card-foot { margin-top: auto; padding-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
-.stp-badge-applied { border-color: var(--bmm-success); }
-.stp-preview { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.stp-card-foot { margin-top: 2px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+.stp-card-foot.is-done { color: var(--bmm-success); }
+.stp-badge-applied { border-color: var(--bmm-success); color: var(--bmm-text-primary); }
+
+/* The preview: a diff list, then the note and Apply on one row. */
+.stp-preview { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--bmm-border); border-radius: 12px; background: var(--bmm-s02); }
 .stp-preview:empty { display: none; }
-.stp-preview-head { display: flex; align-items: center; justify-content: space-between; gap: var(--stm-row-gap); flex-wrap: wrap; }
-.stp-changes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.stp-change { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: baseline; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-primary); }
-.stp-change-mark { font-weight: 700; text-align: center; color: var(--bmm-text-secondary); }
-.stp-change.is-add .stp-change-mark { color: var(--bmm-success); }
-.stp-change.is-remove .stp-change-mark { color: var(--bmm-danger); }
-.stp-change.is-remove > span:last-child { color: var(--bmm-text-secondary); }
+.stp-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.stp-counts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.stp-count { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); font-size: 11.5px; font-weight: 600; color: var(--bmm-text-primary); }
+.stp-count b { font-weight: 800; }
+.stp-count.is-add b { color: var(--bmm-success); }
+.stp-count.is-change b { color: var(--bmm-warning); }
+.stp-count.is-remove b { color: var(--bmm-danger); }
+.stp-diff { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--bmm-border); border-radius: 10px; overflow: hidden; }
+.stp-diff-row { display: grid; grid-template-columns: 26px minmax(120px, 200px) 1fr; gap: 10px; align-items: baseline; padding: 8px 12px 8px 8px; font-size: 12.5px; line-height: 1.5; min-width: 0; }
+.stp-diff-row + .stp-diff-row { border-top: 1px solid var(--bmm-border); }
+.stp-diff-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; font-weight: 800; font-size: 13px; line-height: 1; align-self: center; background: var(--bmm-s05); color: var(--bmm-text-secondary); }
+.stp-diff-row.is-add .stp-diff-mark { background: var(--bmm-success-dim); color: var(--bmm-success); }
+.stp-diff-row.is-change .stp-diff-mark { background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary)); }
+.stp-diff-row.is-remove .stp-diff-mark { background: var(--bmm-danger-dim); color: var(--bmm-danger); }
+.stp-diff-where { font-weight: 700; color: var(--bmm-text-primary); min-width: 0; overflow-wrap: anywhere; }
+.stp-diff-vals { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; min-width: 0; }
+.stp-diff-before { color: var(--bmm-text-secondary); }
+.stp-diff-row.is-change .stp-diff-before, .stp-diff-row.is-remove .stp-diff-before { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bmm-text-secondary) 60%, transparent); }
+.stp-diff-arrow { color: var(--bmm-text-secondary); }
+.stp-diff-after { color: var(--bmm-text-primary); font-weight: 600; }
+.stp-preview-empty { margin: 0; padding: 12px 14px; border: 1px dashed var(--bmm-border); border-radius: 10px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+.stp-preview-empty.is-done { color: var(--bmm-text-primary); }
+.stp-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.stp-actions .stm-help { flex: 1 1 260px; }
+.stp-apply { flex-shrink: 0; min-width: 120px; justify-content: center; }
+@media (max-width: 640px) {
+    .stp-diff-row { grid-template-columns: 26px 1fr; }
+    .stp-diff-vals { grid-column: 2; }
+}
 @media (prefers-reduced-motion: reduce) { .stp-card { transition: none; } }

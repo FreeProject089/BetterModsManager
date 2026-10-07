@@ -201,10 +201,19 @@
 .modal > .modal-header:first-child { border-radius: var(--bms-radius) var(--bms-radius) 0 0; }
 .modal > .modal-footer:last-child { border-radius: 0 0 var(--bms-radius) var(--bms-radius); }
 
-.modal :is(button, [role="tab"], a, summary, input, select, textarea):focus-visible {
+/* Keyboard ring for the controls that have none of their own. NOT text fields, selects or
+   textareas: a text field matches :focus-visible on a mouse click too, and at (0,3,0) this
+   rule beat every field's own `outline: none` — a search box inside a wrapper that draws its
+   own :focus-within ring got a second, square one inside it. Fields keep their own focus
+   style (border + glow, or the wrapper's ring); scripts/check-focus-rings.mjs keeps it so. */
+.modal :is(button, [role="tab"], a, summary, input:is([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])):focus-visible {
     outline: 2px solid var(--bmm-accent);
     outline-offset: 2px;
 }
+/* A dialog opened with the pointer takes the focus itself (not its first text field): no ring. */
+.modal[tabindex="-1"]:focus,
+.modal-overlay[tabindex="-1"]:focus,
+.modal-generic-overlay[tabindex="-1"]:focus { outline: none; }
 
 /* Motion: a short rise and fade, no overshoot. Off under reduced motion and BMM's own switch. */
 @keyframes bms-in { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }

@@ -11,28 +11,61 @@
 }
 .lo-head { align-items: flex-start; gap: 10px; }
 .lo-head-text { flex: 1; min-width: 0; }
-.lo-head h3 { margin: 0; font-size: 15px; color: var(--bmm-text-primary); }
-.lo-lede { margin: 4px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+/* The title is one line: "Activation order" then the profile as a quiet chip that truncates
+   (a long imported profile name used to wrap the title onto two lines). The full sentence is
+   the heading's accessible name; the full profile name is the chip's tooltip. */
+.lo-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.35;
+    color: var(--bmm-text-primary);
+}
+.lo-title-t { flex: none; white-space: nowrap; }
+.lo-title-p {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 1px 9px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 999px;
+    background: var(--bmm-s04);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+}
+.lo-lede { margin: 5px 0 0; max-width: 72ch; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
 .lo-learn { margin-top: 2px; }
 
-/* The toolbar: the saved lists first (a button that reads as a destination, with its count),
-   then two labelled groups, Arrange (sort, where bulk enables go) and Share (share, import).
-   Every control is 30px tall, so the row reads as one line of equals. */
+/* The toolbar, two rows on one surface. Row 1: the saved lists (a destination, so a card with
+   its count) and, at the other end, Share / Import. Row 2: Arrange: two labelled selects.
+   One height for every control (--lo-ctl), one radius, one gap; the group labels share one
+   column so ARRANGE and SHARE read as the same kind of thing. */
+.lo-modal { --lo-ctl: 32px; --lo-pad-x: var(--bms-pad-x, 24px); }
 .lo-tools {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "lists share" "arrange arrange";
     align-items: center;
-    gap: 10px 14px;
-    padding: 12px 20px 10px;
+    gap: 12px 16px;
+    padding: 14px var(--lo-pad-x) 12px;
     border-bottom: 1px solid var(--bmm-s08);
     background: var(--bmm-s02);
 }
 .lo-lists-btn {
+    grid-area: lists;
+    justify-self: start;
     display: inline-flex;
     align-items: center;
-    gap: 9px;
-    min-height: 46px;
+    gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
     padding: 6px 12px 6px 10px;
     border: 1px solid var(--bmm-border-accent);
     border-radius: var(--bmm-radius-card, 10px);
@@ -40,15 +73,31 @@
     color: var(--bmm-text-primary);
     text-align: left;
 }
-.lo-lists-btn > svg { flex: none; color: var(--bms-accent-ink); }
+.lo-lists-btn > svg {
+    flex: none;
+    box-sizing: content-box;
+    padding: 6px;
+    border-radius: var(--bmm-radius-btn, 6px);
+    background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
+    color: var(--bms-accent-ink);
+}
 .lo-lists-btn:hover { background: color-mix(in srgb, var(--bmm-accent) 22%, transparent); }
 .lo-lists-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent); outline-offset: 2px; }
-.lo-lists-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lo-lists-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lo-lists-t { font-size: 12.5px; font-weight: 700; line-height: 1.2; }
-.lo-lists-sub { font-size: 10.5px; line-height: 1.25; color: var(--bmm-text-secondary); font-weight: 500; }
+.lo-lists-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+    line-height: 1.25;
+    color: var(--bmm-text-secondary);
+    font-weight: 500;
+}
 .lo-badge {
     flex: none;
     min-width: 20px;
+    margin-left: 4px;
     padding: 1px 7px;
     border-radius: 999px;
     background: var(--bmm-accent);
@@ -56,73 +105,134 @@
     font-family: var(--font-mono);
     font-size: 10.5px;
     font-weight: 700;
+    line-height: 1.5;
     text-align: center;
 }
 .lo-badge[hidden] { display: none; }
-.lo-lists-btn { grid-area: lists; justify-self: start; }
-.lo-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.lo-group-arrange { grid-area: arrange; padding-top: 10px; border-top: 1px solid var(--bmm-s06); }
+
+.lo-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.lo-group-arrange { grid-area: arrange; padding-top: 12px; border-top: 1px solid var(--bmm-s06); }
 .lo-group-share { grid-area: share; justify-self: end; }
 .lo-group-label {
-    font-size: 9.5px;
+    flex: none;
+    min-width: 64px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--bmm-text-secondary);
-    padding-left: 2px;
 }
-.lo-group-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.lo-group-share .lo-group-label { min-width: 0; }
+.lo-group-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+
+/* A labelled select is ONE control: icon, label, value and chevron inside a single border,
+   the same height as the buttons. The themed select's own trigger loses its border and fill
+   (it was a pill inside a pill), and the field draws the hover, the open state and the
+   keyboard ring for both. */
 .lo-field {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 0 4px 0 8px;
+    gap: 7px;
+    height: var(--lo-ctl);
+    min-width: 0;
+    padding: 0 4px 0 10px;
     border: 1px solid var(--bmm-border);
     border-radius: var(--bmm-radius-btn, 6px);
     background: var(--bmm-s03);
     color: var(--bmm-text-secondary);
+    cursor: pointer;
+    transition: border-color var(--bmm-transition-fast, 0.15s), background var(--bmm-transition-fast, 0.15s), box-shadow var(--bmm-transition-fast, 0.15s);
 }
-.lo-field > svg { flex: none; }
-.lo-field-t { font-size: 11px; font-weight: 600; white-space: nowrap; }
+.lo-field:hover { border-color: var(--bmm-border-hover); background: var(--bmm-s05); }
+.lo-field:has(.bmm-csel.open) { border-color: var(--bmm-border-accent); }
+.lo-field:has(:focus-visible) {
+    border-color: var(--bmm-border-accent);
+    box-shadow: 0 0 0 3px var(--bmm-accent-dim);
+}
+.lo-field > svg { flex: none; color: var(--bmm-text-secondary); }
+.lo-field-t {
+    flex: none;
+    padding-right: 7px;
+    border-right: 1px solid var(--bmm-s08);
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+}
+.lo-field .bmm-csel { min-width: 0; }
+.lo-field .bmm-csel-trigger,
+.lo-field .bmm-csel-trigger:hover,
+.lo-field .bmm-csel.open .bmm-csel-trigger {
+    height: calc(var(--lo-ctl) - 2px);
+    padding: 0 6px 0 1px;
+    border: 0;
+    border-radius: 0;
+    background-color: transparent;
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+}
+/* The field draws the ring; the global keyboard ring on the trigger would be a second one. */
+.lo-field .bmm-csel-trigger:focus-visible { outline: none !important; }
+.lo-field .bmm-csel-arrow { color: var(--bmm-text-secondary); opacity: 1; }
 .lo-field select { min-height: 26px; border: 0; background: transparent; }
-.lo-sort { min-width: 140px; max-width: 190px; }
-.lo-tool { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; }
+.lo-sort { min-width: 128px; max-width: 190px; }
+.lo-tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--lo-ctl); padding-top: 0; padding-bottom: 0; }
 .lo-tool > svg { flex: none; }
+
+/* The hint line belongs to the list under it: no band of its own, the same inset. */
 .lo-sub {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 20px;
-    border-bottom: 1px solid var(--bmm-s06);
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px var(--lo-pad-x) 0;
 }
 /* Secondary, not muted, for every line the reader has to read here (hint, counts, the
    first/last edges, "no conflict", the status): muted #475569 measured 2.2-2.4:1 on this
    modal in the dark themes. Muted stays on the grip, which is decoration. */
-.lo-hint { flex: 1; min-width: 0; font-size: 10.5px; color: var(--bmm-text-secondary); }
+.lo-hint { flex: 1; min-width: 0; font-size: 11px; line-height: 1.45; color: var(--bmm-text-secondary); }
 .lo-count {
+    flex: none;
     margin-left: auto;
+    padding: 1px 8px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 999px;
     font-size: 10.5px;
     font-family: var(--font-mono);
     color: var(--bmm-text-secondary);
+    white-space: nowrap;
 }
+.lo-count:empty { display: none; }
+/* Nothing to drag yet: the hint and the two edges would describe an empty list. */
+.lo-modal.is-empty .lo-sub,
+.lo-modal.is-empty .lo-edge { display: none; }
 
 /* Not .modal-body: that class forces a column flex with its own gap and padding. */
 .lo-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 8px 20px 10px;
+    padding: 8px var(--lo-pad-x) 14px;
 }
+.lo-modal.is-empty .lo-body { padding-top: 16px; padding-bottom: 18px; }
+/* The two ends of the list: a small label and a hairline that runs to the edge, the same
+   size, weight and spacing; the last one carries the success tint (it wins). */
 .lo-edge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
+    line-height: 1.4;
     text-transform: uppercase;
     color: var(--bmm-text-secondary);
-    padding: 4px 2px;
 }
-.lo-edge-last { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); }
+.lo-edge::after { content: ''; flex: 1; height: 1px; background: var(--bmm-s08); }
+.lo-edge-first { margin: 4px 0 8px; }
+.lo-edge-last { margin: 8px 0 2px; color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); }
+.lo-edge-last::after { background: color-mix(in srgb, var(--bmm-success) 30%, transparent); }
 
 .lo-list {
     list-style: none;
@@ -239,18 +349,29 @@
 .lo-mv:disabled { opacity: 0.3; cursor: default; }
 
 .lo-empty {
-    padding: 22px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 30px 24px;
     text-align: center;
-    font-size: 12px;
-    color: var(--bmm-text-secondary);
     border: 1px dashed var(--bmm-s10);
     border-radius: var(--bmm-radius-card, 10px);
+    background: var(--bmm-s02);
 }
+.lo-empty-ic {
+    display: inline-flex;
+    padding: 10px;
+    border-radius: 999px;
+    background: var(--bmm-s05);
+    color: var(--bmm-text-secondary);
+}
+.lo-empty-t { max-width: 46ch; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
 
 .lo-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .lo-foot { display: flex; align-items: center; gap: 8px; }
-.lo-status { flex: 1; min-width: 0; font-size: 11px; color: var(--bmm-text-secondary); text-align: right; }
+.lo-status { flex: 1; min-width: 0; margin-right: 4px; font-size: 11px; line-height: 1.4; color: var(--bmm-text-secondary); text-align: right; }
 .lo-status.is-dirty { color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-text-primary)); font-weight: 600; }
 
 /* Motion only for those who have not asked for less of it. */

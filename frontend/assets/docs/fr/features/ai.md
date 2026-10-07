@@ -46,7 +46,7 @@ qu'il travaille. C'est un **paquet de modèle** à part (327 Mo à télécharger
 **D'où il vient.** L'option de l'installeur *Laya hors ligne (IA locale, aucune donnée envoyée)*
 est cochée par défaut : l'installation télécharge le paquet une fois, le refuse s'il ne
 correspond pas à son SHA-256 épinglé, et le décompresse dans `<dossier d'installation>\models\laya`.
-Si vous l'avez décochée, **Réglages → IA → Laya intégré → Installer le modèle** télécharge le même
+Si vous l'avez décochée, **Paramètres → Laya → Gérer Laya → Aperçu → Où Laya tourne → Installer le modèle** télécharge le même
 paquet dans `%LOCALAPPDATA%\com.bettermm.desktop\models\laya`. Le bloc montre toujours UN seul état :
 
 | État | Ce que vous voyez |
@@ -363,7 +363,7 @@ les scores bruts, **Recharger le modèle** et **Vider les appels et le cache**.
 
 ## Réponses de Laya : à quel point sûr, et vos propres tâches
 
-**Paramètres → Laya → Gérer Laya → Réponses** règle à quel point Laya doit être sûr avant que
+**Paramètres → Laya → Gérer Laya → Exigence des réponses** règle à quel point Laya doit être sûr avant que
 BMM propose ou utilise une réponse. Rien ne change tant que vous n'y touchez pas : **Équilibré** est
 le comportement habituel de BMM.
 
@@ -372,7 +372,7 @@ le comportement habituel de BMM.
 | **Prudent** | Moins de réponses, plus souvent justes. Dit *je ne sais pas* en cas de doute |
 | **Équilibré** | Le comportement habituel (tags dès 35 %, catégorie de rapport dès 30 %, les tâches répondent toujours) |
 | **Permissif** | Plus de réponses. Une réponse douteuse est gardée et marquée *hypothèse* |
-| **Personnalisé** | Vos valeurs, dans *Réglages fins* |
+| **Personnalisé** | Vos valeurs, dans *Avancé : réglages fins* |
 
 *Pour* choisit la fonction : toutes, ou une seule avec ses propres réglages (suggestions de mods,
 Ask Laya, rapports de bug, analyse de la bibliothèque, tâches planifiées et scripts, programmes, rapports de crash).
@@ -399,7 +399,7 @@ exactement ce qu'il demandait avant.
 
 ### Vos propres tâches
 
-*Mes tâches* : un nom, ce qu'elle lit (nom, description, readme du mod ou tout ; un texte ; un
+*Mes tâches* (son propre onglet) : un nom, ce qu'elle lit (nom, description, readme du mod ou tout ; un texte ; un
 fichier ; un rapport), 2 à 32 étiquettes (chacune avec un sens et des exemples facultatifs), une
 question facultative, ses propres réglages ou ceux des *tâches*, et quoi faire de la réponse sur un
 mod (afficher seulement, ajouter le tag du même nom, le définir comme catégorie du mod parmi les

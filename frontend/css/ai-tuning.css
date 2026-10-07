@@ -25,6 +25,21 @@
 }
 .lt-chip:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent); outline-offset: 2px; }
 .lt-hint { margin: 2px 0 6px; }
+.lt-hint:empty { display: none; }
+
+/* In the Laya dialog the presets are four cards: the name, and what it means, side by side. */
+.laya-pane-card .lt-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 0; }
+.laya-pane-card .lt-chip {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; min-width: 0;
+    padding: 10px 12px; border-radius: var(--bmm-radius-input, 10px);
+    border-color: var(--bmm-border); background: var(--bmm-s02); color: var(--bmm-text-primary);
+}
+.laya-pane-card .lt-chip-name { font-size: 13px; font-weight: 800; }
+.laya-pane-card .lt-chip-hint { font-size: 11.5px; font-weight: 500; line-height: 1.45; color: var(--text-secondary); }
+.laya-pane-card .lt-chip.is-on { border-color: var(--bmm-accent); background: color-mix(in srgb, var(--bmm-accent) 10%, transparent); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
+.laya-pane-card .lt-chip.is-on .lt-chip-name { color: var(--bms-accent-ink, var(--bmm-text-primary)); }
+.laya-pane-card .lt-fs { display: flex; flex-direction: column; gap: 10px; }
+.laya-pane-card .lt-fs > * { margin-top: 0; margin-bottom: 0; }
 
 /* « Réglages fins »: label · control · one-line hint. */
 .lt-grid { max-width: 720px; display: grid; grid-template-columns: minmax(110px, max-content) minmax(0, 1fr); gap: 6px 12px; align-items: center; margin: 8px 0; }

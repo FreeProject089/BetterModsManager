@@ -11,6 +11,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { rowsFromSuggestions, toggleRow, buildFields, pct, providerBlock, type SuggestionRow, type AiSuggestion, type ModView } from './ai-model.js';
 import { ensureAiCss, loadAiView, sourceLabel, fieldLabel, reasonText, bcAuthArgs, openAiDocs, offerInstall, installPromptHtml, wireInstallPrompt } from './ai-shared.js';
 import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
+import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 
 interface OpenOpts {
     /** Called with the updated mod once fields were applied. */
@@ -43,7 +44,20 @@ function close(): void {
     try { if (back?.isConnected) back.focus(); } catch { /* nothing to return to */ }
 }
 
-const IC_SPARK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const svg = (inner: string, size = 16): string => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+const IC_SPARK = svg('<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>');
+const IC_FILE = svg('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>', 13);
+const IC_BOOK = svg('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>', 14);
+const IC_CHECK = svg('<path d="M20 6L9 17l-5-5"/>', 20);
+const IC_ALERT = svg('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>', 20);
+const IC_ARROW = svg('<path d="M5 12h14M13 6l6 6-6 6"/>', 14);
+const IC_CHEV = svg('<path d="M9 6l6 6-6 6"/>', 14);
+
+/** The confidence chip's tone: high reads as settled, low as « check this ». */
+function confTone(c: number): string {
+    const p = pct(c);
+    return p >= 80 ? 'is-high' : p >= 50 ? 'is-mid' : 'is-low';
+}
 
 export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void> {
     ensureAiCss();
@@ -59,18 +73,30 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
     let showProbs = true;
     let busy = false;
 
+    // The house anatomy: icon tile, title + one line (« nothing is written until you apply »), ×.
     const head = `
       <div class="modal-header">
-        <h3 class="modal-title ai-title" id="ais-title">${IC_SPARK}<span>${escHtml(t('ai.suggest.title', { name: String(mod.name || '') }))}</span></h3>
-        <button type="button" class="modal-close" id="ais-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div class="bms-icon" aria-hidden="true">${IC_SPARK}</div>
+        <div class="bms-titles">
+          <h2 class="modal-title" id="ais-title">${escHtml(t('ai.suggest.title', { name: String(mod.name || '') }))}</h2>
+          <p class="bms-sub">${escHtml(t('ai.suggest.lead'))}</p>
+        </div>
+        <button type="button" class="modal-close" id="ais-close" aria-label="${escAttr(t('common.close'))}">${MODAL_CLOSE_SVG}</button>
       </div>`;
 
-    const providerLine = (): string => {
+    /** Who read the mod (a chip), and what left this PC (a second chip, once it is known). */
+    const providerLine = (extra: { sent?: string | null; offline?: boolean } = {}): string => {
+        const chips: string[] = [];
         if (!block) {
             const which = settings?.classifier === 'embedded' ? t('ai.src.embedded') : settings?.classifier === 'local' ? t('ai.src.laya') : t('ai.src.bettercommunity');
-            return `<span class="ai-pill ai-pill-on">${escHtml(t('ai.suggest.withProvider', { provider: which }))}</span>`;
+            chips.push(`<span class="bms-chip bms-chip--accent">${IC_SPARK}${escHtml(t('ai.suggest.withProvider', { provider: which }))}</span>`);
+        } else {
+            chips.push(`<span class="bms-chip">${IC_FILE}${escHtml(t('ai.suggest.filesOnly'))}</span>`);
         }
-        return `<span class="ai-pill">${escHtml(t('ai.suggest.filesOnly'))}</span> <span class="ai-muted">${escHtml(reasonText(block))}</span>`;
+        if (extra.sent) chips.push(`<span class="bms-chip bms-chip--warn"><span class="bms-dot"></span>${escHtml(t('ai.sug3.sentChip'))}</span>`);
+        else if (extra.offline || block) chips.push(`<span class="bms-chip bms-chip--ok"><span class="bms-dot"></span>${escHtml(t('ai.hub2.private'))}</span>`);
+        const why = block ? `<span class="ai-sug-why">${escHtml(reasonText(block))}</span>` : '';
+        return `<div class="ai-sug-chips">${chips.join('')}</div>${why}`;
     };
 
     const render = (state: 'loading' | 'ready' | 'error', extra: { notes?: string[]; sent?: string | null; read?: string[]; sources?: any[]; error?: string; offline?: boolean } = {}) => {
@@ -82,34 +108,47 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
         const applicable = rows.filter((r) => r.applicable);
         const hints = rows.filter((r) => !r.applicable);
         const nChecked = rows.filter((r) => r.checked).length;
+        const allOn = applicable.length > 0 && applicable.every((r) => r.checked);
+        // « Details »: what was read, what was sent, the notes. A styled disclosure, not raw text.
         const details: string[] = [];
         if ((extra.notes || []).length) details.push(`<ul class="ai-notes">${(extra.notes || []).map((n) => `<li>${escHtml(reasonText(n))}</li>`).join('')}</ul>`);
         const srcs = (extra.sources || []).slice(0, 12);
-        if (srcs.length) details.push(`<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))}</div><ul class="ai-srclist">${srcs.map((x: any) => `<li><code>${escHtml(String(x.file || ''))}</code> <span class="ai-muted">${escHtml(x.listed_only ? t('ai.sug2.listed') : [String(x.kind || ''), String(x.encoding || '')].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>`);
-        else if ((extra.read || []).length) details.push(`<div class="ai-muted ai-read">${escHtml(t('ai.suggest.read'))} ${escHtml((extra.read || []).slice(0, 8).join(', '))}</div>`);
-        if (extra.sent) details.push(`<div class="ai-muted">${escHtml(t('ai.suggest.sentSummary'))}</div><pre>${escHtml(extra.sent)}</pre>`);
-        else if (extra.offline) details.push(`<div class="ai-muted">${escHtml(t('ai.emb.offline'))}</div>`);
-        details.push(`<button type="button" class="ai-link" id="ais-docs">${escHtml(t('ai.docsLink'))}</button>`);
+        if (srcs.length) details.push(`<div class="bms-label">${escHtml(t('ai.suggest.read'))}</div><ul class="ai-srclist">${srcs.map((x: any) => `<li><code>${escHtml(String(x.file || ''))}</code> <span class="ai-muted">${escHtml(x.listed_only ? t('ai.sug2.listed') : [String(x.kind || ''), String(x.encoding || '')].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>`);
+        else if ((extra.read || []).length) details.push(`<div class="bms-label">${escHtml(t('ai.suggest.read'))}</div><p class="ai-sug-detail">${escHtml((extra.read || []).slice(0, 8).join(', '))}</p>`);
+        if (extra.sent) details.push(`<div class="bms-label">${escHtml(t('ai.suggest.sentSummary'))}</div><pre class="ai-sug-pre">${escHtml(extra.sent)}</pre>`);
+        else if (extra.offline) details.push(`<p class="ai-sug-detail">${escHtml(t('ai.emb.offline'))}</p>`);
+        details.push(`<div class="ai-sug-docs"><button type="button" class="btn btn-ghost btn-sm" id="ais-docs">${IC_BOOK}<span>${escHtml(t('ai.docsLink'))}</span></button></div>`);
         const hasDraft = rows.some((r) => r.note === 'draft');
         const body = state === 'loading'
-            ? `<div class="ai-loading"><span class="ai-dot"></span>${escHtml(wantDraft ? t('ai.sug2.drafting') : t('ai.suggest.loading'))}</div>`
+            ? `<div class="bms-empty ai-sug-loading" role="status"><span class="ai-dot" aria-hidden="true"></span><span class="bms-empty-t">${escHtml(wantDraft ? t('ai.sug2.drafting') : t('ai.suggest.loading'))}</span></div>`
             : state === 'error'
-                ? `<div class="ai-error">${escHtml(extra.error || '')}</div>`
-                : `${applicable.length ? `<div class="ai-rows" role="list">${applicable.map(rowHtml).join('')}</div>` : `<div class="ai-empty">${escHtml(t('ai.suggest.none'))}</div>`}
-                   ${hints.length ? `<div class="ai-hints"><div class="ai-sub">${escHtml(t('ai.suggest.hints'))}</div>${hints.map(hintHtml).join('')}</div>` : ''}
-                   ${hasDraft ? `<div class="ai-muted ai-draftnote">${escHtml(t('ai.sug2.draftNote'))}</div>` : ''}
-                   <details class="ai-sent ai-more"><summary>${escHtml(t('ai.sug2.details'))}</summary>${details.join('')}</details>`;
+                ? `<div class="bms-empty ai-sug-error" role="alert"><span class="bms-empty-ic" aria-hidden="true">${IC_ALERT}</span><span class="bms-empty-t">${escHtml(t('ai.sug3.errorT'))}</span><span class="ai-err">${escHtml(extra.error || '')}</span></div>`
+                : `${applicable.length
+                    ? `<section class="ai-sug-sec" aria-labelledby="ais-rows-h">
+                        <div class="ai-sug-sec-h"><span class="bms-label" id="ais-rows-h">${escHtml(t('ai.sug3.rowsTitle', { n: String(applicable.length) }))}</span></div>
+                        <div class="ai-rows" role="list">${applicable.map(rowHtml).join('')}</div>
+                      </section>`
+                    : `<div class="bms-empty ai-sug-empty"><span class="bms-empty-ic" aria-hidden="true">${IC_CHECK}</span><span class="bms-empty-t">${escHtml(t('ai.sug3.emptyT'))}</span><span>${escHtml(t('ai.sug3.emptyB'))}</span></div>`}
+                   ${hints.length ? `<section class="ai-sug-sec ai-hints" aria-labelledby="ais-hints-h">
+                        <div class="ai-sug-sec-h"><span class="bms-label" id="ais-hints-h">${escHtml(t('ai.suggest.hints'))}</span></div>
+                        <ul class="ai-hint-list">${hints.map(hintHtml).join('')}</ul>
+                      </section>` : ''}
+                   ${hasDraft ? `<p class="ai-sug-note">${escHtml(t('ai.sug2.draftNote'))}</p>` : ''}
+                   <details class="ai-sug-more"><summary>${IC_CHEV}<span>${escHtml(t('ai.sug2.details'))}</span></summary><div class="ai-sug-more-in">${details.join('')}</div></details>`;
         o.innerHTML = `
-        <div class="modal ai-modal" role="dialog" aria-modal="true" aria-labelledby="ais-title">
+        <div class="modal bms modal--lg ai-modal ai-sug" role="dialog" aria-modal="true" aria-labelledby="ais-title">
           ${head}
           <div class="modal-body ai-body">
-            <div class="ai-provider">${providerLine()}
-              ${canDraft && state !== 'loading' && !wantDraft ? `<button type="button" class="btn btn-ghost btn-sm" id="ais-draft">${IC_SPARK}<span>${escHtml(t('ai.sug2.draftBtn'))}</span></button>` : ''}</div>
+            <div class="ai-provider">${providerLine(state === 'ready' ? extra : {})}
+              ${canDraft && state !== 'loading' && !wantDraft ? `<button type="button" class="btn btn-secondary btn-sm" id="ais-draft">${IC_SPARK}<span>${escHtml(t('ai.sug2.draftBtn'))}</span></button>` : ''}</div>
             ${offerInstall(view) ? installPromptHtml(view) : ''}
             ${body}
           </div>
           <div class="modal-footer ai-foot">
-            <span class="ai-muted" id="ais-count">${escHtml(t('ai.suggest.selected', { n: String(nChecked) }))}</span>
+            <div class="modal-footer-start">
+              ${state === 'ready' && applicable.length > 1 ? `<button type="button" class="btn btn-ghost btn-sm" id="ais-all">${escHtml(allOn ? t('ai.sug3.none') : t('ai.lib.tickAll'))}</button>` : ''}
+              <span class="modal-footer-note" id="ais-count">${escHtml(t('ai.suggest.selected', { n: String(nChecked) }))}</span>
+            </div>
             <button type="button" class="btn btn-ghost btn-sm" id="ais-cancel">${escHtml(t('common.cancel'))}</button>
             <button type="button" class="btn btn-primary btn-sm" id="ais-apply" ${nChecked && !busy ? '' : 'disabled'}>${escHtml(t('ai.suggest.apply'))}</button>
           </div>
@@ -127,37 +166,46 @@ export async function openAiSuggest(mod: any, opts: OpenOpts = {}): Promise<void
                 render('ready', last);
             });
         });
+        o.querySelector('#ais-all')?.addEventListener('click', () => {
+            for (const r of applicable) rows = toggleRow(rows, r.key, !allOn);
+            render('ready', last);
+        });
         o.querySelector('#ais-apply')?.addEventListener('click', () => void apply());
         const again = keep ? o.querySelector<HTMLElement>(keep) : null;
         if (again && !(again as HTMLButtonElement).disabled) again.focus();
         else if (keep || !o.contains(document.activeElement)) o.querySelector<HTMLElement>('#ais-close')?.focus();
     };
 
+    /** One suggestion: a selectable card. Field, where it came from, how sure; then now → proposed. */
     const rowHtml = (r: SuggestionRow): string => {
         const multi = r.field === 'description';
-        const cur = r.current && r.field !== 'tags' && r.field !== 'links'
-            ? `<div class="ai-current"><span>${escHtml(t('ai.suggest.current'))}</span> ${escHtml(r.current.slice(0, 200)) || '—'}</div>` : '';
+        const showCur = r.field !== 'tags' && r.field !== 'links';
+        const cur = showCur
+            ? `<span class="ai-sug-cur"><span class="ai-sug-k">${escHtml(t('ai.sug3.now'))}</span><span class="ai-sug-v${r.current ? '' : ' is-empty'}">${escHtml((r.current || '').slice(0, 200)) || escHtml(t('ai.sug3.empty'))}</span></span>
+               <span class="ai-sug-arrow" aria-hidden="true">${IC_ARROW}</span>` : '';
         return `
-        <label class="ai-row${r.checked ? ' is-on' : ''}" role="listitem">
+        <label class="ai-row${r.checked ? ' is-on' : ''}${showCur ? '' : ' is-add'}" role="listitem">
           <input type="checkbox" data-row="${escAttr(r.key)}" ${r.checked ? 'checked' : ''} aria-label="${escAttr(fieldLabel(r.field))}">
           <span class="ai-row-main">
-            <span class="ai-row-head"><b>${escHtml(fieldLabel(r.field))}</b>
+            <span class="ai-row-head"><b class="ai-row-field">${escHtml(fieldLabel(r.field))}</b>
               <span class="ai-src ai-src-${escAttr(r.source)}">${escHtml(sourceLabel(r.source))}</span>
-              <span class="ai-origin">${escHtml(r.origin)}</span>
-              ${showProbs ? `<span class="ai-conf" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span>` : ''}
               ${r.uncertain ? `<span class="ai-src ai-src-unsure" title="${escAttr(t('ai.lt.guessTip'))}">${escHtml(t('ai.lt.guessBadge'))}</span>` : ''}
               ${r.note === 'draft' ? `<span class="ai-src ai-src-draft">${escHtml(t('ai.suggest.draftBadge'))}</span>` : ''}
+              ${showProbs ? `<span class="ai-conf ${confTone(r.confidence)}" title="${escAttr(t('ai.suggest.confidence'))}">${pct(r.confidence)}%</span>` : ''}
             </span>
-            <span class="ai-value${multi ? ' ai-value-multi' : ''}">${escHtml(r.display)}</span>
-            ${cur}
+            <span class="ai-sug-change">
+              ${cur}
+              <span class="ai-sug-new"><span class="ai-sug-k">${escHtml(t('ai.sug3.next'))}</span><span class="ai-value${multi ? ' ai-value-multi' : ''}">${escHtml(r.display)}</span></span>
+            </span>
+            ${r.origin ? `<span class="ai-origin" title="${escAttr(r.origin)}">${escHtml(r.origin)}</span>` : ''}
           </span>
         </label>`;
     };
     const hintHtml = (r: SuggestionRow): string => `
-        <div class="ai-hint"><b>${escHtml(fieldLabel(r.field))}</b>
-          <span>${escHtml(r.field === 'nsfw' ? (r.value === true ? t('ai.suggest.nsfwYes') : t('ai.suggest.nsfwNo')) : r.display)}</span>
+        <li class="ai-hint"><b>${escHtml(fieldLabel(r.field))}</b>
+          <span class="ai-hint-v">${escHtml(r.field === 'nsfw' ? (r.value === true ? t('ai.suggest.nsfwYes') : t('ai.suggest.nsfwNo')) : r.display)}</span>
           <span class="ai-src ai-src-${escAttr(r.source)}">${escHtml(sourceLabel(r.source))}</span>
-          ${showProbs ? `<span class="ai-conf">${pct(r.confidence)}%</span>` : ''}</div>`;
+          ${showProbs ? `<span class="ai-conf ${confTone(r.confidence)}">${pct(r.confidence)}%</span>` : ''}</li>`;
 
     let wantDraft = false;
     let last: { notes?: string[]; sent?: string | null; read?: string[]; sources?: any[]; offline?: boolean } = {};

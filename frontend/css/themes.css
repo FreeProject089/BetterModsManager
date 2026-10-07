@@ -414,34 +414,133 @@
 }
 .bte-empty { text-align: center; color: var(--bmm-text-muted); font-size: 13px; padding: 30px; }
 
-/* ── Catalogue modal ──────────────────────────────────────────────────────── */
-.btc-card {
-    border-radius: 12px; border: 1px solid var(--bmm-s08);
-    background: var(--bmm-s02); overflow: hidden;
-    display: flex; flex-direction: column; transition: all 0.15s ease;
+/* ── Theme Catalogue (features/themes/theme-catalog.ts) ─────────────────────
+   House shell (openModal, modal--xl modal--tall, flush body). Toolbar: search, source,
+   dark/light. Body: the gallery | the selected theme. Each card carries a miniature of the
+   app painted in that theme's colours (--m-* set inline from its validated vars). */
+.tcg-toolbar { flex-wrap: nowrap; }
+.tcg-toolbar > .bms-seg { flex: none; }
+.tcg-search { position: relative; display: flex; align-items: center; flex: 1 1 200px; min-width: 140px; max-width: 360px; margin: 0; }
+.tcg-search > svg { position: absolute; left: 11px; color: var(--bmm-text-secondary); pointer-events: none; }
+.tcg-search > .form-input { padding-left: 32px; }
+.tcg-toolbar .bms-seg-btn { gap: 5px; }
+.tcg-refresh { margin-left: auto; width: 34px; padding: 0; justify-content: center; }
+.tcg-n {
+    display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; text-align: center;
+    background: var(--bmm-s06); color: var(--bmm-text-secondary);
+    font-size: 10.5px; font-weight: 700; line-height: 17px; font-variant-numeric: tabular-nums;
 }
-.btc-card:hover { border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.14); background: var(--bmm-s04); }
-.btc-preview {
-    height: 80px; overflow: hidden; background: rgba(0,0,0,0.3); flex-shrink: 0;
+.bms-seg-btn[aria-pressed="true"] .tcg-n { background: color-mix(in srgb, var(--bmm-text-on-accent) 22%, transparent); color: var(--bmm-text-on-accent); }
+
+.tcg-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
+.tcg-gridwrap { min-width: 0; min-height: 0; overflow-y: auto; }
+.tcg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; padding: 14px 18px 20px; align-content: start; }
+.tcg-sec { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-top: 6px; min-width: 0; }
+.tcg-sec:first-child { margin-top: 0; }
+.tcg-sec > .btn { margin-left: auto; }
+.tcg-loading { justify-content: center; font-size: 12px; color: var(--bmm-text-secondary); }
+.tcg-empty { grid-column: 1 / -1; padding-top: 60px; }
+
+/* A card: the miniature, the name and author, the state badges in the corner. */
+.tcg-card {
+    position: relative; display: flex; flex-direction: column; min-width: 0;
+    padding: 0; border: 1px solid var(--bmm-border); border-radius: 12px; background: var(--bmm-s02);
+    color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden;
+    transition: border-color var(--bmm-transition-fast), background var(--bmm-transition-fast), transform var(--bmm-transition-fast);
 }
-.btc-preview-placeholder {
-    height: 100%; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 6px;
+.tcg-card:hover { border-color: var(--bmm-border-hover); background: var(--bmm-s04); }
+.tcg-card[aria-selected="true"] { border-color: var(--bmm-accent); box-shadow: 0 0 0 1px var(--bmm-accent); }
+.tcg-card:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.tcg-card.is-hidden .tcg-thumb { opacity: 0.45; filter: grayscale(0.6); }
+.tcg-thumb { display: block; aspect-ratio: 16 / 10; background: var(--bmm-s05); border-bottom: 1px solid var(--bmm-border); overflow: hidden; }
+.tcg-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tcg-meta { display: flex; flex-direction: column; gap: 1px; padding: 9px 11px 10px; min-width: 0; }
+.tcg-name { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcg-sub { font-size: 11.5px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.3em; }
+.tcg-badges { position: absolute; top: 7px; right: 7px; display: flex; gap: 4px; }
+.tcg-badge {
+    display: inline-flex; align-items: center; gap: 3px; height: 19px; padding: 0 6px; border-radius: 999px;
+    background: color-mix(in srgb, var(--bmm-bg-base) 82%, transparent); color: var(--bmm-text-primary);
+    border: 1px solid var(--bmm-border-hover); font-size: 10px; font-weight: 700; backdrop-filter: blur(4px);
 }
-.btc-preview-swatches { display: flex; gap: 4px; }
-.btc-swatch { width: 14px; height: 14px; border-radius: 50%; }
-.btc-preview-name { font-size: 11px; font-weight: 600; color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.6); }
-.btc-info { padding: 10px 12px; flex: 1; }
-.btc-name { font-size: 13px; font-weight: 700; }
-.btc-author { font-size: 11px; color: var(--bmm-text-muted); margin-bottom: 4px; }
-.btc-desc { font-size: 11px; color: var(--bmm-text-secondary); line-height: 1.4; }
-.btc-actions {
-    display: flex; align-items: center; gap: 6px; padding: 8px 12px;
-    border-top: 1px solid var(--bmm-s05); background: rgba(0,0,0,0.1);
+.tcg-badge.is-active { background: var(--bmm-accent); border-color: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+.tcg-badge.is-ok { color: color-mix(in srgb, var(--bmm-success) 65%, var(--bmm-text-primary)); }
+.tcg-badge.is-muted { color: var(--bmm-text-secondary); }
+.tcg-card.is-skeleton { cursor: default; pointer-events: none; }
+.tcg-card.is-skeleton .tcg-thumb, .tcg-skel { animation: tcg-pulse 1.4s ease-in-out infinite; }
+.tcg-skel { display: block; height: 9px; width: 70%; margin: 3px 0; border-radius: 4px; background: var(--bmm-s07); }
+.tcg-skel.is-short { width: 40%; }
+@keyframes tcg-pulse { 50% { opacity: 0.45; } }
+
+/* The miniature. Colours come from the theme (--m-*), the shapes are a sketch of BMM. */
+/* Each palette is a class (.tcg-pN) the module writes into the dialog's own <style>; these
+   zero-specificity defaults only show if that class is missing. */
+:where(.tcg-mock, .tcg-palette) {
+    --m-bg: var(--bmm-bg-base); --m-side: var(--bmm-bg-sidebar); --m-card: var(--bmm-bg-elevated);
+    --m-acc: var(--bmm-accent); --m-tx: var(--bmm-text-primary); --m-tx2: var(--bmm-text-secondary);
 }
-.btc-installed-badge {
-    font-size: 10px; color: var(--bmm-success); background: rgba(16,185,129,0.12);
-    padding: 2px 7px; border-radius: 5px; border: 1px solid rgba(16,185,129,0.25);
+.tcg-mock {
+    display: flex; width: 100%; height: 100%; background: var(--m-bg);
+}
+.tcg-mock i { display: block; border-radius: 3px; }
+.tcg-mock-side { display: flex; flex-direction: column; gap: 5px; width: 24%; padding: 8px 6px; background: var(--m-side); border-right: 1px solid color-mix(in srgb, var(--m-tx) 10%, transparent); }
+.tcg-mock-side i { height: 5px; background: color-mix(in srgb, var(--m-tx2) 45%, transparent); }
+.tcg-mock-side i.is-acc { height: 7px; background: var(--m-acc); }
+.tcg-mock-main { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; padding: 8px; }
+.tcg-mock-top { display: flex; align-items: center; gap: 6px; }
+.tcg-mock-title { height: 6px; width: 45%; background: var(--m-tx); }
+.tcg-mock-btn { height: 9px; width: 22%; margin-left: auto; background: var(--m-acc); border-radius: 4px; }
+.tcg-mock-card { display: flex; flex-direction: column; gap: 4px; flex: 1; padding: 6px; border-radius: 5px; background: var(--m-card); border: 1px solid color-mix(in srgb, var(--m-tx) 9%, transparent); }
+.tcg-mock-card i { height: 4px; width: 80%; background: color-mix(in srgb, var(--m-tx) 75%, transparent); }
+.tcg-mock-card i.is-short { width: 50%; background: color-mix(in srgb, var(--m-tx2) 60%, transparent); }
+.tcg-mock.is-big .tcg-mock-side { padding: 12px 9px; gap: 8px; }
+.tcg-mock.is-big .tcg-mock-main { padding: 12px; gap: 9px; }
+.tcg-mock.is-big .tcg-mock-side i { height: 7px; }
+.tcg-mock.is-big .tcg-mock-side i.is-acc { height: 10px; }
+.tcg-mock.is-big .tcg-mock-title { height: 8px; }
+.tcg-mock.is-big .tcg-mock-btn { height: 13px; }
+.tcg-mock.is-big .tcg-mock-card { padding: 9px; gap: 6px; }
+.tcg-mock.is-big .tcg-mock-card i { height: 6px; }
+
+/* The selected theme. */
+.tcg-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow-y: auto; padding: 16px 18px; border-left: 1px solid var(--bmm-border); background: var(--bmm-s02); }
+.tcg-hero { aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid var(--bmm-border-hover); flex: none; background: var(--bmm-s05); }
+.tcg-d-head { display: flex; flex-direction: column; gap: 2px; }
+.tcg-d-name { margin: 0; font-size: 16px; font-weight: 800; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.tcg-d-sub { font-size: 12px; color: var(--bmm-text-secondary); }
+.tcg-d-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.tcg-d-badges .bms-chip > svg { flex: none; }
+.tcg-d-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.tcg-d-block { display: flex; flex-direction: column; gap: 8px; }
+.tcg-palette { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.tcg-sw { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); }
+.tcg-sw-dot { flex: none; width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--bmm-border-hover); }
+.tcg-sw-dot.is-bg { background: var(--m-bg); }
+.tcg-sw-dot.is-card { background: var(--m-card); }
+.tcg-sw-dot.is-acc { background: var(--m-acc); }
+.tcg-sw-dot.is-tx { background: var(--m-tx); }
+/* The action stays in reach however long the description: pinned to the pane's bottom. */
+.tcg-d-actions {
+    position: sticky; bottom: -16px; z-index: 1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: auto -18px -16px; padding: 10px 18px 14px;
+    border-top: 1px solid var(--bmm-border); background: var(--bmm-bg-elevated); box-shadow: inset 0 0 0 999px var(--bmm-s02);
+}
+.tcg-danger { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.tcg-presets { display: inline-flex; align-items: center; gap: 4px; }
+.tcg-presets[hidden] { display: none; }
+.tcg-modal .modal-footer-start .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Narrow: the preview pane goes under the gallery, the mode labels become their icons. */
+@media (max-width: 980px) {
+    .tcg-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    .tcg-detail { border-left: 0; border-top: 1px solid var(--bmm-border); max-height: 230px; flex-direction: row; flex-wrap: wrap; }
+    .tcg-hero { width: 180px; }
+    #tcg-mode .bms-seg-btn > span { display: none; }
+    .tcg-toolbar { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tcg-card { transition: none; }
+    .tcg-card.is-skeleton .tcg-thumb, .tcg-skel { animation: none; }
 }
 
 /* ── Elements tab ─────────────────────────────────────────────────────────── */

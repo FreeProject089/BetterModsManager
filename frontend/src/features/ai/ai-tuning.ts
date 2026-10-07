@@ -19,6 +19,8 @@ import {
 } from './ai-tuning-model.js';
 
 const CARD_ID = 'laya-tuning-card';
+/** « Mes tâches », its own tab: the same draft, rendered into a second card. */
+const TASKS_ID = 'laya-tasks-card';
 
 interface View { config: any; presets: PresetTable; limits?: any }
 
@@ -57,7 +59,7 @@ function errText(raw: string): string {
 }
 
 /** Put the card (once) in `host` — a pane of the Laya dialog (laya-hub.ts) — then fill it. */
-export async function mountLayaTuning(host: HTMLElement): Promise<void> {
+export async function mountLayaTuning(host: HTMLElement, tasksHost?: HTMLElement): Promise<void> {
     ensureCss();
     let card = document.getElementById(CARD_ID);
     if (!card) {
@@ -65,6 +67,12 @@ export async function mountLayaTuning(host: HTMLElement): Promise<void> {
         card.className = 'ai-card laya-pane-card lt-card';
         card.id = CARD_ID;
         host.appendChild(card);
+    }
+    if (!document.getElementById(TASKS_ID)) {
+        const tc = document.createElement('div');
+        tc.className = 'ai-card laya-pane-card lt-card lt-tasks-card';
+        tc.id = TASKS_ID;
+        (tasksHost || host).appendChild(tc);
     }
     await load();
     render(card);
@@ -95,10 +103,21 @@ function refold(): void {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
+/** The card's own words for its header: a title, the pill the hub reads, one line. */
+function headHtml(title: string, pillId: string, pill: string, lead: string): string {
+    return `<header class="laya-page-h">
+        <h3 class="card-title ai-card-title"><span>${escHtml(title)}</span>
+          <span class="ai-pill" id="${pillId}">${escHtml(pill)}</span></h3>
+        <p class="ai-muted lt-lead">${escHtml(lead)}</p>
+      </header>`;
+}
+
 function render(card: HTMLElement): void {
-    const openIds = [...card.querySelectorAll('details[open]')].map((d) => d.id).filter(Boolean);
+    const tasksCard = document.getElementById(TASKS_ID);
+    const openIds = [card, tasksCard].flatMap((c) => c ? [...c.querySelectorAll('details[open]')].map((d) => d.id) : []).filter(Boolean);
     if (!_draft) {
-        card.innerHTML = `<h3 class="card-title ai-card-title"><span>${escHtml(t('ai.lt.title'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
+        card.innerHTML = `<h3 class="card-title ai-card-title"><span>${escHtml(t('ai.hub.tabAnswers'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
+        if (tasksCard) tasksCard.innerHTML = `<h3 class="card-title ai-card-title"><span>${escHtml(t('ai.lt.tasks'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
         refold();
         return;
     }
@@ -108,39 +127,57 @@ function render(card: HTMLElement): void {
     const own = _area !== 'global' && !!cfg.features[_area];
     const locked = _area !== 'global' && !own;
     const eff = _area === 'global' ? stored : effective(cfg, _area, _presets);
-    const pill = presetName(sum.preset) + (sum.tasks ? ` · ${t('ai.lt.nTasks', { n: String(sum.tasks) })}` : '');
+    const pill = presetName(sum.preset) + (sum.overrides ? ` · ${t('ai.hub2.nOwn', { n: String(sum.overrides) })}` : '');
+    const nOn = cfg.tasks.filter((x) => x.enabled).length;
+    const tasksPill = sum.tasks ? t('ai.hub2.tasksPill', { n: String(sum.tasks), on: String(nOn) }) : t('ai.hub2.noTasksPill');
     const areaOpts = (['global', ...AREAS] as (Area | 'global')[]).map((a) => `<option value="${a}"${a === _area ? ' selected' : ''}>${escHtml(areaName(a))}</option>`).join('');
     card.innerHTML = `
-      <h3 class="card-title ai-card-title"><span>${escHtml(t('ai.lt.title'))}</span>
-        <span class="ai-pill" id="lt-pill">${escHtml(pill)}</span></h3>
-      <p class="ai-muted lt-lead">${escHtml(t('ai.lt.lead'))}</p>
-      <div class="lt-row">
-        <label class="ai-lbl" for="lt-area">${escHtml(t('ai.lt.for'))}</label>
-        <select id="lt-area" class="form-input lt-area">${areaOpts}</select>
-      </div>
-      ${_area !== 'global' ? `<label class="ai-check"><input type="checkbox" id="lt-own" ${own ? 'checked' : ''}> <span>${escHtml(t('ai.lt.own'))}</span></label>` : ''}
-      <fieldset class="lt-fs" ${locked ? 'disabled' : ''}>
-        <div class="lt-presets" role="radiogroup" aria-label="${escAttr(t('ai.lt.presetsAria'))}">
-          ${PRESETS.map((p) => `<button type="button" class="lt-chip${stored.preset === p ? ' is-on' : ''}" role="radio" aria-checked="${stored.preset === p}" data-preset="${p}">${escHtml(presetName(p))}</button>`).join('')}
-        </div>
-        <p class="ai-muted lt-hint" id="lt-preset-hint">${escHtml(locked ? t('ai.lt.followsGlobal') : presetHint(stored.preset))}</p>
-        <details class="ai-more" id="lt-fine"${stored.preset === 'custom' ? ' open' : ''}>
-          <summary>${escHtml(t('ai.lt.fine'))}</summary>
-          ${fineHtml(stored.preset === 'custom' ? stored : eff)}
-        </details>
-      </fieldset>
-      <details class="ai-more" id="lt-tasks"><summary>${escHtml(t('ai.lt.tasks'))} (${cfg.tasks.length})</summary>${tasksHtml(cfg)}</details>
-      <details class="ai-more" id="lt-hints"><summary>${escHtml(t('ai.lt.hints'))}</summary>${hintsHtml(cfg)}</details>
+      ${headHtml(t('ai.hub.tabAnswers'), 'lt-pill', pill, t('ai.lt.lead'))}
+      <section class="laya-sec" aria-labelledby="lt-style-h">
+        <header class="laya-sec-h laya-sec-h--row">
+          <h4 class="laya-sec-title" id="lt-style-h">${escHtml(t('ai.hub2.styleTitle'))}</h4>
+          <div class="lt-row">
+            <label class="ai-lbl" for="lt-area">${escHtml(t('ai.lt.for'))}</label>
+            <select id="lt-area" class="form-input lt-area">${areaOpts}</select>
+          </div>
+        </header>
+        ${_area !== 'global' ? `<label class="ai-check"><input type="checkbox" id="lt-own" ${own ? 'checked' : ''}> <span>${escHtml(t('ai.lt.own'))}</span></label>` : ''}
+        <fieldset class="lt-fs" ${locked ? 'disabled' : ''}>
+          <div class="lt-presets" role="radiogroup" aria-labelledby="lt-style-h">
+            ${PRESETS.map((p) => `<button type="button" class="lt-chip${stored.preset === p ? ' is-on' : ''}" role="radio" aria-checked="${stored.preset === p}" data-preset="${p}"><span class="lt-chip-name">${escHtml(presetName(p))}</span><span class="lt-chip-hint">${escHtml(presetHint(p))}</span></button>`).join('')}
+          </div>
+          <p class="ai-muted lt-hint" id="lt-preset-hint">${escHtml(locked ? t('ai.lt.followsGlobal') : '')}</p>
+          <details class="ai-more" id="lt-fine"${stored.preset === 'custom' ? ' open' : ''}>
+            <summary>${escHtml(t('ai.hub2.fineAdv'))}</summary>
+            ${fineHtml(stored.preset === 'custom' ? stored : eff)}
+          </details>
+        </fieldset>
+      </section>
       <details class="ai-more" id="lt-test"><summary>${escHtml(t('ai.lt.test'))}</summary>${testHtml(cfg)}</details>
-      <label class="ai-check"><input type="checkbox" id="lt-programs" ${cfg.allow_program_changes ? 'checked' : ''}> <span>${escHtml(t('ai.lt.programs'))}</span></label>
+      <details class="ai-more" id="lt-hints"><summary>${escHtml(t('ai.lt.hints'))}</summary>${hintsHtml(cfg)}</details>
+      <details class="ai-more" id="lt-adv"><summary>${escHtml(t('ai.hub2.ltAdvanced'))}</summary>
+        <label class="ai-check"><input type="checkbox" id="lt-programs" ${cfg.allow_program_changes ? 'checked' : ''}> <span>${escHtml(t('ai.lt.programs'))}</span></label>
+        <p class="ai-muted">${escHtml(t('ai.hub2.ltFileLead'))}</p>
+        <div class="ai-actions lt-file">
+          <button type="button" class="btn btn-ghost btn-sm" id="lt-export">${escHtml(t('ai.lt.export'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm lt-import" id="lt-import-btn">${escHtml(t('ai.lt.import'))}</button><input type="file" id="lt-import" accept=".json,application/json" hidden>
+          <button type="button" class="btn btn-ghost btn-sm lt-reset" id="lt-reset">${escHtml(t('ai.lt.reset'))}</button>
+        </div>
+      </details>
       <div class="ai-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="lt-save">${escHtml(t('common.save'))}</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="lt-export">${escHtml(t('ai.lt.export'))}</button>
-        <label class="btn btn-ghost btn-sm lt-import">${escHtml(t('ai.lt.import'))}<input type="file" id="lt-import" accept=".json,application/json" hidden></label>
-        <button type="button" class="btn btn-ghost btn-sm" id="lt-reset">${escHtml(t('ai.lt.reset'))}</button>
         <span class="ai-muted" id="lt-status" aria-live="polite">${_dirty ? escHtml(t('ai.lt.unsaved')) : ''}</span>
+        <button type="button" class="btn btn-primary btn-sm" id="lt-save">${escHtml(t('common.save'))}</button>
       </div>`;
-    for (const id of openIds) card.querySelector<HTMLDetailsElement>('#' + id)?.setAttribute('open', '');
+    if (tasksCard) {
+        tasksCard.innerHTML = `
+          ${headHtml(t('ai.lt.tasks'), 'lt-tasks-pill', tasksPill, t('ai.lt.tasksLead'))}
+          <section class="laya-sec" id="lt-tasks">${tasksHtml(cfg)}</section>
+          <div class="ai-actions">
+            <span class="ai-muted" id="lt-tasks-status" aria-live="polite">${_dirty ? escHtml(t('ai.lt.unsaved')) : ''}</span>
+            <button type="button" class="btn btn-primary btn-sm" id="lt-tasks-save">${escHtml(t('common.save'))}</button>
+          </div>`;
+    }
+    for (const id of openIds) (card.querySelector<HTMLDetailsElement>('#' + id) || tasksCard?.querySelector<HTMLDetailsElement>('#' + id))?.setAttribute('open', '');
     wire(card);
     refold();
 }
@@ -187,7 +224,6 @@ function tasksHtml(cfg: LayaConfig): string {
       </div>
       ${_edit === i ? taskEditorHtml(tk, i) : ''}`).join('');
     return `
-      <p class="ai-muted">${escHtml(t('ai.lt.tasksLead'))}</p>
       <div class="lt-tasks">${rows || `<p class="ai-muted lt-empty">${escHtml(t('ai.lt.noTasks'))}</p>`}</div>
       <div class="ai-actions"><button type="button" class="btn btn-ghost btn-sm" id="lt-task-new" ${cfg.tasks.length >= LIMITS.tasks ? 'disabled' : ''}>${escHtml(t('ai.lt.newTask'))}</button></div>
       <div class="lt-run" id="lt-run" aria-live="polite"></div>`;
@@ -284,7 +320,7 @@ export function decisionHtml(r: any): string {
 function wire(card: HTMLElement): void {
     const q = <T extends HTMLElement>(sel: string) => card.querySelector<T>(sel);
     const cfg = _draft as LayaConfig;
-    const say = (msg: string, tone: '' | 'ok' | 'err' = '') => { const o = q('#lt-status'); if (o) { o.textContent = msg; o.className = `ai-muted${tone ? ` ai-${tone}` : ''}`; } };
+    const say = status;
     const changed = () => { _dirty = true; say(t('ai.lt.unsaved')); };
     const rerender = () => render(card);
 
@@ -319,7 +355,6 @@ function wire(card: HTMLElement): void {
         const base = cur().preset === 'custom' ? cur() : withPreset(cur(), 'custom', _area === 'global' ? cur() : effective(cfg, _area, _presets));
         setTuning(normTuning({ ...base, [k]: v, preset: 'custom' }));
         card.querySelectorAll('[data-preset]').forEach((c) => { const on = (c as HTMLElement).dataset.preset === 'custom'; c.classList.toggle('is-on', on); c.setAttribute('aria-checked', String(on)); });
-        const h = q('#lt-preset-hint'); if (h) h.textContent = presetHint('custom');
     }));
     q<HTMLSelectElement>('#lt-abstain')?.addEventListener('change', (e) => {
         const base = cur().preset === 'custom' ? cur() : withPreset(cur(), 'custom', _area === 'global' ? cur() : effective(cfg, _area, _presets));
@@ -334,7 +369,9 @@ function wire(card: HTMLElement): void {
         if (k === 'multi_label') rerender();
     }));
 
-    wireTasks(card, changed, rerender);
+    const tasksCard = document.getElementById(TASKS_ID);
+    if (tasksCard) wireTasks(tasksCard, changed, rerender);
+    tasksCard?.querySelector('#lt-tasks-save')?.addEventListener('click', () => void save(card));
     wireHints(card, changed, rerender);
     wireTest(card);
 
@@ -352,6 +389,7 @@ function wire(card: HTMLElement): void {
             say(t('ai.lt.exported'), 'ok');
         } catch (e) { say(errText(String((e as Error)?.message || e)), 'err'); }
     });
+    q('#lt-import-btn')?.addEventListener('click', () => q<HTMLInputElement>('#lt-import')?.click());
     q<HTMLInputElement>('#lt-import')?.addEventListener('change', async (e) => {
         const f = (e.target as HTMLInputElement).files?.[0];
         (e.target as HTMLInputElement).value = '';
@@ -363,7 +401,7 @@ function wire(card: HTMLElement): void {
         try {
             const v = await invoke('ai_laya_save', { config: r.value }) as View;
             _draft = normConfig(v?.config); _presets = v?.presets || _presets; _dirty = false; _edit = -1;
-            render(card); const o = card.querySelector('#lt-status'); if (o) { o.textContent = t('ai.lt.imported'); o.className = 'ai-muted ai-ok'; }
+            render(card); status(t('ai.lt.imported'), 'ok');
         } catch (err) { say(errText(String((err as Error)?.message || err)), 'err'); }
     });
     q('#lt-reset')?.addEventListener('click', async () => {
@@ -371,23 +409,30 @@ function wire(card: HTMLElement): void {
         try {
             const v = await invoke('ai_laya_save', { config: { ...normConfig({}), allow_program_changes: false } }) as View;
             _draft = normConfig(v?.config); _presets = v?.presets || _presets; _dirty = false; _edit = -1; _area = 'global';
-            render(card); const o = card.querySelector('#lt-status'); if (o) { o.textContent = t('ai.lt.resetDone'); o.className = 'ai-muted ai-ok'; }
+            render(card); status(t('ai.lt.resetDone'), 'ok');
         } catch (err) { say(errText(String((err as Error)?.message || err)), 'err'); }
     });
+}
+
+/** Both action rows (Answers, My tasks) say the same thing: they save the same draft. */
+function status(msg: string, tone: '' | 'ok' | 'err' = ''): void {
+    for (const id of ['lt-status', 'lt-tasks-status']) {
+        const o = document.getElementById(id);
+        if (o) { o.textContent = msg; o.className = `ai-muted${tone ? ` ai-${tone}` : ''}`; }
+    }
 }
 
 async function save(card: HTMLElement): Promise<void> {
     if (!_draft) return;
     const bad = _draft.tasks.map((tk) => taskProblem(tk, _draft?.tasks || [])).find(Boolean);
-    const out = card.querySelector<HTMLElement>('#lt-status');
-    if (bad) { if (out) { out.textContent = errText(bad); out.className = 'ai-muted ai-err'; } return; }
+    if (bad) { status(errText(bad), 'err'); return; }
     try {
         const v = await invoke('ai_laya_save', { config: forSave(_draft) }) as View;
         _draft = normConfig(v?.config); _presets = v?.presets || _presets; _dirty = false; _edit = -1;
         render(card);
-        const o = card.querySelector('#lt-status'); if (o) { o.textContent = t('ai.lt.saved'); o.className = 'ai-muted ai-ok'; }
+        status(t('ai.lt.saved'), 'ok');
     } catch (e) {
-        if (out) { out.textContent = errText(String((e as Error)?.message || e)); out.className = 'ai-muted ai-err'; }
+        status(errText(String((e as Error)?.message || e)), 'err');
     }
 }
 

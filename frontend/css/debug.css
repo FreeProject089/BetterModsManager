@@ -375,10 +375,16 @@
     padding: 6px 12px;
     border-bottom: 1px solid var(--bmm-s02);
     white-space: pre-wrap;
-    word-break: break-all;
     display: flex;
     gap: 8px;
 }
+/* Time in a fixed gutter, the message wraps under itself (a hanging indent); long paths and
+   URLs break anywhere instead of pushing the line past the right edge. Words stay whole
+   where they fit (break-all used to split every word mid-way). */
+.log-entry > span:first-child { flex: none; white-space: nowrap; }
+.log-entry > span:last-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* A timeline row's expanded ARGS / RESULT: a long JSON string wraps, never runs off the row. */
+.timeline-detail { min-width: 0; overflow-wrap: anywhere; }
 
 .log-entry.INFO { color: var(--debug-text-secondary); border-left: 2px solid transparent; }
 .log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); border-left: 2px solid #fbbf24; }
@@ -1300,8 +1306,12 @@ textarea.dbg-input { resize: vertical; width: 100%; font-family: var(--bmm-font-
 
 /* Rust log: time, a level mark, the text. The mark carries the colour; the text stays
    in the readable ink of the theme, so a light theme does not get yellow on white. */
-.dbg-log { padding: 4px 0; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 10.5px; user-select: text; }
-.dbg-log:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
+/* Not `.dbg-log`: that name is the scheduler debugger's step list (main.css), whose
+   `max-height: 130px` and 26px left padding leaked in here and cut the log to a 130px strip
+   with the rest of the pane left empty. Long lines wrap (paths break anywhere) under the
+   message column, so the time stays a clean left gutter: nothing is ever cut on the right. */
+.dbg-rustlog { padding: 4px 0; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 10.5px; user-select: text; overflow-x: hidden; }
+.dbg-rustlog:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
 .dbg-logline {
     display: grid;
     grid-template-columns: auto 3px minmax(0, 1fr);

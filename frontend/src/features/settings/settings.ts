@@ -215,6 +215,14 @@ async function initShaSettings() {
     const chkStrict = document.getElementById('chk-sha-strict-mode') as HTMLInputElement;
     const chkLazy = document.getElementById('chk-sha-lazy-calc') as HTMLInputElement;
     if (!chkStrict || !chkLazy) return;
+    // The card's look (css/integrity.css, shared with the Integrity dialog), linked once.
+    if (!document.getElementById('integrity-css')) {
+        const link = document.createElement('link');
+        link.id = 'integrity-css';
+        link.rel = 'stylesheet';
+        link.href = 'css/integrity.css';
+        document.head.appendChild(link);
+    }
 
     try {
         const settings = await getSettings();
@@ -243,6 +251,17 @@ async function initShaSettings() {
             if (modalToggle) modalToggle.checked = (e.target as HTMLInputElement).checked;
         } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
     });
+
+    // The state chips are drawn when the card first scrolls into view (one read of every mod).
+    const card = document.getElementById('settings-sha-card');
+    if (card && 'IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+            if (!entries.some((en) => en.isIntersecting)) return;
+            io.disconnect();
+            void refreshShaSummary();
+        });
+        io.observe(card);
+    } else void refreshShaSummary();
 }
 
 export async function updateDiscordStatus() {
@@ -798,264 +817,24 @@ window.deleteModHashes = async (modId) => {
     }
 };
 
+// The Integrity dialog (integrity-center.ts): the states, the list, verify / re-hash / export.
+// Loaded on first use. The names stay: the command palette and the navbar call them.
 window.showHashingStats = async () => {
-    try {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay open';
-        overlay.id = 'modal-sha-stats';
-        overlay.style.zIndex = '100002';
-
-        const content = document.createElement('div');
-        content.className = 'modal glass modal--lg';
-        
-        let currentProfileId: string | null = null;
-        let profiles: any[] = [];
-        try {
-            profiles = await invoke('get_profiles');
-        } catch(e) {}
-
-        content.innerHTML = `
-            <div class="modal-header">
-                <div style="display:flex;align-items:center;gap:12px">
-                    <div class="bms-icon">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                    </div>
-                    <div>
-                        <h2 class="modal-title">${t('settings.shaStatsBtn') || 'Hashing Progress'}</h2>
-                        <p class="bms-sub">${t('settings.shaStatsDesc') || 'Monitor and manage mod file integrity calculation'}</p>
-                    </div>
-                </div>
-                <div class="bms-head-end">
-                    <select id="sha-profile-select" class="form-select">
-                        <option value="">${t('common.global') || 'Global (All)'}</option>
-                        ${profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('')}
-                    </select>
-                    <button class="modal-close" ${actAttrs('closeShaStats')}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <div class="modal-body" id="sha-stats-body">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" ${actAttrs('closeShaStats')}>${t('common.close') || 'Close'}</button>
-            </div>
-        `;
-
-        const profileSelect = content.querySelector('#sha-profile-select') as HTMLSelectElement;
-        profileSelect.onchange = () => {
-            currentProfileId = profileSelect.value || null;
-            renderContent();
-        };
-
-        const renderContent = async () => {
-            try {
-                const stats: any = await invoke('get_hashing_stats', { profileId: currentProfileId });
-                const percent = stats.total_mods > 0 ? Math.round((stats.hashed_mods / stats.total_mods) * 100) : 0;
-                const settings = await getSettings();
-                const lazyEnabled = settings?.enable_lazy_sha_calculation ?? true;
-
-                const body = content.querySelector('#sha-stats-body');
-                if (!body) return;
-
-                body.innerHTML = `
-                    <!-- Main Progress Card -->
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:24px; position:relative; overflow:hidden; box-shadow:inset 0 0 20px rgba(0,0,0,0.2)">
-                        <div style="display:flex; align-items:center; gap:24px; position:relative; z-index:1">
-                            <div style="width:70px; height:70px; background:var(--accent); border-radius:18px; display:flex; align-items:center; justify-content:center; box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3)">
-                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                            </div>
-                            <div style="flex:1">
-                                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:12px">
-                                    <div style="font-size:38px; font-weight:900; color:var(--text-bright); line-height:1; font-family:var(--font-mono); letter-spacing:-0.02em">${percent}%</div>
-                                    <div style="font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em">
-                                        ${stats.hashed_mods} / ${stats.total_mods} ${t('settings.shaStatsHashed') || 'Hashed'}
-                                    </div>
-                                </div>
-                                <div style="height:10px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.05)">
-                                    <div style="width:${percent}%; height:100%; background:var(--accent); border-radius:10px; transition:width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow:0 0 20px rgba(59, 130, 246, 0.4)"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stats Grid -->
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:16px">
-                        <!-- Valid -->
-                        <div style="background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.15); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:var(--bmm-success); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                ${t('hashes.status.verified') || 'Valid'}
-                            </div>
-                            <div style="font-size:24px; font-weight:800; color:var(--text-bright); font-family:var(--font-mono)">${stats.valid_mods ?? 0}</div>
-                        </div>
-                        
-                        <!-- Invalid -->
-                        <div style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:var(--bmm-danger); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                ${t('hashes.status.invalid') || 'Invalid'}
-                            </div>
-                            <div style="font-size:24px; font-weight:800; color:var(--text-bright); font-family:var(--font-mono)">${stats.invalid_mods ?? 0}</div>
-                        </div>
-                        
-                        <!-- Missing -->
-                        <div style="background:rgba(255, 255, 255, 0.02); border:1px solid rgba(255, 255, 255, 0.08); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                                ${t('hashes.status.missing') || 'Missing'}
-                            </div>
-                            <div style="font-size:24px; font-weight:800; color:var(--text-bright); font-family:var(--font-mono)">${stats.missing_mods ?? 0}</div>
-                        </div>
-                        
-                        <!-- Queue -->
-                        <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                                ${t('settings.shaStatsQueue') || 'Queue'}
-                            </div>
-                            <div style="font-size:24px; font-weight:800; color:var(--text-bright); font-family:var(--font-mono)">${stats.queue_size}</div>
-                        </div>
-                    </div>
-
-                    ${stats.is_active && stats.current_mod_name ? `
-                        <div style="background:rgba(99, 102, 241, 0.03); border:1px solid rgba(99, 102, 241, 0.1); border-radius:14px; padding:14px 20px; display:flex; align-items:center; gap:12px">
-                            <span class="spinner-tiny" style="width:18px; height:18px; border:2px solid rgba(99, 102, 241, 0.2); border-top-color:var(--accent)"></span>
-                            <div style="flex:1; overflow:hidden">
-                                <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:700; margin-bottom:2px; letter-spacing:0.05em">${t('common.processing') || 'Processing'}</div>
-                                <div style="font-size:13px; font-weight:600; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${stats.current_mod_name}</div>
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <!-- Settings Card -->
-                    <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:14px; overflow:hidden">
-                         <div style="display:flex; justify-content:space-between; align-items:center; padding:18px 20px">
-                            <div style="flex:1">
-                                <div style="font-size:14px; font-weight:700; color:var(--text-primary)">${t('settings.shaEnableLazy') || 'Background Hashing'}</div>
-                                <div style="font-size:12px; color:var(--text-muted); margin-top:2px">${t('settings.shaEnableLazyDesc') || 'Automatically calculate missing hashes in the background'}</div>
-                            </div>
-                            <label class="bmm-switch">
-                                <input type="checkbox" id="modal-chk-sha-lazy" ${lazyEnabled ? 'checked' : ''}>
-                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                            </label>
-                        </div>
-                    </div>
-                `;
-
-                // Wire up toggle
-                const toggle = body.querySelector('#modal-chk-sha-lazy') as HTMLInputElement;
-                if (toggle) {
-                    toggle.onchange = async () => {
-                        const settings = await getSettings();
-                        settings.enable_lazy_sha_calculation = toggle.checked;
-                        await updateSettings(settings);
-                        
-                        if (toggle.checked) {
-                            await invoke('trigger_sha_background_population');
-                        }
-                        
-                        // Sync main settings UI if it exists
-                        const mainToggle = document.getElementById('chk-sha-lazy-calc') as HTMLInputElement;
-                        if (mainToggle) mainToggle.checked = toggle.checked;
-                    };
-                }
-            } catch (err) { console.error('Render hashing stats error:', err); }
-        };
-        
-        renderContent();
-        const refreshInterval = setInterval(renderContent, 1000);
-        
-        (window as any).closeShaStats = () => {
-            clearInterval(refreshInterval);
-            overlay.classList.remove('open');
-            overlay.style.opacity = '0';
-            setTimeout(() => overlay.remove(), 250);
-        };
-
-        overlay.onclick = (e) => { if (e.target === overlay) (window as any).closeShaStats(); };
-        overlay.appendChild(content);
-        (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-    } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+    try { (await import('./integrity-center.js')).openIntegrityCenter(toast); }
+    catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
 };
-
-
 
 window.recalculateAllHashesPrompt = async () => {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-    overlay.id = 'modal-sha-recalc';
-    overlay.style.zIndex = '100001';
-
-    const content = document.createElement('div');
-    content.className = 'modal glass modal--sm';
-    
-    content.innerHTML = `
-        <div class="modal-header">
-            <div style="display:flex;align-items:center;gap:12px">
-                <div class="bms-icon bms-icon--warn">
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                </div>
-                <div>
-                    <h2 class="modal-title">${t('settings.shaRecalculateTitle')}</h2>
-                    <p class="bms-sub">${t('common.actionRequired') || 'Action Required'}</p>
-                </div>
-            </div>
-            <button class="modal-close" id="btn-recalc-x">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-            </button>
-        </div>
-        
-        <div class="modal-body" style="text-align:center">
-            <p style="font-size:13px; color:var(--text-secondary); margin-bottom:32px; line-height:1.6">
-                ${t('settings.shaRecalculateDesc')}
-            </p>
-            
-            <div style="display:flex; flex-direction:column; gap:12px;">
-                <button class="btn btn-primary" id="btn-recalc-missing" style="height:44px; font-weight:700">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                    ${t('settings.shaRecalcMissing')}
-                </button>
-                <button class="btn btn-secondary" id="btn-recalc-all" style="height:44px; font-weight:600">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                    ${t('settings.shaRecalcAll')}
-                </button>
-            </div>
-        </div>
-        
-        <div class="modal-footer">
-            <button class="btn btn-ghost" id="btn-recalc-cancel">${t('common.cancel')}</button>
-        </div>
-    `;
-    
-    overlay.appendChild(content);
-    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-
-    const cleanup = () => {
-        overlay.classList.remove('open');
-        overlay.style.opacity = '0';
-        setTimeout(() => overlay.remove(), 250);
-    };
-    
-    overlay.onclick = (e) => { if (e.target === overlay) cleanup(); };
-
-    document.getElementById('btn-recalc-missing').onclick = async () => {
-        await invoke('recalculate_all_hashes', { onlyMissing: true });
-        toast(t('mods.sha.queued'), 'success');
-        cleanup();
-    };
-    document.getElementById('btn-recalc-all').onclick = async () => {
-        await invoke('recalculate_all_hashes', { onlyMissing: false });
-        toast(t('mods.sha.queued'), 'success');
-        cleanup();
-    };
-    document.getElementById('btn-recalc-cancel').onclick = cleanup;
-    document.getElementById('btn-recalc-x').onclick = cleanup;
+    try { (await import('./integrity-center.js')).openRehashPrompt(toast, null, () => { void refreshShaSummary(); }); }
+    catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
 };
+
+/** The SHA card's state chips (every mod), redrawn after a change made from the card. */
+async function refreshShaSummary(): Promise<void> {
+    const host = document.getElementById('sha-card-summary');
+    if (!host) return;
+    try { await (await import('./integrity-center.js')).mountIntegritySummary(host); } catch { /* the card keeps its buttons */ }
+}
 
 // ── Link this creator id to a BetterCommunity account ──────────────
 // Local-first: BMM works fully offline. This only reaches the server when the user

@@ -272,7 +272,7 @@ class DebugUI {
                                     </select>
                                     <span class="dbg-count" id="rust-log-count" aria-live="polite"></span>
                                 </div>
-                                <div class="dbg-body dbg-log" id="rust-logs-container" tabindex="0">
+                                <div class="dbg-body dbg-rustlog" id="rust-logs-container" tabindex="0">
                                     <div class="debug-empty-state" data-i18n="dev.msg.clickRefresh">Click Refresh to load logs...</div>
                                 </div>
                             </div>

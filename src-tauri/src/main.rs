@@ -733,6 +733,7 @@ fn main() {
             commands::mods::update_mod_hashes,
             commands::mods::delete_mod_hashes,
             commands::mods::get_hashing_stats,
+            commands::mods::get_hash_overview,
             commands::mods::recalculate_all_hashes,
             commands::mods::recalculate_mod_sha,
             commands::mods::trigger_sha_background_population,

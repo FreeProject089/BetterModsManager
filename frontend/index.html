@@ -39,6 +39,10 @@
     <link rel="stylesheet" href="css/legacy-import.css" />
     <link rel="stylesheet" href="css/server-modal.css" />
     <link rel="stylesheet" href="css/activation-jobs.css" />
+    <!-- Laya's dialogs and cards. Linked here, not only on demand (ai-shared.ts ensureAiCss sees
+         the id and skips): a Laya dialog drawn before a lazily added sheet arrived showed raw text
+         and a browser-default button. -->
+    <link rel="stylesheet" href="css/ai.css" id="ai-css" />
     <!-- The dialog shell: after every feature sheet, so no feature can restyle a modal by accident
          (scripts/check-modal-consistency.mjs). Its id lets ui/modal-shell.ts skip re-linking it. -->
     <link rel="stylesheet" href="css/modal-shell.css" id="modal-shell-css" />
@@ -3136,9 +3140,6 @@
                             </p>
                         </div>
 
-                        <!-- BUILT WITH: one chip per group of the generated stack (app.ts) -->
-                        <div class="glass-card credits-stack-summary" id="credits-stack-summary" hidden></div>
-
                         <!-- CUSTOM MESSAGES MARQUEE -->
                         <div class="credits-marquee-container" id="credits-marquee-container">
                             <!-- Injected by JS -->
@@ -3510,126 +3511,151 @@
                             </div>
                         </div>
 
-                        <!-- ── i18n Translation Sandbox Modal ── -->
+                        <!-- ── i18n Translation Sandbox Modal ──
+                             Header: progress + the on-screen tools. Toolbar: the two tabs and, for keys,
+                             the source → target pair. Body: list | editor, source and target side by
+                             side (features/settings/i18n-sandbox.ts, css/i18n-sandbox.css). -->
                         <div class="modal-overlay" id="modal-i18n-sandbox" style="z-index:9999;">
-                            <div class="modal glass i18n-sb modal--xl" style="height: 88vh;">
-                                <div class="modal-header i18n-sb-header">
-                                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
-                                        <h2 class="modal-title" style="white-space:nowrap; flex:none;" data-i18n="i18n.title"
-                                            data-i18n-tooltip="i18n.subtitle">Translation Sandbox</h2>
-                                        <div class="i18n-sb-progress" id="i18n-progress" style="flex:1;max-width:260px;">
-                                            <div class="i18n-sb-progress-bar"><span id="i18n-progress-fill"></span></div>
-                                            <span class="i18n-sb-progress-txt" id="i18n-progress-txt"></span>
+                            <div class="modal glass i18n-sb i18x modal--xl modal--tall">
+                                <div class="modal-header i18x-head">
+                                    <div class="bms-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                                    </div>
+                                    <div class="bms-titles">
+                                        <h2 class="modal-title" data-i18n="i18n.title" data-i18n-tooltip="i18n.subtitle">Translation Sandbox</h2>
+                                        <div class="i18x-progress" id="i18n-progress">
+                                            <span class="i18x-progress-bar"><span id="i18n-progress-fill"></span></span>
+                                            <span class="i18x-progress-txt" id="i18n-progress-txt"></span>
                                         </div>
                                     </div>
-                                    <div class="i18n-sb-header-actions">
-                                        <button class="i18n-sb-tool" id="i18n-pick-screen" data-i18n-tooltip="i18n.pickScreen">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                    <div class="bms-head-end i18x-tools">
+                                        <button type="button" class="i18x-tool" id="i18n-pick-screen" data-i18n-tooltip="i18n.pickScreen">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
                                             <span data-i18n="i18n.pickScreenShort">Pick</span>
                                         </button>
-                                        <button class="i18n-sb-tool" id="i18n-highlight-hc" data-i18n-tooltip="i18n.highlightHc">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+                                        <button type="button" class="i18x-tool" id="i18n-highlight-hc" data-i18n-tooltip="i18n.highlightHc">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
                                             <span data-i18n="i18n.highlightHcShort">Scan</span>
                                         </button>
-                                        <span class="i18n-sb-toolsep" aria-hidden="true"></span>
+                                        <span class="bms-sep" aria-hidden="true"></span>
                                         <label class="i18n-ovl-opacity" id="i18n-ovl-opacity" data-i18n-tooltip="i18n.overlayOpacity">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
                                             <input type="range" min="35" max="100" value="100" id="i18n-ovl-opacity-range">
                                         </label>
-                                        <button class="i18n-sb-tool" id="i18n-dock-toggle" data-i18n-tooltip="i18n.dockMode">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-dock-toggle" data-i18n-tooltip="i18n.dockMode">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
                                         </button>
-                                        <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
-                                        </button>
-                                        <button type="button" class="modal-close" data-close="modal-i18n-sandbox">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
                                         </button>
                                     </div>
+                                    <button type="button" class="modal-close" data-close="modal-i18n-sandbox"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                                 </div>
 
-                                <!-- Tabs -->
-                                <div class="i18n-sb-tabs" style="flex-shrink:0;">
-                                    <button class="i18n-sb-tab active" data-i18n-tab="keys">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-3 3"/></svg>
-                                        <span data-i18n="i18n.tabKeys">Translation keys</span>
-                                        <span class="i18n-sb-tab-count" id="i18n-tabcount-keys"></span>
-                                    </button>
-                                    <button class="i18n-sb-tab" data-i18n-tab="hardcoded">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
-                                        <span data-i18n="i18n.tabHardcoded">Hardcoded text</span>
-                                        <span class="i18n-sb-tab-count" id="i18n-tabcount-hc"></span>
-                                    </button>
-                                </div>
-
-                                <!-- KEYS TAB -->
-                                <div class="i18n-sb-panel active" data-i18n-panel="keys">
-                                    <div class="i18n-sb-left">
-                                        <div class="i18n-sb-filters">
-                                            <select id="i18n-base-lang" class="i18n-sb-lang"></select>
-                                            <button class="i18n-sb-newlang" id="i18n-new-lang" data-i18n-tooltip="i18n.newLang">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
-                                            </button>
-                                            <div class="i18n-sb-search-wrap">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                                <input id="i18n-search" placeholder="Search key or text…">
-                                            </div>
-                                        </div>
-                                        <div class="i18n-sb-chips">
-                                            <button class="i18n-sb-chip active" data-i18n-filter="all"><span data-i18n="i18n.filterAll">All</span></button>
-                                            <button class="i18n-sb-chip" data-i18n-filter="missing">⚠ <span data-i18n="i18n.filterMissing">Missing</span></button>
-                                            <button class="i18n-sb-chip i18n-sb-next" id="i18n-next-missing" data-i18n-tooltip="i18n.nextMissing">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                                                <span data-i18n="i18n.nextMissingShort">Next missing</span>
-                                            </button>
-                                        </div>
-                                        <div id="i18n-stats" class="i18n-sb-stats"></div>
-                                        <div id="i18n-key-list" class="i18n-sb-keylist"></div>
+                                <div class="modal-toolbar i18x-toolbar">
+                                    <div class="bms-tabs" role="tablist">
+                                        <button type="button" class="bms-tab" role="tab" data-i18n-tab="keys" aria-selected="true">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-3 3"/></svg>
+                                            <span data-i18n="i18n.tabKeys">Translation keys</span>
+                                            <span class="i18x-count" id="i18n-tabcount-keys"></span>
+                                        </button>
+                                        <button type="button" class="bms-tab" role="tab" data-i18n-tab="hardcoded" aria-selected="false">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                                            <span data-i18n="i18n.tabHardcoded">Hardcoded text</span>
+                                            <span class="i18x-count" id="i18n-tabcount-hc"></span>
+                                        </button>
                                     </div>
-                                    <div class="i18n-sb-right">
-                                        <div id="i18n-detail" class="i18n-sb-detail">
-                                            <div class="i18n-sb-start">
-                                                <div class="i18n-sb-start-title" data-i18n="i18n.startTitle">Trois façons de commencer</div>
-                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">1</span><span data-i18n="i18n.startPickList">Choisis une clé dans la liste à gauche — tu vois sa valeur, ses usages, et tu édites.</span></div>
-                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">2</span><span data-i18n="i18n.startPickScreen">« Pick » puis clique n'importe quel texte de BMM : sa clé s'ouvre ici directement.</span></div>
-                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">3</span><span data-i18n="i18n.startNextMissing">« Suivant manquant » saute de trou en trou — le chemin le plus court pour finir une langue.</span></div>
-                                            </div>
-                                        </div>
+                                    <div class="i18x-langpair" data-i18x-for="keys">
+                                        <label class="i18x-lang">
+                                            <span class="bms-label" data-i18n="i18n.source">Source</span>
+                                            <select id="i18n-ref-lang" class="i18x-select"></select>
+                                        </label>
+                                        <button type="button" class="i18x-iconbtn" id="i18n-swap-langs" data-i18n-tooltip="i18n.swapLangs">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+                                        </button>
+                                        <label class="i18x-lang">
+                                            <span class="bms-label" data-i18n="i18n.target">Target</span>
+                                            <select id="i18n-base-lang" class="i18x-select"></select>
+                                        </label>
+                                        <button type="button" class="i18x-iconbtn" id="i18n-new-lang" data-i18n-tooltip="i18n.newLang">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                        </button>
                                     </div>
-                                </div>
-
-                                <!-- HARDCODED TAB -->
-                                <div class="i18n-sb-panel" data-i18n-panel="hardcoded">
-                                    <div class="i18n-sb-hc-bar">
-                                        <div class="i18n-sb-search-wrap" style="flex:1;">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                            <input id="i18n-hc-search" placeholder="Filter hardcoded text…">
+                                    <div class="i18x-hcbar" data-i18x-for="hardcoded" hidden>
+                                        <div class="bms-seg" role="group" id="i18n-hc-kind">
+                                            <button type="button" class="bms-seg-btn" data-kind="all" aria-pressed="true"><span data-i18n="i18n.filterAll">All</span> <span class="i18x-n" data-kn="all"></span></button>
+                                            <button type="button" class="bms-seg-btn" data-kind="html" aria-pressed="false">HTML <span class="i18x-n" data-kn="html"></span></button>
+                                            <button type="button" class="bms-seg-btn" data-kind="ts" aria-pressed="false">TS / JS <span class="i18x-n" data-kn="ts"></span></button>
+                                            <button type="button" class="bms-seg-btn" data-kind="toast" aria-pressed="false"><span data-i18n="i18n.filterToasts">Toasts</span> <span class="i18x-n" data-kn="toast"></span></button>
                                         </div>
-                                        <select id="i18n-hc-kind" class="i18n-sb-lang" style="width:auto;">
-                                            <option value="all" data-i18n="i18n.hcAll">All sources</option>
-                                            <option value="html">HTML</option>
-                                            <option value="ts">.ts / .js</option>
-                                            <option value="toast">Toasts</option>
-                                        </select>
-                                        <button class="btn btn-secondary btn-sm" id="i18n-hc-rescan">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="i18n-hc-rescan">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                                             <span data-i18n="i18n.hcRescan">Scan</span>
                                         </button>
                                     </div>
-                                    <p class="i18n-sb-hc-hint" data-i18n="i18n.hcHint">Human-readable text found in the source that is NOT using i18n. Click an entry to copy its file:line so you can add a key there.</p>
-                                    <div id="i18n-hc-list" class="i18n-sb-hclist"></div>
                                 </div>
 
-                                <div class="i18n-sb-footer">
-                                    <span id="i18n-dirty-count" style="font-size:12px;color:var(--amber);"></span>
-                                    <div style="display:flex;gap:10px;">
-                                        <button class="btn btn-ghost btn-sm" id="i18n-reset" data-i18n="i18n.reset">Reset sandbox</button>
-                                        <button class="btn btn-secondary btn-sm" id="i18n-export" data-i18n="i18n.export">Export .json</button>
-                                        <label style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text-secondary);cursor:pointer;margin-left:4px">
-                                            <div class="plug-toggle"><input type="checkbox" id="i18n-test-live"><span class="plug-toggle-slider"></span></div>
+                                <div class="modal-body modal-body--flush">
+                                    <!-- KEYS -->
+                                    <div class="i18x-panel" data-i18n-panel="keys">
+                                        <div class="i18x-listpane">
+                                            <div class="i18x-listbar">
+                                                <div class="i18x-searchrow">
+                                                    <label class="i18x-search">
+                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                        <input id="i18n-search" class="form-input" type="search" spellcheck="false" autocomplete="off" data-i18n-placeholder="i18n.searchPh" placeholder="Search key or text…">
+                                                    </label>
+                                                    <button type="button" class="i18x-iconbtn" id="i18n-next-missing" data-i18n-tooltip="i18n.nextMissing">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
+                                                    </button>
+                                                </div>
+                                                <div class="bms-seg i18x-seg" role="group" id="i18n-filter-seg">
+                                                    <button type="button" class="bms-seg-btn" data-i18n-filter="all" aria-pressed="true"><span data-i18n="i18n.filterAll">All</span></button>
+                                                    <button type="button" class="bms-seg-btn" data-i18n-filter="missing" aria-pressed="false"><span data-i18n="i18n.filterMissing">Missing</span> <span class="i18x-n" data-fn="missing"></span></button>
+                                                    <button type="button" class="bms-seg-btn" data-i18n-filter="edited" aria-pressed="false"><span data-i18n="i18n.filterEdited">Edited</span> <span class="i18x-n" data-fn="edited"></span></button>
+                                                    <button type="button" class="bms-seg-btn" data-i18n-filter="same" aria-pressed="false" data-i18n-tooltip="i18n.filterSameTip"><span data-i18n="i18n.filterSameShort">Same</span> <span class="i18x-n" data-fn="same"></span></button>
+                                                </div>
+                                            </div>
+                                            <div id="i18n-key-list" class="i18x-list" role="listbox" tabindex="0"></div>
+                                            <div id="i18n-stats" class="i18x-stats"></div>
+                                        </div>
+                                        <div id="i18n-detail" class="i18x-editor">
+                                            <div class="i18x-start">
+                                                <div class="bms-label" data-i18n="i18n.startTitle">Three ways to start</div>
+                                                <div class="i18x-start-row"><span class="i18x-start-num">1</span><span data-i18n="i18n.startPickList">Pick a key in the list on the left to see and edit it.</span></div>
+                                                <div class="i18x-start-row"><span class="i18x-start-num">2</span><span data-i18n="i18n.startPickScreen">'Pick', then click any text in BMM: its key opens right here.</span></div>
+                                                <div class="i18x-start-row"><span class="i18x-start-num">3</span><span data-i18n="i18n.startNextMissing">'Next missing' jumps from gap to gap.</span></div>
+                                                <p class="i18x-kbd" data-i18n="i18n.kbdHint">Up and Down move through the list, Enter edits, Alt+Up and Alt+Down move from the editor.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- HARDCODED -->
+                                    <div class="i18x-panel" data-i18n-panel="hardcoded" hidden>
+                                        <div class="i18x-listpane">
+                                            <div class="i18x-listbar">
+                                                <label class="i18x-search">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input id="i18n-hc-search" class="form-input" type="search" spellcheck="false" autocomplete="off" data-i18n-placeholder="i18n.hcSearchPh" placeholder="Filter by text or file…">
+                                                </label>
+                                            </div>
+                                            <div id="i18n-hc-list" class="i18x-list" role="listbox" tabindex="0"></div>
+                                            <div id="i18n-hc-stats" class="i18x-stats"></div>
+                                        </div>
+                                        <div id="i18n-hc-detail" class="i18x-editor"></div>
+                                    </div>
+                                </div>
+
+                                <div class="modal-footer">
+                                    <div class="modal-footer-start">
+                                        <span class="bms-chip bms-chip--warn" id="i18n-dirty-count" hidden></span>
+                                        <label class="i18x-live">
+                                            <span class="plug-toggle"><input type="checkbox" id="i18n-test-live"><span class="plug-toggle-slider"></span></span>
                                             <span data-i18n="i18n.testLive">Test in app</span>
                                         </label>
+                                        <button type="button" class="btn btn-ghost btn-sm" id="i18n-reset" data-i18n="i18n.reset">Reset sandbox</button>
                                     </div>
+                                    <button type="button" class="btn btn-primary btn-sm" id="i18n-export" data-i18n="i18n.export">Export .json</button>
                                 </div>
                             </div>
                         </div>
@@ -4096,76 +4122,51 @@
                             <div id="shortcuts-manager"></div>
                         </div>
 
-                        <!-- ── Hashes / SHA ── -->
-                        <div class="glass-card" id="settings-sha-card"
-                            style="border: 1px solid rgba(139, 92, 246, 0.25); position: relative; overflow: hidden;">
-                            <div
-                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(139, 92, 246, 0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
-                            </div>
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6"
-                                    stroke-width="2.2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                    <path d="m9 12 2 2 4-4" />
-                                </svg>
-                                <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
-                            </h3>
-
-                            <div class="kit-callout kit-callout-accent bmm-tip" data-tip-id="sha" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.shaDesc">Manage file integrity verification. Hashing ensures your mod files are not corrupted
-                                    or tampered with.</span></div></div>
-
-                            <!-- Strict mode toggle -->
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div>
-                                    <div class="set-row-title"
-                                        data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
-                                    <div class="set-row-desc"
-                                        data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a
-                                        mod</div>
+                        <!-- ── Hashes / SHA ── (classes: css/integrity.css; dialog: integrity-center.ts) -->
+                        <div class="glass-card sha-card" id="settings-sha-card">
+                            <div class="sha-card-head">
+                                <span class="sha-card-ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg></span>
+                                <div class="sha-card-titles">
+                                    <h3 class="card-title" data-i18n="settings.shaTitle">Hashes / SHA &amp; Integrity</h3>
+                                    <p class="sha-card-lead" data-i18n="settings.shaDesc">Checks that mod files are neither corrupted nor altered.</p>
                                 </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-sha-strict-mode">
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
                             </div>
 
-                            <!-- Enable Lazy SHA toggle -->
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div>
-                                    <div class="set-row-title"
-                                        data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
-                                    <div class="set-row-desc"
-                                        data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in
-                                        the background</div>
+                            <div class="sha-card-summary" id="sha-card-summary" hidden></div>
+
+                            <div class="sha-card-opts">
+                                <div class="sha-card-opt">
+                                    <label class="sha-card-opt-text" for="chk-sha-strict-mode">
+                                        <span class="set-row-title" data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</span>
+                                        <span class="set-row-desc" data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a mod</span>
+                                    </label>
+                                    <label class="bmm-switch">
+                                        <input type="checkbox" id="chk-sha-strict-mode">
+                                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                    </label>
                                 </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-sha-lazy-calc">
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
+                                <div class="sha-card-opt">
+                                    <label class="sha-card-opt-text" for="chk-sha-lazy-calc">
+                                        <span class="set-row-title" data-i18n="settings.shaEnableLazy">Enable Background Hashing</span>
+                                        <span class="set-row-desc" data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in the background</span>
+                                    </label>
+                                    <label class="bmm-switch">
+                                        <input type="checkbox" id="chk-sha-lazy-calc">
+                                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                    </label>
+                                </div>
                             </div>
 
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                                <button class="btn btn-secondary btn-sm" data-act="showHashingStats">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                                    </svg>
-                                    <span data-i18n="settings.shaStatsBtn">Hashing Progress</span>
+                            <div class="sha-card-actions">
+                                <button type="button" class="btn btn-primary btn-sm" data-act="showHashingStats">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg>
+                                    <span data-i18n="settings.shaOpenCenter">Check integrity</span>
                                 </button>
-                                <button class="btn btn-secondary btn-sm" data-act="recalculateAllHashesPrompt">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M23 4v6h-6M1 20v-6h6" />
-                                        <path
-                                            d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                                    </svg>
+                                <button type="button" class="btn btn-secondary btn-sm" data-act="recalculateAllHashesPrompt">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
                                     <span data-i18n="settings.shaRecalculateAllBtn">Recalculate All</span>
                                 </button>
                             </div>
-
                         </div>
 
                         <!-- ── Scanning & Mod Updates ── -->
@@ -7283,7 +7284,9 @@
 
         <div id="modal-stack" class="modal-generic-overlay"
             data-backdrop-close="1">
-            <div class="modal glass modal--xl">
+            <!-- Groups | dense list | the selected component (app.ts → openStackModal). The search
+                 is the toolbar band: inside the scrolling body it floated over the list. -->
+            <div class="modal glass modal--xl modal--tall stk-modal">
                 <div class="modal-header">
                         <div class="bms-icon">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke="currentColor">
@@ -7294,13 +7297,19 @@
                             </svg>
                         </div>
                         <div class="bms-titles">
-                            <h2 data-i18n="credits.stackTitle" class="modal-title">Technical
-                                Architecture</h2>
-                            <p class="bms-sub">
-                                BMM Core Stack</p>
+                            <h2 data-i18n="credits.stackTitle" class="modal-title">Technical Architecture</h2>
+                            <p class="bms-sub" id="stack-modal-sub"></p>
                         </div>
                 <button type="button" class="modal-close" data-close-modal="#modal-stack"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                <div class="modal-body" id="stack-modal-content">
+                <div class="modal-toolbar stk-toolbar">
+                    <label class="stk-search">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        <input id="stack-filter" class="form-input" type="search" spellcheck="false" autocomplete="off"
+                            data-i18n-placeholder="credits.stackFilter" placeholder="Filter by name…">
+                    </label>
+                    <span class="stk-shown" id="stack-shown" aria-live="polite"></span>
+                </div>
+                <div class="modal-body modal-body--flush" id="stack-modal-content">
                     <!-- Dynamically populated -->
                 </div>
             </div>

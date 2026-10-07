@@ -1,9 +1,14 @@
 // @ts-nocheck
 // ── i18n Translation Sandbox ──────────────────────────────────────────────────
-// In-memory playground to browse/edit every translatable key (1-click, auto-saved
-// to a sandbox — never the live app), preview them as toasts AND Tasky tooltips,
-// pick any text straight from the app, highlight hardcoded (non-i18n) text like
-// devtools, create new languages, and export a finished .json.
+// In-memory playground to browse/edit every translatable key (auto-saved to a sandbox, never
+// the live app), preview them as toasts AND Tasky tooltips, pick any text straight from the
+// app, find hardcoded (non-i18n) text, create new languages, and export a finished .json.
+//
+// Layout (css/i18n-sandbox.css): the toolbar band holds the two tabs and the SOURCE → TARGET
+// pair; the body is a list | editor split. The editor shows the source text beside the target
+// field, so translating is reading one and typing the other, not hunting for the English in a
+// list under the field. The hardcoded tab groups its findings by file and offers a key for
+// each one (an existing key with the same text first, else a suggested name).
 
 import { invoke } from '../../core/api.js';
 import { claimDockSpace, releaseDockSpace, makeDock } from '../../ui/dock-space.js';
@@ -13,22 +18,44 @@ import { escHtml, escAttr } from '../../core/utils.js';
 
 let _allTrans: Record<string, Record<string, string>> = {};
 let _allKeys: string[] = [];
-let _baseLang = 'en';
+let _baseLang = 'en';                             // the TARGET: the language being edited
+let _refLang = 'en';                              // the SOURCE: shown beside it, read-only
 let _sandbox: Record<string, string> = {};
 let _selectedKey: string | null = null;
 let _usageCache: Record<string, any[]> = {};
 let _diskParsed: Record<string, any> = {};        // raw parsed lang files (preserve order + _info/_synonyms)
-let _filter = 'all';                              // all | missing
+let _filter = 'all';                              // all | missing | edited | same
+let _visible: string[] = [];                      // the keys the list shows, in order (keyboard)
 let _modal: HTMLElement | null = null;
 let _hcData: any[] = [];
 let _hcLoaded = false;
+let _hcKind = 'all';
+let _hcSel = -1;                                  // index into _hcData
+let _hcVisible: number[] = [];
+const _hcFolded = new Set<string>();
+const SRC_KEY = 'bmm.i18nsb.source';
+const TGT_KEY = 'bmm.i18nsb.target';
+const CSS_ID = 'i18n-sandbox-css';
 
 function debounce<T extends (...a: any[]) => void>(fn: T, ms: number): T {
     let h: any;
     return ((...a: any[]) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }) as T;
 }
-const debouncedRenderList = debounce(() => renderList(), 160);
-const debouncedRenderHardcoded = debounce(() => renderHardcoded(), 160);
+const debouncedRenderList = debounce(() => renderList(), 140);
+const debouncedRenderHardcoded = debounce(() => renderHardcoded(), 140);
+const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage off */ } };
+
+/** The dialog's content styles. Linked on first open: the sandbox is a developer tool, not
+ *  something every boot should pay for. */
+function ensureCss(): void {
+    if (document.getElementById(CSS_ID)) return;
+    const link = document.createElement('link');
+    link.id = CSS_ID;
+    link.rel = 'stylesheet';
+    link.href = 'css/i18n-sandbox.css';
+    document.head.appendChild(link);
+}
 
 export function initI18nSandbox(): void {
     const openBtn = document.getElementById('btn-open-i18n-sandbox');
@@ -57,24 +84,52 @@ export function initI18nSandbox(): void {
     };
 
     openBtn.addEventListener('click', async () => {
+        ensureCss();
         await loadData();
         modal.classList.add('open');
         document.body.style.overflow = 'hidden';
         switchTab('keys');
         renderList();
-        if (localStorage.getItem(I18N_DOCK_KEY) === 'right') toggleDockMode(modal, true);
+        updateDirty();
+        if (lsGet(I18N_DOCK_KEY) === 'right') toggleDockMode(modal, true);
+        requestAnimationFrame(() => (document.getElementById('i18n-search') as HTMLInputElement | null)?.focus({ preventScroll: true }));
     });
 
     modal.addEventListener('click', (e) => { if (e.target === modal && !_overlayMode) closeModal(); });
     modal.querySelector('[data-close="modal-i18n-sandbox"]')?.addEventListener('click', closeModal);
 
-    modal.querySelectorAll('.i18n-sb-tab').forEach(tab =>
-        tab.addEventListener('click', () => switchTab((tab as HTMLElement).dataset.i18nTab || 'keys')));
+    modal.querySelectorAll<HTMLElement>('[data-i18n-tab]').forEach((tab) =>
+        tab.addEventListener('click', () => switchTab(tab.dataset.i18nTab || 'keys')));
+    // Arrow keys move between the two tabs, the way a tablist does.
+    modal.querySelector('.i18x-toolbar [role="tablist"]')?.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const tabs = [...modal.querySelectorAll<HTMLElement>('[data-i18n-tab]')];
+        const at = tabs.indexOf(document.activeElement as HTMLElement);
+        if (at < 0) return;
+        e.preventDefault();
+        const next = tabs[(at + 1) % tabs.length];
+        next.focus();
+        switchTab(next.dataset.i18nTab || 'keys');
+    });
 
-    // Delegated key-row click (one listener, not one-per-row on every render).
-    document.getElementById('i18n-key-list')?.addEventListener('click', (e) => {
-        const row = (e.target as HTMLElement).closest('.i18n-key-row') as HTMLElement | null;
-        if (row?.dataset.key) selectKey(row.dataset.key);
+    // ── Keys list: click selects, the keyboard walks it ──
+    const list = document.getElementById('i18n-key-list');
+    list?.addEventListener('click', (e) => {
+        const row = (e.target as HTMLElement).closest('.i18x-krow') as HTMLElement | null;
+        if (row?.dataset.key) selectKey(row.dataset.key, { focusEditor: true });
+    });
+    list?.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter' && _selectedKey) { e.preventDefault(); focusEditor(); return; }
+        const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : e.key === 'PageDown' ? 12 : e.key === 'PageUp' ? -12 : 0;
+        if (e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+            const k = e.key === 'Home' ? _visible[0] : _visible[_visible.length - 1];
+            if (k) selectKey(k, { focusEditor: false });
+            return;
+        }
+        if (!step) return;
+        e.preventDefault();
+        moveSelection(step, false);
     });
 
     // Tools
@@ -86,45 +141,106 @@ export function initI18nSandbox(): void {
 
     // Filters — debounce the search so we don't rebuild the (large) key list on
     // every keystroke (prevents typing lag with 1500+ keys).
-    document.getElementById('i18n-search')?.addEventListener('input', debouncedRenderList);
-    document.getElementById('i18n-base-lang')?.addEventListener('change', (e) => {
-        _baseLang = (e.target as HTMLSelectElement).value;
+    const search = document.getElementById('i18n-search') as HTMLInputElement | null;
+    search?.addEventListener('input', debouncedRenderList);
+    search?.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowDown' || !_visible.length) return;
+        e.preventDefault();
+        selectKey(_selectedKey && _visible.includes(_selectedKey) ? _selectedKey : _visible[0], { focusEditor: false });
+        list?.focus({ preventScroll: true });
+    });
+    const onLang = () => {
+        lsSet(SRC_KEY, _refLang); lsSet(TGT_KEY, _baseLang);
+        refreshLangSelect();
         renderList();
         if (_selectedKey) renderDetail(_selectedKey);
+    };
+    document.getElementById('i18n-base-lang')?.addEventListener('change', (e) => {
+        _baseLang = (e.target as HTMLSelectElement).value;
+        onLang();
     });
-    modal.querySelectorAll('.i18n-sb-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            _filter = (chip as HTMLElement).dataset.i18nFilter || 'all';
-            modal.querySelectorAll('.i18n-sb-chip').forEach(c => c.classList.toggle('active', c === chip));
-            renderList();
-        });
+    document.getElementById('i18n-ref-lang')?.addEventListener('change', (e) => {
+        _refLang = (e.target as HTMLSelectElement).value;
+        onLang();
+    });
+    document.getElementById('i18n-swap-langs')?.addEventListener('click', () => {
+        [_refLang, _baseLang] = [_baseLang, _refLang];
+        onLang();
+    });
+    document.getElementById('i18n-filter-seg')?.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-i18n-filter]');
+        if (!b) return;
+        _filter = b.dataset.i18nFilter || 'all';
+        renderList();
     });
 
     // Jump to the next untranslated key (wraps) — the fastest way to finish a language.
     document.getElementById('i18n-next-missing')?.addEventListener('click', selectNextMissing);
 
+    // Ctrl+F finds in the tab that is showing.
+    modal.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'f') return;
+        const hc = !document.querySelector('[data-i18n-panel="hardcoded"]')?.hasAttribute('hidden');
+        const box = document.getElementById(hc ? 'i18n-hc-search' : 'i18n-search') as HTMLInputElement | null;
+        if (!box) return;
+        e.preventDefault();
+        box.focus(); box.select();
+    });
+
     // Floating-window opacity (only visible in overlay mode; persisted).
     const opRange = document.getElementById('i18n-ovl-opacity-range') as HTMLInputElement | null;
     if (opRange) {
-        opRange.value = localStorage.getItem('bmm_i18n_overlay_opacity') || '100';
+        opRange.value = lsGet('bmm_i18n_overlay_opacity') || '100';
         opRange.addEventListener('input', () => {
-            localStorage.setItem('bmm_i18n_overlay_opacity', opRange.value);
+            lsSet('bmm_i18n_overlay_opacity', opRange.value);
             const panel = _modal?.querySelector('.modal') as HTMLElement | null;
             if (panel && _overlayMode) panel.style.opacity = String(Number(opRange.value) / 100);
         });
     }
 
-    // Hardcoded tab
+    // ── Hardcoded tab ──
     document.getElementById('i18n-hc-search')?.addEventListener('input', debouncedRenderHardcoded);
-    document.getElementById('i18n-hc-kind')?.addEventListener('change', renderHardcoded);
+    document.getElementById('i18n-hc-search')?.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key !== 'ArrowDown' || !_hcVisible.length) return;
+        e.preventDefault();
+        selectHc(_hcVisible.includes(_hcSel) ? _hcSel : _hcVisible[0]);
+        document.getElementById('i18n-hc-list')?.focus({ preventScroll: true });
+    });
+    document.getElementById('i18n-hc-kind')?.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]');
+        if (!b) return;
+        _hcKind = b.dataset.kind || 'all';
+        renderHardcoded();
+    });
     document.getElementById('i18n-hc-rescan')?.addEventListener('click', () => { _hcLoaded = false; loadHardcoded(true); });
+    const hcList = document.getElementById('i18n-hc-list');
+    hcList?.addEventListener('click', (e) => {
+        const head = (e.target as HTMLElement).closest<HTMLElement>('.i18x-hcfile-head');
+        if (head?.dataset.file) { toggleFold(head.dataset.file); return; }
+        const row = (e.target as HTMLElement).closest<HTMLElement>('.i18x-hcrow');
+        if (row?.dataset.i) selectHc(Number(row.dataset.i));
+    });
+    hcList?.addEventListener('keydown', (e: KeyboardEvent) => {
+        const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : e.key === 'PageDown' ? 12 : e.key === 'PageUp' ? -12 : 0;
+        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && _hcSel >= 0) {
+            const file = _hcData[_hcSel]?.file;
+            if (file && (e.key === 'ArrowLeft') !== _hcFolded.has(file)) { e.preventDefault(); toggleFold(file); }
+            return;
+        }
+        if (e.key === 'Enter' && _hcSel >= 0) { e.preventDefault(); copyLoc(_hcData[_hcSel]); return; }
+        if (!step || !_hcVisible.length) return;
+        e.preventDefault();
+        const at = _hcVisible.indexOf(_hcSel);
+        const to = at < 0 ? 0 : Math.max(0, Math.min(_hcVisible.length - 1, at + step));
+        selectHc(_hcVisible[to]);
+    });
 
     document.getElementById('i18n-reset')?.addEventListener('click', () => {
-        if (Object.keys(_sandbox).length === 0) { toast(t('i18n.nothingToReset') || 'Sandbox is already empty', 'info'); return; }
+        if (Object.keys(_sandbox).length === 0) { toast(t('i18n.nothingToReset'), 'info'); return; }
         _sandbox = {};
         updateDirty(); renderList();
         if (_selectedKey) renderDetail(_selectedKey);
-        toast(t('i18n.resetDone') || 'Sandbox reset', 'success');
+        toast(t('i18n.resetDone'), 'success');
     });
     document.getElementById('i18n-export')?.addEventListener('click', exportSandbox);
 
@@ -138,13 +254,25 @@ export function initI18nSandbox(): void {
         const on = (e.target as HTMLInputElement).checked;
         const { setSandboxOverlay } = await import('../../core/i18n.js');
         setSandboxOverlay(on ? { ..._sandbox } : null);
-        toast(on
-            ? (t('i18n.testOn') || 'Sandbox is LIVE app-wide — everything now speaks your draft')
-            : (t('i18n.testOff') || 'Back to the real translations'), on ? 'warning' : 'info', 2600);
+        toast(on ? t('i18n.testOn') : t('i18n.testOff'), on ? 'warning' : 'info', 2600);
     });
 }
 
-/** Header progress: how complete the selected language is (translated / total). */
+// ── Status of a key, for the TARGET language ─────────────────────────────────────
+function isMissingKey(k: string): boolean { return !isObjKey(k) && !isSectionKey(k) && !valueFor(k, _baseLang).trim(); }
+function isSameKey(k: string): boolean {
+    if (_refLang === _baseLang || isObjKey(k) || isSectionKey(k)) return false;
+    const v = valueFor(k, _baseLang).trim();
+    return !!v && v === valueFor(k, _refLang).trim();
+}
+function statusOf(k: string): 'missing' | 'edited' | 'same' | 'ok' {
+    if (_sandbox[k] !== undefined) return 'edited';
+    if (isMissingKey(k)) return 'missing';
+    if (isSameKey(k)) return 'same';
+    return 'ok';
+}
+
+/** Header progress: how complete the target language is (translated / total). */
 function updateProgress(missing: number): void {
     const fill = document.getElementById('i18n-progress-fill');
     const txt = document.getElementById('i18n-progress-txt');
@@ -153,31 +281,38 @@ function updateProgress(missing: number): void {
     const done = Math.max(0, total - missing);
     const pct = total ? Math.round((done / total) * 100) : 100;
     (fill as HTMLElement).style.width = pct + '%';
-    (fill as HTMLElement).style.background = pct >= 100 ? 'var(--success)' : pct >= 60 ? 'var(--accent)' : 'var(--danger)';
-    txt.textContent = `${_baseLang.toUpperCase()} · ${done}/${total} (${pct}%)`;
+    fill.className = pct >= 100 ? 'is-done' : pct >= 60 ? '' : 'is-low';
+    txt.textContent = t('i18n.progress').replace('{lang}', _baseLang.toUpperCase()).replace('{done}', String(done)).replace('{total}', String(total)).replace('{pct}', String(pct));
 }
 
 /** Jump to the next missing key after the current selection (wraps around). */
 function selectNextMissing(): void {
-    const isMissing = (k: string) => !isObjKey(k) && !isSectionKey(k) && !valueFor(k, _baseLang).trim();
     const start = _selectedKey ? _allKeys.indexOf(_selectedKey) + 1 : 0;
     for (let i = 0; i < _allKeys.length; i++) {
         const k = _allKeys[(start + i) % _allKeys.length];
-        if (isMissing(k)) {
-            selectKey(k);
-            document.querySelector(`.i18n-key-row[data-key="${CSS.escape(k)}"]`)?.scrollIntoView({ block: 'center' });
+        if (isMissingKey(k)) {
+            if (!_visible.includes(k)) {
+                // The filter or the search hides it: show the gaps, so the row it lands on exists.
+                _filter = 'missing';
+                const box = document.getElementById('i18n-search') as HTMLInputElement | null;
+                if (box) box.value = '';
+            }
+            selectKey(k, { focusEditor: true });
             return;
         }
     }
-    toast(t('i18n.noMissing') || 'No missing keys — this language is complete.', 'success');
+    toast(t('i18n.noMissing'), 'success');
 }
 
 function switchTab(name: string): void {
     if (!_modal) return;
-    _modal.querySelectorAll('.i18n-sb-tab').forEach(tb =>
-        tb.classList.toggle('active', (tb as HTMLElement).dataset.i18nTab === name));
-    _modal.querySelectorAll('.i18n-sb-panel').forEach(p =>
-        p.classList.toggle('active', (p as HTMLElement).dataset.i18nPanel === name));
+    _modal.querySelectorAll<HTMLElement>('[data-i18n-tab]').forEach((tb) => {
+        const on = tb.dataset.i18nTab === name;
+        tb.setAttribute('aria-selected', String(on));
+        tb.tabIndex = on ? 0 : -1;
+    });
+    _modal.querySelectorAll<HTMLElement>('[data-i18n-panel]').forEach((p) => { p.hidden = p.dataset.i18nPanel !== name; });
+    _modal.querySelectorAll<HTMLElement>('[data-i18x-for]').forEach((p) => { p.hidden = p.dataset.i18xFor !== name; });
     if (name === 'hardcoded') loadHardcoded(false);
 }
 
@@ -195,7 +330,10 @@ async function loadData(): Promise<void> {
     } catch {}
 
     const langs = Object.keys(_allTrans);
-    if (!langs.includes(_baseLang)) _baseLang = getLang() || langs[0] || 'en';
+    const want = lsGet(TGT_KEY);
+    _baseLang = want && langs.includes(want) ? want : (langs.includes(_baseLang) ? _baseLang : (getLang() || langs[0] || 'en'));
+    const src = lsGet(SRC_KEY);
+    _refLang = src && langs.includes(src) ? src : (langs.includes('en') && _baseLang !== 'en' ? 'en' : (langs.find((l) => l !== _baseLang) || _baseLang));
 
     // ALL keys (including _info, _synonyms, __SECTION__ …) — preserve base file order,
     // then append any keys only present in other languages.
@@ -210,15 +348,18 @@ async function loadData(): Promise<void> {
 
     refreshLangSelect();
     const kc = document.getElementById('i18n-tabcount-keys');
-    if (kc) kc.textContent = String(_allKeys.length);
+    if (kc) kc.textContent = String(_allKeys.filter((k) => !isSectionKey(k)).length);
 }
 
 function refreshLangSelect(): void {
-    const sel = document.getElementById('i18n-base-lang') as HTMLSelectElement;
-    if (!sel) return;
     const langs = Object.keys(_allTrans).sort();
-    sel.innerHTML = langs.map(l =>
-        `<option value="${escAttr(l)}"${l === _baseLang ? ' selected' : ''}>${escHtml(l.toUpperCase())}</option>`).join('');
+    for (const [id, cur] of [['i18n-base-lang', _baseLang], ['i18n-ref-lang', _refLang]] as const) {
+        const sel = document.getElementById(id) as HTMLSelectElement | null;
+        if (!sel) continue;
+        sel.innerHTML = langs.map(l =>
+            `<option value="${escAttr(l)}"${l === cur ? ' selected' : ''}>${escHtml(l.toUpperCase())}</option>`).join('');
+        sel.value = cur;
+    }
 }
 
 function rawVal(key: string, lang: string): any { return (_allTrans[lang] || {})[key]; }
@@ -242,120 +383,231 @@ function valueFor(key: string, lang: string): string {
 }
 
 // ── Key list ──────────────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = { missing: 'i18n.filterMissing', edited: 'i18n.filterEdited', same: 'i18n.filterSame', ok: 'i18n.translated' };
+
 function renderList(): void {
     const listEl = document.getElementById('i18n-key-list');
     const statsEl = document.getElementById('i18n-stats');
     if (!listEl) return;
 
     const q = ((document.getElementById('i18n-search') as HTMLInputElement)?.value || '').toLowerCase().trim();
-
-    let shown = 0, missing = 0;
+    const counts = { all: 0, missing: 0, edited: 0, same: 0 };
+    let missingAll = 0;
+    let capped = 0;
     const rows: string[] = [];
+    _visible = [];
     for (const key of _allKeys) {
-        const isObj = isObjKey(key);
-        const val = valueFor(key, _baseLang);
-        const isMissing = !isObj && !val.trim();
-        if (isMissing) missing++;
-        if (_filter === 'missing' && !isMissing) continue;
-        if (q && !key.toLowerCase().includes(q) && !val.toLowerCase().includes(q)) continue;
-        shown++;
-        // Section dividers render as labels
-        if (isSectionKey(key) && _filter !== 'missing') {
-            rows.push(`<div class="i18n-key-section">${escHtml(String(rawVal(key, _baseLang) || key).replace(/^-+\s*|\s*-+$/g, ''))}</div>`);
+        if (isSectionKey(key)) {
+            // Section dividers only make sense in the unfiltered, unsearched list.
+            if (_filter === 'all' && !q) rows.push(`<div class="i18x-ksec" role="presentation">${escHtml(String(rawVal(key, _baseLang) || key).replace(/^-+\s*|\s*-+$/g, ''))}</div>`);
             continue;
         }
-        const edited = _sandbox[key] !== undefined;
-        const preview = val.replace(/\s+/g, ' ').trim();
+        const st = statusOf(key);
+        if (isMissingKey(key)) missingAll++;
+        const val = valueFor(key, _baseLang);
+        if (q && !key.toLowerCase().includes(q) && !val.toLowerCase().includes(q) && !valueFor(key, _refLang).toLowerCase().includes(q)) continue;
+        counts.all++;
+        if (isMissingKey(key)) counts.missing++;
+        if (st === 'edited') counts.edited++;
+        if (st === 'same') counts.same++;
+        if (_filter === 'missing' && !isMissingKey(key)) continue;
+        if (_filter === 'edited' && st !== 'edited') continue;
+        if (_filter === 'same' && st !== 'same') continue;
+        if (rows.length > 1500) { capped++; continue; }
+        _visible.push(key);
+        const isObj = isObjKey(key);
+        const preview = isMissingKey(key) ? valueFor(key, _refLang).replace(/\s+/g, ' ').trim() : val.replace(/\s+/g, ' ').trim();
         rows.push(`
-            <div class="i18n-key-row${key === _selectedKey ? ' active' : ''}${edited ? ' edited' : ''}${isMissing ? ' missing' : ''}" data-key="${escAttr(key)}">
-                <div class="i18n-key-row-key">${escHtml(key)}${isObj ? '<span class="i18n-key-tag obj">{ }</span>' : ''}</div>
-                <div class="i18n-key-row-val">${isMissing ? (t('i18n.missing') || '⚠ missing') : escHtml(preview)}</div>
+            <div class="i18x-krow is-${st}" role="option" data-key="${escAttr(key)}" aria-selected="${key === _selectedKey}">
+                <span class="i18x-dot" title="${escAttr(t(STATUS_LABEL[st]))}"></span>
+                <span class="i18x-k">${escHtml(key)}${isObj ? '<span class="i18x-tag">{ }</span>' : ''}</span>
+                <span class="i18x-v${isMissingKey(key) ? ' is-src' : ''}">${escHtml(preview)}</span>
             </div>`);
-        if (rows.length > 1500) break;
     }
 
-    listEl.innerHTML = rows.join('') ||
-        `<div class="i18n-sb-empty" style="height:auto;margin-top:30px;">${t('i18n.noResults') || 'No keys match'}</div>`;
-    if (statsEl) statsEl.innerHTML =
-        `<b>${_allKeys.length}</b> ${t('i18n.keys') || 'keys'} · ${shown} ${t('i18n.shown') || 'shown'} · <span style="color:${missing ? 'var(--danger)' : 'var(--text-muted)'}">${missing} ${t('i18n.missingWord') || 'missing'}</span> · ${_baseLang.toUpperCase()}`;
-    updateProgress(missing);
-
-    // Row clicks use a single delegated listener (attached once in init), so we
-    // don't bind 1500 listeners on every render — that was the list's main lag.
+    if (capped) rows.push(`<div class="i18x-capped">${escHtml(t('i18n.listCapped').replace('{n}', String(capped)))}</div>`);
+    listEl.innerHTML = rows.join('') || `<div class="bms-empty">
+        <div class="bms-empty-t">${escHtml(t('i18n.noResults'))}</div>
+        ${q || _filter !== 'all' ? `<button type="button" class="btn btn-ghost btn-sm" id="i18n-clear-filters">${escHtml(t('i18n.clearFilters'))}</button>` : ''}
+    </div>`;
+    document.getElementById('i18n-clear-filters')?.addEventListener('click', () => {
+        const box = document.getElementById('i18n-search') as HTMLInputElement | null;
+        if (box) box.value = '';
+        _filter = 'all';
+        renderList();
+        box?.focus();
+    });
+    _modal?.querySelectorAll<HTMLElement>('#i18n-filter-seg [data-i18n-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.i18nFilter === _filter)));
+    _modal?.querySelectorAll<HTMLElement>('#i18n-filter-seg [data-fn]').forEach((n) => { n.textContent = String(counts[n.dataset.fn as keyof typeof counts] ?? ''); });
+    if (statsEl) statsEl.innerHTML = `<span><b>${_visible.length}</b> ${escHtml(t('i18n.shown'))}</span><span class="i18x-kbdmini">${escHtml(t('i18n.kbdShort'))}</span>`;
+    updateProgress(missingAll);
 }
 
-function selectKey(key: string): void {
+/** Mark the selected row without rebuilding a 1500-row list. */
+function markSelected(key: string | null, scroll = true): void {
+    const listEl = document.getElementById('i18n-key-list');
+    if (!listEl) return;
+    listEl.querySelector('.i18x-krow[aria-selected="true"]')?.setAttribute('aria-selected', 'false');
+    if (!key) return;
+    const row = listEl.querySelector<HTMLElement>(`.i18x-krow[data-key="${CSS.escape(key)}"]`);
+    row?.setAttribute('aria-selected', 'true');
+    if (row) {
+        row.id = 'i18x-active-row';
+        listEl.setAttribute('aria-activedescendant', row.id);
+        listEl.querySelectorAll('#i18x-active-row').forEach((r) => { if (r !== row) r.removeAttribute('id'); });
+        if (scroll) row.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function selectKey(key: string, opts: { focusEditor?: boolean } = {}): void {
     if (!_allKeys.includes(key)) { _allKeys.push(key); _allKeys.sort(); }
     _selectedKey = key;
     switchTab('keys');
-    renderList();
+    if (!_visible.includes(key)) renderList();
+    markSelected(key);
     renderDetail(key);
-    requestAnimationFrame(() => {
-        document.querySelector(`.i18n-key-row[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' });
-        const ta = document.getElementById('i18n-edit-value') as HTMLTextAreaElement;
-        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-    });
+    if (opts.focusEditor !== false) requestAnimationFrame(focusEditor);
+}
+
+function focusEditor(): void {
+    const ta = document.getElementById('i18n-edit-value') as HTMLTextAreaElement | null;
+    if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+/** Previous / next visible key. From the editor the focus stays in the editor. */
+function moveSelection(step: number, fromEditor: boolean): void {
+    if (!_visible.length) return;
+    const at = _selectedKey ? _visible.indexOf(_selectedKey) : -1;
+    const to = at < 0 ? 0 : Math.max(0, Math.min(_visible.length - 1, at + step));
+    if (_visible[to] === _selectedKey) return;
+    selectKey(_visible[to], { focusEditor: fromEditor });
 }
 
 // ── Detail / editor ───────────────────────────────────────────────────────────
+/** The key's state as chips: missing / edited / same as source / translated, and JSON. */
+function chipsFor(key: string): string {
+    const chip = (cls: string, label: string) => `<span class="bms-chip ${cls}"><span class="bms-dot"></span>${escHtml(label)}</span>`;
+    const missing = isMissingKey(key), edited = _sandbox[key] !== undefined, same = isSameKey(key);
+    return [
+        missing ? chip('bms-chip--danger', t('i18n.filterMissing')) : '',
+        edited ? chip('bms-chip--warn', t('i18n.edited')) : '',
+        same ? chip('', t('i18n.filterSame')) : '',
+        !missing && !same ? chip('bms-chip--ok', t('i18n.translated')) : '',
+        isObjKey(key) ? '<span class="bms-chip bms-chip--accent">JSON</span>' : '',
+    ].join('');
+}
+
+const placeholders = (s: string) => new Set([...(s || '').matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
+
 async function renderDetail(key: string): Promise<void> {
     const detail = document.getElementById('i18n-detail');
     if (!detail) return;
 
     const langs = Object.keys(_allTrans).sort();
     const baseVal = valueFor(key, _baseLang);
-    const edited = _sandbox[key] !== undefined;
+    const sameLang = _refLang === _baseLang;
+    const srcVal = sameLang ? originalDisplay(key) : valueFor(key, _refLang);
+    const st = statusOf(key);
     const isObj = isObjKey(key);
+    const at = _visible.indexOf(key);
 
-    const refsHtml = langs.filter(l => l !== _baseLang).map(l => {
+    const others = langs.filter(l => l !== _baseLang && l !== _refLang);
+    const refsHtml = others.map(l => {
         const v = valueFor(key, l);
-        return `<div class="i18n-ref-row">
-            <span class="i18n-ref-lang">${escHtml(l.toUpperCase())}</span>
-            <span class="i18n-ref-val${v ? '' : ' missing'}">${v ? escHtml(v) : (t('i18n.missing') || '⚠ missing')}</span>
-        </div>`;
+        return `<div class="i18x-ref"><span class="i18x-langtag">${escHtml(l.toUpperCase())}</span>
+            <span class="i18x-ref-v${v ? '' : ' is-missing'}">${v ? escHtml(v) : escHtml(t('i18n.missing'))}</span></div>`;
     }).join('');
 
+    const chips = chipsFor(key);
+
     detail.innerHTML = `
-        <div class="i18n-detail-head">
-            <code class="i18n-detail-key" id="i18n-copy-key" data-tooltip="${t('i18n.copyKey') || 'Copy key'}">${escHtml(key)}</code>
-            ${isObj ? `<span class="i18n-kind-badge" style="color:var(--accent);border-color:rgba(124,131,253,0.4);">JSON</span>` : ''}
-            ${edited ? `<span class="i18n-edited-badge">${t('i18n.edited') || 'edited'}</span>` : ''}
-        </div>
-
-        <label class="i18n-detail-label">${(t('i18n.editValue') || 'Value')} · ${escHtml(_baseLang.toUpperCase())}${isObj ? ' · JSON' : ''}
-            <span class="i18n-autosave-hint" id="i18n-autosave">${t('i18n.autoSaved') || 'auto-saved to sandbox'}</span>
-        </label>
-        <textarea id="i18n-edit-value" class="i18n-edit-area${isObj ? ' mono' : ''}" rows="${isObj ? 8 : 3}" placeholder="${t('i18n.emptyValue') || '(empty — type a translation)'}">${escHtml(baseVal)}</textarea>
-
-        <div class="i18n-detail-actions">
-            <button class="btn btn-sm i18n-toast-btn" id="i18n-test-toast">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-                <span data-i18n="i18n.testToast">Show as toast</span>
+        <div class="i18x-ed-head">
+            <button type="button" class="i18x-keyname" id="i18n-copy-key" data-tooltip="${escAttr(t('i18n.copyKey'))}">
+                <code>${escHtml(key)}</code>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
-            <button class="btn btn-sm i18n-tip-btn" id="i18n-test-tip">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span data-i18n="i18n.testTip">Show as tooltip</span>
+            <div class="i18x-ed-nav">
+                <span class="i18x-pos">${at >= 0 ? `${at + 1} / ${_visible.length}` : ''}</span>
+                <button type="button" class="i18x-iconbtn" id="i18n-prev-key" data-tooltip="${escAttr(t('i18n.prevKey'))}"${at <= 0 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+                <button type="button" class="i18x-iconbtn" id="i18n-next-key" data-tooltip="${escAttr(t('i18n.nextKey'))}"${at < 0 || at >= _visible.length - 1 ? ' disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            </div>
+        </div>
+        <div class="i18x-chips" id="i18n-chips">${chips}</div>
+
+        <div class="i18x-pair">
+            <section class="i18x-side is-source">
+                <header class="i18x-side-h">
+                    <span class="i18x-langtag">${escHtml(_refLang.toUpperCase())}</span>
+                    <span class="bms-label">${escHtml(sameLang ? t('i18n.original') : t('i18n.source'))}</span>
+                    <button type="button" class="btn btn-ghost btn-xs" id="i18n-use-source"${srcVal ? '' : ' disabled'}>${escHtml(t('i18n.useSource'))}</button>
+                </header>
+                <div class="i18x-srctext${isObj ? ' is-mono' : ''}${srcVal ? '' : ' is-empty'}"${_refLang !== getLang() ? ` lang="${escAttr(_refLang)}"` : ''}>${srcVal ? escHtml(srcVal) : escHtml(t('i18n.missing'))}</div>
+            </section>
+            <section class="i18x-side is-target">
+                <header class="i18x-side-h">
+                    <span class="i18x-langtag is-target">${escHtml(_baseLang.toUpperCase())}</span>
+                    <label class="bms-label" for="i18n-edit-value">${escHtml(t('i18n.target'))}</label>
+                    <span class="i18x-autosave" id="i18n-autosave">${escHtml(t('i18n.autoSaved'))}</span>
+                </header>
+                <textarea id="i18n-edit-value" class="i18x-ta${isObj ? ' is-mono' : ''}" rows="${isObj ? 9 : 4}" spellcheck="true" lang="${escAttr(_baseLang)}" placeholder="${escAttr(t('i18n.emptyValue'))}">${escHtml(baseVal)}</textarea>
+                <div class="i18x-ta-foot" id="i18n-ta-foot"></div>
+            </section>
+        </div>
+
+        <div class="i18x-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="i18n-test-toast">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                <span>${escHtml(t('i18n.testToast'))}</span>
             </button>
-            <button class="btn btn-ghost btn-sm" id="i18n-preview-live">${t('i18n.previewLive') || 'Preview live'}</button>
-            ${edited ? `<button class="btn btn-ghost btn-sm" id="i18n-revert-edit">${t('i18n.revert') || 'Revert'}</button>` : ''}
+            <button type="button" class="btn btn-secondary btn-sm" id="i18n-test-tip">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>${escHtml(t('i18n.testTip'))}</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="i18n-preview-live">${escHtml(t('i18n.previewLive'))}</button>
+            <span class="bms-spacer"></span>
+            ${st === 'edited' ? `<button type="button" class="btn btn-ghost btn-sm" id="i18n-revert-edit">${escHtml(t('i18n.revert'))}</button>` : ''}
         </div>
 
-        <div class="i18n-detail-section">
-            <div class="i18n-detail-section-title">${t('i18n.otherLangs') || 'Other languages'}</div>
-            ${refsHtml || `<span class="i18n-sb-muted">${t('i18n.noOtherLangs') || 'No other languages loaded'}</span>`}
-        </div>
+        ${others.length ? `<details class="i18x-sec" open>
+            <summary><span class="bms-label">${escHtml(t('i18n.otherLangs'))}</span><span class="i18x-n">${others.length}</span></summary>
+            <div class="i18x-refs">${refsHtml}</div>
+        </details>` : ''}
 
-        <div class="i18n-detail-section">
-            <div class="i18n-detail-section-title">${t('i18n.usedIn') || 'Used in'} <span id="i18n-usage-count" class="i18n-sb-muted"></span></div>
-            <div id="i18n-usage-list" class="i18n-sb-muted">${t('common.loading') || 'Loading…'}</div>
-        </div>`;
+        <details class="i18x-sec" open>
+            <summary><span class="bms-label">${escHtml(t('i18n.usedIn'))}</span><span class="i18x-n" id="i18n-usage-count"></span></summary>
+            <div id="i18n-usage-list" class="i18x-usage"><span class="i18x-muted">${escHtml(t('common.loading'))}</span></div>
+        </details>`;
+
+    const ta = document.getElementById('i18n-edit-value') as HTMLTextAreaElement;
+    const foot = () => {
+        const el = document.getElementById('i18n-ta-foot');
+        if (!el || !ta) return;
+        // The {placeholders} the source has and the target lost (or invented): the one mistake
+        // that renders as a raw "{n}" in a toast.
+        const ps = placeholders(srcVal), pt = placeholders(ta.value);
+        const lost = [...ps].filter((p) => !pt.has(p));
+        const extra = ta.value.trim() ? [...pt].filter((p) => !ps.has(p) && srcVal) : [];
+        el.innerHTML = [
+            ...lost.map((p) => `<span class="bms-chip bms-chip--danger">${escHtml(t('i18n.phMissing').replace('{name}', `{${p}}`))}</span>`),
+            ...extra.map((p) => `<span class="bms-chip bms-chip--warn">${escHtml(t('i18n.phExtra').replace('{name}', `{${p}}`))}</span>`),
+            `<span class="i18x-len">${escHtml(t('i18n.chars').replace('{n}', String(ta.value.length)).replace('{src}', String(srcVal.length)))}</span>`,
+        ].join('');
+    };
+    foot();
 
     document.getElementById('i18n-copy-key')?.addEventListener('click', () => {
         navigator.clipboard?.writeText(key);
-        toast(t('i18n.keyCopied') || 'Key copied', 'success', 1500);
+        toast(t('i18n.keyCopied'), 'success', 1500);
+    });
+    document.getElementById('i18n-prev-key')?.addEventListener('click', () => moveSelection(-1, true));
+    document.getElementById('i18n-next-key')?.addEventListener('click', () => moveSelection(1, true));
+    document.getElementById('i18n-use-source')?.addEventListener('click', () => {
+        if (!ta) return;
+        ta.value = srcVal;
+        ta.dispatchEvent(new Event('input'));
+        focusEditor();
     });
 
-    const ta = document.getElementById('i18n-edit-value') as HTMLTextAreaElement;
     let deb: any;
     ta?.addEventListener('input', () => {
         const v = ta.value;
@@ -366,12 +618,32 @@ async function renderDetail(key: string): Promise<void> {
         }
         const hint = document.getElementById('i18n-autosave');
         if (hint) { hint.classList.add('flash'); setTimeout(() => hint.classList.remove('flash'), 400); }
+        foot();
         clearTimeout(deb);
-        deb = setTimeout(() => { updateDirty(); renderListPreviewOnly(key); }, 250);
+        deb = setTimeout(() => {
+            updateDirty();
+            renderListPreviewOnly(key);
+            const c = document.getElementById('i18n-chips');
+            if (c) c.innerHTML = chipsFor(key);
+            updateProgress(_allKeys.reduce((n, k) => n + (isMissingKey(k) ? 1 : 0), 0));
+        }, 250);
+    });
+    ta?.addEventListener('keydown', (e: KeyboardEvent) => {
+        // Alt+Up / Alt+Down: the previous / next key without leaving the field.
+        if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            moveSelection(e.key === 'ArrowDown' ? 1 : -1, true);
+            return;
+        }
+        // Escape leaves the field for the list; it does not close the whole sandbox.
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            document.getElementById('i18n-key-list')?.focus({ preventScroll: true });
+        }
     });
 
     document.getElementById('i18n-revert-edit')?.addEventListener('click', () => {
-        delete _sandbox[key]; updateDirty(); renderList(); renderDetail(key);
+        delete _sandbox[key]; updateDirty(); renderList(); markSelected(key); renderDetail(key);
     });
     document.getElementById('i18n-test-toast')?.addEventListener('click', () => testToastForKey(key));
     // Tooltip preview: shown ONLY while hovering the button, hidden the instant you leave it.
@@ -382,7 +654,7 @@ async function renderDetail(key: string): Promise<void> {
     document.getElementById('i18n-preview-live')?.addEventListener('click', () => {
         const v = (document.getElementById('i18n-edit-value') as HTMLTextAreaElement).value;
         document.querySelectorAll(`[data-i18n="${CSS.escape(key)}"]`).forEach(el => { (el as HTMLElement).textContent = v; });
-        toast(t('i18n.previewApplied') || 'Live preview applied to visible elements', 'info', 2000);
+        toast(t('i18n.previewApplied'), 'info', 2000);
     });
 
     // Usage
@@ -393,132 +665,266 @@ async function renderDetail(key: string): Promise<void> {
         try { usages = await invoke('find_i18n_usages', { key }); _usageCache[key] = usages; }
         catch { usages = []; }
     }
-    if (!usageEl) return;
+    if (!usageEl || _selectedKey !== key) return;
     if (!usages.length) {
-        usageEl.innerHTML = `<span class="i18n-sb-muted">${t('i18n.noUsage') || 'No usage found in source (may be built dynamically)'}</span>`;
-        if (countEl) countEl.textContent = '';
+        usageEl.innerHTML = `<span class="i18x-muted">${escHtml(t('i18n.noUsage'))}</span>`;
+        if (countEl) countEl.textContent = '0';
         return;
     }
     const byFile: Record<string, any[]> = {};
     usages.forEach((u: any) => { (byFile[u.file] ||= []).push(u); });
-    if (countEl) countEl.textContent = `(${usages.length} · ${Object.keys(byFile).length} ${t('i18n.files') || 'file(s)'})`;
+    if (countEl) countEl.textContent = String(usages.length);
     usageEl.innerHTML = Object.entries(byFile).map(([file, list]) => `
-        <div class="i18n-usage-file">
-            <div class="i18n-usage-file-name">${escHtml(file)} <span class="i18n-sb-muted">(${list.length})</span></div>
+        <div class="i18x-ufile">
+            <div class="i18x-ufile-name" title="${escAttr(file)}">${escHtml(file)} <span class="i18x-n">${list.length}</span></div>
             ${list.slice(0, 8).map(u => `
-                <div class="i18n-usage-line" data-loc="${escAttr(file + ':' + u.line)}" data-tooltip="${t('i18n.copyLoc') || 'Click to copy file:line'}">
-                    <span class="i18n-usage-ln">L${u.line}</span>
-                    ${/toast\s*\(/.test(u.snippet || '') ? `<span class="i18n-usage-toast-tag">toast</span>` : ''}
-                    ${/showTaskyHelp\s*\(/.test(u.snippet || '') ? `<span class="i18n-usage-toast-tag" style="color:var(--cyan);background:rgba(6,182,212,0.15);">tooltip</span>` : ''}
-                    <span class="i18n-usage-snip">${escHtml(u.snippet)}</span>
-                </div>`).join('')}
-            ${list.length > 8 ? `<div class="i18n-sb-muted" style="padding:4px 0 0;">+${list.length - 8} ${t('i18n.more') || 'more…'}</div>` : ''}
+                <button type="button" class="i18x-uline" data-loc="${escAttr(file + ':' + u.line)}" data-tooltip="${escAttr(t('i18n.copyLoc'))}">
+                    <span class="i18x-uln">L${u.line}</span>
+                    ${/toast\s*\(/.test(u.snippet || '') ? `<span class="i18x-utag">toast</span>` : ''}
+                    ${/showTaskyHelp\s*\(/.test(u.snippet || '') ? `<span class="i18x-utag is-tip">tooltip</span>` : ''}
+                    <span class="i18x-usnip">${escHtml(u.snippet)}</span>
+                </button>`).join('')}
+            ${list.length > 8 ? `<div class="i18x-muted">+${list.length - 8} ${escHtml(t('i18n.more'))}</div>` : ''}
         </div>`).join('');
-    usageEl.querySelectorAll('.i18n-usage-line').forEach(el => {
+    usageEl.querySelectorAll<HTMLElement>('.i18x-uline').forEach(el => {
         el.addEventListener('click', () => {
-            navigator.clipboard?.writeText((el as HTMLElement).dataset.loc || '');
-            toast(`${t('i18n.locCopied') || 'Copied'}: ${(el as HTMLElement).dataset.loc}`, 'success', 1800);
+            navigator.clipboard?.writeText(el.dataset.loc || '');
+            toast(`${t('i18n.locCopied')}: ${el.dataset.loc}`, 'success', 1800);
         });
     });
 }
 
-/** Shows a hardcoded (no-key) string picked from the app in the detail panel. */
-async function showHardcodedDetail(text: string): Promise<void> {
-    switchTab('keys');
-    _selectedKey = null;
-    renderList();
-    const detail = document.getElementById('i18n-detail');
-    if (!detail) return;
-    detail.innerHTML = `
-        <div class="i18n-detail-head"><span class="i18n-kind-badge" style="color:var(--amber);border-color:rgba(245,158,11,0.4);">${t('i18n.hardcoded') || 'Hardcoded'}</span></div>
-        <div class="i18n-hc-picked-text">${escHtml(text)}</div>
-        <p class="i18n-sb-muted" style="line-height:1.6;margin:6px 0 16px;">${t('i18n.hcPickedHint') || 'This text has no i18n key. Find it in the source below, then add a t(\'…\') key there.'}</p>
-        <div id="i18n-hc-picked-loc" class="i18n-sb-muted">${t('common.loading') || 'Locating in source…'}</div>
-        <div class="i18n-detail-actions" style="margin-top:16px;">
-            <button class="btn btn-secondary btn-sm" id="i18n-hc-copy-text">${t('i18n.copyText') || 'Copy text'}</button>
-        </div>`;
-    document.getElementById('i18n-hc-copy-text')?.addEventListener('click', () => {
-        navigator.clipboard?.writeText(text); toast(t('i18n.copied') || 'Copied', 'success', 1500);
-    });
-    // locate in scan data
-    if (!_hcLoaded) await loadHardcoded(false, true);
-    const norm = text.trim().toLowerCase();
-    const hits = _hcData.filter(h => (h.text || '').trim().toLowerCase() === norm)
-        .concat(_hcData.filter(h => (h.text || '').trim().toLowerCase().includes(norm) && (h.text || '').trim().toLowerCase() !== norm)).slice(0, 12);
-    const locEl = document.getElementById('i18n-hc-picked-loc');
-    if (!locEl) return;
-    if (!hits.length) {
-        locEl.innerHTML = `<span class="i18n-sb-muted">${t('i18n.hcNotLocated') || 'Not found in static source (built dynamically).'}</span>`;
-        return;
-    }
-    locEl.innerHTML = `<div class="i18n-detail-section-title">${t('i18n.usedIn') || 'Found in'}</div>` + hits.map(h => `
-        <div class="i18n-usage-line" data-loc="${escAttr(h.file + ':' + h.line)}" data-tooltip="${t('i18n.copyLoc') || 'Click to copy file:line'}">
-            <span class="i18n-usage-ln">${escHtml(h.file)}:${h.line}</span>
-            <span class="i18n-usage-snip">${escHtml(h.snippet)}</span>
-        </div>`).join('');
-    locEl.querySelectorAll('.i18n-usage-line').forEach(el => el.addEventListener('click', () => {
-        navigator.clipboard?.writeText((el as HTMLElement).dataset.loc || '');
-        toast(`${t('i18n.locCopied') || 'Copied'}: ${(el as HTMLElement).dataset.loc}`, 'success', 1800);
-    }));
-}
-
 function renderListPreviewOnly(key: string): void {
-    const row = document.querySelector(`.i18n-key-row[data-key="${CSS.escape(key)}"]`) as HTMLElement;
-    if (!row) { renderList(); return; }
+    const row = document.querySelector(`.i18x-krow[data-key="${CSS.escape(key)}"]`) as HTMLElement;
+    if (!row) { renderList(); markSelected(key, false); return; }
     const val = valueFor(key, _baseLang);
-    const valEl = row.querySelector('.i18n-key-row-val');
-    if (valEl) valEl.textContent = val || (t('i18n.missing') || '⚠ missing');
-    row.classList.toggle('edited', _sandbox[key] !== undefined);
-    row.classList.toggle('missing', !val);
+    const valEl = row.querySelector('.i18x-v');
+    if (valEl) { valEl.textContent = val.replace(/\s+/g, ' ').trim() || valueFor(key, _refLang); valEl.classList.toggle('is-src', !val.trim()); }
+    const st = statusOf(key);
+    row.className = `i18x-krow is-${st}`;
+    row.querySelector('.i18x-dot')?.setAttribute('title', t(STATUS_LABEL[st]));
 }
 
 function updateDirty(): void {
     const el = document.getElementById('i18n-dirty-count');
     const n = Object.keys(_sandbox).length;
-    if (el) el.textContent = n ? `${n} ${t('i18n.unsavedEdits') || 'unsaved sandbox edit(s)'}` : '';
+    if (!el) return;
+    el.hidden = !n;
+    el.innerHTML = n ? `<span class="bms-dot"></span>${escHtml(`${n} ${t('i18n.unsavedEdits')}`)}` : '';
 }
 
 // ── Hardcoded scanner tab ───────────────────────────────────────────────────────
 async function loadHardcoded(force: boolean, quiet = false): Promise<void> {
     if (_hcLoaded && !force) return;
     const listEl = document.getElementById('i18n-hc-list');
-    if (listEl && !quiet) listEl.innerHTML = `<div class="i18n-sb-empty" style="height:auto;margin-top:40px;">${t('common.loading') || 'Scanning source…'}</div>`;
+    if (listEl && !quiet) listEl.innerHTML = `<div class="bms-empty"><div class="bms-empty-t">${escHtml(t('i18n.hcScanning'))}</div></div>`;
     try { _hcData = await invoke('find_hardcoded_strings', { filter: '' }) || []; }
     catch { _hcData = []; }
     _hcLoaded = true;
+    _hcSel = -1;
     const c = document.getElementById('i18n-tabcount-hc');
     if (c) c.textContent = String(_hcData.length);
-    if (!quiet) renderHardcoded();
+    if (!quiet) { renderHardcoded(); renderHcDetail(null); }
 }
+
+const kindOf = (h: any) => (h.kind === 'js' ? 'ts' : h.kind);
 
 function renderHardcoded(): void {
     const listEl = document.getElementById('i18n-hc-list');
     if (!listEl) return;
     const q = ((document.getElementById('i18n-hc-search') as HTMLInputElement)?.value || '').toLowerCase().trim();
-    const kind = (document.getElementById('i18n-hc-kind') as HTMLSelectElement)?.value || 'all';
-    let filtered = _hcData;
-    if (kind !== 'all') filtered = filtered.filter(h => kind === 'ts' ? (h.kind === 'ts' || h.kind === 'js') : h.kind === kind);
-    if (q) filtered = filtered.filter(h => (h.text || '').toLowerCase().includes(q) || (h.file || '').toLowerCase().includes(q));
+    const kc: Record<string, number> = { all: 0, html: 0, ts: 0, toast: 0 };
+    const byFile = new Map<string, number[]>();
+    _hcData.forEach((h, i) => {
+        if (q && !(h.text || '').toLowerCase().includes(q) && !(h.file || '').toLowerCase().includes(q)) return;
+        const k = kindOf(h);
+        kc.all++; kc[k] = (kc[k] || 0) + 1;
+        if (_hcKind !== 'all' && k !== _hcKind) return;
+        if (!byFile.has(h.file)) byFile.set(h.file, []);
+        byFile.get(h.file)!.push(i);
+    });
+    _modal?.querySelectorAll<HTMLElement>('#i18n-hc-kind [data-kind]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === _hcKind)));
+    _modal?.querySelectorAll<HTMLElement>('#i18n-hc-kind [data-kn]').forEach((n) => { n.textContent = String(kc[n.dataset.kn || ''] || 0); });
 
-    if (!filtered.length) {
-        listEl.innerHTML = `<div class="i18n-sb-empty" style="height:auto;margin-top:40px;">${
-            _hcData.length ? (t('i18n.noResults') || 'No matches') : (t('i18n.hcNone') || 'No hardcoded text found 🎉')}</div>`;
+    _hcVisible = [];
+    const stats = document.getElementById('i18n-hc-stats');
+    if (!byFile.size) {
+        listEl.innerHTML = `<div class="bms-empty">
+            <div class="bms-empty-t">${escHtml(_hcData.length ? t('i18n.noResults') : t('i18n.hcNone'))}</div>
+            ${_hcData.length ? '' : `<div>${escHtml(t('i18n.hcHint'))}</div>`}
+        </div>`;
+        if (stats) stats.textContent = '';
         return;
     }
-    const kindColor: Record<string, string> = { toast: 'var(--amber)', html: 'var(--cyan)', js: 'var(--accent)', ts: 'var(--accent)' };
-    listEl.innerHTML = filtered.slice(0, 600).map(h => `
-        <div class="i18n-hc-item" data-loc="${escAttr(h.file + ':' + h.line)}" data-text="${escAttr(h.text)}">
-            <div class="i18n-hc-item-top">
-                <span class="i18n-hc-kind" style="color:${kindColor[h.kind] || 'var(--text-muted)'};border-color:${kindColor[h.kind] || 'var(--text-muted)'}40;">${escHtml(h.kind)}</span>
-                <span class="i18n-hc-text">${escHtml(h.text)}</span>
+    const files = [...byFile.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    let shown = 0;
+    listEl.innerHTML = files.map(([file, idx]) => {
+        const folded = _hcFolded.has(file);
+        const base = file.replace(/^.*[/\\]/, '');
+        const dir = file.slice(0, file.length - base.length);
+        const rows = folded ? '' : idx.slice(0, 200).map((i) => {
+            _hcVisible.push(i);
+            shown++;
+            const h = _hcData[i];
+            return `<div class="i18x-hcrow" role="option" data-i="${i}" aria-selected="${i === _hcSel}">
+                <span class="i18x-kind is-${escAttr(kindOf(h))}">${escHtml(kindOf(h))}</span>
+                <span class="i18x-hctext">${escHtml(h.text)}</span>
+                <span class="i18x-uln">L${h.line}</span>
+            </div>`;
+        }).join('');
+        return `<div class="i18x-hcfile">
+            <button type="button" class="i18x-hcfile-head" data-file="${escAttr(file)}" aria-expanded="${!folded}" title="${escAttr(file)}">
+                <svg class="i18x-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                <span class="i18x-hcfile-name"><span class="i18x-hcfile-dir">${escHtml(dir)}</span>${escHtml(base)}</span>
+                <span class="i18x-n">${idx.length}</span>
+            </button>
+            ${rows}
+        </div>`;
+    }).join('');
+    const total = files.reduce((n, [, idx]) => n + idx.length, 0);
+    if (stats) stats.innerHTML = `<span><b>${total}</b> ${escHtml(t('i18n.hcFindings'))} · ${escHtml(t('i18n.hcFiles').replace('{n}', String(files.length)))}</span>`;
+    if (shown && _hcSel >= 0 && !_hcVisible.includes(_hcSel)) renderHcDetail(null);
+}
+
+function toggleFold(file: string): void {
+    if (_hcFolded.has(file)) _hcFolded.delete(file); else _hcFolded.add(file);
+    renderHardcoded();
+    document.querySelector<HTMLElement>(`.i18x-hcfile-head[data-file="${CSS.escape(file)}"]`)?.scrollIntoView({ block: 'nearest' });
+}
+
+function selectHc(i: number): void {
+    _hcSel = i;
+    const listEl = document.getElementById('i18n-hc-list');
+    listEl?.querySelector('.i18x-hcrow[aria-selected="true"]')?.setAttribute('aria-selected', 'false');
+    const row = listEl?.querySelector<HTMLElement>(`.i18x-hcrow[data-i="${i}"]`);
+    row?.setAttribute('aria-selected', 'true');
+    row?.scrollIntoView({ block: 'nearest' });
+    const h = _hcData[i];
+    renderHcDetail(h ? { text: h.text, hits: [h], kind: kindOf(h) } : null);
+}
+
+function copyLoc(h: any): void {
+    if (!h) return;
+    const loc = `${h.file}:${h.line}`;
+    navigator.clipboard?.writeText(loc);
+    toast(`${t('i18n.locCopied')}: ${loc}`, 'success', 1800);
+}
+
+/** A key for a string that has none: an existing key with the very same text first (the
+ *  string is already translated somewhere), else `<area>.<firstWords>`. */
+function suggestKey(text: string, file: string): { key: string; existing: boolean } {
+    const norm = text.trim().toLowerCase();
+    const en = { ...(_diskParsed.en || {}), ...(_allTrans.en || {}) };
+    for (const [k, v] of Object.entries(en)) {
+        if (typeof v === 'string' && !k.startsWith('_') && v.trim().toLowerCase() === norm) return { key: k, existing: true };
+    }
+    const base = (file || '').replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '').replace(/[-_.](\w)/g, (_m, c) => c.toUpperCase());
+    const area = !base || base === 'index' ? 'ui' : base.charAt(0).toLowerCase() + base.slice(1);
+    const words = text.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 4);
+    const slug = words.map((w, i) => (i ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())).join('') || 'text';
+    return { key: `${area}.${slug.slice(0, 32)}`, existing: false };
+}
+
+/** Put a found string on screen: the first element outside the sandbox whose own text
+ *  matches, scrolled into view and outlined for a moment. */
+function findOnScreen(text: string): boolean {
+    const norm = text.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!norm) return false;
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n: Node | null;
+    while ((n = walk.nextNode())) {
+        const p = n.parentElement;
+        if (!p || _modal?.contains(p) || p.closest('script,style,template')) continue;
+        if (!(n.textContent || '').replace(/\s+/g, ' ').toLowerCase().includes(norm)) continue;
+        if (!p.getClientRects().length) continue;
+        p.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        p.classList.add('i18x-flash');
+        setTimeout(() => p.classList.remove('i18x-flash'), 2600);
+        return true;
+    }
+    return false;
+}
+
+function renderHcDetail(f: { text: string; hits: any[]; kind?: string; picked?: boolean } | null): void {
+    const el = document.getElementById('i18n-hc-detail');
+    if (!el) return;
+    if (!f) {
+        el.innerHTML = `<div class="i18x-start">
+            <div class="bms-label">${escHtml(t('i18n.tabHardcoded'))}</div>
+            <p class="i18x-muted">${escHtml(t('i18n.hcHint'))}</p>
+            <p class="i18x-muted">${escHtml(t('i18n.hcPick'))}</p>
+        </div>`;
+        return;
+    }
+    const first = f.hits[0];
+    const sug = suggestKey(f.text, first?.file || '');
+    const isHtml = (first?.kind || f.kind) === 'html' || /\.html?$/i.test(first?.file || '');
+    const call = isHtml ? `data-i18n="${sug.key}"` : `t('${sug.key}')`;
+    el.innerHTML = `
+        <div class="i18x-chips">
+            <span class="bms-chip bms-chip--warn"><span class="bms-dot"></span>${escHtml(t('i18n.hardcoded'))}</span>
+            ${f.kind ? `<span class="i18x-kind is-${escAttr(f.kind)}">${escHtml(f.kind)}</span>` : ''}
+            ${f.picked ? `<span class="bms-chip">${escHtml(t('i18n.pickedHc'))}</span>` : ''}
+        </div>
+        <blockquote class="i18x-quote">${escHtml(f.text)}</blockquote>
+
+        <div class="i18x-block">
+            <div class="bms-label">${escHtml(sug.existing ? t('i18n.hcReuse') : t('i18n.hcSuggested'))}</div>
+            <div class="i18x-sugg">
+                <code class="i18x-sugg-key">${escHtml(sug.key)}</code>
+                <button type="button" class="btn btn-secondary btn-xs" data-copy="${escAttr(sug.key)}">${escHtml(t('i18n.copyKey'))}</button>
+                <button type="button" class="btn btn-ghost btn-xs" data-copy="${escAttr(call)}">${escHtml(isHtml ? t('i18n.copyAttr') : t('i18n.copyCall'))}</button>
             </div>
-            <div class="i18n-hc-loc"><span class="i18n-hc-file">${escHtml(h.file)}</span><span class="i18n-hc-ln">L${h.line}</span></div>
-        </div>`).join('') +
-        (filtered.length > 600 ? `<div class="i18n-sb-muted" style="padding:10px;text-align:center;">+${filtered.length - 600} ${t('i18n.more') || 'more…'}</div>` : '');
-    listEl.querySelectorAll('.i18n-hc-item').forEach(el => el.addEventListener('click', () => {
-        navigator.clipboard?.writeText((el as HTMLElement).dataset.loc || '');
-        toast(`${t('i18n.locCopied') || 'Copied'}: ${(el as HTMLElement).dataset.loc}`, 'success', 1800);
+        </div>
+
+        <div class="i18x-block">
+            <div class="bms-label">${escHtml(t('i18n.hcLocated'))}</div>
+            ${f.hits.length ? f.hits.map((h) => `
+                <button type="button" class="i18x-loc" data-loc="${escAttr(h.file + ':' + h.line)}" data-tooltip="${escAttr(t('i18n.copyLoc'))}">
+                    <span class="i18x-loc-file">${escHtml(h.file)}<span class="i18x-uln">:${h.line}</span></span>
+                    ${h.snippet ? `<code class="i18x-loc-snip">${escHtml(h.snippet)}</code>` : ''}
+                </button>`).join('') : `<p class="i18x-muted">${escHtml(t('i18n.hcNotLocated'))}</p>`}
+        </div>
+
+        <div class="i18x-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="i18n-hc-find">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>
+                <span>${escHtml(t('i18n.hcFind'))}</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" data-copy="${escAttr(f.text)}">${escHtml(t('i18n.copyText'))}</button>
+        </div>`;
+    el.querySelectorAll<HTMLElement>('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+        navigator.clipboard?.writeText(b.dataset.copy || '');
+        toast(t('i18n.copied'), 'success', 1400);
     }));
+    el.querySelectorAll<HTMLElement>('.i18x-loc').forEach((b) => b.addEventListener('click', () => {
+        navigator.clipboard?.writeText(b.dataset.loc || '');
+        toast(`${t('i18n.locCopied')}: ${b.dataset.loc}`, 'success', 1800);
+    }));
+    document.getElementById('i18n-hc-find')?.addEventListener('click', () => {
+        if (findOnScreen(f.text)) {
+            // Floating, so the app underneath can be seen; the outline fades on its own.
+            if (_modal && !_overlayMode && !_dockMode) toggleOverlayMode(_modal, true);
+            toast(t('i18n.hcFound'), 'success', 1600);
+        } else toast(t('i18n.hcNotOnScreen'), 'info', 2600);
+    });
+}
+
+/** A hardcoded string picked from the app: the hardcoded tab, with where the scan found it. */
+async function showHardcodedDetail(text: string): Promise<void> {
+    switchTab('hardcoded');
+    if (!_hcLoaded) await loadHardcoded(false, true);
+    renderHardcoded();
+    const norm = text.trim().toLowerCase();
+    const hits = _hcData.filter(h => (h.text || '').trim().toLowerCase() === norm)
+        .concat(_hcData.filter(h => (h.text || '').trim().toLowerCase().includes(norm) && (h.text || '').trim().toLowerCase() !== norm)).slice(0, 12);
+    _hcSel = hits.length ? _hcData.indexOf(hits[0]) : -1;
+    if (_hcSel >= 0) {
+        const row = document.querySelector<HTMLElement>(`.i18x-hcrow[data-i="${_hcSel}"]`);
+        row?.setAttribute('aria-selected', 'true');
+        row?.scrollIntoView({ block: 'nearest' });
+    }
+    renderHcDetail({ text, hits, kind: hits[0] ? kindOf(hits[0]) : undefined, picked: true });
 }
 
 // ── Pick text from the running app (any text, i18n or hardcoded) ─────────────────
@@ -772,7 +1178,7 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         // Saved floating opacity (the slider in the header controls it live).
         const savedOp = Number(localStorage.getItem('bmm_i18n_overlay_opacity') || '100');
         panel.style.opacity = String(Math.min(100, Math.max(35, savedOp)) / 100);
-        makeDraggable(panel, modal.querySelector('.i18n-sb-header') as HTMLElement);
+        makeDraggable(panel, modal.querySelector('.modal-header') as HTMLElement);
         observeResize(panel);
     } else {
         if (_ro) { _ro.disconnect(); _ro = null; }   // stop before clearing styles (avoid saving reset size)

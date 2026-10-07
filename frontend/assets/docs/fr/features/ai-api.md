@@ -7,7 +7,7 @@ réglage, ni rien d'autre à toi.
 
 ## L'activer
 
-**Paramètres → Laya → Gérer Laya → API locale → Activer l'API locale.** BMM crée un jeton et l'affiche **une
+**Paramètres → Laya → Gérer Laya → Pour les programmes → Activer l'API locale.** BMM crée un jeton et l'affiche **une
 seule fois** : copie-le à ce moment-là. **Nouveau jeton** en crée un autre ; l'ancien cesse de
 marcher aussitôt.
 
@@ -47,7 +47,7 @@ curl -s http://127.0.0.1:51275/v1/classify \
 ```
 
 `labels` sont des ids ou des `{id, description, examples}` (2 à 32), ou `"task": "<id>"` désigne
-une tâche enregistrée dans **Paramètres → Laya → Gérer Laya → Réponses**. La réponse suit vos réglages pour les
+une tâche enregistrée dans **Paramètres → Laya → Gérer Laya → Mes tâches**. La réponse suit vos réglages pour les
 *Programmes* (ou ceux de la tâche) : `label` (`none` quand Laya s'abstient), `p`, `labels`
 (retenues), `ranked`, `probabilities` (chaque étiquette), `abstained`, `uncertain`, `reason`. Champs
 inconnus : 400.

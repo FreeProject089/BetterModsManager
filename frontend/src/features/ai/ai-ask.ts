@@ -128,9 +128,10 @@ export async function openAskLaya(question = ''): Promise<void> {
     let hits: AskHit[] = [];
     let lastReq: any = null;
     o.innerHTML = `
-      <div class="modal ai-modal ai-ask" role="dialog" aria-modal="true" aria-labelledby="aia-title">
+      <div class="modal bms modal--lg ai-modal ai-ask" role="dialog" aria-modal="true" aria-labelledby="aia-title">
         <div class="modal-header">
-          <h3 class="modal-title ai-title" id="aia-title">${IC}<span>${escHtml(t('ai.ask.title'))}</span></h3>
+          <div class="bms-icon" aria-hidden="true">${IC}</div>
+            <h2 class="modal-title" id="aia-title">${escHtml(t('ai.ask.title'))}</h2>
           <button type="button" class="modal-close" id="aia-close" aria-label="${escAttr(t('common.close'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body ai-body">

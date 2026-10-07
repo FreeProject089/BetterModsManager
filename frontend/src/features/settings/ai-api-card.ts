@@ -43,10 +43,15 @@ function render(card: HTMLElement, st: ApiStatus | null): void {
     const line = statusLine(st);
     const example = `curl -s -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \\\n  -d '{"state":{"body":"The game crashes at start"},"questions":{"cat":{"type":"choice","criteria":["crash","ui"]}}}' \\\n  ${st.url}/v1/systemone`;
     card.innerHTML = `
-      <h3 class="card-title ai-card-title"><span>${escHtml(t('ai.api.title'))}</span>
-        <span class="${line.cls}" id="ai-api-pill">${escHtml(line.text)}</span></h3>
-      <p class="ai-muted">${escHtml(t('ai.api.intro'))}</p>
-      <label class="ai-switch"><input type="checkbox" id="ai-api-on" ${st.enabled ? 'checked' : ''}> <span>${escHtml(t('ai.api.toggle'))}</span></label>
+      <header class="laya-page-h">
+        <h3 class="card-title ai-card-title"><span>${escHtml(t('ai.api.title'))}</span>
+          <span class="${line.cls}" id="ai-api-pill">${escHtml(line.text)}</span></h3>
+        <p class="ai-muted">${escHtml(t('ai.api.intro'))}</p>
+      </header>
+      <div class="laya-switchrow">
+        <span class="laya-switchrow-text"><b id="ai-api-on-l">${escHtml(t('ai.api.toggle'))}</b><small>${escHtml(t('ai.hub2.apiHint'))}</small></span>
+        <label class="bmm-switch"><input type="checkbox" id="ai-api-on" ${st.enabled ? 'checked' : ''} aria-labelledby="ai-api-on-l"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+      </div>
       ${_freshToken ? `
       <div class="ai-block" id="ai-api-token-box">
         <div class="ai-lbl">${escHtml(t('ai.api.tokenOnce'))}</div>
@@ -59,7 +64,7 @@ function render(card: HTMLElement, st: ApiStatus | null): void {
         <span class="ai-muted" id="ai-api-status" aria-live="polite"></span>
       </div>
       <details class="ai-more" id="ai-api-more">
-        <summary>${escHtml(t('ai.api.more'))}</summary>
+        <summary>${escHtml(t('ai.hub2.apiAdvanced'))}</summary>
         <div class="ai-grid">
           <label class="ai-lbl" for="ai-api-port">${escHtml(t('ai.api.port'))}</label>
           <input id="ai-api-port" class="form-input" type="number" min="1024" max="65535" value="${escAttr(String(st.port))}">

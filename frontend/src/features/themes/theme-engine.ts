@@ -386,7 +386,9 @@ function enforceLightContrast(root: Element | Document): void {
     const scan = (el: HTMLElement) => {
       try {
         if (!el || el.nodeType !== 1) return;
-        if (el.closest('#bmm-theme-editor, #bte-elov, .bmm-csel-menu, #app-loader')) return;
+        // .tcg-mock: the theme catalogue's miniatures are painted in ANOTHER theme's colours on
+        // purpose; "fixing" a dark one under a light theme would preview the wrong theme.
+        if (el.closest('#bmm-theme-editor, #bte-elov, .bmm-csel-menu, #app-loader, .tcg-mock, .tcg-sw-dot')) return;
         if (isOverridden(el)) return;
         const cls = el.className && typeof el.className === 'string' ? el.className : '';
         const isChip = /badge|btn|tag|pill|chip|toggle|dot|avatar|method|status/i.test(cls);
@@ -525,6 +527,8 @@ function startPatchObserver(theme: BmmTheme): void {
     const patchEl = (el: HTMLElement) => {
         if (!el.style?.cssText) return;
         if (el.id?.startsWith('bmm-theme') || el.closest('#bmm-theme-editor') || el.closest('#bte-elov')) return;
+        // The catalogue's miniatures carry another theme's literal colours on purpose.
+        if (el.closest('.tcg-mock, .tcg-sw-dot')) return;
         let txt = el.style.cssText;
         let changed = false;
         for (const [re, rep] of allPatches) {

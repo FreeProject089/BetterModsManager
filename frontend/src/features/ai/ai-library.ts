@@ -73,9 +73,10 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
 
     const shell = (body: string, foot: string) => {
         o.innerHTML = `
-        <div class="modal ai-modal ai-lib" role="dialog" aria-modal="true" aria-labelledby="ail-title">
+        <div class="modal bms modal--lg ai-modal ai-lib" role="dialog" aria-modal="true" aria-labelledby="ail-title">
           <div class="modal-header">
-            <h3 class="modal-title ai-title" id="ail-title">${IC}<span>${escHtml(t('ai.lib.title'))}</span></h3>
+            <div class="bms-icon" aria-hidden="true">${IC}</div>
+            <h2 class="modal-title" id="ail-title">${escHtml(t('ai.lib.title'))}</h2>
             <button type="button" class="modal-close" id="ail-close" aria-label="${escAttr(t('common.close'))}" ${_running ? 'disabled' : ''}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div class="modal-body ai-body">${body}</div>
@@ -183,7 +184,7 @@ export async function openAnalyzeLibrary(opts: LibraryOpts): Promise<void> {
           <div class="ai-rows">${shown.map((r) => rowHtml(it, r)).join('')}</div>
           ${it.error ? `<div class="ai-error">${escHtml(it.error)}</div>` : ''}
           ${it.done ? '' : `<div class="ai-lib-actions">
-            <button type="button" class="ai-link" data-all="${escAttr(it.id)}">${escHtml(t('ai.lib.tickAll'))}</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-all="${escAttr(it.id)}">${escHtml(t('ai.lib.tickAll'))}</button>
             <button type="button" class="btn btn-primary btn-sm" data-apply="${escAttr(it.id)}" ${n ? '' : 'disabled'}>${escHtml(t('ai.lib.apply', { n: String(n) }))}</button></div>`}
         </details>`;
     };

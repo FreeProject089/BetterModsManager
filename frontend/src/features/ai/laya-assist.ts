@@ -106,7 +106,7 @@ function acceptedHtml(): string {
     if (_acc.related) chips.push(['duplicate', _acc.related, _acc.related]);
     if (!chips.length) return '';
     return `<div class="laya-fb-accepted"><span class="ai-muted">${escHtml(t('laya.fb.accepted'))}</span>
-      ${chips.map(([f, v, w]) => `<span class="laya-chip">${escHtml(fieldWord(f))}: ${escHtml(w)}<button type="button" data-laya-rm="${escHtml(f)}" data-v="${escHtml(v)}" aria-label="${escHtml(t('common.remove'))}">×</button></span>`).join('')}</div>`;
+      ${chips.map(([f, v, w]) => `<span class="laya-chip">${escHtml(fieldWord(f))}: ${escHtml(w)}<button type="button" class="laya-chip-x" data-laya-rm="${escHtml(f)}" data-v="${escHtml(v)}" aria-label="${escHtml(t('common.remove'))}">×</button></span>`).join('')}</div>`;
 }
 
 function draw(box: HTMLElement): void {

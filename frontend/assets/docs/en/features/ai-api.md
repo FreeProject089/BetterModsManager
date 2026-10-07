@@ -6,7 +6,7 @@ Classification only: the API cannot read a file, a mod, a setting or anything el
 
 ## Turn it on
 
-**Settings → Laya → Manage Laya → Local API → Turn on the local API.** BMM makes a token and shows it **once**:
+**Settings → Laya → Manage Laya → For programs → Turn on the local API.** BMM makes a token and shows it **once**:
 copy it then. **New token** makes another one; the old one stops working at once.
 
 From a terminal: `bmm ai-api start` (prints a token once if there is none), `bmm ai-api stop`,
@@ -45,7 +45,7 @@ curl -s http://127.0.0.1:51275/v1/classify \
 ```
 
 `labels` are ids or `{id, description, examples}` (2 to 32), or `"task": "<id>"` names a task saved
-in **Settings → Laya → Manage Laya → Answers**. The answer follows your settings for *Programs* (or the task's):
+in **Settings → Laya → Manage Laya → My tasks**. The answer follows your settings for *Programs* (or the task's):
 `label` (`none` when Laya abstained), `p`, `labels` (accepted), `ranked`, `probabilities` (every
 label), `abstained`, `uncertain`, `reason`. Unknown fields: 400.
 

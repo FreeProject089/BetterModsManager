@@ -426,7 +426,7 @@
         "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
         "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 3408,
+      "words": 3426,
       "diagrams": 1,
       "fr": true
     },
@@ -441,7 +441,7 @@
         "en": "Programs on your PC can ask the built-in Laya the same questions as laya-serve: sort a text into labels, answer yes or no, score a level. Off by default.",
         "fr": "Les programmes de ton PC peuvent poser à la Laya intégrée les mêmes questions qu'à laya-serve : classer un texte dans des étiquettes, répondre oui ou non,…"
       },
-      "words": 382,
+      "words": 383,
       "diagrams": 0,
       "fr": true
     },

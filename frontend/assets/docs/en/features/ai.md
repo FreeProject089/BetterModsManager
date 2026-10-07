@@ -43,7 +43,7 @@ works. It is a separate **model pack** (327 MB to download, 404 MB on disk):
 **Where it comes from.** The installer's option *Laya offline (local AI, nothing sent)* is
 ticked by default: setup downloads the pack once, refuses it unless it matches its pinned
 SHA-256, and unpacks it into `<install folder>\models\laya`. If you unticked it, **Settings → Laya
-→ Manage Laya → General → Laya built in → Install the model** downloads the same pack into
+→ Manage Laya → Overview → Where Laya runs → Install the model** downloads the same pack into
 `%LOCALAPPDATA%\com.bettermm.desktop\models\laya`. The block always shows ONE state:
 
 | State | What you see |
@@ -177,7 +177,7 @@ Rules BMM enforces before anything is sent — in the Rust core, not in the page
 
 Laya ranks and filters; it never writes. When you want text — a description draft for a mod, or a
 written answer in *Ask Laya* — BMM can ask a **writing model** you choose, in **Settings → Laya →
-Manage Laya → General → Writing**:
+Manage Laya → Overview → Advanced → Writing**:
 
 | Writing | Where the text goes | What you need |
 |---|---|---|
@@ -341,7 +341,7 @@ calls and cache**.
 
 ## Laya's answers: how sure, and your own tasks
 
-**Settings → Laya → Manage Laya → Answers** decides how sure Laya must be before BMM shows or
+**Settings → Laya → Manage Laya → Answer strictness** decides how sure Laya must be before BMM shows or
 uses an answer. Nothing changes until you touch it: **Balanced** is BMM's usual behaviour.
 
 | Preset | What it does |
@@ -349,7 +349,7 @@ uses an answer. Nothing changes until you touch it: **Balanced** is BMM's usual 
 | **Careful** | Fewer answers, more often right. Says *I don't know* when unsure |
 | **Balanced** | BMM's usual behaviour (tags from 35 %, a report category from 30 %, tasks always answer) |
 | **Open** | More answers. A doubtful one is kept and marked *guess* |
-| **Custom** | Your own numbers, under *Fine settings* |
+| **Custom** | Your own numbers, under *Advanced: fine settings* |
 
 *For* picks the feature: all of them, or one with its own settings (mod suggestions, Ask Laya,
 bug reports, library analysis, scheduled tasks and scripts, programs, crash reports). *Fine settings*:
@@ -375,7 +375,7 @@ before.
 
 ### Your own tasks
 
-*My tasks*: a name, what it reads (the mod's name, description, readme or everything; a text; a
+*My tasks* (its own tab): a name, what it reads (the mod's name, description, readme or everything; a text; a
 file; a report), 2 to 32 labels (each with an optional meaning and examples), an optional question,
 its own settings or the *tasks* ones, and what to do with a mod's answer (show only, add the tag of
 the same name, set it as the mod's category among the task's labels, or write a note line). A tag
@@ -392,12 +392,12 @@ is never created: a label without a tag of the same name is reported.
 
 **Export** writes a versioned JSON file; **Import** reads one back (checked, refused if it comes
 from a newer BMM or has unknown fields); **Reset** goes back to the defaults. Programs may change
-these settings only if you tick *Programs (local API, MCP, CLI) may change these settings*; a
+these settings only if you tick *Programs (local API, MCP, CLI) may change these settings* (under *Advanced: programs, import, export, reset*); a
 program can never tick it.
 
 ## Turning it off
 
-- **Settings → Laya → Manage Laya → General**: the master switch. Off means no AI network request anywhere in
+- **Settings → Laya → Manage Laya → Overview**: the master switch (the switch next to *Laya is on*). Off means no AI network request anywhere in
   BMM; this is covered by an automated test that counts requests.
 - **The installer**: *Laya offline (local AI, nothing sent)* on the options page, ticked by
   default because nothing leaves the PC. Ticked installs the model pack and turns the master

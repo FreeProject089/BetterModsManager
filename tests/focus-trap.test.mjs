@@ -49,7 +49,7 @@ describe('the dialogs use it', () => {
   test('activation order: trapped, and gated on being ON SCREEN (a Learn more hides it)', () => {
     assert.match(ORDER, /installFocusTrap\(ov, shown\)/);
     assert.match(ORDER, /const shown = \(\): boolean => _open === ov && ov\.isConnected && ov\.classList\.contains\('open'\)/);
-    assert.match(ORDER, /if \(e\.key === 'Escape' && shown\(\)\)/, 'Escape only while it is on screen');
+    assert.match(ORDER, /if \(e\.key === 'Escape' && !e\.defaultPrevented && shown\(\)\)/, 'Escape only while it is on screen, and not when an open menu inside took it');
     assert.match(ORDER, /\}, shown\);/, 'its Alt+arrow commands only while it is on screen');
     // Opened again after the docs: the hidden view comes back with its draft.
     assert.match(ORDER, /if \(_open\) \{\s*[^}]*_open\.classList\.add\('open'\)/);

@@ -26,7 +26,7 @@ import { isActivationBusy, configureActivationJobs } from '../core/activation-jo
 import { initActivationIndicator } from './activation-indicator.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
-import { openModal } from './modal-shell.js';
+import { shortLicense } from './licence-short.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
 import { fireErrorEvent } from '../core/bmm-events.js';
@@ -1780,7 +1780,6 @@ export function startCreditsMarquee(): void {
 function initCredits() {
     const contributorsGrid = document.getElementById('contributors-grid');
     startCreditsMarquee();
-    void renderCreditsStackSummary();
     if (contributorsGrid) {
         const sections = [
             { id: 'staff', title: 'credits.sections.staff' },
@@ -1831,7 +1830,6 @@ function initCredits() {
     }
     // Language change support
     document.addEventListener('langChanged', () => {
-        void renderCreditsStackSummary();
         if (contributorsGrid) {
             contributorsGrid.querySelectorAll('.contributor-role').forEach(el => {
                 const key = (el as HTMLElement).dataset.i18n;
@@ -1889,184 +1887,288 @@ function stackDesc(it: StackItem): { text: string; upstream: boolean } {
 }
 const stackVersion = (v: string | null) => (!v ? '' : /^\d/.test(v) ? `v${v}` : v);
 
-/** Credits → the "Built with" strip: one chip per group with its count, each opening the
- *  stack on that group. Drawn from the same generated file as the modal. */
-async function renderCreditsStackSummary(): Promise<void> {
-    const host = document.getElementById('credits-stack-summary');
-    if (!host) return;
-    const groups = (await loadStackData()).filter((g) => g.items.length);
-    if (!groups.length) { host.hidden = true; return; }
-    const total = groups.reduce((n, g) => n + g.items.length, 0);
-    host.hidden = false;
-    host.innerHTML = `
-        <div class="credits-stack-head">
-            <span class="credits-section-title credits-stack-title">${escHtml(t('credits.builtWith') || 'Built with')}</span>
-            <span class="credits-stack-total">${escHtml((t('credits.stackTotal') || '{n} open-source components').replace('{n}', String(total)))}</span>
-        </div>
-        <div class="credits-stack-chips">${groups.map((g) => {
-            const tx = STACK_GROUP_TEXT[g.id];
-            const title = tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : g.id;
-            return `<button type="button" class="credits-stack-chip" data-group="${escAttr(g.id)}">${escHtml(title)} <span class="stack-count">${g.items.length}</span></button>`;
-        }).join('')}</div>`;
-    host.onclick = (e) => {
-        const chip = (e.target as HTMLElement).closest<HTMLElement>('.credits-stack-chip');
-        if (chip?.dataset.group) void (window as any).openStackModal(chip.dataset.group);
-    };
-}
+// Where each piece actually earns its place. A dependency list answers "what do we ship"; this
+// answers "why", which is the only reason to read one. Optional on purpose: the load-bearing
+// ones, not a paraphrase of every README.
+const STACK_ROLE: Record<string, { en: string; fr: string }> = {
+    'jwalk':         { en: 'Walks your mod folders. Recursive scanning is the hottest path in BMM, so it runs in parallel.', fr: 'Parcourt tes dossiers de mods. Le scan récursif est le chemin le plus chaud de BMM, donc il tourne en parallèle.' },
+    'rayon':         { en: 'Turns per-file work (hashing, copying, verifying) into multithreaded iteration without hand-rolling a pool.', fr: 'Transforme le travail par fichier (hash, copie, vérification) en itération multithread sans écrire de pool à la main.' },
+    'blake3':        { en: 'Every integrity check and every delta-sync decision compares BLAKE3 fingerprints, never file contents.', fr: 'Chaque vérification d’intégrité et chaque décision de delta-sync compare des empreintes BLAKE3, jamais le contenu des fichiers.' },
+    'ed25519-dalek': { en: 'Signs and verifies repo manifests, so a mod list can prove who produced it.', fr: 'Signe et vérifie les manifestes de dépôt, pour qu’une liste de mods puisse prouver qui l’a produite.' },
+    'tokio':         { en: 'The async runtime behind downloads, the local API and the repo server.', fr: 'Le runtime asynchrone derrière les téléchargements, l’API locale et le serveur de dépôt.' },
+    'mimalloc':      { en: 'Replaces the system allocator: measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système : mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
+    'rrweb':         { en: 'Records a session as replayable DOM events: the .bmmreplay files behind bug reports and the docs player.', fr: 'Enregistre une session en événements DOM rejouables : les fichiers .bmmreplay des rapports de bug et du lecteur de docs.' },
+    'dompurify':     { en: 'Sanitises every piece of markdown BMM renders, because catalogs and repos are content written by other people.', fr: 'Assainit chaque markdown affiché par BMM, parce que catalogues et dépôts sont du contenu écrit par d’autres.' },
+    'lucide':        { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON, never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON, jamais une dépendance d’exécution.' },
+    'simple-icons':  { en: 'Build-time source of the 3400+ brand glyphs, sharded per first letter so one stored icon costs KB, not MB.', fr: 'Source à la compilation des 3400+ glyphes de marques, shardée par première lettre pour qu’une icône stockée coûte des Ko, pas des Mo.' },
+    'clap':          { en: 'Parses the BMM CLI, the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM, la même surface que le serveur MCP expose aux agents.' },
+    'schemars':      { en: 'Generates the JSON Schemas the MCP tools advertise, so an agent knows what a tool accepts.', fr: 'Génère les schémas JSON annoncés par les outils MCP, pour qu’un agent sache ce qu’un outil accepte.' },
+    'tauri-api':     { en: 'The bridge the whole UI talks through: every action crosses it to reach the Rust core.', fr: 'Le pont par lequel toute l’UI passe : chaque action le traverse pour atteindre le cœur Rust.' },
+    'laya-model':    { en: 'The model behind Laya: it classifies text (a crash, a question, a report) on your PC, offline, never generating any.', fr: 'Le modèle derrière Laya : il classe du texte (un crash, une question, un rapport) sur ton PC, hors ligne, sans jamais en générer.' },
+    'ort':           { en: 'Runs the Laya model in-process through ONNX Runtime, loaded from the model pack after its hash is checked.', fr: 'Fait tourner le modèle Laya dans le processus via ONNX Runtime, chargé depuis le pack après vérification de son empreinte.' },
+    'tokenizers':    { en: 'Cuts text into the exact token ids the model was trained on, byte for byte the same as the Python reference.', fr: 'Découpe le texte en exactement les identifiants de tokens du modèle, octet pour octet comme la référence Python.' },
+    'slint':         { en: 'Draws BetterInstaller: a native window without a browser engine, so the installer stays small.', fr: 'Dessine BetterInstaller : une fenêtre native sans moteur de navigateur, pour que l’installeur reste petit.' },
+    'mkdocs-material': { en: 'The theme and search of BMM Docs, in English and French.', fr: 'Le thème et la recherche de BMM Docs, en anglais et en français.' },
+};
 
+const stackGroupTitle = (id: string) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : id; };
+const stackGroupBlurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[2]) !== tx[2] ? t(tx[2]) : tx[3]) : ''; };
+
+/**
+ * Credits → Technical Architecture. Three panes inside one dialog: the groups with their counts
+ * on the left, a dense list in the middle (one line of description, a short licence badge), and
+ * the selected component on the right (what it is, why BMM uses it, the full licence and where
+ * each fact was read). With nothing selected the right pane is the overview: licences counted.
+ *
+ * The search lives in the dialog's toolbar band. It used to be a sticky block inside the
+ * scrolling body, which floated over the cards and cut them at its edge.
+ */
 (window as any).openStackModal = async (onlyGroup?: string) => {
     const modal = document.getElementById('modal-stack');
     const content = document.getElementById('stack-modal-content');
-    if (!modal || !content)
-        return;
+    const filterBox = document.getElementById('stack-filter') as HTMLInputElement | null;
+    const shownEl = document.getElementById('stack-shown');
+    const subEl = document.getElementById('stack-modal-sub');
+    if (!modal || !content) return;
     modal.classList.add('open');
-    content.innerHTML = `<div class="stack-loading">${escHtml(t('credits.stackLoading') || 'Loading…')}</div>`;
+    content.innerHTML = `<div class="bms-empty stk-state">${escHtml(t('credits.stackLoading'))}</div>`;
     const groups = (await loadStackData()).filter((g) => g.items.length);
-    if (!groups.length) { content.innerHTML = `<div class="stack-empty">${escHtml(t('credits.stackUnavailable') || 'The component list could not be read.')}</div>`; return; }
+    if (!groups.length) {
+        content.innerHTML = `<div class="bms-empty stk-state"><div class="bms-empty-t">${escHtml(t('credits.stackUnavailable'))}</div></div>`;
+        return;
+    }
 
-    // Where each piece actually earns its place. A dependency list answers "what do we ship";
-    // this answers "why", which is the only reason to read one. Optional on purpose: the
-    // load-bearing ones, not a paraphrase of every README.
-    const STACK_ROLE: Record<string, { en: string; fr: string }> = {
-        'jwalk':         { en: 'Walks your mod folders. Recursive scanning is the hottest path in BMM, so it runs in parallel.', fr: 'Parcourt tes dossiers de mods. Le scan récursif est le chemin le plus chaud de BMM, donc il tourne en parallèle.' },
-        'rayon':         { en: 'Turns per-file work (hashing, copying, verifying) into multithreaded iteration without hand-rolling a pool.', fr: 'Transforme le travail par fichier (hash, copie, vérification) en itération multithread sans écrire de pool à la main.' },
-        'blake3':        { en: 'Every integrity check and every delta-sync decision compares BLAKE3 fingerprints, never file contents.', fr: 'Chaque vérification d’intégrité et chaque décision de delta-sync compare des empreintes BLAKE3, jamais le contenu des fichiers.' },
-        'ed25519-dalek': { en: 'Signs and verifies repo manifests, so a mod list can prove who produced it.', fr: 'Signe et vérifie les manifestes de dépôt, pour qu’une liste de mods puisse prouver qui l’a produite.' },
-        'tokio':         { en: 'The async runtime behind downloads, the local API and the repo server.', fr: 'Le runtime asynchrone derrière les téléchargements, l’API locale et le serveur de dépôt.' },
-        'mimalloc':      { en: 'Replaces the system allocator: measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système : mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
-        'rrweb':         { en: 'Records a session as replayable DOM events: the .bmmreplay files behind bug reports and the docs player.', fr: 'Enregistre une session en événements DOM rejouables : les fichiers .bmmreplay des rapports de bug et du lecteur de docs.' },
-        'dompurify':     { en: 'Sanitises every piece of markdown BMM renders, because catalogs and repos are content written by other people.', fr: 'Assainit chaque markdown affiché par BMM, parce que catalogues et dépôts sont du contenu écrit par d’autres.' },
-        'lucide':        { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON, never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON, jamais une dépendance d’exécution.' },
-        'simple-icons':  { en: 'Build-time source of the 3400+ brand glyphs, sharded per first letter so one stored icon costs KB, not MB.', fr: 'Source à la compilation des 3400+ glyphes de marques, shardée par première lettre pour qu’une icône stockée coûte des Ko, pas des Mo.' },
-        'clap':          { en: 'Parses the BMM CLI, the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM, la même surface que le serveur MCP expose aux agents.' },
-        'schemars':      { en: 'Generates the JSON Schemas the MCP tools advertise, so an agent knows what a tool accepts.', fr: 'Génère les schémas JSON annoncés par les outils MCP, pour qu’un agent sache ce qu’un outil accepte.' },
-        'tauri-api':     { en: 'The bridge the whole UI talks through: every action crosses it to reach the Rust core.', fr: 'Le pont par lequel toute l’UI passe : chaque action le traverse pour atteindre le cœur Rust.' },
-        'laya-model':    { en: 'The model behind Laya: it classifies text (a crash, a question, a report) on your PC, offline, never generating any.', fr: 'Le modèle derrière Laya : il classe du texte (un crash, une question, un rapport) sur ton PC, hors ligne, sans jamais en générer.' },
-        'ort':           { en: 'Runs the Laya model in-process through ONNX Runtime, loaded from the model pack after its hash is checked.', fr: 'Fait tourner le modèle Laya dans le processus via ONNX Runtime, chargé depuis le pack après vérification de son empreinte.' },
-        'tokenizers':    { en: 'Cuts text into the exact token ids the model was trained on, byte for byte the same as the Python reference.', fr: 'Découpe le texte en exactement les identifiants de tokens du modèle, octet pour octet comme la référence Python.' },
-        'slint':         { en: 'Draws BetterInstaller: a native window without a browser engine, so the installer stays small.', fr: 'Dessine BetterInstaller : une fenêtre native sans moteur de navigateur, pour que l’installeur reste petit.' },
-        'mkdocs-material': { en: 'The theme and search of BMM Docs, in English and French.', fr: 'Le thème et la recherche de BMM Docs, en anglais et en français.' },
-    };
-    (window as any).__bmmStackRole = STACK_ROLE;
-    const all: StackItem[] = [];
-    const card = (it: StackItem) => {
-        const i = all.push(it) - 1;
+    const lang = getLang() === 'fr' ? 'fr' : 'en';
+    const custom = t('credits.stackLicCustom');
+    type Row = { it: StackItem; g: string; lic: string; q: string };
+    const rows: Row[] = [];
+    for (const g of groups) for (const it of g.items) {
         const d = stackDesc(it);
-        return `<button type="button" class="stack-item" data-i="${i}" data-q="${escAttr(`${it.name} ${it.license || ''}`.toLowerCase())}">
-            <span class="stack-item-header">
-                <span class="stack-item-name">${escHtml(it.name)}</span>
-                ${it.version ? `<span class="stack-item-version">${escHtml(stackVersion(it.version))}</span>` : ''}
-            </span>
-            ${d.text ? `<span class="stack-item-desc"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</span>` : ''}
-            <span class="stack-item-meta">
-                ${it.license ? `<span class="stack-license">${escHtml(it.license)}</span>` : ''}
-                ${it.apps?.length ? `<span class="stack-apps">${escHtml(it.apps.join(' · '))}</span>` : ''}
-            </span>
+        rows.push({ it, g: g.id, lic: shortLicense(it.license, custom), q: `${it.name} ${it.license || ''} ${d.text}`.toLowerCase() });
+    }
+    const total = rows.length;
+    if (subEl) subEl.textContent = `${t('credits.stackTotal').replace('{n}', String(total))} · ${t('credits.stackGroupsN').replace('{n}', String(groups.length))}`;
+
+    let group = groups.some((g) => g.id === onlyGroup) ? onlyGroup as string : 'all';
+    let sel = -1;
+    if (filterBox) { filterBox.value = ''; filterBox.setAttribute('aria-label', t('credits.stackFilter')); }
+
+    content.innerHTML = `
+        <div class="stk-wrap">
+            <div class="stk-layout">
+                <nav class="stk-nav" aria-label="${escAttr(t('credits.stackGroups'))}"></nav>
+                <div class="stk-list" role="listbox" aria-label="${escAttr(t('credits.stackTitle'))}" tabindex="-1"></div>
+                <aside class="stk-detail" aria-live="polite"></aside>
+            </div>
+        </div>`;
+    const layout = content.querySelector<HTMLElement>('.stk-layout')!;
+    const nav = content.querySelector<HTMLElement>('.stk-nav')!;
+    const list = content.querySelector<HTMLElement>('.stk-list')!;
+    const detail = content.querySelector<HTMLElement>('.stk-detail')!;
+
+    const query = () => (filterBox?.value || '').trim().toLowerCase();
+    const matches = (r: Row, q: string) => !q || r.q.includes(q);
+
+    const renderNav = () => {
+        const q = query();
+        const count = (id: string) => rows.filter((r) => (id === 'all' || r.g === id) && matches(r, q)).length;
+        const item = (id: string, label: string) => {
+            const n = count(id);
+            return `<button type="button" class="stk-nav-item${n ? '' : ' is-empty'}" data-group="${escAttr(id)}" aria-current="${id === group}">
+                <span class="stk-nav-name">${escHtml(label)}</span><span class="stk-nav-count">${n}</span></button>`;
+        };
+        nav.innerHTML = `<div class="bms-label stk-nav-label">${escHtml(t('credits.stackGroups'))}</div>`
+            + item('all', t('credits.stackAll'))
+            + `<div class="stk-nav-sep" role="separator"></div>`
+            + groups.map((g) => item(g.id, stackGroupTitle(g.id))).join('');
+    };
+
+    const rowHtml = (r: Row, i: number) => {
+        const d = stackDesc(r.it);
+        return `<button type="button" class="stk-row" role="option" data-i="${i}" aria-selected="${i === sel}" tabindex="${i === sel ? 0 : -1}">
+            <span class="stk-name" title="${escAttr(r.it.name)}">${escHtml(r.it.name)}</span>
+            <span class="stk-ver">${escHtml(stackVersion(r.it.version))}</span>
+            ${r.lic ? `<span class="stk-lic" title="${escAttr(r.it.license || '')}">${escHtml(r.lic)}</span>` : '<span class="stk-lic is-none"></span>'}
+            <span class="stk-desc"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</span>
         </button>`;
     };
-    const title = (id: string) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : id; };
-    const blurb = (id: string) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[2]) !== tx[2] ? t(tx[2]) : tx[3]) : ''; };
-    const total = groups.reduce((n, g) => n + g.items.length, 0);
-    const start = groups.some((g) => g.id === onlyGroup) ? onlyGroup as string : 'all';
-    content.innerHTML = `
-        <div class="stack-top">
-            <input class="input stack-filter" id="stack-filter" spellcheck="false" type="search"
-                placeholder="${escAttr(t('credits.stackFilter') || 'Filter by name…')}" aria-label="${escAttr(t('credits.stackFilter') || 'Filter by name…')}">
-            <div class="stack-chips" role="group" aria-label="${escAttr(t('credits.stackGroups') || 'Groups')}">
-                <button type="button" class="stack-chip" data-group="all" aria-pressed="false">${escHtml(t('credits.stackAll') || 'All')} <span class="stack-count">${total}</span></button>
-                ${groups.map((g) => `<button type="button" class="stack-chip" data-group="${escAttr(g.id)}" aria-pressed="false">${escHtml(title(g.id))} <span class="stack-count">${g.items.length}</span></button>`).join('')}
-            </div>
-            <p class="stack-note">${escHtml(t('credits.stackNote') || 'Read from the manifests at build time (Cargo.lock, package-lock.json, licence banners, the model lock): versions are what ships, licences are what each project declares.')}</p>
-        </div>
-        ${groups.map((g) => `
-        <section class="stack-section" data-group="${escAttr(g.id)}">
-            <div class="stack-section-title">${escHtml(title(g.id))} <span class="stack-count">${g.items.length}</span></div>
-            ${blurb(g.id) ? `<p class="stack-section-blurb">${escHtml(blurb(g.id))}</p>` : ''}
-            <div class="stack-grid">${g.items.map(card).join('')}</div>
-        </section>`).join('')}
-        <div class="stack-empty" hidden>${escHtml(t('credits.stackNoMatch') || 'Nothing matches this filter.')}</div>
-        <div class="stack-docs-link">
-            <span data-i18n="credits.stackDocsBlurb">${t('credits.stackDocsBlurb')}</span>
-            <button type="button" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>
-                <span data-i18n="credits.stackDocsCta">${t('credits.stackDocsCta')}</span> ↗
-            </button>
-        </div>
-    `;
 
-    // Filtering hides cards instead of re-rendering them, and each section's count follows,
-    // so an empty section reads as "nothing here matched" rather than as a rendering fault.
-    let group = start;
-    const filterBox = content.querySelector('#stack-filter') as HTMLInputElement | null;
-    const apply = () => {
-        const q = (filterBox?.value || '').trim().toLowerCase();
+    const renderList = () => {
+        const q = query();
         let shown = 0;
-        content.querySelectorAll<HTMLElement>('.stack-chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.group === group)));
-        content.querySelectorAll<HTMLElement>('.stack-section').forEach((sec) => {
-            const inGroup = group === 'all' || sec.dataset.group === group;
-            let visible = 0;
-            sec.querySelectorAll<HTMLElement>('.stack-item').forEach((el) => {
-                const on = inGroup && (!q || (el.dataset.q || '').includes(q));
-                el.hidden = !on;
-                if (on) visible++;
-            });
-            sec.hidden = !inGroup || visible === 0;
-            const count = sec.querySelector('.stack-section-title .stack-count');
-            if (count) count.textContent = String(visible);
-            shown += visible;
-        });
-        const empty = content.querySelector<HTMLElement>('.stack-empty');
-        if (empty) empty.hidden = shown > 0;
+        const html: string[] = [];
+        for (const g of groups) {
+            if (group !== 'all' && g.id !== group) continue;
+            const inGroup = rows.map((r, i) => [r, i] as const).filter(([r]) => r.g === g.id && matches(r, q));
+            if (!inGroup.length) continue;
+            shown += inGroup.length;
+            const blurb = stackGroupBlurb(g.id);
+            html.push(`<section class="stk-sec" aria-label="${escAttr(stackGroupTitle(g.id))}">
+                <div class="stk-group">
+                    <span class="stk-group-title">${escHtml(stackGroupTitle(g.id))}</span>
+                    <span class="stk-nav-count">${inGroup.length}</span>
+                    ${blurb ? `<span class="stk-group-blurb" title="${escAttr(blurb)}">${escHtml(blurb)}</span>` : ''}
+                </div>
+                ${inGroup.map(([r, i]) => rowHtml(r, i)).join('')}
+            </section>`);
+        }
+        list.innerHTML = html.join('') || `<div class="bms-empty stk-state">
+            <div class="bms-empty-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+            <div class="bms-empty-t">${escHtml(t('credits.stackNoMatch'))}</div>
+            ${q ? `<button type="button" class="btn btn-ghost btn-sm" data-stk-clear>${escHtml(t('credits.stackClear'))}</button>` : ''}
+        </div>`;
+        // A roving tabindex needs one row that takes the Tab: the selected one, else the first.
+        if (!list.querySelector('.stk-row[tabindex="0"]')) list.querySelector('.stk-row')?.setAttribute('tabindex', '0');
+        if (shownEl) shownEl.textContent = q || group !== 'all' ? t('credits.stackShown').replace('{n}', String(shown)).replace('{total}', String(total)) : '';
     };
-    filterBox?.addEventListener('input', apply);
-    content.onclick = (e) => {
-        const chip = (e.target as HTMLElement).closest<HTMLElement>('.stack-chip');
-        if (chip?.dataset.group) { group = chip.dataset.group; apply(); return; }
-        const el = (e.target as HTMLElement).closest<HTMLElement>('.stack-item');
-        const it = el ? all[Number(el.dataset.i)] : undefined;
-        if (it) openStackDetail(it);
-    };
-    apply();
-};
 
-/** The dependency explainer: what it is, why it is here, its licence and where those facts
- *  were read, then the way out. */
-function openStackDetail(it: StackItem): void {
-    document.getElementById('bmm-stack-detail')?.remove();
-    const role = (window as any).__bmmStackRole?.[it.key];
-    const lang = getLang() === 'fr' ? 'fr' : 'en';
-    const d = stackDesc(it);
-    const row = (label: string, value: string) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
-    const body = `
+    const fact = (label: string, value: string) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
+    const docsLink = `<div class="stk-docs">
+        <span>${escHtml(t('credits.stackDocsBlurb'))}</span>
+        <button type="button" class="btn btn-secondary btn-sm" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>${escHtml(t('credits.stackDocsCta'))} ↗</button>
+    </div>`;
+
+    const renderDetail = () => {
+        const r = rows[sel];
+        layout.classList.toggle('has-sel', !!r);
+        if (!r) {
+            // The overview: what the licences add up to. Counted on the short form, so the
+            // "MIT OR Apache-2.0" and "Apache-2.0 OR MIT" crates are one line, not two.
+            const byLic = new Map<string, number>();
+            for (const x of rows) byLic.set(x.lic || custom, (byLic.get(x.lic || custom) || 0) + 1);
+            const sorted = [...byLic.entries()].sort((a, b) => b[1] - a[1]);
+            const top = sorted.slice(0, 7);
+            const rest = sorted.slice(7).reduce((n, [, c]) => n + c, 0);
+            const max = top[0]?.[1] || 1;
+            const bar = (label: string, n: number, title = label) => `<div class="stk-licrow" title="${escAttr(title)}">
+                <span class="stk-licrow-name">${escHtml(label)}</span>
+                <span class="stk-bar"><span style="width:${Math.max(4, Math.round((n / max) * 100))}%"></span></span>
+                <span class="stk-licrow-n">${n}</span></div>`;
+            detail.innerHTML = `
+                <div class="stk-d-kicker bms-label">${escHtml(t('credits.stackOverview'))}</div>
+                <div class="stk-stats">
+                    <div class="stk-stat"><b>${total}</b><span>${escHtml(t('credits.stackComponents'))}</span></div>
+                    <div class="stk-stat"><b>${groups.length}</b><span>${escHtml(t('credits.stackGroups'))}</span></div>
+                    <div class="stk-stat"><b>${byLic.size}</b><span>${escHtml(t('credits.stackLicences'))}</span></div>
+                </div>
+                <div class="stk-d-block">
+                    <div class="bms-label">${escHtml(t('credits.stackLicences'))}</div>
+                    <div class="stk-licbars">${top.map(([l, n]) => bar(l, n)).join('')}${rest ? bar(t('credits.stackOther'), rest) : ''}</div>
+                </div>
+                <p class="stk-note">${escHtml(t('credits.stackPickHint'))}</p>
+                <p class="stk-note">${escHtml(t('credits.stackNote'))}</p>
+                ${docsLink}`;
+            return;
+        }
+        const it = r.it;
+        const d = stackDesc(it);
+        const role = STACK_ROLE[it.key];
+        detail.innerHTML = `
+            <div class="stk-d-head">
+                <div class="stk-d-name">${escHtml(it.name)}</div>
+                <div class="stk-d-meta">
+                    ${it.version ? `<span class="stk-ver-pill">${escHtml(stackVersion(it.version))}</span>` : ''}
+                    <span class="bms-chip">${escHtml(stackGroupTitle(r.g))}</span>
+                    ${r.lic ? `<span class="stk-lic" title="${escAttr(it.license || '')}">${escHtml(r.lic)}</span>` : ''}
+                </div>
+            </div>
             ${d.text ? `<div class="stackd-block">
-                <div class="stackd-label">${escHtml(t('credits.stackWhatIs') || 'What it is')}</div>
+                <div class="stackd-label">${escHtml(t('credits.stackWhatIs'))}</div>
                 <p class="stackd-text"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</p>
             </div>` : ''}
             ${role ? `<div class="stackd-block stackd-role">
-                <div class="stackd-label">${escHtml(t('credits.stackWhyHere') || 'Why BMM uses it')}</div>
+                <div class="stackd-label">${escHtml(t('credits.stackWhyHere'))}</div>
                 <p class="stackd-text">${escHtml(role[lang])}</p>
             </div>` : ''}
             <dl class="stackd-facts">
-                ${it.license ? row(t('credits.stackLicense') || 'Licence', it.license) : ''}
-                ${it.req ? row(t('credits.stackRequired') || 'Asked for', it.req) : ''}
-                ${it.apps?.length ? row(t('credits.stackUsedBy') || 'Used by', it.apps.join(', ')) : ''}
-                ${row(t('credits.stackSource') || 'Read from', it.source)}
-                ${it.licenseFrom && it.licenseFrom !== it.source ? row(t('credits.stackLicenseFrom') || 'Licence read from', it.licenseFrom) : ''}
-            </dl>`;
-    const m = openModal({
-        id: 'bmm-stack-detail',
-        title: it.name,
-        subtitle: it.version ? stackVersion(it.version) : undefined,
-        size: 'md',
-        className: 'stackd-modal',
-        closeLabel: t('common.close') || 'Close',
-        body,
-        footer: it.url ? `<button type="button" class="btn btn-secondary" id="stackd-open">${escHtml(t('credits.stackOpenPage') || 'Open its page')} ↗</button>` : null,
-    });
-    m.q('#stackd-open')?.addEventListener('click', () => {
-        if (it.url) (window as any).openExternal?.(it.url);
-        m.close();
-    });
-}
+                ${it.license ? fact(t('credits.stackLicense'), it.license) : ''}
+                ${it.req ? fact(t('credits.stackRequired'), it.req) : ''}
+                ${it.apps?.length ? fact(t('credits.stackUsedBy'), it.apps.join(', ')) : ''}
+                ${fact(t('credits.stackSource'), it.source)}
+                ${it.licenseFrom && it.licenseFrom !== it.source ? fact(t('credits.stackLicenseFrom'), it.licenseFrom) : ''}
+            </dl>
+            <div class="stk-d-actions">
+                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open>${escHtml(t('credits.stackOpenPage'))} ↗</button>` : ''}
+                <button type="button" class="btn btn-ghost btn-sm" data-stk-back>${escHtml(t('credits.stackOverview'))}</button>
+            </div>`;
+    };
+
+    const select = (i: number, focus = false) => {
+        sel = i;
+        list.querySelectorAll<HTMLElement>('.stk-row').forEach((el) => {
+            const on = Number(el.dataset.i) === i;
+            el.setAttribute('aria-selected', String(on));
+            el.tabIndex = on ? 0 : -1;
+            if (on && focus) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest' }); }
+        });
+        renderDetail();
+    };
+    const setGroup = (g: string) => {
+        group = g;
+        if (sel >= 0 && group !== 'all' && rows[sel]?.g !== group) sel = -1;
+        renderNav(); renderList(); renderDetail();
+        list.scrollTop = 0;
+    };
+
+    nav.onclick = (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('.stk-nav-item');
+        if (b?.dataset.group) setGroup(b.dataset.group);
+    };
+    nav.onkeydown = (e) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        const items = [...nav.querySelectorAll<HTMLElement>('.stk-nav-item')];
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        if (at < 0) return;
+        e.preventDefault();
+        const next = items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length];
+        next.focus();
+        if (next.dataset.group) setGroup(next.dataset.group);
+        nav.querySelector<HTMLElement>(`.stk-nav-item[data-group="${CSS.escape(next.dataset.group || '')}"]`)?.focus();
+    };
+    list.onclick = (e) => {
+        if ((e.target as HTMLElement).closest('[data-stk-clear]')) { if (filterBox) filterBox.value = ''; renderNav(); renderList(); filterBox?.focus(); return; }
+        const el = (e.target as HTMLElement).closest<HTMLElement>('.stk-row');
+        if (el) select(Number(el.dataset.i));
+    };
+    list.onkeydown = (e) => {
+        const items = [...list.querySelectorAll<HTMLElement>('.stk-row')];
+        if (!items.length) return;
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        let to = -1;
+        if (e.key === 'ArrowDown') to = Math.min(items.length - 1, at + 1);
+        else if (e.key === 'ArrowUp') to = Math.max(0, at - 1);
+        else if (e.key === 'Home') to = 0;
+        else if (e.key === 'End') to = items.length - 1;
+        else if (e.key === 'PageDown') to = Math.min(items.length - 1, at + 10);
+        else if (e.key === 'PageUp') to = Math.max(0, at - 10);
+        if (to < 0) return;
+        e.preventDefault();
+        select(Number(items[to].dataset.i), true);
+    };
+    detail.onclick = (e) => {
+        const tgt = e.target as HTMLElement;
+        if (tgt.closest('[data-stk-open]')) { const u = rows[sel]?.it.url; if (u) (window as any).openExternal?.(u); return; }
+        if (tgt.closest('[data-stk-back]')) {
+            const row = list.querySelector<HTMLElement>(`.stk-row[data-i="${sel}"]`);
+            select(-1);
+            row?.focus({ preventScroll: true });
+        }
+    };
+    if (filterBox) {
+        filterBox.oninput = () => { renderNav(); renderList(); };
+        // Down from the search goes into the list, the way a combobox would.
+        filterBox.onkeydown = (e) => {
+            if (e.key !== 'ArrowDown') return;
+            const first = list.querySelector<HTMLElement>('.stk-row');
+            if (!first) return;
+            e.preventDefault();
+            select(Number(first.dataset.i), true);
+        };
+    }
+
+    renderNav(); renderList(); renderDetail();
+    requestAnimationFrame(() => filterBox?.focus({ preventScroll: true }));
+};
 
 (window as any).openContributorModal = (id: string) => {
     const c = CONTRIBUTORS.find(x => x.id === id);

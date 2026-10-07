@@ -44,11 +44,9 @@
 }
 
 /* ── Suggestion dialog ───────────────────────────────────────────────────── */
-.ai-overlay .ai-modal { max-width: 680px; }
-.ai-title { display: flex; align-items: center; gap: 8px; }
-.ai-title svg { color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary)); flex: none; }
-.ai-body { gap: 10px; }
-.ai-provider { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+/* The card, header and footer are the house shell (modal-shell.css, .modal--lg); below is
+   only what goes inside the body. */
+.ai-provider { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; font-size: 12px; min-width: 0; }
 .ai-loading { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); padding: 18px 4px; }
 .ai-dot {
     width: 10px; height: 10px; border-radius: 50%; flex: none;
@@ -57,21 +55,24 @@
 }
 @keyframes aiPulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
 .ai-empty { font-size: 13px; color: var(--text-secondary); padding: 12px 4px; }
-.ai-rows { display: flex; flex-direction: column; gap: 6px; }
+.ai-rows { display: flex; flex-direction: column; gap: 8px; }
 .ai-row {
-    display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; cursor: pointer;
-    border: 1px solid var(--border); border-radius: var(--bmm-radius-chip, 8px); background: var(--bmm-s05);
-    transition: border-color var(--transition-fast), background var(--transition-fast);
+    display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; cursor: pointer; min-width: 0;
+    border: 1px solid var(--bmm-border); border-radius: var(--bmm-radius-input, 10px); background: var(--bmm-s02);
+    transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.ai-row:hover { background: var(--bg-hover); }
+.ai-row:hover { background: var(--bmm-s04); border-color: var(--bmm-border-hover); }
 .ai-row.is-on {
-    border-color: color-mix(in srgb, var(--bmm-accent) 55%, transparent);
-    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-accent) 60%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 8%, transparent);
+    box-shadow: inset 3px 0 0 var(--bmm-accent);
 }
-.ai-row input { margin-top: 3px; flex: none; }
-.ai-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.ai-row-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
-.ai-row-head b { font-size: 12.5px; }
+.ai-row input { margin-top: 2px; flex: none; width: 16px; height: 16px; accent-color: var(--bmm-accent); }
+.ai-row:focus-within { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.ai-row:has(input:focus:not(:focus-visible)) { outline: none; }
+.ai-row-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.ai-row-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; min-width: 0; }
+.ai-row-head b { font-size: 13px; color: var(--bmm-text-primary); }
 .ai-src {
     font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
     border: 1px solid var(--border); color: var(--text-secondary); background: var(--bmm-s05);
@@ -79,14 +80,67 @@
 .ai-src-file, .ai-src-folder { border-color: color-mix(in srgb, var(--info) 40%, transparent); color: color-mix(in srgb, var(--info) 60%, var(--text-primary)); }
 .ai-src-laya, .ai-src-bettercommunity { border-color: color-mix(in srgb, var(--bmm-accent) 45%, transparent); color: color-mix(in srgb, var(--bmm-accent) 65%, var(--text-primary)); }
 .ai-src-api, .ai-src-draft { border-color: color-mix(in srgb, var(--warning) 45%, transparent); color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); }
-.ai-origin { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
-.ai-conf { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.ai-value { font-size: 12.5px; line-height: 1.5; color: var(--text-primary); word-break: break-word; }
+.ai-origin { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ai-conf {
+    margin-left: auto; flex: none; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    padding: 1px 8px; border-radius: 999px; border: 1px solid var(--bmm-border-hover); background: var(--bmm-s04); color: var(--text-secondary);
+}
+.ai-conf.is-high { border-color: color-mix(in srgb, var(--success) 45%, var(--bmm-border)); background: color-mix(in srgb, var(--success) 10%, transparent); color: color-mix(in srgb, var(--success) 55%, var(--text-primary)); }
+.ai-conf.is-mid { border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border)); color: var(--bms-accent-ink, var(--text-primary)); }
+.ai-conf.is-low { border-color: color-mix(in srgb, var(--warning) 45%, var(--bmm-border)); background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--warning) 50%, var(--text-primary)); }
+.ai-value { font-size: 13px; line-height: 1.5; color: var(--text-primary); word-break: break-word; }
 .ai-value-multi { white-space: pre-wrap; max-height: 120px; overflow: auto; }
 .ai-current { font-size: 11.5px; color: var(--text-secondary); word-break: break-word; }
 .ai-current span { font-weight: 600; }
-.ai-hints { border-top: 1px solid var(--border); padding-top: 6px; }
-.ai-hint { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+.ai-hint { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 8px 12px; min-width: 0; }
+.ai-hint + .ai-hint { border-top: 1px solid var(--bmm-border); }
+.ai-hint b { color: var(--bmm-text-primary); }
+.ai-hint-v { color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
+.ai-hint .ai-conf { margin-left: auto; }
+
+/* Suggestion rows: « now → proposed », the provider chips, the sections, the details. */
+.ai-sug-change { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.ai-sug-cur, .ai-sug-new { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 0; }
+.ai-row.is-add .ai-sug-new { flex-basis: 100%; }
+.ai-sug-k { font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.ai-sug-v { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); word-break: break-word; max-height: 120px; overflow: auto; }
+.ai-sug-v.is-empty { font-style: italic; }
+.ai-sug-arrow { flex: none; align-self: center; color: var(--text-secondary); margin-top: 14px; }
+.ai-sug-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ai-sug-chips .bms-chip svg { flex: none; }
+.ai-sug-why { flex-basis: 100%; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.ai-sug .ai-provider #ais-draft { margin-left: auto; }
+.ai-sug-sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ai-sug-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-hint-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--bmm-border); border-radius: var(--bmm-radius-input, 10px); background: var(--bmm-s02); }
+.ai-sug-note { margin: 0; font-size: 12px; line-height: 1.5; color: color-mix(in srgb, var(--warning) 50%, var(--text-primary)); }
+.ai-sug-loading, .ai-sug-empty, .ai-sug-error { border: 1px dashed var(--bmm-border-hover); border-radius: var(--bmm-radius-input, 10px); }
+.ai-sug-loading { flex-direction: row; gap: 12px; }
+.ai-sug-empty .bms-empty-ic { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.ai-sug-error .bms-empty-ic { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); background: var(--bmm-danger-dim); }
+.ai-sug-more { border: 1px solid var(--bmm-border); border-radius: var(--bmm-radius-input, 10px); background: var(--bmm-s02); min-width: 0; }
+.ai-sug-more > summary {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none;
+    font-size: 12.5px; font-weight: 700; color: var(--text-secondary); border-radius: inherit;
+}
+.ai-sug-more > summary::-webkit-details-marker { display: none; }
+.ai-sug-more > summary:hover { color: var(--bmm-text-primary); }
+.ai-sug-more > summary svg { flex: none; transition: transform var(--transition-fast); }
+.ai-sug-more[open] > summary svg { transform: rotate(90deg); }
+.ai-sug-more-in { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; min-width: 0; }
+.ai-sug-more-in .ai-notes, .ai-sug-more-in .ai-srclist { margin: 0; }
+.ai-sug-detail { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
+.ai-sug-pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-primary);
+    padding: 8px 10px; border-radius: 8px; background: var(--bmm-s05); border: 1px solid var(--bmm-border);
+}
+.ai-sug-docs { display: flex; padding-top: 8px; border-top: 1px solid var(--bmm-border); }
+.ai-sug-docs .btn, .ai-docs-btn { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 640px) {
+    .ai-sug-change { flex-direction: column; }
+    .ai-sug-arrow { transform: rotate(90deg); margin-top: 0; align-self: flex-start; }
+}
 .ai-notes { margin: 4px 0 0 18px; padding: 0; font-size: 12px; color: color-mix(in srgb, var(--warning) 55%, var(--text-primary)); }
 .ai-read { font-size: 11px; }
 .ai-foot { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
@@ -267,16 +321,65 @@
 }
 .laya-sum-row:hover { background: var(--bg-hover); }
 .laya-sum-row span { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ai-overlay .laya-modal { max-width: 860px; height: min(85vh, 780px); }
-.laya-tabs { display: flex; gap: 4px; padding: 6px 28px 0; border-bottom: 1px solid var(--border); }
-.laya-tab {
-    border: none; background: transparent; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-    color: var(--text-secondary); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px;
-}
-.laya-tab:hover { color: var(--text-primary); }
-.laya-tab.is-on { color: var(--text-primary); border-bottom-color: var(--bmm-accent); }
-.laya-body { overflow-y: auto; min-height: 0; flex: 1; padding: 22px 28px 28px; }
+.laya-sum-ic { display: inline-grid; place-items: center; color: var(--bms-accent-ink, var(--text-primary)); }
+/* The dialog: house shell (.modal--lg .modal--tall), tabs as the shell's segmented rail. */
+.laya-modal #laya-head-chip[hidden] { display: none; }
+.laya-toolbar .laya-tabs { flex: 0 1 auto; }
 .laya-pane[hidden] { display: none; }
+
+/* « Aperçu »: the state first — on or off, the one switch, what runs, what leaves this PC. */
+.laya-hero {
+    display: flex; flex-direction: column; gap: 10px; min-width: 0;
+    padding: 16px 18px; border-radius: var(--bmm-radius-card, 14px);
+    border: 1px solid var(--bmm-border-hover); background: var(--bmm-s04);
+}
+.laya-hero.is-on { border-color: color-mix(in srgb, var(--success) 40%, var(--bmm-border)); background: color-mix(in srgb, var(--success) 6%, var(--bmm-s02)); }
+.laya-hero-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.laya-hero-ic {
+    flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--bmm-accent-dim); color: var(--bms-accent-ink, var(--text-primary)); border: 1px solid var(--bmm-border-accent);
+}
+.laya-hero-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.laya-pane-card .laya-hero-title { margin: 0; font-size: 16px; font-weight: 800; color: var(--bmm-text-primary); letter-spacing: -0.01em; }
+.laya-pane-card .laya-hero .ai-statusline { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.laya-hero-switch { flex: none; }
+.laya-hero-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* #ai-pill stays in the card (the summary and the header read it) but the switch says it. */
+.laya-hero-chips .ai-pill[hidden] { display: none; }
+.laya-hero-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.laya-pane-card .bmm-switch input:focus-visible + .bmm-switch-track { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.laya-pane-card .bmm-switch input:disabled + .bmm-switch-track { opacity: 0.5; cursor: not-allowed; }
+
+/* Every tab is made of the same sections: a title, one line, then the controls. */
+.laya-sec { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.laya-sec-h { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.laya-sec-h--row { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.laya-sec-h--row .lt-row { margin: 0; }
+.laya-sec-title { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--bmm-text-primary); }
+.laya-sec-lead { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.laya-pane-card .laya-sec + .laya-sec, .laya-pane-card .ai-settings-body > .laya-sec + .laya-sec { padding-top: 16px; border-top: 1px solid var(--bmm-border); }
+.laya-page-h { display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--bmm-border); }
+.laya-page-h > .card-title { margin: 0; font-size: 15px; font-weight: 800; text-transform: none; letter-spacing: -0.01em; color: var(--bmm-text-primary); }
+.laya-page-h > .ai-muted { margin: 0; }
+/* A switch with its words (the local API). */
+.laya-switchrow {
+    display: flex; align-items: center; gap: 14px; min-width: 0;
+    padding: 12px 16px; border: 1px solid var(--bmm-border); border-radius: var(--bmm-radius-input, 10px); background: var(--bmm-s02);
+}
+.laya-switchrow-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; font-size: 13px; }
+.laya-switchrow-text small { font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); }
+/* The action row of a tab: the status on the left, the primary action last, on the right. */
+.laya-pane-card > .ai-actions > [aria-live] { margin-right: auto; min-width: 0; }
+.laya-pane-card .ai-actions.lt-file { margin-top: 0; padding-top: 0; border-top: 0; }
+.laya-pane-card .lt-reset { margin-left: auto; color: color-mix(in srgb, var(--danger) 62%, var(--bmm-text-primary)); }
+.laya-pane-card .ai-toggles .ai-toggle {
+    padding: 10px 12px; border: 1px solid var(--bmm-border); border-radius: var(--bmm-radius-input, 10px); background: var(--bmm-s02);
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.laya-pane-card .ai-toggles .ai-toggle:hover { border-color: var(--bmm-border-hover); }
+.laya-pane-card .ai-toggles .ai-toggle:has(input:checked) { border-color: color-mix(in srgb, var(--bmm-accent) 50%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 6%, transparent); }
+.laya-pane-card .ai-toggles .ai-toggle input { accent-color: var(--bmm-accent); }
+.laya-pane-card .ai-toggles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 /* Inside the dialog the cards are pages, not Settings cards: one vertical rhythm owned by the
    card (gap), so the children's own margins are dropped instead of stacking on top of it. */
 .laya-pane-card { display: flex; flex-direction: column; gap: 14px; }
@@ -295,9 +398,11 @@
 .laya-pane-card details.ai-more[open] > summary { margin-bottom: 12px; }
 .laya-pane-card > .ai-actions { margin-top: 0; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
 .laya-pane-card .ai-settings-body { gap: 16px; }
+.laya-pane-card details.ai-more > summary { font-size: 12.5px; font-weight: 700; }
+.laya-pane-card details.laya-adv > .ai-prov + .ai-prov { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--bmm-border); }
+.laya-pane-card details.ai-more > .ai-check:first-of-type { margin-top: 0; }
 @media (max-width: 640px) {
-    .laya-tabs { padding: 6px 16px 0; }
-    .laya-body { padding: 16px; }
+    .laya-hero-main { flex-wrap: wrap; }
 }
 
 /* ── Laya in the feedback dialog, the crash manager and the debug menu (features/ai/laya-*.ts) ── */

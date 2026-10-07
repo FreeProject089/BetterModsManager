@@ -38,8 +38,11 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
     const tx = (k: string, en: string) => { const v = t(k); return v && v !== k ? v : en; };
     host.innerHTML = `
         <div class="res-matrix">
-            <p class="stm-lead">${esc(tx('stm.lead.rulesShort', 'Optional. Type a value to override the preset for one disk and one kind of work.'))}</p>
-            <details class="stm-more">
+            <div class="stm-section-head">
+                <h3 class="stm-card-title" id="stm-rules-title">${esc(tx('stm.rules.title', 'Your own rules'))}</h3>
+                <p class="stm-help">${esc(tx('stm.lead.rulesShort', 'Optional. Type a value to override the preset for one disk and one kind of work.'))}</p>
+            </div>
+            <details class="stm-more stm-legend-more">
                 <summary>${esc(tx('stm.legend.title', 'How to read this table'))}</summary>
                 <div class="stm-more-body">
                     <dl class="stm-legend">${legend.map(([term, k, en]) => `<div><dt>${esc(term)}</dt><dd>${esc(tx(k, en))}</dd></div>`).join('')}</dl>
@@ -47,13 +50,17 @@ export async function renderResourcesMatrix(host: HTMLElement, mounts: string[])
                     ${learnMore('resources-rules')}
                 </div>
             </details>
-            <div class="stm-row">
-                <label class="stm-card-title" for="stm-m-disk">${esc(tx('stm.rules.disk', 'Disk'))}</label>
-                <select id="stm-m-disk" class="input res-m-disk" data-tooltip="${esc(tx('stm.rules.diskTip', 'The disk whose rules the table shows. All disks: rules every disk inherits.'))}">${disks.map((d) => `<option value="${esc(d)}">${esc(d === '*' ? (t('res.allDisks') || 'All disks') : d.toUpperCase())}</option>`).join('')}</select>
-                <button type="button" class="btn btn-sm btn-ghost res-m-reset" data-tooltip="${esc(tx('stm.rules.resetTip', 'Remove every rule of this disk: the preset decides again.'))}">${esc(t('res.resetDisk') || 'Back to defaults for this disk')}</button>
-                <span class="stm-msg res-m-msg" role="status"></span>
+            <div class="stm-table-card" role="group" aria-labelledby="stm-rules-title">
+                <div class="stm-toolbar">
+                    <label class="stm-toolbar-field" for="stm-m-disk">
+                        <span class="stm-toolbar-label">${esc(tx('stm.rules.disk', 'Disk'))}</span>
+                        <select id="stm-m-disk" class="input res-m-disk" data-tooltip="${esc(tx('stm.rules.diskTip', 'The disk whose rules the table shows. All disks: rules every disk inherits.'))}">${disks.map((d) => `<option value="${esc(d)}">${esc(d === '*' ? (t('res.allDisks') || 'All disks') : d.toUpperCase())}</option>`).join('')}</select>
+                    </label>
+                    <span class="stm-msg res-m-msg" role="status"></span>
+                    <button type="button" class="btn btn-sm btn-ghost res-m-reset" data-tooltip="${esc(tx('stm.rules.resetTip', 'Remove every rule of this disk: the preset decides again.'))}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg><span>${esc(t('res.resetDisk') || 'Back to defaults for this disk')}</span></button>
+                </div>
+                <div class="res-m-table stm-table-wrap"></div>
             </div>
-            <div class="res-m-table stm-table-wrap"></div>
         </div>`;
     const q = <T extends Element>(s: string) => host.querySelector(s) as T | null;
     const msg = (text: string, ok: boolean) => { const m = q<HTMLElement>('.res-m-msg'); if (m) { m.textContent = text; m.classList.toggle('is-err', !ok); } };

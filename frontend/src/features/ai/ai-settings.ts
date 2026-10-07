@@ -17,7 +17,9 @@ import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 // Lives in the « Laya » dialog (laya-hub.ts); Settings keeps one summary card.
 const CARD_ID = 'laya-general-card';
 
-const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+const IC = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
+/** A book: the « How AI works in BMM » link-button. */
+const DOC_IC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
 
 /**
  * The « Laya intégré » box. ONE state at a time (ai-model.ts `embState`): absent → downloading
@@ -181,89 +183,126 @@ function render(card: HTMLElement, view: AiView | null): void {
     const opt = (v: string, cur: string, label: string) => `<option value="${escAttr(v)}"${v === cur ? ' selected' : ''}>${escHtml(label)}</option>`;
     const cls = s.classifier || 'off';
     const gen = s.generative || 'off';
+    // The overview's chips: the model, and what leaves this PC (the same rule as the status line).
+    const emb = embState0(st);
+    const modelOn = emb === 'installed' || emb === 'loaded';
+    const modelWord = modelOn ? (emb === 'loaded' ? t('ai.emb.stLoaded') : t('ai.emb.installed')) : t('ai.emb.absent');
+    const leaves = on && !st?.offline;
+    const heroTitle = killed ? t('ai.hub2.heroKilled') : on ? t('ai.hub2.heroOn') : t('ai.hub2.heroOff');
+    // A setup that is not the default (another engine, a writing model) is shown open: hiding
+    // what is in use would be the wrong kind of simple.
+    const custom = (cls !== 'embedded' && cls !== 'off') || gen !== 'off';
     card.innerHTML = `
-      <h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.settings.title'))}</span>
-        <span class="ai-pill${on ? ' ai-pill-on' : ''}" id="ai-pill">${escHtml(pill)}</span></h3>
-      <div class="ai-statusline" id="ai-statusline">${escHtml(statusLine(s, st))}</div>
-      ${killed ? `<div class="ai-warn">${escHtml(t('ai.settings.killedNote'))}</div>` : ''}
-      <label class="ai-switch"><input type="checkbox" id="ai-enabled" ${s.enabled ? 'checked' : ''} ${killed ? 'disabled' : ''}>
-        <span><b>${escHtml(t('ai.set2.master'))}</b><small>${escHtml(t('ai.set2.masterHint'))}</small></span></label>
+      <section class="laya-hero${on ? ' is-on' : ''}" aria-labelledby="ai-hero-title">
+        <div class="laya-hero-main">
+          <div class="laya-hero-ic" aria-hidden="true">${IC}</div>
+          <div class="laya-hero-text">
+            <h3 class="laya-hero-title" id="ai-hero-title">${escHtml(heroTitle)}</h3>
+            <div class="ai-statusline" id="ai-statusline">${escHtml(statusLine(s, st))}</div>
+          </div>
+          <label class="bmm-switch laya-hero-switch" title="${escAttr(t('ai.set2.master'))}">
+            <input type="checkbox" id="ai-enabled" ${s.enabled ? 'checked' : ''} ${killed ? 'disabled' : ''} aria-label="${escAttr(t('ai.set2.master'))}" aria-describedby="ai-hero-hint">
+            <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="laya-hero-chips">
+          <span class="ai-pill${on ? ' ai-pill-on' : ''}" id="ai-pill" hidden>${escHtml(pill)}</span>
+          <span class="bms-chip${modelOn ? ' bms-chip--ok' : ''}"><span class="bms-dot"></span>${escHtml(t('ai.hub2.model', { state: modelWord }))}</span>
+          <span class="bms-chip${on ? (leaves ? ' bms-chip--warn' : ' bms-chip--ok') : ''}"><span class="bms-dot"></span>${escHtml(on ? (leaves ? t('ai.hub2.mayLeave') : t('ai.hub2.private')) : t('ai.hub2.nothingSent'))}</span>
+        </div>
+        <p class="laya-hero-hint" id="ai-hero-hint">${escHtml(t('ai.set2.masterHint'))}</p>
+        ${killed ? `<div class="ai-warn">${escHtml(t('ai.settings.killedNote'))}</div>` : ''}
+      </section>
       <div class="ai-settings-body${s.enabled ? '' : ' is-off'}" id="ai-body">
-        <div class="ai-prov">
-          <div class="ai-grid">
-            <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.set2.cls'))}</label>
-            <select id="ai-classifier" class="form-input">
-              ${opt('embedded', cls, t('ai.set2.clsEmbedded'))}
-              ${opt('local', cls, t('ai.set2.clsLocal'))}
-              ${opt('bettercommunity', cls, t('ai.set2.clsBc'))}
-              ${opt('off', cls, t('ai.set2.clsOff'))}
-            </select>
-            <span></span><small class="ai-hint1" id="ai-cls-hint">${escHtml(clsHint(cls))}</small>
+        <section class="laya-sec" aria-labelledby="ai-does-h">
+          <header class="laya-sec-h">
+            <h4 class="laya-sec-title" id="ai-does-h">${escHtml(t('ai.hub2.doesTitle'))}</h4>
+            <p class="laya-sec-lead">${escHtml(t('ai.hub2.doesLead'))}</p>
+          </header>
+          <div class="ai-toggles">
+            ${toggle('ai-f-mod', s.mod_suggest, t('ai.set2.fMod'), t('ai.set2.fModHint'))}
+            ${toggle('ai-f-report', s.report_triage, t('ai.set2.fReport'), t('ai.set2.fReportHint'))}
+            ${toggle('ai-f-ask', s.ask !== false, t('ai.set2.fAsk'), t('ai.set2.fAskHint'))}
+            ${toggle('ai-f-draft', s.description_drafts, t('ai.set2.fDraft'), t('ai.set2.fDraftHint'))}
+            ${toggle('ai-f-askgen', !!s.ask_generate, t('ai.set2.fAskGen'), t('ai.set2.fAskGenHint'))}
           </div>
+        </section>
+        <section class="laya-sec" aria-labelledby="ai-where-h">
+          <header class="laya-sec-h">
+            <h4 class="laya-sec-title" id="ai-where-h">${escHtml(t('ai.hub2.whereTitle'))}</h4>
+            <p class="laya-sec-lead">${escHtml(t('ai.hub2.whereLead'))}</p>
+          </header>
           <div id="ai-emb-wrap" ${cls === 'embedded' || cls === 'off' ? '' : 'hidden'}>${embeddedHtml(st)}</div>
-          <div class="ai-block" id="ai-bc-block" ${cls === 'bettercommunity' ? '' : 'hidden'}>
-            <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
-            <details class="ai-more"><summary>${escHtml(t('ai.set2.whatSent'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p></details>
-          </div>
-          <div class="ai-block" id="ai-local-block" ${cls === 'local' ? '' : 'hidden'}>
-            <div class="ai-grid">
-              <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
-              <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
-              <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.set2.key'))}</label>
-              <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-              <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-              <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
+          <details class="ai-more laya-adv" id="ai-adv"${custom ? ' open' : ''}>
+            <summary>${escHtml(t('ai.hub2.advanced'))}</summary>
+            <div class="ai-prov">
+              <div class="ai-grid">
+                <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.set2.cls'))}</label>
+                <select id="ai-classifier" class="form-input">
+                  ${opt('embedded', cls, t('ai.set2.clsEmbedded'))}
+                  ${opt('local', cls, t('ai.set2.clsLocal'))}
+                  ${opt('bettercommunity', cls, t('ai.set2.clsBc'))}
+                  ${opt('off', cls, t('ai.set2.clsOff'))}
+                </select>
+                <span></span><small class="ai-hint1" id="ai-cls-hint">${escHtml(clsHint(cls))}</small>
+              </div>
+              <div class="ai-block" id="ai-bc-block" ${cls === 'bettercommunity' ? '' : 'hidden'}>
+                <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
+                <details class="ai-more"><summary>${escHtml(t('ai.set2.whatSent'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p></details>
+              </div>
+              <div class="ai-block" id="ai-local-block" ${cls === 'local' ? '' : 'hidden'}>
+                <div class="ai-grid">
+                  <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
+                  <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
+                  <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.set2.key'))}</label>
+                  <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+                  <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+                  <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
+                </div>
+                <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
+                <div class="ai-warn" id="ai-local-warn" hidden></div>
+                <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p></details>
+              </div>
             </div>
-            <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
-            <div class="ai-warn" id="ai-local-warn" hidden></div>
-            <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p></details>
-          </div>
-        </div>
-        <div class="ai-prov">
-          <div class="ai-grid">
-            <label class="ai-lbl" for="ai-generative">${escHtml(t('ai.set2.gen'))}</label>
-            <select id="ai-generative" class="form-input">
-              ${opt('off', gen, t('ai.set2.genOff'))}
-              ${opt('local', gen, t('ai.set2.genLocalOpt'))}
-              ${opt('external', gen, t('ai.set2.genExternalOpt'))}
-            </select>
-            <span></span><small class="ai-hint1" id="ai-gen-hint">${escHtml(genHint(gen))}</small>
-          </div>
-          <div class="ai-block" id="ai-genlocal-block" ${gen === 'local' ? '' : 'hidden'}>
-            <div class="ai-grid">
-              <label class="ai-lbl" for="ai-gen-url">${escHtml(t('ai.settings.localUrl'))}</label>
-              <input id="ai-gen-url" class="form-input" value="${escAttr(s.gen_local_url || 'http://127.0.0.1:11434/v1')}" spellcheck="false" autocomplete="off">
-              <label class="ai-lbl" for="ai-gen-model">${escHtml(t('ai.settings.externalModel'))}</label>
-              <span class="ai-keyrow"><input id="ai-gen-model" class="form-input" list="ai-gen-models" value="${escAttr(s.gen_local_model || '')}" placeholder="llama3.1:8b" spellcheck="false" autocomplete="off">
-              <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-find">${escHtml(t('ai.set2.findModels'))}</button></span>
-              <datalist id="ai-gen-models"></datalist>
+            <div class="ai-prov">
+              <div class="ai-grid">
+                <label class="ai-lbl" for="ai-generative">${escHtml(t('ai.set2.gen'))}</label>
+                <select id="ai-generative" class="form-input">
+                  ${opt('off', gen, t('ai.set2.genOff'))}
+                  ${opt('local', gen, t('ai.set2.genLocalOpt'))}
+                  ${opt('external', gen, t('ai.set2.genExternalOpt'))}
+                </select>
+                <span></span><small class="ai-hint1" id="ai-gen-hint">${escHtml(genHint(gen))}</small>
+              </div>
+              <div class="ai-block" id="ai-genlocal-block" ${gen === 'local' ? '' : 'hidden'}>
+                <div class="ai-grid">
+                  <label class="ai-lbl" for="ai-gen-url">${escHtml(t('ai.settings.localUrl'))}</label>
+                  <input id="ai-gen-url" class="form-input" value="${escAttr(s.gen_local_url || 'http://127.0.0.1:11434/v1')}" spellcheck="false" autocomplete="off">
+                  <label class="ai-lbl" for="ai-gen-model">${escHtml(t('ai.settings.externalModel'))}</label>
+                  <span class="ai-keyrow"><input id="ai-gen-model" class="form-input" list="ai-gen-models" value="${escAttr(s.gen_local_model || '')}" placeholder="llama3.1:8b" spellcheck="false" autocomplete="off">
+                  <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-find">${escHtml(t('ai.set2.findModels'))}</button></span>
+                  <datalist id="ai-gen-models"></datalist>
+                </div>
+                <div class="ai-warn" id="ai-gen-warn" hidden></div>
+                <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.set2.genLocalHow'))}</p></details>
+              </div>
+              <div class="ai-block" id="ai-ext-block" ${gen === 'external' ? '' : 'hidden'}>
+                <div class="ai-grid">
+                  <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
+                  <input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
+                  <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.settings.externalModel'))}</label>
+                  <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
+                  <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
+                  <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+                  <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+                  <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
+                </div>
+                <div class="ai-warn">${escHtml(t('ai.set2.extWarn'))}</div>
+              </div>
             </div>
-            <div class="ai-warn" id="ai-gen-warn" hidden></div>
-            <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.set2.genLocalHow'))}</p></details>
-          </div>
-          <div class="ai-block" id="ai-ext-block" ${gen === 'external' ? '' : 'hidden'}>
-            <div class="ai-grid">
-              <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
-              <input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
-              <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.settings.externalModel'))}</label>
-              <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
-              <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
-              <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-              <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-              <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
-            </div>
-            <div class="ai-warn">${escHtml(t('ai.set2.extWarn'))}</div>
-          </div>
-        </div>
-        <div class="ai-sub">${escHtml(t('ai.settings.features'))}</div>
-        <div class="ai-toggles">
-          ${toggle('ai-f-mod', s.mod_suggest, t('ai.set2.fMod'), t('ai.set2.fModHint'))}
-          ${toggle('ai-f-report', s.report_triage, t('ai.set2.fReport'), t('ai.set2.fReportHint'))}
-          ${toggle('ai-f-ask', s.ask !== false, t('ai.set2.fAsk'), t('ai.set2.fAskHint'))}
-          ${toggle('ai-f-draft', s.description_drafts, t('ai.set2.fDraft'), t('ai.set2.fDraftHint'))}
-          ${toggle('ai-f-askgen', !!s.ask_generate, t('ai.set2.fAskGen'), t('ai.set2.fAskGenHint'))}
-        </div>
-        <details class="ai-more">
+          </details>
+        </section>
+        <details class="ai-more" id="ai-learn">
           <summary>${escHtml(t('ai.set2.more'))}</summary>
           <p class="ai-muted">${escHtml(t('ai.set2.aboutLaya'))}</p>
           ${s.installer_choice != null ? `<p class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</p>` : ''}
@@ -275,13 +314,13 @@ function render(card: HTMLElement, view: AiView | null): void {
             <li>${escHtml(t('ai.settings.sent3'))}</li>
             <li>${escHtml(t('ai.settings.sent4'))}</li>
           </ul>
-          <button type="button" class="ai-link" id="ai-docs">${escHtml(t('ai.docsLink'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm ai-docs-btn" id="ai-docs">${DOC_IC}<span>${escHtml(t('ai.docsLink'))}</span></button>
         </details>
       </div>
       <div class="ai-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="ai-save">${escHtml(t('common.save'))}</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="ai-test" ${on ? '' : 'disabled'}>${escHtml(t('ai.settings.test'))}</button>
         <span class="ai-muted" id="ai-status" aria-live="polite"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="ai-test" ${on ? '' : 'disabled'}>${escHtml(t('ai.settings.test'))}</button>
+        <button type="button" class="btn btn-primary btn-sm" id="ai-save">${escHtml(t('common.save'))}</button>
       </div>`;
     wire(card, s, st);
     refold();
@@ -358,6 +397,13 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
     };
     // The master switch saves at once: turning AI OFF must not wait for a second click.
     q<HTMLInputElement>('ai-enabled')?.addEventListener('change', () => { void save(); });
+    // Everything else waits for Save: say so as soon as something changed, so a toggle flipped
+    // and the dialog closed is not mistaken for a saved one.
+    card.querySelector('#ai-body')?.addEventListener('change', (e) => {
+        const el = e.target as HTMLElement | null;
+        if (!el || el.matches('input[type="password"]')) return;
+        say(t('ai.lt.unsaved'));
+    });
     q<HTMLSelectElement>('ai-classifier')?.addEventListener('change', (e) => {
         const v = (e.target as HTMLSelectElement).value;
         q('ai-bc-block')?.toggleAttribute('hidden', v !== 'bettercommunity');

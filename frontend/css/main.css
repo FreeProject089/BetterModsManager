@@ -6512,9 +6512,11 @@ select option {
     color: var(--text-primary) !important;
 }
 
+/* One ring, the same as a text field's (.form-input:focus): border + glow, no outline on top. */
 select:focus {
-    outline: 1px solid var(--accent);
+    outline: none;
     border-color: var(--border-accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 /* ── .input / .select utility classes ── */
@@ -10330,89 +10332,6 @@ body.tasky-hidden #app-mascot-container {
         animation-duration: 7s !important;
         animation-iteration-count: infinite !important;
     }
-}
-
-/* Technical Stack Modal Styles */
-/* Multi-column, not one. Fifty entries stacked in a single column is a wall: finding
-   whether BMM ships `zip` meant scrolling past forty things nobody asked about, on a modal
-   wide enough for three. minmax(220px, 1fr) so it collapses to one column when narrow
-   rather than squeezing three unreadable ones. */
-/* ONE scrollbar for the modal, not one per section.
-   Each section used to be a 400px box with its own `overflow-y: auto`, inside a 600px modal
-   that fitted two columns — so the fifty backend crates arrived as a two-wide list in a
-   window six rows tall, with a second scrollbar nested inside the first. Reading it meant
-   scrolling a little box inside a big box, and the section below was always cut off.
-   The sections are now their natural height and the modal body scrolls once. */
-.stack-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 15px;
-    padding-right: 10px;
-}
-
-.stack-item {
-    padding: 15px;
-    background: var(--bmm-s03);
-    border: 1px solid var(--bmm-s05);
-    border-radius: 12px;
-    transition: all 0.2s;
-}
-
-.stack-item:hover {
-    background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.05);
-    border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.2);
-}
-
-.stack-item-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-}
-
-.stack-item-name {
-    font-weight: 700;
-    color: var(--bmm-text-primary);
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.stack-item-version {
-    font-size: 0.8rem;
-    color: var(--accent);
-    background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.1);
-    padding: 2px 8px;
-    border-radius: 6px;
-}
-
-.stack-item-desc {
-    font-size: 0.85rem;
-    color: var(--bmm-text-secondary);
-    line-height: 1.4;
-}
-
-/* The filter, and the count beside each heading. The count answers "how much is there"
-   before you start reading, and drops as you type so an empty section reads as "nothing
-   matched" rather than as a rendering fault. */
-.stack-filter { width: 100%; margin-bottom: 14px; font-size: 13px; }
-.stack-count { font-size: 11px; font-weight: 600; color: var(--text-muted);
-    border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
-
-.stack-section-title {
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin: 20px 0 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.stack-section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--bmm-s05);
 }
 
 .contributors-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; color: var(--bmm-text-muted); margin: 50px 0 20px; text-align: center; text-transform: uppercase; }
@@ -15951,7 +15870,7 @@ h1 {
       specificity anywhere else. */
 /* Inputs/selects/textareas already carry their own focus ring (.form-input:focus etc.),
    so target only the interactive elements that commonly lack one — no double indicator. */
-:where(a, button, summary, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"]), .btn):focus-visible {
+:where(a, button, summary, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"], input, textarea, select), .btn):focus-visible {
   outline: 2px solid var(--bmm-accent, #3b82f6) !important;
   outline-offset: 2px !important;
 }
@@ -15992,42 +15911,6 @@ h1 {
   }
 }
 
-/* Stack modal → BMM Docs. The component list answers "what do we use"; this points at the
-   page that answers "how does it fit together". All colours are tokens so a custom theme
-   recolours it with the rest of the modal. */
-.stack-docs-link {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 22px;
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--bg-card);
-    color: var(--text-secondary);
-    font-size: 0.82rem;
-}
-.stack-docs-link button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border: 1px solid var(--border-accent);
-    border-radius: 8px;
-    background: var(--accent-dim);
-    color: var(--accent);
-    font-family: var(--font-sans);
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-}
-.stack-docs-link button:hover {
-    background: var(--accent);
-    color: var(--bg-primary);
-}
 
 
 /* Dock entry/exit. Separate from tutCardUp, which also translated horizontally to keep a
@@ -16346,11 +16229,10 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 /* ── Dependency explainer (Credits → Technical Architecture) ─────────────────
    Clicking a stack card used to launch a browser. It opens this first: what the
    library is, and — the part worth reading — what BMM uses it FOR. */
-/* The card itself is the house shell (openModal, modal--md); only the content is ours. */
-.stackd-modal > .modal-body { gap: 14px; }
+/* Shown in the stack dialog's detail pane (app.ts → openStackModal). */
 .stackd-block {
     padding: 12px 14px; border-radius: 10px;
-    background: var(--bmm-s02); border: 1px solid var(--border);
+    background: var(--bmm-s03); border: 1px solid var(--border);
 }
 /* The "why" block is the one that earns the modal — give it the accent. */
 .stackd-role {
@@ -16360,10 +16242,10 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 }
 .stackd-label {
     font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
-    color: var(--text-muted); margin-bottom: 6px;
+    color: var(--bmm-text-secondary); margin-bottom: 6px;
 }
-.stackd-role .stackd-label { color: var(--accent); }
-.stackd-text { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.stackd-role .stackd-label { color: var(--credits-accent-ink); }
+.stackd-text { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
 .stackd-role .stackd-text { color: var(--text-primary); }
 
 /* ── A dock must never be covered by, nor cover, the app ─────────────────────
@@ -21018,30 +20900,13 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .bc-by b { font-weight: 600; color: var(--text-secondary); }
 
 
-/* ═══ Credits: "Built with" and the generated technical stack (app.ts, gen-credits.mjs) ═══
+/* ═══ Credits: contributors and the generated technical stack (app.ts, gen-credits.mjs) ═══
    Tokens only. The accent is a fill or a ring; accent-coloured TEXT goes through
-   --credits-accent-ink, the accent walked toward the theme's ink, so a version pill stays
-   readable on a light theme (the old pill was accent text on an accent tint). */
-#view-credits, #modal-stack, #bmm-stack-detail {
+   --credits-accent-ink, the accent walked toward the theme's ink, so a version stays readable
+   on a light theme (the old pill was accent text on an accent tint). */
+#view-credits, #modal-stack {
     --credits-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
 }
-.credits-stack-summary { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; padding: 18px 20px; border-radius: 16px; }
-.credits-stack-summary[hidden] { display: none; }
-.credits-stack-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.credits-stack-title { margin: 0; }
-.credits-stack-total { font-size: 12px; color: var(--bmm-text-secondary); }
-.credits-stack-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.credits-stack-chip, .stack-chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 6px 12px; border-radius: 999px;
-    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
-    color: var(--bmm-text-primary); font: inherit; font-size: 12.5px; font-weight: 600;
-    cursor: pointer; transition: background .15s, border-color .15s;
-}
-.credits-stack-chip:hover, .stack-chip:hover { background: var(--bmm-s06); }
-.credits-stack-chip:focus-visible, .stack-chip:focus-visible, .stack-item:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
-.stack-chip[aria-pressed="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); }
-.credits-stack-chip .stack-count, .stack-chip .stack-count { margin-left: 2px; }
 
 /* Contributors: the section spacing that was inline in app.ts. */
 .credits-category-section { margin-bottom: 24px; }
@@ -21053,35 +20918,134 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .sub-contributors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
 
-/* The stack modal. */
-.stack-top { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; gap: 10px; padding: 2px 0 12px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); margin-bottom: 4px; }
-.stack-top .stack-filter { margin-bottom: 0; }
-.stack-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.stack-chip { padding: 4px 10px; font-size: 12px; }
-.stack-note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
-.stack-section[hidden], .stack-item[hidden], .stack-empty[hidden] { display: none; }
-.stack-section-blurb { margin: -4px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
-.stack-section-title { color: var(--bmm-text-secondary); }
-.stack-count { color: var(--bmm-text-secondary); border-color: var(--bmm-border); }
-.stack-grid { gap: 12px; padding-right: 0; }
-.stack-item {
-    display: flex; flex-direction: column; gap: 6px; min-width: 0;
-    padding: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer;
-    border-color: var(--bmm-border);
+/* ── Technical Architecture: groups | dense list | the selected component ──────────────────
+   The shell is the house one (modal--xl modal--tall, the search in .modal-toolbar, a flush
+   body). Each pane scrolls on its own, so nothing floats over the list: the old sticky
+   filter block sat inside the scrolling body and cut the cards at its bottom edge. */
+.stk-search { position: relative; display: flex; align-items: center; flex: 1 1 260px; max-width: 460px; min-width: 0; margin: 0; }
+.stk-search > svg { position: absolute; left: 11px; color: var(--bmm-text-secondary); pointer-events: none; }
+.stk-search > .form-input { padding-left: 32px; }
+.stk-shown { margin-left: auto; font-size: 12px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stk-state { flex: 1 1 auto; }
+
+.stk-wrap { flex: 1 1 auto; min-height: 0; display: flex; container: stk / inline-size; }
+.stk-layout {
+    flex: 1 1 auto; min-width: 0; min-height: 0;
+    display: grid; grid-template-columns: 212px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr);
 }
-.stack-item:hover { background: var(--bmm-s05); border-color: var(--bmm-accent); }
-.stack-item-header { align-items: baseline; gap: 8px; margin-bottom: 0; min-width: 0; }
-.stack-item-name { min-width: 0; overflow-wrap: anywhere; font-family: var(--bmm-font-mono, monospace); font-size: 13px; }
-.stack-item-version { flex-shrink: 0; color: var(--credits-accent-ink); background: var(--bmm-accent-dim); font-family: var(--bmm-font-mono, monospace); font-size: 11px; }
-.stack-item-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; }
-.stack-item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
-.stack-license, .stack-apps { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
-.stack-loading, .stack-empty { padding: 32px 16px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
+
+/* Groups. */
+.stk-nav {
+    display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto;
+    padding: 12px 10px; border-right: 1px solid var(--bmm-border); background: var(--bmm-s02);
+}
+.stk-nav-label { padding: 2px 10px 8px; }
+.stk-nav-sep { height: 1px; margin: 6px 10px; background: var(--bmm-border); flex: none; }
+.stk-nav-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; flex: none;
+    padding: 7px 10px; border: 0; border-radius: 8px; background: transparent;
+    color: var(--bmm-text-secondary); font: inherit; font-size: 12.5px; font-weight: 600;
+    text-align: left; cursor: pointer;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
+}
+.stk-nav-item:hover { background: var(--bmm-s05); color: var(--bmm-text-primary); }
+.stk-nav-item[aria-current="true"] { background: var(--bmm-accent-dim); color: var(--bmm-text-primary); box-shadow: inset 2px 0 0 var(--bmm-accent); }
+.stk-nav-item.is-empty { opacity: 0.55; }
+.stk-nav-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-nav-count {
+    flex: none; min-width: 22px; padding: 0 7px; border-radius: 999px; text-align: center;
+    background: var(--bmm-s05); color: var(--bmm-text-secondary);
+    font-size: 11px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums;
+}
+.stk-nav-item[aria-current="true"] .stk-nav-count { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+
+/* The list. Two lines per component in the usual width (name + version, then the one-line
+   description + the licence badge); a real table once the pane is wide enough. */
+.stk-list { min-width: 0; min-height: 0; overflow-y: auto; container: stklist / inline-size; outline: none; }
+.stk-sec { display: flex; flex-direction: column; }
+.stk-group {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+    padding: 9px 16px 8px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border);
+}
+.stk-group-title { flex: none; font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--bmm-text-primary); }
+.stk-group-blurb { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-row {
+    display: grid; align-items: center; column-gap: 12px; row-gap: 2px; width: 100%; min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name ver" "desc lic";
+    padding: 8px 16px; border: 0; border-bottom: 1px solid var(--bmm-s04);
+    background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+    transition: background var(--bmm-transition-fast);
+}
+.stk-row:hover { background: var(--bmm-s04); }
+.stk-row[aria-selected="true"] { background: var(--bmm-accent-dim); box-shadow: inset 3px 0 0 var(--bmm-accent); }
+.stk-row:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+.stk-name { grid-area: name; min-width: 0; font-family: var(--bmm-font-mono); font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-ver { grid-area: ver; justify-self: end; min-width: 0; max-width: 120px; font-family: var(--bmm-font-mono); font-size: 11px; color: var(--credits-accent-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-desc { grid-area: desc; min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-lic {
+    grid-area: lic; justify-self: end; max-width: 150px; min-width: 0;
+    padding: 1px 7px; border-radius: 6px; border: 1px solid var(--bmm-border-hover); background: var(--bmm-s04);
+    color: var(--bmm-text-secondary); font-size: 10.5px; font-weight: 700; line-height: 1.5;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.stk-lic.is-none { visibility: hidden; }
+@container stklist (min-width: 640px) {
+    .stk-row {
+        grid-template-columns: minmax(150px, 1fr) 96px 132px minmax(0, 1.6fr);
+        grid-template-areas: "name ver lic desc";
+        padding-block: 7px;
+    }
+    .stk-ver, .stk-lic { justify-self: start; }
+}
+
+/* The selected component, or the overview. */
+.stk-detail {
+    display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; overflow-y: auto;
+    padding: 18px; border-left: 1px solid var(--bmm-border); background: var(--bmm-s02);
+}
+.stk-d-head { display: flex; flex-direction: column; gap: 8px; }
+.stk-d-name { font-family: var(--bmm-font-mono); font-size: 15px; font-weight: 800; color: var(--bmm-text-primary); overflow-wrap: anywhere; line-height: 1.3; }
+.stk-d-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.stk-d-meta .stk-lic { max-width: 100%; }
+.stk-ver-pill { padding: 1px 8px; border-radius: 6px; background: var(--bmm-accent-dim); color: var(--credits-accent-ink); font-family: var(--bmm-font-mono); font-size: 11px; font-weight: 700; line-height: 1.6; }
+.stk-d-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
+.stk-d-block { display: flex; flex-direction: column; gap: 8px; }
+.stk-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stk-stat { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s03); min-width: 0; }
+.stk-stat b { font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stk-stat span { font-size: 11px; line-height: 1.3; color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.stk-licbars { display: flex; flex-direction: column; gap: 6px; }
+.stk-licrow { display: grid; grid-template-columns: minmax(0, 10em) minmax(0, 1fr) 2.2em; align-items: center; gap: 8px; font-size: 12px; }
+.stk-licrow-name { color: var(--bmm-text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stk-licrow-n { text-align: right; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+.stk-bar { height: 6px; border-radius: 999px; background: var(--bmm-s06); overflow: hidden; }
+.stk-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--bmm-accent); }
+.stk-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--bmm-text-secondary); }
+.stk-docs { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: auto; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s03); font-size: 12px; color: var(--bmm-text-secondary); }
+
+/* The facts of a component (the explainer blocks are .stackd-*, defined with the old
+   explainer dialog and reused here). */
 .stackd-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); }
 .stackd-fact { display: contents; }
 .stackd-fact dt { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bmm-text-secondary); }
 .stackd-fact dd { margin: 0; font-size: 12.5px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: reduce) { .credits-stack-chip, .stack-chip { transition: none; } }
+
+/* Narrow dialog: the groups shrink, and the detail pane only exists once something is picked,
+   as a band under the list. */
+@container stk (max-width: 820px) {
+    .stk-layout { grid-template-columns: 164px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    .stk-detail { grid-column: 1 / -1; max-height: 260px; border-left: 0; border-top: 1px solid var(--bmm-border); }
+    .stk-layout:not(.has-sel) .stk-detail { display: none; }
+}
+@container stk (max-width: 520px) {
+    .stk-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+    .stk-nav { flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--bmm-border); padding: 8px 10px; }
+    .stk-nav-label, .stk-nav-sep { display: none; }
+    .stk-nav-item { width: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .stk-row, .stk-nav-item { transition: none; } }
 
 /* ── The update dialog and the first-run language question (ui/update-notes.ts) ─────────────
    Both are the house shell; what is left here is their content: Tasky in the header, the

@@ -62,6 +62,7 @@ const I = {
     reapply: tool('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>'),
     reset: tool('<path d="M3 12a9 9 0 1 0 2.64-6.36"/><polyline points="3 3 3 9 9 9"/>'),
     apply: tool('<polyline points="20 6 9 17 4 12"/>', 15, ' stroke-width="2.6"'),
+    empty: tool('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>', 22, ' stroke-width="1.6"'),
 };
 
 function tool(body: string, w = 14, extra = ''): string {
@@ -129,7 +130,9 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
       <div class="modal glass lo-modal" role="dialog" aria-modal="true" aria-labelledby="lo-title">
         <div class="modal-header lo-head">
           <div class="lo-head-text">
-            <h3 class="modal-title" id="lo-title">${escHtml(profileName ? fill('order.titleFor', { p: profileName }) : t('order.title'))}</h3>
+            <h3 class="modal-title lo-title" id="lo-title"${profileName ? ` aria-label="${escAttr(fill('order.titleFor', { p: profileName }))}"` : ''}>
+              <span class="lo-title-t">${escHtml(t('order.title'))}</span>${profileName ? `<span class="lo-title-p" title="${escAttr(profileName)}">${escHtml(profileName)}</span>` : ''}
+            </h3>
             <p class="lo-lede">${escHtml(t('order.lede'))}</p>
           </div>
           ${learnMore('load-order', { compact: true, className: 'lo-learn' })}
@@ -246,7 +249,8 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
                     <button type="button" class="lo-mv lo-mv-bottom" data-id="${escAttr(id)}" title="${escAttr(t('order.moveBottom'))}" aria-label="${escAttr(t('order.moveBottom'))}" ${i === draft.length - 1 ? 'disabled' : ''}>${I.bottom}</button>
                   </span>
                 </li>`;
-            }).join('') : `<li class="lo-empty">${escHtml(t('order.empty'))}</li>`;
+            }).join('') : `<li class="lo-empty"><span class="lo-empty-ic">${I.empty}</span><span class="lo-empty-t">${escHtml(t('order.empty'))}</span></li>`;
+            list.closest('.lo-modal')?.classList.toggle('is-empty', !draft.length);
             const selIdx = selected ? draft.indexOf(selected) : -1;
             if (selIdx >= 0) list.setAttribute('aria-activedescendant', `lo-row-${selIdx}`);
             else list.removeAttribute('aria-activedescendant');
@@ -355,7 +359,9 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         }
         const onEsc = (e: KeyboardEvent) => {
             // Only while on screen: hidden behind the docs, Escape belongs to the docs.
-            if (e.key === 'Escape' && shown()) { e.stopPropagation(); close(); }
+            // An open Sort / Bulk enable menu closes first: the themed select handles that Escape
+            // (and says so with preventDefault); the view stays open under it.
+            if (e.key === 'Escape' && !e.defaultPrevented && shown()) { e.stopPropagation(); close(); }
         };
         document.addEventListener('keydown', onEsc, true);
         // aria-modal="true" is a promise that Tab stays in here.
@@ -488,6 +494,17 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         });
         // The default placement of a bulk enable (modpack, "Enable all", a list, a task, a
         // script): a setting, saved at once. It never moves anything by itself.
+        // A labelled select is ONE control: a click on its icon or its label opens the menu, as
+        // a click on the value does (the native select it labels is hidden by the themed one).
+        ov.querySelectorAll<HTMLElement>('.lo-field').forEach((field) => {
+            field.addEventListener('click', (e) => {
+                const trigger = field.querySelector<HTMLElement>('.bmm-csel-trigger');
+                if (!trigger || trigger.contains(e.target as Node)) return;
+                e.preventDefault();
+                trigger.focus({ preventScroll: true });
+                trigger.click();
+            });
+        });
         const bulkSel = ov.querySelector('#lo-bulk') as HTMLSelectElement | null;
         if (bulkSel) {
             bulkSel.addEventListener('change', () => {

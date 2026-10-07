@@ -611,7 +611,7 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Scheduler chips',    sel: '.sched-chip' },
         { label: 'Card-order bar',     sel: '.cardorder-bar' },
         { label: 'Docs browser',       sel: '.ptb-modal-card' },
-        { label: 'Theme catalog',      sel: '.btc-modal, .btc-card' },
+        { label: 'Theme catalog',      sel: '.tcg-modal, .tcg-card' },
         { label: 'TOS / Privacy',      sel: '#modal-tos .modal, #modal-privacy .modal' },
         { label: 'Settings cards',     sel: '#view-settings .glass-card' },
         { label: 'Storage manager',    sel: '#modal-storage .modal' },

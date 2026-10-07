@@ -88,6 +88,29 @@ export function changeLines(c: Changes, t: T): Line[] {
     return out;
 }
 
+/** One change as a diff row: what it touches, what it was, what it becomes. `before` is empty
+ *  for an added rule, `after` for a removed one. The preview draws these as two columns. */
+export interface Row { kind: 'add' | 'remove' | 'change'; where: string; before: string; after: string }
+
+/** The same changes as changeLines, split for a diff list (intensity, alerts, then rules). */
+export function changeRows(c: Changes, t: T): Row[] {
+    const out: Row[] = [];
+    if (c.preset) out.push({ kind: 'change', where: say(t, 'stm.presets.w.intensity', 'Work intensity'), before: intensityName(c.preset[0], t), after: intensityName(c.preset[1], t) });
+    if (c.alert) {
+        const txt = (x: Alert) => x.enabled
+            ? say(t, 'stm.presets.c.alertOn', 'on, warning at {w} % free, critical at {c} %').replace('{w}', String(x.warning_pct)).replace('{c}', String(x.critical_pct))
+            : say(t, 'stm.presets.c.alertOff', 'off');
+        out.push({ kind: 'change', where: say(t, 'stm.presets.w.alerts', 'Space alerts'), before: txt(c.alert[0]), after: txt(c.alert[1]) });
+    }
+    for (const r of c.rules) {
+        const where = `${diskName(r.disk, t)}, ${opName(r.op, t)}`;
+        if (!r.before) out.push({ kind: 'add', where, before: '', after: ruleText(r.after, t) });
+        else if (!r.after) out.push({ kind: 'remove', where, before: ruleText(r.before, t), after: '' });
+        else out.push({ kind: 'change', where, before: ruleText(r.before, t), after: ruleText(r.after, t) });
+    }
+    return out;
+}
+
 export function driveKindName(kind: string, external: boolean, t: T): string {
     const m: Record<string, [string, string]> = {
         nvme: ['stm.presets.k.nvme', 'NVMe SSD'], ssd: ['stm.presets.k.ssd', 'SSD'], hdd: ['stm.presets.k.hdd', 'Hard disk'],
