@@ -21,10 +21,10 @@ import { openServerModal } from './server-modal.js';
 import { uiIcon } from '../../ui/icons.js';
 
 const ICON = {
-    server: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/></svg>',
+    server: (uiIcon('server', 12)),
     repo: (uiIcon('database', 12)),
     play: (uiIcon('play', 12)),
-    stop: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>',
+    stop: (uiIcon('stop', 12)),
     sync: (uiIcon('refresh', 12)),
     link: (uiIcon('link', 12)),
     panel: (uiIcon('activity', 12)),
@@ -119,8 +119,11 @@ function renderHead(slot: HTMLElement): void {
 
     let actions = '';
     if (tab === 'sync') {
+        // Disabled with the page's button: a refused signature (or a sync already running)
+        // must not look like one click away from the header.
+        const off = !!(document.getElementById('btn-start-repo-sync') as HTMLButtonElement | null)?.disabled;
         actions = s.joined
-            ? `<button type="button" class="btn btn-primary btn-sm rp-act" data-rp-act="sync">${ICON.sync}<span>${escHtml(t('repo.head.syncNow'))}</span></button>`
+            ? `<button type="button" class="btn btn-primary btn-sm rp-act" data-rp-act="sync"${off ? ` disabled title="${escHtml(t('repo.sig.syncBlocked'))}"` : ''}>${ICON.sync}<span>${escHtml(t('repo.head.syncNow'))}</span></button>`
             : `<button type="button" class="btn btn-secondary btn-sm rp-act" data-rp-act="join">${ICON.link}<span>${escHtml(t('repo.head.join'))}</span></button>`;
     } else {
         actions = s.serverOn
@@ -136,6 +139,38 @@ function renderHead(slot: HTMLElement): void {
     // Only touch the DOM when something changed: this runs from observers, and replacing
     // a focused button on every mutation would steal focus from the keyboard user.
     if (slot.dataset.rpHtml !== html) { slot.dataset.rpHtml = html; slot.innerHTML = html; }
+    paintTabBadges(s);
+}
+
+// ── Tab badges: what each tab holds, readable from the rail ───────────────────────────────
+
+/** Repos this BMM has fetched (repo.ts saveClientHistory keeps the last twenty). */
+function historyCount(): number {
+    try {
+        const h = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+        return Array.isArray(h) ? h.length : 0;
+    } catch { return 0; }
+}
+
+/** Sync: how many repos you know (the History list). Host: "Live" while the server runs. */
+function paintTabBadges(s: HeadState): void {
+    const root = view();
+    if (!root) return;
+    const put = (tab: string, html: string, label: string) => {
+        const btn = root.querySelector<HTMLElement>(`.repo-tab-btn[data-repo-tab="${tab}"]`);
+        if (!btn) return;
+        let b = btn.querySelector<HTMLElement>(':scope > .rp-tab-badge');
+        if (!html) { b?.remove(); return; }
+        if (!b) { b = document.createElement('span'); btn.appendChild(b); }
+        const cls = `rp-tab-badge${tab === 'host' ? ' rp-tab-badge--live' : ''}`;
+        if (b.className !== cls) b.className = cls;
+        if (b.innerHTML !== html) b.innerHTML = html;
+        b.title = label;
+        b.setAttribute('aria-label', label);
+    };
+    const n = historyCount();
+    put('sync', n ? String(n) : '', t('repo.head.historyCount', { n: String(n) }));
+    put('host', s.serverOn ? `<span class="rp-dot" aria-hidden="true"></span>${escHtml(t('repo.head.live'))}` : '', t('repo.head.serverOn'));
 }
 
 function scrollToAndFocus(id: string): void {
@@ -223,9 +258,9 @@ export function initRepoPage(): void {
         // What the header mirrors lives in three nodes that other modules write to. Watch
         // those nodes only — never the whole page.
         const mo = new MutationObserver(() => renderHead(slot));
-        for (const id of ['repo-server-btn-text', 'repo-server-status-label', 'repo-sync-name-display', 'repo-sync-info-card']) {
+        for (const id of ['repo-server-btn-text', 'repo-server-status-label', 'repo-sync-name-display', 'repo-sync-info-card', 'btn-start-repo-sync']) {
             const n = document.getElementById(id);
-            if (n) mo.observe(n, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+            if (n) mo.observe(n, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'disabled'] });
         }
         document.addEventListener('langChanged', () => { delete slot.dataset.rpHtml; renderHead(slot); });
     }

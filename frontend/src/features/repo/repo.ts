@@ -548,9 +548,9 @@ export const loadProfilesForExport = async (profilesListEl) => {
         profiles.forEach(p => {
             const item = document.createElement('div');
             item.className = 'repo-profile-item';
-            item.style.cssText = 'display:flex; align-items:center; padding:10px 12px; margin-bottom:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; transition:all 0.2s ease;';
-            item.onmouseenter = () => { item.style.background = 'rgba(255,255,255,0.06)'; item.style.borderColor = 'rgba(255,255,255,0.1)'; };
-            item.onmouseleave = () => { item.style.background = 'rgba(255,255,255,0.03)'; item.style.borderColor = 'rgba(255,255,255,0.05)'; };
+            item.style.cssText = 'display:flex; align-items:center; padding:10px 12px; margin-bottom:6px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); border-radius:8px; cursor:pointer; transition:all 0.2s ease;';
+            item.onmouseenter = () => { item.style.background = 'var(--bmm-s06)'; item.style.borderColor = 'var(--bmm-s10)'; };
+            item.onmouseleave = () => { item.style.background = 'var(--bmm-s03)'; item.style.borderColor = 'var(--bmm-s05)'; };
 
             const cb = document.createElement('input');
             cb.type = 'checkbox';
@@ -592,7 +592,7 @@ export const loadModpacksForExport = async (modpacksListEl) => {
         modpacks.forEach(pack => {
             const item = document.createElement('div');
             item.className = 'repo-modpack-item';
-            item.style.cssText = 'display:flex; flex-direction:column; padding:10px; margin-bottom:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px;';
+            item.style.cssText = 'display:flex; flex-direction:column; padding:10px; margin-bottom:8px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); border-radius:8px;';
 
             const topRow = document.createElement('div');
             topRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:8px;';
@@ -614,7 +614,7 @@ export const loadModpacksForExport = async (modpacksListEl) => {
             const settingsRow = document.createElement('div');
             settingsRow.style.cssText = 'display:flex; align-items:center; gap:8px; padding-left:26px;';
             settingsRow.innerHTML = `
-                <select class="repo-modpack-share-mode input-field" style="font-size:11px; padding:4px; flex:1; background: rgba(0,0,0,0.3);">
+                <select class="repo-modpack-share-mode input-field" style="font-size:11px; padding:4px; flex:1; background: var(--bmm-s04);">
                     <option value="public">${t('modpack.sharePublic') || 'Public'}</option>
                     <option value="whitelist_repo">${t('modpack.shareWhitelistRepo') || 'Whitelist Serveur'}</option>
                     <option value="whitelist_custom">${t('modpack.shareWhitelistCustom') || 'Whitelist Dédiée'}</option>
@@ -625,7 +625,7 @@ export const loadModpacksForExport = async (modpacksListEl) => {
             customWhitelistInput.type = 'text';
             customWhitelistInput.className = 'input-field repo-modpack-custom-whitelist';
             customWhitelistInput.placeholder = 'IDs (sép. par virgule)';
-            customWhitelistInput.style.cssText = 'font-size:11px; padding:4px; flex:1; display:none; background: rgba(0,0,0,0.3);';
+            customWhitelistInput.style.cssText = 'font-size:11px; padding:4px; flex:1; display:none; background: var(--bmm-s04);';
             
             const shareModeSelect = settingsRow.querySelector('.repo-modpack-share-mode');
             shareModeSelect.addEventListener('change', () => {
@@ -1240,13 +1240,13 @@ export function initRepo() {
                 historyList.innerHTML = history.map((entry, idx) => {
                     const date = new Date(entry.date);
                     const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    const categoryColor = entry.category === 'official' ? '#2ecc71' : entry.category === 'partner' ? '#bc74ff' : '#fb923c';
+                    const categoryColor = entry.category === 'official' ? 'var(--bmm-success)' : entry.category === 'partner' ? 'var(--bmm-purple)' : 'var(--bmm-warning)';
                     const categoryLabel = entry.category === 'official' ? 'Official' : entry.category === 'partner' ? 'Partner' : 'Private';
 
                     return `
-                        <div class="repo-history-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:12px; display:flex; gap:12px; align-items:flex-start;">
+                        <div class="repo-history-item" style="background:var(--bmm-s03); border:1px solid var(--bmm-s06); border-radius:8px; padding:12px; display:flex; gap:12px; align-items:flex-start;">
                             <div style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(251,146,60,0.1); border-radius:6px; flex-shrink:0;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--bmm-warning)" stroke-width="2" aria-hidden="true">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <polyline points="12 6 12 12 16 14"></polyline>
                                 </svg>
@@ -1266,14 +1266,14 @@ export function initRepo() {
                                 <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
                                     <span style="font-size:10px; padding:2px 8px; background:${categoryColor}20; color:${categoryColor}; border-radius:100px; font-weight:600;">${categoryLabel}</span>
                                     ${entry.game ? `
-                                        <span style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px;">
+                                        <span style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; background:var(--bmm-s05); padding:2px 8px; border-radius:100px;">
                                             ${uiIcon('monitor', 12, { style: 'opacity:0.7;' })}
                                             ${escHtml(entry.game)}
                                         </span>
                                     ` : ''}
                                 </div>
                                 ${entry.author ? `
-                                    <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px; width:fit-content;">
+                                    <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:flex; align-items:center; gap:6px; background:var(--bmm-s05); padding:2px 8px; border-radius:100px; width:fit-content;">
                                         ${uiIcon('user', 12, { style: 'opacity:0.7;' })}
                                         ${escHtml(entry.author)}
                                     </div>
@@ -1329,13 +1329,13 @@ export function initRepo() {
                         const text = container.querySelector('.repo-history-ping-text');
                         
                         if (ping >= 0) {
-                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
-                            icon.setAttribute('stroke', color);
+                            const color = ping < 100 ? 'var(--bmm-success)' : ping < 250 ? 'var(--bmm-warning)' : 'var(--bmm-danger)';
+                            icon.style.stroke = color;
                             text.style.color = color;
                             text.textContent = ping + 'ms';
                         } else {
-                            icon.setAttribute('stroke', '#ef4444');
-                            text.style.color = '#ef4444';
+                            icon.style.stroke = 'var(--bmm-danger)';
+                            text.style.color = 'var(--bmm-danger)';
                             text.textContent = 'Offline';
                         }
                     }
@@ -1353,19 +1353,19 @@ export function initRepo() {
                         const text = container.querySelector('.repo-history-ping-text');
                         
                         text.textContent = 'Pinging...';
-                        icon.setAttribute('stroke', 'var(--text-muted)');
+                        icon.style.stroke = 'var(--text-muted)';
                         text.style.color = 'var(--text-muted)';
                         
                         const ping = await checkRepo(url);
                         
                         if (ping >= 0) {
-                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
-                            icon.setAttribute('stroke', color);
+                            const color = ping < 100 ? 'var(--bmm-success)' : ping < 250 ? 'var(--bmm-warning)' : 'var(--bmm-danger)';
+                            icon.style.stroke = color;
                             text.style.color = color;
                             text.textContent = ping + 'ms';
                         } else {
-                            icon.setAttribute('stroke', '#ef4444');
-                            text.style.color = '#ef4444';
+                            icon.style.stroke = 'var(--bmm-danger)';
+                            text.style.color = 'var(--bmm-danger)';
                             text.textContent = 'Offline';
                         }
                     };
@@ -1651,7 +1651,7 @@ export function initRepo() {
                    </div>`
                 : '';
             listEl.innerHTML = hiddenNote + filtered.map(repo => `
-                <div class="repo-browser-item${isBoosted(repo) ? ' repo-browser-item-boosted' : ''}" style="background:${isBoosted(repo) ? 'linear-gradient(180deg, rgba(245,158,11,0.06), rgba(255,255,255,0.03))' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isBoosted(repo) ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
+                <div class="repo-browser-item${isBoosted(repo) ? ' repo-browser-item-boosted' : ''}" style="background:${isBoosted(repo) ? 'linear-gradient(180deg, rgba(245,158,11,0.06), var(--bmm-s03))' : 'var(--bmm-s03)'}; border:1px solid ${isBoosted(repo) ? 'rgba(245,158,11,0.35)' : 'var(--bmm-s08)'}; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div style="flex:1;">
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
@@ -1682,13 +1682,13 @@ export function initRepo() {
                             </div>
                             ${repo.tags && repo.tags.length > 0 ? `
                                 <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
-                                    ${repo.tags.slice(0, 2).map(tag => `<span style="font-size:9px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:3px; color:var(--text-muted);">${escHtml(tag)}</span>`).join('')}
+                                    ${repo.tags.slice(0, 2).map(tag => `<span style="font-size:9px; padding:2px 6px; background:var(--bmm-s05); border-radius:3px; color:var(--text-muted);">${escHtml(tag)}</span>`).join('')}
                                     ${repo.tags.length > 2 ? `<span style="font-size:9px; color:var(--text-muted);">+${repo.tags.length - 2}</span>` : ''}
                                 </div>
                             ` : ''}
                         </div>
                     </div>
-                    <div style="display:flex; gap:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="display:flex; gap:16px; padding-top:12px; border-top:1px solid var(--bmm-s05);">
                         <div style="display:flex; align-items:center; gap:6px;">
                             ${uiIcon('monitor', 12, { style: 'color:var(--accent)' })}
                             <span style="font-size:11px; color:var(--text-secondary);"><span style="color:var(--accent); font-weight:600;">${repo.mods_count || 0}</span> mods</span>
@@ -1782,13 +1782,13 @@ export function initRepo() {
                 });
 
                 item.addEventListener('mouseenter', () => {
-                    item.style.background = 'rgba(255,255,255,0.06)';
-                    item.style.borderColor = 'rgba(255,255,255,0.15)';
+                    item.style.background = 'var(--bmm-s06)';
+                    item.style.borderColor = 'var(--bmm-s15)';
                 });
 
                 item.addEventListener('mouseleave', () => {
-                    item.style.background = 'rgba(255,255,255,0.03)';
-                    item.style.borderColor = 'rgba(255,255,255,0.08)';
+                    item.style.background = 'var(--bmm-s03)';
+                    item.style.borderColor = 'var(--bmm-s08)';
                 });
             });
 
@@ -1832,13 +1832,13 @@ export function initRepo() {
                     repoPingData.set(url, { online: ping >= 0, ping });
                     
                     if (ping >= 0) {
-                        const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
-                        icon.setAttribute('stroke', color);
+                        const color = ping < 100 ? 'var(--bmm-success)' : ping < 250 ? 'var(--bmm-warning)' : 'var(--bmm-danger)';
+                        icon.style.stroke = color;
                         text.style.color = color;
                         text.textContent = ping + 'ms';
                     } else {
-                        icon.setAttribute('stroke', '#ef4444');
-                        text.style.color = '#ef4444';
+                        icon.style.stroke = 'var(--bmm-danger)';
+                        text.style.color = 'var(--bmm-danger)';
                         text.textContent = 'Offline';
                     }
                 }
@@ -1855,7 +1855,7 @@ export function initRepo() {
                         const text = container.querySelector('.repo-ping-text');
                         
                         text.textContent = 'Pinging...';
-                        icon.setAttribute('stroke', 'var(--text-muted)');
+                        icon.style.stroke = 'var(--text-muted)';
                         text.style.color = 'var(--text-muted)';
                         
                         const ping = await checkRepo(url);
@@ -1864,13 +1864,13 @@ export function initRepo() {
                         repoPingData.set(url, { online: ping >= 0, ping });
                         
                         if (ping >= 0) {
-                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
-                            icon.setAttribute('stroke', color);
+                            const color = ping < 100 ? 'var(--bmm-success)' : ping < 250 ? 'var(--bmm-warning)' : 'var(--bmm-danger)';
+                            icon.style.stroke = color;
                             text.style.color = color;
                             text.textContent = ping + 'ms';
                         } else {
-                            icon.setAttribute('stroke', '#ef4444');
-                            text.style.color = '#ef4444';
+                            icon.style.stroke = 'var(--bmm-danger)';
+                            text.style.color = 'var(--bmm-danger)';
                             text.textContent = 'Offline';
                         }
                         
@@ -2021,7 +2021,7 @@ export function initRepo() {
         const renderLoaded = async (repo) => {
             // Current repo content — checkbox per mod (checked = keep, unchecked = remove)
             currentEl.innerHTML = (repo.profiles || []).map(p => `
-                <div class="ru-current-block" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px;">
+                <div class="ru-current-block" style="background:var(--bmm-s03);border:1px solid var(--bmm-s06);border-radius:8px;padding:10px;">
                     <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
                         <span>${escHtml(p.name)} <span style="color:var(--text-muted);font-weight:400;">(${p.mods.length} mods)</span></span>
                         <button class="btn btn-xs btn-outline-danger repo-up-rm-profile" data-pid="${escAttr(p.id)}" style="font-size:10px;flex-shrink:0;">${t('repo.update.removeProfile') || 'Remove profile'}</button>
@@ -2036,7 +2036,7 @@ export function initRepo() {
                             <div style="display:flex;align-items:center;gap:6px;margin:1px 0 3px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
                                 <span>repo_mod_id:</span>
                                 <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
-                                <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                                <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:var(--bmm-s06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
                             </div>
                         </div>`).join('')}
                     </div>
@@ -2045,13 +2045,13 @@ export function initRepo() {
             // Local profiles to add — expandable per-mod selection
             const localProfiles = await invoke('get_profiles');
             addEl.innerHTML = localProfiles.map(p => `
-                <div class="ru-add-block" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;">
+                <div class="ru-add-block" style="background:var(--bmm-s03);border:1px solid var(--bmm-s06);border-radius:8px;overflow:hidden;">
                     <div style="display:flex;align-items:center;gap:8px;padding:10px;cursor:pointer;font-size:12px;">
                         <input type="checkbox" class="repo-up-add-profile" data-pid="${escAttr(p.id)}">
                         <span style="font-weight:600;flex:1;">${escHtml(p.name)} <span style="color:var(--text-muted);font-size:11px;font-weight:400;">${escHtml(p.game_name || '')}</span></span>
                         <button class="btn btn-xs btn-ghost repo-up-expand" data-pid="${escAttr(p.id)}" style="font-size:10px;">${t('repo.update.chooseMods') || 'Choose mods'}</button>
                     </div>
-                    <div class="repo-up-mods" data-pid="${escAttr(p.id)}" style="display:none;padding:0 10px 10px 32px;border-top:1px solid rgba(255,255,255,0.04);"></div>
+                    <div class="repo-up-mods" data-pid="${escAttr(p.id)}" style="display:none;padding:0 10px 10px 32px;border-top:1px solid var(--bmm-s04);"></div>
                 </div>`).join('');
 
             contentEl.style.display = 'block';
@@ -2107,11 +2107,11 @@ export function initRepo() {
                                     </label>
                                     <input type="text" class="repo-up-mod-changelog" data-mid="${escAttr(m.id)}"
                                         placeholder="${escAttr(t('repo.update.changelogPlaceholder') || 'Changelog for this version (optional)')}"
-                                        style="width:100%;margin:3px 0 2px 22px;max-width:calc(100% - 22px);font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid var(--bmm-s08,rgba(255,255,255,0.08));background:var(--bmm-s03,rgba(255,255,255,0.03));color:var(--text-secondary);" />
+                                        style="width:100%;margin:3px 0 2px 22px;max-width:calc(100% - 22px);font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid var(--bmm-s08);background:var(--bmm-s03);color:var(--text-secondary);" />
                                     <div style="display:flex;align-items:center;gap:6px;margin:0 0 4px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
                                         <span>repo_mod_id:</span>
                                         <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
-                                        <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                                        <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:var(--bmm-s06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
                                     </div>
                                 </div>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}
                                 <button type="button" class="btn btn-xs btn-ghost ru-mods-more" style="display:none;margin-top:4px"></button>`;
@@ -2496,7 +2496,7 @@ export function initRepo() {
                 } else {
                     listEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">${repos.length} ${t('repo.hub.found') || 'repos found'}</div>` +
                         repos.map(r => `
-                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;gap:12px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bmm-s03);border:1px solid var(--bmm-s06);border-radius:8px;padding:12px;gap:12px;">
                             <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:0;">
                                 ${uiIcon('folder', 18, { style: 'color:var(--cyan);flex-shrink:0;' })}
                                 <div style="flex:1; min-width:0;">
@@ -2558,11 +2558,11 @@ export function initRepo() {
                 if (serve) {
                     resultEl.innerHTML = `
                         ✓ ${t('repo.hub.done') || 'Hub server generated!'}<br>
-                        <span style="color:var(--text-secondary)">${t('repo.hub.runHint') || 'Run'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">Start-Hub.bat</code> / <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">start-hub.sh</code>.<br>${t('repo.hub.dashHint') || 'Dashboard:'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">http://&lt;ip&gt;:${port}/</code> · ${t('repo.hub.perRepo') || 'each repo has its own page'}</span>`;
+                        <span style="color:var(--text-secondary)">${t('repo.hub.runHint') || 'Run'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">Start-Hub.bat</code> / <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">start-hub.sh</code>.<br>${t('repo.hub.dashHint') || 'Dashboard:'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">http://&lt;ip&gt;:${port}/</code> · ${t('repo.hub.perRepo') || 'each repo has its own page'}</span>`;
                 } else {
                     resultEl.innerHTML = `
                         ✓ ${t('repo.hub.doneStatic') || 'Static directory generated!'}<br>
-                        <span style="color:var(--text-secondary)">${t('repo.hub.staticHint') || 'Edit'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">hub-repos.json</code> ${t('repo.hub.staticHint2') || 'to fill each repo URL, then host this folder anywhere (open index.html).'}</span>`;
+                        <span style="color:var(--text-secondary)">${t('repo.hub.staticHint') || 'Edit'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">hub-repos.json</code> ${t('repo.hub.staticHint2') || 'to fill each repo URL, then host this folder anywhere (open index.html).'}</span>`;
                 }
                 resultEl.style.display = 'block';
                 toast(serve ? (t('repo.hub.done') || 'Hub server generated!') : (t('repo.hub.doneStatic') || 'Static directory generated!'), 'success');

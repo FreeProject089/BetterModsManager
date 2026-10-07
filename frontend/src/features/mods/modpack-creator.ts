@@ -274,52 +274,86 @@ async function _loadData() {
 
 // ── List view ────────────────────────────────────────────────────────────────
 
+// ── The apply switch (list cards and the quick-apply dialog) ─────────────────────────────────
+//
+// A real <button role="switch">: it was a div with an onclick, so the keyboard could not reach
+// it and a screen reader announced nothing. `.btn-apply` and `.bmm-switch-wrap` stay on it: the
+// tutorial points at `btn-apply`, and three built-in themes style `.bmm-switch-wrap`.
+function _switchHtml(on: boolean, label: string): string {
+    return `<button type="button" role="switch" aria-checked="${on ? 'true' : 'false'}" aria-label="${escAttr(label)}"`
+        + ` class="mp-switch bmm-switch-wrap btn-apply${on ? ' active' : ''}"><span class="mp-switch-knob" aria-hidden="true"></span></button>`;
+}
+function _setSwitch(el: HTMLElement | null, on: boolean): void {
+    if (!el) return;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+/** The header's primary action. Lives in the view header beside Catalogues and Import, so the
+ *  page has one row of actions; the id is the one the tutorial points at. */
+function _ensureCreateButton(container): void {
+    const actions = document.getElementById('modpack-header-actions');
+    if (!actions) return;
+    let btn = document.getElementById('modpack-create-btn') as HTMLButtonElement | null;
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'modpack-create-btn';
+        btn.className = 'btn btn-primary mp-create';
+        actions.appendChild(btn);
+    }
+    btn.innerHTML = `${uiIcon('add', 16)}<span>${escHtml(t('modpack.create'))}</span>`;
+    btn.onclick = () => _openEditor(container, null);
+    btn.hidden = false;
+}
+function _hideHeaderActions(hide: boolean): void {
+    const actions = document.getElementById('modpack-header-actions');
+    if (actions) actions.hidden = hide;
+}
+
 function _renderModpackList(container) {
     container.innerHTML = '';
-
-    const countHeader = document.createElement('div');
-    countHeader.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap: wrap; gap: 16px;';
-    countHeader.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px;">
-            <div style="width:4px; height:20px; background:var(--accent); border-radius:2px;"></div>
-            <span style="font-size:16px; font-weight:800; color:var(--text-primary); text-transform:uppercase; letter-spacing:0.5px;">${t('modpack.title')}</span>
-            <span style="font-size:12px; color:var(--text-muted); background:var(--bmm-s05); padding:2px 8px; border-radius:10px; font-weight:600;" id="modpack-count-badge">${_modpacks.length}</span>
-        </div>
-        <div style="display:flex; align-items:center; gap:10px; flex:0 1 auto; justify-content: flex-end; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
-            <div class="search-box" id="mp-search-wrap" style="display:flex;align-items:center;gap:8px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:10px;padding:8px 12px;transition:border-color 0.2s; max-width: 250px; width: 100%;">
-                ${uiIcon('search', 14, { style: 'color:var(--text-muted);flex-shrink:0;' })}
-                <input type="text" id="modpack-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
-            </div>
-            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 18px; font-size:12px; font-weight:700; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; flex-shrink:0;">
-                ${uiIcon('add', 16, { style: 'flex-shrink:0;' })}
-                <span>${t('modpack.create')}</span>
-            </button>
-        </div>
-    `;
-    container.appendChild(countHeader);
-
-    const searchInput = countHeader.querySelector('#modpack-search');
-    const searchWrap = countHeader.querySelector('#mp-search-wrap');
-    searchWrap.addEventListener('focusin', () => searchWrap.style.borderColor = 'rgba(0,194,255,0.35)');
-    searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'var(--bmm-s08)');
-
-    const countBadge = countHeader.querySelector('#modpack-count-badge');
-
-    const createBtn = countHeader.querySelector('#modpack-create-btn');
-    createBtn.addEventListener('click', () => _openEditor(container, null));
+    container.classList.add('mp-page');
+    _editingPack = null;
+    _hideHeaderActions(false);
+    _ensureCreateButton(container);
 
     if (_modpacks.length === 0) {
+        // The empty page says what a pack is and offers the three ways to get one.
         const empty = document.createElement('div');
-        empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
+        empty.className = 'empty-state mp-empty';
         empty.innerHTML = `
-            <div style="width:64px; height:64px; border-radius:20px; background:var(--bmm-s02); display:flex; align-items:center; justify-content:center; border:1px dashed var(--bmm-s10);">
- ${uiIcon('folders', 18)}            </div>
-            <div style="font-size:14px; font-weight:600; color:var(--text-secondary);">${t('modpack.noMods')}</div>
-            <p style="font-size:12px; max-width:300px; line-height:1.5;">${t('modpack.noModsDesc')}</p>
-        `;
+            <div class="empty-icon">${uiIcon('package', 32)}</div>
+            <p class="empty-title">${escHtml(t('modpack.noMods'))}</p>
+            <p class="empty-desc">${escHtml(t('modpack.noModsDesc'))}</p>
+            <div class="mp-empty-a">
+                <button type="button" class="btn btn-primary" data-mp-go="create">${uiIcon('add', 16)}<span>${escHtml(t('modpack.create'))}</span></button>
+                <button type="button" class="btn btn-secondary" data-mp-go="catalog">${uiIcon('store', 16)}<span>${escHtml(t('modpack.cat.open'))}</span></button>
+                <button type="button" class="btn btn-secondary" data-mp-go="import">${uiIcon('import', 16)}<span>${escHtml(t('modpack.import'))}</span></button>
+            </div>`;
+        empty.addEventListener('click', (e) => {
+            const go = (e.target as HTMLElement).closest<HTMLElement>('[data-mp-go]')?.dataset.mpGo;
+            if (go === 'create') _openEditor(container, null);
+            else if (go === 'catalog') document.getElementById('btn-modpack-catalog')?.click();
+            else if (go === 'import') document.getElementById('btn-import-modpack')?.click();
+        });
         container.appendChild(empty);
         return;
     }
+
+    // Toolbar: search, and how many of how many are shown.
+    const bar = document.createElement('div');
+    bar.className = 'mp-toolbar';
+    bar.innerHTML = `
+        <label class="mp-search" id="mp-search-wrap">
+            ${uiIcon('search', 14)}
+            <input type="search" id="modpack-search" placeholder="${escAttr(t('modpack.searchPh'))}" aria-label="${escAttr(t('modpack.searchPh'))}" spellcheck="false" autocomplete="off">
+        </label>
+        <span class="mp-count" id="modpack-count-badge" aria-live="polite">${escHtml(t('modpack.countAll', { n: String(_modpacks.length) }))}</span>
+    `;
+    container.appendChild(bar);
+    const searchInput = bar.querySelector('#modpack-search') as HTMLInputElement;
+    const countBadge = bar.querySelector('#modpack-count-badge') as HTMLElement;
 
     const grid = document.createElement('div');
     grid.className = 'modpack-grid';
@@ -331,52 +365,39 @@ function _renderModpackList(container) {
         card.className = 'modpack-card';
 
         const modsCount = pack.mods ? pack.mods.length : 0;
-        const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '—';
-        const description = escHtml(pack.description || t('modpack.noDesc'));
+        const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '';
+        const hasDesc = !!(pack.description && String(pack.description).trim());
 
         const anyEnabled = pack.mods && pack.mods.length > 0 && pack.mods.some(mref => {
-            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            const local = _allMods.find(m => m.id === mref.mod_id || (!!mref.sha256 && m.sha256 === mref.sha256));
             return local && local.enabled;
         });
-
-        const applyIcon = anyEnabled
-            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>'
-            : (uiIcon('check', 16));
-        const applyTitle = anyEnabled ? t('modpack.deactivate') || 'Désactiver le modpack' : t('modpack.apply');
-        const applyClass = anyEnabled ? 'btn-apply active' : 'btn-apply';
-        const applyColor = anyEnabled ? 'color: var(--success);' : '';
+        const applyLabel = anyEnabled ? (t('modpack.deactivate') || 'Désactiver le modpack') : t('modpack.apply');
 
         card.innerHTML = `
-            <div class="modpack-card-info" style="margin-left: 0; display: flex; flex-direction: column; height: 100%;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; padding-right: 90px;">
-                    <div class="modpack-card-title" data-tooltip="${escHtml(pack.name)}">${escHtml(pack.name)}</div>
-                </div>
-                <div class="modpack-card-meta">
-                    <span>${t('modpack.modsCount', { count: modsCount })}</span>
-                    <span style="opacity:0.3">•</span>
-                    <span>${escHtml(pack.game_name || t('modpack.general'))}</span>
-                </div>
-                <div class="modpack-card-ids">${copyIdButtons('modpack', pack.id, { compact: true })}</div>
-                <div style="font-size:10px; color:var(--text-muted); margin-top:8px; line-height:1.4; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; height:28px;">
-                    ${description}
-                </div>
-                <div style="margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between;">
-                    <div style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; opacity:0.6; padding-bottom: 4px;">
-                        ${t('modpack.updatedAt', { date: lastUpdate })}
+            <div class="modpack-card-top">
+                <div class="modpack-card-icon">${uiIcon('package', 20)}</div>
+                <div class="modpack-card-info">
+                    <div class="modpack-card-title" title="${escAttr(pack.name)}">${escHtml(pack.name)}</div>
+                    <div class="modpack-card-meta">
+                        <span class="mp-chip">${escHtml(t('modpack.modsCount', { count: modsCount }))}</span>
+                        <span class="mp-chip">${escHtml(pack.multi_profile ? t('modpack.multiProfile') : (pack.game_name || t('modpack.general')))}</span>
+                        ${pack.skip_integrity_check ? `<span class="mp-chip mp-chip--warn" title="${escAttr(t('modpack.skipIntegrityDesc'))}">${uiIcon('warning', 12)}${escHtml(t('modpack.noCheckChip'))}</span>` : ''}
                     </div>
-                    <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
-                         style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
-                         data-tasky="${escAttr(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}" data-tasky-icon="zap" data-tasky-literal="1"
-                        >
-                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
-                        <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
-                    </div>
+                </div>
+                <div class="mp-apply" data-tasky="${escAttr(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}" data-tasky-icon="zap" data-tasky-literal="1">
+                    ${_switchHtml(!!anyEnabled, `${applyLabel}: ${pack.name}`)}
                 </div>
             </div>
-            <div class="modpack-card-actions">
-                <button class="btn btn-icon btn-ghost btn-export">${uiIcon('export', 16)}</button>
-                <button class="btn btn-icon btn-ghost btn-edit">${uiIcon('edit', 16)}</button>
-                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" >${uiIcon('delete', 16)}</button>
+            <p class="modpack-card-desc${hasDesc ? '' : ' is-empty'}">${escHtml(hasDesc ? pack.description : t('modpack.noDesc'))}</p>
+            <div class="modpack-card-ids">${copyIdButtons('modpack', pack.id, { compact: true })}</div>
+            <div class="modpack-card-foot">
+                <span class="modpack-card-date">${lastUpdate ? escHtml(t('modpack.updatedAt', { date: lastUpdate })) : ''}</span>
+                <div class="modpack-card-actions">
+                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-export" title="${escAttr(t('modpack.exportBtn'))}" aria-label="${escAttr(t('modpack.exportBtn'))}">${uiIcon('export', 16)}</button>
+                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-edit" title="${escAttr(t('modpack.edit'))}" aria-label="${escAttr(t('modpack.edit'))}">${uiIcon('edit', 16)}</button>
+                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-delete mp-danger" title="${escAttr(t('modpack.delete'))}" aria-label="${escAttr(t('modpack.delete'))}">${uiIcon('delete', 16)}</button>
+                </div>
             </div>
         `;
 
@@ -385,26 +406,46 @@ function _renderModpackList(container) {
         card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
         card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };
         card.querySelector('.btn-delete').onclick = (e) => { e.stopPropagation(); _deleteModpack(container, pack); };
-        card.onclick = () => _openEditor(container, pack);
+        // The card opens the editor on a click anywhere that is not a control (the copy-id
+        // chips and the buttons above stop the event themselves or are matched here).
+        card.onclick = (e) => {
+            if ((e.target as HTMLElement).closest('button, a, input, [data-copy-id]')) return;
+            _openEditor(container, pack);
+        };
 
         grid.appendChild(card);
-        cards.push({ card, name: pack.name.toLowerCase() });
+        cards.push({ card, name: `${pack.name} ${pack.game_name || ''} ${pack.description || ''}`.toLowerCase() });
     });
 
     container.appendChild(grid);
 
-    searchInput.addEventListener('input', (e) => {
-        const q = e.target.value.toLowerCase().trim();
+    const noHit = document.createElement('div');
+    noHit.className = 'empty-state mp-nohit';
+    noHit.hidden = true;
+    container.appendChild(noHit);
+
+    searchInput.addEventListener('input', () => {
+        const q = searchInput.value.toLowerCase().trim();
         let visible = 0;
         cards.forEach(({ card, name }) => {
-            if (!q || name.includes(q)) {
-                card.style.display = 'flex';
-                visible++;
-            } else {
-                card.style.display = 'none';
-            }
+            const hit = !q || name.includes(q);
+            card.hidden = !hit;
+            if (hit) visible++;
         });
-        countBadge.textContent = visible.toString();
+        countBadge.textContent = q
+            ? t('modpack.countOf', { n: String(visible), total: String(cards.length) })
+            : t('modpack.countAll', { n: String(cards.length) });
+        noHit.hidden = visible > 0;
+        if (!visible) {
+            noHit.innerHTML = `<div class="empty-icon">${uiIcon('search', 24)}</div>
+                <p class="empty-title">${escHtml(t('modpack.noMatch', { q: searchInput.value.trim() }))}</p>
+                <div class="mp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-mp-clear>${escHtml(t('common.clear'))}</button></div>`;
+            noHit.querySelector('[data-mp-clear]')?.addEventListener('click', () => {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+                searchInput.focus();
+            });
+        }
     });
 }
 
@@ -419,23 +460,25 @@ async function _openEditor(container, pack) {
 
     container.innerHTML = '';
 
-    // Premium Header / Breadcrumbs
+    // The editor replaces the page body, so the page header's actions (Catalogues, Import,
+    // Create) step aside: two rows of buttons acting on different things read as one.
+    _hideHeaderActions(true);
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;';
+    header.className = 'mp-ed-head';
     header.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:4px;">
-            <div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
-                <span style="cursor:pointer;" id="bc-home">${t('modpack.title')}</span>
+        <div class="mp-ed-titles">
+            <nav class="mp-crumbs" aria-label="${escAttr(t('modpack.title'))}">
+                <button type="button" class="mp-crumb" id="bc-home">${uiIcon('arrow-left', 14)}<span>${escHtml(t('modpack.title'))}</span></button>
                 ${uiIcon('chevron-right', 12)}
-                <span style="color:var(--accent);">${pack ? t('modpack.edit') : t('modpack.create')}</span>
-            </div>
-            <h2 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary);">${pack ? escHtml(pack.name) : t('modpack.newPack')}</h2>
+                <span class="mp-crumb-now">${escHtml(pack ? t('modpack.edit') : t('modpack.create'))}</span>
+            </nav>
+            <h2 class="mp-ed-title">${pack ? escHtml(pack.name) : escHtml(t('modpack.newPack'))}</h2>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
-            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid var(--bmm-s05); display:inline-flex; align-items:center; justify-content:center; height:38px; padding:0 16px;">${t('common.cancel')}</button>
-            <button class="btn btn-primary" id="editor-save" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:120px; height:38px; padding:0 18px; white-space:nowrap;">
-                ${uiIcon('save', 16, { style: 'flex-shrink:0;' })}
-                <span>${t('modpack.save')}</span>
+        <div class="mp-ed-actions">
+            <button type="button" class="btn btn-secondary" id="editor-cancel">${escHtml(t('common.cancel'))}</button>
+            <button type="button" class="btn btn-primary" id="editor-save">
+                ${uiIcon('save', 16)}
+                <span>${escHtml(t('modpack.save'))}</span>
             </button>
         </div>
     `;
@@ -455,73 +498,57 @@ async function _openEditor(container, pack) {
     leftCol.className = 'editor-section-card';
     leftCol.innerHTML = `
         <div class="editor-section-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="13 2 13 8 20 8"/></svg>
-            ${t('modpack.generalInfo')}
+            ${uiIcon('file-text', 14)}
+            <span>${escHtml(t('modpack.generalInfo'))}</span>
         </div>
     `;
 
     const metaForm = document.createElement('div');
-    metaForm.style.cssText = 'display:flex; flex-direction:column; gap:16px;';
+    metaForm.className = 'mp-form';
 
     // Escaped: a modpack can be imported from a file or a deeplink, so its name/description are
     // not always the user's own typing. A raw `"` closes the value attribute and a raw
     // `</textarea>` closes the field — both let markup in (CWE-79).
-    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${escAttr(t('modpack.namePlaceholder'))}" value="${escAttr(_editingPack.name || '')}" style="width:100%;">`));
-    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${escHtml(_editingPack.description || '')}</textarea>`));
-    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${escAttr(t('modpack.gamePlaceholder') || 'e.g. DCS World')}" value="${escAttr(_editingPack.game_name || '')}" style="width:100%;">`));
+    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${escAttr(t('modpack.namePlaceholder'))}" value="${escAttr(_editingPack.name || '')}">`));
+    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" rows="4">${escHtml(_editingPack.description || '')}</textarea>`));
+    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${escAttr(t('modpack.gamePlaceholder') || 'e.g. DCS World')}" value="${escAttr(_editingPack.game_name || '')}">`));
 
-    // Multi-profile toggle (re-styled)
+    // Two options that change what applying the pack does: a check row each, the risky one
+    // in the warning tone (classes in modpack.css).
     const multiRow = document.createElement('label');
-    multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:all 0.2s;';
-    multiRow.onmouseenter = () => multiRow.style.borderColor = 'rgba(var(--accent-rgb), 0.2)';
-    multiRow.onmouseleave = () => multiRow.style.borderColor = 'var(--bmm-s05)';
-
+    multiRow.className = 'mp-opt';
     const multiCb = document.createElement('input');
     multiCb.type = 'checkbox';
     multiCb.id = 'mp-multi';
-    multiCb.style.cssText = 'width:20px; height:20px; accent-color:var(--accent); cursor:pointer;';
     multiCb.checked = _editingPack.multi_profile;
     multiCb.onchange = () => {
         _editingPack.multi_profile = multiCb.checked;
     };
-
-    const multiInfo = document.createElement('div');
-    multiInfo.innerHTML = `
-        <div style="font-size:13px; font-weight:700; color:var(--text-primary);">${t('modpack.multiProfile')}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.multiProfileDesc')}</div>
-    `;
-
+    const multiInfo = document.createElement('span');
+    multiInfo.className = 'mp-opt-txt';
+    multiInfo.innerHTML = `<b>${escHtml(t('modpack.multiProfile'))}</b><span>${escHtml(t('modpack.multiProfileDesc'))}</span>`;
     multiRow.appendChild(multiCb);
     multiRow.appendChild(multiInfo);
     metaForm.appendChild(multiRow);
 
-    // Skip Integrity Check toggle
     const skipRow = document.createElement('label');
-    skipRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,136,0,0.05); border:1px solid rgba(255,136,0,0.1); transition:all 0.2s;';
-    skipRow.onmouseenter = () => skipRow.style.borderColor = 'rgba(255,136,0,0.3)';
-    skipRow.onmouseleave = () => skipRow.style.borderColor = 'rgba(255,136,0,0.1)';
-
+    skipRow.className = 'mp-opt mp-opt--warn';
     const skipCb = document.createElement('input');
     skipCb.type = 'checkbox';
     skipCb.id = 'mp-skip-integrity';
-    skipCb.style.cssText = 'width:20px; height:20px; accent-color:#ff8800; cursor:pointer;';
     skipCb.checked = _editingPack.skip_integrity_check;
     skipCb.onchange = () => {
         _editingPack.skip_integrity_check = skipCb.checked;
     };
-
-    const skipInfo = document.createElement('div');
-    skipInfo.innerHTML = `
-        <div style="font-size:13px; font-weight:700; color:var(--bmm-warning);">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Disables file verification on launch (faster, but does not repair broken mods)."}</div>
-    `;
-
+    const skipInfo = document.createElement('span');
+    skipInfo.className = 'mp-opt-txt';
+    skipInfo.innerHTML = `<b>${escHtml(t('modpack.skipIntegrity'))}</b><span>${escHtml(t('modpack.skipIntegrityDesc'))}</span>`;
     skipRow.appendChild(skipCb);
     skipRow.appendChild(skipInfo);
     metaForm.appendChild(skipRow);
 
     metaForm.appendChild(_formField(t('modpack.depMode'), `
-        <select id="mp-depmode" class="form-input" style="width:100%;">
+        <select id="mp-depmode" class="form-input">
             <option value="all" ${_editingPack.dependency_mode === 'all' ? 'selected' : ''}>${t('modpack.depModeAll')}</option>
             <option value="none" ${_editingPack.dependency_mode === 'none' ? 'selected' : ''}>${t('modpack.depModeNone')}</option>
             <option value="manual" ${_editingPack.dependency_mode === 'manual' ? 'selected' : ''}>${t('modpack.depModeManual')}</option>
@@ -532,7 +559,7 @@ async function _openEditor(container, pack) {
     // (commands/order_share.rs). Empty = the setting "Bulk enable" in Settings.
     const om = _editingPack.order_mode || '';
     metaForm.appendChild(_formField(t('modpack.orderMode'), `
-        <select id="mp-ordermode" class="form-input" style="width:100%;" title="${escAttr(t('modpack.orderModeTip'))}">
+        <select id="mp-ordermode" class="form-input" title="${escAttr(t('modpack.orderModeTip'))}">
             <option value="" ${om === '' ? 'selected' : ''}>${escHtml(t('order.mode.default'))}</option>
             <option value="top" ${om === 'top' ? 'selected' : ''}>${escHtml(t('order.mode.top'))}</option>
             <option value="bottom" ${om === 'bottom' ? 'selected' : ''}>${escHtml(t('order.mode.bottom'))}</option>
@@ -540,30 +567,31 @@ async function _openEditor(container, pack) {
         </select>
     `));
 
-    metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${t('modpack.srLinkPlaceholder')}" value="${_editingPack.sr_link || ''}" style="width:100%;">`));
+    metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${escAttr(t('modpack.srLinkPlaceholder'))}" value="${escAttr(_editingPack.sr_link || '')}">`));
 
     leftCol.appendChild(metaForm);
     layout.appendChild(leftCol);
 
     // RIGHT: Mods
     const rightCol = document.createElement('div');
-    rightCol.className = 'editor-section-card';
-    rightCol.style.flex = '1';
+    rightCol.className = 'editor-section-card mp-ed-mods';
     rightCol.innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <div class="mp-ed-mods-h">
             <div class="editor-section-title">
- ${uiIcon('folders', 18)}                ${t('modpack.modsManagement')}
+                ${uiIcon('folders', 14)}
+                <span>${escHtml(t('modpack.modsManagement'))}</span>
+                <span class="mp-count" id="mp-modcount">${_packMods.length}</span>
             </div>
-            <button class="btn btn-secondary btn-sm" id="btn-add-mods-pack" style="font-size:11px; height:32px; border-radius:8px;">
-                ${uiIcon('add', 14, { style: 'margin-right:6px;' })}
-                ${t('modpack.addMods')}
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-add-mods-pack">
+                ${uiIcon('add', 14)}
+                <span>${escHtml(t('modpack.addMods'))}</span>
             </button>
         </div>
     `;
 
     const modListEl = document.createElement('div');
     modListEl.id = 'mp-modlist';
-    modListEl.style.cssText = 'display:flex; flex-direction:column; gap:10px; margin-top:10px;';
+    modListEl.className = 'mp-modlist';
     rightCol.appendChild(modListEl);
     _renderPackModList(modListEl);
 
@@ -622,12 +650,18 @@ function _ensureOrderCss() {
 
 function _renderPackModList(listEl) {
     listEl.innerHTML = '';
+    const countEl = document.getElementById('mp-modcount');
+    if (countEl) countEl.textContent = String(_packMods.length);
     if (_packMods.length === 0) {
         const empty = document.createElement('div');
-        empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed var(--bmm-s08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
+        empty.className = 'empty-state mp-modlist-empty';
         empty.innerHTML = `
-                            ${uiIcon('folders', 18)}            <span style="font-size:12px;">${t('modpack.noMods')}</span>
+            <div class="empty-icon">${uiIcon('folders', 24)}</div>
+            <p class="empty-title">${escHtml(t('modpack.editorNoMods'))}</p>
+            <p class="empty-desc">${escHtml(t('modpack.editorNoModsHint'))}</p>
+            <div class="mp-empty-a"><button type="button" class="btn btn-primary btn-sm" data-mp-add>${uiIcon('add', 14)}<span>${escHtml(t('modpack.addMods'))}</span></button></div>
         `;
+        empty.querySelector('[data-mp-add]')?.addEventListener('click', () => document.getElementById('btn-add-mods-pack')?.click());
         listEl.appendChild(empty);
         return;
     }
@@ -643,56 +677,55 @@ function _renderPackModList(listEl) {
     _packMods.forEach((pm, idx) => {
         const card = document.createElement('div');
         card.className = 'mod-item-card';
-        card.style.display = 'flex';
-        card.style.flexDirection = 'column';
-        card.style.gap = '12px';
 
         card.innerHTML = `
-            <div style="display:flex; align-items:center; gap:12px;">
+            <div class="mp-mi-top">
                 <span class="mp-order-btns">
                     <button type="button" class="btn btn-icon btn-ghost mp-up" title="${escHtml(t('order.moveUp'))}" aria-label="${escHtml(t('order.moveUp'))}" ${idx === 0 ? 'disabled' : ''}>${uiIcon('chevron-up', 12)}</button>
                     <button type="button" class="btn btn-icon btn-ghost mp-down" title="${escHtml(t('order.moveDown'))}" aria-label="${escHtml(t('order.moveDown'))}" ${idx === _packMods.length - 1 ? 'disabled' : ''}>${uiIcon('chevron-down', 12)}</button>
                 </span>
                 <span class="mp-order-pos" title="${escHtml(t('order.position').replace('{n}', String(idx + 1)))}">${idx + 1}</span>
-                <div style="flex:1; min-width:0;">
-                    <div style="font-size:13px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(pm.mod_name)}</div>
-                    <div style="font-size:10px; color:var(--text-muted); display:flex; gap:6px;">
-                        <span>V${escHtml(pm.mod_version)}</span>
-                        <span style="opacity:0.3">|</span>
-                        <span style="color:var(--text-secondary);">${escHtml(pm.profile_name || t('modpack.global') || 'Global')}</span>
+                <div class="mp-mi-main">
+                    <div class="mp-mi-name" title="${escAttr(pm.mod_name)}">${escHtml(pm.mod_name)}</div>
+                    <div class="mp-mi-meta">
+                        ${pm.mod_version ? `<span>v${escHtml(pm.mod_version)}</span>` : ''}
+                        <span>${escHtml(pm.profile_name || t('modpack.global') || 'Global')}</span>
                     </div>
                 </div>
-                <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;">${uiIcon('delete', 14)}</button>
+                <button type="button" class="btn btn-icon btn-ghost btn-sm btn-remove mp-danger" title="${escAttr(t('modpack.removeMod'))}" aria-label="${escAttr(t('modpack.removeMod'))}: ${escAttr(pm.mod_name)}">${uiIcon('delete', 14)}</button>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding-top:8px; border-top:1px solid var(--bmm-s03);">
-                <div style="display:flex; flex-direction:column; gap:4px;">
-                    <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modDownloadLink')}</label>
-                    <input type="text" class="form-input dl-input" placeholder="https://..." value="${pm.download_link || ''}" style="font-size:11px; height:30px; padding:0 8px;">
-                </div>
-                <div style="display:flex; flex-direction:column; gap:4px;">
-                    <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallback')}</label>
-                    <input type="text" class="form-input fb-input" placeholder="${t('modpack.modFallbackPlaceholder') || 'Nexus, Drive, etc.'}" value="${pm.download_fallback || ''}" style="font-size:11px; height:30px; padding:0 8px;">
-                </div>
+            <details class="mp-mi-more"${pm.download_link || pm.download_fallback || pm.include_dependencies ? ' open' : ''}>
+            <summary class="mp-mi-more-h">${uiIcon('chevron-right', 12)}<span>${escHtml(t('modpack.sourcesFold'))}</span></summary>
+            <div class="mp-mi-grid">
+                <label class="mp-field">
+                    <span class="form-label">${escHtml(t('modpack.modDownloadLink'))}</span>
+                    <input type="text" class="form-input dl-input" placeholder="https://..." value="${escAttr(pm.download_link || '')}">
+                </label>
+                <label class="mp-field">
+                    <span class="form-label">${escHtml(t('modpack.modFallback'))}</span>
+                    <input type="text" class="form-input fb-input" placeholder="${escAttr(t('modpack.modFallbackPlaceholder') || 'Nexus, Drive, etc.')}" value="${escAttr(pm.download_fallback || '')}">
+                </label>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
-                <div style="display:flex; align-items:center; gap:16px;">
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:10px; font-weight:600; color:var(--text-secondary);">
-                        <input type="checkbox" class="deps-cb" ${pm.include_dependencies ? 'checked' : ''} style="width:14px; height:14px; accent-color:var(--accent);">
-                        ${t('modpack.modDeps')}
+            <div class="mp-mi-opts">
+                <div class="mp-mi-row">
+                    <label class="checkbox-container mp-mi-check">
+                        <input type="checkbox" class="deps-cb" ${pm.include_dependencies ? 'checked' : ''}>
+                        <span>${escHtml(t('modpack.modDeps'))}</span>
                     </label>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallbackType')}</span>
-                        <select class="form-select fb-type-select" style="font-size:10px; height:24px; padding:0 4px; border-radius:4px; background:var(--bmm-s03); border:1px solid var(--bmm-s10); color:var(--text-primary);">
+                    <label class="mp-mi-sel">
+                        <span class="form-label">${escHtml(t('modpack.modFallbackType'))}</span>
+                        <select class="form-input select-sm fb-type-select">
                             <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>${t('modpack.fallbackDirect') || 'Direct Link'}</option>
                             <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>${t('modpack.fallbackServerRepo') || 'Server Repo'}</option>
                         </select>
-                    </div>
+                    </label>
                 </div>
-                
-                <div class="deps-list" style="display:flex; flex-wrap:wrap; gap:4px; opacity:0.6;"></div>
+
+                <div class="deps-list"></div>
             </div>
+            </details>
         `;
 
         card.querySelector('.btn-remove').onclick = () => {
@@ -727,7 +760,7 @@ function _renderPackModList(listEl) {
             const dlist = card.querySelector('.deps-list');
             localMod.dependencies.forEach(did => {
                 const tag = document.createElement('span');
-                tag.style.cssText = 'font-size:9px; padding:2px 6px; border-radius:4px; background:var(--bmm-s05); border:1px solid var(--bmm-s05); color:var(--text-muted);';
+                tag.className = 'mp-chip';
                 const dmod = _allMods.find(m => m.id === did);
                 tag.textContent = dmod ? dmod.name : did;
                 dlist.appendChild(tag);
@@ -742,9 +775,9 @@ function _renderPackModList(listEl) {
 
 function _formField(label, inputHtml) {
     const wrap = document.createElement('div');
-    wrap.style.marginBottom = '16px';
+    wrap.className = 'mp-field';
     wrap.innerHTML = `
-        <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">${label}</div>
+        <div class="form-label">${escHtml(label)}</div>
         ${inputHtml}
     `;
     return wrap;
@@ -841,8 +874,8 @@ function _openMultiSelectModal(listEl) {
         const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
 
         const row = document.createElement('label');
-        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)'};`;
-        if (alreadyInPack) row.style.borderColor = 'rgba(0,194,255,0.25)';
+        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)' : 'var(--bmm-s02)'};`;
+        if (alreadyInPack) row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)';
         if (_isAddingMods) {
             row.style.pointerEvents = 'none';
             row.style.opacity = '0.7';
@@ -850,8 +883,8 @@ function _openMultiSelectModal(listEl) {
 
         row.addEventListener('mouseenter', () => {
             if (!row.querySelector('input').checked) {
-                row.style.background = 'rgba(0,194,255,0.04)';
-                row.style.borderColor = 'rgba(0,194,255,0.12)';
+                row.style.background = 'color-mix(in srgb, var(--bmm-cyan) 4%, transparent)';
+                row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 12%, transparent)';
             }
         });
         row.addEventListener('mouseleave', () => {
@@ -859,8 +892,8 @@ function _openMultiSelectModal(listEl) {
                 row.style.background = 'var(--bmm-s02)';
                 row.style.borderColor = 'transparent';
             } else if (alreadyInPack) {
-                row.style.background = 'rgba(0,194,255,0.08)';
-                row.style.borderColor = 'rgba(0,194,255,0.25)';
+                row.style.background = 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)';
+                row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)';
             }
         });
 
@@ -884,8 +917,8 @@ function _openMultiSelectModal(listEl) {
         switchWrap.appendChild(track);
 
         cb.addEventListener('change', () => {
-            row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)';
-            row.style.borderColor = cb.checked ? 'rgba(0,194,255,0.25)' : 'transparent';
+            row.style.background = cb.checked ? 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)' : 'var(--bmm-s02)';
+            row.style.borderColor = cb.checked ? 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)' : 'transparent';
             updateSelCount();
         });
 
@@ -895,9 +928,9 @@ function _openMultiSelectModal(listEl) {
             <div style="font-size:13px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(m.name)}</div>
             <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
                 <span style="font-size:10px; color:var(--text-muted);">v${escHtml(m.version || '?')}</span>
-                ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:rgba(0,194,255,0.1); border:1px solid rgba(0,194,255,0.2); border-radius:4px; padding:1px 6px;">${escHtml(prof.name)}</span>` : ''}
+                ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:color-mix(in srgb, var(--bmm-cyan) 10%, transparent); border:1px solid color-mix(in srgb, var(--bmm-cyan) 20%, transparent); border-radius:4px; padding:1px 6px;">${escHtml(prof.name)}</span>` : ''}
                 ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:var(--bmm-s05); border:1px solid var(--bmm-s06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} ${t('modpack.dependenciesShort') || 'dep.'}</span>` : ''}
-                ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:rgba(16,185,129,0.1); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
+                ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:color-mix(in srgb, var(--bmm-success) 10%, transparent); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
             </div>
         `;
 
@@ -1126,7 +1159,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
     problematicMods.forEach(m => {
         const isMissing = report.missingMods.some(x => x.mod_id === m.mod_id);
         const statusText = isMissing ? t('modpack.repair.statusMissing') || "Manquant" : t('modpack.repair.statusCorrupted') || "Corrompu";
-        const statusColor = isMissing ? "var(--danger)" : "#fbbf24";
+        const statusColor = isMissing ? "var(--danger)" : "var(--bmm-warning)";
         const fallbackType = m.fallback_type || "direct";
 
         // Vérification de la possibilité de réparation :
@@ -1177,8 +1210,8 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
                 <span id="repair-status-pct" style="color:var(--bmm-warning);">0%</span>
             </div>
-            <div style="width:100%; height:6px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden;">
-                <div id="repair-progress-bar" style="height:100%; background:linear-gradient(90deg, #ff8800, #ff5500); width:0%; transition:width 0.3s ease; box-shadow:0 0 10px rgba(255,136,0,0.5);"></div>
+            <div style="width:100%; height:6px; background:var(--bmm-s08); border-radius:10px; overflow:hidden;">
+                <div id="repair-progress-bar" style="height:100%; background:var(--bmm-warning); width:0%; transition:width 0.3s ease; box-shadow:0 0 10px color-mix(in srgb, var(--bmm-warning) 50%, transparent);"></div>
             </div>
         </div>
 
@@ -1566,7 +1599,7 @@ export async function openQuickApplyModal() {
         row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:background 0.2s, border-color 0.2s;';
         row.onmouseenter = () => {
             row.style.background = 'var(--bmm-s05)';
-            row.style.borderColor = 'rgba(0,194,255,0.2)';
+            row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 20%, transparent)';
         };
         row.onmouseleave = () => {
             row.style.background = 'var(--bmm-s03)';
@@ -1595,16 +1628,12 @@ const local = _allMods.find(m => m.id === mref.mod_id);
                     <span style="color:var(--text-secondary);">${pack.multi_profile ? t('modpack.multiProfile') : escHtml(pack.game_name || t('modpack.general'))}</span>
                 </div>
             </div>
-            <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
-                 style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;">
-                <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
-                <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
-            </div>
+            ${_switchHtml(!!anyEnabled, `${anyEnabled ? (t('modpack.deactivate') || 'Deactivate') : t('modpack.apply')}: ${pack.name}`)}
         `;
 
         const applyBtn = row.querySelector('.btn-apply');
         applyBtn.onclick = async () => {
-            const wrap = applyBtn.closest('.bmm-switch-wrap');
+            const wrap = applyBtn as HTMLElement;
             wrap.style.opacity = '0.5';
             wrap.style.pointerEvents = 'none';
             await _applyModpack(null, pack);
@@ -1623,19 +1652,7 @@ const local = _allMods.find(m => m.id === mref.mod_id);
                 });
             }
 
-            if (newAnyEnabled) {
-                wrap.classList.add('active');
-                wrap.querySelector('.switch-bg').style.background = 'var(--success)';
-                wrap.querySelector('.switch-bg').style.borderColor = 'rgba(16,185,129,0.3)';
-                wrap.querySelector('.switch-knob').style.left = 'auto';
-                wrap.querySelector('.switch-knob').style.right = '3px';
-            } else {
-                wrap.classList.remove('active');
-                wrap.querySelector('.switch-bg').style.background = 'var(--bmm-s10)';
-                wrap.querySelector('.switch-bg').style.borderColor = 'var(--bmm-s05)';
-                wrap.querySelector('.switch-knob').style.right = 'auto';
-                wrap.querySelector('.switch-knob').style.left = '3px';
-            }
+            _setSwitch(wrap, newAnyEnabled);
             wrap.style.opacity = '1';
             wrap.style.pointerEvents = 'auto';
         };

@@ -149,9 +149,42 @@ export async function initAppsCatalog() {
 // Call after every mutating action so the UI stays in sync without user clicking Refresh.
 
 async function refreshState() {
-    try { _state = await invoke('get_apps_state'); } catch (_) {}
-    const badge = document.getElementById('badge-installed');
-    if (badge) badge.textContent = String(Object.keys(_state.installed).length);
+    try { _state = (await invoke('get_apps_state')) || _state; } catch (_) {}
+    paintAppsCounts();
+}
+
+/** The count beside each tab. Zero shows nothing: an empty pill is noise, not news. */
+function paintAppsCounts(): void {
+    const counts: Record<string, number> = {
+        // No count on Browse: the toolbar's "n of N" says it, next to the filters that change it.
+        installed: Object.keys(_state.installed || {}).length,
+        favorites: (_state.favorites || []).length,
+        history: (_state.history || []).length,
+        sources: (_state.community_sources || []).length,
+    };
+    document.querySelectorAll<HTMLElement>('#view-apps [data-apps-count]').forEach((el) => {
+        const n = counts[el.dataset.appsCount || ''] || 0;
+        el.textContent = n ? String(n) : '';
+    });
+}
+
+/** Select a tab: state, ARIA and roving tabindex, the toolbar, then the content. */
+async function selectAppsTab(tab: string, focus = false): Promise<void> {
+    if (!TABS.includes(tab)) return;
+    _activeTab = tab;
+    document.querySelectorAll<HTMLElement>('#view-apps .apps-tab').forEach((b) => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+        if (on && focus) b.focus();
+    });
+    document.getElementById('apps-content')?.setAttribute('aria-labelledby', `apps-tab-${tab}`);
+    const toolbar = document.getElementById('apps-toolbar');
+    if (toolbar) toolbar.style.display = tab === 'browse' ? 'flex' : 'none';
+    // Re-read disk state so usage time / installs update after returning from an app
+    if (tab === 'installed' || tab === 'favorites' || tab === 'history') await refreshState();
+    renderCurrentTab();
 }
 
 async function refreshAndRender() {
@@ -163,61 +196,70 @@ async function refreshAndRender() {
 
 const TABS = ['browse', 'installed', 'favorites', 'history', 'sources', 'create'];
 
+// Skeleton grid instead of a bare spinner: it shows the SHAPE of the app cards that are
+// coming, so the load reads as faster and doesn't pop in from an empty screen.
+const APPS_SKELETON = `<div class="apps-loading apps-loading--skeleton" id="apps-loading" aria-busy="true">
+          <div class="apps-skeleton-grid" aria-hidden="true">${'<div class="skeleton skeleton-card"></div>'.repeat(6)}</div>
+        </div>`;
+
 function renderShell(view: HTMLElement) {
+    // The page head and tab rail shared with Plugins & API (css/page-head.css). Every id the
+    // rest of this file and the tutorial read (apps-tabs, badge-installed, apps-toolbar,
+    // apps-search, apps-filter-*, apps-btn-reload, apps-content) is unchanged.
     view.innerHTML = `
     <div class="apps-root">
-      <div class="apps-header">
-        <div class="apps-header-left">
-          ${uiIcon('grid', 20)}
-          <div>
-            <h2 class="apps-title" data-i18n="apps.title">App Catalog</h2>
-            <p class="apps-subtitle" data-i18n="apps.subtitle">Browse &amp; install apps in one click</p>
-          </div>
+      <header class="pg-head apps-header">
+        <div class="pg-head-icon" aria-hidden="true">${uiIcon('grid', 20)}</div>
+        <div class="pg-head-titles">
+          <h1 class="pg-head-title apps-title" data-i18n="apps.title">${escHtml(t('apps.title'))}</h1>
+          <p class="pg-head-sub apps-subtitle" data-i18n="apps.subtitle">${escHtml(t('apps.subtitle'))}</p>
         </div>
-        <div class="apps-header-right">
+        <div class="pg-head-actions apps-header-right">
           ${learnMore('catalogs')}
-          <button class="btn btn-sm btn-ghost" id="apps-btn-reload">${IC.refresh} <span data-i18n="common.refresh">Refresh</span></button>
+          <button type="button" class="btn btn-sm btn-ghost pg-iconbtn" id="apps-btn-reload"
+            aria-label="${escAttr(t('apps.reloadCatalog'))}" data-tooltip="${escAttr(t('apps.reloadCatalog'))}">${IC.refresh}</button>
+        </div>
+      </header>
+
+      <div class="pg-tabbar apps-tabbar">
+        <div class="bms-tabs pg-tabs apps-tabs" id="apps-tabs" role="tablist" aria-label="${escAttr(t('apps.tabsAria'))}">
+          ${TABS.map(tab => {
+            const on = _activeTab === tab;
+            return `
+          <button type="button" class="bms-tab apps-tab${on ? ' active' : ''}" role="tab" id="apps-tab-${tab}" data-tab="${tab}"
+            aria-selected="${on}" aria-controls="apps-content" tabindex="${on ? 0 : -1}">
+            ${tabIcon(tab)}<span data-i18n="apps.tab.${tab}">${escHtml(t('apps.tab.' + tab) || tabLabel(tab))}</span>
+            <span class="pg-count"${tab === 'installed' ? ' id="badge-installed"' : ''} data-apps-count="${tab}"></span>
+          </button>`; }).join('')}
         </div>
       </div>
 
-      <div class="apps-tabs">
-        ${TABS.map(tab => `
-          <button class="apps-tab${_activeTab === tab ? ' active' : ''}" data-tab="${tab}">
-            ${tabIcon(tab)} <span data-i18n="apps.tab.${tab}">${tabLabel(tab)}</span>
-            ${tab === 'installed' ? `<span class="apps-tab-badge" id="badge-installed">0</span>` : ''}
-          </button>`).join('')}
-      </div>
-
-      <div class="apps-toolbar" id="apps-toolbar" style="${_activeTab === 'browse' ? '' : 'display:none'}">
-        <div class="apps-search-wrap">
+      <div class="pg-toolbar apps-toolbar" id="apps-toolbar" style="${_activeTab === 'browse' ? '' : 'display:none'}">
+        <label class="pg-search apps-search-wrap">
           ${uiIcon('search', 14)}
-          <input class="apps-search" id="apps-search" type="text" placeholder="${t('common.search') || 'Search...'}" value="${escAttr(_searchQ)}">
-        </div>
-        <select class="apps-filter" id="apps-filter-cat">
+          <input class="pg-search-input apps-search" id="apps-search" type="search" spellcheck="false"
+            placeholder="${escAttr(t('apps.searchPh'))}" aria-label="${escAttr(t('apps.searchPh'))}" value="${escAttr(_searchQ)}">
+        </label>
+        <select class="apps-filter" id="apps-filter-cat" aria-label="${escAttr(t('apps.filter.allCat'))}">
           <option value="all"${_filterCat==='all'?' selected':''}>${t('apps.filter.allCat')||'All categories'}</option>
           <option value="game"${_filterCat==='game'?' selected':''}>${t('apps.cat.game')||'Game'}</option>
           <option value="utility"${_filterCat==='utility'?' selected':''}>${t('apps.cat.utility')||'Utility'}</option>
           <option value="other"${_filterCat==='other'?' selected':''}>${t('apps.cat.other')||'Other'}</option>
         </select>
-        <select class="apps-filter" id="apps-filter-price">
+        <select class="apps-filter" id="apps-filter-price" aria-label="${escAttr(t('apps.filter.allPrice'))}">
           <option value="all"${_filterPrice==='all'?' selected':''}>${t('apps.filter.allPrice')||'All prices'}</option>
           <option value="free"${_filterPrice==='free'?' selected':''}>${t('apps.price.free')||'Free'}</option>
           <option value="freemium"${_filterPrice==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
           <option value="paid"${_filterPrice==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
           <option value="oss"${_filterPrice==='oss'?' selected':''}>${t('apps.price.oss')}</option>
         </select>
+        <span class="pg-results" id="apps-results" aria-live="polite"></span>
+        <span class="pg-toolbar-gap"></span>
+        <button type="button" class="btn btn-sm btn-ghost" id="apps-clear-filters" hidden>${uiIcon('clear', 14)} ${escHtml(t('apps.clearFilters'))}</button>
       </div>
 
       <div class="apps-content" id="apps-content">
-        <!-- Skeleton grid instead of a bare spinner: it shows the SHAPE of the app cards that
-             are coming, so the load reads as faster and doesn't pop in from an empty screen. -->
-        <div class="apps-loading apps-loading--skeleton" id="apps-loading" aria-busy="true">
-          <div class="apps-skeleton-grid" aria-hidden="true">
-            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
-            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
-            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
-          </div>
-        </div>
+        ${APPS_SKELETON}
       </div>
     </div>
 
@@ -258,18 +300,32 @@ function tabLabel(tab: string) {
 
 function setupEvents(view: HTMLElement) {
     view.querySelectorAll('.apps-tab').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            _activeTab = (btn as HTMLElement).dataset.tab || 'browse';
-            view.querySelectorAll('.apps-tab').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const toolbar = document.getElementById('apps-toolbar');
-            if (toolbar) toolbar.style.display = _activeTab === 'browse' ? 'flex' : 'none';
-            // Re-read disk state so usage time / installs update after returning from an app
-            if (_activeTab === 'installed' || _activeTab === 'favorites' || _activeTab === 'history') {
-                await refreshState();
-            }
-            renderCurrentTab();
+        btn.addEventListener('click', () => selectAppsTab((btn as HTMLElement).dataset.tab || 'browse'));
+    });
+    // Arrow keys (and Home / End) move along the tabs, as a tablist does.
+    view.querySelector('.apps-tabs')?.addEventListener('keydown', (e) => {
+        const k = (e as KeyboardEvent).key;
+        const i = TABS.indexOf(_activeTab);
+        let to = -1;
+        if (k === 'ArrowRight') to = (i + 1) % TABS.length;
+        else if (k === 'ArrowLeft') to = (i + TABS.length - 1) % TABS.length;
+        else if (k === 'Home') to = 0;
+        else if (k === 'End') to = TABS.length - 1;
+        if (to < 0) return;
+        e.preventDefault();
+        selectAppsTab(TABS[to], true);
+    });
+    paintAppsCounts();
+    document.getElementById('apps-clear-filters')?.addEventListener('click', () => {
+        _searchQ = ''; _filterCat = 'all'; _filterPrice = 'all'; _filterTag = 'all';
+        const s = document.getElementById('apps-search') as HTMLInputElement | null;
+        if (s) s.value = '';
+        (['apps-filter-cat', 'apps-filter-price'] as const).forEach((id) => {
+            const el = document.getElementById(id) as HTMLSelectElement | null;
+            if (el) { el.value = 'all'; el.dispatchEvent(new Event('change')); }
         });
+        renderBrowse();
+        s?.focus();
     });
 
     document.getElementById('apps-btn-reload')?.addEventListener('click', () => loadCatalog(true));
@@ -306,7 +362,9 @@ async function loadCatalog(force = false) {
     _loading = true;
 
     const content = document.getElementById('apps-content');
-    if (content) content.innerHTML = `<div class="apps-loading"><div class="apps-spinner"></div><p>${t('apps.loading') || 'Loading…'}</p></div>`;
+    // The skeleton, not a spinner: this replaced the shell's skeleton grid within a tick, so
+    // the shape of what was coming was never actually on screen.
+    if (content) content.innerHTML = APPS_SKELETON;
 
     try {
         const result = await invoke('fetch_app_catalogs', {
@@ -342,13 +400,35 @@ async function loadCatalog(force = false) {
         }
     } catch {
         _catalog = [];
-        if (content) content.innerHTML = `<div class="apps-empty">${IC.info}<p>${t('apps.catalogUnavail') || 'Catalog unavailable'}</p></div>`;
+        if (content) {
+            content.innerHTML = appsEmpty('cloud', t('apps.catalogUnavail') || 'Catalog unavailable', t('apps.catalogUnavailSub'),
+                `<button type="button" class="btn btn-sm btn-accent" id="apps-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`);
+            content.querySelector('#apps-retry')?.addEventListener('click', () => loadCatalog(true));
+        }
         _loading = false;
         return;
     }
 
     _loading = false;
+    paintAppsCounts();
     renderCurrentTab();
+}
+
+// ── Empty states ──────────────────────────────────────────────────────────────
+
+/**
+ * One shape for every "nothing here": the glyph in a tile, what is (not) there, one line on
+ * why or what to do, and the action that helps. The tabs each wrote their own — a 48-px icon
+ * at 30 or 40 % opacity over a bare sentence — so an empty favourites list and a catalogue
+ * that failed to load looked the same, and neither said what to do next.
+ */
+function appsEmpty(icon: string, title: string, sub = '', actions = '', compact = false): string {
+    return `<div class="apps-empty${compact ? ' apps-empty--compact' : ''}">
+      <div class="apps-empty-icon" aria-hidden="true">${uiIcon(icon as any, 24)}</div>
+      <p class="apps-empty-title">${escHtml(title)}</p>
+      ${sub ? `<p class="apps-empty-sub">${escHtml(sub)}</p>` : ''}
+      ${actions ? `<div class="apps-empty-actions">${actions}</div>` : ''}
+    </div>`;
 }
 
 // ── Tab dispatcher ────────────────────────────────────────────────────────────
@@ -396,13 +476,28 @@ function renderBrowse() {
         </div>`;
     }
 
+    // How many of how many, and a way back to everything when a filter is narrowing it.
+    const filtering = !!_searchQ || _filterTag !== 'all' || _filterCat !== 'all' || _filterPrice !== 'all';
+    const results = document.getElementById('apps-results');
+    if (results) results.textContent = _catalog.length
+        ? t('apps.shownOf').replace('{n}', String(apps.length)).replace('{total}', String(_catalog.length))
+        : '';
+    const clearBtn = document.getElementById('apps-clear-filters');
+    if (clearBtn) clearBtn.hidden = !filtering;
+
     if (!apps.length) {
-        html += `<div class="apps-empty">${uiIcon('search', 48, { style: 'opacity:0.4' })}<p>${_searchQ || _filterTag !== 'all' ? (t('apps.noResults')||'No results') : (t('apps.emptyBrowse')||'Catalog is empty')}</p></div>`;
+        html += filtering
+            ? appsEmpty('search', t('apps.noResults') || 'No results', t('apps.noResultsSub'),
+                `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-clear">${uiIcon('clear', 14)} ${escHtml(t('apps.clearFilters'))}</button>`)
+            : appsEmpty('grid', t('apps.emptyBrowse') || 'Catalog is empty', t('apps.emptyBrowseSub'),
+                `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-sources">${uiIcon('globe', 14)} ${escHtml(t('apps.tab.sources'))}</button>`);
     } else {
         html += `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
     }
 
     content.innerHTML = html;
+    content.querySelector('#apps-empty-clear')?.addEventListener('click', () => document.getElementById('apps-clear-filters')?.click());
+    content.querySelector('#apps-empty-sources')?.addEventListener('click', () => selectAppsTab('sources'));
 
     content.querySelectorAll('.apps-tag-chip').forEach(chip => {
         chip.addEventListener('click', () => {
@@ -654,7 +749,9 @@ function renderInstalled() {
     const apps = Object.values(_state.installed);
 
     if (!apps.length) {
-        content.innerHTML = `<div class="apps-empty">${uiIcon('check', 48, { style: 'opacity:0.4' })}<p>${t('apps.noneInstalled')||'No apps installed yet'}</p></div>`;
+        content.innerHTML = appsEmpty('download', t('apps.noneInstalled') || 'No apps installed yet', t('apps.noneInstalledSub'),
+            `<button type="button" class="btn btn-sm btn-accent" id="apps-empty-browse">${uiIcon('search', 14)} ${escHtml(t('apps.tab.browse'))}</button>`);
+        content.querySelector('#apps-empty-browse')?.addEventListener('click', () => selectAppsTab('browse'));
         return;
     }
 
@@ -775,7 +872,9 @@ function renderFavorites() {
     let apps = _catalog.filter(a => _state.favorites.includes(a.id));
 
     if (!apps.length) {
-        content.innerHTML = `<div class="apps-empty">${uiIcon('star', 48, { style: 'opacity:0.4' })}<p>${t('apps.noFavorites')||'No favorites yet'}</p></div>`;
+        content.innerHTML = appsEmpty('star', t('apps.noFavorites') || 'No favorites yet', t('apps.noFavoritesSub'),
+            `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-browse">${uiIcon('search', 14)} ${escHtml(t('apps.tab.browse'))}</button>`);
+        content.querySelector('#apps-empty-browse')?.addEventListener('click', () => selectAppsTab('browse'));
         return;
     }
 
@@ -838,7 +937,7 @@ function renderFavorites() {
     </div>
 
     ${apps.length === 0
-      ? `<div class="apps-empty" style="height:140px"><p>${t('apps.fav.noMatch')||'No matching favorites'}</p></div>`
+      ? appsEmpty('search', t('apps.fav.noMatch') || 'No matching favorites', '', '', true)
       : `<div class="apps-grid">${apps.map(a => renderAppCardWithCollMenu(a)).join('')}</div>`}`;
 
     // Search
@@ -966,10 +1065,7 @@ function renderHistory() {
     const all = [..._state.history].reverse();
 
     if (!all.length) {
-        content.innerHTML = `<div class="apps-empty">
-          ${uiIcon('history', 48, { style: 'opacity:0.3' })}
-          <p>${t('apps.noHistory')||'No activity yet'}</p>
-        </div>`;
+        content.innerHTML = appsEmpty('history', t('apps.noHistory') || 'No activity yet', t('apps.noHistorySub'));
         return;
     }
 
@@ -1009,7 +1105,7 @@ function renderHistory() {
     </div>
 
     ${entries.length === 0
-        ? `<div class="apps-empty" style="height:120px"><p>${t('apps.history.noneFilter')||'No entries for this filter'}</p></div>`
+        ? appsEmpty('filter', t('apps.history.noneFilter') || 'No entries for this filter', '', '', true)
         : days.map(day => `
       <div class="apps-hist-day">
         <div class="apps-hist-day-label">${escHtml(day.label)}</div>
@@ -1289,7 +1385,7 @@ function renderCreate() {
 
       <!-- Numbered, because this screen has an order and used to draw four identical
            panels that did not say so. -->
-      <div class="apps-create-section">
+      <div class="apps-create-section apps-create-section--fields">
         <h4 class="apps-cr-step-h"><span>1</span>${escHtml(t('apps.create.stepName'))}</h4>
         <label class="apps-install-label" for="cr-name">${t('apps.create.catalogName')||'Catalog name'}</label>
         <input class="apps-path-input" id="cr-name" type="text" placeholder="${escAttr(t('apps.create.namePh'))}" value="${escAttr(_draft.name)}">

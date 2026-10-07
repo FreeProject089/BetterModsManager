@@ -266,29 +266,112 @@ async function isBcLinked() {
         }
     }
 }
-// ── Repo verification detail modal ───────────────────────────────────────────
-// reason: optional override describing WHY verification failed.
-//   'mismatch'  → live repo signature differs from the BMM-recorded one
-//   'unsigned'  → no/invalid self-signature (default)
-function _openRepoVerifyDetail(repo, isVerified, reason) {
+export function repoSignatureState(repo, selfSigned, pin) {
+    const claims = !!repo?.signature || !!repo?.author_id;
+    if (claims && !selfSigned)
+        return 'invalid';
+    const p = (pin || '').trim();
+    if (p) {
+        if (!repo?.signature)
+            return 'missing';
+        if (String(repo.signature).trim().toLowerCase() !== p.toLowerCase())
+            return 'mismatch';
+    }
+    return claims ? 'valid' : 'unsigned';
+}
+export const sigBlocked = (s) => s === 'invalid' || s === 'missing' || s === 'mismatch';
+const SIG_UI = {
+    valid: { tone: 'ok', icon: 'shield-check', chip: 'repo.sig.chipValid', title: 'repo.sig.valid', desc: 'repo.sig.validDesc' },
+    unsigned: { tone: 'warn', icon: 'shield', chip: 'repo.sig.chipUnsigned', title: 'repo.sig.unsigned', desc: 'repo.sig.unsignedDesc' },
+    invalid: { tone: 'bad', icon: 'alert', chip: 'repo.sig.chipBlocked', title: 'repo.sig.invalid', desc: 'repo.errSignatureInvalid' },
+    missing: { tone: 'bad', icon: 'alert', chip: 'repo.sig.chipBlocked', title: 'repo.sig.missing', desc: 'repo.errSignatureMissing' },
+    mismatch: { tone: 'bad', icon: 'alert', chip: 'repo.sig.chipBlocked', title: 'repo.sig.mismatch', desc: 'repo.errSignatureMismatch' },
+};
+/** The state currently shown on the sync card ('' = no repo fetched). */
+let currentSigState = '';
+/**
+ * Paint the signature state on the sync card: the chip at its top, the panel under the
+ * description, and the Sync button (disabled, with the reason beside it, when the backend
+ * would refuse). `pinned` changes only the wording of a valid signature.
+ */
+export function paintSignature(state, pinned = false) {
+    currentSigState = state;
+    const card = document.getElementById('repo-sync-info-card');
+    const chip = document.getElementById('repo-sync-author-badge');
+    const btn = document.getElementById('btn-start-repo-sync');
+    let panel = document.getElementById('repo-sync-sig');
+    let note = document.getElementById('repo-sync-blocked-note');
+    if (!state) {
+        panel?.remove();
+        note?.remove();
+        if (btn) {
+            btn.disabled = false;
+            btn.removeAttribute('aria-describedby');
+        }
+        return;
+    }
+    const ui = SIG_UI[state];
+    if (chip) {
+        chip.removeAttribute('style');
+        chip.className = `rp-sig-chip rp-tone--${ui.tone}`;
+        chip.innerHTML = `${uiIcon(ui.icon, 12)}<span>${escHtml(t(ui.chip))}</span>`;
+        chip.setAttribute('role', 'button');
+        chip.tabIndex = 0;
+        chip.title = t('repo.verifyDetail.clickHint');
+    }
+    if (card && !panel) {
+        panel = document.createElement('div');
+        panel.id = 'repo-sync-sig';
+        panel.setAttribute('role', 'status');
+        const desc = document.getElementById('repo-sync-desc-display');
+        (desc || card.firstElementChild)?.after(panel);
+    }
+    if (panel) {
+        panel.className = `rp-sig rp-tone--${ui.tone}`;
+        const descKey = state === 'valid' && pinned ? 'repo.sig.validPinnedDesc' : ui.desc;
+        panel.innerHTML = `<span class="rp-sig-ic">${uiIcon(ui.icon, 16)}</span>`
+            + `<span class="rp-sig-txt"><b class="rp-sig-t">${escHtml(t(ui.title))}</b>`
+            + `<span class="rp-sig-d">${escHtml(t(descKey))}</span></span>`
+            + `<button type="button" class="btn btn-ghost btn-sm rp-sig-more" data-rp-sig-details>${escHtml(t('repo.sig.details'))}</button>`;
+    }
+    const blocked = sigBlocked(state);
+    if (btn) {
+        btn.disabled = blocked;
+        if (blocked) {
+            if (!note) {
+                note = document.createElement('p');
+                note.id = 'repo-sync-blocked-note';
+                note.className = 'rp-blocked-note';
+                btn.after(note);
+            }
+            note.innerHTML = `${uiIcon('lock', 12)}<span>${escHtml(t('repo.sig.syncBlocked'))}</span>`;
+            btn.setAttribute('aria-describedby', 'repo-sync-blocked-note');
+        }
+        else {
+            note?.remove();
+            btn.removeAttribute('aria-describedby');
+        }
+    }
+}
+function _openRepoVerifyDetail(repo, state) {
     const modal = document.getElementById('modal-repo-verify-detail');
     if (!modal)
         return;
+    const ui = SIG_UI[state] || SIG_UI.unsigned;
     const totalMods = repo.profiles ? repo.profiles.reduce((n, p) => n + (p.mods?.length || 0), 0) : 0;
     const totalProfs = repo.profiles ? repo.profiles.length : 0;
-    // Status icon & label
+    // Status icon & label: the shell's own tone modifiers (modal-shell.css), tokens only.
     const statusIcon = document.getElementById('repo-vd-status-icon');
     const statusLabel = document.getElementById('repo-vd-status-label');
     if (statusIcon) {
-        statusIcon.style.background = isVerified ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)';
-        statusIcon.style.border = isVerified ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(231,76,60,0.3)';
-        statusIcon.innerHTML = isVerified
-            ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`
-            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+        statusIcon.removeAttribute('style');
+        statusIcon.className = `bms-icon bms-icon--${ui.tone === 'bad' ? 'danger' : ui.tone}`;
+        statusIcon.innerHTML = uiIcon(ui.icon, 16);
     }
     if (statusLabel) {
-        statusLabel.textContent = isVerified ? (t('repo.verified') || 'Vérifié') : (t('repo.unverified') || 'Non vérifié');
-        statusLabel.style.color = isVerified ? '#2ecc71' : '#e74c3c';
+        statusLabel.removeAttribute('style');
+        statusLabel.className = `bms-sub rp-vd-state rp-tone--${ui.tone}`;
+        statusLabel.textContent = t(ui.chip);
     }
     // Fields
     const set = (id, val) => { const el = document.getElementById(id); if (el)
@@ -311,26 +394,16 @@ function _openRepoVerifyDetail(repo, isVerified, reason) {
     const sigTitle = document.getElementById('repo-vd-sig-title');
     const sigDesc = document.getElementById('repo-vd-sig-desc');
     if (sigBox && sigIcon && sigTitle && sigDesc) {
-        sigBox.style.borderColor = isVerified ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.2)';
-        sigBox.style.background = isVerified ? 'rgba(46,204,113,0.06)' : 'rgba(231,76,60,0.06)';
-        sigIcon.innerHTML = isVerified
-            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
-            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-        if (isVerified) {
-            sigTitle.textContent = t('repo.verifyDetail.sigOk') || 'Signature Ed25519 valide';
-            sigDesc.textContent = t('repo.verifyDetail.sigOkDesc') || "Le contenu de ce dépôt a été signé par l'auteur et n'a pas été altéré.";
-        }
-        else if (reason === 'mismatch') {
-            // Content changed since the BMM team verified this repo
-            sigTitle.textContent = t('repo.verifyDetail.sigMismatch') || 'Signature ne correspond plus';
-            sigDesc.textContent = t('repo.verifyDetail.sigMismatchDesc')
-                || "Le contenu de ce dépôt a changé depuis sa vérification par l'équipe BMM. Sa signature ne correspond plus à celle enregistrée — vérifiez avant de synchroniser.";
-        }
-        else {
-            sigTitle.textContent = t('repo.verifyDetail.sigFail') || 'Signature invalide ou absente';
-            sigDesc.textContent = t('repo.verifyDetail.sigFailDesc') || "La signature n'a pas pu être vérifiée. Le dépôt peut être non signé ou potentiellement modifié.";
-        }
-        sigTitle.style.color = isVerified ? '#2ecc71' : '#e74c3c';
+        sigBox.removeAttribute('style');
+        sigBox.className = `rp-sig rp-tone--${ui.tone}`;
+        sigIcon.className = 'rp-sig-ic';
+        sigIcon.innerHTML = uiIcon(ui.icon, 16);
+        sigTitle.removeAttribute('style');
+        sigTitle.className = 'rp-sig-t';
+        sigDesc.removeAttribute('style');
+        sigDesc.className = 'rp-sig-d';
+        sigTitle.textContent = t(ui.title);
+        sigDesc.textContent = t(ui.desc);
     }
     modal.classList.add('open');
 }
@@ -443,22 +516,10 @@ export function initRepoSync(elements) {
                 catch { }
                 // 1. Self-signature check: is the repo validly signed by its author?
                 const selfSigned = await invoke('verify_repo_signature', { repo });
-                // 2. Content-integrity check: does the live signature still match the
-                //    one the BMM team recorded in repos.json? If a server changed its
-                //    repo content after verification, the signature won't match.
-                let verifyReason;
-                const normUrl = (url || '').trim().replace(/\/repo\.json$/i, '').replace(/\/+$/, '').toLowerCase();
-                const expectedSig = window.__bmmRepoExpectedSig?.[normUrl];
-                let isVerified = selfSigned;
-                if (selfSigned && expectedSig) {
-                    if (repo.signature !== expectedSig) {
-                        isVerified = false;
-                        verifyReason = 'mismatch';
-                    }
-                }
-                else if (!selfSigned) {
-                    verifyReason = 'unsigned';
-                }
+                // 2. The official list's pin, if this URL is in it: the same value the sync
+                //    passes as expectedSignature, so card and backend judge with one input.
+                const pin = expectedRepoSignature(url);
+                const sigState = repoSignatureState(repo, !!selfSigned, pin);
                 syncInfoCard.style.display = 'block';
                 syncNameDisplay.textContent = repo.name;
                 syncAuthorDisplay.textContent = (t('repo.authorShort') || "Auteur :") + " " + (repo.author || "Inconnu");
@@ -474,60 +535,31 @@ export function initRepoSync(elements) {
                     : (repo.description || "");
                 syncDescDisplay.style.color = discovered ? 'var(--warning)' : '';
                 syncGameBadge.textContent = repo.game_name ? (t(repo.game_name) || repo.game_name) : '';
-                if (isVerified) {
-                    syncBadge.textContent = t('repo.verified');
-                    syncBadge.style.background = 'rgba(46, 204, 113, 0.2)';
-                    syncBadge.style.color = '#2ecc71';
-                    syncBadge.style.border = '1px solid rgba(46, 204, 113, 0.3)';
-                }
-                else {
-                    syncBadge.textContent = t('repo.unverified');
-                    syncBadge.style.background = 'rgba(231, 76, 60, 0.2)';
-                    syncBadge.style.color = '#e74c3c';
-                    syncBadge.style.border = '1px solid rgba(231, 76, 60, 0.3)';
-                }
-                syncBadge.style.cursor = 'pointer';
-                syncBadge.style.borderRadius = '100px';
-                syncBadge.style.padding = '2px 8px';
-                syncBadge.title = t('repo.verifyDetail.clickHint') || 'Cliquer pour les détails';
-                // Cache repo + verification state for the detail modal
-                syncBadge.dataset.isVerified = isVerified ? '1' : '0';
-                syncBadge.dataset.verifyReason = verifyReason || '';
+                // The chip, the panel under the description and the Sync button all say the
+                // one state; the detail dialog opens from the chip or the panel's button.
                 syncBadge._repoRef = repo;
+                paintSignature(sigState, !!pin);
                 if (profilesSelectionEl && repo.profiles) {
-                    profilesSelectionEl.innerHTML = `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; opacity:0.8;">${t('repo.selectSyncTasks')}</div>`;
+                    profilesSelectionEl.innerHTML = `<div class="rp-pick-h">${escHtml(t('repo.selectSyncTasks'))}</div>`;
                     const localProfiles = await invoke('get_profiles');
                     repo.profiles.forEach(rp => {
                         const rpSizeTotal = rp.mods.reduce((acc, m) => acc + (m.files ? m.files.reduce((a, f) => a + f.size, 0) : 0), 0);
+                        // Classes (repo-page.css), not inline washes: rgba(255,255,255,…) was
+                        // white on white under BMM White, and the group vanished.
                         const group = document.createElement('div');
-                        group.style.background = 'rgba(255,255,255,0.02)';
-                        group.style.border = '1px solid rgba(255,255,255,0.05)';
-                        group.style.borderRadius = '8px';
-                        group.style.padding = '10px';
-                        group.style.marginBottom = '8px';
+                        group.className = 'rp-pick';
                         const title = document.createElement('div');
-                        title.style.display = 'flex';
-                        title.style.justifyContent = 'space-between';
-                        title.style.alignItems = 'center';
+                        title.className = 'rp-pick-title';
                         title.innerHTML = `
-                            <span style="font-size:12px; font-weight:700;">${escHtml(rp.name)}</span>
-                            <span style="font-size:10px; color:var(--text-muted);">${formatBytes(rpSizeTotal)}</span>
+                            <span class="rp-pick-name">${escHtml(rp.name)}</span>
+                            <span class="rp-pick-meta">${escHtml(t('modpack.modsCount', { count: rp.mods?.length || 0 }))} · ${formatBytes(rpSizeTotal)}</span>
                         `;
-                        title.style.color = 'var(--accent)';
-                        title.style.marginBottom = '8px';
                         group.appendChild(title);
                         const optionsContainer = document.createElement('div');
-                        optionsContainer.style.display = 'flex';
-                        optionsContainer.style.flexDirection = 'column';
-                        optionsContainer.style.gap = '6px';
+                        optionsContainer.className = 'rp-pick-opts';
                         const addOption = (label, value, checked = false) => {
                             const row = document.createElement('label');
-                            row.style.display = 'flex';
-                            row.style.alignItems = 'center';
-                            row.style.gap = '8px';
-                            row.style.cursor = 'pointer';
-                            row.style.fontSize = '11px';
-                            row.style.color = 'var(--text-secondary)';
+                            row.className = 'rp-pick-opt';
                             const cb = document.createElement('input');
                             cb.type = 'checkbox';
                             cb.value = value;
@@ -546,26 +578,20 @@ export function initRepoSync(elements) {
                         });
                         if (localProfiles.length > matches.length) {
                             const selectRow = document.createElement('div');
-                            selectRow.style.display = 'flex';
-                            selectRow.style.alignItems = 'center';
-                            selectRow.style.gap = '8px';
-                            selectRow.style.marginTop = '4px';
+                            selectRow.className = 'rp-pick-other';
                             const selectLabel = document.createElement('span');
+                            selectLabel.className = 'rp-pick-other-l';
                             selectLabel.textContent = (t('repo.syncOther') || 'Autre profil :');
-                            selectLabel.style.fontSize = '10px';
-                            selectLabel.style.color = 'var(--text-muted)';
                             const select = document.createElement('select');
-                            select.className = 'input-field repo-sync-manual-select';
-                            select.style.fontSize = '10px';
-                            select.style.padding = '2px 6px';
-                            select.style.height = '24px';
-                            select.style.flex = '1';
-                            select.innerHTML = `<option value="">-- ${t('repo.selectLocal') || 'Choisir un profil local'} --</option>` +
-                                localProfiles.map(lp => `<option value="${lp.id}">${lp.name}</option>`).join('');
+                            select.className = 'form-input select-sm repo-sync-manual-select';
+                            select.setAttribute('aria-label', t('repo.selectLocal'));
+                            select.innerHTML = `<option value="">${escHtml(t('repo.selectLocal'))}</option>` +
+                                localProfiles.map(lp => `<option value="${escHtml(lp.id)}">${escHtml(lp.name)}</option>`).join('');
                             const cb = document.createElement('input');
                             cb.type = 'checkbox';
                             cb.dataset.repoProfileId = rp.id;
                             cb.className = 'repo-sync-choice-cb manual-sync-cb';
+                            cb.setAttribute('aria-label', t('repo.syncOther'));
                             select.onchange = () => {
                                 cb.checked = !!select.value;
                                 cb.value = select.value;
@@ -580,40 +606,45 @@ export function initRepoSync(elements) {
                         // ── Per-mod selection ──────────────────────────────
                         if (rp.mods && rp.mods.length > 0) {
                             const modSection = document.createElement('details');
-                            modSection.style.marginTop = '10px';
+                            modSection.className = 'rp-pick-mods';
                             const summary = document.createElement('summary');
-                            summary.style.cursor = 'pointer';
-                            summary.style.fontSize = '10px';
-                            summary.style.color = 'var(--text-muted)';
-                            summary.style.userSelect = 'none';
-                            summary.textContent = `${t('repo.selectMods') || 'Choisir les mods'} (${rp.mods.length})`;
+                            summary.className = 'rp-pick-mods-h';
+                            const sumTxt = document.createElement('span');
+                            sumTxt.textContent = t('repo.selectMods') || 'Choisir les mods';
+                            const sumCount = document.createElement('span');
+                            sumCount.className = 'rp-count';
+                            summary.appendChild(sumTxt);
+                            summary.appendChild(sumCount);
                             modSection.appendChild(summary);
                             // Select all / none buttons
                             const modToolbar = document.createElement('div');
-                            modToolbar.style.display = 'flex';
-                            modToolbar.style.gap = '6px';
-                            modToolbar.style.margin = '6px 0 4px';
-                            modToolbar.style.alignItems = 'center';
-                            modToolbar.style.flexWrap = 'wrap';
+                            modToolbar.className = 'rp-pick-tools';
                             const makeSmallBtn = (label, onClick) => {
                                 const b = document.createElement('button');
+                                b.type = 'button';
+                                b.className = 'btn btn-secondary btn-xs';
                                 b.textContent = label;
-                                b.style.cssText = 'font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-secondary);cursor:pointer;';
                                 b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
                                 return b;
                             };
                             const modCheckboxes = [];
+                            // "12 / 40": how many will download, on the fold itself, so a
+                            // narrowed selection is visible without opening it.
+                            const recount = () => {
+                                const on = modCheckboxes.filter(c => c.checked).length;
+                                sumCount.textContent = `${on} / ${modCheckboxes.length}`;
+                            };
                             // Select all / none act on what is SHOWN, not on everything.
                             //
                             // With a filter typed, "Select all" meaning all four hundred is
                             // the opposite of what somebody who just narrowed the list means
-                            // by it — and it is silent, so they would find out at download.
+                            // by it, and it is silent, so they would find out at download.
                             const visible = () => modCheckboxes.filter((c) => {
                                 const row = c.closest('label');
-                                return !row || row.style.display !== 'none';
+                                return !row || !row.hidden;
                             });
-                            modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => visible().forEach(c => c.checked = true)));
-                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'None', () => visible().forEach(c => c.checked = false)));
+                            modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => { visible().forEach(c => c.checked = true); recount(); }));
+                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'None', () => { visible().forEach(c => c.checked = false); recount(); }));
                             // A search box, for the profile with two hundred mods in it.
                             //
                             // It FILTERS rather than re-rendering: a tick is state that lives
@@ -622,14 +653,22 @@ export function initRepoSync(elements) {
                             // still in the form and still counts, which is what keeps
                             // "everything is ticked by default" true while you are looking at
                             // three of them.
+                            const findWrap = document.createElement('label');
+                            findWrap.className = 'rp-find';
+                            findWrap.innerHTML = uiIcon('search', 12);
                             const find = document.createElement('input');
                             find.type = 'search';
-                            find.className = 'input input-sm';
                             find.placeholder = t('repo.sync.findMod');
+                            find.setAttribute('aria-label', t('repo.sync.findMod'));
                             find.spellcheck = false;
-                            find.style.cssText = 'flex:1;min-width:0;height:24px;font-size:10px;';
+                            findWrap.appendChild(find);
                             const found = document.createElement('span');
-                            found.style.cssText = 'font-size:9px;color:var(--text-muted);font-family:var(--font-mono);flex:none;';
+                            found.className = 'rp-find-n';
+                            found.setAttribute('aria-live', 'polite');
+                            const noHit = document.createElement('div');
+                            noHit.className = 'rp-pick-none';
+                            noHit.hidden = true;
+                            noHit.textContent = t('repo.sync.noModMatch');
                             find.addEventListener('input', () => {
                                 const q = find.value.trim().toLowerCase();
                                 let n = 0;
@@ -638,50 +677,48 @@ export function initRepoSync(elements) {
                                     if (!row)
                                         continue;
                                     const hit = !q || (row.dataset.find || '').includes(q);
-                                    row.style.display = hit ? '' : 'none';
+                                    row.hidden = !hit;
                                     if (hit)
                                         n += 1;
                                 }
                                 found.textContent = q ? `${n}/${modCheckboxes.length}` : '';
+                                noHit.hidden = n > 0;
                             });
-                            modToolbar.appendChild(find);
+                            modToolbar.appendChild(findWrap);
                             modToolbar.appendChild(found);
                             modSection.appendChild(modToolbar);
                             const modList = document.createElement('div');
-                            modList.style.display = 'flex';
-                            modList.style.flexDirection = 'column';
-                            modList.style.gap = '3px';
-                            modList.style.maxHeight = '160px';
-                            modList.style.overflowY = 'auto';
-                            modList.style.paddingRight = '4px';
+                            modList.className = 'rp-pick-list';
                             rp.mods.forEach(mod => {
                                 const modSize = mod.files ? mod.files.reduce((a, f) => a + f.size, 0) : 0;
                                 const row = document.createElement('label');
+                                row.className = 'rp-pick-row';
                                 // What the search matches on, lowercased once here rather than
                                 // on every keystroke for every row.
                                 row.dataset.find = String(mod.name || '').toLowerCase();
-                                row.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 4px;border-radius:4px;transition:background 0.15s;';
-                                row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.04)');
-                                row.addEventListener('mouseleave', () => row.style.background = '');
                                 const cb = document.createElement('input');
                                 cb.type = 'checkbox';
                                 cb.checked = true;
                                 cb.dataset.repoProfileId = rp.id;
                                 cb.dataset.modId = mod.id;
                                 cb.className = 'repo-sync-mod-cb';
+                                cb.addEventListener('change', recount);
                                 modCheckboxes.push(cb);
                                 const nameSpan = document.createElement('span');
+                                nameSpan.className = 'rp-pick-row-n';
                                 nameSpan.textContent = mod.name;
-                                nameSpan.style.cssText = 'font-size:10px;color:var(--text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+                                nameSpan.title = mod.name;
                                 const sizeSpan = document.createElement('span');
+                                sizeSpan.className = 'rp-pick-row-s';
                                 sizeSpan.textContent = formatBytes(modSize);
-                                sizeSpan.style.cssText = 'font-size:9px;color:var(--text-muted);flex-shrink:0;';
                                 row.appendChild(cb);
                                 row.appendChild(nameSpan);
                                 row.appendChild(sizeSpan);
                                 modList.appendChild(row);
                             });
+                            recount();
                             modSection.appendChild(modList);
+                            modSection.appendChild(noHit);
                             group.appendChild(modSection);
                         }
                         profilesSelectionEl.appendChild(group);
@@ -689,46 +726,28 @@ export function initRepoSync(elements) {
                     // ── Modpacks selection ──────────────────────────────
                     if (repo.modpacks && repo.modpacks.length > 0) {
                         const mpGroup = document.createElement('div');
-                        mpGroup.className = 'repo-sync-profile-group glass-card';
-                        mpGroup.style.marginTop = '20px';
-                        mpGroup.style.padding = '12px';
-                        mpGroup.style.background = 'rgba(255,255,255,0.02)';
-                        mpGroup.style.border = '1px solid rgba(255,255,255,0.08)';
-                        mpGroup.style.borderRadius = '8px';
-                        mpGroup.innerHTML = `<h4 style="margin:0 0 12px; font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
-                            ${uiIcon('box', 14)}
-                            ${t('modpack.sharedModpacks') || 'Modpacks Partagés'}
-                        </h4>`;
+                        mpGroup.className = 'repo-sync-profile-group rp-pick';
+                        mpGroup.innerHTML = `<div class="rp-pick-title"><span class="rp-pick-name">${uiIcon('box', 14)}<span>${escHtml(t('modpack.sharedModpacks') || 'Modpacks Partagés')}</span></span><span class="rp-count">${repo.modpacks.length}</span></div>`;
                         const mpList = document.createElement('div');
-                        mpList.style.cssText = 'display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; padding-right:4px;';
+                        mpList.className = 'rp-pick-list rp-pick-list--packs';
                         repo.modpacks.forEach(mpShare => {
                             const mp = mpShare.modpack;
-                            const item = document.createElement('div');
-                            item.className = 'repo-modpack-item';
-                            item.style.cssText = 'display:flex; flex-direction:column; padding:10px; margin-bottom:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px;';
-                            const topRow = document.createElement('div');
-                            topRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:8px;';
+                            const item = document.createElement('label');
+                            item.className = 'repo-modpack-item rp-pick-row';
                             const cb = document.createElement('input');
                             cb.type = 'checkbox';
                             cb.className = 'repo-sync-modpack-cb';
                             cb.dataset.modpack = JSON.stringify(mp);
                             cb.checked = true;
                             const name = document.createElement('span');
-                            name.style.cssText = 'font-size:13px; font-weight:600; color:var(--text-primary); flex:1;';
+                            name.className = 'rp-pick-row-n';
                             name.textContent = mp.name;
-                            const badge = document.createElement('div');
-                            badge.style.cssText = 'font-size:9px; font-weight:800; padding:3px 8px; border-radius:4px; background:rgba(59, 130, 246, 0.15); color:var(--accent); text-transform:uppercase; letter-spacing:0.5px;';
-                            badge.textContent = t('modpack.modpackBadge') || 'MODPACK';
-                            topRow.appendChild(cb);
-                            topRow.appendChild(name);
-                            topRow.appendChild(badge);
-                            item.appendChild(topRow);
-                            const infoRow = document.createElement('div');
-                            infoRow.style.cssText = 'display:flex; align-items:center; gap:8px; padding-left:26px;';
-                            infoRow.innerHTML = `<span style="font-size:11px; color:var(--text-muted);">
-                                <span style="color:var(--accent); font-weight:600;">${mp.mods.length}</span> ${t('modpack.modsIncluded') || 'mods inclus'}
-                            </span>`;
-                            item.appendChild(infoRow);
+                            const meta = document.createElement('span');
+                            meta.className = 'rp-pick-row-s';
+                            meta.textContent = t('modpack.modsCount', { count: mp.mods?.length || 0 });
+                            item.appendChild(cb);
+                            item.appendChild(name);
+                            item.appendChild(meta);
                             mpList.appendChild(item);
                         });
                         mpGroup.appendChild(mpList);
@@ -774,6 +793,7 @@ export function initRepoSync(elements) {
         btnClearFetchedRepo.addEventListener('click', () => {
             syncInfoCard.style.display = 'none';
             lastFetchedRepo = null;
+            paintSignature('');
             if (profilesSelectionEl)
                 profilesSelectionEl.innerHTML = '';
             const totalSizeEl = document.getElementById('repo-sync-total-size');
@@ -940,6 +960,11 @@ export function initRepoSync(elements) {
                 else {
                     syncStatus.textContent = t('repo.syncError') || "Sync error";
                     toast(t(errMsg) || errMsg, 'error');
+                    // A signature refusal is a state of the repo, not a passing error: the
+                    // card keeps saying it (and why) after the toast is gone.
+                    const refused = /repo\.errSignature(Invalid|Missing|Mismatch)/.exec(errMsg);
+                    if (refused)
+                        paintSignature(refused[1].toLowerCase());
                 }
             }
             finally {
@@ -1001,8 +1026,20 @@ export function initRepoSync(elements) {
             const repo = syncBadge._repoRef;
             if (!repo)
                 return;
-            const isVerified = syncBadge.dataset.isVerified === '1';
-            _openRepoVerifyDetail(repo, isVerified, syncBadge.dataset.verifyReason || undefined);
+            _openRepoVerifyDetail(repo, currentSigState || 'unsigned');
+        });
+        syncBadge.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                syncBadge.click();
+            }
+        });
+    }
+    // The panel's "Details" button opens the same dialog as the chip.
+    if (syncInfoCard && syncBadge) {
+        syncInfoCard.addEventListener('click', (e) => {
+            if (e.target.closest('[data-rp-sig-details]'))
+                syncBadge.click();
         });
     }
     // Close verification modal
@@ -1033,28 +1070,16 @@ export function showSyncSummary(summary) {
         </div>`;
     }
     else {
+        // One card per profile: three counted outcomes and what crossed the wire. Classes in
+        // repo-page.css (the old inline washes were black holes under BMM White).
         body.innerHTML = summary.profiles.map(p => `
-            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:12px;">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                    <div style="width:8px; height:8px; border-radius:50%; background:var(--accent);"></div>
-                    <span style="font-weight:700; font-size:14px; color:var(--text-primary);">${escHtml(p.name)}</span>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">MODS</div>
-                        <div style="display:flex; flex-direction:column; gap:4px;">
-                            <div style="font-size:12px; color:var(--success); font-weight:600;">+ ${p.mods_added} ${t('repo.summaryAdded')}</div>
-                            <div style="font-size:12px; color:var(--accent); font-weight:600;">~ ${p.mods_updated} ${t('repo.summaryUpdated')}</div>
-                            <div style="font-size:12px; color:var(--danger); font-weight:600;">- ${p.mods_removed} ${t('repo.summaryRemoved')}</div>
-                        </div>
-                    </div>
-                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">TRANSFERT</div>
-                        <div style="display:flex; flex-direction:column; gap:4px;">
-                            <div style="font-size:12px; color:var(--text-primary); font-weight:600;">${p.files_downloaded} ${t('repo.summaryFiles') || 'files'}</div>
-                            <div style="font-size:12px; color:var(--cyan); font-weight:600;">${formatBytes(p.bytes_downloaded)}</div>
-                        </div>
-                    </div>
+            <div class="rp-sum">
+                <div class="rp-sum-h">${uiIcon('profile', 14)}<span>${escHtml(p.name)}</span></div>
+                <div class="rp-sum-grid">
+                    <div class="rp-sum-tile rp-tone--ok"><b>${Number(p.mods_added) || 0}</b><span>${escHtml(t('repo.summaryAdded'))}</span></div>
+                    <div class="rp-sum-tile rp-tone--info"><b>${Number(p.mods_updated) || 0}</b><span>${escHtml(t('repo.summaryUpdated'))}</span></div>
+                    <div class="rp-sum-tile rp-tone--bad"><b>${Number(p.mods_removed) || 0}</b><span>${escHtml(t('repo.summaryRemoved'))}</span></div>
+                    <div class="rp-sum-tile"><b>${formatBytes(p.bytes_downloaded)}</b><span>${Number(p.files_downloaded) || 0} ${escHtml(t('repo.summaryFiles') || 'files')}</span></div>
                 </div>
             </div>
         `).join('');
@@ -1062,7 +1087,7 @@ export function showSyncSummary(summary) {
     // Synced, but nothing vouches for what came down: say so on the result too, not only on
     // the badge before it (check_repo_signature; a signature that FAILED never gets here).
     if (summary?.signature === 'unsigned') {
-        body.insertAdjacentHTML('beforeend', `<div style="font-size:11.5px; color:var(--warning); margin-top:4px;">${escHtml(t('repo.summaryUnsigned'))}</div>`);
+        body.insertAdjacentHTML('beforeend', `<div class="rp-sig rp-tone--warn"><span class="rp-sig-ic">${uiIcon('shield', 16)}</span><span class="rp-sig-txt"><b class="rp-sig-t">${escHtml(t('repo.sig.unsigned'))}</b><span class="rp-sig-d">${escHtml(t('repo.summaryUnsigned'))}</span></span></div>`);
     }
     modal.classList.add('open');
 }

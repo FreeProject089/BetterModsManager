@@ -179,3 +179,349 @@
     color: var(--bmm-text-on-accent);
 }
 #view-repo .repo-host-group + .repo-host-group { margin-top: 32px; }
+
+/* ══ Oct 2026 pass: one vocabulary for the whole page ═════════════════════════════════════
+   Everything below replaces inline styles that index.html and repo-sync.ts used to carry:
+   white/black washes that vanished or punched holes under BMM White, hex greens and reds no
+   theme could reach, and seven sizes of 9-11px uppercase labels. Tokens only. */
+
+/* Tones: one custom property, read by every state-bearing block (signature, notes, tiles). */
+.rp-tone--ok   { --rp-tone: var(--bmm-success); }
+.rp-tone--warn { --rp-tone: var(--bmm-warning); }
+.rp-tone--bad  { --rp-tone: var(--bmm-danger); }
+.rp-tone--info { --rp-tone: var(--bmm-accent); }
+
+/* ── Tab rail: a count or a live state on each tab ────────────────────────────────────── */
+#view-repo .repo-tab-btn .rp-tab-badge {
+    margin-left: auto;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+#view-repo .repo-tab-btn .rp-tab-badge--live {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 12%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .repo-tab-btn .rp-tab-badge--live .rp-dot { background: var(--bmm-success); }
+#view-repo .rp-sticky.is-stuck .rp-tab-badge { padding: 1px 7px; }
+/* Host's active state was a literal cyan rgba; the token says the same in every theme. */
+#view-repo .repo-tab-btn[data-repo-tab="host"].active {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--bmm-cyan) 12%, transparent) 0%, color-mix(in srgb, var(--bmm-cyan) 3%, transparent) 100%);
+    border-color: color-mix(in srgb, var(--bmm-cyan) 40%, var(--bmm-border));
+}
+#view-repo .repo-tab-btn[data-repo-tab="host"].active .repo-tab-ic {
+    background: color-mix(in srgb, var(--bmm-cyan) 16%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-cyan) 35%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-cyan) 70%, var(--bmm-text-primary));
+}
+#view-repo .repo-card--green::before { background: var(--bmm-success); }
+
+/* ── Shared small parts ───────────────────────────────────────────────────────────────── */
+#view-repo .rp-lede { font-size: 12.5px; line-height: 1.6; color: var(--bmm-text-secondary); margin: 0 0 14px; }
+#view-repo .rp-hint-t { display: block; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); margin: 6px 0 0; }
+#view-repo .rp-hint-t:empty { display: none; }
+#view-repo .rp-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); margin-bottom: 6px; }
+#view-repo .rp-inline-pick { display: flex; gap: 8px; min-width: 0; }
+#view-repo .rp-inline-pick > .form-input { flex: 1; min-width: 0; }
+#view-repo .rp-inline-pick > .btn { flex: none; }
+#view-repo .rp-well {
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    margin-bottom: 8px;
+}
+#view-repo .rp-result {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--bmm-text-secondary);
+    padding: 10px 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    overflow-wrap: anywhere;
+}
+#view-repo .rp-grow { flex: 1 1 0; justify-content: center; min-height: 38px; }
+#view-repo .rp-mono, #view-repo .rp-addr, #view-repo .rp-addr-input { font-family: var(--font-mono); }
+#view-repo .rp-mono { font-size: 12px; resize: vertical; }
+#view-repo .rp-sub-h {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin: 0 0 10px;
+}
+#view-repo .rp-sub-h--rule { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-check-row { margin-bottom: 12px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex: none;
+}
+
+/* ── Sync: the URL row. Fetch acts on the field; the three icon buttons go elsewhere ──── */
+#view-repo .rp-url-row { gap: 6px; flex-wrap: nowrap; }
+#view-repo .rp-url-row > .form-input { min-width: 0; }
+#view-repo .rp-url-row > .btn { flex: none; height: 38px; }
+#view-repo .rp-fetch { padding-inline: 18px; font-weight: 700; }
+#view-repo .rp-icon-btn { width: 38px; padding: 0; justify-content: center; color: var(--bmm-text-secondary); }
+#view-repo .rp-icon-btn:hover { color: var(--bmm-text-primary); }
+#view-repo #btn-browse-repos { margin-inline-start: 4px; }
+
+/* ── Sync: the fetched repo ───────────────────────────────────────────────────────────── */
+#view-repo .rp-joined {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s03);
+}
+#view-repo .rp-joined-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; }
+#view-repo .rp-joined-game {
+    font-size: 11px; font-weight: 600; color: var(--bmm-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#view-repo .rp-joined-x { margin-left: auto; flex: none; color: var(--bmm-text-secondary); }
+#view-repo .rp-joined-name { font-size: 16px; font-weight: 700; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-joined-author { font-size: 12px; color: var(--bmm-text-secondary); margin: 2px 0 8px; }
+#view-repo .rp-joined-desc { font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
+#view-repo .rp-joined-desc:empty { display: none; }
+#view-repo .rp-joined-picks { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bmm-border); display: flex; flex-direction: column; gap: 10px; }
+#view-repo .rp-joined-picks:empty { display: none; }
+#view-repo .rp-joined-total { font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); text-align: right; margin: 10px 0 0; }
+#view-repo .rp-joined-total:empty { display: none; }
+#view-repo .rp-joined-opts { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+
+/* The signature: a chip on the card, a panel saying what the sync will do and why. Not scoped
+   to the page: the verification dialog (modal-repo-verify-detail) uses the same panel. */
+.rp-sig-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 12%, transparent);
+    color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 62%, var(--bmm-text-primary));
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    flex: none;
+}
+.rp-sig-chip:empty { display: none; }
+.rp-sig-chip:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
+.rp-sig {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-border)) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, transparent) 8%, transparent);
+}
+.rp-sig-ic { flex: none; display: inline-flex; margin-top: 1px; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 70%, var(--bmm-text-primary)); }
+.rp-sig-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.rp-sig-t { display: block; font-size: 12.5px; font-weight: 700; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-primary)) 55%, var(--bmm-text-primary)); }
+.rp-sig-d { display: block; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.rp-sig-more { flex: none; align-self: center; }
+.rp-vd-state { font-weight: 700; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 60%, var(--bmm-text-primary)); }
+#view-repo .rp-blocked-note {
+    display: flex; align-items: center; gap: 6px;
+    margin: 8px 0 0;
+    font-size: 12px; font-weight: 600;
+    color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-blocked-note svg { flex: none; }
+
+/* The profile picker the card draws (repo-sync.ts). */
+#view-repo .rp-pick-h { font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-pick {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+#view-repo .rp-pick-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; min-width: 0; }
+#view-repo .rp-pick-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-pick-name svg { flex: none; color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-meta { flex: none; font-size: 11.5px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-pick-opts { display: flex; flex-direction: column; gap: 6px; }
+#view-repo .rp-pick-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--bmm-text-primary); }
+#view-repo .rp-pick-other { display: flex; align-items: center; gap: 8px; margin-top: 2px; min-width: 0; }
+#view-repo .rp-pick-other-l { flex: none; font-size: 12px; color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-other .form-input { flex: 1; min-width: 0; width: auto; }
+#view-repo .rp-pick-mods { margin-top: 10px; }
+#view-repo .rp-pick-mods-h {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary);
+    padding: 4px 0;
+}
+#view-repo .rp-pick-mods-h:hover { color: var(--bmm-text-primary); }
+#view-repo .rp-pick-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#view-repo .rp-find {
+    flex: 1 1 160px; min-width: 0;
+    display: flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 8px;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+}
+#view-repo .rp-find:focus-within { border-color: var(--bmm-accent); }
+#view-repo .rp-find svg { flex: none; }
+#view-repo .rp-find input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--bmm-text-primary); font-size: 12px; }
+#view-repo .rp-find-n { flex: none; font-size: 11px; font-family: var(--font-mono); color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
+#view-repo .rp-pick-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; min-width: 0; }
+#view-repo .rp-pick-row:hover { background: var(--bmm-s04); }
+#view-repo .rp-pick-row[hidden] { display: none; }
+#view-repo .rp-pick-row-n { flex: 1; min-width: 0; font-size: 12px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-repo .rp-pick-row-s { flex: none; font-size: 11px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-pick-none { font-size: 12px; color: var(--bmm-text-secondary); padding: 8px 6px; }
+#view-repo .rp-pick-none[hidden] { display: none; }
+
+/* Sync run: the paused badge and the file log. */
+#view-repo .rp-paused {
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--bmm-warning-dim);
+    color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary));
+    font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
+}
+#view-repo .rp-log {
+    margin-top: 8px; padding: 6px 8px;
+    max-height: 90px; overflow-y: auto;
+    border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+    color: var(--bmm-text-secondary); word-break: break-all;
+}
+
+/* ── Host: the local server ───────────────────────────────────────────────────────────── */
+#view-repo .rp-srv-status { background: var(--bmm-s03); border-color: var(--bmm-border); }
+#view-repo .rp-srv-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; transition: background 0.2s, box-shadow 0.2s; }
+#view-repo .rp-srv-label { font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); min-width: 0; }
+#view-repo .rp-upnp { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
+#view-repo .rp-stats { flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+#view-repo .rp-stat {
+    flex: 1 1 140px; min-width: 0;
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+}
+#view-repo .rp-stat-l { font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+#view-repo .rp-stat-v { font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 12px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone) 8%, transparent);
+    font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary);
+}
+#view-repo .rp-note > svg { flex: none; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 65%, var(--bmm-text-primary)); }
+#view-repo .rp-note-txt b { display: block; color: var(--bmm-text-primary); margin-bottom: 2px; }
+#view-repo .rp-srv-tools { margin-top: 10px; }
+#view-repo .rp-indeterminate { height: 3px; margin-top: 8px; border-radius: 2px; overflow: hidden; background: var(--bmm-s10); }
+#view-repo .rp-indeterminate > span {
+    display: block; height: 100%; width: 100%;
+    background: var(--bmm-accent);
+    transform-origin: left;
+    /* The old inline bar named a keyframes `indeterminate` that no stylesheet defines: it sat
+       still, a full blue line that read as "done". */
+    animation: rp-indeterminate 1.6s infinite ease-in-out;
+}
+@keyframes rp-indeterminate {
+    0%   { transform: translateX(-100%) scaleX(0.35); }
+    50%  { transform: translateX(30%) scaleX(0.5); }
+    100% { transform: translateX(100%) scaleX(0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #view-repo .rp-indeterminate > span { animation: none; opacity: 0.6; }
+}
+/* Addresses and the creator id: monospace, selectable, a copy button beside each. */
+#view-repo .rp-urls { flex-direction: column; gap: 12px; margin-top: 14px; }
+#view-repo .rp-url-l { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#view-repo .rp-url-l svg { color: var(--bmm-text-secondary); }
+#view-repo .rp-addr-input { font-size: 12.5px; color: var(--bmm-text-primary); background: var(--bmm-s03); }
+#view-repo .rp-copy { flex: none; width: 38px; padding: 0; justify-content: center; }
+#view-repo .rp-idbox {
+    margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--bmm-purple) 30%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-purple) 6%, transparent);
+}
+#view-repo .rp-idbox-h { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#view-repo .rp-idbox-ic {
+    width: 30px; height: 30px; border-radius: 8px; flex: none;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--bmm-purple) 14%, transparent);
+    color: color-mix(in srgb, var(--bmm-purple) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-idbox-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#view-repo .rp-idbox-t { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-idbox-sub, #view-repo .rp-idbox-foot { font-size: 11.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-idbox-foot { margin-top: 8px; }
+#view-repo .rp-addr-row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+#view-repo .rp-addr {
+    flex: 1; min-width: 0;
+    padding: 8px 11px; border-radius: 8px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 12px; color: var(--bmm-text-primary);
+    word-break: break-all; user-select: all; cursor: text;
+}
+#view-repo .rp-wait { opacity: 0.5; animation: pulse-text 1.5s infinite; }
+
+/* Mini-server: a form grid, then the switches. */
+#view-repo .rp-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px 14px;
+    margin-bottom: 12px;
+}
+#view-repo .rp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#view-repo .rp-field > .form-label { margin: 0; }
+#view-repo .rp-pw { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#view-repo .rp-pw .form-input { flex: 1; min-width: 0; }
+#view-repo .rp-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px 14px;
+    padding: 12px; margin-bottom: 14px;
+    border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s02);
+    font-size: 12.5px; color: var(--bmm-text-primary);
+}
+#view-repo .rp-sub-opt { grid-column: 1 / -1; max-width: 240px; }
+#view-repo #btn-generate-mini-server { flex: 1; justify-content: center; min-height: 38px; }
+
+/* ── The sync result dialog (modal-repo-sync-summary) ─────────────────────────────────── */
+.rp-sum { padding: 12px 14px; margin-bottom: 10px; border-radius: 12px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); }
+.rp-sum-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.rp-sum-h svg { color: var(--bmm-text-secondary); flex: none; }
+.rp-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.rp-sum-tile {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 10px; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-border)) 30%, var(--bmm-border));
+    background: var(--bmm-s03);
+}
+.rp-sum-tile b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-primary)) 55%, var(--bmm-text-primary)); }
+.rp-sum-tile span { font-size: 11.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-form-grid { align-items: end; }

@@ -45,7 +45,7 @@ export function initRepoAdmin(elements) {
                     <div class="item-type">${type}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
+                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:center;">
                         ${uiIcon('copy', 14)}
                     </button>
                     <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
@@ -165,7 +165,7 @@ export function initRepoAdmin(elements) {
                     <div class="item-type">${type}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
+                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:center;">
                         ${uiIcon('copy', 14)}
                     </button>
                     <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">

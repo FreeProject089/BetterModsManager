@@ -195,7 +195,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
     // Neutral "re-download available" blocks for direct sources with no detected
     // change — a direct download has no version, so it's always re-downloadable.
     const reDownloadBlocks = reDownloadSources.map(s => `
-        <div class="mod-updates-repo-block" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+        <div class="mod-updates-repo-block" style="background:var(--bmm-s03);border:1px solid var(--bmm-s06);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(s.name || '')}</div>
@@ -217,7 +217,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
 
     const repoBlocks = [...byRepo.entries()].map(([repoUrl, mods]) => {
         const rows = mods.map(m => `
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));cursor:pointer;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--bmm-s06);cursor:pointer;">
                 <input type="checkbox" class="mod-update-cb" data-repo-url="${escAttr(repoUrl)}" data-mod-id="${escAttr(m.mod_id)}" checked style="margin-top:3px;flex-shrink:0;">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(m.name)}</div>
@@ -226,11 +226,11 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
                         <span style="margin:0 5px;">→</span>
                         <span style="color:var(--bmm-success);font-weight:700;">${escHtml(m.new_version)}</span>
                     </div>
-                    ${m.changelog ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;line-height:1.45;background:var(--bmm-s04,rgba(255,255,255,0.04));padding:6px 8px;border-radius:5px;">${escHtml(m.changelog)}</div>` : ''}
+                    ${m.changelog ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;line-height:1.45;background:var(--bmm-s04);padding:6px 8px;border-radius:5px;">${escHtml(m.changelog)}</div>` : ''}
                 </div>
             </label>`).join('');
         return `
-            <div class="mod-updates-repo-block" data-repo-url="${escAttr(repoUrl)}" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+            <div class="mod-updates-repo-block" data-repo-url="${escAttr(repoUrl)}" style="background:var(--bmm-s03);border:1px solid var(--bmm-s06);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                     <div style="min-width:0;">
                         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);">${t('repo.updateFromRepo') || 'From repository'}</div>
@@ -250,7 +250,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
                     <div style="display:flex;align-items:center;gap:7px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0;" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--bmm-warning)" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
                         <span style="font-weight:700;font-size:12.5px;color:var(--bmm-warning);">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
                     </div>
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-top:5px;">${escHtml(m.name)}</div>

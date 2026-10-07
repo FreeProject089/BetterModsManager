@@ -80,7 +80,7 @@ import { uiIcon } from '../../ui/icons.js';
 
 const IC = {
   paperclip:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
-  puzzle:      `${uiIcon('tag', 16)}`,
+  puzzle:      `${uiIcon('box', 16)}`,
   editIcon:    `${uiIcon('edit', 12)}`,
   duplicate:   `${uiIcon('copy', 12)}`,
   inspect:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
@@ -117,6 +117,14 @@ const IC = {
 // ── State ──────────────────────────────────────────────────────────────────
 
 let _tab = 'installed';
+// The API & Scripts tab's own panels, and which one is showing (kept across re-renders).
+const API_SECTIONS: Array<{ id: string; icon: string; key: string }> = [
+    { id: 'test',      icon: 'run',      key: 'plugins.api.secTest' },
+    { id: 'endpoints', icon: 'list',     key: 'plugins.api.secEndpoints' },
+    { id: 'deeplinks', icon: 'link',     key: 'plugins.api.secDeeplinks' },
+    { id: 'generator', icon: 'code',     key: 'plugins.api.secGenerator' },
+];
+let _apiSec = 'test';
 let _installedPlugins = [];
 let _allLaunchpacks: any[] = [];
 let _allTasks: any[] = [];
@@ -340,31 +348,114 @@ async function loadInitialData() {
 
 // ── Layout ─────────────────────────────────────────────────────────────────
 
+// The five tabs, in order, with the glyph each one wears. One list feeds the tab strip, the
+// arrow-key order and the panel's label, so they cannot disagree.
+const PLUG_TABS: Array<{ id: string; icon: string; key: string }> = [
+    { id: 'installed', icon: 'box',      key: 'plugins.tabInstalled' },
+    { id: 'catalog',   icon: 'globe',    key: 'plugins.tabCatalog' },
+    { id: 'create',    icon: 'edit',     key: 'plugins.tabCreate' },
+    { id: 'scripts',   icon: 'terminal', key: 'plugins.tabScripts' },
+    { id: 'perms',     icon: 'shield',   key: 'plugins.tabPerms' },
+];
+
 function renderPluginsView() {
     const view = document.getElementById('view-plugins');
     if (!view) return;
+    // The same page head as the App Catalog (css/page-head.css): an icon tile, the title and
+    // its one line, then what the page is FOR on the right — the API's state, the docs and
+    // the one action every tab shares (bringing a plugin file in).
     view.innerHTML = `
-        <div class="view-header" style="margin-bottom:20px;">
-            <div class="view-header-top">
-                <h1 class="view-title" data-i18n="plugins.title">${t('plugins.title')}</h1>
-                <p class="view-subtitle" data-i18n="plugins.subtitle">${t('plugins.subtitle')}</p>
+        <header class="pg-head">
+            <div class="pg-head-icon" aria-hidden="true">${uiIcon('box', 20)}</div>
+            <div class="pg-head-titles">
+                <h1 class="pg-head-title" data-i18n="plugins.title">${t('plugins.title')}</h1>
+                <p class="pg-head-sub" data-i18n="plugins.subtitle">${t('plugins.subtitle')}</p>
             </div>
-            <div class="view-actions">${learnMore('plugins')}${learnMore('api', { label: t('learnMore.api') })}</div>
+            <div class="pg-head-actions">
+                <span class="bms-chip" id="plug-api-chip"><span class="bms-dot"></span><span class="plug-api-chip-label"></span></span>
+                ${learnMore('plugins')}${learnMore('api', { label: t('learnMore.api') })}
+                <button type="button" class="btn btn-sm btn-accent" id="plug-head-import">${IC.upload} ${escHtml(t('plugins.importFile'))}</button>
+            </div>
+        </header>
+        <div class="pg-tabbar">
+            <div class="bms-tabs pg-tabs plug-tabs" role="tablist" aria-label="${escAttr(t('plugins.tabsAria'))}">
+                ${PLUG_TABS.map((tb) => {
+                    const on = tb.id === _tab;
+                    return `<button type="button" class="bms-tab plug-tab${on ? ' active' : ''}" role="tab" id="plug-tab-${tb.id}"
+                        data-tab="${tb.id}" aria-selected="${on}" aria-controls="plug-tab-content" tabindex="${on ? 0 : -1}">
+                        ${uiIcon(tb.icon as any, 14)}<span>${escHtml(t(tb.key))}</span><span class="pg-count" data-plug-count="${tb.id}"></span>
+                    </button>`;
+                }).join('')}
+            </div>
         </div>
-        <div class="plug-tabs">
-            <button class="plug-tab active" data-tab="installed">${IC.puzzle} ${t('plugins.tabInstalled')}</button>
-            <button class="plug-tab" data-tab="catalog">${IC.globe} ${t('plugins.tabCatalog')}</button>
-            <button class="plug-tab" data-tab="create">${IC.list} ${t('plugins.tabCreate')}</button>
-            <button class="plug-tab" data-tab="scripts">${IC.terminal} ${t('plugins.tabScripts')}</button>
-            <button class="plug-tab" data-tab="perms">${IC.shield} ${t('plugins.tabPerms')}</button>
-        </div>
-        <div id="plug-tab-content" class="plug-tab-content"></div>
+        <div id="plug-tab-content" class="plug-tab-content" role="tabpanel" aria-labelledby="plug-tab-${escAttr(_tab)}"></div>
     `;
+    paintPluginHead();
+    view.querySelector('#plug-head-import')?.addEventListener('click', handleImportFile);
+}
+
+/** The API chip and the tab counts — cheap, and called whenever what they report changes. */
+function paintPluginHead(): void {
+    const chip = document.getElementById('plug-api-chip');
+    if (chip) {
+        const on = apiRunning();
+        chip.className = `bms-chip${on ? ' bms-chip--ok' : ''}`;
+        const label = chip.querySelector('.plug-api-chip-label');
+        if (label) label.textContent = on
+            ? t('plugins.apiChipOn').replace('{port}', apiBase().split(':').pop() || '')
+            : t('plugins.apiChipOff');
+        chip.setAttribute('title', t('plugins.apiChipTip'));
+    }
+    const counts: Record<string, number | null> = {
+        installed: _installedPlugins.length,
+        catalog: _catalog?.plugins ? _catalog.plugins.length : null,
+    };
+    document.querySelectorAll<HTMLElement>('#view-plugins [data-plug-count]').forEach((el) => {
+        const n = counts[el.dataset.plugCount || ''];
+        el.textContent = n == null ? '' : String(n);
+    });
+}
+
+/** Select a tab: state, ARIA, roving tabindex, the panel's label, then its content. */
+function selectPluginTab(tabId: string, focus = false): void {
+    const view = document.getElementById('view-plugins');
+    if (!view || !PLUG_TABS.some((x) => x.id === tabId)) return;
+    view.querySelectorAll<HTMLElement>('.plug-tab').forEach((b) => {
+        const on = b.dataset.tab === tabId;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+        if (on && focus) b.focus();
+    });
+    document.getElementById('plug-tab-content')?.setAttribute('aria-labelledby', `plug-tab-${tabId}`);
+    _tab = tabId;
+    renderTab(tabId);
 }
 
 function setupPluginTabs() {
     const view = document.getElementById('view-plugins');
     if (!view) return;
+
+    // Arrow keys (and Home / End) move along the tabs, as a tablist does. Bound on the strip,
+    // which is rebuilt with the view, so it never accumulates.
+    view.querySelector('.plug-tabs')?.addEventListener('keydown', (e) => {
+        const k = (e as KeyboardEvent).key;
+        const i = PLUG_TABS.findIndex((x) => x.id === _tab);
+        let to = -1;
+        if (k === 'ArrowRight') to = (i + 1) % PLUG_TABS.length;
+        else if (k === 'ArrowLeft') to = (i + PLUG_TABS.length - 1) % PLUG_TABS.length;
+        else if (k === 'Home') to = 0;
+        else if (k === 'End') to = PLUG_TABS.length - 1;
+        if (to < 0) return;
+        e.preventDefault();
+        selectPluginTab(PLUG_TABS[to].id, true);
+    });
+
+    // Everything below is delegated on the view itself, which outlives a re-render (a language
+    // change rebuilds its contents, not the element). Bound once, or every language switch
+    // added another set and one click switched the tab N times.
+    if (view.dataset.plugWired === '1') return;
+    view.dataset.plugWired = '1';
 
     // Tasky hover tooltips on tabs
     const TAB_TIPS: Record<string, [string, string]> = {
@@ -374,24 +465,23 @@ function setupPluginTabs() {
         scripts:   ['plugins.tooltipTabScripts',    'terminal'],
         perms:     ['plugins.tooltipTabPerms',      'shield'],
     };
-    view.querySelectorAll('.plug-tab').forEach(tab => {
-        const id = (tab as HTMLElement).dataset.tab || '';
-        const tip = TAB_TIPS[id];
-        if (tip) {
-            tab.addEventListener('mouseenter', () => (window as any).showTaskyHelp?.(tip[0], tip[1]));
-            tab.addEventListener('mouseleave', () => (window as any).hideTaskyHelp?.());
-        }
-    });
-
-    // Intercept ALL [data-tooltip] elements inside view-plugins → use Tasky instead of CSS tooltip
+    // Tasky hover help on the tabs, and every [data-tooltip] inside the view → Tasky instead
+    // of the CSS tooltip. Delegated: the tab buttons are rebuilt on a language change.
     view.addEventListener('mouseover', (e) => {
-        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        const target = e.target as HTMLElement;
+        const tab = target.closest('.plug-tab') as HTMLElement | null;
+        if (tab) {
+            const tip = TAB_TIPS[tab.dataset.tab || ''];
+            if (tip) (window as any).showTaskyHelp?.(tip[0], tip[1]);
+            return;
+        }
+        const el = target.closest('[data-tooltip]') as HTMLElement | null;
         if (!el) return;
         const tip = el.getAttribute('data-tooltip') || '';
         if (tip) (window as any).showTaskyHelp?.(tip, 'info', true);
     });
     view.addEventListener('mouseout', (e) => {
-        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        const el = (e.target as HTMLElement).closest('[data-tooltip], .plug-tab') as HTMLElement | null;
         if (el) (window as any).hideTaskyHelp?.();
     });
 
@@ -399,17 +489,15 @@ function setupPluginTabs() {
         const tab = (e.target as HTMLElement).closest('[data-tab]') as HTMLElement;
         if (!tab || !tab.classList.contains('plug-tab')) return;
         const tabId = tab.dataset.tab;
-        if (!tabId) return;
-        view.querySelectorAll('.plug-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        _tab = tabId;
-        renderTab(tabId);
+        if (!tabId || tabId === _tab && tab.classList.contains('active')) return;
+        selectPluginTab(tabId);
     });
 }
 
 function renderTab(tabId: string) {
     const container = document.getElementById('plug-tab-content');
     if (!container) return;
+    paintPluginHead();
     switch (tabId) {
         case 'installed': renderInstalled(container); break;
         case 'catalog':   renderCatalog(container); break;
@@ -434,35 +522,65 @@ function renderInstalled(container: HTMLElement) {
     if (_installedPlugins.length === 0) {
         container.innerHTML = `
             <div class="plug-empty">
-                <div class="plug-empty-icon">${IC.puzzle}</div>
-                <p>${t('plugins.noInstalled')}</p>
-                <div style="display:flex;gap:8px;">
+                <div class="plug-empty-icon">${uiIcon('box', 32)}</div>
+                <p class="plug-empty-title">${escHtml(t('plugins.noInstalled'))}</p>
+                <p class="plug-empty-sub">${escHtml(t('plugins.noInstalledSub'))}</p>
+                <div class="plug-empty-actions">
                     <button class="btn btn-accent" id="plug-goto-catalog">${IC.globe} ${t('plugins.browseCatalog')}</button>
                     <button class="btn btn-secondary" id="plug-import-btn">${IC.upload} ${t('plugins.importFile')}</button>
                 </div>
             </div>`;
-        container.querySelector('#plug-goto-catalog')?.addEventListener('click', () => {
-            document.querySelector('.plug-tab[data-tab="catalog"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        });
+        container.querySelector('#plug-goto-catalog')?.addEventListener('click', () => selectPluginTab('catalog'));
         container.querySelector('#plug-import-btn')?.addEventListener('click', handleImportFile);
         return;
     }
 
+    // A filter box once there is something to filter: names, ids, authors and tags. The
+    // import action lives in the page head now, so the row is about finding, not adding.
     container.innerHTML = `
-        <div class="plug-toolbar">
-            <button class="btn btn-sm btn-secondary" id="plug-import-file">${IC.upload} ${t('plugins.importFile')}</button>
-            <button class="btn btn-sm btn-ghost" id="plug-goto-catalog-btn">${IC.globe} ${t('plugins.browseCatalog')}</button>
+        <div class="pg-toolbar">
+            <label class="pg-search">
+                ${uiIcon('search', 14)}
+                <input type="search" id="plug-installed-search" class="pg-search-input" spellcheck="false"
+                    placeholder="${escAttr(t('plugins.installedSearch'))}" aria-label="${escAttr(t('plugins.installedSearch'))}">
+            </label>
+            <span class="pg-results" id="plug-installed-count" aria-live="polite"></span>
+            <span class="pg-toolbar-gap"></span>
+            <button type="button" class="btn btn-sm btn-ghost" id="plug-goto-catalog-btn">${IC.globe} ${t('plugins.browseCatalog')}</button>
         </div>
         <div class="plug-grid" id="plug-installed-grid"></div>`;
 
     const grid = container.querySelector('#plug-installed-grid') as HTMLElement;
+    const hay = new Map<HTMLElement, string>();
     for (const plugin of _installedPlugins) {
-        grid.appendChild(buildPluginCard(plugin, 'installed'));
+        const card = buildPluginCard(plugin, 'installed');
+        const m = plugin.manifest || {};
+        hay.set(card, [m.name, m.id, m.author, m.description, ...(m.tags || [])].join(' ').toLowerCase());
+        grid.appendChild(card);
     }
-    container.querySelector('#plug-import-file')?.addEventListener('click', handleImportFile);
-    container.querySelector('#plug-goto-catalog-btn')?.addEventListener('click', () => {
-        document.querySelector('.plug-tab[data-tab="catalog"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    const count = container.querySelector('#plug-installed-count') as HTMLElement;
+    const search = container.querySelector('#plug-installed-search') as HTMLInputElement;
+    const apply = () => {
+        const q = search.value.trim().toLowerCase();
+        let shown = 0;
+        hay.forEach((h, card) => { const ok = !q || h.includes(q); card.hidden = !ok; if (ok) shown++; });
+        count.textContent = t('plugins.shownOf').replace('{n}', String(shown)).replace('{total}', String(hay.size));
+        let none = grid.querySelector('.plug-empty--inline') as HTMLElement | null;
+        if (!shown && !none) {
+            none = document.createElement('div');
+            none.className = 'plug-empty plug-empty--inline';
+            grid.appendChild(none);
+        }
+        if (none) {
+            none.hidden = shown > 0;
+            if (!shown) none.innerHTML = `<div class="plug-empty-icon">${IC.search}</div>
+                <p class="plug-empty-title">${escHtml(t('plugins.installedNoMatch'))}</p>
+                <p class="plug-empty-sub">“${escHtml(search.value.trim())}”</p>`;
+        }
+    };
+    search.addEventListener('input', apply);
+    apply();
+    container.querySelector('#plug-goto-catalog-btn')?.addEventListener('click', () => selectPluginTab('catalog'));
 }
 
 function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
@@ -853,15 +971,20 @@ async function renderCatalog(container: HTMLElement) {
                 <span>${t('plugins.communityBannerDesc')}</span>
             </div>
         </div>
-        <div class="plug-toolbar">
-            <div class="plug-search-wrap">
-                ${IC.search}
-                <input type="text" id="plug-catalog-search" class="input plug-search-input" placeholder="${t('plugins.searchPlaceholder')}">
-            </div>
-            <button class="btn btn-sm btn-ghost" id="plug-refresh-catalog">${IC.refresh} ${t('plugins.refresh')}</button>
-            <button class="btn btn-sm btn-ghost" id="plug-toggle-sources">${IC.globe} ${t('plugins.communityCatalogs') || 'Community catalogs'}</button>
-            <button class="btn btn-sm btn-ghost" id="plug-my-catalogs">${IC.list} ${t('plugins.myCatalogs') || 'My catalogs'}</button>
-            <button class="btn btn-sm btn-secondary" id="plug-import-file-cat">${IC.upload} ${t('plugins.importFile')}</button>
+        <!-- Finding on the left, the catalogue's own sources on the right. Importing a file is
+             the page head's action and is not repeated here. -->
+        <div class="pg-toolbar">
+            <label class="pg-search">
+                ${uiIcon('search', 14)}
+                <input type="search" id="plug-catalog-search" class="pg-search-input plug-search-input" spellcheck="false"
+                    placeholder="${escAttr(t('plugins.searchPlaceholder'))}" aria-label="${escAttr(t('plugins.searchPlaceholder'))}">
+            </label>
+            <span class="pg-results" id="plug-catalog-count" aria-live="polite"></span>
+            <span class="pg-toolbar-gap"></span>
+            <button type="button" class="btn btn-sm btn-ghost" id="plug-toggle-sources" aria-expanded="false" aria-controls="plug-sources-panel">${IC.globe} ${t('plugins.communityCatalogs') || 'Community catalogs'}</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="plug-my-catalogs">${IC.list} ${t('plugins.myCatalogs') || 'My catalogs'}</button>
+            <button type="button" class="btn btn-sm btn-ghost pg-iconbtn" id="plug-refresh-catalog"
+                aria-label="${escAttr(t('plugins.refresh'))}" data-tooltip="${escAttr(t('plugins.refresh'))}">${uiIcon('refresh', 16)}</button>
         </div>
         <div id="plug-sources-panel" class="plug-sources-panel" style="display:none">
             <p class="plug-sources-desc">${t('plugins.communityCatalogsDesc') || 'Import custom plugin catalogs by HTTPS/HTTP link or local .json file. Community plugins are unverified — install at your own risk.'}</p>
@@ -883,7 +1006,6 @@ async function renderCatalog(container: HTMLElement) {
         _catalog = null;
         await renderCatalog(container);
     });
-    container.querySelector('#plug-import-file-cat')?.addEventListener('click', handleImportFile);
     container.querySelector('#plug-my-catalogs')?.addEventListener('click', () => openPluginCatalogBuilder(() => renderCatalog(container)));
     container.querySelector('#plug-catalog-search')?.addEventListener('input', (e) => {
         filterCatalogGrid((e.target as HTMLInputElement).value);
@@ -891,8 +1013,11 @@ async function renderCatalog(container: HTMLElement) {
 
     // ── Community-catalog sources management ──────────────────────────────────
     const panel = container.querySelector('#plug-sources-panel') as HTMLElement;
-    container.querySelector('#plug-toggle-sources')?.addEventListener('click', () => {
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    container.querySelector('#plug-toggle-sources')?.addEventListener('click', (e) => {
+        const open = panel.style.display === 'none';
+        panel.style.display = open ? 'block' : 'none';
+        (e.currentTarget as HTMLElement).setAttribute('aria-expanded', String(open));
+        (e.currentTarget as HTMLElement).classList.toggle('active', open);
     });
     const reloadCatalog = async () => { _catalog = null; await renderCatalog(container); };
     const addSource = async (src: string) => {
@@ -1459,6 +1584,12 @@ function renderCatalogGrid(plugins: any[], query = '') {
     const grid = document.getElementById('plug-catalog-grid');
     if (!grid) return;
     grid.removeAttribute('aria-busy');
+    paintPluginHead();
+    const countEl = document.getElementById('plug-catalog-count');
+    const total = _catalog?.plugins?.length || 0;
+    if (countEl) countEl.textContent = total
+        ? t('plugins.shownOf').replace('{n}', String(plugins.length)).replace('{total}', String(total))
+        : '';
     if (!plugins.length) {
         const q = query.trim();
         if (q) {
@@ -1495,7 +1626,7 @@ function renderCatalogGrid(plugins: any[], query = '') {
             </div>`;
         // Reuse the toolbar buttons already wired in renderCatalog — no duplicate logic.
         grid.querySelector('#plug-empty-sources')?.addEventListener('click', () => (document.getElementById('plug-toggle-sources') as HTMLElement | null)?.click());
-        grid.querySelector('#plug-empty-import')?.addEventListener('click', () => (document.getElementById('plug-import-file-cat') as HTMLElement | null)?.click());
+        grid.querySelector('#plug-empty-import')?.addEventListener('click', handleImportFile);
         grid.querySelector('#plug-empty-refresh')?.addEventListener('click', () => (document.getElementById('plug-refresh-catalog') as HTMLElement | null)?.click());
         return;
     }
@@ -4646,10 +4777,27 @@ function renderScripts(container: HTMLElement) {
                 </div>
             </div>
 
-            <!-- Quick test + endpoints (full width) -->
-            <div class="plug-section-card">
+            <!-- Four things lived in one 4 000-px column: trying a call, the endpoint reference,
+                 the deep-link reference and the script generator. They are four jobs, so they
+                 are four panels behind one segmented control. Every id inside is unchanged;
+                 a hidden panel is still in the DOM, so nothing that queries it breaks. -->
+            <div class="plug-api-secbar">
+                <div class="bms-seg plug-api-secnav" role="tablist" aria-label="${escAttr(t('plugins.api.secAria'))}">
+                    ${API_SECTIONS.map((s) => {
+                        const on = s.id === _apiSec;
+                        const n = s.id === 'endpoints' ? getEndpointDefs().length : s.id === 'deeplinks' ? getDeepLinkDefs().length : 0;
+                        return `<button type="button" class="bms-seg-btn plug-api-sec${on ? ' active' : ''}" role="tab" id="plug-api-sec-${s.id}"
+                            data-api-sec="${s.id}" aria-selected="${on}" aria-controls="plug-api-panel-${s.id}" tabindex="${on ? 0 : -1}">
+                            ${uiIcon(s.icon as any, 14)}<span>${escHtml(t(s.key))}</span>${n ? `<span class="pg-count">${n}</span>` : ''}
+                        </button>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Try a call: the quick test, a free-form request, and the log of what was called -->
+            <div class="plug-section-card plug-api-panel" role="tabpanel" id="plug-api-panel-test" aria-labelledby="plug-api-sec-test"${_apiSec === 'test' ? '' : ' hidden'}>
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
-                <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">${t('plugins.quickTestIntro') || 'Pick an endpoint, fill the fields, then Run or copy the cURL. Every BMM action is here.'}</p>
+                <p class="plug-section-lead">${t('plugins.quickTestIntro') || 'Pick an endpoint, fill the fields, then Run or copy the cURL. Every BMM action is here.'}</p>
                 <!-- Unified single-panel quick test -->
                 <div class="plug-uqt">
                     <div class="plug-uqt-anchor">
@@ -4708,41 +4856,50 @@ function renderScripts(container: HTMLElement) {
                         </div>
                     </div>
                 </details>
+            </div>
 
-                <h3 class="plug-section-title" style="margin-top:18px;">${IC.list} ${t('plugins.apiEndpoints')}</h3>
-                <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.epHint')}</p>
-                <div class="plug-qt-search-row">
-                    <span class="plug-qt-search-ic">${IC.search || ''}</span>
-                    <input type="text" id="plug-ep-search" class="input input-sm plug-qt-search-input"
-                        placeholder="${t('plugins.endpointSearch') || 'Search endpoints… (GET, /api/mods, modpack…)'}" spellcheck="false">
-                    <button class="btn btn-xs btn-ghost" id="plug-ep-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
-                    <span class="plug-qt-search-count" id="plug-ep-search-count"></span>
-                </div>
-                <div class="plug-ep-collapse-bar">
-                    <button class="btn btn-xs btn-ghost" id="plug-ep-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
-                    <button class="btn btn-xs btn-ghost" id="plug-ep-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+            <!-- The endpoint reference -->
+            <div class="plug-section-card plug-api-panel" role="tabpanel" id="plug-api-panel-endpoints" aria-labelledby="plug-api-sec-endpoints"${_apiSec === 'endpoints' ? '' : ' hidden'}>
+                <h3 class="plug-section-title">${IC.list} ${t('plugins.apiEndpoints')}</h3>
+                <p class="plug-section-lead">${t('plugins.epHint')}</p>
+                <div class="plug-ref-tools">
+                    <div class="plug-qt-search-row">
+                        <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                        <input type="text" id="plug-ep-search" class="input input-sm plug-qt-search-input"
+                            placeholder="${t('plugins.endpointSearch') || 'Search endpoints… (GET, /api/mods, modpack…)'}" spellcheck="false">
+                        <button class="btn btn-xs btn-ghost" id="plug-ep-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" aria-label="${escAttr(t('common.clear'))}" style="display:none;">${IC.x}</button>
+                        <span class="plug-qt-search-count" id="plug-ep-search-count"></span>
+                    </div>
+                    <div class="plug-ep-collapse-bar">
+                        <button class="btn btn-xs btn-ghost" id="plug-ep-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
+                        <button class="btn btn-xs btn-ghost" id="plug-ep-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+                    </div>
                 </div>
                 <div class="plug-endpoint-list" id="plug-ep-list">
                     ${epListHtml()}
                 </div>
+            </div>
 
-                <h3 class="plug-section-title plug-dl-foldhead" id="plug-dl-foldhead" role="button" tabindex="0" style="margin-top:18px;cursor:pointer;">
-                    ${uiIcon('chevron-down', 14, { cls: 'plug-dl-fold-chevron' })}
-                    ${IC.zap} ${t('plugins.deepLinks') || 'bmm:// Deep Links'}
-                    <span class="plug-dl-fold-count">${getDeepLinkDefs().length}</span>
+            <!-- The bmm:// deep-link reference. It used to fold away under the endpoints; as
+                 its own panel there is nothing to fold, so the heading is a plain heading. -->
+            <div class="plug-section-card plug-api-panel" role="tabpanel" id="plug-api-panel-deeplinks" aria-labelledby="plug-api-sec-deeplinks"${_apiSec === 'deeplinks' ? '' : ' hidden'}>
+                <h3 class="plug-section-title plug-dl-foldhead" id="plug-dl-foldhead">
+                    ${uiIcon('link', 16)} ${t('plugins.deepLinks') || 'bmm:// Deep Links'}
                 </h3>
                 <div id="plug-dl-fold-body">
-                    <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.deepLinksHint') || 'Trigger BMM actions from any script, .bat or app by opening a bmm:// URL — no token needed. Click a row to expand.'}</p>
-                    <div class="plug-qt-search-row">
-                        <span class="plug-qt-search-ic">${IC.search || ''}</span>
-                        <input type="text" id="plug-dl-search" class="input input-sm plug-qt-search-input"
-                            placeholder="${t('plugins.deepLinkSearch') || 'Search deep links… (mod, theme, telemetry…)'}" spellcheck="false">
-                        <button class="btn btn-xs btn-ghost" id="plug-dl-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
-                        <span class="plug-qt-search-count" id="plug-dl-search-count"></span>
-                    </div>
-                    <div class="plug-ep-collapse-bar">
-                        <button class="btn btn-xs btn-ghost" id="plug-dl-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
-                        <button class="btn btn-xs btn-ghost" id="plug-dl-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+                    <p class="plug-section-lead">${t('plugins.deepLinksHint') || 'Trigger BMM actions from any script, .bat or app by opening a bmm:// URL — no token needed. Click a row to expand.'}</p>
+                    <div class="plug-ref-tools">
+                        <div class="plug-qt-search-row">
+                            <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                            <input type="text" id="plug-dl-search" class="input input-sm plug-qt-search-input"
+                                placeholder="${t('plugins.deepLinkSearch') || 'Search deep links… (mod, theme, telemetry…)'}" spellcheck="false">
+                            <button class="btn btn-xs btn-ghost" id="plug-dl-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" aria-label="${escAttr(t('common.clear'))}" style="display:none;">${IC.x}</button>
+                            <span class="plug-qt-search-count" id="plug-dl-search-count"></span>
+                        </div>
+                        <div class="plug-ep-collapse-bar">
+                            <button class="btn btn-xs btn-ghost" id="plug-dl-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
+                            <button class="btn btn-xs btn-ghost" id="plug-dl-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+                        </div>
                     </div>
                     <div class="plug-endpoint-list" id="plug-dl-list">
                         ${dlListHtml()}
@@ -4750,8 +4907,8 @@ function renderScripts(container: HTMLElement) {
                 </div>
             </div>
 
-            <!-- Script generator (full width) -->
-            <div class="plug-section-card">
+            <!-- Script generator -->
+            <div class="plug-section-card plug-api-panel" role="tabpanel" id="plug-api-panel-generator" aria-labelledby="plug-api-sec-generator"${_apiSec === 'generator' ? '' : ' hidden'}>
                 <h3 class="plug-section-title">${IC.terminal} ${t('plugins.scriptGenerator')}</h3>
                 <div class="plug-gen-two-col">
                     <div class="plug-gen-form">
@@ -4938,16 +5095,37 @@ function renderScripts(container: HTMLElement) {
     dlSearch?.addEventListener('input', applyDeepLinkFilter);
     dlSearchClr?.addEventListener('click', () => { if (dlSearch) { dlSearch.value = ''; applyDeepLinkFilter(); dlSearch.focus(); } });
 
-    // ── Deep-link section fold (show all / none) + expand/collapse every row ───
-    const dlFoldHead = container.querySelector('#plug-dl-foldhead') as HTMLElement | null;
-    const dlFoldBody = container.querySelector('#plug-dl-fold-body') as HTMLElement | null;
-    const toggleDlFold = () => {
-        if (!dlFoldHead || !dlFoldBody) return;
-        const folded = dlFoldHead.classList.toggle('folded');
-        dlFoldBody.style.display = folded ? 'none' : '';
+    // ── The four API panels: the segmented control above them, arrows included ──
+    const secnav = container.querySelector('.plug-api-secnav') as HTMLElement | null;
+    const showSec = (id: string, focus = false) => {
+        if (!API_SECTIONS.some((s) => s.id === id)) return;
+        _apiSec = id;
+        secnav?.querySelectorAll<HTMLElement>('.plug-api-sec').forEach((b) => {
+            const on = b.dataset.apiSec === id;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', String(on));
+            b.tabIndex = on ? 0 : -1;
+            if (on && focus) b.focus();
+        });
+        container.querySelectorAll<HTMLElement>('.plug-api-panel').forEach((p) => { p.hidden = p.id !== `plug-api-panel-${id}`; });
     };
-    dlFoldHead?.addEventListener('click', toggleDlFold);
-    dlFoldHead?.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDlFold(); } });
+    secnav?.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('.plug-api-sec') as HTMLElement | null;
+        if (b) showSec(b.dataset.apiSec || '');
+    });
+    secnav?.addEventListener('keydown', (e: KeyboardEvent) => {
+        const i = API_SECTIONS.findIndex((s) => s.id === _apiSec);
+        let to = -1;
+        if (e.key === 'ArrowRight') to = (i + 1) % API_SECTIONS.length;
+        else if (e.key === 'ArrowLeft') to = (i + API_SECTIONS.length - 1) % API_SECTIONS.length;
+        else if (e.key === 'Home') to = 0;
+        else if (e.key === 'End') to = API_SECTIONS.length - 1;
+        if (to < 0) return;
+        e.preventDefault();
+        showSec(API_SECTIONS[to].id, true);
+    });
+
+    // ── Deep links: expand/collapse every row ───
     const setAllDlRows = (open: boolean) => {
         dlList?.querySelectorAll<HTMLElement>('.plug-ep-wrap').forEach(w => {
             const id = w.id.replace(/^epw-/, '');
@@ -10677,9 +10855,9 @@ async function renderPerms(container: HTMLElement) {
         <p class="plug-perms-desc">${IC.shield} ${t('plugins.permsDesc')}</p>
 
         <!-- ── Global API permissions ─────────────────────────── -->
-        <div class="plug-section-card" style="margin-bottom:14px;">
-            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${t('plugins.globalApiPermTitle') || 'Permissions globales (API & Deep Links)'}</h3>
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${t('plugins.globalApiPermDesc') || 'Ces paramètres s\'appliquent à tous les appelants externes : plugins, scripts .bat, PowerShell, applications tierces, etc.'}</p>
+        <div class="plug-section-card">
+            <h3 class="plug-section-title">${IC.globe} ${t('plugins.globalApiPermTitle') || 'Permissions globales (API & Deep Links)'}</h3>
+            <p class="plug-section-lead">${t('plugins.globalApiPermDesc') || 'Ces paramètres s\'appliquent à tous les appelants externes : plugins, scripts .bat, PowerShell, applications tierces, etc.'}</p>
 
             <!-- "Global plugin trust — skip all permission dialogs for every plugin" used to
                  live here, with a red warning under it. It did nothing: the dialog it claimed
@@ -10729,9 +10907,9 @@ async function renderPerms(container: HTMLElement) {
         </div>
 
         <!-- ── CORS (cross-origin API access) ──────────────────── -->
-        <div class="plug-section-card" style="margin-bottom:14px;">
-            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${t('plugins.corsTitle') || 'CORS — cross-origin API access'}</h3>
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${t('plugins.corsDesc') || 'Allow web pages hosted on other origins to call your local BMM API from the browser. Leave empty to keep the secure default (only BMM itself). Changes require an API restart.'}</p>
+        <div class="plug-section-card">
+            <h3 class="plug-section-title">${IC.globe} ${t('plugins.corsTitle') || 'CORS — cross-origin API access'}</h3>
+            <p class="plug-section-lead">${t('plugins.corsDesc') || 'Allow web pages hosted on other origins to call your local BMM API from the browser. Leave empty to keep the secure default (only BMM itself). Changes require an API restart.'}</p>
 
             <div class="plug-perm-global-card" style="margin-bottom:10px;${corsAllowAny ? 'border-color:rgba(239,68,68,0.35);' : ''}">
                 <div class="plug-perm-global-inner">
@@ -10766,9 +10944,9 @@ async function renderPerms(container: HTMLElement) {
         </div>
 
         <!-- ── Host names (DNS-rebinding check) ────────────────── -->
-        <div class="plug-section-card" style="margin-bottom:14px;">
-            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${escHtml(t('plugins.hostsTitle'))}</h3>
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${escHtml(t('plugins.hostsDesc'))}</p>
+        <div class="plug-section-card">
+            <h3 class="plug-section-title">${IC.globe} ${escHtml(t('plugins.hostsTitle'))}</h3>
+            <p class="plug-section-lead">${escHtml(t('plugins.hostsDesc'))}</p>
             <div class="plug-cors-allowlist">
                 <div class="plug-sources-add">
                     <input type="text" id="plug-hosts-input" class="input" placeholder="abc.trycloudflare.com">
@@ -10780,8 +10958,10 @@ async function renderPerms(container: HTMLElement) {
         </div>
 
         <!-- ── Per-plugin permissions ──────────────────────────── -->
-        <h3 class="plug-section-title" style="margin-bottom:8px;">${IC.puzzle} ${t('plugins.perPluginPermTitle') || 'Permissions par plugin'}</h3>
-        <div id="plug-perms-list"></div>`;
+        <div class="plug-section-card plug-perms-perplugin">
+            <h3 class="plug-section-title">${uiIcon('box', 16)} ${t('plugins.perPluginPermTitle') || 'Permissions par plugin'}<span class="pg-count">${_installedPlugins.length || ''}</span></h3>
+            <div id="plug-perms-list"></div>
+        </div>`;
 
     // ── CORS handlers ─────────────────────────────────────────────────────────
     const saveCors = async () => {
@@ -10929,7 +11109,7 @@ async function renderPerms(container: HTMLElement) {
     const list = document.getElementById('plug-perms-list') as HTMLElement;
 
     if (!_installedPlugins.length) {
-        list.innerHTML = `<p style="color:var(--text-muted);font-size:13px;margin:16px 0;text-align:center;">${t('plugins.noPluginsForPerms')}</p>`;
+        list.innerHTML = `<p class="plug-sources-empty">${t('plugins.noPluginsForPerms')}</p>`;
         return;
     }
 
@@ -10947,9 +11127,10 @@ async function renderPerms(container: HTMLElement) {
         return `
             <div class="plug-perm-block" data-pid="${escHtml(id)}">
                 <div class="plug-perm-header">
-                    <div class="plug-card-icon-default" style="width:28px;height:28px;font-size:14px;">${IC.puzzle}</div>
+                    <div class="plug-perm-header-icon" aria-hidden="true">${uiIcon('box', 14)}</div>
                     <strong>${escHtml(plugin.manifest.name)}</strong>
                     <span class="plug-perm-id">${escHtml(id)}</span>
+                    <span class="pg-results plug-perm-granted" aria-live="polite"></span>
                 </div>
                 <div class="plug-perm-domains">
                     ${PERM_GROUPS.map(g => `
@@ -10966,10 +11147,10 @@ async function renderPerms(container: HTMLElement) {
                             </div>
                         </div>`).join('')}
                 </div>
-                <div style="display:flex;gap:6px;margin-top:8px;">
+                <div class="plug-perm-foot">
                     <button class="btn btn-xs btn-ghost plug-perm-all" data-id="${escHtml(id)}">${t('common.all') || 'All'}</button>
                     <button class="btn btn-xs btn-ghost plug-perm-none" data-id="${escHtml(id)}">${t('common.none') || 'None'}</button>
-                    <span style="flex:1;"></span>
+                    <span class="pg-toolbar-gap"></span>
                     <button class="btn btn-sm btn-accent plug-save-perms" data-id="${escHtml(id)}">${IC.save} ${t('plugins.savePerms')}</button>
                 </div>
             </div>`;
@@ -10978,10 +11159,20 @@ async function renderPerms(container: HTMLElement) {
     // Wire listeners once (single pass over the rendered blocks).
     list.querySelectorAll('.plug-perm-block').forEach(block => {
         const id = (block as HTMLElement).dataset.pid || '';
-        block.querySelector('.plug-perm-all')?.addEventListener('click', () =>
-            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = true));
-        block.querySelector('.plug-perm-none')?.addEventListener('click', () =>
-            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = false));
+        // How much of the surface this plugin holds, in the header — the number you check
+        // before reading twenty-six boxes. Counts what is ticked, saved or not.
+        const granted = block.querySelector('.plug-perm-granted') as HTMLElement | null;
+        const recount = () => {
+            const all = block.querySelectorAll('.plug-perm-check').length;
+            const on = block.querySelectorAll('.plug-perm-check:checked').length;
+            if (granted) granted.textContent = t('plugins.permsGranted').replace('{n}', String(on)).replace('{total}', String(all));
+        };
+        block.addEventListener('change', recount);
+        recount();
+        block.querySelector('.plug-perm-all')?.addEventListener('click', () => {
+            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = true); recount(); });
+        block.querySelector('.plug-perm-none')?.addEventListener('click', () => {
+            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = false); recount(); });
         block.querySelector('.plug-save-perms')?.addEventListener('click', async () => {
             const perms = Array.from(block.querySelectorAll('.plug-perm-check:checked')).map(c => (c as HTMLInputElement).dataset.perm);
             try {

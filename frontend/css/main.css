@@ -12658,14 +12658,8 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     border: 1px solid rgba(16,185,129,0.25);
 }
 .plug-dl-noauth svg { width: 11px; height: 11px; }
-/* Foldable deep-links section */
-.plug-dl-foldhead { display: flex; align-items: center; gap: 8px; user-select: none; }
-.plug-dl-fold-chevron { transition: transform .15s ease; flex-shrink: 0; opacity: .8; }
-.plug-dl-foldhead.folded .plug-dl-fold-chevron { transform: rotate(-90deg); }
-.plug-dl-fold-count {
-    font-size: 10px; font-weight: 700; color: var(--text-muted);
-    background: var(--bmm-s06); border-radius: 999px; padding: 1px 8px; margin-left: 2px;
-}
+/* Deep-links heading (its own panel in API & Scripts now; nothing folds, see plugins.css) */
+.plug-dl-foldhead { display: flex; align-items: center; gap: 8px; }
 /* Improved deep-link docs (detail panel) */
 .plug-dl-fullurl {
     /* override .plug-ep-copy-btn's opacity:0 (hover-reveal icon button) — this is

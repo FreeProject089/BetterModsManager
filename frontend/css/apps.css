@@ -9,103 +9,52 @@
     overflow: hidden;
 }
 
-/* ── Header ── */
+/* ── Head, tab rail, toolbar ──
+   The shapes come from page-head.css (.pg-head / .pg-tabbar / .pg-toolbar), shared with
+   Plugins & API so the two sidebar neighbours read as one app. What is here is only how they
+   sit in this page's fixed frame: the head and the strip stay put and .apps-content scrolls. */
+/* No gutter of its own: #view-apps is a .view and already has the 28 / 32 px every page
+   has. This header used to add 20 / 24 px on top of it, so the App Catalog sat further in
+   than Plugins & API next to it. */
 .apps-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px 12px;
-    border-bottom: 1px solid var(--border);
+    padding: 0;
+    margin-bottom: 14px;
     flex-shrink: 0;
 }
-.apps-header-left { display: flex; align-items: center; gap: 14px; color: var(--accent); }
-/* Same values as .view-title / .view-subtitle. Every other nav page's heading is 22px/700
-   with a 13px muted line under it; this one was 18px/12px for no reason anyone chose — it
-   was simply written on a different day. Values copied rather than the classes reused
-   because this header's layout hangs off .apps-*. */
-.apps-title { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
-.apps-subtitle { font-size: 13px; color: var(--text-muted); margin: 4px 0 0; }
-
-/* ── Tabs ── */
-.apps-tabs {
-    display: flex;
-    gap: 2px;
-    padding: 8px 24px 0;
-    border-bottom: 1px solid var(--border);
+.apps-tabbar {
+    padding: 0;
+    margin-bottom: 12px;
     flex-shrink: 0;
 }
-.apps-tab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-    position: relative;
-    bottom: -1px;
-}
-.apps-tab:hover { color: var(--text-primary); }
-.apps-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.apps-tab-badge {
-    background: var(--accent);
-    color: var(--text-on-accent);
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 10px;
-    min-width: 16px;
-    text-align: center;
-}
-
-/* ── Toolbar ── */
 .apps-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 24px;
+    padding: 0;
+    margin-bottom: 4px;
     flex-shrink: 0;
 }
-.apps-search-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 12px;
-    flex: 1;
-    color: var(--text-muted);
-}
-.apps-search {
-    border: none;
-    background: none;
-    outline: none;
-    color: var(--text-primary);
-    font-size: 13px;
-    flex: 1;
-    min-width: 0;
-}
+/* The old underline-tab metrics, switched off: the strip is a .bms-tabs rail now. */
+.apps-tab { position: static; }
 .apps-filter {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
-    color: var(--text-primary);
-    font-size: 12px;
+    height: 34px;
+    background: var(--bmm-s03);
+    border: 1px solid var(--bmm-border-hover);
+    border-radius: 9px;
+    padding: 0 10px;
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
     cursor: pointer;
+    flex: none;
+    max-width: 200px;
 }
 
 /* ── Content area ── */
 .apps-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 24px;
+    /* A few pixels of room, cancelled by the margin, so a hovered card's lift and shadow are
+       not clipped by the scroll box. */
+    padding: 4px 6px 8px;
+    margin: 0 -6px;
+    min-width: 0;
 }
 
 /* ── Loading / Empty ── */
@@ -116,28 +65,53 @@
     justify-content: center;
     gap: 16px;
     height: 200px;
-    color: var(--text-muted);
+    color: var(--bmm-text-secondary);
     font-size: 13px;
 }
+/* The skeleton grid is a grid, not a centred column. main.css says so too, but this sheet
+   loads after it and the rule above (same weight) used to win: six skeleton cards stacked in
+   a narrow centred column instead of the shape of the grid they stand in for. */
+.apps-loading.apps-loading--skeleton { display: block; height: auto; }
 .apps-spinner {
     width: 28px;
     height: 28px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
+    border: 2px solid var(--bmm-border);
+    border-top-color: var(--bmm-accent);
     border-radius: 50%;
     animation: apps-spin 0.7s linear infinite;
 }
 @keyframes apps-spin { to { transform: rotate(360deg); } }
+
+/* Nothing here: a glyph in a tile, the fact, one line on what to do, the action. */
 .apps-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    height: 240px;
-    color: var(--text-muted);
+    gap: 8px;
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--bmm-text-secondary);
     font-size: 13px;
 }
+.apps-empty--compact { padding: 24px 16px; }
+.apps-empty-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 6px;
+    border-radius: 16px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+}
+.apps-empty--compact .apps-empty-icon { width: 40px; height: 40px; border-radius: 12px; margin-bottom: 2px; }
+.apps-empty-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--bmm-text-primary); }
+.apps-empty--compact .apps-empty-title { font-size: 13px; font-weight: 600; }
+.apps-empty-sub { margin: 0; max-width: 46ch; line-height: 1.5; color: var(--bmm-text-secondary); }
+.apps-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.apps-empty p { margin: 0; }
 
 /* ── App Grid ── */
 .apps-grid {
@@ -563,11 +537,19 @@
 .apps-inst-fav-btn:hover, .apps-inst-fav-btn.active { color: var(--accent); }
 
 /* ── Sources ── */
-.apps-sources-wrap { max-width: 680px; }
-.apps-sources-header { margin-bottom: 20px; }
-.apps-sources-header h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
-.apps-sources-desc { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
-.apps-sources-add { display: flex; gap: 8px; margin-bottom: 16px; }
+/* The Sources tab as one section card, the same surface as Plugins & API's cards — it was a
+   680-px column floating at the left of an empty page. */
+.apps-sources-wrap {
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-card, 12px);
+    padding: 18px;
+}
+.apps-sources-header { margin-bottom: 16px; }
+.apps-sources-header h3 { font-size: 14px; font-weight: 750; color: var(--bmm-text-primary); margin: 0 0 6px; }
+.apps-sources-desc { font-size: 12px; color: var(--bmm-text-secondary); margin: 0; line-height: 1.55; max-width: 90ch; }
+.apps-sources-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.apps-sources-add .apps-source-input { min-width: 220px; }
 .apps-source-input {
     flex: 1;
     background: var(--bg-secondary);
@@ -980,7 +962,8 @@
 }
 
 /* ── Catalog creator ── */
-.apps-create-wrap { max-width: 760px; margin: 0 auto; }
+/* Full width like every other tab; the form's own sections keep their reading width. */
+.apps-create-wrap { max-width: none; margin: 0; }
 .apps-create-header { margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--bmm-s07); }
 .apps-create-header h3 {
     font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px;
@@ -1363,3 +1346,15 @@
    ellipsis in the middle of that list hides the field somebody still has to fill. */
 .apps-cr-missing.is-bad { color: var(--warning, #f59e0b); font-weight: 600; }
 .apps-cr-missing.is-ok { color: var(--success, #10b981); }
+
+/* Create › step 1: label | field, two rows, the fields taking the width. They were two
+   160-px boxes in a wrapping row, so the name of a catalogue was cut after a dozen letters. */
+.apps-create-section--fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 10px 12px;
+}
+.apps-create-section--fields > .apps-cr-step-h { grid-column: 1 / -1; }
+.apps-create-section--fields > .apps-install-label { margin: 0; }
+.apps-create-section--fields > .apps-path-input { width: 100%; min-width: 0; }

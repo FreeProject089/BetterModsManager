@@ -1,0 +1,202 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   plugins.css — Plugins & API page, the layer on top of the .plug-* rules in main.css.
+
+   The page head and the tab rail come from page-head.css. What is here: the old
+   underline tab row switched off (the strip is a .bms-tabs rail now), the API tab's
+   four panels and their segmented control, one rhythm for section cards and their
+   lead lines, the per-plugin permission blocks, and the readable code surfaces.
+   Loaded after main.css and modal-shell.css, scoped to #view-plugins.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The tab strip: a rail now, not an underline row ──────────────────────── */
+#view-plugins .plug-tabs {
+    display: inline-flex;
+    margin-bottom: 0;
+    border-bottom: 0;
+    padding: 3px;
+}
+#view-plugins .plug-tab {
+    border-bottom: 0;
+    padding: 6px 14px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--bmm-text-secondary);
+}
+#view-plugins .plug-tab:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+#view-plugins .plug-tab.active {
+    background: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+    border-bottom-color: transparent;
+}
+
+/* A [hidden] card or empty state inside a flex/grid list stays hidden. */
+#view-plugins .plug-card[hidden],
+#view-plugins .plug-empty[hidden],
+#view-plugins .plug-api-panel[hidden] { display: none; }
+
+/* A card's description is something to read, not a caption: secondary ink, not muted. */
+#view-plugins .plug-card-desc { color: var(--bmm-text-secondary); }
+
+/* An empty state inside a grid spans the grid. */
+#view-plugins .plug-grid > .plug-empty { grid-column: 1 / -1; padding: 40px 20px; }
+
+/* ── Section cards: one rhythm ────────────────────────────────────────────── */
+#view-plugins .plug-section-card {
+    background: var(--bmm-bg-elevated);
+    border-color: var(--bmm-border);
+    border-radius: var(--bmm-radius-card, 12px);
+    gap: 12px;
+    min-width: 0;
+}
+#view-plugins .plug-section-card + .plug-section-card { margin-top: 14px; }
+#view-plugins .plug-scripts-root .plug-section-card + .plug-section-card { margin-top: 0; }
+#view-plugins .plug-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 750;
+    color: var(--bmm-text-primary);
+}
+#view-plugins .plug-section-title svg { flex: none; color: var(--bms-accent-ink); }
+/* The one line under a section title. These were eleven inline styles at 11px muted, which
+   is below what reads comfortably on BMM White. */
+#view-plugins .plug-section-lead {
+    margin: -4px 0 0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--bmm-text-secondary);
+    max-width: 90ch;
+}
+
+/* ── Catalogue: the community warning ─────────────────────────────────────── */
+/* Its title was warning-coloured TEXT, which is a fill colour and washes out on light
+   themes. The bar and the icon carry the tone; the words stay ink. */
+#view-plugins .plug-community-banner strong {
+    color: color-mix(in srgb, var(--bmm-warning) 45%, var(--bmm-text-primary));
+}
+
+/* ── API & Scripts ────────────────────────────────────────────────────────── */
+.plug-api-secbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.plug-api-secnav { flex: 0 1 auto; min-width: 0; }
+.plug-api-secnav .bms-seg-btn { gap: 6px; }
+.plug-api-secnav .bms-seg-btn[aria-selected="true"] {
+    background: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+}
+
+/* The token card: label and URL on one line, the field and its three actions on the next. */
+#view-plugins .plug-token-card { background: var(--bmm-bg-elevated); border-color: var(--bmm-border); }
+#view-plugins .plug-token-card-top { flex-wrap: wrap; row-gap: 6px; }
+#view-plugins .plug-api-hint { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+#view-plugins .plug-api-hint code,
+#view-plugins .plug-api-url-copy {
+    color: var(--bmm-text-primary);
+    background: var(--bmm-s06);
+    border: 1px solid var(--bmm-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: copy;
+    word-break: break-all;
+}
+#view-plugins .plug-api-url-copy:hover { border-color: var(--bmm-border-accent); }
+#view-plugins .plug-token-row { flex-wrap: wrap; }
+#view-plugins .plug-token-row .plug-token-input { flex: 1 1 260px; min-width: 0; font-family: var(--font-mono); }
+
+/* Code and responses: monospace on a recessed surface, wrapping inside the card rather
+   than pushing the page sideways. */
+#view-plugins .plug-code-pre {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border);
+    border-radius: 9px;
+    max-width: 100%;
+}
+#view-plugins .plug-endpoint-list,
+#view-plugins .plug-uqt,
+#view-plugins .plug-gen-two-col { min-width: 0; }
+
+/* Search rows inside the reference panels: the same field as the page toolbar. */
+#view-plugins .plug-qt-search-row { margin: 0; }
+#view-plugins .plug-ep-collapse-bar { margin: -4px 0 0; }
+
+/* ── Permissions ──────────────────────────────────────────────────────────── */
+#view-plugins .plug-perms-desc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    font-size: 12.5px;
+    color: var(--bmm-text-secondary);
+}
+#view-plugins .plug-perms-desc svg { flex: none; color: var(--bms-accent-ink); }
+#view-plugins .plug-perm-global-card + .plug-perm-global-card { margin-top: 8px; }
+#view-plugins .plug-perm-block {
+    background: var(--bmm-s02);
+    border-color: var(--bmm-border);
+    margin-bottom: 0;
+}
+#view-plugins .plug-perm-block + .plug-perm-block { margin-top: 10px; }
+#view-plugins .plug-perm-header { flex-wrap: wrap; row-gap: 6px; }
+#view-plugins .plug-perm-header strong { min-width: 0; overflow-wrap: anywhere; }
+.plug-perm-header-icon {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--bmm-accent-dim);
+    color: var(--bms-accent-ink);
+}
+#view-plugins .plug-perm-id { background: var(--bmm-s06); color: var(--bmm-text-secondary); }
+#view-plugins .plug-perm-granted { margin-left: auto; }
+.plug-perm-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--bmm-border);
+}
+
+/* The reference panels' tools on one line: the search field, then expand / collapse. */
+.plug-ref-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+.plug-ref-tools .plug-qt-search-row { flex: 1 1 320px; min-width: 0; }
+.plug-ref-tools .plug-ep-collapse-bar { margin: 0; flex: none; }
+
+/* The endpoint / deep-link detail: these surfaces were black washes (rgba(0,0,0,.18–.3)),
+   which is a recess on a dark theme and a grey smudge on BMM White. Surface tokens instead:
+   the same depth steps, in the theme's own direction. */
+#view-plugins .plug-ep-detail { background: var(--bmm-s02); }
+#view-plugins .plug-ep-code-notice { background: var(--bmm-s03); color: var(--bmm-text-secondary); }
+#view-plugins .plug-ep-code-tabs { background: var(--bmm-s04); }
+#view-plugins .plug-ep-code-block {
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border);
+    font-family: var(--font-mono);
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+/* Warning lines under a permission: the icon keeps the warning tone, the sentence is ink
+   walked toward it — warning-yellow text is a fill colour and washes out on light themes. */
+#view-plugins .plug-perm-global-warn {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--bmm-warning) 45%, var(--bmm-text-primary));
+}
+#view-plugins .plug-perm-global-warn svg { color: var(--bmm-warning); flex: none; }

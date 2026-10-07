@@ -129,7 +129,7 @@ export function initRepoMonitoring(elements) {
                             </td>
                             <td style="color:var(--text-secondary); max-width:140px;">${creatorIdHtml}</td>
                             <td>
-                                <span style="font-size:10px; font-weight:900; background:${protocolBg}; border:1px solid rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; color:${protocolColor}; letter-spacing:0.05em;">${protocol}</span>
+                                <span style="font-size:10px; font-weight:900; background:${protocolBg}; border:1px solid var(--bmm-s05); padding:3px 8px; border-radius:6px; color:${protocolColor}; letter-spacing:0.05em;">${protocol}</span>
                             </td>
                             <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" data-tooltip="${escAttr(d.file || '-')}">${escHtml(d.file || '-')}</td>
                             <td>

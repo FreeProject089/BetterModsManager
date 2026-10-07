@@ -154,6 +154,25 @@ const ICON_DONE = (uiIcon('check', 14));
     };
     paintServerState(false);
 
+    // The button text and the status line are STATE, written here, not static copy: with a
+    // data-i18n on them, the boot-time translation pass (and every language change) rewrote
+    // them to "Start" / "Server offline" over a server that was running, the header chip
+    // read that, and the page said the opposite of the truth. The attributes are dropped and
+    // a language change repaints from the state.
+    let runningPort = '';
+    const paintServerTexts = () => {
+        const txt = document.getElementById('repo-server-btn-text');
+        if (txt) { txt.removeAttribute('data-i18n'); txt.textContent = t(isServerRunning ? 'repo.hostStop' : 'repo.hostStart'); }
+        if (serverStatusLabel) {
+            serverStatusLabel.removeAttribute('data-i18n');
+            serverStatusLabel.textContent = isServerRunning
+                ? t('repo.serverOnline', { port: runningPort || '8000' })
+                : t('repo.serverOffline');
+        }
+    };
+    paintServerTexts();
+    document.addEventListener('langChanged', paintServerTexts);
+
     // --- Host Server toggle ---
     if (btnToggleServer) {
         btnToggleServer.addEventListener('click', async () => {
@@ -221,6 +240,7 @@ const ICON_DONE = (uiIcon('check', 14));
                     const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
                     newTextEl.textContent = t('repo.hostStop');
                     paintServerState(true);
+                    runningPort = String(port);
                     if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
                     
                     urlInputServer.value = result.lan_url;
@@ -315,6 +335,7 @@ const ICON_DONE = (uiIcon('check', 14));
                 const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
                 if (btnTxt) btnTxt.textContent = t('repo.hostStop');
                 paintServerState(true);
+                runningPort = String(status.port || 8000);
                 if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
                 urlInputServer.value = status.lan_url;
                 if (status.public_url) {

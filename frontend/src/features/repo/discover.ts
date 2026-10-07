@@ -132,7 +132,7 @@ async function discover() {
         ));
 
         const list = document.createElement('div');
-        list.style.cssText = 'max-height:180px;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px';
+        list.style.cssText = 'max-height:180px;overflow-y:auto;border-top:1px solid var(--bmm-s06);padding-top:6px';
         // Unverified first: they are the ones that need a decision.
         for (const m of [...r.mods].sort((a, b) => Number(a.verified) - Number(b.verified))) {
             list.append(modRow(m));

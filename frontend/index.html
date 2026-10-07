@@ -39,6 +39,9 @@
     <link rel="stylesheet" href="css/legacy-import.css" />
     <link rel="stylesheet" href="css/server-modal.css" />
     <link rel="stylesheet" href="css/activation-jobs.css" />
+    <!-- Page head + tab rail shared by Plugins & API and the App Catalog, then the Plugins page. -->
+    <link rel="stylesheet" href="css/page-head.css" />
+    <link rel="stylesheet" href="css/plugins.css" />
     <!-- Laya's dialogs and cards. Linked here, not only on demand (ai-shared.ts ensureAiCss sees
          the id and skips): a Laya dialog drawn before a lazily added sheet arrived showed raw text
          and a browser-default button. -->
@@ -1070,11 +1073,7 @@
                         </button>
                         <button class="repo-tab-btn" id="btn-repo-tab-host" data-repo-tab="host" role="tab">
                             <span class="repo-tab-ic">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                                    <path d="M8 21h8M12 17v4" />
-                                    <path d="M7 7h.01M11 7h.01" />
-                                </svg>
+                                <svg class="ic ic-server" data-icon="server" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
                             </span>
                             <span class="repo-tab-txt">
                                 <span class="repo-tab-title" data-i18n="repo.tabHost">Héberger</span>
@@ -1130,7 +1129,7 @@
                                     </button>
                                 </div>
                                 <div class="repo-card-body">
-                                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.stepOneDesc">...</p>
 
                                     <div class="form-group" style="margin-bottom:12px;">
@@ -1462,7 +1461,7 @@
                                     <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
                                 </div>
                                 <div class="repo-card-body">
-                                    <p style="font-size:11px; color:var(--text-muted); margin:0 0 12px; line-height:1.5;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.manifestOnlyIntro">Genere uniquement repo.json pour des mods que tu heberges deja. Rien n&apos;est copie, rien n&apos;est uploade, le dossier n&apos;est pas modifie.</p>
 
                                     <div style="display:flex; gap:6px; margin-bottom:12px;">
@@ -1481,21 +1480,18 @@
                                     <!-- A LIST of folders, not one: a collection kept in two
                                          places is one repo, and it used to be impossible. -->
                                     <div id="manifest-folder-block" style="margin-bottom:10px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestModsDirs">DOSSIERS DE MODS</span>
-                                        <div id="manifest-folder-list"
-                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
-                                        <button class="btn btn-sm" id="btn-manifest-browse"
-                                            style="height:26px; padding:0 10px; margin-top:6px; font-size:11px; font-weight:700;"
+                                        <div id="manifest-folder-list" class="rp-well"></div>
+                                        <button class="btn btn-sm btn-secondary" id="btn-manifest-browse"
                                             data-i18n="repo.manifestAddFolder">AJOUTER UN DOSSIER</button>
                                     </div>
 
                                     <div id="manifest-profile-block" style="display:none; margin-bottom:10px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestProfiles">PROFILS A PUBLIER</span>
-                                        <div id="manifest-profile-list"
-                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
-                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                        <div id="manifest-profile-list" class="rp-well"></div>
+                                        <p class="rp-hint-t"
                                             data-i18n="repo.manifestProfilesHint">Des profils sur des dossiers differents donnent un seul repo.json.</p>
                                     </div>
 
@@ -1505,15 +1501,13 @@
                                     <!-- Where repo.json lands. Empty = beside the first folder,
                                          which is what it has always done. -->
                                     <div style="margin-bottom:10px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestOutputDir">OU ECRIRE repo.json</span>
-                                        <div style="display:flex; gap:6px; margin-top:5px;">
+                                        <div class="rp-inline-pick">
                                             <input type="text" id="manifest-output-dir" class="form-input" readonly
                                                 data-i18n-placeholder="repo.manifestOutputDirPlaceholder"
-                                                placeholder="A cote du premier dossier"
-                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
-                                            <button class="btn btn-sm" id="btn-manifest-output"
-                                                style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
+                                                placeholder="A cote du premier dossier">
+                                            <button class="btn btn-sm btn-secondary" id="btn-manifest-output"
                                                 data-i18n="common.browse">PARCOURIR</button>
                                         </div>
                                     </div>
@@ -1524,33 +1518,29 @@
                                     <!-- Modpacks apply to BOTH modes: a pack is a selection of
                                          mods, independent of how the mods were chosen. -->
                                     <div style="margin-bottom:10px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestModpacks">MODPACKS A INCLURE</span>
-                                        <div id="manifest-modpack-list"
-                                            style="margin-top:5px; max-height:110px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
+                                        <div id="manifest-modpack-list" class="rp-well"></div>
                                     </div>
 
                                     <div style="margin-bottom:10px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestFilesBaseUrl">URL PUBLIQUE DES FICHIERS</span>
                                         <input type="text" id="manifest-files-base-url" class="form-input"
-                                            placeholder="https://mon-serveur.tld/fichiers"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
+                                            placeholder="https://mon-serveur.tld/fichiers">
                                     </div>
                                     </details>
 
                                     <div style="margin-bottom:12px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.manifestLayout">DISPOSITION DES FICHIERS</span>
                                         <input type="text" id="manifest-files-layout" class="form-input"
-                                            placeholder="mods/{id}/{path}"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
-                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                            placeholder="mods/{id}/{path}">
+                                        <p class="rp-hint-t"
                                             data-i18n="repo.manifestLayoutHint">Laisse vide pour mods/{id}/{path}.</p>
                                     </div>
 
-                                    <div id="manifest-result"
-                                        style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+                                    <div id="manifest-result" class="rp-result" style="display:none;"></div>
 
                                     <!-- Hashing a real collection takes minutes. A disabled
                                          button and an empty card read as "it does nothing". -->
@@ -1564,8 +1554,7 @@
                                     </div>
 
                                     <div style="display:flex; gap:10px; align-items:center;">
-                                        <button class="btn btn-primary" id="btn-generate-manifest"
-                                            style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px;">
+                                        <button class="btn btn-primary rp-grow" id="btn-generate-manifest">
                                             <span data-i18n="repo.manifestGenerate">GENERER repo.json</span>
                                         </button>
                                     </div>
@@ -1583,29 +1572,26 @@
                                     <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
                                 </div>
                                 <div class="repo-card-body">
-                                    <p style="font-size:11px; color:var(--text-muted); margin:0 0 12px; line-height:1.5;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.remoteIntro">Tes mods sont uniquement sur le serveur ? BMM lit son listing et met a jour repo.json sans rapatrier le repo. Necessite l&apos;index de repertoire (autoindex) active.</p>
 
                                     <div style="margin-bottom:14px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.remoteBaseUrl">URL DU DOSSIER DES MODS</span>
                                         <input type="text" id="remote-base-url" class="form-input"
-                                            placeholder="https://mon-serveur.tld/mods"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
+                                            placeholder="https://mon-serveur.tld/mods">
                                     </div>
 
                                     <div style="margin-bottom:14px;">
-                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                        <span class="rp-lbl"
                                             data-i18n="repo.remoteManifest">TON repo.json LOCAL (OPTIONNEL)</span>
-                                        <div style="display:flex; gap:6px; margin-top:5px;">
+                                        <div class="rp-inline-pick">
                                             <input type="text" id="remote-manifest-path" class="form-input" readonly
-                                                placeholder="repo.json"
-                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
-                                            <button class="btn btn-sm" id="btn-remote-browse"
-                                                style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
+                                                placeholder="repo.json">
+                                            <button class="btn btn-sm btn-secondary" id="btn-remote-browse"
                                                 data-i18n="common.browse">PARCOURIR</button>
                                         </div>
-                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                        <p class="rp-hint-t"
                                             data-i18n="repo.remoteManifestHint">Laisse vide si le repo.json est deja
                                             sur le serveur : BMM le recupere, verifie sa signature et ecrit la version
                                             mise a jour. C&apos;est ce qui evite que tous les mods reviennent
@@ -1614,19 +1600,17 @@
 
                                     <div style="display:flex; gap:10px; margin-bottom:10px;">
                                         <div style="flex:1;">
-                                            <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            <span class="rp-lbl"
                                                 data-i18n="repo.remoteName">NOM DU REPO</span>
-                                            <input type="text" id="remote-repo-name" class="form-input"
-                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
+                                            <input type="text" id="remote-repo-name" class="form-input">
                                         </div>
                                         <div style="flex:1;">
-                                            <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            <span class="rp-lbl"
                                                 data-i18n="repo.remoteGame">JEU</span>
-                                            <input type="text" id="remote-game-name" class="form-input"
-                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
+                                            <input type="text" id="remote-game-name" class="form-input">
                                         </div>
                                     </div>
-                                    <p style="font-size:10px; color:var(--text-muted); margin:-4px 0 12px; line-height:1.4;"
+                                    <p class="rp-hint-t"
                                         data-i18n="repo.remoteNameHint">Utilises seulement si aucun repo.json n&apos;existe encore — sinon ceux du manifeste sont conserves.</p>
 
                                     <label class="checkbox-container"
@@ -1642,16 +1626,13 @@
                                              fighting for a row neither needed to share. -->
                                         <div id="remote-access-mount" style="margin-top:12px"></div>
 
-                                    <div id="remote-result"
-                                        style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+                                    <div id="remote-result" class="rp-result" style="display:none;"></div>
 
                                     <div style="display:flex; gap:10px; align-items:center; margin-top:14px;">
-                                        <button class="btn btn-sm" id="btn-remote-plan"
-                                            style="flex:1; height:34px; justify-content:center; font-size:11px; font-weight:700;">
+                                        <button class="btn btn-secondary rp-grow" id="btn-remote-plan">
                                             <span data-i18n="repo.remotePlan">VERIFIER (SANS RIEN CHANGER)</span>
                                         </button>
-                                        <button class="btn btn-primary" id="btn-remote-refresh"
-                                            style="flex:1; height:34px; justify-content:center; font-size:11px; font-weight:700;">
+                                        <button class="btn btn-primary rp-grow" id="btn-remote-refresh">
                                             <span data-i18n="repo.remoteRefresh">METTRE A JOUR</span>
                                         </button>
                                     </div>
@@ -1674,7 +1655,7 @@
                                     </h3>
                                 </div>
                                 <div class="repo-card-body">
-                                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.stepTwoDesc">...</p>
 
                                     <div class="form-group" style="margin-bottom:12px;">
@@ -1707,19 +1688,15 @@
                                     <div style="display:flex; gap:12px; margin-bottom:12px;">
                                         <div style="flex:1;">
                                             <label class="form-label"
-                                                style="font-size:11px; margin-bottom:4px; display:block;"
                                                 data-i18n="repo.portLabel">Port du serveur</label>
                                             <input type="number" id="repo-server-port" class="form-input" value="8000"
-                                                min="1" max="65535"
-                                                style="font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" />
+                                                min="1" max="65535" />
                                         </div>
                                         <div style="flex:1;">
                                             <label class="form-label"
-                                                style="font-size:11px; margin-bottom:4px; display:block;"
                                                 data-i18n="repo.uploadLimit">Limite Upload (Ko/s)</label>
                                             <input type="number" id="repo-server-upload-limit" class="form-input"
-                                                value="0" min="0" step="50" data-i18n-placeholder="repo.limitNone"
-                                                style="font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" />
+                                                value="0" min="0" step="50" data-i18n-placeholder="repo.limitNone" />
                                         </div>
                                     </div>
 
@@ -1734,13 +1711,12 @@
                                                 type="password" id="repo-server-download-password" class="form-input"
                                                 autocomplete="new-password"
                                                 data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
-                                                placeholder="Leave empty for an open repo"
-                                                style="flex:1; font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" /></form>
+                                                placeholder="Leave empty for an open repo" /></form>
                                             <button type="button" class="btn btn-sm"
                                                 data-toggle-password="#repo-server-download-password"
                                                 data-i18n="repo.showHide">Show</button>
                                         </div>
-                                        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;"
+                                        <div class="rp-hint-t"
                                              data-i18n="repo.hostDownloadPasswordHelp">Subscribers are asked for it before anything is served — the manifest included.</div>
                                     </div>
 
@@ -1753,63 +1729,43 @@
                                         <label class="form-label"
                                             style="font-size:11px; margin-bottom:4px; display:block;"
                                             data-i18n="repo.hostAuthorizedKeys">Authorised public keys (optional)</label>
-                                        <textarea id="repo-server-authorized-keys" class="form-input" rows="3"
+                                        <textarea id="repo-server-authorized-keys" class="form-input rp-mono" rows="3"
                                             spellcheck="false"
                                             data-i18n-placeholder="repo.hostAuthorizedKeysPlaceholder"
-                                            placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5… you@machine"
-                                            style="width:100%; font-size:11px; padding:6px; font-family:var(--font-mono); background:var(--bmm-bg-base); border:1px solid var(--border); resize:vertical;"></textarea>
-                                        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;"
+                                            placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5… you@machine"></textarea>
+                                        <div class="rp-hint-t"
                                              data-i18n="repo.hostAuthorizedKeysHelp">One key per line. Adding any makes a key REQUIRED for everyone — add your own first.</div>
                                     </div>
 
-                                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:12px; color:var(--text-muted); cursor:pointer;">
+                                    <label class="checkbox-container rp-check-row">
                                         <input type="checkbox" id="repo-host-require-login" />
                                         <span data-i18n="repo.requireLogin">Require a BetterCommunity account to download</span>
                                     </label>
 
-                                    <div class="repo-status-bar">
-                                        <div id="repo-server-status-dot"
-                                            style="width:8px;height:8px;border-radius:50%;background:#555;transition:all 0.3s;flex-shrink:0;">
+                                    <div class="repo-status-bar rp-srv-status" role="status">
+                                        <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
+                                        <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
+                                        <span id="upnp-status-badge" class="rp-upnp" style="display:none;"></span>
+                                    </div>
+
+                                    <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
+                                        <div class="rp-stat">
+                                            <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
+                                            <span id="repo-server-stat-dls" class="rp-stat-v">0</span>
                                         </div>
-                                        <span id="repo-server-status-label"
-                                            style="font-size:12px;color:var(--text-muted);"
-                                            data-i18n="repo.serverOffline">...</span>
-                                        <div id="upnp-status-badge"
-                                            style="display:none; font-size:9px; font-weight:800; padding:2px 6px; border-radius:4px; margin-left:auto;">
+                                        <div class="rp-stat">
+                                            <span class="rp-stat-l" data-i18n="repo.stat.sent">Data sent</span>
+                                            <span id="repo-server-stat-bytes" class="rp-stat-v">0 B</span>
                                         </div>
                                     </div>
 
-                                    <div id="repo-server-stats-container"
-                                        style="display:none; flex-wrap:wrap; gap:12px; margin-bottom:12px; padding:10px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s05); border-radius:8px;">
-                                        <div style="flex:1; display:flex; flex-direction:column;">
-                                            <span
-                                                style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Téléchargements</span>
-                                            <span id="repo-server-stat-dls"
-                                                style="font-size:16px; font-weight:800; color:var(--accent);">0</span>
-                                        </div>
-                                        <div style="flex:1; display:flex; flex-direction:column;">
-                                            <span
-                                                style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Données
-                                                Envoyées</span>
-                                            <span id="repo-server-stat-bytes"
-                                                style="font-size:16px; font-weight:800; color:var(--cyan);">0 B</span>
-                                        </div>
+                                    <div id="public-ip-hint-box" class="rp-note rp-tone--warn" style="display:none;">
+                                        <svg class="ic ic-alert" data-icon="alert" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                                        <span class="rp-note-txt"><b data-i18n="repo.hostPublicHintTitle">Accès Public</b>
+                                        <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre routeur pour un accès externe sans tunnel.</span></span>
                                     </div>
 
-                                    <div id="public-ip-hint-box"
-                                        style="display:none; margin-bottom:12px; padding:10px; background:rgba(245,158,11,0.05); border:1px dashed rgba(245,158,11,0.2); border-radius:8px; font-size:11px; color:var(--text-secondary);">
-                                        <div
-                                            style="display:flex; align-items:center; gap:8px; color:var(--bmm-warning); font-weight:700; margin-bottom:4px; text-transform:uppercase; font-size:10px;">
-                                            <svg class="ic ic-alert" data-icon="alert" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                                            <span data-i18n="repo.hostPublicHintTitle">Accès Public</span>
-                                        </div>
-                                        <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre
-                                            routeur
-                                            pour un accès externe sans tunnel.</span>
-                                    </div>
-
-                                    <button class="btn btn-secondary" id="btn-toggle-repo-server"
-                                        style="width:100%;justify-content:center;background:rgba(46,204,113,0.1);color:var(--bmm-success);border-color:rgba(46,204,113,0.2);">
+                                    <button class="btn btn-secondary rp-srv-toggle" id="btn-toggle-repo-server">
                                         <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
                                     </button>
 
@@ -1821,7 +1777,7 @@
                                          three views of the same server, so they read as one
                                          control: same size, same ink, and the icon carries
                                          the difference. -->
-                                    <div id="repo-server-tools" class="bmm-seg" style="display:none; margin-top:10px;">
+                                    <div id="repo-server-tools" class="bmm-seg rp-srv-tools" style="display:none;">
                                         <button class="bmm-seg-item" id="btn-open-monitoring">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1844,111 +1800,67 @@
                                         </button>
                                     </div>
 
-                                    <div id="repo-server-loading-bar"
-                                        style="display:none;height:3px;background:var(--bmm-s10);border-radius:2px;overflow:hidden;margin-top:8px;">
-                                        <div
-                                            style="height:100%;width:100%;background:var(--accent);animation:indeterminate 1.8s infinite ease-in-out;transform-origin:left;">
-                                        </div>
-                                    </div>
+                                    <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
 
-                                    <!-- Creator ID — hardware-locked, immutable -->
-                                    <div id="repo-creator-id-container"
-                                        style="margin-top:14px;background:linear-gradient(135deg,rgba(188,116,255,0.07) 0%,rgba(188,116,255,0.02) 100%);border:1px solid rgba(188,116,255,0.18);border-radius:10px;padding:12px 14px;">
-                                        <!-- Header row -->
-                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
-                                            <div
-                                                style="width:28px;height:28px;border-radius:7px;background:rgba(188,116,255,0.13);border:1px solid rgba(188,116,255,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                                    stroke="#bc74ff" stroke-width="2" aria-hidden="true">
-                                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                                </svg>
-                                            </div>
-                                            <div style="flex:1;min-width:0;">
-                                                <div style="display:flex;align-items:center;gap:7px;">
-                                                    <label class="form-label"
-                                                        style="font-size:11px;margin:0;color:var(--bmm-purple);text-transform:uppercase;letter-spacing:0.07em;font-weight:800;"
-                                                        data-i18n="repo.creatorId">Creator ID</label>
-                                                </div>
-                                                <div style="font-size:9.5px;color:var(--text-muted);margin-top:1px;"
-                                                    data-i18n="repo.creatorIdHint">L'identité de ce BMM auprès des dépôts
-                                                </div>
-                                            </div>
+                                    <!-- Creator ID: hardware-locked, immutable. Shown while the server runs. -->
+                                    <div id="repo-creator-id-container" class="rp-idbox">
+                                        <div class="rp-idbox-h">
+                                            <span class="rp-idbox-ic"><svg class="ic ic-fingerprint" data-icon="fingerprint" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg></span>
+                                            <span class="rp-idbox-txt">
+                                                <span class="rp-idbox-t" data-i18n="repo.creatorId">Creator ID</span>
+                                                <span class="rp-idbox-sub" data-i18n="repo.creatorIdHint">L'identité de ce BMM auprès des dépôts</span>
+                                            </span>
                                         </div>
-                                        <!-- Value row -->
-                                        <div style="display:flex;gap:6px;align-items:center;">
-                                            <div style="flex:1;font-family:var(--font-mono);font-size:10px;color:color-mix(in srgb, var(--bmm-purple) 45%, var(--bmm-text-primary));background:var(--bmm-bg-base);padding:7px 11px;border-radius:7px;word-break:break-all;border:1px solid rgba(188,116,255,0.15);letter-spacing:0.04em;user-select:all;cursor:text;"
-                                                id="repo-creator-id-value"
+                                        <div class="rp-addr-row">
+                                            <div class="rp-addr" id="repo-creator-id-value"
                                                 data-i18n-tooltip="repo.creatorIdTooltip" data-tooltip="Creator ID — cliquez pour sélectionner tout">
-                                                <span style="opacity:0.35;animation:pulse-text 1.5s infinite">…</span>
+                                                <span class="rp-wait">…</span>
                                             </div>
-                                            <button class="btn btn-ghost btn-sm" id="btn-copy-my-creator-id"
-                                                data-tasky="repo.creatorIdCopyTip" data-tasky-icon="icon-copy"
-                                               
-                                                style="padding:0 9px;height:34px;border:1px solid rgba(188,116,255,0.25);color:var(--bmm-purple);flex-shrink:0;border-radius:7px;transition:background 0.15s;"
-                                                data-hover="background:rgba(188,116,255,0.1)"
-                                                data-hover-out="background:transparent">
+                                            <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-my-creator-id"
+                                                data-tasky="repo.creatorIdCopyTip" data-tasky-icon="icon-copy">
                                                 <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                                             </button>
                                         </div>
-                                        <!-- Fingerprint note -->
-                                        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
-                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(188,116,255,0.45)" stroke-width="2" style="flex-shrink:0;" aria-hidden="true">
-                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                            </svg>
-                                            <span style="font-size:9.5px;color:color-mix(in srgb, var(--bmm-purple) 45%, transparent);font-style:italic;" data-i18n="repo.creatorIdFinal">Un identifiant qui identifie ce BMM</span>
-                                        </div>
+                                        <div class="rp-idbox-foot" data-i18n="repo.creatorIdFinal">Un identifiant qui identifie ce BMM</div>
                                     </div>
 
-                                    <div id="repo-server-url-container"
-                                        style="display:none;margin-top:12px;display:flex;flex-direction:column;gap:10px;">
-                                        <!-- (Keep existing URL sections) -->
-                                        <div id="repo-server-lan-section">
-                                            <label class="form-label"
-                                                style="font-size:11px;margin-bottom:4px;display:block;"
-                                                data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
+                                    <div id="repo-server-url-container" class="rp-urls" style="display:none;">
+                                                                                <div id="repo-server-lan-section">
+                                            <label class="form-label rp-url-l" for="repo-server-url" data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
                                             <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-server-url" readonly
-                                                    style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
-                                                <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
-                                                    style="padding:0 10px;">
+                                                <input type="text" class="form-input rp-addr-input" id="repo-server-url" readonly />
+                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-url"
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
                                                     <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div id="repo-server-public-section" style="display:none;">
-                                            <label class="form-label"
-                                                style="font-size:10px;margin-bottom:3px;margin-top:2px;display:flex;align-items:center;gap:5px;">
-                                                <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" style="color:var(--accent)" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                            <label class="form-label rp-url-l" for="repo-server-public-url">
+                                                <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                                                 <span data-i18n="repo.hostPublicUrl">Public IP URL</span>
                                             </label>
                                             <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-server-public-url"
-                                                    readonly
-                                                    style="color:var(--accent);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
-                                                <button class="btn btn-secondary btn-sm" id="btn-copy-repo-public-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
-                                                    style="padding:0 10px;">
+                                                <input type="text" class="form-input rp-addr-input" id="repo-server-public-url"
+                                                    readonly />
+                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-public-url"
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
                                                     <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div id="repo-server-tunnel-section" style="display:none;">
-                                            <label class="form-label"
-                                                style="font-size:10px;margin-bottom:3px;margin-top:2px;display:flex;align-items:center;gap:5px;">
-                                                <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" style="color:var(--cyan)" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                                            <label class="form-label rp-url-l" for="repo-server-tunnel-url">
+                                                <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
                                                 <span data-i18n="repo.hostTunnelUrl">Cloudflare Tunnel URL</span>
                                             </label>
                                             <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-server-tunnel-url"
-                                                    readonly
-                                                    style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
-                                                <button class="btn btn-secondary btn-sm" id="btn-copy-repo-tunnel-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
-                                                    style="padding:0 10px;">
+                                                <input type="text" class="form-input rp-addr-input" id="repo-server-tunnel-url"
+                                                    readonly />
+                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-tunnel-url"
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
                                                     <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                                                 </button>
                                             </div>
@@ -2025,7 +1937,7 @@
                                         <svg class="ic ic-activity" data-icon="activity" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
                                         <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
                                     </h3>
-                                    <div class="badge-server-tag">OPTIONAL</div>
+                                    <div class="badge-server-tag" data-i18n="repo.badgeOptional">OPTIONAL</div>
                                 </div>
                                 <div class="repo-card-body">
 
@@ -2038,152 +1950,69 @@
                                                 placeholder="C:\...\repo.json"
                                                 data-i18n-placeholder="repo.miniServerRepoPlaceholder" readonly
                                                 style="font-size:11px; flex:1; min-width:0;" />
-                                            <button class="btn btn-secondary btn-sm" id="btn-pick-mini-server-repo"
-                                                data-tasky="repo.miniServerSelectRepoTip" data-tasky-icon="icon-folder"
-                                               
-                                                style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
+                                            <button class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-pick-mini-server-repo"
+                                                data-tasky="repo.miniServerSelectRepoTip" data-tasky-icon="icon-folder">
                                                 <svg class="ic ic-file-text" data-icon="file-text" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
                                             </button>
-                                            <button class="btn btn-secondary btn-sm" id="btn-pick-mini-folder"
-                                                data-tasky="repo.miniServerSelectFolderTip" data-tasky-icon="icon-folder"
-                                               
-                                                style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
+                                            <button class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-pick-mini-folder"
+                                                data-tasky="repo.miniServerSelectFolderTip" data-tasky-icon="icon-folder">
                                                 <svg class="ic ic-folder" data-icon="folder" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                                             </button>
                                         </div>
                                     </div>
 
-                                    <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:12px;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.miniServerDesc">
                                         Générez un script <code>.bat</code> pour lancer un serveur ultra-léger sans
                                         l'interface BMM. Idéal pour économiser les performances sur une machine dédiée.
                                     </p>
 
-                                    <!-- Configuration Options Grid -->
-                                    <div
-                                        style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:var(--bmm-s03); border-radius:8px; border:1px solid var(--bmm-s05);">
-                                        <!-- Left Column: Numeric Settings -->
-                                        <div style="display:flex; flex-direction:column; gap:10px;">
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.portLabel">PORT</span>
-                                                <input type="number" id="repo-mini-server-port" class="form-input"
-                                                    value="8000" min="1" max="65535"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--cyan); font-weight:700;">
-                                            </div>
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
-                                                <input type="number" id="repo-mini-server-upload-limit"
-                                                    class="form-input" value="0" min="0" step="50"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--accent); font-weight:700;">
-                                            </div>
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.miniServerPassword">PASSWORD</span>
-                                                <div style="display:flex; align-items:center; gap:5px;">
-                                                    <button
-                                                        data-i18n-tooltip="common.showPassword" data-toggle-password="#repo-mini-server-password"
-                                                        class="btn btn-sm"
-                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
-                                                        <svg class="ic ic-eye" data-icon="eye" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
-                                                    </button>
-                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-password"
-                                                        class="form-input" value="admin"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
-                                                </div>
-                                            </div>
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;"
-                                                data-tooltip="Optional. When set, subscribers must enter this password to download from the repo. Leave blank for an open repo."
-                                                data-i18n-tooltip="repo.miniServerDownloadPasswordHint">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.miniServerDownloadPassword">DOWNLOAD PASSWORD</span>
-                                                <div style="display:flex; align-items:center; gap:5px;">
-                                                    <button
-                                                        data-i18n-tooltip="common.showPassword" data-toggle-password="#repo-mini-server-download-password"
-                                                        class="btn btn-sm"
-                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
-                                                        <svg class="ic ic-eye" data-icon="eye" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
-                                                    </button>
-                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-download-password"
-                                                        class="form-input" value="" placeholder="none"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
-                                                </div>
-                                            </div>
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.miniServerVersion">VERSION</span>
-                                                <select id="repo-mini-server-version" class="form-input"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--success); font-weight:700; cursor:pointer;">
-                                                    <option value="1">v1 (Std)</option>
-                                                    <option value="2" selected>v2 (Lux)</option>
-                                                </select>
-                                            </div>
-                                            <div
-                                                style="display:flex; align-items:center; justify-content:space-between;">
-                                                <span
-                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                                    data-i18n="repo.miniServerType">TYPE</span>
-                                                <select id="repo-mini-server-type" class="form-input"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--accent); font-weight:700; cursor:pointer;">
-                                                    <option value="user" selected data-i18n="repo.typeUser">User</option>
-                                                    <option value="server" data-i18n="repo.typeServer">Server</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <!-- Right Column: Toggles -->
-                                        <div
-                                            style="display:flex; flex-direction:column; gap:8px; border-left:1px solid var(--bmm-s05); padding-left:15px;">
-                                            <label
-                                                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                                <input type="checkbox" id="repo-mini-server-autostart"
-                                                    style="margin:0;">
-                                                <span data-i18n="repo.autoStart">Lancer au démarrage</span>
-                                            </label>
-                                            <label
-                                                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                                <input type="checkbox" id="repo-mini-server-cloudflare" checked
-                                                    style="margin:0;">
-                                                <span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel
-                                                    (Public)</span>
-                                            </label>
-                                            <label
-                                                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                                <input type="checkbox" id="repo-mini-server-upnp" checked
-                                                    style="margin:0;">
-                                                <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
-                                            </label>
-                                            <div style="border-top:1px solid var(--bmm-s10); margin:8px 0;">
-                                            </div>
-                                            <label
-                                                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                                <input type="checkbox" id="repo-mini-server-docker" style="margin:0;">
-                                                <span data-i18n="repo.miniServerDocker">Docker Support</span>
-                                            </label>
-                                            <div id="repo-mini-server-docker-options"
-                                                style="display:none; margin-top:8px;">
-                                                <select id="repo-mini-server-docker-host" class="form-input"
-                                                    style="width:100%; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
-                                                    <option value="linux">Linux Host</option>
-                                                    <option value="windows">Windows Host</option>
-                                                </select>
-                                            </div>
+                                    <!-- Configuration: the numbers and the switches, one field per cell. -->
+                                    <div class="rp-form-grid">
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.portLabel">PORT</span>
+                                            <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535"></label>
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
+                                            <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"></label>
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.miniServerVersion">VERSION</span>
+                                            <select id="repo-mini-server-version" class="form-input">
+                                                <option value="1">v1 (Std)</option>
+                                                <option value="2" selected>v2 (Lux)</option>
+                                            </select></label>
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.miniServerType">TYPE</span>
+                                            <select id="repo-mini-server-type" class="form-input">
+                                                <option value="user" selected data-i18n="repo.typeUser">User</option>
+                                                <option value="server" data-i18n="repo.typeServer">Server</option>
+                                            </select></label>
+                                        <div class="rp-field"><label class="form-label" for="repo-mini-server-password" data-i18n="repo.miniServerPassword">PASSWORD</label>
+                                            <div class="rp-pw">
+                                                <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-password" class="form-input" value="admin"></form>
+                                                <button type="button" class="btn btn-ghost btn-sm btn-icon" data-i18n-tooltip="common.showPassword" data-toggle-password="#repo-mini-server-password">
+                                                    <svg class="ic ic-eye" data-icon="eye" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                                                </button>
+                                            </div></div>
+                                        <div class="rp-field" data-tooltip="Optional. When set, subscribers must enter this password to download from the repo. Leave blank for an open repo." data-i18n-tooltip="repo.miniServerDownloadPasswordHint"><label class="form-label" for="repo-mini-server-download-password" data-i18n="repo.miniServerDownloadPassword">DOWNLOAD PASSWORD</label>
+                                            <div class="rp-pw">
+                                                <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-download-password" class="form-input" value="" placeholder="none"></form>
+                                                <button type="button" class="btn btn-ghost btn-sm btn-icon" data-i18n-tooltip="common.showPassword" data-toggle-password="#repo-mini-server-download-password">
+                                                    <svg class="ic ic-eye" data-icon="eye" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                                                </button>
+                                            </div></div>
+                                    </div>
+                                    <div class="rp-checks">
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-mini-server-autostart"><span data-i18n="repo.autoStart">Lancer au démarrage</span></label>
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-mini-server-cloudflare" checked><span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel (Public)</span></label>
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-mini-server-upnp" checked><span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span></label>
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-mini-server-docker"><span data-i18n="repo.miniServerDocker">Docker Support</span></label>
+                                        <div id="repo-mini-server-docker-options" class="rp-sub-opt" style="display:none;">
+                                            <select id="repo-mini-server-docker-host" class="form-input select-sm" aria-label="Docker">
+                                                <option value="linux">Linux Host</option>
+                                                <option value="windows">Windows Host</option>
+                                            </select>
                                         </div>
                                     </div>
 
                                     <div style="display:flex; gap:10px; align-items:center;">
-                                        <button class="btn btn-primary" id="btn-generate-mini-server"
-                                            style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(59,130,246,0.25);">
+                                        <button class="btn btn-primary" id="btn-generate-mini-server">
                                             <svg class="ic ic-add" data-icon="add" width="16" height="16" viewBox="0 0 24 24" style="margin-right:8px" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                                             <span data-i18n="repo.miniServerGenerate">GÉNÉRER LE SERVEUR</span>
                                         </button>
@@ -2217,40 +2046,29 @@
                                     </h3>
                                 </div>
                                 <div class="repo-card-body">
-                                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;"
+                                    <p class="rp-lede"
                                         data-i18n="repo.syncDesc">...</p>
 
                                     <div class="form-group" style="margin-bottom:4px;">
                                         <label class="form-label" style="margin-bottom:4px;"
                                             data-i18n="repo.url">...</label>
-                                        <div class="path-picker">
+                                        <div class="path-picker rp-url-row">
                                             <input type="text" class="form-input" id="repo-sync-url"
                                                 data-i18n-placeholder="repo.urlPlaceholder" />
-                                            <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
-                                                data-i18n="repo.fetchBtn"
-                                                style="padding:0 20px; font-weight:600; font-size:13px; letter-spacing:0.5px; border-radius:6px; height:32px;">FETCH</button>
-                                            <button class="btn btn-secondary btn-sm" id="btn-browse-repos" data-i18n-tooltip="repo.browserTitle"
-                                                style="padding:0; width:32px; height:32px; font-weight:600; background:rgba(188,116,255,0.12); color:var(--bmm-purple); border:1px solid rgba(188,116,255,0.25); border-radius:6px; transition:all 0.2s ease; display:flex; align-items:center; justify-content:center;">
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                                    stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                                    <circle cx="12" cy="12" r="10"></circle>
-                                                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                                                    <path
-                                                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
-                                                    </path>
-                                                </svg>
+                                            <button class="btn btn-primary btn-sm rp-fetch" id="btn-fetch-repo-info"
+                                                data-i18n="repo.fetchBtn">FETCH</button>
+                                            <button type="button" class="btn btn-secondary btn-sm rp-icon-btn" id="btn-browse-repos" data-i18n-tooltip="repo.browserTitle">
+                                                <svg class="ic ic-globe" data-icon="globe" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                                             </button>
-                                            <button class="btn btn-secondary btn-sm" id="btn-repo-history" data-i18n-tooltip="repo.historyTitle"
-                                                style="padding:0; width:32px; height:32px; font-weight:600; background:rgba(251,146,60,0.12); color:var(--bmm-warning); border:1px solid rgba(251,146,60,0.25); border-radius:6px; transition:all 0.2s ease; display:flex; align-items:center; justify-content:center;">
-                                                <svg class="ic ic-clock" data-icon="clock" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                                            <button type="button" class="btn btn-secondary btn-sm rp-icon-btn" id="btn-repo-history" data-i18n-tooltip="repo.historyTitle">
+                                                <svg class="ic ic-history" data-icon="history" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                                             </button>
-                                            <button class="btn btn-secondary btn-sm" id="btn-check-mod-updates"
-                                                data-i18n-tooltip="repo.checkUpdatesBtn" data-tooltip="Check for mod updates" aria-label="Check for mod updates"
-                                                style="padding:0; width:32px; height:32px; font-weight:600; background:rgba(46,204,113,0.12); color:var(--bmm-success); border:1px solid rgba(46,204,113,0.25); border-radius:6px; transition:all 0.2s ease; display:flex; align-items:center; justify-content:center;">
+                                            <button type="button" class="btn btn-secondary btn-sm rp-icon-btn" id="btn-check-mod-updates"
+                                                data-i18n-tooltip="repo.checkUpdatesBtn" data-tooltip="Check for mod updates" aria-label="Check for mod updates">
                                                 <svg class="ic ic-refresh" data-icon="refresh" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                                             </button>
                                         </div>
-                                        <span id="mod-updates-hint" style="display:block;font-size:11px;color:var(--text-muted);margin-top:6px;"></span>
+                                        <span id="mod-updates-hint" class="rp-hint-t"></span>
 
                                         <!-- Download password, offered UP FRONT rather than only via the 401 prompt.
                                              The prompt still exists for the surprise case; this is for the user who
@@ -2270,8 +2088,7 @@
                                             <form style="display:contents" autocomplete="off" data-no-submit="1"><input
                                                 type="password" class="form-input" id="repo-sync-password"
                                                 autocomplete="new-password"
-                                                data-i18n-placeholder="repo.syncPassPlaceholder"
-                                                style="height:32px;font-size:12px;" /></form>
+                                                data-i18n-placeholder="repo.syncPassPlaceholder" /></form>
                                         </div>
 
                                         <!-- Private key, the sibling of the password above.
@@ -2290,14 +2107,11 @@
                                                  keyring from Settings; MANAGE goes there rather than
                                                  opening a second copy of it. -->
                                             <div class="path-picker">
-                                                <select class="form-input" id="repo-sync-key-sel"
-                                                    style="height:32px;font-size:12px;"></select>
+                                                <select class="form-input" id="repo-sync-key-sel"></select>
                                                 <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-manage"
-                                                    data-i18n="repo.syncKeyManage"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Manage…</button>
+                                                    data-i18n="repo.syncKeyManage">Manage…</button>
                                             </div>
-                                            <span style="display:block;font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.5;"
-                                                data-i18n="repo.syncKeyHint">...</span>
+                                            <span class="rp-hint-t" data-i18n="repo.syncKeyHint">...</span>
                                         </div>
 
                                         <!-- Which SSH server an `ssh://` source connects to.
@@ -2306,61 +2120,41 @@
                                              host, a port, a key and a folder — two would drift, and the one you edited
                                              would not be the one that connects. Only shown for an ssh:// source. -->
                                         <div id="repo-sync-ssh-row" style="display:none;margin-top:8px;">
-                                            <label class="form-label" style="margin-bottom:4px;font-size:11px;"
+                                            <label class="form-label" for="repo-sync-ssh-target"
                                                 data-i18n="repo.syncSshTarget">SSH server</label>
                                             <div class="path-picker">
-                                                <select class="form-input" id="repo-sync-ssh-target"
-                                                    style="height:32px;font-size:12px;"></select>
+                                                <select class="form-input" id="repo-sync-ssh-target"></select>
                                                 <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-ssh-config"
-                                                    data-i18n="repo.syncSshConfig"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Configure…</button>
+                                                    data-i18n="repo.syncSshConfig">Configure…</button>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div id="repo-sync-info-card"
-                                        style="display:none;margin-top:12px;background:var(--bmm-s03);border-radius:8px;padding:12px;border:1px solid var(--bmm-s06);">
-                                        <div
-                                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                            <span id="repo-sync-author-badge"
-                                                style="font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;"></span>
-                                            <div style="display:flex; align-items:center; gap:8px;">
-                                                <span id="repo-sync-game-badge"
-                                                    style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
-                                                <button id="btn-clear-fetched-repo" data-i18n-tooltip="common.clear"
-                                                    style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;background:transparent;border:none;border-radius:4px;cursor:pointer;color:var(--text-secondary);opacity:0.65;flex-shrink:0;transition:opacity 0.15s,color 0.15s;" data-hover="opacity:1;color:var(--text-primary)" data-hover-out="opacity:0.65;color:var(--text-secondary)">
-                                                    <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                </button>
-                                            </div>
+                                    <div id="repo-sync-info-card" class="rp-joined" style="display:none;">
+                                        <div class="rp-joined-top">
+                                            <span id="repo-sync-author-badge" class="rp-sig-chip"></span>
+                                            <span id="repo-sync-game-badge" class="rp-joined-game"></span>
+                                            <button type="button" id="btn-clear-fetched-repo" class="btn btn-ghost btn-sm btn-icon rp-joined-x" data-i18n-tooltip="common.clear">
+                                                <svg class="ic ic-close" data-icon="close" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                            </button>
                                         </div>
-                                        <div style="font-size:14px;font-weight:700;margin-bottom:2px;"
-                                            id="repo-sync-name-display">
-                                        </div>
-                                        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"
-                                            id="repo-sync-author-display"></div>
-                                        <div style="font-size:12px;color:var(--text-muted);line-height:1.5;"
-                                            id="repo-sync-desc-display"></div>
+                                        <div class="rp-joined-name" id="repo-sync-name-display"></div>
+                                        <div class="rp-joined-author" id="repo-sync-author-display"></div>
+                                        <div class="rp-joined-desc" id="repo-sync-desc-display"></div>
 
-                                        <div id="repo-sync-profiles-selection"
-                                            style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--bmm-s05); padding-top:12px;">
+                                        <div id="repo-sync-profiles-selection" class="rp-joined-picks">
                                             <!-- Selection logic will inject profiles here -->
                                         </div>
-                                        <div id="repo-sync-total-size"
-                                            style="font-size:11px; color:var(--text-muted); margin:10px 0; text-align:right; font-weight:600;">
-                                        </div>
+                                        <div id="repo-sync-total-size" class="rp-joined-total"></div>
 
-                                        <div id="repo-sync-options"
-                                            style="margin-top:15px; padding-top:12px; border-top:1px solid var(--bmm-s05);">
-                                            <label class="form-label"
-                                                style="font-size:11px; margin-bottom:8px; display:block; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;"
-                                                data-i18n="repo.syncOptions">Options de Synchronisation</label>
+                                        <div id="repo-sync-options" class="rp-joined-opts">
+                                            <div class="rp-sub-h" data-i18n="repo.syncOptions">Options de Synchronisation</div>
 
                                             <div style="display:flex; gap:12px; margin-bottom:10px;">
                                                 <div style="flex:1;">
                                                     <label class="form-label" style="font-size:11px; margin-bottom:4px;"
                                                         data-i18n="repo.syncMode">Mode de synchronisation</label>
-                                                    <select class="form-input" id="repo-sync-mode"
-                                                        style="font-size:12px; padding:6px; background:var(--bmm-s05);">
+                                                    <select class="form-input" id="repo-sync-mode">
                                                         <option value="missing" selected
                                                             data-i18n="repo.syncModeMissing">
                                                             Manquants ou Incorrects uniquement</option>
@@ -2374,8 +2168,7 @@
                                                         data-i18n="repo.downloadLimit">Limite Download (Ko/s)</label>
                                                     <input type="number" id="repo-sync-download-limit"
                                                         class="form-input" value="0" min="0" step="50"
-                                                        data-i18n-placeholder="repo.limitNone"
-                                                        style="font-size:12px; padding:6px; background:var(--bmm-s05); border:1px solid var(--bmm-s10);" />
+                                                        data-i18n-placeholder="repo.limitNone" />
                                                 </div>
                                             </div>
 
@@ -2438,8 +2231,7 @@
                                         <button class="btn btn-secondary btn-sm" id="btn-discover-server"
                                             style="font-size:11.5px; height:28px; padding:0 12px;"
                                             data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
-                                        <div id="discover-result"
-                                            style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px;"></div>
+                                        <div id="discover-result" class="rp-result" style="display:none;"></div>
                                     </div>
 
                                     <div id="repo-sync-paths-existing-hint" class="kit-callout kit-callout-info bmm-tip" data-tip-id="reposyncpaths" style="display:none;margin-top:10px;">
@@ -2448,10 +2240,7 @@
                                     </div>
 
                                     <div id="repo-sync-paths-section">
-                                        <hr
-                                            style="border:none;border-top:1px solid var(--bmm-s07);margin:14px 0;" />
-                                        <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin:8px 0 12px;text-transform:uppercase;"
-                                            data-i18n="repo.syncFolders">...</p>
+                                        <div class="rp-sub-h rp-sub-h--rule" data-i18n="repo.syncFolders">...</div>
 
                                         <div class="form-group" style="margin-bottom:10px;">
                                             <label class="form-label" style="margin-bottom:4px;"
@@ -2505,14 +2294,12 @@
                                         <div class="bmm-progress-head">
                                             <div style="display:flex;align-items:center;gap:8px">
                                                 <span id="repo-sync-status" data-i18n="common.loading">...</span>
-                                                <span id="repo-sync-paused-badge"
-                                                    style="display:none;background:rgba(245,158,11,0.2);color:var(--warning);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px">PAUSED</span>
+                                                <span id="repo-sync-paused-badge" class="rp-paused" style="display:none" data-i18n="repo.pausedBadge">PAUSED</span>
                                             </div>
                                             <span class="bmm-progress-pct" id="repo-sync-percent">0%</span>
                                         </div>
                                         <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-sync-progress-fill"></div></div>
-                                        <div id="repo-sync-details"
-                                            style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:6px;padding:6px 8px;word-break:break-all;">
+                                        <div id="repo-sync-details" class="rp-log">
                                         </div>
                                         <div style="display:flex;gap:8px;margin-top:10px">
                                             <button class="btn btn-secondary btn-sm" id="btn-pause-sync"
