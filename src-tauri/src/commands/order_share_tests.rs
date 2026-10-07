@@ -274,6 +274,7 @@ fn resolution_prefers_fingerprints_over_names() {
         name: None,
         game: None,
         created_at: String::new(),
+        notes: None,
         mods: vec![
             // Renamed on the other machine, same fingerprint.
             OrderEntry { name: "Alpha HD".into(), content_id: Some("cid-a".into()), ..Default::default() },
@@ -291,7 +292,7 @@ fn two_mods_with_one_name_need_the_version() {
     let mut l = lib();
     l.push(LibMod { id: "id-c2".into(), name: "Gamma".into(), version: "2.0".into(), ..Default::default() });
     let d = |v: &str| OrderDoc {
-        format: FORMAT.into(), version: 1, name: None, game: None, created_at: String::new(),
+        format: FORMAT.into(), version: 1, name: None, game: None, created_at: String::new(), notes: None,
         mods: vec![OrderEntry { name: "Gamma".into(), version: v.into(), ..Default::default() }],
     };
     assert_eq!(resolve(&d("2.0"), &l), vec![Some("id-c2".into())]);

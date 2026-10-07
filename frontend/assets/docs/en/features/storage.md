@@ -108,6 +108,35 @@ force and where it comes from; a greyed-out cell does not apply to its operation
     and **Hash** rows, for instance. A mod downloaded from a link is not paced yet. Details in
     [the governor page](doc-page:how-it-works/resources#what-each-column-acts-on).
 
+<a id="presets"></a>
+### Presets for this PC
+Above the table, **Presets for this PC** fills the whole table at once. BMM reads your drives
+(size, free space, SSD or hard disk, external or not, and which drive holds each profile's game,
+mods and backups), recommends one preset and says why. Choosing a card applies nothing: it shows
+every change, one line each, and **Apply** writes them. **Undo** puts back what the last apply
+replaced, for as long as BMM stays open.
+
+| Preset | Work intensity | Rules it writes | Space alerts |
+|---|---|---|---|
+| **Balanced** | Balanced | none | on, sized for your drives |
+| **Quiet** | Silent | none | on, sized for your drives |
+| **Performance / SSD** | Max | on each hard disk: backups at low priority | on, sized for your drives |
+| **Small SSD + big HDD** | Balanced | hard disk: 512 KiB steps, one backup at a time, backups and archives at low priority; SSD: installs and extraction in 4 MiB steps | on, sized for your drives |
+| **Watch the space** | Balanced | none | on, earlier (about 10 points more) |
+| **External drives** | Balanced | each USB or removable drive: 256 KiB steps, low priority, one backup at a time | on, sized for your drives |
+
+- **Sized for your drives**: the warning aims at about 30 GB free and the critical level at about
+  10 GB, on the smallest drive your profiles use (between 10 and 40 % for the warning). Under the
+  critical level BMM refuses to enable mods on that drive.
+- A preset that has nothing to act on (no hard disk for *Small SSD + big HDD*, no external drive
+  for *External drives*) is shown greyed out and cannot be applied.
+- **Speed caps are kept.** The cap of a disk (Disks & space, or the benchmark) stays as it is;
+  every other rule of the table is replaced, and the preview lists the ones that go.
+- If a drive is plugged in or a rule edited between the preview and **Apply**, BMM refuses and
+  asks you to look at the preview again.
+- There is no "move everything to another disk" preset: a rule paces the work on a disk, it does
+  not choose the disk. Where the game, the mods and the backups live is set in each profile.
+
 !!! note "Graphics moved"
 
     Which graphics card draws BMM's window is an app-wide setting: **Settings → Graphics &

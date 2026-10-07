@@ -92,9 +92,10 @@ describe('load-order wiring', () => {
     const invoked = [...view.matchAll(/invoke\('([a-z_]+)'/g)].map((m) => m[1]);
     assert.ok(invoked.length >= 4, 'read too few invokes to be right');
     for (const name of invoked) {
-      // Two modules: the rule and the disk (mod_order), the bulk placement and the shared
-      // document (order_share).
-      assert.match(main, new RegExp(`commands::(?:mod_order|order_share)::${name}\\b`), `${name} is not in the invoke handler`);
+      // Three modules: the rule and the disk (mod_order), the bulk placement and the shared
+      // document (order_share), and the saved lists, whose count the Lists button shows
+      // (order_lists).
+      assert.match(main, new RegExp(`commands::(?:mod_order|order_share|order_lists)::${name}\\b`), `${name} is not in the invoke handler`);
     }
   });
 

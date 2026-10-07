@@ -318,6 +318,11 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                 // `:::schedule` here drew a card with a blank heading.
                 const { hydrateMdLite } = await import('../../docs/md-hydrate.js');
                 hydrateMdLite(view);
+                // Diagrams survive the sanitiser (md-safe.ts `stashDiagrams`) and are drawn here
+                // in mermaid's STRICT mode: a plugin's README is somebody else's text (no click
+                // callbacks, labels sanitised by mermaid).
+                const { drawDiagrams } = await import('../../docs/md-mermaid.js');
+                void drawDiagrams(view, { strict: true }).catch(() => 0);
             } else {
                 // Everything else stays TEXT, escaped. A .json or a .ps1 rendered as markdown
                 // would silently eat its own punctuation, and a script is the one file where

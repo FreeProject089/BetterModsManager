@@ -890,9 +890,22 @@ export function renderDocMarkdown(src: string, opts: { trusted?: boolean } = {})
   // `withGlobalTauri` is on. That is the whole backend behind an `onerror`.
   const trusted = opts.trusted === true;
   if (trusted && /^\s*</.test(src)) return src;   // our own HTML article bodies
+  const html = renderDocMarkup(src);
+  return trusted ? html : sanitizeDocHtml(html);
+}
+
+/**
+ * The renderer's own markup for `src`: every block rendered, NO raw-HTML passthrough (a source
+ * starting with `<` is rendered as Markdown like any other) and no sanitiser yet.
+ *
+ * For a caller that has its own pass to run between the two — the order lists' imported notes
+ * take every network fetch out (order-notes-model.ts `offlineMarkup`) and THEN sanitise. Its
+ * output is md-lite's, so every attribute is double-quoted and every `<` in text is escaped.
+ */
+export function renderDocMarkup(src: string): string {
+  if (!src) return '';
   // Emoji LAST, on the rendered output: a shortcode inside a directive's attributes is not a
   // shortcode, and by here every directive has been consumed.
   const prepared = tableOfContents(promoteLeaves(markMath(src.replace(/\r\n?/g, '\n'))));
-  const html = replaceEmoji(renderBlocks(prepared.split('\n')));
-  return trusted ? html : sanitizeDocHtml(html);
+  return replaceEmoji(renderBlocks(prepared.split('\n')));
 }

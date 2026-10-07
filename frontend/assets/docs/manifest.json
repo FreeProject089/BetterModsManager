@@ -141,7 +141,7 @@
         "en": "The Library is where every mod you own lives — installed or not, from any source.",
         "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
       },
-      "words": 737,
+      "words": 956,
       "diagrams": 0,
       "fr": true
     },
@@ -396,7 +396,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 1568,
+      "words": 1828,
       "diagrams": 0,
       "fr": true
     },
@@ -516,7 +516,7 @@
         "en": "A profile is a small record — a name, three folders, and an ordered list of which mods are on. It stores no mod files itself.",
         "fr": "Un profil est un petit enregistrement — un nom, trois dossiers, et une liste ordonnée des mods activés. Il ne stocke aucun fichier de mod."
       },
-      "words": 784,
+      "words": 1255,
       "diagrams": 3,
       "fr": true
     },
@@ -576,7 +576,7 @@
         "en": "Two active mods that ship the same file do not merge: BMM copies files, so one of them is what the game reads.",
         "fr": "Deux mods actifs qui fournissent le même fichier ne fusionnent pas : BMM copie des fichiers, donc l'un des deux est celui que le jeu lit."
       },
-      "words": 1616,
+      "words": 1937,
       "diagrams": 1,
       "fr": true
     },
@@ -966,7 +966,7 @@
         "en": "BMM is built by the Better project and its contributors. The in-app Credits screen is the authoritative list of people — it's generated from the project's own…",
         "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
       },
-      "words": 472,
+      "words": 671,
       "diagrams": 0,
       "fr": true
     }

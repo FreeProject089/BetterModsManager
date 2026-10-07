@@ -119,6 +119,37 @@ dit la valeur en vigueur et d'où elle vient ; une case grisée ne s'applique pa
     depuis un lien n'est pas encore cadencé. Les détails sont sur
     [la page du gouverneur](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
 
+<a id="presets"></a>
+### Préréglages pour ce PC
+Au-dessus du tableau, **Préréglages pour ce PC** remplit tout le tableau d'un coup. BMM lit tes
+disques (taille, espace libre, SSD ou disque dur, externe ou non, et quel disque porte le jeu, les
+mods et les sauvegardes de chaque profil), recommande un préréglage et dit pourquoi. Choisir une
+carte n'applique rien : elle montre chaque changement, une ligne chacun, et **Appliquer** les écrit.
+**Annuler** remet ce que le dernier changement a remplacé, tant que BMM reste ouvert.
+
+| Préréglage | Intensité de travail | Règles écrites | Alertes d'espace |
+|---|---|---|---|
+| **Équilibré** | Équilibré | aucune | activées, à la taille de tes disques |
+| **Discret** | Silencieux | aucune | activées, à la taille de tes disques |
+| **Performance / SSD** | Max | sur chaque disque dur : sauvegardes en priorité basse | activées, à la taille de tes disques |
+| **Petit SSD + grand HDD** | Équilibré | disque dur : pas de 512 Kio, une sauvegarde à la fois, sauvegardes et archives en priorité basse ; SSD : installations et extraction par pas de 4 Mio | activées, à la taille de tes disques |
+| **Économe en espace** | Équilibré | aucune | activées, plus tôt (environ 10 points de plus) |
+| **Disques externes** | Équilibré | chaque disque USB ou amovible : pas de 256 Kio, priorité basse, une sauvegarde à la fois | activées, à la taille de tes disques |
+
+- **À la taille de tes disques** : l'avertissement vise environ 30 Go libres et le niveau critique
+  environ 10 Go, sur le plus petit disque utilisé par tes profils (entre 10 et 40 % pour
+  l'avertissement). Sous le niveau critique, BMM refuse d'activer des mods sur ce disque.
+- Un préréglage qui n'a rien à régler (pas de disque dur pour *Petit SSD + grand HDD*, pas de disque
+  externe pour *Disques externes*) est grisé et ne peut pas être appliqué.
+- **Les plafonds de vitesse sont gardés.** Le plafond d'un disque (Disques et espace, ou le
+  benchmark) reste tel quel ; toutes les autres règles du tableau sont remplacées, et l'aperçu liste
+  celles qui partent.
+- Si un disque est branché ou une règle modifiée entre l'aperçu et **Appliquer**, BMM refuse et te
+  demande de revoir l'aperçu.
+- Il n'y a pas de préréglage « tout mettre sur un autre disque » : une règle cadence le travail sur
+  un disque, elle ne choisit pas le disque. L'endroit où vivent le jeu, les mods et les sauvegardes
+  se règle dans chaque profil.
+
 !!! note "Les graphismes ont déménagé"
 
     Quelle carte graphique dessine la fenêtre de BMM est un réglage de toute l'application :

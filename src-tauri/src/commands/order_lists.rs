@@ -28,26 +28,70 @@
 //! the list keeps every identifier the mod has today. A shared document goes through the same
 //! resolver with local ids UNtrusted, and its entries are saved under local identities only
 //! when they resolved; the others keep the names they came with, without a foreign local id.
+//!
+//! ── Notes and sharing ──────────────────────────────────────────────────────────────────────
+//!
+//! A list's notes are B.MD source: line breaks are kept (they ARE the markup), other control
+//! characters dropped, at most `MAX_NOTES` characters, refused rather than cut beyond that.
+//! A list that came from elsewhere is flagged `imported` for good, and the frontend renders its
+//! notes on the untrusted path.
+//!
+//! A list travels two ways. The one-line code (`order_share`'s, notes included) is for a chat
+//! window, so it has a ceiling (`MAX_CODE`): past it the export offers no code and says so.
+//! The `.bmmorder` file (`ListFile`) carries the whole list, notes included, whatever its size;
+//! it is versioned and read strictly (`parse_file`): unknown fields, a newer version, oversized
+//! or control-character fields and an empty list are refused, never trimmed into shape.
 
 use crate::commands::mod_order;
 use crate::commands::order_share::{self, LibMod, MatchKind, OrderEntry, PlaceMode, Resolution};
 use crate::models::order_list::OrderList;
 use crate::state::AppState;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tauri::{State, Window};
 
 pub const MAX_LISTS: usize = 500;
 pub const MAX_ENTRIES: usize = 10_000;
 const MAX_NAME: usize = 120;
-const MAX_DESCRIPTION: usize = 2_000;
+pub const MAX_NOTES: usize = order_share::MAX_NOTES;
 const MAX_ENTRY_NAME: usize = 300;
 const MAX_FIELD: usize = 256;
+/// The longest code the export hands out, in characters. A code is pasted into chats and forum
+/// posts; past this it stops being "a line" and the file is the way to share.
+pub const MAX_CODE: usize = 8_000;
+/// The `.bmmorder` file: its format name and the newest version this build reads.
+pub const FILE_FORMAT: &str = "bmm-order-list";
+pub const FILE_VERSION: u32 = 1;
+pub const FILE_EXT: &str = "bmmorder";
+/// A list file larger than this is not a list (10 000 entries and full notes fit well inside).
+pub const MAX_FILE: usize = 4 * 1024 * 1024;
+const MAX_STAMP: usize = 64;
 
 /// `s` without control characters, trimmed, at most `max` characters.
 fn clean(s: &str, max: usize) -> String {
     let t: String = s.chars().filter(|c| !c.is_control()).collect();
     t.trim().chars().take(max).collect::<String>().trim().to_string()
+}
+
+/// Notes as they may be stored: B.MD source, so line breaks (`\r\n` and `\r` become `\n`) and
+/// tabs stay; every other control character goes; blank lines around it are trimmed. Longer than
+/// `MAX_NOTES` characters is refused, not cut: half a table is worse than an error.
+///
+/// The cause of "the notes show raw once saved": the old cleaner was the single-line one, which
+/// dropped every `\n` as a control character, so a saved list came back as one long paragraph
+/// of Markdown syntax.
+pub fn clean_notes(s: &str) -> Result<String, String> {
+    let t: String = s
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .chars()
+        .filter(|c| *c == '\n' || *c == '\t' || !c.is_control())
+        .collect();
+    let t = t.trim_end().trim_start_matches(|c: char| c == '\n' || c == ' ' || c == '\t');
+    if t.chars().count() > MAX_NOTES {
+        return Err("orderList.errNotesTooLong".into());
+    }
+    Ok(t.to_string())
 }
 
 fn clean_opt(s: &Option<String>) -> Option<String> {
@@ -122,7 +166,8 @@ pub fn sanitize(
     Ok(OrderList {
         id: existing.map(|l| l.id.clone()).unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
         name,
-        description: clean(&input.description, MAX_DESCRIPTION),
+        description: clean_notes(&input.description)?,
+        imported: input.imported || existing.map_or(false, |l| l.imported),
         game: clean_opt(&input.game),
         profile_ids,
         entries: clean_entries(&input.entries, lib)?,
@@ -402,6 +447,8 @@ pub fn order_list_plan(state: State<'_, AppState>, entries: Vec<OrderEntry>, pro
 pub struct ImportedList {
     pub name: Option<String>,
     pub game: Option<String>,
+    /// The notes it came with (empty when none), cleaned like a saved list's.
+    pub notes: String,
     pub entries: Vec<OrderEntry>,
     pub matches: Vec<Resolution>,
 }
@@ -420,33 +467,232 @@ pub fn imported(doc: &order_share::OrderDoc, lib: &[LibMod]) -> ImportedList {
             None => OrderEntry { id: None, ..e.clone() },
         })
         .collect();
-    ImportedList { name: doc.name.clone(), game: doc.game.clone(), entries, matches }
+    // Every import path has already refused notes over the cap; cleaning cannot fail here.
+    let notes = doc.notes.as_deref().map(clean_notes).and_then(Result::ok).unwrap_or_default();
+    ImportedList {
+        name: doc.name.as_deref().map(|n| clean(n, MAX_NAME)).filter(|n| !n.is_empty()),
+        game: clean_opt(&doc.game),
+        notes,
+        entries,
+        matches,
+    }
+}
+
+// ── The .bmmorder file ─────────────────────────────────────────────────────────────────────
+
+/// One entry of a list file. Same fields as `OrderEntry`, read strictly.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct FileEntry {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_mod_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_repo: Option<String>,
+    /// The writer's local id: a hint for a round trip on the same machine, never trusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+}
+
+/// A whole list as a file: what the code cannot carry when it is long, notes included. No
+/// profile ids (they name profiles of the machine that wrote it) and no list id.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ListFile {
+    pub format: String,
+    pub version: u32,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub created_at: String,
+    pub entries: Vec<FileEntry>,
+}
+
+/// The list as a `.bmmorder` file (pretty JSON).
+pub fn write_file(list: &OrderList, now: &str) -> String {
+    let f = ListFile {
+        format: FILE_FORMAT.into(),
+        version: FILE_VERSION,
+        name: list.name.clone(),
+        game: list.game.clone(),
+        notes: list.description.clone(),
+        created_at: now.to_string(),
+        entries: list
+            .entries
+            .iter()
+            .map(|e| FileEntry {
+                name: e.name.clone(),
+                version: e.version.clone(),
+                content_id: e.content_id.clone(),
+                repo_mod_id: e.repo_mod_id.clone(),
+                source_repo: e.source_repo.clone(),
+                id: e.id.clone(),
+            })
+            .collect(),
+    };
+    serde_json::to_string_pretty(&f).unwrap_or_default()
+}
+
+/// A single-line field of a file: no control character, at most `max` characters.
+fn field_ok(s: &str, max: usize) -> bool {
+    !s.chars().any(char::is_control) && s.chars().count() <= max
+}
+
+fn opt_ok(s: &Option<String>, max: usize) -> bool {
+    s.as_deref().map_or(true, |v| field_ok(v, max))
+}
+
+/// Read a `.bmmorder` file, strictly. Refused (never trimmed into shape): larger than
+/// `MAX_FILE`, not this format, a version this build does not know, an unknown field, a field
+/// over its size or holding a control character (notes may hold line breaks and tabs), notes
+/// over `MAX_NOTES`, no entry, too many, or an entry that names nothing.
+pub fn parse_file(text: &str) -> Result<order_share::OrderDoc, String> {
+    if text.len() > MAX_FILE {
+        return Err("order.errTooLarge".into());
+    }
+    let t = text.trim_start_matches('\u{feff}').trim();
+    let v: serde_json::Value = serde_json::from_str(t).map_err(|_| "orderList.errFile".to_string())?;
+    if v.get("format").and_then(|f| f.as_str()) != Some(FILE_FORMAT) {
+        return Err("orderList.errFile".into());
+    }
+    // The version before the shape: a newer file may carry fields this build refuses, and
+    // "made by a newer BMM" is the message that tells the reader what to do.
+    match v.get("version").and_then(|x| x.as_u64()) {
+        Some(n) if n >= 1 && n <= FILE_VERSION as u64 => {}
+        Some(_) => return Err("order.errVersion".into()),
+        None => return Err("orderList.errFile".into()),
+    }
+    let f: ListFile = serde_json::from_value(v).map_err(|_| "orderList.errFile".to_string())?;
+    let name = f.name.trim();
+    if name.is_empty() || !field_ok(name, MAX_NAME) || !opt_ok(&f.game, MAX_FIELD) || !field_ok(&f.created_at, MAX_STAMP) {
+        return Err("orderList.errFile".into());
+    }
+    if f.notes.chars().any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+        return Err("orderList.errFile".into());
+    }
+    if f.notes.chars().count() > MAX_NOTES {
+        return Err("orderList.errNotesTooLong".into());
+    }
+    if f.entries.is_empty() {
+        return Err("order.errEmpty".into());
+    }
+    if f.entries.len() > MAX_ENTRIES {
+        return Err("order.errTooLarge".into());
+    }
+    let mut mods = Vec::with_capacity(f.entries.len());
+    for e in f.entries {
+        let some = |o: &Option<String>| o.as_deref().map_or(false, |x| !x.trim().is_empty());
+        let named = !e.name.trim().is_empty() || some(&e.content_id) || some(&e.repo_mod_id);
+        let sized = field_ok(&e.name, MAX_ENTRY_NAME)
+            && field_ok(&e.version, MAX_FIELD)
+            && [&e.content_id, &e.repo_mod_id, &e.source_repo, &e.id].iter().all(|o| opt_ok(o, MAX_FIELD));
+        if !named || !sized {
+            return Err("orderList.errFile".into());
+        }
+        mods.push(OrderEntry {
+            name: e.name,
+            version: e.version,
+            content_id: e.content_id,
+            repo_mod_id: e.repo_mod_id,
+            source_repo: e.source_repo,
+            id: e.id,
+        });
+    }
+    Ok(order_share::OrderDoc {
+        format: order_share::FORMAT.into(),
+        version: order_share::DOC_VERSION,
+        name: Some(name.to_string()),
+        game: f.game,
+        created_at: f.created_at,
+        notes: Some(f.notes).filter(|n| !n.trim().is_empty()),
+        mods,
+    })
+}
+
+/// Anything the import box may receive: a list file (read strictly), or whatever
+/// `order_share::parse_text` reads (a code, a link, an order's JSON, a list of names).
+pub fn parse_any(text: &str) -> Result<order_share::OrderDoc, String> {
+    let t = text.trim_start_matches('\u{feff}').trim_start();
+    if t.starts_with('{') && text.len() <= MAX_FILE {
+        let is_file = serde_json::from_str::<serde_json::Value>(t)
+            .ok()
+            .and_then(|v| v.get("format").and_then(|f| f.as_str()).map(|f| f == FILE_FORMAT))
+            .unwrap_or(false);
+        if is_file {
+            return parse_file(text);
+        }
+    }
+    order_share::parse_text(text)
 }
 
 #[tauri::command]
 pub fn order_list_parse(state: State<'_, AppState>, text: String) -> Result<ImportedList, String> {
-    let doc = order_share::parse_text(&text)?;
+    let doc = parse_any(&text)?;
     Ok(imported(&doc, &lib_mods(&state)))
 }
 
-/// A saved list as a code, a link, plain text and the document (`order_share`'s formats).
-#[tauri::command]
-pub fn order_list_export(state: State<'_, AppState>, id: String) -> Result<order_share::OrderExport, String> {
-    let list = find_list(&state, &id)?;
+/// What sharing a list offers: the code when it is short enough, plain text, and the file.
+#[derive(Debug, Serialize)]
+pub struct ListExport {
+    /// The one-line code (notes included), or None when it would be longer than `code_max`.
+    pub code: Option<String>,
+    /// How long the code is (or would be), in characters.
+    pub code_len: usize,
+    pub code_max: usize,
+    /// One mod name per line: what a person reads.
+    pub text: String,
+    /// The `.bmmorder` file, the whole list.
+    pub file: String,
+    pub file_name: String,
+    pub notes_len: usize,
+}
+
+/// A file name made of the list's name: letters, digits, `-` and `_`, never empty.
+pub fn file_name_for(name: &str) -> String {
+    let dashed: String = name.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '-' }).collect();
+    let mut base = dashed.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
+    base = base.chars().take(60).collect::<String>().trim_end_matches('-').to_string();
+    if base.is_empty() {
+        base = "order-list".into();
+    }
+    format!("{}.{}", base, FILE_EXT)
+}
+
+pub fn export_list(list: &OrderList, now: &str) -> ListExport {
     let doc = order_share::OrderDoc {
         format: order_share::FORMAT.into(),
-        version: 1,
+        version: order_share::DOC_VERSION,
         name: Some(list.name.clone()),
         game: list.game.clone(),
-        created_at: chrono::Utc::now().to_rfc3339(),
+        created_at: now.to_string(),
+        notes: Some(list.description.clone()).filter(|n| !n.trim().is_empty()),
         mods: list.entries.clone(),
     };
-    Ok(order_share::OrderExport {
-        code: order_share::encode_code(&doc),
-        link: order_share::encode_link(&doc),
+    let code = order_share::encode_code(&doc);
+    let code_len = code.chars().count();
+    ListExport {
+        code: if code_len <= MAX_CODE { Some(code) } else { None },
+        code_len,
+        code_max: MAX_CODE,
         text: order_share::encode_text(&doc),
-        doc,
-    })
+        file: write_file(list, now),
+        file_name: file_name_for(&list.name),
+        notes_len: list.description.chars().count(),
+    }
+}
+
+/// A saved list, to share: the code (when short enough), plain text and the `.bmmorder` file.
+#[tauri::command]
+pub fn order_list_export(state: State<'_, AppState>, id: String) -> Result<ListExport, String> {
+    let list = find_list(&state, &id)?;
+    Ok(export_list(&list, &chrono::Utc::now().to_rfc3339()))
 }
 
 #[derive(Debug, Serialize)]
@@ -523,8 +769,37 @@ pub struct ActivateReport {
 ///
 /// `enable_mod` acts on the active profile, which is why this one does too: `profile_id`, when
 /// given, must be it.
+///
+/// `cancel_scope`: the batch's own cancel token (the frontend's activation job id). The enables
+/// run inside it, so `cancel_mod_ops(scope)` stops this batch and nothing else, and no other
+/// batch's clear can lower this one's Stop. Without it, the legacy global flag (reset here).
 #[tauri::command]
 pub async fn order_list_activate(
+    window: Window,
+    state: State<'_, AppState>,
+    id: String,
+    exclusive: bool,
+    profile_id: Option<String>,
+    bypass_sha: Option<bool>,
+    cancel_scope: Option<String>,
+) -> Result<ActivateReport, String> {
+    match cancel_scope {
+        Some(sc) => {
+            if !crate::fs_utils::valid_scope_id(&sc) {
+                return Err("invalid cancel scope".into());
+            }
+            crate::fs_utils::in_cancel_scope(Some(&sc), activate_in(window, state, id, exclusive, profile_id, bypass_sha)).await
+        }
+        None => {
+            crate::fs_utils::reset_mod_op_cancel();
+            activate_in(window, state, id, exclusive, profile_id, bypass_sha).await
+        }
+    }
+}
+
+/// The batch, inside whatever cancel scope is current. One plan, the enables in list order
+/// (dependencies resolved by `enable_mod`), then ONE order commit for everything that is on.
+async fn activate_in(
     window: Window,
     state: State<'_, AppState>,
     id: String,
@@ -540,7 +815,6 @@ pub async fn order_list_activate(
     if profile_id.as_ref().map_or(false, |p| p != &active_pid) {
         return Err("orderList.errNotActive".into());
     }
-    crate::fs_utils::reset_mod_op_cancel();
     let (pid, current, lib) = library_for(&state, Some(&active_pid))?;
     let p = plan(&pid, &current, &list.entries, &lib, true);
     let mut rep = ActivateReport {
@@ -573,7 +847,7 @@ pub async fn order_list_activate(
             rep.enabled += 1;
             continue;
         }
-        match crate::commands::mods::enable_mod(window.clone(), state.clone(), m.id.clone(), bypass_sha).await {
+        match crate::commands::mods::enable_mod_in(window.clone(), state.clone(), m.id.clone(), bypass_sha).await {
             Ok(_) => rep.enabled += 1,
             Err(e) => rep.failed.push(Failed { id: m.id.clone(), name: m.name.clone(), error: e }),
         }

@@ -135,8 +135,8 @@
   },
   "src/commands/mods.rs": {
     "thread::spawn": {
-      "count": 2,
-      "why": "G3b: recalculate_mod_sha is governed (process_single_mod_hashing takes one Hash ticket per mod, checkpoints between files); populate_sha_queue is exempt: it only reads the in-memory state and fills the queue, no disk I/O. (The SHA and content-id background loops use thread::Builder: one Hash / Maintenance ticket per mod, never one for the loop's life)"
+      "count": 3,
+      "why": "G3b: recalculate_mod_sha is governed (process_single_mod_hashing takes one Hash ticket per mod, checkpoints between files); populate_sha_queue is exempt: it only reads the in-memory state and fills the queue, no disk I/O. (The SHA and content-id background loops use thread::Builder: one Hash / Maintenance ticket per mod, never one for the loop's life); exempt 1: run_mod_io_worker_with_mode drains the mod worker's stdout progress pipe (reads lines, stores a counter; no disk I/O, ends when the worker exits)"
     },
     "spawn_blocking": {
       "count": 12,
@@ -251,6 +251,10 @@
     "update_mmap": {
       "count": 1,
       "why": "governed (G3b): the BLAKE3 primitive itself (compute_file_hash, one file, one pass); bulk callers run it inside pool(Hash) under a Hash ticket, single-file callers (verify.rs hash_file, modpack) hold their own ticket"
+    },
+    "thread::spawn": {
+      "count": 1,
+      "why": "exempt: run_mod_worker's progress reporter, inside the worker process: reads the governor queue snapshot every 100 ms and prints the byte count for the parent; no disk I/O, stops when the op ends"
     }
   },
   "src/main.rs": {
@@ -295,8 +299,8 @@
   },
   "src/commands/ai_assist.rs": {
     "spawn_blocking": {
-      "count": 5,
-      "why": "one-shot, user-clicked Laya request each: the feedback dialog's report assist (one inference over a 1500-character excerpt), the crash manager's digests (reads at most 60 managed report zips, 64 KB log tail + 16 KB stack each) and labels (at most 12 inferences, cached), « Expliquer » (one bounded generator request), and the debug panel's tester (one inference); off the async runtime, not bulk IO"
+      "count": 6,
+      "why": "one-shot, user-clicked Laya request each: the feedback dialog's report assist (one inference over a 1500-character excerpt), the crash manager's digests (reads at most 60 managed report zips, 64 KB log tail + 16 KB stack each) and labels (at most 12 inferences, cached), « Expliquer » (one bounded generator request), and the debug panel's tester (one inference); off the async runtime, not bulk IO; the debug panel's « Vérifier l'intégrité » is governed: it hashes the model folder (~350 MB) under one Hash ticket, checkpoint before it starts"
     }
   },
   "src/commands/ai.rs": {
@@ -339,6 +343,22 @@
     "spawn_blocking": {
       "count": 1,
       "why": "one scheduled-task Laya classification: one capped inference behind a single global slot, 30 per minute for all tasks, a 30 s timeout and the AI guard (refused in game mode)"
+    }
+  },
+  "src/commands/mod_op_progress_tests.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "test only: concurrent data.json saves"
+    },
+    "fs::copy": {
+      "count": 2,
+      "why": "test only: the save benchmark reproduces the old and new .bak roll"
+    }
+  },
+  "src/commands/storage_presets.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "exempt: the Storage Manager presets read the drive list (one sysinfo enumeration, one read-only IOCTL per drive letter for the bus and the seek penalty) and the profiles, then build the plans in memory; apply writes data.json once. No bulk I/O; off the main thread because a spinning-up disk or a dead network drive answers in seconds"
     }
   }
 }

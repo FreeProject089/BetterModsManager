@@ -55,6 +55,7 @@ export const LEARN_MORE: Readonly<Record<string, LearnTarget>> = Object.freeze({
     'resources':          { article: 'storage-manager', page: 'how-it-works/resources' },
     // The Storage Manager's tabs, each to its own section (agent-bmm-storage)
     'storage-space':      { article: 'storage-manager', page: 'features/storage', hash: 'tabs' },
+    'storage-presets':    { article: 'storage-manager', page: 'features/storage', hash: 'presets' },
     // Graphics & display is an app-wide Settings card now; the old key stays as an alias.
     'graphics':           { article: 'what-is-bmm', page: 'features/settings', hash: 'graphics' },
     'storage-graphics':   { article: 'what-is-bmm', page: 'features/settings', hash: 'graphics' },

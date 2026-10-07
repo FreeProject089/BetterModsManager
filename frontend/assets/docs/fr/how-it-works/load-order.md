@@ -35,6 +35,11 @@ Ouvre l'ordre depuis une carte de profil (l'icône de liste), depuis la fenêtre
 (**Ouvrir l'ordre d'activation**) ou depuis la palette de commandes (`Ctrl+K` → **Ordre
 d'activation**).
 
+Sous le titre, la barre d'outils se lit de gauche à droite : **Listes** (vos listes d'ordre
+enregistrées, avec leur nombre), **Organiser** (**Trier** et la place des activations groupées) et
+**Partager** (**Partager** et **Importer**). Le pied de fenêtre porte **Réappliquer** à gauche,
+puis **Réinitialiser** et **Appliquer l'ordre**.
+
 | Pour | Fais |
 |---|---|
 | Déplacer un mod | Glisse sa ligne, ou sélectionne-la et appuie sur `Alt+↑` / `Alt+↓` |
@@ -182,8 +187,8 @@ installé mais désactivé, installé hors du profil, ou pas encore installé ic
 enregistrées avec vos données, indépendamment des profils.
 
 - **Nouvelle liste**, **Depuis un profil** (les mods actifs du profil affiché, dans leur ordre) ou
-  **Importer** (un code, un lien, du JSON ou une liste de noms, lu comme une nouvelle liste à
-  vérifier avant de l'enregistrer).
+  **Importer** (un code, un lien, du JSON, un fichier `.bmmorder` ou une liste de noms, lu comme
+  une nouvelle liste à vérifier avant de l'enregistrer).
 - **Ajouter des mods** cherche dans toute la bibliothèque, mods désactivés compris. Les lignes se
   déplacent avec les flèches et se retirent avec la croix.
 - **Prévue pour** : cochez les profils concernés. Aucun coché donne une liste réutilisable, pour
@@ -220,6 +225,41 @@ Deux actions utilisent une liste enregistrée, chacune avec sa propre confirmati
   dernier gagne un fichier partagé. **Uniquement cette liste** désactive aussi, en un seul lot, les
   mods actifs que la liste ne nomme pas et dont elle n'a pas besoin comme dépendances : le profil
   devient la liste.
+
+### Notes
+
+Une liste peut porter des notes, écrites en B.MD : titres, listes, tableaux, encadrés, code,
+formules, sections repliables, étapes et diagrammes Mermaid. Elles s'affichent rendues sous le nom
+de la liste, dans un cadre que vous pouvez agrandir en le tirant ; **Agrandir** les lit en grand.
+
+**Modifier les notes** ouvre un grand éditeur : une barre d'outils pour les blocs courants
+(`Ctrl+B`, `Ctrl+I`, `Ctrl+K` pour un lien, `Ctrl+E` pour du code), la source et un aperçu en
+direct côte à côte, ou l'un des deux seul. Chaque frappe va dans le brouillon de la liste : fermer
+l'éditeur (ou `Échap`) ne perd rien, **Enregistrer** dans l'éditeur ou dans la liste le garde.
+
+Les notes contiennent jusqu'à **20 000 caractères** ; le compteur passe à l'orange près de la fin
+et l'enregistrement est refusé au-delà, plutôt que de couper le texte.
+
+Une liste venue de quelqu'un d'autre (un code, un lien ou un fichier) est marquée **Importée**,
+pour de bon. Ses notes s'affichent en mode sûr : pas de HTML, rien de chargé depuis Internet (une
+image devient sa description ; vidéos, audio et intégrations sont écartés), diagrammes dessinés en
+mode strict de Mermaid. Vos propres notes n'exécutent jamais de HTML non plus ; elles peuvent
+afficher les images qu'elles lient.
+
+### Partager une liste
+
+**Partager** dans la liste propose deux moyens :
+
+| Moyen | Contient | Quand |
+|---|---|---|
+| **Code** | l'ordre et les notes, sur une ligne | jusqu'à 8 000 caractères, pour un chat ou un message de forum |
+| **Fichier `.bmmorder`** | toute la liste, notes comprises | toujours, quelle que soit la taille |
+
+Au-delà de 8 000 caractères, la fenêtre dit que le code est trop long et propose d'abord le
+fichier. Sur l'autre PC : **Listes**, **Importer**, puis collez le code ou **Ouvrir un fichier…**.
+Le fichier est du JSON versionné, lu strictement : un champ inconnu, une version plus récente, un
+champ trop long ou contenant un caractère de contrôle, ou des notes au-delà de la limite font
+refuser le fichier au lieu d'en lire une partie.
 
 ---
 

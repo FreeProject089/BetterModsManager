@@ -12,6 +12,28 @@ import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-ac
 import { escHtml, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { smartRank } from '../ai/ai-smart-state.js';
+import { runActivationJob } from '../../core/activation-jobs.js';
+import { applyCardActivity } from './mods-job-anim.js';
+/**
+ * One mod (and, for a disable, the mods it takes with it) through the app's activation queue
+ * (core/activation-jobs.ts) instead of a bare invoke: the work belongs to the app, not to this
+ * card, so leaving the Library or redrawing the list never stops it, and the activity pill
+ * shows it from any view. Throws what the bare invoke threw (MISSING_SHA|…, CRITICAL_SPACE|…,
+ * an error, or CANCELLED), so the handler below keeps its prompts; returns enable_mod's
+ * WARNING_SPACE|… string when there is one.
+ */
+async function runCardJob(mods, mode, bypassSha = false) {
+    const job = runActivationJob({ mods, mode, bypassSha, label: mods[mods.length - 1]?.name, silent: true, refreshAfter: false, source: 'library' });
+    const sum = await job.done;
+    const main = sum.items[sum.items.length - 1];
+    if (!main)
+        return null;
+    if (main.phase === 'failed')
+        throw main.error || 'error';
+    if (main.phase === 'cancelled')
+        throw 'CANCELLED';
+    return main.warning || null;
+}
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -192,6 +214,7 @@ export async function renderModList(force = false) {
         const isProcessing = S.processingMods.has(mod.id);
         if (!card) {
             card = createModCard(mod);
+            applyCardActivity(card, mod.id);
             _anyNewCard = true;
             if (S.selectedModId === mod.id) {
                 setTimeout(() => import('./mods-details.js').then(m => m.renderModDetail(mod.id)), 0);
@@ -276,10 +299,11 @@ export function createModCard(mod) {
                 setTimeout(() => toggleLabel.classList.remove('spin-360'), 600);
             }
         }
-        setModLoading(mod.id, true);
+        // No blocking overlay any more: the card shows queued → copying → done itself
+        // (mods-job-anim.ts), from the job's progress.
         try {
             if (toggle.checked) {
-                const warningMsg = await invoke('enable_mod', { modId: mod.id, bypassSha: false });
+                const warningMsg = await runCardJob([{ id: mod.id, name: mod.name }], 'enable');
                 if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
                     // Protocol: WARNING_SPACE|<label>|<free>|<limit>. free/limit are the trailing
                     // numbers; the label sits in the middle and may itself contain '|', so rebuild it
@@ -318,12 +342,16 @@ export function createModCard(mod) {
                     const desc = (t('mod.disableDependentsDesc') || 'Les mods suivants sont liés à celui-ci et pourraient être désactivés : {names}. Voulez-vous les désactiver aussi ?').replace('{names}', `<strong>${names}</strong>`);
                     const ok = await window.confirmCustom(title, desc, 'danger', { noLabel: t('common.no') || 'Non' });
                     if (ok) {
-                        for (const rel of relatedMods) {
-                            await invoke('disable_mod', { modId: rel.id });
-                        }
+                        // Same queue, one job: the related mods first, this one last (as before).
+                        await runCardJob([...relatedMods.map(r => ({ id: r.id, name: r.name })), { id: mod.id, name: mod.name }], 'disable');
+                    }
+                    else {
+                        await runCardJob([{ id: mod.id, name: mod.name }], 'disable');
                     }
                 }
-                await invoke('disable_mod', { modId: mod.id });
+                else {
+                    await runCardJob([{ id: mod.id, name: mod.name }], 'disable');
+                }
                 if (!isCancelledOp(mod.id)) {
                     toast(t('mod.deactivated', { name: mod.name }), 'info');
                     try {
@@ -368,7 +396,7 @@ export function createModCard(mod) {
                 else {
                     // Retry with bypass
                     try {
-                        await invoke('enable_mod', { modId: mod.id, bypassSha: true });
+                        await runCardJob([{ id: mod.id, name: mod.name }], 'enable', true);
                         toggle.checked = true;
                         toast(t('mod.activated', { name: mod.name }), 'success');
                     }

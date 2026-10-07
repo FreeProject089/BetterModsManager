@@ -21553,3 +21553,69 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .bc-by img { width: 13px; height: 13px; border-radius: 3px; background: #fff; padding: 1px; }
 .bc-by b { font-weight: 600; color: var(--text-secondary); }
+
+
+/* ═══ Credits: "Built with" and the generated technical stack (app.ts, gen-credits.mjs) ═══
+   Tokens only. The accent is a fill or a ring; accent-coloured TEXT goes through
+   --credits-accent-ink, the accent walked toward the theme's ink, so a version pill stays
+   readable on a light theme (the old pill was accent text on an accent tint). */
+#view-credits, #modal-stack, #bmm-stack-detail {
+    --credits-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
+}
+.credits-stack-summary { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; padding: 18px 20px; border-radius: 16px; }
+.credits-stack-summary[hidden] { display: none; }
+.credits-stack-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.credits-stack-title { margin: 0; }
+.credits-stack-total { font-size: 12px; color: var(--bmm-text-secondary); }
+.credits-stack-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.credits-stack-chip, .stack-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    color: var(--bmm-text-primary); font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; transition: background .15s, border-color .15s;
+}
+.credits-stack-chip:hover, .stack-chip:hover { background: var(--bmm-s06); }
+.credits-stack-chip:focus-visible, .stack-chip:focus-visible, .stack-item:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.stack-chip[aria-pressed="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); }
+.credits-stack-chip .stack-count, .stack-chip .stack-count { margin-left: 2px; }
+
+/* Contributors: the section spacing that was inline in app.ts. */
+.credits-category-section { margin-bottom: 24px; }
+.credits-category-title {
+    margin-bottom: 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--bmm-border);
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.sub-contributors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+
+/* The stack modal. */
+.stack-top { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; gap: 10px; padding: 2px 0 12px; background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-border); margin-bottom: 4px; }
+.stack-top .stack-filter { margin-bottom: 0; }
+.stack-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.stack-chip { padding: 4px 10px; font-size: 12px; }
+.stack-note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.stack-section[hidden], .stack-item[hidden], .stack-empty[hidden] { display: none; }
+.stack-section-blurb { margin: -4px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.stack-section-title { color: var(--bmm-text-secondary); }
+.stack-count { color: var(--bmm-text-secondary); border-color: var(--bmm-border); }
+.stack-grid { gap: 12px; padding-right: 0; }
+.stack-item {
+    display: flex; flex-direction: column; gap: 6px; min-width: 0;
+    padding: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+    border-color: var(--bmm-border);
+}
+.stack-item:hover { background: var(--bmm-s05); border-color: var(--bmm-accent); }
+.stack-item-header { align-items: baseline; gap: 8px; margin-bottom: 0; min-width: 0; }
+.stack-item-name { min-width: 0; overflow-wrap: anywhere; font-family: var(--bmm-font-mono, monospace); font-size: 13px; }
+.stack-item-version { flex-shrink: 0; color: var(--credits-accent-ink); background: var(--bmm-accent-dim); font-family: var(--bmm-font-mono, monospace); font-size: 11px; }
+.stack-item-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; }
+.stack-item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.stack-license, .stack-apps { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.stack-loading, .stack-empty { padding: 32px 16px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
+.stackd-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); }
+.stackd-fact { display: contents; }
+.stackd-fact dt { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.stackd-fact dd { margin: 0; font-size: 12.5px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .credits-stack-chip, .stack-chip { transition: none; } }

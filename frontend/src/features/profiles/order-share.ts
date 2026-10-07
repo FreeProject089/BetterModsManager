@@ -50,6 +50,11 @@ function ensureCss(): void {
     document.head.appendChild(link);
 }
 
+/** The dialogs this file opened that are still on screen, last opened last. Only the top one
+ *  answers Escape and holds Tab: the lists dialog opens the notes editor and the import box
+ *  over itself, and one Escape used to close both (two capture listeners on one target). */
+const stack: HTMLElement[] = [];
+
 /** A small modal above everything, with Escape, a focus trap and the focus given back. */
 export function dialog(id: string, title: string, body: string, foot: string): { ov: HTMLElement; close: () => void; onClose: (fn: () => void) => void } {
     ensureCss();
@@ -68,13 +73,16 @@ export function dialog(id: string, title: string, body: string, foot: string): {
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     const hooks: (() => void)[] = [];
-    const shown = () => ov.isConnected;
+    stack.push(ov);
+    const shown = () => ov.isConnected && stack[stack.length - 1] === ov;
     const untrap = installFocusTrap(ov, shown);
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && shown()) { e.stopPropagation(); close(); } };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && shown()) { e.stopImmediatePropagation(); close(); } };
     document.addEventListener('keydown', onEsc, true);
     function close(): void {
         if (!ov.isConnected) return;
         ov.remove();
+        const at = stack.indexOf(ov);
+        if (at >= 0) stack.splice(at, 1);
         document.removeEventListener('keydown', onEsc, true);
         untrap();
         hooks.forEach((h) => h());

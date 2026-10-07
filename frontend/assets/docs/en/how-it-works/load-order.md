@@ -32,6 +32,10 @@ flowchart LR
 Open the order from a profile card (the list icon), from the conflict window (**Open the
 activation order**) or from the command palette (`Ctrl+K` → **Activation order**).
 
+Under the title, the toolbar reads left to right: **Lists** (your saved order lists, with how
+many you have), **Arrange** (**Sort** and where bulk enables go) and **Share** (**Share** and
+**Import**). The footer holds **Re-apply** on the left, then **Reset** and **Apply order**.
+
 | To | Do |
 |---|---|
 | Move a mod | Drag its row, or select it and press `Alt+↑` / `Alt+↓` |
@@ -172,7 +176,8 @@ named order you keep, and it can name *any* mod: active, installed but off, inst
 profile, or not installed here yet. Lists are saved with your app data, apart from any profile.
 
 - **New list**, **From a profile** (the active mods of the profile shown, in their order) or
-  **Import** (a code, a link, JSON or a list of names, read as a new list you check before saving).
+  **Import** (a code, a link, JSON, a `.bmmorder` file or a list of names, read as a new list you
+  check before saving).
 - **Add mods** searches the whole library, inactive mods included. Rows move with the arrows and
   leave with the cross.
 - **Meant for**: tick the profiles a list is for. None ticked makes a reusable list, for any
@@ -207,6 +212,39 @@ Two actions use a saved list, each with its own confirmation:
   after the current mod), then places the list's mods on top in its order: the last one wins a
   shared file. **Only this list** also turns off, in one batch, the active mods the list neither
   names nor needs as dependencies, so the profile ends up as the list.
+
+### Notes
+
+A list can carry notes, written in B.MD: headings, lists, tables, callouts, code, formulas,
+collapsible sections, steps and Mermaid diagrams. They show rendered under the list's name, in a
+box you can drag taller; **Expand** reads them full size.
+
+**Edit notes** opens a large editor: a toolbar for the common blocks (`Ctrl+B`, `Ctrl+I`,
+`Ctrl+K` for a link, `Ctrl+E` for code), the source and a live preview side by side, or either
+one alone. Every keystroke goes to the list's draft, so closing the editor (or `Esc`) loses
+nothing: **Save** in the editor or in the list keeps it.
+
+Notes hold up to **20,000 characters**; the counter turns amber near the end and the save is
+refused past it, rather than cutting the text.
+
+A list that came from somebody else (a code, a link or a file) is marked **Imported**, for good.
+Its notes are shown in safe mode: no HTML, nothing loaded from the internet (images become their
+description; videos, audio and embeds are left out), diagrams drawn in Mermaid's strict mode.
+Your own notes never run HTML either; they may show the images they link.
+
+### Sharing a list
+
+**Share** in the list gives two ways:
+
+| Way | Carries | When |
+|---|---|---|
+| **Code** | the order and the notes, on one line | up to 8,000 characters, for a chat or a forum post |
+| **`.bmmorder` file** | the whole list, notes included | always, whatever the size |
+
+Past 8,000 characters the dialog says the code is too long and offers the file first. On the other
+PC: **Lists**, **Import**, then paste the code or **Open a file…**. The file is versioned JSON and
+is read strictly: an unknown field, a newer version, a field that is too long or holds a control
+character, or notes over the limit refuse the file instead of reading part of it.
 
 ---
 

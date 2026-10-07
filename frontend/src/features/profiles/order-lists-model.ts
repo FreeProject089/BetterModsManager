@@ -27,6 +27,9 @@ export interface OrderList {
     /** Profiles the list is meant for; empty = any profile. */
     profile_ids: string[];
     entries: OrderEntry[];
+    /** Came from a code, a link or a file: its notes render on the untrusted path. The backend
+     *  keeps it once set (order_lists.rs `sanitize`). */
+    imported?: boolean;
     created_at?: string;
     updated_at?: string;
 }

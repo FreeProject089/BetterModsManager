@@ -124,6 +124,79 @@ from two half-finished ones interleaved.
 
 ---
 
+## Activations are background jobs
+
+Turning mods on or off is owned by the app, not by the screen that asked
+(`frontend/src/core/activation-jobs.ts`). Jobs queue and run one after another; inside a mod the
+copy is parallel under the [resource governor](doc-page:how-it-works/resources)'s Deploy rules. **Only an explicit
+cancel stops a job**: changing view, closing a dialog or redrawing the Library never does. The
+title-bar activity pill and the Library cards both draw from the same feed.
+
+**Progress.** For every mod an enable or disable touches (dependencies included, whoever asked:
+a card, *Enable all*, an order list, the scheduler), the backend emits `bmm://mod-op-progress`:
+`{ mod_id, mod_name, op: "enable" | "disable", phase: "start" | "copy" | "done" | "failed" | "cancelled", bytes_done, bytes_total }`.
+The copy itself runs in the worker process, which prints its byte count on a pipe; the parent
+turns it into `copy` events, **at most 10 a second** and only when the count moved.
+
+**Cancel semantics.** The mod in flight is undone (its worker is killed and the inverse
+operation reverts the partial copy, as in the table above); mods already done stay done; mods
+not reached are not started. Other queued jobs still run.
+
+**One cancel token per job.** Every job sends its own scope with its calls (`cancelScope`); its
+Stop is `cancel_mod_ops({ scope })` and its end `clear_mod_op_cancel({ scope })`. Neither touches
+the backend's global flag, so one job finishing its cancel can no longer lower the Stop of
+another batch running at the same moment (that is what the single shared flag used to do). A
+global *Cancel all* still reaches every job that began before it, and none that begins after:
+nobody has to lower anything before the next one (`CancelScope` in `src-tauri/src/fs_utils.rs`).
+
+### For developers: `runActivationJob`
+
+```ts
+import { runActivationJob } from '../../core/activation-jobs.js';
+
+const job = runActivationJob({
+  mods: [{ id, name }, …],     // in order; duplicates are dropped
+  mode: 'enable',              // or 'disable'
+  profileId,                   // optional; must be the ACTIVE profile, else every item fails with actjob.errNotActive
+  label: 'List « Survival »',  // what the pill and the end toast call it
+  bypassSha: false,            // optional
+  silent: false,               // true = no end toast (you report the result yourself)
+  refreshAfter: true,          // re-read the Library once when the queue drains
+  source: 'order-list',
+});
+const summary = await job.done;   // never rejects
+// summary.items[i].phase: 'done' | 'failed' | 'cancelled'; .error (MISSING_SHA|…, CRITICAL_SPACE|…), .warning (WARNING_SPACE|…)
+// summary.done / .failed / .cancelled / .wasCancelled
+await job.cancel();               // the explicit stop
+```
+
+Also exported: `onActivationChange(fn)` (coalesced to a frame), `modActivity(modId)` (what a card
+shows), `isActivationBusy()`, `cancelActivationJob(id)`, `cancelAllActivationJobs()`, and
+`announceExternal(ids, op)` / `clearAnnounced(ids)` for a screen that runs its own backend batch
+and wants its cards to show *Queued* until the backend reaches them.
+
+A batch the **backend** runs as one command is a job too: `runActivationBatch({ mods, mode, label,
+run: (scope) => invoke(…, { cancelScope: scope }), failToast })`. The order lists' *Activate* is
+one (`order_list_activate`: one plan, the enables with their dependencies, one order commit): it
+queues behind the other jobs, its mods move through the pill and the cards from the progress
+events, its Stop cancels its scope only, its end toast is the job manager's, and closing the
+dialog or leaving the view does not stop it. `run` returns `{ failed, cancelled, toast }`.
+
+### What an activation no longer pays for
+
+| Cost per mod (before) | Now |
+|---|---|
+| `enable_mod` invalidated the file cache, so the **next** enable rebuilt the whole file → mods index under the data lock | Not invalidated: the cache is each mod's file list, which enabling does not change |
+| `data.json` written (pretty JSON, `.bak` roll, fsync) **while holding the data lock**: every other command waited | Serialised under the lock, written outside it; an ordering lock keeps an older snapshot from ever landing over a newer one |
+| A dependency chain read the next mod's "other mods' files" from the file cache, which leaving the Library flushed: the next mod backed the previous one's copies up as game originals | Read from what the worker reports it wrote; and leaving the Library no longer flushes the cache while a job runs |
+| An error on the 3rd mod of a chain returned before the save: the first two were deployed but not recorded until a later save | The save runs on every way out |
+| A blocking spinner over each card for the whole operation (every card of an *Enable all*) | A state label and a thin bar on the card; each progress event touches that one card, never the list |
+
+The per-mod save is kept on purpose: a crash between two mods of a batch must leave `data.json`
+knowing what is in the game folder.
+
+---
+
 ## Activation order is the whole conflict story
 
 Because `active_mods` is an **ordered** list and deployment walks it in order, the mod you enable last

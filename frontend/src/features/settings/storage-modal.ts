@@ -26,6 +26,7 @@ import { installFocusTrap, ownsFocus } from '../../ui/focus-trap.js';
 import { bindLifecycle } from './storage-live.js';
 import { feed, readStatus, resetPainters, mountStatusStrip, mountIntensityPanel, mountGamePanel, mountLivePanel, moreBlock, type Status } from './resources-dash.js';
 import { renderResourcesMatrix } from './resources-matrix.js';
+import { mountStoragePresets } from './storage-presets.js';
 import { gameHeadline, sizeText, usedOfText, type GameView } from './resources-spark.js';
 
 export type StorageTab = 'space' | 'intensity' | 'game' | 'live' | 'rules';
@@ -228,7 +229,12 @@ async function mountTab(id: StorageTab, panel: HTMLElement): Promise<void> {
             case 'rules': {
                 const disks = await data.disks;
                 if (seq !== _seq) return;
-                await renderResourcesMatrix(panel, disks.map((d) => String(d.mount_point || '')).filter(Boolean));
+                // The presets first (a whole set of rules for this PC), then the table they fill.
+                panel.innerHTML = '<div class="stm-presets-host"></div><div class="stm-matrix-host"></div>';
+                const presets = panel.querySelector<HTMLElement>('.stm-presets-host');
+                const matrix = panel.querySelector<HTMLElement>('.stm-matrix-host');
+                if (presets) void mountStoragePresets(presets, () => { if (seq === _seq) refreshIfOpen(); }, toast);
+                if (matrix) await renderResourcesMatrix(matrix, disks.map((d) => String(d.mount_point || '')).filter(Boolean));
                 break;
             }
         }
@@ -319,7 +325,7 @@ async function mountSpace(host: HTMLElement, disks: DiskInfo[]): Promise<void> {
 
     host.innerHTML = `
         <p class="stm-lead">${esc(tr('stm.lead.spaceShort', 'Room left on each disk, and how fast BMM may write to it.'))}</p>
-        <div class="stm-disks">${disks.length ? disks.map(diskCard).join('') : `<div class="stm-help">${esc(t('storage.noDisks'))}</div>`}</div>
+        <div class="stm-disks">${disks.length ? disks.map(diskCard).join('') : `<div class="stm-empty">${esc(t('storage.noDisks'))}</div>`}</div>
         <div class="stm-card">
             <div class="stm-row stm-opt" data-tooltip="${escAttr(`${t('storage.autoCalibDesc')} ${tr('stm.space.autoTip', 'On: BMM measures the disks your profiles use (again after 30 days) and sets their speed caps.')}`)}">
                 <label class="stm-grow stm-opt-label" for="chk-auto-io">${esc(tr('stm.space.autoShort', 'Set the speed caps by itself'))}</label>

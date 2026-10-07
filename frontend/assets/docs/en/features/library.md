@@ -89,6 +89,25 @@ The Library rewards a few gestures:
 - **Right-click** a card *while it's activating* to cancel the operation.
 - **Drag & drop** a `.zip` or folder onto the window to add it.
 
+## While mods turn on or off
+
+Turning a mod on or off is a background job that belongs to BMM, not to the Library screen.
+You can go anywhere in the app while it runs; only an explicit **Cancel** stops it.
+
+- **The activity pill** in the title bar shows the mod being copied, where it is in its batch
+  (`3/12`), the bytes copied so far, how many mods are waiting, and a **Cancel** button. It
+  appears on every view and also follows batches started elsewhere (Enable all, an order list).
+- **The cards** walk through their states: *Queued*, then *Copying 45%* with a thin bar at the
+  bottom, then *On* (a short glow, and the activation-order number pops in) or *Failed*.
+  Deactivation is the same walk, in amber, ending on *Off*.
+- **Several toggles in a row** queue up and run one after another, in the order you clicked.
+- **Cancel** undoes the mod in progress (its partial copy is reverted), leaves the mods already
+  done as they are, and does not start the ones still waiting.
+- A **summary toast** at the end says how many went through and names the ones that failed.
+
+The animation follows **Settings › Graphics & display › Reduce animations** and Windows' own "show fewer
+animations": the states still show, they just stop moving.
+
 There's no multi-select in the list itself — you pick one mod at a time. When you need a
 batch (building a [modpack](doc-page:features/modpacks), or importing a [`.MM` list](doc-page:features/modlist)), the
 selection modal gives you checkboxes and a select-all. Full detail in

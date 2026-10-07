@@ -8,6 +8,7 @@
 // any media tag left in the HTML is removed. Links stay as md-lite renders them for untrusted
 // text (`javascript:` and the like are refused by `safeDocUrl`).
 import { renderDocMarkdown } from '../../docs/md-lite.js';
+import { hydrateMdLite } from '../../docs/md-hydrate.js';
 
 /** The model's text as B.MD source a crash explanation may use: prose, lists, emphasis, code. */
 export function explainSource(text: string): string {
@@ -32,4 +33,12 @@ export function explainHtml(text: string): string {
     return renderDocMarkdown(src)
         .replace(/<(img|video|audio|source|iframe|object|embed)\b[^>]*>/gi, '')
         .replace(/<\/(video|audio|iframe|object)>/gi, '');
+}
+
+/** Paint an explanation into `host` and finish it like every md-lite surface (hydrateMdLite:
+ *  the words md-lite leaves blank, tab strips, formulas). Nothing it adds fetches: the
+ *  directives that would (icons, embeds) were dropped from the source above. */
+export function paintExplain(host: HTMLElement, text: string): void {
+    host.innerHTML = explainHtml(text);
+    hydrateMdLite(host);
 }

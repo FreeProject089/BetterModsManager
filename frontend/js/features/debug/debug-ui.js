@@ -236,149 +236,174 @@ class DebugUI {
                     <div id="timeline-list" class="debug-fill-scroll debug-list" data-dbg-empty="dev.empty.timeline"></div>
                 </div>
                 <div class="debug-pane" id="pane-debugger">
-                    <div class="debugger-layout" style="display:flex; height:100%; flex-direction:column">
+                    <div class="debugger-layout">
                         <!-- The JS debugger sub-tab was removed: the real Chrome DevTools
                              (button in the header) does everything the custom JS pane did,
-                             better. RUST is now the default debugger sub-tab. -->
-                        <div class="debugger-subtabs" style="display:flex; border-bottom:1px solid var(--bmm-s05); background:var(--debug-sunken)">
-                            <button type="button" class="debug-subtab active" data-sub="rust" data-i18n="dev.subtab.rust">RUST</button>
-                            <button type="button" class="debug-subtab" data-sub="html" data-i18n="dev.subtab.html">HTML</button>
-                            <button type="button" class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</button>
+                             better. RUST is now the default debugger sub-tab. Every sub-pane
+                             is the same shape: a .dbg-bar header (title, one line of what it
+                             is, its actions), an optional .dbg-subbar of filters, and a body
+                             that scrolls on its own. -->
+                        <div class="debugger-subtabs" role="tablist">
+                            <button type="button" class="debug-subtab active" role="tab" aria-selected="true" aria-controls="subpane-rust" data-sub="rust" data-i18n="dev.subtab.rust">RUST</button>
+                            <button type="button" class="debug-subtab" role="tab" aria-selected="false" aria-controls="subpane-html" data-sub="html" data-i18n="dev.subtab.html">HTML</button>
+                            <button type="button" class="debug-subtab" role="tab" aria-selected="false" aria-controls="subpane-css" data-sub="css" data-i18n="dev.subtab.css">CSS</button>
                         </div>
-                        <div class="debugger-subcontent" style="flex:1; position:relative; overflow:hidden">
-                            <div class="debug-subpane active" id="subpane-rust" style="height:100%; flex-direction:column; display:flex">
-                                <div style="padding:12px 16px; border-bottom:1px solid var(--bmm-s05); display:flex; justify-content:space-between; align-items:center; background:var(--debug-sunken)">
-                                    <div>
-                                        <div style="font-size:13px; font-weight:600; color:var(--debug-text-primary); margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
-                                        <div class="debug-label" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
+                        <div class="debugger-subcontent">
+                            <div class="debug-subpane active" id="subpane-rust" role="tabpanel">
+                                <div class="dbg-bar">
+                                    <div class="dbg-bar-text">
+                                        <div class="dbg-bar-title" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
+                                        <div class="dbg-bar-desc" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
-                                    <div class="debug-row">
-                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-export-diag" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
-                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-gen-report" data-i18n="dev.btn.genReport">REPORT</button>
-                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-mem-snap" data-i18n="dev.btn.memSnap">MEMORY</button>
-                                        <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" data-i18n="dev.btn.copyCmd">COPY CMD</button>
-                                        <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
+                                    <div class="debug-btn-row">
+                                        <button type="button" class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-export-diag" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
+                                        <button type="button" class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-gen-report" data-i18n="dev.btn.genReport">REPORT</button>
+                                        <button type="button" class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-mem-snap" data-i18n="dev.btn.memSnap">MEMORY</button>
+                                        <button type="button" class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-copy-lldb" data-i18n="dev.btn.copyCmd">COPY CMD</button>
+                                        <button type="button" class="debug-btn debug-btn-primary debug-btn-sm" id="rust-refresh-logs" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
                                     </div>
                                 </div>
-                                <div style="flex:1; overflow-y:auto; padding:8px; font-family:'JetBrains Mono'; font-size:10px; user-select:text" id="rust-logs-container">
-                                    <div style="color:var(--text-muted)" data-i18n="dev.msg.clickRefresh">Click Refresh to load logs...</div>
+                                <div class="dbg-subbar">
+                                    <input type="search" id="rust-log-filter" class="dbg-input dbg-grow" data-i18n-placeholder="dev.placeholder.filterLines" placeholder="Filter lines">
+                                    <select id="rust-log-level" class="dbg-input">
+                                        <option value="all" data-i18n="dev.level.all">All levels</option>
+                                        <option value="warn" data-i18n="dev.level.warn">Warnings and errors</option>
+                                        <option value="error" data-i18n="dev.level.error">Errors only</option>
+                                    </select>
+                                    <span class="dbg-count" id="rust-log-count" aria-live="polite"></span>
+                                </div>
+                                <div class="dbg-body dbg-log" id="rust-logs-container" tabindex="0">
+                                    <div class="debug-empty-state" data-i18n="dev.msg.clickRefresh">Click Refresh to load logs...</div>
                                 </div>
                             </div>
-                            <div class="debug-subpane" id="subpane-html" style="height:100%; overflow-y:auto; padding:8px; display:none; flex-direction:column">
-                                <div style="margin-bottom:8px; display:flex; gap:8px">
-                                    <button class="debug-btn" id="html-refresh-dom"  data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
-                                    <button class="debug-btn debug-btn-ghost" id="html-collapse-all"  data-i18n="dev.btn.collapseAll">Collapse All</button>
+                            <div class="debug-subpane" id="subpane-html" role="tabpanel">
+                                <div class="dbg-bar">
+                                    <div class="dbg-bar-text">
+                                        <div class="dbg-bar-title" data-i18n="dev.title.dom">DOM tree</div>
+                                        <div class="dbg-bar-desc" data-i18n="dev.msg.domDesc">Expand a node with its arrow; click a tag to inspect it.</div>
+                                    </div>
+                                    <div class="debug-btn-row">
+                                        <button type="button" class="debug-btn debug-btn-ghost debug-btn-sm" id="html-collapse-all" data-i18n="dev.btn.collapseAll">Collapse All</button>
+                                        <button type="button" class="debug-btn debug-btn-primary debug-btn-sm" id="html-refresh-dom" data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
+                                    </div>
                                 </div>
-                                <div id="html-dom-tree" style="font-family:'JetBrains Mono'; font-size:11px"></div>
+                                <div class="dbg-body dbg-tree" id="html-dom-tree"></div>
                             </div>
-                            <div class="debug-subpane" id="subpane-css" style="height:100%; display:flex; flex-direction:column; display:none">
-                                <div style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:16px">
-                                    <div style="background:var(--debug-sunken); border:1px solid var(--bmm-s05); border-radius:6px; padding:16px;">
-                                        <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:16px; font-weight:700" data-i18n="dev.title.design">Design & Accessibility Tools</div>
-                                        <div id="dbg-css-toggles-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:16px">
+                            <div class="debug-subpane" id="subpane-css" role="tabpanel">
+                                <div class="dbg-bar">
+                                    <div class="dbg-bar-text">
+                                        <div class="dbg-bar-title" data-i18n="dev.title.design">Design & Accessibility Tools</div>
+                                        <div class="dbg-bar-desc" data-i18n="dev.msg.designDesc">Overlays drawn on the app, and the live rules of each stylesheet.</div>
+                                    </div>
+                                </div>
+                                <div class="dbg-body">
+                                    <div class="dbg-section">
+                                        <div id="dbg-css-toggles-grid" class="dbg-toggle-grid">
                                             <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssPink.title">CSS Debugging</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssPink.desc">Outline all elements.</div>
-                                                </div>
-                                                <div style="display:flex; align-items:center; gap:4px">
-                                                    <input type="color" id="dbg-css-color" value="#ff1493" style="width:20px; height:20px; border:none; padding:0; cursor:pointer; border-radius:4px">
-                                                    <input type="checkbox" id="dbg-css-pink" class="debug-switch debug-switch-pink">
-                                                </div>
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" id="dbg-t-pink" data-i18n="dev.tool.cssPink.title">CSS Debugging</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.cssPink.desc">Outline all elements.</span>
+                                                </span>
+                                                <span class="dbg-toggle-ctl">
+                                                    <input type="color" id="dbg-css-color" value="#ff1493" class="dbg-color" aria-labelledby="dbg-t-pink">
+                                                    <input type="checkbox" id="dbg-css-pink" class="debug-switch debug-switch-pink" aria-labelledby="dbg-t-pink">
+                                                </span>
                                             </div>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.zIndex.title">Z-Index Layers</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.zIndex.desc">Layer viewer.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.zIndex.title">Z-Index Layers</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.zIndex.desc">Layer viewer.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-css-zindex" class="debug-switch debug-switch-pink">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssEvents.title">Event Components</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssEvents.desc">Highlights elements with events (onclick, href) in green.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.cssEvents.title">Event Components</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.cssEvents.desc">Highlights elements with events (onclick, href) in green.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-css-events" class="debug-switch debug-switch-blue">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssInteractive.title">Interactive Components (Hi-Vis)</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssInteractive.desc">Highlights all graphical interface hitboxes.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.cssInteractive.title">Interactive Components (Hi-Vis)</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.cssInteractive.desc">Highlights all graphical interface hitboxes.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-css-interactive" class="debug-switch debug-switch-blue">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yWarnings.title">Live Accessibility Warnings</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yWarnings.desc">Signals missing alt/label attributes.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.a11yWarnings.title">Live Accessibility Warnings</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.a11yWarnings.desc">Signals missing alt/label attributes.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-a11y-warnings" class="debug-switch debug-switch-warning">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yReader.title">Screen Reader Simulation</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yReader.desc">Displays what assistive tools see.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.a11yReader.title">Screen Reader Simulation</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.a11yReader.desc">Displays what assistive tools see.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-a11y-reader" class="debug-switch debug-switch-pink">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.jsEvents.title">Event Overlay (All types)</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.jsEvents.desc">Highlights elements with JS listeners.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.jsEvents.title">Event Overlay (All types)</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.jsEvents.desc">Highlights elements with JS listeners.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-js-events" class="debug-switch debug-switch-blue">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yHardcoded.title">Hardcoded Text</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yHardcoded.desc">Detects non-i18n text.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.a11yHardcoded.title">Hardcoded Text</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.a11yHardcoded.desc">Detects non-i18n text.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-a11y-hardcoded" class="debug-switch debug-switch-warning">
-                                            </div>
+                                            </label>
 
-                                            <div class="debug-toggle-row">
-                                                <div class="debug-toggle-info">
-                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssGrid.title">Layout Grid</div>
-                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssGrid.desc">Customizable grid.</div>
-                                                </div>
+                                            <label class="debug-toggle-row">
+                                                <span class="debug-toggle-info">
+                                                    <span class="debug-toggle-title" data-i18n="dev.tool.cssGrid.title">Layout Grid</span>
+                                                    <span class="debug-toggle-desc" data-i18n="dev.tool.cssGrid.desc">Customizable grid.</span>
+                                                </span>
                                                 <input type="checkbox" id="dbg-css-grid" class="debug-switch debug-switch-blue">
-                                            </div>
+                                            </label>
                                         </div>
 
-                                        <div id="dbg-grid-config" style="display:none; padding-top:12px; border-top:1px dashed var(--bmm-s10)">
-                                            <div style="margin-bottom:12px">
+                                        <div id="dbg-grid-config" class="dbg-grid-config" style="display:none">
+                                            <div>
                                                 <div class="debug-row-split">
-                                                    <div id="dbg-label-grid-h" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridH">Horizontal Spacing</div>
+                                                    <label for="dbg-grid-h" id="dbg-label-grid-h" class="dbg-field-label" data-i18n="dev.label.gridH">Horizontal Spacing</label>
                                                     <div class="debug-label"><span id="dbg-grid-h-val">16</span>px</div>
                                                 </div>
-                                                <input type="range" id="dbg-grid-h" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
+                                                <input type="range" id="dbg-grid-h" min="0" max="64" value="16" class="custom-range dbg-range" style="--val:25%">
                                             </div>
                                             <div>
                                                 <div class="debug-row-split">
-                                                    <div id="dbg-label-grid-v" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridV">Vertical Spacing</div>
+                                                    <label for="dbg-grid-v" id="dbg-label-grid-v" class="dbg-field-label" data-i18n="dev.label.gridV">Vertical Spacing</label>
                                                     <div class="debug-label"><span id="dbg-grid-v-val">16</span>px</div>
                                                 </div>
-                                                <input type="range" id="dbg-grid-v" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
+                                                <input type="range" id="dbg-grid-v" min="0" max="64" value="16" class="custom-range dbg-range" style="--val:25%">
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px">
-                                        <select id="css-stylesheet-select" style="background:var(--debug-sunken); border:1px solid var(--debug-border); color:var(--debug-text-primary); padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
+                                    <div class="dbg-subbar dbg-subbar-sticky">
+                                        <span class="dbg-subbar-title" data-i18n="dev.title.cssRules">Stylesheet rules</span>
+                                        <select id="css-stylesheet-select" class="dbg-input dbg-grow">
                                             <option value="" data-i18n="dev.msg.selectStylesheet">Select a stylesheet...</option>
                                         </select>
-                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:var(--debug-sunken); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:var(--debug-text-primary); border-radius:4px; outline:none; width:120px">
+                                        <input type="search" id="css-rule-search" class="dbg-input" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter...">
+                                        <span class="dbg-count" id="css-rule-count" aria-live="polite"></span>
                                     </div>
 
-                                    <div style="flex:1; overflow-y:auto; min-height:100px" id="css-rules-container">
-                                        <div style="color:var(--text-muted); font-size:10px; text-align:center; margin-top:20px" data-i18n="dev.msg.selectStylesheet">Select a stylesheet to view/edit rules, or use the Inspect panel.</div>
+                                    <div class="dbg-rules" id="css-rules-container">
+                                        <div class="debug-empty-state" data-i18n="dev.msg.selectStylesheet">Select a stylesheet to view/edit rules, or use the Inspect panel.</div>
                                     </div>
                                 </div>
                             </div>
@@ -818,13 +843,15 @@ class DebugUI {
             this.showAlert('Rust Debugger Command Copied', `Copied: ${cmd}\n\nPaste this in your terminal to attach LLDB/GDB. You must run the app in debug mode.`);
         });
         this._get('rust-refresh-logs')?.addEventListener('click', () => this.refreshRustLogs());
+        this._get('rust-log-filter')?.addEventListener('input', () => this.filterRustLogs());
+        this._get('rust-log-level')?.addEventListener('change', () => this.filterRustLogs());
         // Debugger HTML
         this._get('html-refresh-dom')?.addEventListener('click', () => this.buildDomTree());
         this._get('html-collapse-all')?.addEventListener('click', () => {
             const tree = this._get('html-dom-tree');
             if (tree) {
-                tree.querySelectorAll('.dom-children').forEach(el => el.style.display = 'none');
-                tree.querySelectorAll('.dom-toggle').forEach(el => el.textContent = '▶');
+                tree.querySelectorAll('.dom-children').forEach(el => { el.hidden = true; });
+                tree.querySelectorAll('.dom-toggle[aria-expanded]').forEach(el => el.setAttribute('aria-expanded', 'false'));
             }
         });
         // Debugger CSS
@@ -1325,12 +1352,13 @@ class DebugUI {
     }
     switchDebuggerSubtab(subId) {
         this.container.querySelectorAll('.debug-subtab').forEach(t => {
-            t.classList.toggle('active', t.dataset.sub === subId);
+            const on = t.dataset.sub === subId;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
         });
+        // The class says which one shows (debug.css); no inline display to fight it.
         this.container.querySelectorAll('.debug-subpane').forEach(p => {
-            p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none';
-            if (p.id === `subpane-${subId}`)
-                p.style.flexDirection = 'column';
+            p.classList.toggle('active', p.id === `subpane-${subId}`);
         });
         if (subId === 'css') {
             this.loadStylesheetsList();
@@ -1338,7 +1366,9 @@ class DebugUI {
         if (subId === 'html' && this._get('html-dom-tree').innerHTML === '') {
             this.buildDomTree();
         }
-        if (subId === 'rust' && (this._get('rust-logs-container').textContent.includes('Click Refresh') || this._get('rust-logs-container').textContent.includes('Actualiser'))) {
+        // Loaded once on first view, then on demand: a flag, not the placeholder's wording
+        // (which changed with the language and silently stopped matching).
+        if (subId === 'rust' && !this._get('rust-logs-container')?.dataset.loaded) {
             this.refreshRustLogs();
         }
     }
@@ -1348,8 +1378,11 @@ class DebugUI {
             return;
         // Preserve current selection if possible
         const currentVal = select.value;
-        const selectPrompt = t('dev.msg.selectStylesheet') || 'Sélectionner une feuille...';
-        select.innerHTML = `<option value="">${selectPrompt}</option>`;
+        select.textContent = '';
+        const prompt = document.createElement('option');
+        prompt.value = '';
+        prompt.textContent = t('dev.msg.pickSheet');
+        select.appendChild(prompt);
         let found = false;
         Array.from(document.styleSheets).forEach((sheet, i) => {
             try {
@@ -1361,7 +1394,9 @@ class DebugUI {
                     return; // Ignore debug styles
                 const opt = document.createElement('option');
                 opt.value = i;
-                opt.textContent = `[${i}] ${name} (${sheet.cssRules.length} règles)`;
+                // The same count the list shows once opened: style rules, not @media / @font-face.
+                const styleRules = Array.from(sheet.cssRules).filter(r => r.type === CSSRule.STYLE_RULE).length;
+                opt.textContent = `[${i}] ${name} · ${t('dev.label.rules', { n: String(styleRules) })}`;
                 select.appendChild(opt);
                 if (currentVal && currentVal == i)
                     found = true;
@@ -1377,46 +1412,44 @@ class DebugUI {
         const container = this._get('css-rules-container');
         if (!container)
             return;
+        const count = this._get('css-rule-count');
+        if (count)
+            count.textContent = '';
         if (sheetIndex === '') {
-            container.innerHTML = '<div style="color:var(--text-muted); font-size:10px; text-align:center; margin-top:20px">Sélectionnez une feuille de style.</div>';
+            container.innerHTML = `<div class="debug-empty-state">${this.escapeHtml(t('dev.msg.selectStylesheet'))}</div>`;
             return;
         }
         try {
             const sheet = document.styleSheets[sheetIndex];
             const rules = sheet.cssRules;
             let html = '';
+            let n = 0;
+            const inspectTip = this.escapeHtml(t('dev.btn.inspectRule'));
             for (let r = 0; r < rules.length; r++) {
                 const rule = rules[r];
                 if (rule.type !== CSSRule.STYLE_RULE)
                     continue;
-                // Format the cssText
-                const cssText = rule.cssText;
-                const match = cssText.match(/\{([\s\S]*)\}/);
-                let styles = match ? match[1].trim() : '';
-                // Add minor syntax highlighting manually
-                styles = styles.split(';').map(s => s.trim()).filter(s => s).map(s => {
-                    const parts = s.split(':');
-                    if (parts.length < 2)
-                        return s;
-                    return `<span style="color:#9cdcfe">${parts[0].trim()}</span>: <span style="color:#ce9178">${parts.slice(1).join(':').trim()}</span>;`;
-                }).join('<br>  ');
-                if (styles)
-                    styles = '  ' + styles;
-                // Live Edit Structure
+                n++;
+                const match = rule.cssText.match(/\{([\s\S]*)\}/);
+                // One declaration per line, plain text: the block is contenteditable and what
+                // the user types is re-applied as is (see the input listener below).
+                const body = (match ? match[1].trim() : '').split(';').map(s => s.trim()).filter(Boolean).map(s => `  ${s};`).join('\n');
+                const sel = this.escapeHtml(rule.selectorText || '');
                 html += `
-                    <div class="css-rule-block" style="margin-bottom:12px; font-family:'JetBrains Mono'; font-size:11px; padding:8px; border-radius:4px; background:var(--bmm-s02); border:1px solid var(--debug-border)">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
-                            <div style="color:var(--debug-accent); font-weight:700">${this.escapeHtml(rule.selectorText || '')} {</div>
-                            <button class="rule-inspect-btn" data-selector="${this.escapeHtml(rule.selectorText || '')}" data-tooltip="Inspect matching element" style="background:none; border:none; color:var(--debug-accent); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center; transition:background 0.2s">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.94-.49-7-3.85-7-7.93s3.06-7.44 7-7.93V19.93z"></path></svg>
+                    <div class="css-rule-block">
+                        <div class="css-rule-head">
+                            <code class="css-rule-sel">${sel} {</code>
+                            <button type="button" class="rule-inspect-btn" data-selector="${sel}" data-tooltip="${inspectTip}" aria-label="${inspectTip}">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
                             </button>
                         </div>
-                        <div class="live-css-editor" contenteditable="true" spellcheck="false" data-sheet="${sheetIndex}" data-rule="${r}" data-selector="${this.escapeHtml(rule.selectorText || '')}" style="outline:none; padding:4px; border:1px dashed transparent; transition:border 0.2s" data-focus="border-color:var(--debug-accent)" data-blur="border-color:transparent">${styles.replace(/<span.*?>/g, '').replace(/<\/span>/g, '')}</div>
-                        <div style="color:var(--debug-accent); font-weight:700; margin-top:4px">}</div>
-                    </div>
-                `;
+                        <div class="live-css-editor" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="${sel}" data-sheet="${sheetIndex}" data-rule="${r}" data-selector="${sel}">${this.escapeHtml(body)}</div>
+                        <code class="css-rule-sel">}</code>
+                    </div>`;
             }
-            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px; text-align:center">Nonee règle CSS standard trouvée.</div>';
+            container.innerHTML = html || `<div class="debug-empty-state">${this.escapeHtml(t('dev.msg.noRules'))}</div>`;
+            if (count)
+                count.textContent = t('dev.label.rules', { n: String(n) });
             // Attach Live CSS Modifiers
             container.querySelectorAll('.live-css-editor').forEach(editor => {
                 editor.addEventListener('input', (e) => {
@@ -1446,18 +1479,25 @@ class DebugUI {
                 this.filterCSSRules(query);
         }
         catch (e) {
-            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Failed to lire la feuille: ${e.message}</div>`;
+            container.innerHTML = `<div class="debug-empty-state dbg-error">${this.escapeHtml(t('dev.msg.sheetFailed', { why: String(e?.message || e) }))}</div>`;
         }
     }
     filterCSSRules(query) {
         const container = this._get('css-rules-container');
         if (!container)
             return;
-        query = query.toLowerCase();
-        container.querySelectorAll('.css-rule-block').forEach(block => {
-            const text = block.textContent.toLowerCase();
-            block.style.display = text.includes(query) ? 'block' : 'none';
+        query = String(query || '').toLowerCase();
+        let shown = 0;
+        const blocks = container.querySelectorAll('.css-rule-block');
+        blocks.forEach(block => {
+            const hit = block.textContent.toLowerCase().includes(query);
+            block.hidden = !hit;
+            if (hit)
+                shown++;
         });
+        const count = this._get('css-rule-count');
+        if (count && blocks.length)
+            count.textContent = query ? t('dev.label.shownOf', { shown: String(shown), n: String(blocks.length) }) : t('dev.label.rules', { n: String(blocks.length) });
     }
     inspectSelector(selector) {
         try {
@@ -2190,10 +2230,17 @@ class DebugUI {
         const tree = this._get('html-dom-tree');
         if (!tree)
             return;
-        tree.innerHTML = '';
-        const root = document.documentElement;
-        tree.appendChild(this._renderDomNode(root));
+        tree.textContent = '';
+        const root = this._renderDomNode(document.documentElement);
+        if (root) {
+            tree.appendChild(root);
+            // The root starts open: an <html> node alone says nothing.
+            root.querySelector('.dom-toggle[aria-expanded]')?.click();
+        }
     }
+    /** One element of the tree: a disclosure button (when it has children), the tag as a
+     *  button that selects it for the Inspect tab, its first classes and a child count.
+     *  Real buttons, so Tab and Enter work; children are built the first time they open. */
     _renderDomNode(node) {
         if (node.nodeType !== Node.ELEMENT_NODE)
             return null;
@@ -2201,83 +2248,121 @@ class DebugUI {
             return null;
         const container = document.createElement('div');
         container.className = 'dom-node';
-        container.style.marginLeft = '12px';
-        container.style.padding = '2px 0';
         const header = document.createElement('div');
-        header.style.cursor = 'pointer';
-        header.style.display = 'flex';
-        header.style.alignItems = 'center';
-        header.style.gap = '6px';
-        header.className = 'dom-tree-node'; // Use style from debug.css
+        header.className = 'dom-tree-node';
         const hasChildren = node.children.length > 0;
-        const toggle = document.createElement('span');
+        const toggle = document.createElement(hasChildren ? 'button' : 'span');
         toggle.className = 'dom-toggle';
-        toggle.style.fontSize = '8px';
-        toggle.style.width = '10px';
-        toggle.style.color = 'var(--text-muted)';
-        toggle.textContent = hasChildren ? '▶' : ' ';
+        if (hasChildren) {
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.setAttribute('aria-label', node.tagName.toLowerCase());
+        }
         header.appendChild(toggle);
-        const tag = document.createElement('span');
-        tag.style.color = 'var(--debug-accent)';
-        tag.style.fontWeight = 'bold';
+        const tag = document.createElement('button');
+        tag.type = 'button';
+        tag.className = 'dom-tag';
         tag.textContent = `<${node.tagName.toLowerCase()}${node.id ? '#' + node.id : ''}>`;
         header.appendChild(tag);
+        const cls = typeof node.className === 'string' ? node.className.trim().split(/\s+/).filter(Boolean) : [];
+        if (cls.length) {
+            const c = document.createElement('span');
+            c.className = 'dom-cls';
+            c.textContent = '.' + cls.slice(0, 3).join('.') + (cls.length > 3 ? '…' : '');
+            header.appendChild(c);
+        }
+        if (hasChildren) {
+            const n = document.createElement('span');
+            n.className = 'dbg-count';
+            n.textContent = String(node.children.length);
+            header.appendChild(n);
+        }
         container.appendChild(header);
         if (hasChildren) {
             const children = document.createElement('div');
             children.className = 'dom-children';
-            children.style.display = 'none';
-            children.style.borderLeft = '1px solid var(--bmm-s05)';
-            children.style.marginLeft = '4px';
-            header.onclick = (e) => {
+            children.hidden = true;
+            toggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const isHidden = children.style.display === 'none';
-                children.style.display = isHidden ? 'block' : 'none';
-                toggle.textContent = isHidden ? '▼' : '▶';
-                // Lazy load children if needed
-                if (isHidden && children.innerHTML === '') {
+                const open = children.hidden;
+                // Lazy: the children are built the first time they are shown.
+                if (open && !children.firstChild) {
                     for (const child of node.children) {
                         const childNode = this._renderDomNode(child);
                         if (childNode)
                             children.appendChild(childNode);
                     }
                 }
-            };
+                children.hidden = !open;
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
             container.appendChild(children);
         }
-        tag.onclick = (e) => {
+        tag.addEventListener('click', (e) => {
             e.stopPropagation();
             this.selectElement(node);
-        };
+        });
         return container;
+    }
+    /** The level a Rust log line reads as. The buffer is "[time] text", and the text carries
+     *  its own tags ("[ERROR]", "panicked", "[WARN]"), so it is read the way a person would. */
+    _rustLevel(line) {
+        const l = String(line).toLowerCase();
+        if (l.includes('error') || l.includes('panic'))
+            return 'error';
+        if (l.includes('warn'))
+            return 'warn';
+        if (l.includes('success') || l.includes('done'))
+            return 'ok';
+        if (l.includes('info'))
+            return 'info';
+        return 'plain';
     }
     async refreshRustLogs() {
         const container = this._get('rust-logs-container');
         if (!container)
             return;
-        container.innerHTML = `<div class="debug-empty">Chargement...</div>`;
+        container.innerHTML = `<div class="debug-empty-state">${this.escapeHtml(t('common.loading'))}</div>`;
         try {
             const { invoke } = window.__TAURI__.core;
             const logs = await invoke('get_rust_logs');
-            container.innerHTML = logs.map(line => {
-                // simple parsing for highlighting strings like "[HH:MM:SS.mmm] [LEVEL] message"
-                let color = 'var(--text-primary)';
-                const lowerLine = line.toLowerCase();
-                if (lowerLine.includes('error') || lowerLine.includes('panic'))
-                    color = 'var(--debug-error)';
-                else if (lowerLine.includes('warn'))
-                    color = 'var(--debug-warn)';
-                else if (lowerLine.includes('info'))
-                    color = 'var(--debug-accent)';
-                else if (lowerLine.includes('success') || lowerLine.includes('done'))
-                    color = 'var(--debug-success)';
-                return `<div class="debug-rustline" style="color:${color}">${this.escapeHtml(line)}</div>`;
-            }).join('') || '<div class="debug-empty">None log Rust trouvé.</div>';
+            container.dataset.loaded = '1';
+            const rows = (Array.isArray(logs) ? logs : []).map(line => {
+                const s = String(line);
+                const m = s.match(/^\[([^\]]{1,20})\]\s?([\s\S]*)$/);
+                const time = m ? m[1] : '';
+                const msg = m ? m[2] : s;
+                const lvl = this._rustLevel(msg);
+                return `<div class="dbg-logline" data-lvl="${lvl}"><span class="dbg-logline-time">${this.escapeHtml(time)}</span><span class="dbg-lvl" data-lvl="${lvl}" aria-hidden="true"></span><span class="dbg-logline-msg">${this.escapeHtml(msg)}</span></div>`;
+            }).join('');
+            container.innerHTML = rows || `<div class="debug-empty-state">${this.escapeHtml(t('dev.msg.noRustLogs'))}</div>`;
+            this.filterRustLogs();
             container.scrollTop = container.scrollHeight;
         }
         catch (e) {
-            container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Error: ${e}</div>`;
+            container.innerHTML = `<div class="debug-empty-state dbg-error">${this.escapeHtml(t('dev.msg.rustFailed', { why: String(e?.message || e) }))}</div>`;
         }
+    }
+    /** The Rust tab's text filter and level select, applied to the lines already drawn. */
+    filterRustLogs() {
+        const container = this._get('rust-logs-container');
+        if (!container)
+            return;
+        const q = String(this._get('rust-log-filter')?.value || '').toLowerCase();
+        const level = this._get('rust-log-level')?.value || 'all';
+        const lines = container.querySelectorAll('.dbg-logline');
+        let shown = 0;
+        lines.forEach(el => {
+            const lvl = el.dataset.lvl;
+            const levelOk = level === 'all' || lvl === 'error' || (level === 'warn' && lvl === 'warn');
+            const hit = levelOk && (!q || el.textContent.toLowerCase().includes(q));
+            el.hidden = !hit;
+            if (hit)
+                shown++;
+        });
+        const count = this._get('rust-log-count');
+        if (count)
+            count.textContent = lines.length ? t('dev.label.shownOf', { shown: String(shown), n: String(lines.length) }) : '';
     }
     _getLogColor(level) {
         if (!level)

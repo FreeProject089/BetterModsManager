@@ -500,6 +500,9 @@ fn load_with_recovery(path: &std::path::Path) -> AppData {
     AppData::default()
 }
 
+/// Serialises `AppState::save` calls (see there).
+static SAVE_ORDER: Mutex<()> = Mutex::new(());
+
 /// Crash-safe write: write to a temp file, fsync, then atomically rename over
 /// the target. An interrupted write can never leave a half-written file.
 pub fn atomic_write_bytes(path: impl AsRef<std::path::Path>, bytes: &[u8]) -> std::io::Result<()> {
@@ -561,8 +564,22 @@ impl AppState {
         }
     }
 
+    /// Write data.json (crash-safe: .bak roll, temp file, fsync, rename).
+    ///
+    /// The data lock is held only while the state is SERIALISED, not while it is written. The
+    /// old save held it through the .bak copy, the write and the fsync, and every mod enabled
+    /// or disabled saves once: on a big library (file lists and hashes for every mod) that was
+    /// tens to hundreds of milliseconds per mod during which get_mods, the cards' refresh and
+    /// every other command waited — the "freeze" of an activation. `SAVE_ORDER` keeps two saves
+    /// from crossing: the one that serialised later is the one that is written later, so an
+    /// older snapshot can never land on top of a newer one. Lock order is SAVE_ORDER → data,
+    /// and nothing takes SAVE_ORDER while holding the data lock (`save` takes both itself).
     pub fn save(&self) -> anyhow::Result<()> {
-        let data = self.data.lock().unwrap();
+        let _order = SAVE_ORDER.lock().unwrap_or_else(|p| p.into_inner());
+        let bytes = {
+            let data = self.data.lock().unwrap();
+            serde_json::to_vec_pretty(&*data)?
+        };
         let path = &*self.data_path;
         // Roll the current good file to .bak BEFORE replacing it. Because the
         // write below is atomic (temp + rename), the live data.json is always a
@@ -570,7 +587,7 @@ impl AppState {
         if path.exists() {
             let _ = std::fs::copy(path, path.with_extension("json.bak"));
         }
-        atomic_write_json(path, &*data)?;
+        atomic_write_bytes(path, &bytes)?;
         Ok(())
     }
 }

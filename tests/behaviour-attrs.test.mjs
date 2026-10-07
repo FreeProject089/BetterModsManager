@@ -145,6 +145,9 @@ const HARMLESS = {
     // button, not document-wide; the probe reaches it through the 3000-char window after `onEsc`).
     // The value only picks which of the export's own strings goes to the clipboard.
     'data-what': 'order-share copy buttons, own dialog',
+    // Library cards' activation look (mods-job-anim.ts): a render cache on app-built .mod-card
+    // elements under #mod-list-viewport, reset on langChanged so the labels redraw; no action.
+    'data-job-sig': 'mods-job-anim render cache on Library cards, reset on langChanged; no action',
 };
 
 function documentListenerAttrs() {

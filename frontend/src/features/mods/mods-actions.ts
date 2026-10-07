@@ -8,6 +8,7 @@ import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
 import { refreshMods, closeModDetail } from './mods.js';
 import { setModLoading, updateCardState, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
+import { isActivationBusy, markCurrentSkipped, cancelAllActivationJobs, announceExternal, clearAnnounced, registerExternalCancel } from '../../core/activation-jobs.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -71,7 +72,7 @@ export function consumeAndClearOp(modId: string): _OpState | undefined {
  * than no shortcut, because the person presses it again harder.
  */
 export function hasCancellableOps(): boolean {
-  return S.isGlobalProcessing || _opState.size > 0 || _queueRunning;
+  return S.isGlobalProcessing || _opState.size > 0 || _queueRunning || isActivationBusy();
 }
 
 function _updateCancelBtn() {
@@ -81,6 +82,8 @@ function _updateCancelBtn() {
 /** "Cancel current op only" — kill the running worker, let any queued
  *  ops continue (used by the main cancel button's default click).        */
 export function requestCancelCurrentOnly() {
+  // The activation queue counts the mod in flight as cancelled and goes on with the next.
+  markCurrentSkipped();
   try { invoke('kill_current_mod_op'); } catch (_) {}
   // Mark the in-flight op(s) as cancelled so the toggle finalizer shows the
   // "cancelled" toast and the success toast is suppressed — even when the backend
@@ -98,7 +101,14 @@ export function requestCancelCurrentOnly() {
  *  there are still in-flight ops that should see CANCELLED. */
 let _cancelAllInProgress = false;
 
+// The activity pill's Cancel on a batch it does not own (Enable all, an order list) is this
+// one, the same as the toolbar's Cancel all.
+registerExternalCancel(() => requestCancelModOps());
+
 export async function requestCancelModOps() {
+  // The activation queue first: its waiting jobs must not start while this stop is under way
+  // (with the backend's cancel flag up, their enables would answer "ok" having done nothing).
+  const jobsStopped = cancelAllActivationJobs().catch(() => {});
   // Tell the Rust side to abort any running file copy IMMEDIATELY — this is
   // what makes cancel feel instant instead of "wait for current mod to finish".
   try { invoke('cancel_mod_ops'); } catch (_) { /* best-effort */ }
@@ -108,6 +118,14 @@ export async function requestCancelModOps() {
   }
   if (_opState.size === 0) {
     _setCancelBtnState(S.isGlobalProcessing, true);
+    await jobsStopped;
+    // The global flag stays up while Enable all runs on the backend: its loop reads it between
+    // mods, and toggleAllMods lowers it in its finally. With nothing like that running it is
+    // lowered here, once the jobs have stopped (they no longer touch it: each one cancels and
+    // clears its own scope, and the order lists run as jobs), so a later unscoped call (the
+    // API, a revert) is not skipped by a stale stop.
+    if (!S.isGlobalProcessing) { try { await invoke('clear_mod_op_cancel'); } catch (_) { /* best-effort */ } }
+    setTimeout(() => _updateCancelBtn(), 300);
     return;
   }
 
@@ -302,8 +320,10 @@ export async function toggleAllMods(forcedEnable = null) {
   S.isGlobalProcessing = true;
   targetMods.forEach(m => {
     S.processingMods.add(m.id);
-    setModLoading(m.id, true);
   });
+  // The cards show "queued" until the backend reaches each one, then copy → done
+  // (mods-job-anim.ts), instead of a spinner over every card for the whole batch.
+  announceExternal(targetMods.map(m => m.id), enable ? 'enable' : 'disable');
 
   // Show cancel button (isGlobalProcessing is now true)
   _updateCancelBtn();
@@ -354,7 +374,7 @@ export async function toggleAllMods(forcedEnable = null) {
     // Always make sure the cancel flag is cleared at the end of the batch
     // so a follow-up toggle isn't accidentally short-circuited.
     try { await invoke('clear_mod_op_cancel'); } catch (_) {}
-    targetMods.forEach(m => setModLoading(m.id, false));
+    clearAnnounced(targetMods.map(m => m.id));
     await new Promise(r => setTimeout(r, 250));
     targetMods.forEach(m => S.processingMods.delete(m.id));
     S.isGlobalProcessing = false;

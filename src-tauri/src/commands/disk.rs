@@ -89,7 +89,7 @@ fn os_free_space(path: &str) -> Option<(u64, u64)> {
 #[cfg(not(windows))]
 fn os_free_space(_path: &str) -> Option<(u64, u64)> { None }
 
-fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
+pub(crate) fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
     let lower_mp = mount_point.to_lowercase();
     let lower_name = name.to_lowercase();
 

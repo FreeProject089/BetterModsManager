@@ -206,10 +206,12 @@ export function mountExplain(detail: HTMLElement, path: string): void {
         try {
             const r: any = await invoke('ai_crash_explain', { path });
             // Model output is untrusted: B.MD's untrusted path, nothing that fetches (laya-explain-md.ts).
-            const { explainHtml } = await import('./laya-explain-md.js');
+            const { paintExplain } = await import('./laya-explain-md.js');
             if (out) {
-                out.innerHTML = `<div class="laya-explain-md">${explainHtml(String(r?.text || ''))}</div>`
+                out.innerHTML = `<div class="laya-explain-md"></div>`
                     + `<p class="ai-muted">${escHtml(t('crashmgr.laya.explainNote', { model: String(r?.model || '') }))}</p>`;
+                const md = out.querySelector<HTMLElement>('.laya-explain-md');
+                if (md) paintExplain(md, String(r?.text || ''));
             }
         } catch (err) {
             if (out) out.textContent = reasonText(String((err as Error)?.message || err));

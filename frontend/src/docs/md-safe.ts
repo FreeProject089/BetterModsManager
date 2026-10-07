@@ -64,6 +64,60 @@ const ALLOW_ATTR = [
 
 let _hooked = false;
 
+// ── Diagrams through the sanitiser ─────────────────────────────────────────────────────────
+//
+// DOMPurify drops any attribute whose value holds `-->` (its guard against comment-based mXSS),
+// and `-->` is the arrow of every flowchart: through the sanitiser, md-lite's `data-mermaid`
+// came out empty and every sanitised render (a plugin's documentation, an order list's notes)
+// lost its diagrams. The source is not HTML (mermaid reads it, in strict mode for anything
+// untrusted: md-mermaid.ts `drawDiagrams({ strict: true })`), so it goes AROUND the sanitiser:
+// taken out before, put back after, on the very element md-lite built for it.
+
+/** md-lite's diagram block, exactly as md-lite writes it (md-lite.ts, the mermaid fence and
+ *  `:::mermaid`). Only this shape is stashed: the class is the first attribute, the source the
+ *  second. */
+const DIAGRAM_ATTR = /(<div class="dh-mermaid") data-mermaid="([^"]*)"/g;
+
+/**
+ * Take every diagram source out of md-lite's markup, leaving a reference that only this call
+ * knows (`nonce`: a reference written by the document itself matches nothing and is dropped).
+ * The sources stay attribute-escaped; a raw `<`, `>` or `'` that did not come from md-lite's
+ * escaping is escaped here, so nothing put back can read as markup.
+ */
+export function stashDiagrams(html: string, nonce: string): { html: string; sources: string[] } {
+    const sources: string[] = [];
+    const out = String(html || '').replace(DIAGRAM_ATTR, (_m, head: string, src: string) => {
+        sources.push(src.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;'));
+        return `${head} data-mermaid-ref="${nonce}:${sources.length - 1}"`;
+    });
+    return { html: out, sources };
+}
+
+/**
+ * Put the sources back on the sanitised markup: on a `dh-mermaid` block carrying this call's
+ * reference, and nowhere else. Every other `data-mermaid-ref` (forged, or orphaned) goes.
+ */
+export function restoreDiagrams(html: string, sources: string[], nonce: string): string {
+    const esc = nonce.replace(/[^\w-]/g, '');
+    const ref = new RegExp(`(<div class="dh-mermaid") data-mermaid-ref="${esc}:(\\d+)"`, 'g');
+    return String(html || '')
+        .replace(ref, (_m, head: string, i: string) => {
+            const src = sources[Number(i)];
+            return src === undefined ? head : `${head} data-mermaid="${src}"`;
+        })
+        .replace(/(<[a-z][^<>]*?)\sdata-mermaid-ref="[^"]*"/gi, '$1');
+}
+
+function diagramNonce(): string {
+    try {
+        const a = new Uint32Array(2);
+        globalThis.crypto.getRandomValues(a);
+        return `m${a[0].toString(36)}${a[1].toString(36)}`;
+    } catch {
+        return `m${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    }
+}
+
 /**
  * Sanitise rendered documentation HTML.
  *
@@ -100,13 +154,17 @@ export function sanitizeDocHtml(html: string): string {
             }
         });
     }
-    return DP.sanitize(html, {
+    // Diagram sources around the sanitiser (see stashDiagrams), then back on their blocks.
+    const nonce = diagramNonce();
+    const { html: stashed, sources } = stashDiagrams(html, nonce);
+    const clean = String(DP.sanitize(stashed, {
         ALLOWED_TAGS: ALLOW_TAGS,
         ALLOWED_ATTR: ALLOW_ATTR,
         ALLOW_DATA_ATTR: true,
         FORBID_TAGS: ['script', 'style', 'form', 'input', 'iframe', 'object', 'embed', 'link', 'meta', 'base'],
         FORBID_ATTR: ['srcset', 'formaction', 'ping'],
-    });
+    }));
+    return restoreDiagrams(clean, sources, nonce);
 }
 
 /**

@@ -289,6 +289,10 @@
 }
 
 .debug-pane-ext.active { display: block; overflow-y: auto; }
+/* The wrapper of the extension panes takes the content's height only while one of them
+   shows, so that pane is the scroller (its sticky header then sticks) instead of growing
+   past the panel and handing the scroll to .debug-content. */
+#debug-ext-panes:has(> .debug-pane.active) { height: 100%; }
 .debug-section-host { min-height: 100%; }
 .debug-section-error { color: var(--debug-error); }
 
@@ -1219,3 +1223,217 @@
 
 /* The minimise glyph flips to a restore chevron once collapsed. */
 .rstudio-bar.rstudio-mini .rstudio-min svg { transform: rotate(90deg); }
+
+/* ── Debugger tab ─────────────────────────────────────────────────────────────
+   One header language for every sub-pane, and for the extension sections (Laya):
+   a sunken bar with the title and one line of what the pane is on the left, its
+   actions on the right, a hairline under it. It wraps as whole groups at narrow
+   widths instead of squeezing the buttons. Below it an optional filter bar, then a
+   body that scrolls on its own, so the bar never scrolls away. */
+.debugger-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.debugger-subtabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--bmm-s05); background: var(--debug-sunken); flex-shrink: 0; }
+.debugger-subcontent { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.debug-subpane { display: none; flex-direction: column; height: 100%; min-height: 0; }
+.debug-subpane.active { display: flex; }
+
+.dbg-bar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bmm-s05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--debug-sunken);
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    flex-shrink: 0;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-bar-text { flex: 1 1 220px; min-width: 0; }
+.dbg-bar-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--debug-text-primary); }
+.dbg-bar-desc { margin: 0; font-size: 11px; line-height: 1.45; color: var(--debug-text-muted); }
+.dbg-bar .debug-btn-row { justify-content: flex-end; }
+.dbg-bar-section .dbg-bar-title { font-size: 12px; letter-spacing: 0.01em; }
+
+.dbg-subbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--bmm-s05);
+    background: var(--debug-bg);
+    flex-shrink: 0;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-subbar-sticky { position: sticky; top: 0; z-index: 1; }
+.dbg-subbar-title { font-size: 11px; font-weight: 600; color: var(--debug-text-secondary); }
+.dbg-grow { flex: 1 1 140px; }
+.dbg-body { flex: 1; min-height: 0; overflow: auto; }
+
+.dbg-input {
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--debug-border);
+    border-radius: 6px;
+    background: var(--debug-sunken);
+    color: var(--debug-text-primary);
+    font: 11px/1.4 var(--bmm-font-sans, system-ui), sans-serif;
+    outline: none;
+}
+.dbg-input:focus-visible { border-color: var(--debug-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--debug-accent) 30%, transparent); }
+textarea.dbg-input { resize: vertical; width: 100%; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; }
+
+.dbg-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--debug-border);
+    background: var(--bmm-s02);
+    font: 600 10px/1.5 var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    color: var(--debug-text-secondary);
+    white-space: nowrap;
+}
+.dbg-count:empty { display: none; }
+.dbg-error { color: var(--debug-error); border-color: color-mix(in srgb, var(--debug-error) 45%, transparent); }
+
+/* Rust log: time, a level mark, the text. The mark carries the colour; the text stays
+   in the readable ink of the theme, so a light theme does not get yellow on white. */
+.dbg-log { padding: 4px 0; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 10.5px; user-select: text; }
+.dbg-log:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
+.dbg-logline {
+    display: grid;
+    grid-template-columns: auto 3px minmax(0, 1fr);
+    gap: 8px;
+    align-items: stretch;
+    padding: 2px 16px;
+    line-height: 1.5;
+}
+.dbg-logline[hidden] { display: none; }
+.dbg-logline:hover { background: var(--bmm-s04); }
+.dbg-logline-time { color: var(--debug-text-muted); white-space: nowrap; }
+.dbg-logline-msg { color: var(--debug-text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dbg-lvl { border-radius: 2px; background: transparent; }
+.dbg-lvl[data-lvl="error"] { background: var(--debug-error); }
+.dbg-lvl[data-lvl="warn"] { background: var(--debug-warn); }
+.dbg-lvl[data-lvl="info"] { background: color-mix(in srgb, var(--debug-accent) 60%, transparent); }
+.dbg-lvl[data-lvl="ok"] { background: var(--debug-success); }
+.dbg-logline[data-lvl="error"] { background: color-mix(in srgb, var(--debug-error) 7%, transparent); }
+.dbg-logline[data-lvl="error"]:hover { background: color-mix(in srgb, var(--debug-error) 13%, transparent); }
+
+/* DOM tree: real buttons (Tab + Enter), a guide line per level, hover per row. */
+.dbg-tree { padding: 8px 8px 12px; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 11px; }
+.dom-node { margin-left: 12px; }
+.dbg-tree > .dom-node { margin-left: 0; }
+.dom-children { margin-left: 5px; border-left: 1px solid var(--bmm-s05); }
+.dom-children[hidden] { display: none; }
+.dom-tree-node { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 1px 4px; border-radius: 4px; }
+.dom-toggle {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--debug-text-muted);
+    cursor: pointer;
+    position: relative;
+}
+span.dom-toggle { cursor: default; }
+button.dom-toggle::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 3px;
+    border-style: solid;
+    border-width: 4px 0 4px 6px;
+    border-color: transparent transparent transparent currentColor;
+    transition: transform 0.12s ease;
+}
+button.dom-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.dom-tag {
+    padding: 0 2px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    font: 600 11px/1.6 var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    color: var(--debug-text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.dom-tag:hover { background: color-mix(in srgb, var(--debug-accent) 16%, transparent); }
+.dom-cls { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--debug-text-muted); }
+.dom-toggle:focus-visible, .dom-tag:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 1px; }
+
+/* CSS sub-pane: the tool switches as a grid of rows (the whole row is the switch's
+   label), then the rule list under a sticky filter bar. */
+.dbg-section { padding: 12px 16px 14px; border-bottom: 1px solid var(--bmm-s05); }
+.dbg-toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 8px; }
+.dbg-toggle-grid .debug-toggle-row {
+    margin: 0;
+    padding: 9px 10px;
+    gap: 10px;
+    border: 1px solid var(--bmm-s05);
+    border-radius: 8px;
+    background: var(--bmm-s02);
+    cursor: pointer;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-toggle-grid .debug-toggle-row:hover { background: var(--bmm-s04); border-color: var(--debug-border); }
+.dbg-toggle-grid .debug-toggle-row:focus-within { border-color: var(--debug-accent); }
+.dbg-toggle-grid .debug-toggle-info { display: flex; flex-direction: column; min-width: 0; padding-right: 0; }
+.dbg-toggle-grid .debug-toggle-title { font-size: 12px; }
+.dbg-toggle-ctl { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.dbg-color { width: 20px; height: 20px; padding: 0; border: 1px solid var(--debug-border); border-radius: 4px; background: transparent; cursor: pointer; }
+.debug-switch:focus-visible, .dbg-color:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 2px; }
+.dbg-grid-config { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--bmm-s10); }
+.dbg-field-label { font: 600 12px/1.4 var(--bmm-font-sans, system-ui), sans-serif; color: var(--debug-text-primary); }
+.dbg-range { width: 100%; }
+
+.dbg-rules { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.css-rule-block {
+    padding: 8px 10px;
+    border: 1px solid var(--bmm-s05);
+    border-radius: 8px;
+    background: var(--bmm-s02);
+    font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    font-size: 11px;
+}
+.css-rule-block[hidden] { display: none; }
+.css-rule-block:hover { border-color: var(--debug-border); }
+.css-rule-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.css-rule-sel { font-weight: 700; color: var(--debug-text-primary); overflow-wrap: anywhere; }
+.rule-inspect-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--debug-text-muted);
+    cursor: pointer;
+}
+.rule-inspect-btn:hover { color: var(--debug-text-primary); background: var(--bmm-s05); border-color: var(--debug-border); }
+.rule-inspect-btn:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 1px; }
+.live-css-editor {
+    margin: 4px 0;
+    padding: 4px 6px;
+    border: 1px dashed transparent;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--debug-text-secondary);
+    outline: none;
+}
+.live-css-editor:hover { border-color: var(--bmm-s10); }
+.live-css-editor:focus { border-color: var(--debug-accent); color: var(--debug-text-primary); background: var(--debug-sunken); }
+
+@container devtools (max-width: 520px) {
+    .dbg-bar, .dbg-subbar { padding-left: 12px; padding-right: 12px; }
+    .dbg-bar .debug-btn-row { justify-content: flex-start; }
+    .dbg-logline { grid-template-columns: 3px minmax(0, 1fr); padding: 2px 12px; }
+    .dbg-logline-time { display: none; }
+    .dbg-section, .dbg-rules { padding-left: 12px; padding-right: 12px; }
+}

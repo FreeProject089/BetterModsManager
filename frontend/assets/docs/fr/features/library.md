@@ -96,6 +96,28 @@ La Bibliothèque récompense quelques gestes :
 - **Clic droit** sur une carte *pendant son activation* pour annuler l'opération.
 - **Glisser-déposer** un `.zip` ou un dossier sur la fenêtre pour l'ajouter.
 
+## Pendant que des mods s'activent ou se désactivent
+
+Activer ou désactiver un mod est une tâche de fond qui appartient à BMM, pas à l'écran
+Bibliothèque. Tu peux aller n'importe où dans l'app pendant qu'elle tourne ; seul un **Annuler**
+explicite l'arrête.
+
+- **La pastille d'activité** dans la barre de titre montre le mod en cours de copie, où il en est
+  dans son lot (`3/12`), les octets déjà copiés, combien de mods attendent, et un bouton
+  **Annuler**. Elle apparaît sur toutes les vues et suit aussi les lots lancés ailleurs (Tout
+  activer, une liste d'ordre).
+- **Les cartes** passent par leurs états : *En attente*, puis *Copie 45 %* avec une fine barre en
+  bas, puis *Activé* (un bref halo, et le numéro d'ordre d'activation apparaît) ou *Échec*. La
+  désactivation suit le même chemin, en ambre, et finit sur *Désactivé*.
+- **Plusieurs bascules d'affilée** se mettent en file et passent l'une après l'autre, dans l'ordre
+  de tes clics.
+- **Annuler** défait le mod en cours (sa copie partielle est revertie), laisse tels quels les mods
+  déjà faits, et ne lance pas ceux qui attendent encore.
+- Un **toast de résumé** à la fin dit combien sont passés et nomme ceux qui ont échoué.
+
+L'animation suit **Paramètres › Graphismes et affichage › Réduire les animations** et le réglage Windows
+« afficher moins d'animations » : les états restent visibles, ils ne bougent simplement plus.
+
 Il n'y a pas de multi-sélection dans la liste elle-même — tu prends un mod à la fois. Quand tu
 as besoin d'un lot (construire un [modpack](doc-page:features/modpacks), ou importer une [liste
 `.MM`](doc-page:features/modlist)), le modal de sélection te donne des cases à cocher et un tout-sélectionner.

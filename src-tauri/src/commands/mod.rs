@@ -6,6 +6,7 @@ pub mod sched_net;
 pub mod resources;
 pub mod resources_live;
 pub mod resources_rules;
+pub mod storage_presets;
 pub mod mod_order;
 pub mod order_share;
 pub mod order_lists;

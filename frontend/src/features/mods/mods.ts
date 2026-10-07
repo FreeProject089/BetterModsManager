@@ -11,6 +11,7 @@ import { appState } from '../../core/state.js';
 // Sub-modules
 import { 
   renderModList,
+  updateCardState,
   updateBadge,
   updateSubtitle,
   updateToggleAllBtn,
@@ -36,6 +37,7 @@ import {
 } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
 import { initLibOrder } from './lib-order.js';
+import { initCardActivityAnimation } from './mods-job-anim.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -68,6 +70,7 @@ export async function initMods() {
     wireLangRerender();
   window._refreshModsFn = refreshMods;
   ensureModCancelContextMenu();
+  initCardActivityAnimation(updateCardState);
   initLibOrder(toast);
 
   // --- Core Listeners ---

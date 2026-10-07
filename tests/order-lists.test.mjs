@@ -169,11 +169,25 @@ describe('wiring', () => {
 
   test('activation goes through enable_mod and the shared commit, never its own copy', () => {
     const body = rs.slice(rs.indexOf('pub async fn order_list_activate'));
-    assert.match(body, /mods::enable_mod\(/);
+    // `enable_mod_in`: the click's path, inside the batch's own cancel scope.
+    assert.match(body, /mods::enable_mod_in\(/);
+    assert.match(body, /in_cancel_scope\(Some\(&sc\)/, 'the batch runs in the scope its job sent');
     assert.match(body, /mods::disable_mods_for_profiles\(/);
     assert.match(body, /mod_order::commit\(/);
     assert.match(body, /is_mod_op_cancelled\(\)/, 'Cancel stops between mods');
     assert.doesNotMatch(rs, /std::fs::|fs::copy|fs::write/, 'no file IO of its own');
+  });
+
+  test('Activate runs as a job of the activation manager, never tied to the dialog', () => {
+    const ts = read('frontend/src/features/profiles/order-lists.ts');
+    assert.match(ts, /runActivationBatch\(\{/);
+    assert.match(ts, /invoke\('order_list_activate', \{[^}]*cancelScope: scope/);
+    // The Stop is the job's own cancel: no global cancel_mod_ops, no clear of the global flag.
+    assert.doesNotMatch(ts, /invoke\('cancel_mod_ops'/);
+    assert.doesNotMatch(ts, /invoke\('clear_mod_op_cancel'/);
+    // Closing the dialog only resolves it: nothing on close reaches the job.
+    const at = ts.indexOf('onClose(');
+    assert.doesNotMatch(ts.slice(at, ts.indexOf('\n', at)), /cancel/);
   });
 
   test('the order view opens the lists', () => {

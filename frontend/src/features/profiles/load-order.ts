@@ -54,7 +54,19 @@ const I = {
     down: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     bottom: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14"/><path d="m7 10 5 5 5-5"/><path d="M12 15V4"/></svg>',
     close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    lists: tool('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><line x1="14" y1="5.5" x2="21" y2="5.5"/><line x1="14" y1="9" x2="19" y2="9"/><line x1="14" y1="16.5" x2="21" y2="16.5"/><line x1="14" y1="20" x2="19" y2="20"/>', 16),
+    sort: tool('<path d="M3 6h11"/><path d="M3 12h8"/><path d="M3 18h5"/><path d="m17 8 3-3 3 3"/><path d="M20 5v14"/>'),
+    share: tool('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'),
+    import: tool('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+    bulk: tool('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>'),
+    reapply: tool('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>'),
+    reset: tool('<path d="M3 12a9 9 0 1 0 2.64-6.36"/><polyline points="3 3 3 9 9 9"/>'),
+    apply: tool('<polyline points="20 6 9 17 4 12"/>', 15, ' stroke-width="2.6"'),
 };
+
+function tool(body: string, w = 14, extra = ''): string {
+    return `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${body}</svg>`;
+}
 
 /** `{n}` / `{m}` / `{p}` / `{e}` placeholders, the house convention. */
 function fill(key: string, vars: Record<string, string | number>): string {
@@ -124,23 +136,40 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
           <button type="button" class="modal-close" id="lo-x" aria-label="${escAttr(t('common.close'))}">${I.close}</button>
         </div>
         <div class="lo-tools">
-          <label class="lo-sort-label" for="lo-sort">${escHtml(t('order.sort'))}</label>
-          <select id="lo-sort" class="lo-sort">
-            <option value="current">${escHtml(t('order.sortCurrent'))}</option>
-            <option value="name-asc">${escHtml(t('order.sortNameAsc'))}</option>
-            <option value="name-desc">${escHtml(t('order.sortNameDesc'))}</option>
-            <option value="oldest">${escHtml(t('order.sortOldest'))}</option>
-            <option value="newest">${escHtml(t('order.sortNewest'))}</option>
-          </select>
+          <button type="button" class="btn btn-sm lo-lists-btn" id="lo-lists" title="${escAttr(t('orderList.openTip'))}">
+            ${I.lists}<span class="lo-lists-text"><span class="lo-lists-t">${escHtml(t('orderList.open'))}</span><span class="lo-lists-sub">${escHtml(t('order.tools.listsSub'))}</span></span>
+            <span class="lo-badge" id="lo-lists-n" hidden></span>
+          </button>
+          <div class="lo-group lo-group-arrange" role="group" aria-label="${escAttr(t('order.tools.arrange'))}">
+            <span class="lo-group-label" aria-hidden="true">${escHtml(t('order.tools.arrange'))}</span>
+            <div class="lo-group-row">
+              <label class="lo-field" title="${escAttr(t('order.sortTip'))}">${I.sort}<span class="lo-field-t">${escHtml(t('order.sort'))}</span>
+                <select id="lo-sort" class="lo-sort">
+                  <option value="current">${escHtml(t('order.sortCurrent'))}</option>
+                  <option value="name-asc">${escHtml(t('order.sortNameAsc'))}</option>
+                  <option value="name-desc">${escHtml(t('order.sortNameDesc'))}</option>
+                  <option value="oldest">${escHtml(t('order.sortOldest'))}</option>
+                  <option value="newest">${escHtml(t('order.sortNewest'))}</option>
+                </select>
+              </label>
+              <label class="lo-field" title="${escAttr(t('order.mode.tip'))}">${I.bulk}<span class="lo-field-t">${escHtml(t('order.mode.label'))}</span>
+                <select id="lo-bulk" class="lo-bulk">
+                  ${(['top', 'bottom', 'keep'] as const).map((m) => `<option value="${m}"${bulkMode === m ? ' selected' : ''}>${escHtml(t(`order.mode.${m}`))}</option>`).join('')}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="lo-group lo-group-share" role="group" aria-label="${escAttr(t('order.tools.share'))}">
+            <span class="lo-group-label" aria-hidden="true">${escHtml(t('order.tools.share'))}</span>
+            <div class="lo-group-row">
+              <button type="button" class="btn btn-secondary btn-sm lo-tool" id="lo-share" title="${escAttr(t('order.share.tip'))}">${I.share}<span>${escHtml(t('order.share.btn'))}</span></button>
+              <button type="button" class="btn btn-secondary btn-sm lo-tool" id="lo-import" title="${escAttr(t('order.import.tip'))}">${I.import}<span>${escHtml(t('order.import.btn'))}</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="lo-sub">
           <span class="lo-hint">${escHtml(t('order.dragHint'))}</span>
           <span class="lo-count" id="lo-count"></span>
-          <button type="button" class="btn btn-ghost btn-sm" id="lo-share" title="${escAttr(t('order.share.tip'))}">${escHtml(t('order.share.btn'))}</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="lo-import" title="${escAttr(t('order.import.tip'))}">${escHtml(t('order.import.btn'))}</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="lo-lists" title="${escAttr(t('orderList.openTip'))}">${escHtml(t('orderList.open'))}</button>
-          <label class="lo-bulk-label" for="lo-bulk" title="${escAttr(t('order.mode.tip'))}">${escHtml(t('order.mode.label'))}</label>
-          <select id="lo-bulk" class="lo-bulk" title="${escAttr(t('order.mode.tip'))}">
-            ${(['top', 'bottom', 'keep'] as const).map((m) => `<option value="${m}"${bulkMode === m ? ' selected' : ''}>${escHtml(t(`order.mode.${m}`))}</option>`).join('')}
-          </select>
         </div>
         <div class="lo-body">
           <div class="lo-edge lo-edge-first">${escHtml(t('order.first'))}</div>
@@ -149,10 +178,10 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         </div>
         <div class="lo-live" id="lo-live" aria-live="polite"></div>
         <div class="modal-footer lo-foot">
-          <button type="button" class="btn btn-ghost btn-sm" id="lo-reapply" title="${escAttr(t('order.reapplyTip'))}">${escHtml(t('order.reapply'))}</button>
-          <span class="lo-status" id="lo-status"></span>
-          <button type="button" class="btn btn-secondary btn-sm" id="lo-reset">${escHtml(t('order.reset'))}</button>
-          <button type="button" class="btn btn-primary btn-sm lo-apply" id="lo-apply">${escHtml(t('order.apply'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm lo-tool" id="lo-reapply" title="${escAttr(t('order.reapplyTip'))}">${I.reapply}<span>${escHtml(t('order.reapply'))}</span></button>
+          <span class="lo-status" id="lo-status" aria-live="polite"></span>
+          <button type="button" class="btn btn-secondary btn-sm lo-tool" id="lo-reset" title="${escAttr(t('order.resetTip'))}">${I.reset}<span>${escHtml(t('order.reset'))}</span></button>
+          <button type="button" class="btn btn-primary btn-sm lo-tool lo-apply" id="lo-apply" title="${escAttr(t('order.applyTip'))}">${I.apply}<span>${escHtml(t('order.apply'))}</span></button>
         </div>
       </div>`;
         (document.getElementById('app-window-outer') || document.body).appendChild(ov);
@@ -168,6 +197,18 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         const reapplyBtn = ov.querySelector('#lo-reapply') as HTMLButtonElement;
         const sortSel = ov.querySelector('#lo-sort') as HTMLSelectElement;
         const closeBtn = ov.querySelector('#lo-x') as HTMLButtonElement;
+        const listsN = ov.querySelector('#lo-lists-n') as HTMLElement;
+
+        /** The saved-lists count on the Lists button: read on open and after the lists close. */
+        async function countLists(): Promise<void> {
+            try {
+                const all = await invoke('order_list_all', {}, { quiet: true }) as unknown[];
+                const n = Array.isArray(all) ? all.length : 0;
+                listsN.textContent = String(n);
+                listsN.hidden = !n;
+                (ov.querySelector('#lo-lists') as HTMLElement | null)?.setAttribute('aria-label', `${t('orderList.open')} (${fill('order.tools.listsCount', { n })})`);
+            } catch { listsN.hidden = true; }
+        }
 
         const rivalText = (items: { name: string; files: number }[], key: string): string => {
             if (!items.length) return '';
@@ -430,6 +471,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
             if (busy) return;
             void import('./order-lists.js').then(async (m) => {
                 const changed = await m.openOrderLists(profileId ?? null, toast);
+                void countLists();
                 if (!changed || !sameOrder(saved, draft)) return;
                 try {
                     const res = await invoke('mod_order_get', { profileId: profileId ?? null }) as [OrderedMod[], ContestedFile[]] | null;
@@ -462,6 +504,7 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
 
         render();
+        void countLists();
         list.focus();
         dispatchBmmAction(BMM_ACTIONS.ORDER_OPENED, { profileId: profileId ?? null });
         if (opts.importText) importInto(opts.importText);

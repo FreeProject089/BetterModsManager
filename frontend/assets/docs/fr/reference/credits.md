@@ -63,11 +63,50 @@ alternative évidente pour une raison consignée dans [Architecture](doc-page:ho
 | `clap`, `colored`, `comfy-table` | le CLI — parsing, couleur et tableaux |
 | `open` | passer une URL ou un dossier à l'OS |
 
+### Verrous, clés et dépôts distants
+
+| Crate | Rôle |
+|---|---|
+| `aes-gcm`, `argon2`, `zeroize` | le verrou par phrase de passe d'un export de données et d'une liste de mods qui porte des identifiants ; les clés sont effacées à la libération |
+| `russh`, `russh-sftp` | publier un dépôt par SSH / SFTP |
+| `keyring` | la clé qui scelle la clé de créateur dans le trousseau de l'OS, hors Windows (DPAPI sous Windows) |
+
+### Laya, l'IA hors ligne
+
+| Composant | Rôle |
+|---|---|
+| `convaiinnovations/laya-multilingual` | le modèle classifieur, Apache-2.0, épinglé à une révision dans `laya-model.lock.json` |
+| ONNX Runtime (Microsoft, MIT) | fait tourner le modèle ; la DLL officielle est livrée dans le pack du modèle et chargée après vérification de son SHA-256 |
+| `ort` | la liaison Rust vers ONNX Runtime, épinglée exactement (une version candidate) |
+| `tokenizers` | le tokenizer de Hugging Face, la même version que celle de la référence Python |
+
+Laya **classe** du texte ; il n'en génère jamais. Tout ce dont il a besoin tourne sur ton PC.
+
 ### Le frontend
 
-Du TypeScript compilé 1:1 vers `frontend/js/`, **sans bundler et sans framework**. La seule dépendance
-runtime notable est **rrweb** pour le replay de session. Voir
-[Architecture](doc-page:how-it-works/architecture) pour ce que ce choix apporte et ce qu'il n'apporte pas.
+Du TypeScript compilé 1:1 vers `frontend/js/`, **sans bundler et sans framework**. Ce que la fenêtre
+charge est embarqué à côté, jamais récupéré sur un CDN : **DOMPurify** (chaque markdown affiché est
+assaini), **marked**, **Prism** (coloration), **KaTeX** (maths), **Mermaid** (diagrammes),
+**rrweb** (replay de session), **GSAP** (animation), **svg-pan-zoom** et **Cropper.js**. Les données
+du sélecteur d'icônes viennent de **Lucide** et **Simple Icons** ; les polices sont **Inter** et
+**JetBrains Mono**. Voir [Architecture](doc-page:how-it-works/architecture) pour ce que ce choix apporte
+et ce qu'il n'apporte pas.
+
+### BetterInstaller et le site
+
+**BetterInstaller**, l'installeur et le programme de mise à jour, est en Rust avec une interface
+**Slint** : une fenêtre native sans moteur de navigateur. Le site **BetterCommunity** est en React et
+Vite devant une API Fastify sur PostgreSQL, avec un bot discord.js.
+
+!!! tip "La liste complète, avec versions et licences"
+
+    Crédits → **Stack technique** liste chaque composant de chaque groupe ci-dessus (coquille de
+    l'app, interface, cœur Rust, IA, polices et icônes, cette doc, BetterInstaller, le site, outils
+    de compilation), chacun avec la version livrée et sa licence. Elle est générée à la compilation
+    par `scripts/gen-credits.mjs` à partir des manifestes eux-mêmes (`Cargo.lock`,
+    `package-lock.json`, le bandeau de licence de chaque fichier embarqué, `laya-model.lock.json`),
+    et une vérification CI échoue dès qu'elle ne leur correspond plus : elle ne peut pas dériver
+    comme une liste écrite à la main.
 
 ---
 

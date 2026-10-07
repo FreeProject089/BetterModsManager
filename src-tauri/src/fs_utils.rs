@@ -49,14 +49,214 @@ pub struct WorkerOutput {
 /// of waiting for the whole file to finish.
 pub static MOD_OP_CANCELLED: AtomicBool = AtomicBool::new(false);
 
+/// The worker's progress line on stdout: `BMMPROG <bytes written so far>` (parsed by
+/// `commands::mods::parse_progress_line`).
+pub const PROGRESS_PREFIX: &str = "BMMPROG";
+
+/// Is the mod operation running here cancelled?
+///
+/// Inside a cancel scope (an activation job, an order-list batch: see `CancelScope`) that is the
+/// scope's own flag, or a global Cancel-all issued AFTER the scope began. Outside one it is the
+/// legacy global flag, as it always was.
 #[inline]
 pub fn is_mod_op_cancelled() -> bool {
-    MOD_OP_CANCELLED.load(Ordering::Relaxed)
+    match current_cancel_scope() {
+        Some(s) => s.is_cancelled(),
+        None => MOD_OP_CANCELLED.load(Ordering::Relaxed),
+    }
 }
 
 #[inline]
 pub fn reset_mod_op_cancel() {
     MOD_OP_CANCELLED.store(false, Ordering::Relaxed);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cancel scopes: one cancel token per batch
+// ─────────────────────────────────────────────────────────────────────────────
+// The global flag above is one bit for every batch in the process, and whoever lowered it
+// (`clear_mod_op_cancel`, a batch starting with `reset_mod_op_cancel`) lowered it for all of
+// them: an activation job finishing its own cancel cleared the Stop of an order list running on
+// the backend at the same moment, which then went on enabling. A scope is a batch's own token:
+//
+//   · `cancel_mod_ops(scope)` raises that scope only; `clear_mod_op_cancel(scope)` forgets it.
+//   · A global Cancel-all (`request_mod_op_cancel`) bumps `CANCEL_EPOCH`, which reaches every
+//     scope that began before it, and none that begins after: nobody has to lower anything
+//     before the next batch, so no clear can race a stop.
+//   · The scope travels with the batch's async task (`in_cancel_scope`, a task-local, so the
+//     nested enable_mod / disable_mod calls see it) and into its blocking threads
+//     (`enter_thread_scope`), where the worker wait loop reads it and kills the worker.
+
+/// Bumped by every global cancel (`request_mod_op_cancel`).
+static CANCEL_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many scopes may be remembered at once; past it, the ones nobody holds are dropped
+/// (a frontend that never sends its clear cannot grow the map without bound).
+const MAX_CANCEL_SCOPES: usize = 256;
+
+#[derive(Debug)]
+pub struct CancelScope {
+    cancelled: AtomicBool,
+    /// `CANCEL_EPOCH` when the scope began: a global cancel after it reaches this scope.
+    epoch: u64,
+}
+
+impl CancelScope {
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled_at(CANCEL_EPOCH.load(Ordering::Relaxed))
+    }
+
+    /// Cancelled on its own, or by a global cancel numbered after the scope began.
+    fn cancelled_at(&self, epoch: u64) -> bool {
+        self.cancelled.load(Ordering::Relaxed) || epoch > self.epoch
+    }
+}
+
+#[cfg(test)]
+mod cancel_scope_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread().build().unwrap()
+    }
+
+    #[test]
+    fn scope_ids_are_bounded_and_plain() {
+        assert!(valid_scope_id("actjob-3-k2x9"));
+        assert!(valid_scope_id("a:b.c_d"));
+        assert!(!valid_scope_id(""));
+        assert!(!valid_scope_id(&"a".repeat(65)));
+        assert!(!valid_scope_id("a b"));
+        assert!(!valid_scope_id("a/b"));
+    }
+
+    #[test]
+    fn a_global_cancel_reaches_scopes_begun_before_it_only() {
+        let s = CancelScope { cancelled: AtomicBool::new(false), epoch: 7 };
+        assert!(!s.cancelled_at(7), "no global cancel since the scope began");
+        assert!(s.cancelled_at(8), "a Cancel-all after it began stops it");
+        let later = CancelScope { cancelled: AtomicBool::new(false), epoch: 8 };
+        assert!(!later.cancelled_at(8), "a Cancel-all before it began does not, and nobody had to lower a flag");
+        later.cancelled.store(true, Ordering::Relaxed);
+        assert!(later.cancelled_at(8));
+    }
+
+    #[test]
+    fn cancelling_one_scope_leaves_another_running() {
+        let (a, b) = ("test-scope-a-1", "test-scope-b-1");
+        let sb = cancel_scope(b);
+        request_scope_cancel(a);
+        assert!(cancel_scope(a).cancelled.load(Ordering::Relaxed));
+        assert!(!sb.cancelled.load(Ordering::Relaxed), "B's token is its own");
+        // Clearing A (its batch is over) does not touch B, and a scope begun again is fresh.
+        drop_cancel_scope(a);
+        assert!(!cancel_scope(a).cancelled.load(Ordering::Relaxed));
+        drop_cancel_scope(a);
+        drop_cancel_scope(b);
+    }
+
+    #[test]
+    fn the_scope_follows_the_task_and_nested_calls_keep_it() {
+        let id = "test-scope-task-1";
+        let seen = rt().block_on(in_cancel_scope(Some(id), async {
+            request_scope_cancel(id);
+            // A nested call passes None: it stays in the batch's scope.
+            in_cancel_scope(None, async { is_mod_op_cancelled() }).await
+        }));
+        assert!(seen, "the batch's own Stop is seen inside it");
+        // Outside the scope, the legacy global flag answers (not this scope's).
+        assert!(current_cancel_scope().is_none());
+        drop_cancel_scope(id);
+    }
+
+    #[test]
+    fn a_blocking_thread_enters_the_scope_and_leaves_it() {
+        let id = "test-scope-thread-1";
+        let s = cancel_scope(id);
+        let s2 = s.clone();
+        std::thread::spawn(move || {
+            assert!(current_cancel_scope().is_none());
+            {
+                let _g = enter_thread_scope(Some(s2.clone()));
+                assert!(Arc::ptr_eq(&current_cancel_scope().unwrap(), &s2));
+            }
+            assert!(current_cancel_scope().is_none(), "the guard restores the previous scope");
+        }).join().unwrap();
+        drop_cancel_scope(id);
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref CANCEL_SCOPES: std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<CancelScope>>> =
+        std::sync::Mutex::new(std::collections::HashMap::new());
+}
+
+tokio::task_local! {
+    static TASK_SCOPE: std::sync::Arc<CancelScope>;
+}
+
+thread_local! {
+    static THREAD_SCOPE: std::cell::RefCell<Option<std::sync::Arc<CancelScope>>> = std::cell::RefCell::new(None);
+}
+
+/// A scope id from the frontend: 1 to 64 characters of `[A-Za-z0-9_.:-]`.
+pub fn valid_scope_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':'))
+}
+
+/// The scope named `id`, created (beginning now) on first use.
+pub fn cancel_scope(id: &str) -> std::sync::Arc<CancelScope> {
+    let mut map = CANCEL_SCOPES.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(s) = map.get(id) { return s.clone(); }
+    if map.len() >= MAX_CANCEL_SCOPES {
+        map.retain(|_, s| std::sync::Arc::strong_count(s) > 1);
+    }
+    let s = std::sync::Arc::new(CancelScope { cancelled: AtomicBool::new(false), epoch: CANCEL_EPOCH.load(Ordering::Relaxed) });
+    map.insert(id.to_string(), s.clone());
+    s
+}
+
+/// Cancel one scope (created cancelled if its batch has not started yet). Nothing else stops.
+pub fn request_scope_cancel(id: &str) {
+    cancel_scope(id).cancelled.store(true, Ordering::Relaxed);
+}
+
+/// Forget a scope once its batch is over.
+pub fn drop_cancel_scope(id: &str) {
+    CANCEL_SCOPES.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
+}
+
+/// The scope of the code running here: the task's, else the blocking thread's.
+pub fn current_cancel_scope() -> Option<std::sync::Arc<CancelScope>> {
+    TASK_SCOPE.try_with(|s| s.clone()).ok()
+        .or_else(|| THREAD_SCOPE.with(|c| c.borrow().clone()))
+}
+
+/// Run `fut` inside the scope `id`. `None` keeps whatever scope is already current (a nested
+/// call from a scoped batch stays in the batch's scope).
+pub async fn in_cancel_scope<F: std::future::Future>(id: Option<&str>, fut: F) -> F::Output {
+    match id {
+        Some(id) => TASK_SCOPE.scope(cancel_scope(id), fut).await,
+        None => fut.await,
+    }
+}
+
+/// Restores the blocking thread's previous scope when dropped.
+pub struct ThreadScopeGuard(Option<std::sync::Arc<CancelScope>>);
+
+impl Drop for ThreadScopeGuard {
+    fn drop(&mut self) {
+        let prev = self.0.take();
+        THREAD_SCOPE.with(|c| *c.borrow_mut() = prev);
+    }
+}
+
+/// Carry a scope into a blocking thread (`spawn_blocking` does not inherit task-locals):
+/// capture `current_cancel_scope()` before spawning, enter it first thing in the closure.
+pub fn enter_thread_scope(scope: Option<std::sync::Arc<CancelScope>>) -> ThreadScopeGuard {
+    let prev = THREAD_SCOPE.with(|c| std::mem::replace(&mut *c.borrow_mut(), scope));
+    ThreadScopeGuard(prev)
 }
 
 /// Raise the flag AND cancel every Deploy ticket in this process. The flag is checked between
@@ -65,6 +265,7 @@ pub fn reset_mod_op_cancel() {
 /// polled this flag themselves.
 pub fn request_mod_op_cancel() {
     MOD_OP_CANCELLED.store(true, Ordering::Relaxed);
+    CANCEL_EPOCH.fetch_add(1, Ordering::Relaxed);
     let q = crate::governor::runtime::global().queue();
     for t in q.snapshot() {
         if t.kind == crate::governor::config::OpKind::Deploy { q.cancel(t.id); }
@@ -101,6 +302,30 @@ pub fn run_mod_worker(input_path: &str, output_path: &str) -> i32 {
         crate::governor::runtime::global().configure(cfg);
     }
 
+    // Progress for the parent (`run_mod_io_worker_with_mode` pipes our stdout when it wants
+    // it): the bytes the governed copies have counted on this process's tickets, a line every
+    // tenth of a second while it moves. A Write error (no pipe, parent gone) is ignored: the
+    // copy matters, the bar does not.
+    let reporting = std::sync::Arc::new(AtomicBool::new(true));
+    {
+        let reporting = reporting.clone();
+        std::thread::spawn(move || {
+            use std::io::Write;
+            let mut best = 0u64;
+            while reporting.load(Ordering::Relaxed) {
+                let now: u64 = crate::governor::runtime::global().queue().snapshot()
+                    .iter().map(|t| t.bytes_written).sum();
+                if now > best {
+                    best = now;
+                    let mut out = std::io::stdout().lock();
+                    let _ = writeln!(out, "{} {}", PROGRESS_PREFIX, best);
+                    let _ = out.flush();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        });
+    }
+
     let result = match input.op.as_str() {
         "apply" => {
             let other: HashSet<PathBuf> = input.other_mods_files.into_iter().collect();
@@ -126,6 +351,7 @@ pub fn run_mod_worker(input_path: &str, output_path: &str) -> i32 {
         }
     };
 
+    reporting.store(false, Ordering::Relaxed);
     let (output, code) = match result {
         Ok(applied) => (WorkerOutput { applied, error: None }, 0),
         Err(e) => {

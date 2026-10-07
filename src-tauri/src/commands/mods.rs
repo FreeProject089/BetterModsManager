@@ -39,6 +39,80 @@ struct BenchEventPayload {
     finished: bool,
 }
 
+/// One mod being turned on or off, as the webview sees it (`bmm://mod-op-progress`). Emitted
+/// for EVERY mod an enable or a disable touches, dependencies included, whoever asked: a card
+/// toggle, "Enable all", an order list, the scheduler. The library cards and the app-wide
+/// activity pill (frontend/src/core/activation-jobs.ts) draw from it, so an activation keeps
+/// showing wherever the user is in BMM.
+///
+/// `phase`: start → copy (bytes, at most `PROGRESS_MAX_PER_SEC` a second) → done | failed |
+/// cancelled. `bytes_total` is the mod's size; `bytes_done` counts what the worker wrote,
+/// backups of the game's originals included, so it is shown clamped to the total.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct ModOpProgress {
+    pub mod_id: String,
+    pub mod_name: String,
+    /// "enable" | "disable"
+    pub op: &'static str,
+    /// "start" | "copy" | "done" | "failed" | "cancelled"
+    pub phase: &'static str,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+}
+
+pub const MOD_OP_PROGRESS_EVENT: &str = "bmm://mod-op-progress";
+
+/// The ceiling on `copy` events per operation. Ten a second is smooth for a bar and nothing
+/// for the webview; an event per file (thousands for a texture pack) was what made a big
+/// activation stutter the UI it was meant to inform.
+pub const PROGRESS_MAX_PER_SEC: u32 = 10;
+
+/// Decides which byte counts become an event: never two within 1/PROGRESS_MAX_PER_SEC of a
+/// second, and never the same value twice.
+#[derive(Debug)]
+pub(crate) struct ProgressThrottle {
+    min_gap: std::time::Duration,
+    last_at: Option<Instant>,
+    last_value: Option<u64>,
+}
+
+impl ProgressThrottle {
+    pub(crate) fn new() -> Self {
+        Self {
+            min_gap: std::time::Duration::from_millis(1000 / PROGRESS_MAX_PER_SEC as u64),
+            last_at: None,
+            last_value: None,
+        }
+    }
+
+    pub(crate) fn should_emit(&mut self, now: Instant, value: u64) -> bool {
+        if self.last_value == Some(value) { return false; }
+        if let Some(at) = self.last_at {
+            if now.duration_since(at) < self.min_gap { return false; }
+        }
+        self.last_at = Some(now);
+        self.last_value = Some(value);
+        true
+    }
+}
+
+/// The worker's progress line on its stdout: `BMMPROG <bytes written>`. Anything else on that
+/// stream is ignored.
+pub(crate) fn parse_progress_line(line: &str) -> Option<u64> {
+    line.trim().strip_prefix(crate::fs_utils::PROGRESS_PREFIX)?.trim().parse().ok()
+}
+
+fn emit_mod_op(window: &Window, mod_id: &str, mod_name: &str, op: &'static str, phase: &'static str, bytes_done: u64, bytes_total: u64) {
+    let _ = window.emit(MOD_OP_PROGRESS_EVENT, ModOpProgress {
+        mod_id: mod_id.to_string(),
+        mod_name: mod_name.to_string(),
+        op,
+        phase,
+        bytes_done,
+        bytes_total,
+    });
+}
+
 #[derive(Serialize, Clone)]
 pub struct EnrichedMod {
     #[serde(flatten)]
@@ -95,10 +169,15 @@ fn probe_process_stats() -> (u64, f32) {
 ///                writes are reverted.
 ///   - `false` → registered nowhere, cannot be cancelled (used for the
 ///                inverse undo itself).
+///
+/// `on_progress`: called with the bytes the worker has written so far, at most
+/// `PROGRESS_MAX_PER_SEC` times a second and only when the count moved. The worker prints them
+/// on its stdout (`fs_utils::PROGRESS_PREFIX`), which is piped only when someone listens.
 fn run_mod_io_worker_with_mode(
     input: crate::fs_utils::WorkerInput,
     cancellable: bool,
     op_label: &str,
+    on_progress: Option<&dyn Fn(u64)>,
 ) -> Result<crate::fs_utils::WorkerOutput, String> {
     use std::process::Stdio;
     use std::sync::atomic::Ordering;
@@ -141,7 +220,7 @@ fn run_mod_io_worker_with_mode(
         .arg(&in_path)
         .arg(&out_path)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(if on_progress.is_some() { Stdio::piped() } else { Stdio::null() })
         .stderr(Stdio::null());
 
     #[cfg(target_os = "windows")]
@@ -169,6 +248,26 @@ fn run_mod_io_worker_with_mode(
         set_mod_op_child_pid(Some(pid));
     }
 
+    // The worker's progress lines, drained on their own thread: a pipe nobody reads fills up
+    // and would block the worker mid-copy. The reader only keeps the highest count; the wait
+    // loop below decides what becomes an event.
+    let progress = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    if let Some(out) = child.stdout.take() {
+        let progress = progress.clone();
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(out).lines() {
+                let Ok(line) = line else { break };
+                if let Some(n) = parse_progress_line(&line) {
+                    progress.fetch_max(n, Ordering::Relaxed);
+                }
+            }
+        });
+    }
+    let mut throttle = ProgressThrottle::new();
+    // The batch this worker belongs to (set by the enable / disable closure); None = legacy.
+    let scope = if cancellable { crate::fs_utils::current_cancel_scope() } else { None };
+
     // Wait for the worker. With a ticket, poll instead of blocking in wait(), so a cancel
     // from the governor (the dashboard) kills the worker exactly like the Cancel button does.
     // The nap grows with the elapsed time (1 ms, up to 50 ms), so a short activation is not
@@ -181,10 +280,16 @@ fn run_mod_io_worker_with_mode(
                 Ok(None) => {}
                 Err(e) => break Err(e),
             }
-            if t.is_cancelled() && !MOD_OP_KILLED.load(Ordering::SeqCst) {
-                log_line(format!("[MOD] governor ticket cancelled, killing worker PID {}", pid));
+            // The ticket (governor dashboard, a global Cancel-all) or this batch's own scope.
+            let scope_stop = scope.as_ref().map_or(false, |s| s.is_cancelled());
+            if (t.is_cancelled() || scope_stop) && !MOD_OP_KILLED.load(Ordering::SeqCst) {
+                log_line(format!("[MOD] {} cancelled, killing worker PID {}", if scope_stop { "batch" } else { "governor ticket" }, pid));
                 MOD_OP_KILLED.store(true, Ordering::SeqCst);
                 kill_worker_pid(pid);
+            }
+            if let Some(cb) = on_progress {
+                let n = progress.load(Ordering::Relaxed);
+                if n > 0 && throttle.should_emit(Instant::now(), n) { cb(n); }
             }
             let nap = (started.elapsed() / 10).clamp(std::time::Duration::from_millis(1), std::time::Duration::from_millis(50));
             std::thread::sleep(nap);
@@ -233,7 +338,7 @@ fn run_mod_io_worker_with_mode(
         let undo_input = make_inverse_undo_input(&input);
         if let Some(u) = undo_input {
             log_line(format!("[MOD] running inverse undo after cancel ({})", input.op));
-            let _ = run_mod_io_worker_with_mode(u, false, "MOD/undo");
+            let _ = run_mod_io_worker_with_mode(u, false, "MOD/undo", None);
         }
 
         return Err("CANCELLED".to_string());
@@ -260,13 +365,13 @@ fn run_mod_io_worker_with_mode(
 }
 
 /// Public wrapper — every call from enable/disable goes through here.
-fn run_mod_io_worker(input: crate::fs_utils::WorkerInput) -> Result<crate::fs_utils::WorkerOutput, String> {
+fn run_mod_io_worker(input: crate::fs_utils::WorkerInput, on_progress: Option<&dyn Fn(u64)>) -> Result<crate::fs_utils::WorkerOutput, String> {
     let label = match input.op.as_str() {
         "apply"   => "MOD/apply",
         "unapply" => "MOD/unapply",
         other     => { log_line(format!("[MOD] unknown op '{}'", other)); "MOD/?" }
     };
-    run_mod_io_worker_with_mode(input, true, label)
+    run_mod_io_worker_with_mode(input, true, label, on_progress)
 }
 
 /// Builds the inverse-op worker input used for "cancel = undo partial work".
@@ -314,9 +419,17 @@ fn make_inverse_undo_input(input: &crate::fs_utils::WorkerInput) -> Option<crate
 
 /// Frontend "cancel" entry-point.  Flips the global cancellation flag AND
 /// kills the worker subprocess if one is running.  Returns instantly.
+///
+/// With `scope`: stops that batch only (an activation job, an order list). Its worker, if it is
+/// the one in flight, is killed by its own wait loop (within 50 ms); the other batches go on.
 #[tauri::command]
-pub fn cancel_mod_ops() {
+pub fn cancel_mod_ops(scope: Option<String>) -> Result<(), String> {
     use std::sync::atomic::Ordering;
+    if let Some(id) = checked_scope(scope)? {
+        log_line(format!("[MOD] cancel_mod_ops requested for batch {}", id));
+        crate::fs_utils::request_scope_cancel(&id);
+        return Ok(());
+    }
     log_line("[MOD] cancel_mod_ops requested");
     crate::fs_utils::request_mod_op_cancel();
 
@@ -330,6 +443,7 @@ pub fn cancel_mod_ops() {
         log_line(format!("[MOD] killing worker PID {}", pid));
         kill_worker_pid(pid);
     }
+    Ok(())
 }
 
 /// Kill a `--mod-worker` process and its tree. Fire and forget: the waiter sees it exit.
@@ -354,9 +468,16 @@ fn kill_worker_pid(pid: u32) {
 
 /// Called by the frontend once all revert work after a cancel is finished,
 /// so the next user-initiated toggle can run normally.
+///
+/// With `scope`: the batch is over, its token is forgotten; the global flag is left alone (it
+/// may be another batch's Stop).
 #[tauri::command]
-pub fn clear_mod_op_cancel() {
-    crate::fs_utils::reset_mod_op_cancel();
+pub fn clear_mod_op_cancel(scope: Option<String>) -> Result<(), String> {
+    match checked_scope(scope)? {
+        Some(id) => crate::fs_utils::drop_cancel_scope(&id),
+        None => crate::fs_utils::reset_mod_op_cancel(),
+    }
+    Ok(())
 }
 
 /// "Cancel current op only" — kills the in-flight worker subprocess but
@@ -1016,13 +1137,30 @@ fn resolve_dependencies(
     Ok(())
 }
 
+/// A cancel scope id from the frontend, checked (`fs_utils::valid_scope_id`).
+fn checked_scope(scope: Option<String>) -> Result<Option<String>, String> {
+    match scope {
+        Some(s) if !crate::fs_utils::valid_scope_id(&s) => Err("invalid cancel scope".to_string()),
+        other => Ok(other),
+    }
+}
+
+/// `cancel_scope`: the batch this call belongs to (an activation job's id). Its Stop
+/// (`cancel_mod_ops` with the same scope) reaches this call and no other batch's.
 #[tauri::command]
-pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>) -> Result<Option<String>, String> {
+pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>, cancel_scope: Option<String>) -> Result<Option<String>, String> {
+    let scope = checked_scope(cancel_scope)?;
+    crate::fs_utils::in_cancel_scope(scope.as_deref(), enable_mod_in(window, state, mod_id, bypass_sha)).await
+}
+
+/// `enable_mod` inside whatever cancel scope is current (a batch calling it keeps its own).
+pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>) -> Result<Option<String>, String> {
     // NOTE: do NOT clear the cancel flag here — multiple parallel enable_mod
     // calls would clobber an in-flight cancel.  The frontend explicitly
     // resets via `clear_mod_op_cancel` once it's done reverting.
     if crate::fs_utils::is_mod_op_cancelled() {
         log_line(format!("[MOD] enable_mod '{}' skipped — cancel flag set", mod_id));
+        emit_mod_op(&window, &mod_id, "", "enable", "cancelled", 0, 0);
         return Ok(None);
     }
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
@@ -1108,6 +1246,11 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     let mut overall_warning: Option<String> = None;
     let disks = sysinfo::Disks::new_with_refreshed_list();
 
+    // The chain runs in a block so that ANY way out of it (an error on the third mod after two
+    // went in) still reaches the save below. A `return Err` from inside the loop used to skip
+    // it: the first mods' files were in the game folder and data.json did not know until some
+    // later save happened to carry them.
+    let chain: Result<(), String> = async {
     for mid in mod_ids_to_enable {
         if crate::fs_utils::is_mod_op_cancelled() {
             log_line(format!("[MOD] Enable loop cancelled before mod '{}'", mid));
@@ -1142,7 +1285,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let mod_folder = if crate::archive::is_archive(&mod_folder) {
             match crate::archive::materialize(&mod_folder) {
                 Ok(dir) => dir,
-                Err(e) => return Err(format!("Failed to extract archive '{}': {}", mod_name, e)),
+                Err(e) => {
+                    emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, 0);
+                    return Err(format!("Failed to extract archive '{}': {}", mod_name, e));
+                }
             }
         } else {
             mod_folder
@@ -1195,8 +1341,11 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             Ok(())
         };
 
-        check_space(&game_path, "Game")?;
-        check_space(&backup_path, "Backup")?;
+        if let Err(e) = check_space(&game_path, "Game").and_then(|_| check_space(&backup_path, "Backup")) {
+            emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, total_bytes);
+            return Err(e);
+        }
+        emit_mod_op(&window, &mid, &mod_name, "enable", "start", 0, total_bytes);
 
         let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
         let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -1208,7 +1357,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         });
 
         let active_files_set_clone = active_files_set.clone();
+        let (pw, pid_, pname) = (window.clone(), mid.clone(), mod_name.clone());
+        let scope = crate::fs_utils::current_cancel_scope();
         let result: Result<Vec<PathBuf>, String> = tauri::async_runtime::spawn_blocking(move || {
+            let _scope = crate::fs_utils::enter_thread_scope(scope);
             let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
             // Re-check cancellation AFTER acquiring the serial lock — if a
             // cancel landed while we were queued, do not start a new worker.
@@ -1226,7 +1378,8 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 smart_io,
                 io: None, // filled in by run_mod_io_worker_with_mode
             };
-            run_mod_io_worker(worker_in).map(|out| out.applied)
+            let on_progress = |n: u64| emit_mod_op(&pw, &pid_, &pname, "enable", "copy", n.min(total_bytes), total_bytes);
+            run_mod_io_worker(worker_in, Some(&on_progress)).map(|out| out.applied)
         }).await.map_err(|e| e.to_string())?;
 
         let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -1241,8 +1394,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 let msg = e.to_string();
                 if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
                     log_line(format!("[MOD] Enable cancelled mid-copy for '{}'", mod_name));
+                    emit_mod_op(&window, &mid, &mod_name, "enable", "cancelled", 0, total_bytes);
                     break;
                 }
+                emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, total_bytes);
                 return Err(msg);
             }
         };
@@ -1261,16 +1416,25 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
         }
 
-        // Update active_files_set for NEXT dependency in the chain
-        if let Some(files) = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner()).get(&mid) {
-            for f in files { active_files_set.insert(f.clone()); }
-        }
+        // The files this mod just placed are "another mod's" for the NEXT one in the chain, so
+        // the next one does not back them up as game originals. Taken from what the worker
+        // reports it wrote, not from `mod_files_cache`: leaving the Library flushes that cache
+        // (flush_mem_caches), and a chain running at that moment saw no files at all, then
+        // backed the previous mod's copies up as the game's own.
+        for f in &applied { active_files_set.insert(f.clone()); }
 
+        emit_mod_op(&window, &mid, &mod_name, "enable", "done", total_bytes, total_bytes);
         log_line(format!("[MOD] Mod '{}' enabled", mod_name));
     }
+    Ok(())
+    }.await;
 
     let _ = state.save();
-    invalidate_cache(&state);
+    // No `invalidate_cache` here: the cache is each mod's file list and the file → mods index,
+    // and neither depends on what is enabled (get_mods reads the active set at query time).
+    // Invalidating it made the NEXT enable rebuild the whole index under the data lock, once per
+    // mod of an "Enable all" or an order list (see `cache_rebuild_cost_bench`).
+    chain?;
     
     // Log history for the primary mod
     if let Some(m) = { let data = state.data.lock().unwrap_or_else(|p| p.into_inner()); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
@@ -1280,10 +1444,18 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     Ok(overall_warning)
 }
 
+/// `cancel_scope`: as for `enable_mod`.
 #[tauri::command]
-pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String, cancel_scope: Option<String>) -> Result<(), String> {
+    let scope = checked_scope(cancel_scope)?;
+    crate::fs_utils::in_cancel_scope(scope.as_deref(), disable_mod_in(window, state, mod_id)).await
+}
+
+/// `disable_mod` inside whatever cancel scope is current.
+pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     if crate::fs_utils::is_mod_op_cancelled() {
         log_line(format!("[MOD] disable_mod '{}' skipped — cancel flag set", mod_id));
+        emit_mod_op(&window, &mod_id, "", "disable", "cancelled", 0, 0);
         return Ok(());
     }
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
@@ -1336,8 +1508,12 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         limit_mb_s: game_path_limit,
         finished: false,
     });
+    emit_mod_op(&window, &mod_id, &mod_name, "disable", "start", 0, total_bytes);
 
+    let (pw, pid_, pname) = (window.clone(), mod_id.clone(), mod_name.clone());
+    let scope = crate::fs_utils::current_cancel_scope();
     let result: Result<(), String> = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = crate::fs_utils::enter_thread_scope(scope);
         let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         if crate::fs_utils::is_mod_op_cancelled() {
             return Err("CANCELLED".to_string());
@@ -1361,7 +1537,8 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
             smart_io,
             io: None, // filled in by run_mod_io_worker_with_mode
         };
-        run_mod_io_worker(worker_in).map(|_| ())
+        let on_progress = |n: u64| emit_mod_op(&pw, &pid_, &pname, "disable", "copy", n.min(total_bytes), total_bytes);
+        run_mod_io_worker(worker_in, Some(&on_progress)).map(|_| ())
     }).await.map_err(|e| e.to_string())?;
 
     let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -1378,8 +1555,10 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     if let Err(msg) = &result {
         if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
             log_line(format!("[MOD] Disable cancelled mid-copy for '{}'", mod_name));
+            emit_mod_op(&window, &mod_id, &mod_name, "disable", "cancelled", 0, total_bytes);
             return Ok(());
         }
+        emit_mod_op(&window, &mod_id, &mod_name, "disable", "failed", 0, total_bytes);
     }
     result?;
 
@@ -1407,6 +1586,7 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     }
     let _ = state.save();
     
+    emit_mod_op(&window, &mod_id, &mod_name, "disable", "done", total_bytes, total_bytes);
     // Log history
     log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled", None);
@@ -1445,7 +1625,7 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     for dep in orphans {
         if crate::fs_utils::is_mod_op_cancelled() { break; }
         log_line(format!("[MOD] Cascade: disabling '{}' — pulled in by '{}' and no longer required by any active mod", dep, mod_id));
-        Box::pin(disable_mod(window.clone(), state.clone(), dep)).await?;
+        Box::pin(disable_mod_in(window.clone(), state.clone(), dep)).await?;
     }
     Ok(())
 }
@@ -2629,9 +2809,9 @@ pub async fn toggle_all_mods(
         // We have to re-prime per iteration because enable_mod/disable_mod
         // reset the cancel flag on entry.  Check before the call.
         if enable {
-            let _ = enable_mod(window.clone(), state.clone(), id, bypass_sha).await;
+            let _ = enable_mod_in(window.clone(), state.clone(), id, bypass_sha).await;
         } else {
-            let _ = disable_mod(window.clone(), state.clone(), id).await;
+            let _ = disable_mod_in(window.clone(), state.clone(), id).await;
         }
         if crate::fs_utils::is_mod_op_cancelled() { break; }
     }
@@ -3896,3 +4076,7 @@ mod governed_install_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+#[cfg(test)]
+#[path = "mod_op_progress_tests.rs"]
+mod mod_op_progress_tests;

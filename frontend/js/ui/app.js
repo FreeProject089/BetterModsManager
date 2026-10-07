@@ -21,6 +21,8 @@ import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
+import { isActivationBusy, configureActivationJobs } from '../core/activation-jobs.js';
+import { initActivationIndicator } from './activation-indicator.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
@@ -90,7 +92,7 @@ async function waitForModalClosed(id) {
     });
 }
 // ── Tauri bridge ──────────────────────────────────────────
-import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification, lastSavePath } from '../core/api.js';
+import { loadTauri, invoke, listen, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification, lastSavePath } from '../core/api.js';
 import { recordNotification, initNotificationCenter } from './notification-center.js';
 // Imported from the tiny standalone module, NOT from debug-ui: the trap has to be
 // installed at boot to be worth anything, and pulling the whole DevTools surface
@@ -343,8 +345,13 @@ function initNavigation() {
                         marqueeContainer._marqueeInterval = null;
                     }
                 }
-                // MEMORY OPTIMIZATION: Flush conflict cache if not in library
-                if (viewId !== 'library') {
+                // MEMORY OPTIMIZATION: Flush conflict cache if not in library — but never while
+                // mods are being turned on or off. The flush empties the backend's file cache,
+                // which the next get_mods then rebuilds under the data lock the activation also
+                // needs: leaving the Library mid-activation cost a stall, and the cache is what
+                // the activation reads. Navigation never touches the running job itself
+                // (core/activation-jobs.ts: only an explicit cancel stops one).
+                if (viewId !== 'library' && !isActivationBusy()) {
                     appState.flushMemory();
                 }
                 // MEMORY OPTIMIZATION: pause/release YouTube iframes when
@@ -1031,6 +1038,14 @@ async function main() {
     initModals();
     initBenchmark();
     await initTitlebar();
+    // The activity pill for mods being turned on / off, in the title bar on every view.
+    try {
+        configureActivationJobs({ invoke: (cmd, args) => invoke(cmd, args || {}), listen, t });
+        initActivationIndicator();
+    }
+    catch (e) {
+        console.warn('[BMM] activation indicator', e);
+    }
     initModlist();
     initRepo();
     // After the UI is up, never before: this makes network calls, and a slow or unreachable
@@ -1781,6 +1796,7 @@ export function startCreditsMarquee() {
 function initCredits() {
     const contributorsGrid = document.getElementById('contributors-grid');
     startCreditsMarquee();
+    void renderCreditsStackSummary();
     if (contributorsGrid) {
         const sections = [
             { id: 'staff', title: 'credits.sections.staff' },
@@ -1801,11 +1817,11 @@ function initCredits() {
             if (members.length === 0)
                 return '';
             return `
-                <div class="credits-category-section" style="margin-bottom: 24px;">
-                    <div class="credits-category-title" data-i18n="${section.title}" style="margin-bottom:12px; font-size:0.8rem; opacity:0.5; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
+                <div class="credits-category-section">
+                    <div class="credits-category-title" data-i18n="${section.title}">
                         ${t(section.title)}
                     </div>
-                    <div class="sub-contributors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div class="sub-contributors-grid">
                         ${members.map(c => {
                 const sub = c.subcategory;
                 // Check if role is a translation key or a literal string
@@ -1828,6 +1844,7 @@ function initCredits() {
     }
     // Language change support
     document.addEventListener('langChanged', () => {
+        void renderCreditsStackSummary();
         if (contributorsGrid) {
             contributorsGrid.querySelectorAll('.contributor-role').forEach(el => {
                 const key = el.dataset.i18n;
@@ -1842,128 +1859,140 @@ function initCredits() {
         }
     });
 }
-window.openStackModal = () => {
+/** Each group's title and one line on what it is, in the order the generator writes them. */
+const STACK_GROUP_TEXT = {
+    shell: ['credits.group.shell', 'App shell', 'credits.groupBlurb.shell', 'Tauri, its plugins and the Windows glue that make BMM a desktop app.'],
+    ui: ['credits.group.ui', 'Interface', 'credits.groupBlurb.ui', 'The libraries the window loads: markdown, sanitising, highlighting, diagrams, maths, replays, animation.'],
+    core: ['credits.group.core', 'Rust core', 'credits.groupBlurb.core', 'Scanning, hashing, archives, networking, the local API and the MCP server.'],
+    ai: ['credits.group.ai', 'AI (Laya)', 'credits.groupBlurb.ai', 'The offline Laya classifier: the model, its runtime and its tokenizer, pinned.'],
+    art: ['credits.group.art', 'Fonts & icons', 'credits.groupBlurb.art', 'Typefaces and icon sets drawn by other people.'],
+    docs: ['credits.group.docs', 'BMM Docs', 'credits.groupBlurb.docs', 'What builds the documentation site and its PDF.'],
+    installer: ['credits.group.installer', 'BetterInstaller', 'credits.groupBlurb.installer', 'The installer and updater, built with Slint.'],
+    site: ['credits.group.site', 'BetterCommunity site', 'credits.groupBlurb.site', 'The website, its API and its Discord bot.'],
+    tooling: ['credits.group.tooling', 'Build & tooling', 'credits.groupBlurb.tooling', 'Compiler, build and test tools. They do not ship inside BMM.'],
+};
+let _stackData = null;
+function loadStackData() {
+    if (!_stackData) {
+        _stackData = fetch('assets/credits-stack.gen.json')
+            .then((r) => (r.ok ? r.json() : { groups: [] }))
+            .then((j) => (Array.isArray(j?.groups) ? j.groups : []))
+            .catch(() => { _stackData = null; return []; });
+    }
+    return _stackData;
+}
+/** The card's description: ours when we wrote one, else the line from its own manifest. */
+function stackDesc(it) {
+    for (const k of [`credits.stackCrate.${it.key}`, `credits.stackPkg.${it.key}`]) {
+        const v = t(k);
+        if (v && v !== k)
+            return { text: v, upstream: false };
+    }
+    return { text: it.desc || '', upstream: !!it.desc };
+}
+const stackVersion = (v) => (!v ? '' : /^\d/.test(v) ? `v${v}` : v);
+/** Credits → the "Built with" strip: one chip per group with its count, each opening the
+ *  stack on that group. Drawn from the same generated file as the modal. */
+async function renderCreditsStackSummary() {
+    const host = document.getElementById('credits-stack-summary');
+    if (!host)
+        return;
+    const groups = (await loadStackData()).filter((g) => g.items.length);
+    if (!groups.length) {
+        host.hidden = true;
+        return;
+    }
+    const total = groups.reduce((n, g) => n + g.items.length, 0);
+    host.hidden = false;
+    host.innerHTML = `
+        <div class="credits-stack-head">
+            <span class="credits-section-title credits-stack-title">${escHtml(t('credits.builtWith') || 'Built with')}</span>
+            <span class="credits-stack-total">${escHtml((t('credits.stackTotal') || '{n} open-source components').replace('{n}', String(total)))}</span>
+        </div>
+        <div class="credits-stack-chips">${groups.map((g) => {
+        const tx = STACK_GROUP_TEXT[g.id];
+        const title = tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : g.id;
+        return `<button type="button" class="credits-stack-chip" data-group="${escAttr(g.id)}">${escHtml(title)} <span class="stack-count">${g.items.length}</span></button>`;
+    }).join('')}</div>`;
+    host.onclick = (e) => {
+        const chip = e.target.closest('.credits-stack-chip');
+        if (chip?.dataset.group)
+            void window.openStackModal(chip.dataset.group);
+    };
+}
+window.openStackModal = async (onlyGroup) => {
     const modal = document.getElementById('modal-stack');
     const content = document.getElementById('stack-modal-content');
     if (!modal || !content)
         return;
-    // Links point to the canonical registry page (crates.io / npm) — these never
-    // 404 for a published crate/package, unlike upstream GitHub repos that move.
-    const crate = (c) => `https://crates.io/crates/${c}`;
-    const npm = (p) => `https://www.npmjs.com/package/${p}`;
-    const backend = [
-        { name: "Tauri", v: "2", key: "tauri", url: crate("tauri") },
-        { name: "Tauri Plugins", v: "2", key: "tauri-plugins", url: crate("tauri-plugin-fs") },
-        { name: "rmcp (MCP)", v: "1.4", key: "rmcp", url: crate("rmcp") },
-        { name: "Serde", v: "1.0", key: "serde", url: crate("serde") },
-        { name: "Tokio", v: "1.0", key: "tokio", url: crate("tokio") },
-        { name: "Reqwest", v: "0.12", key: "reqwest", url: crate("reqwest") },
-        { name: "Walkdir", v: "2.0", key: "walkdir", url: crate("walkdir") },
-        { name: "Zip", v: "0.6", key: "zip", url: crate("zip") },
-        { name: "SHA2", v: "0.10", key: "sha2", url: crate("sha2") },
-        { name: "BLAKE3", v: "1", key: "blake3", url: crate("blake3") },
-        { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: crate("discord-rich-presence") },
-        { name: "Warp", v: "0.4", key: "warp", url: crate("warp") },
-        { name: "Rayon", v: "1.8", key: "rayon", url: crate("rayon") },
-        { name: "Anyhow", v: "1.0", key: "anyhow", url: crate("anyhow") },
-        { name: "Sysinfo", v: "0.30", key: "sysinfo", url: crate("sysinfo") },
-        { name: "Tracing", v: "0.1", key: "tracing", url: crate("tracing") },
-        { name: "Clap", v: "4.0", key: "clap", url: crate("clap") },
-        { name: "Comfy Table", v: "7.0", key: "comfy-table", url: crate("comfy-table") },
-        { name: "Chrono", v: "0.4", key: "chrono", url: crate("chrono") },
-        { name: "Regex", v: "1.0", key: "regex", url: crate("regex") },
-        { name: "UUID", v: "1.0", key: "uuid", url: crate("uuid") },
-        { name: "Image", v: "0.25", key: "image", url: crate("image") },
-        { name: "Rand", v: "0.8", key: "rand", url: crate("rand") },
-        { name: "Tempfile", v: "3.0", key: "tempfile", url: crate("tempfile") },
-        { name: "Base64", v: "0.21", key: "base64", url: crate("base64") },
-        { name: "Winreg", v: "0.52", key: "winreg", url: crate("winreg") },
-        { name: "Jwalk", v: "0.8", key: "jwalk", url: crate("jwalk") },
-        { name: "Hex", v: "0.4", key: "hex", url: crate("hex") },
-        { name: "Serde JSON", v: "1.0", key: "serde-json", url: crate("serde_json") },
-        { name: "Thiserror", v: "1.0", key: "thiserror", url: crate("thiserror") },
-        { name: "Futures", v: "0.3", key: "futures", url: crate("futures") },
-        { name: "Flate2", v: "1.0", key: "flate2", url: crate("flate2") },
-        { name: "Tar", v: "0.4", key: "tar", url: crate("tar") },
-        { name: "Sevenz Rust 2", v: "0.23", key: "sevenz-rust2", url: crate("sevenz-rust2") },
-        { name: "Unrar", v: "0.5", key: "unrar", url: crate("unrar") },
-        { name: "Ed25519 Dalek", v: "2.0", key: "ed25519-dalek", url: crate("ed25519-dalek") },
-        { name: "IGD", v: "0.12", key: "igd", url: crate("igd") },
-        { name: "Local IP Address", v: "0.6", key: "local-ip-address", url: crate("local-ip-address") },
-        { name: "Lazy Static", v: "1.4", key: "lazy-static", url: crate("lazy_static") },
-        { name: "mimalloc", v: "0.1", key: "mimalloc", url: crate("mimalloc") },
-        { name: "Open", v: "5", key: "open", url: crate("open") },
-        { name: "fs_extra", v: "1", key: "fs-extra", url: crate("fs_extra") },
-        { name: "Tracing Subscriber", v: "0.3", key: "tracing-subscriber", url: crate("tracing-subscriber") },
-        { name: "Tokio Util", v: "0.7", key: "tokio-util", url: crate("tokio-util") },
-        { name: "Bytes", v: "1", key: "bytes", url: crate("bytes") },
-        { name: "Percent Encoding", v: "2.3", key: "percent-encoding", url: crate("percent-encoding") },
-        { name: "Schemars", v: "0.8", key: "schemars", url: crate("schemars") },
-        { name: "Colored", v: "2", key: "colored", url: crate("colored") },
-        { name: "Backtrace", v: "0.3", key: "backtrace", url: crate("backtrace") },
-        { name: "Windows", v: "0.52", key: "windows", url: crate("windows") }
-    ];
-    const frontend = [
-        { name: "TypeScript", v: "5.7", key: "typescript", url: npm("typescript") },
-        { name: "TanStack Query", v: "5.0", key: "tanstack-query", url: npm("@tanstack/query-core") },
-        { name: "Cheerio", v: "1.2", key: "cheerio", url: npm("cheerio") },
-        { name: "DOMPurify", v: "3.4", key: "dompurify", url: npm("dompurify") },
-        { name: "rrweb", v: "2.0", key: "rrweb", url: npm("rrweb") },
-        { name: "Puppeteer Core", v: "25", key: "puppeteer-core", url: npm("puppeteer-core") },
-        { name: "Prisma Client", v: "5.22", key: "prisma", url: npm("@prisma/client") },
-        { name: "Tauri API", v: "2", key: "tauri-api", url: npm("@tauri-apps/api") },
-        { name: "Tauri CLI", v: "2", key: "tauri-cli", url: npm("@tauri-apps/cli") },
-        { name: "Concurrently", v: "9.2", key: "concurrently", url: npm("concurrently") },
-        { name: "Lucide", v: "0.5", key: "lucide", url: npm("lucide") },
-        { name: "Simple Icons", v: "13", key: "simple-icons", url: npm("simple-icons") }
-    ];
-    // Where each piece actually earns its place. A dependency list answers "what do
-    // we ship"; this answers "why", which is the only reason to read one. Entries are
-    // optional on purpose — the point is to explain the load-bearing ones, not to pad
-    // every row with a paraphrase of its own README.
+    modal.classList.add('open');
+    content.innerHTML = `<div class="stack-loading">${escHtml(t('credits.stackLoading') || 'Loading…')}</div>`;
+    const groups = (await loadStackData()).filter((g) => g.items.length);
+    if (!groups.length) {
+        content.innerHTML = `<div class="stack-empty">${escHtml(t('credits.stackUnavailable') || 'The component list could not be read.')}</div>`;
+        return;
+    }
+    // Where each piece actually earns its place. A dependency list answers "what do we ship";
+    // this answers "why", which is the only reason to read one. Optional on purpose: the
+    // load-bearing ones, not a paraphrase of every README.
     const STACK_ROLE = {
         'jwalk': { en: 'Walks your mod folders. Recursive scanning is the hottest path in BMM, so it runs in parallel.', fr: 'Parcourt tes dossiers de mods. Le scan récursif est le chemin le plus chaud de BMM, donc il tourne en parallèle.' },
         'rayon': { en: 'Turns per-file work (hashing, copying, verifying) into multithreaded iteration without hand-rolling a pool.', fr: 'Transforme le travail par fichier (hash, copie, vérification) en itération multithread sans écrire de pool à la main.' },
         'blake3': { en: 'Every integrity check and every delta-sync decision compares BLAKE3 fingerprints, never file contents.', fr: 'Chaque vérification d’intégrité et chaque décision de delta-sync compare des empreintes BLAKE3, jamais le contenu des fichiers.' },
         'ed25519-dalek': { en: 'Signs and verifies repo manifests, so a mod list can prove who produced it.', fr: 'Signe et vérifie les manifestes de dépôt, pour qu’une liste de mods puisse prouver qui l’a produite.' },
         'tokio': { en: 'The async runtime behind downloads, the local API and the repo server.', fr: 'Le runtime asynchrone derrière les téléchargements, l’API locale et le serveur de dépôt.' },
-        'mimalloc': { en: 'Replaces the system allocator — measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système — mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
+        'mimalloc': { en: 'Replaces the system allocator: measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système : mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
         'rrweb': { en: 'Records a session as replayable DOM events: the .bmmreplay files behind bug reports and the docs player.', fr: 'Enregistre une session en événements DOM rejouables : les fichiers .bmmreplay des rapports de bug et du lecteur de docs.' },
         'dompurify': { en: 'Sanitises every piece of markdown BMM renders, because catalogs and repos are content written by other people.', fr: 'Assainit chaque markdown affiché par BMM, parce que catalogues et dépôts sont du contenu écrit par d’autres.' },
-        'lucide': { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON — never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON — jamais une dépendance d’exécution.' },
+        'lucide': { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON, never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON, jamais une dépendance d’exécution.' },
         'simple-icons': { en: 'Build-time source of the 3400+ brand glyphs, sharded per first letter so one stored icon costs KB, not MB.', fr: 'Source à la compilation des 3400+ glyphes de marques, shardée par première lettre pour qu’une icône stockée coûte des Ko, pas des Mo.' },
-        'clap': { en: 'Parses the BMM CLI — the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM — la même surface que le serveur MCP expose aux agents.' },
+        'clap': { en: 'Parses the BMM CLI, the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM, la même surface que le serveur MCP expose aux agents.' },
         'schemars': { en: 'Generates the JSON Schemas the MCP tools advertise, so an agent knows what a tool accepts.', fr: 'Génère les schémas JSON annoncés par les outils MCP, pour qu’un agent sache ce qu’un outil accepte.' },
         'tauri-api': { en: 'The bridge the whole UI talks through: every action crosses it to reach the Rust core.', fr: 'Le pont par lequel toute l’UI passe : chaque action le traverse pour atteindre le cœur Rust.' },
+        'laya-model': { en: 'The model behind Laya: it classifies text (a crash, a question, a report) on your PC, offline, never generating any.', fr: 'Le modèle derrière Laya : il classe du texte (un crash, une question, un rapport) sur ton PC, hors ligne, sans jamais en générer.' },
+        'ort': { en: 'Runs the Laya model in-process through ONNX Runtime, loaded from the model pack after its hash is checked.', fr: 'Fait tourner le modèle Laya dans le processus via ONNX Runtime, chargé depuis le pack après vérification de son empreinte.' },
+        'tokenizers': { en: 'Cuts text into the exact token ids the model was trained on, byte for byte the same as the Python reference.', fr: 'Découpe le texte en exactement les identifiants de tokens du modèle, octet pour octet comme la référence Python.' },
+        'slint': { en: 'Draws BetterInstaller: a native window without a browser engine, so the installer stays small.', fr: 'Dessine BetterInstaller : une fenêtre native sans moteur de navigateur, pour que l’installeur reste petit.' },
+        'mkdocs-material': { en: 'The theme and search of BMM Docs, in English and French.', fr: 'Le thème et la recherche de BMM Docs, en anglais et en français.' },
     };
     window.__bmmStackRole = STACK_ROLE;
+    const all = [];
+    const card = (it) => {
+        const i = all.push(it) - 1;
+        const d = stackDesc(it);
+        return `<button type="button" class="stack-item" data-i="${i}" data-q="${escAttr(`${it.name} ${it.license || ''}`.toLowerCase())}">
+            <span class="stack-item-header">
+                <span class="stack-item-name">${escHtml(it.name)}</span>
+                ${it.version ? `<span class="stack-item-version">${escHtml(stackVersion(it.version))}</span>` : ''}
+            </span>
+            ${d.text ? `<span class="stack-item-desc"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</span>` : ''}
+            <span class="stack-item-meta">
+                ${it.license ? `<span class="stack-license">${escHtml(it.license)}</span>` : ''}
+                ${it.apps?.length ? `<span class="stack-apps">${escHtml(it.apps.join(' · '))}</span>` : ''}
+            </span>
+        </button>`;
+    };
+    const title = (id) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : id; };
+    const blurb = (id) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[2]) !== tx[2] ? t(tx[2]) : tx[3]) : ''; };
+    const total = groups.reduce((n, g) => n + g.items.length, 0);
+    const start = groups.some((g) => g.id === onlyGroup) ? onlyGroup : 'all';
     content.innerHTML = `
-        <input class="input stack-filter" id="stack-filter" spellcheck="false"
-            placeholder="${escAttr(t('credits.stackFilter') || 'Filter by name…')}">
-        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')} <span class="stack-count">${backend.length}</span></div>
-        <div class="stack-grid">
-            ${backend.map(item => `
-                <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
-                    <div class="stack-item-header">
-                        <span class="stack-item-name">${item.name}</span>
-                        <span class="stack-item-version">${item.v}</span>
-                    </div>
-                    <div class="stack-item-desc" data-i18n="credits.stackCrate.${item.key}">${t(`credits.stackCrate.${item.key}`)}</div>
-                </div>
-            `).join('')}
+        <div class="stack-top">
+            <input class="input stack-filter" id="stack-filter" spellcheck="false" type="search"
+                placeholder="${escAttr(t('credits.stackFilter') || 'Filter by name…')}" aria-label="${escAttr(t('credits.stackFilter') || 'Filter by name…')}">
+            <div class="stack-chips" role="group" aria-label="${escAttr(t('credits.stackGroups') || 'Groups')}">
+                <button type="button" class="stack-chip" data-group="all" aria-pressed="false">${escHtml(t('credits.stackAll') || 'All')} <span class="stack-count">${total}</span></button>
+                ${groups.map((g) => `<button type="button" class="stack-chip" data-group="${escAttr(g.id)}" aria-pressed="false">${escHtml(title(g.id))} <span class="stack-count">${g.items.length}</span></button>`).join('')}
+            </div>
+            <p class="stack-note">${escHtml(t('credits.stackNote') || 'Read from the manifests at build time (Cargo.lock, package-lock.json, licence banners, the model lock): versions are what ships, licences are what each project declares.')}</p>
         </div>
-        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')} <span class="stack-count">${frontend.length}</span></div>
-        <div class="stack-grid">
-            ${frontend.map(item => `
-                <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
-                    <div class="stack-item-header">
-                        <span class="stack-item-name">${item.name}</span>
-                        <span class="stack-item-version">${item.v}</span>
-                    </div>
-                    <div class="stack-item-desc" data-i18n="credits.stackPkg.${item.key}">${t(`credits.stackPkg.${item.key}`)}</div>
-                </div>
-            `).join('')}
-        </div>
+        ${groups.map((g) => `
+        <section class="stack-section" data-group="${escAttr(g.id)}">
+            <div class="stack-section-title">${escHtml(title(g.id))} <span class="stack-count">${g.items.length}</span></div>
+            ${blurb(g.id) ? `<p class="stack-section-blurb">${escHtml(blurb(g.id))}</p>` : ''}
+            <div class="stack-grid">${g.items.map(card).join('')}</div>
+        </section>`).join('')}
+        <div class="stack-empty" hidden>${escHtml(t('credits.stackNoMatch') || 'Nothing matches this filter.')}</div>
         <div class="stack-docs-link">
             <span data-i18n="credits.stackDocsBlurb">${t('credits.stackDocsBlurb')}</span>
             <button type="button" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>
@@ -1971,79 +2000,105 @@ window.openStackModal = () => {
             </button>
         </div>
     `;
-    // A card used to launch the browser on click, which is an abrupt way to answer
-    // "what is this?". It opens an explainer first — what the library does, what BMM
-    // uses it FOR — and the way out to its page is an explicit button.
-    content.onclick = (e) => {
-        const card = e.target.closest('.stack-item');
-        if (!card?.dataset.stackKey)
-            return;
-        openStackDetail(card.dataset.stackKey, card.dataset.stackName || '', card.dataset.stackV || '', card.dataset.stackUrl || '');
-    };
-    // Filtering hides cards instead of re-rendering them: each one gets a click handler bound
-    // below, and rebuilding the markup would quietly drop every listener.
+    // Filtering hides cards instead of re-rendering them, and each section's count follows,
+    // so an empty section reads as "nothing here matched" rather than as a rendering fault.
+    let group = start;
     const filterBox = content.querySelector('#stack-filter');
-    filterBox?.addEventListener('input', () => {
-        const q = filterBox.value.trim().toLowerCase();
-        content.querySelectorAll('.stack-item').forEach((el) => {
-            const name = (el.dataset.stackName || '').toLowerCase();
-            el.style.display = !q || name.includes(q) ? '' : 'none';
+    const apply = () => {
+        const q = (filterBox?.value || '').trim().toLowerCase();
+        let shown = 0;
+        content.querySelectorAll('.stack-chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.group === group)));
+        content.querySelectorAll('.stack-section').forEach((sec) => {
+            const inGroup = group === 'all' || sec.dataset.group === group;
+            let visible = 0;
+            sec.querySelectorAll('.stack-item').forEach((el) => {
+                const on = inGroup && (!q || (el.dataset.q || '').includes(q));
+                el.hidden = !on;
+                if (on)
+                    visible++;
+            });
+            sec.hidden = !inGroup || visible === 0;
+            const count = sec.querySelector('.stack-section-title .stack-count');
+            if (count)
+                count.textContent = String(visible);
+            shown += visible;
         });
-        // Each section header shows how many of ITS items survive, so an empty section
-        // reads as "nothing here matched" rather than as a rendering fault.
-        content.querySelectorAll('.stack-grid').forEach((grid) => {
-            const visible = [...grid.querySelectorAll('.stack-item')].filter((x) => x.style.display !== 'none').length;
-            const title = grid.previousElementSibling?.querySelector('.stack-count');
-            if (title)
-                title.textContent = String(visible);
-        });
-    });
-    modal.classList.add('open');
+        const empty = content.querySelector('.stack-empty');
+        if (empty)
+            empty.hidden = shown > 0;
+    };
+    filterBox?.addEventListener('input', apply);
+    content.onclick = (e) => {
+        const chip = e.target.closest('.stack-chip');
+        if (chip?.dataset.group) {
+            group = chip.dataset.group;
+            apply();
+            return;
+        }
+        const el = e.target.closest('.stack-item');
+        const it = el ? all[Number(el.dataset.i)] : undefined;
+        if (it)
+            openStackDetail(it);
+    };
+    apply();
 };
-/** The dependency explainer: what it is, why it is here, then the way out. */
-function openStackDetail(key, name, version, url) {
+/** The dependency explainer: what it is, why it is here, its licence and where those facts
+ *  were read, then the way out. */
+function openStackDetail(it) {
     document.getElementById('bmm-stack-detail')?.remove();
-    const role = window.__bmmStackRole?.[key];
+    const role = window.__bmmStackRole?.[it.key];
     const lang = getLang() === 'fr' ? 'fr' : 'en';
-    // The card's own description lives under one of two key prefixes (crates vs npm).
-    const desc = t(`credits.stackCrate.${key}`) !== `credits.stackCrate.${key}`
-        ? t(`credits.stackCrate.${key}`)
-        : t(`credits.stackPkg.${key}`);
+    const d = stackDesc(it);
+    const row = (label, value) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
     const overlay = document.createElement('div');
     overlay.id = 'bmm-stack-detail';
     overlay.className = 'modal-generic-overlay open';
     overlay.innerHTML = `
-        <div class="modal stackd-modal">
+        <div class="modal stackd-modal" role="dialog" aria-modal="true" aria-label="${escAttr(it.name)}">
             <div class="stackd-head">
                 <div class="stackd-id">
-                    <span class="stackd-name">${escHtml(name)}</span>
-                    <span class="stackd-v">v${escHtml(version)}</span>
+                    <span class="stackd-name">${escHtml(it.name)}</span>
+                    ${it.version ? `<span class="stackd-v">${escHtml(stackVersion(it.version))}</span>` : ''}
                 </div>
-                <button class="stackd-close" id="stackd-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                <button class="stackd-close" id="stackd-close" data-tooltip="${escAttr(t('common.close') || 'Close')}" aria-label="${escAttr(t('common.close') || 'Close')}">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
-            <div class="stackd-block">
+            ${d.text ? `<div class="stackd-block">
                 <div class="stackd-label">${escHtml(t('credits.stackWhatIs') || 'What it is')}</div>
-                <p class="stackd-text">${escHtml(desc)}</p>
-            </div>
+                <p class="stackd-text"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</p>
+            </div>` : ''}
             ${role ? `<div class="stackd-block stackd-role">
                 <div class="stackd-label">${escHtml(t('credits.stackWhyHere') || 'Why BMM uses it')}</div>
                 <p class="stackd-text">${escHtml(role[lang])}</p>
             </div>` : ''}
-            <div class="stackd-foot">
+            <dl class="stackd-facts">
+                ${it.license ? row(t('credits.stackLicense') || 'Licence', it.license) : ''}
+                ${it.req ? row(t('credits.stackRequired') || 'Asked for', it.req) : ''}
+                ${it.apps?.length ? row(t('credits.stackUsedBy') || 'Used by', it.apps.join(', ')) : ''}
+                ${row(t('credits.stackSource') || 'Read from', it.source)}
+                ${it.licenseFrom && it.licenseFrom !== it.source ? row(t('credits.stackLicenseFrom') || 'Licence read from', it.licenseFrom) : ''}
+            </dl>
+            ${it.url ? `<div class="stackd-foot">
                 <button class="btn btn-secondary btn-sm" id="stackd-open">${escHtml(t('credits.stackOpenPage') || 'Open its page')} ↗</button>
-            </div>
+            </div>` : ''}
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-    const close = () => overlay.remove();
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (ev) => { if (ev.key === 'Escape') {
+        ev.stopPropagation();
+        close();
+    } };
+    document.addEventListener('keydown', onKey, true);
     overlay.querySelector('#stackd-close')?.addEventListener('click', close);
     overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay)
         close(); });
     overlay.querySelector('#stackd-open')?.addEventListener('click', () => {
-        window.openExternal?.(url);
+        if (it.url)
+            window.openExternal?.(it.url);
         close();
     });
+    overlay.querySelector('#stackd-close')?.focus();
 }
 window.openContributorModal = (id) => {
     const c = CONTRIBUTORS.find(x => x.id === id);

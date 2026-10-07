@@ -22,11 +22,21 @@
 //     on (the same path as a click: dependencies, the SHA gate, the governor, Cancel), then
 //     the list's mods are placed on top in its order. "Only this list" first turns off the
 //     active mods the list neither names nor needs.
-import { invoke } from '../../core/api.js';
+//
+// Activate is ONE backend command (`order_list_activate`: one plan, the enables, one order
+// commit), run as a job of core/activation-jobs.ts (`runActivationBatch`): it is queued behind
+// the other activations, shows in the title bar's activity pill and on the library cards, is
+// stopped by its own cancel scope (this dialog's Stop or the pill's Cancel; no other batch), and
+// reports its end with the job manager's toast. Closing the dialog or leaving the view does not
+// stop it; the dialog only shows the result if it is still open when the job ends.
+import { invoke, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { dialog, copy } from './order-share.js';
+import { runActivationBatch, type ActivationJobHandle } from '../../core/activation-jobs.js';
+import { loadNotesRenderer, paintNotes, openNotesEditor } from './order-notes.js';
+import { notesLength } from './order-notes-model.js';
 import {
     type OrderList, type OrderEntry, type ListPlan, type LibraryMod, type PlanRow,
     addMods, moveEntry, removeEntry, searchLibrary, sameList, activationCounts, qualityCounts, isWeakMatch,
@@ -44,7 +54,13 @@ interface ActivateReport {
 
 interface ApplyOutcome { profile_id: string; profile_name: string; placed: number; moved: number; error: string | null }
 
-interface ImportedList { name: string | null; game: string | null; entries: OrderEntry[]; matches: { quality: string }[] }
+interface ImportedList { name: string | null; game: string | null; notes: string; entries: OrderEntry[]; matches: { quality: string }[] }
+
+/** `order_list_export`'s answer: the code only when it is short enough, and always the file. */
+interface ListExport { code: string | null; code_len: number; code_max: number; text: string; file: string; file_name: string; notes_len: number }
+
+/** A list file read in the import box: bigger than this is refused before it is read (Rust caps it too). */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
 function fill(key: string, vars: Record<string, string | number>): string {
     let s = t(key);
@@ -62,37 +78,15 @@ const I = {
     eye: svg(14, '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
     search: svg(14, '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
     list: svg(20, '<line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
+    note: svg(14, '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>'),
+    edit: svg(14, '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+    expand: svg(14, '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>'),
+    shield: svg(12, '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    file: svg(14, '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/>'),
+    copy: svg(14, '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
     globe: svg(12, '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
     grip: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
 };
-
-// The list's notes are B.MD, rendered by the docs renderer on its UNTRUSTED path (DOMPurify,
-// no raw HTML passthrough): a list can come from someone else's share code. Loaded on first use.
-let mdRender: ((src: string) => string) | null = null;
-async function loadMd(): Promise<void> {
-    if (mdRender) return;
-    try {
-        const m = await import('../../docs/md-lite.js');
-        mdRender = (src: string) => m.renderDocMarkdown(src);
-    } catch { /* the notes show as plain text */ }
-}
-
-/** Notes as HTML: B.MD, sanitised, and nothing that fetches (remote images, media) kept. */
-function notesHtml(src: string): string {
-    const text = String(src || '').trim();
-    if (!text) return '';
-    if (!mdRender) return `<p>${escHtml(text)}</p>`;
-    const tpl = document.createElement('template');
-    tpl.innerHTML = mdRender(text);
-    tpl.content.querySelectorAll('img, video, audio, source, picture, iframe, object, embed').forEach((el) => {
-        const alt = el.getAttribute('alt') || '';
-        el.replaceWith(document.createTextNode(alt));
-    });
-    tpl.content.querySelectorAll('[srcset], [poster], [background]').forEach((el) => {
-        el.removeAttribute('srcset'); el.removeAttribute('poster'); el.removeAttribute('background');
-    });
-    return tpl.innerHTML;
-}
 
 const blank = (): OrderList => ({ id: '', name: '', description: '', profile_ids: [], entries: [] });
 const clone = (l: OrderList): OrderList => JSON.parse(JSON.stringify(l));
@@ -116,7 +110,7 @@ export function openOrderLists(profileId: string | null = null, notify?: Notify)
                     invoke('get_all_mods') as Promise<LibraryMod[]>,
                     invoke('get_active_profile_id') as Promise<string | null>,
                 ]);
-                await loadMd();
+                await loadNotesRenderer();
             } catch (e) {
                 notify?.(fill('orderList.loadFailed', { e: t(String(e)) }), 'error', 7000);
                 resolve(false);
@@ -144,10 +138,15 @@ function run(
     let mode: 'edit' | 'apply' | 'activate' = 'edit';
     let busy = false;
     let changedGame = false;
+    let job: ActivationJobHandle | null = null;   // the activation this dialog started, while it runs
     let seq = 0;
     let query = '';
     let adding = false;                    // the add panel is open
-    let notesOpen = false;                 // the notes editor is open
+    let notesEditor: { close: () => void } | null = null;
+    // The rendered notes, kept between redraws (the view is redrawn on every plan answer, and
+    // drawing diagrams again each time would flicker): rebuilt only when the text changes.
+    let notesNode: HTMLElement | null = null;
+    let notesKey = '';
     const picked = new Set<string>();      // mods selected in the add panel
     let hi = -1;                           // the add panel's highlighted result
     let applyTargets = new Set<string>();  // the profiles Apply order is about to touch
@@ -252,6 +251,8 @@ function run(
         const byName = qc.name + rows.filter((r) => r.quality === 'name_version' && r.version_differs).length;
         const anyScope = !d.profile_ids.length;
         const v = viewed();
+        const hasNotes = !!(d.description || '').trim();
+        const importedChip = `<span class="bms-chip olm-imported" title="${escAttr(t('orderList.importedTip'))}">${I.shield}${escHtml(t('orderList.importedBadge'))}</span>`;
         const counts = `
             <span class="bms-chip"><b>${rows.length || d.entries.length}</b>${escHtml(t('orderList.sum.total'))}</span>
             ${plan ? `<span class="bms-chip bms-chip--ok" title="${escAttr(t('orderList.sum.activeTip'))}"><span class="bms-dot"></span>${escHtml(fill('orderList.sum.active', { n: sc.active }))}</span>` : ''}
@@ -263,17 +264,20 @@ function run(
             <div class="olm-head-row">
               <input id="olm-name" class="form-input olm-name" maxlength="120" value="${escAttr(d.name)}" placeholder="${escAttr(t('orderList.namePlaceholder'))}" aria-label="${escAttr(t('orderList.name'))}">
               <span class="olm-unsaved"${dirty() ? '' : ' hidden'}${saved ? ` title="${escAttr(t('orderList.saveFirst'))}"` : ''}><span class="olm-unsaved-dot"></span>${escHtml(t('orderList.unsaved'))}</span>
-              <button type="button" class="btn btn-ghost btn-sm olm-notes-toggle" aria-expanded="${notesOpen}" aria-controls="olm-notes" title="${escAttr(t('orderList.notesTip'))}">${escHtml(t(notesOpen ? 'orderList.notesDone' : (d.description || '').trim() ? 'orderList.notesEdit' : 'orderList.notesAdd'))}</button>
+              ${hasNotes ? '' : `<button type="button" class="btn btn-ghost btn-sm olm-notes-toggle" title="${escAttr(t('orderList.notesTip'))}">${I.note}<span>${escHtml(t('orderList.notesAdd'))}</span></button>`}
             </div>
-            <div class="olm-counts" aria-live="polite">${counts}</div>
-            ${!notesOpen && (d.description || '').trim() ? `<div class="olm-desc pa-doc">${notesHtml(d.description || '')}</div>` : ''}
+            <div class="olm-counts" aria-live="polite">${counts}${d.imported ? importedChip : ''}</div>
           </header>
-          ${notesOpen ? `
-          <section class="olm-notes" id="olm-notes">
-            <label class="bms-label" for="olm-notes-input">${escHtml(t('orderList.notes'))}</label>
-            <textarea id="olm-notes-input" class="form-input olm-notes-input" rows="3" maxlength="2000" placeholder="${escAttr(t('orderList.notesPlaceholder'))}">${escHtml(d.description || '')}</textarea>
-            <span class="bms-label">${escHtml(t('orderList.notesPreview'))}</span>
-            <div class="olm-notes-preview pa-doc">${notesHtml(d.description || '') || `<span class="osh-note">${escHtml(t('orderList.notesEmpty'))}</span>`}</div>
+          ${hasNotes ? `
+          <section class="olm-notesbox" aria-labelledby="olm-notes-h">
+            <div class="olm-notes-h">
+              <span class="bms-label" id="olm-notes-h">${escHtml(t('orderList.notes'))}</span>
+              <span class="olm-notes-n">${escHtml(fill('orderList.notesChars', { n: notesLength(d.description || '').toLocaleString() }))}</span>
+              <span class="bms-spacer"></span>
+              <button type="button" class="btn btn-ghost btn-sm olm-notes-expand" title="${escAttr(t('orderList.notesExpandTip'))}">${I.expand}<span>${escHtml(t('orderList.notesExpand'))}</span></button>
+              <button type="button" class="btn btn-ghost btn-sm olm-notes-toggle" title="${escAttr(t('orderList.notesTip'))}">${I.edit}<span>${escHtml(t('orderList.notesEdit'))}</span></button>
+            </div>
+            <div class="olm-desc-slot"></div>
           </section>` : ''}
           <section class="olm-targets" aria-labelledby="olm-tg-h">
             <div class="olm-targets-h">
@@ -430,7 +434,7 @@ function run(
             ${c.missing ? `<details class="osh-more olm-card"><summary>${escHtml(fill('orderList.act.missingList', { n: c.missing }))}</summary><ul>${names(missingRows)}</ul></details>` : ''}
             <label class="olm-excl${exclusive ? ' is-on' : ''}"><input type="checkbox" class="olm-exclusive"${exclusive ? ' checked' : ''}><span>${escHtml(t('orderList.exclusive'))}</span></label>
             ${c.disable ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.act.disableList', { n: c.disable }))}</summary><ul>${names(p.to_deactivate)}</ul></details>` : ''}`}
-            <div class="olm-result"></div>
+            <div class="olm-result">${job ? `<p class="osh-note">${escHtml(t('orderList.background'))}</p>` : ''}</div>
           </div>`;
     }
 
@@ -499,7 +503,9 @@ function run(
                 <button type="button" class="btn btn-primary btn-sm olm-new-main">${I.plus}<span>${escHtml(t('orderList.new'))}</span></button>
               </div>`;
         } else {
+            const notesTop = main.querySelector('.olm-desc')?.scrollTop || 0;
             main.innerHTML = mode === 'apply' ? renderApply() : mode === 'activate' ? renderActivate(activePlan, exclusive) : renderEdit();
+            mountNotes(notesTop);
             if (mode === 'edit' && adding) renderPicks();
         }
         renderFoot();
@@ -511,6 +517,49 @@ function run(
                 if (el instanceof HTMLInputElement && (el.type === 'search' || el.type === 'text')) el.setSelectionRange(el.value.length, el.value.length);
             }
         }
+    }
+
+    /** The rendered notes into their slot: the same node while the text is the same. */
+    function mountNotes(top: number): void {
+        const slot = main.querySelector('.olm-desc-slot');
+        if (!slot || !draft) return;
+        const src = draft.description || '';
+        const key = `${draft.imported ? 1 : 0}\u0000${src}`;
+        if (!notesNode || key !== notesKey) {
+            notesNode = document.createElement('div');
+            notesNode.className = 'olm-desc dh-content';
+            notesNode.tabIndex = 0;
+            notesNode.setAttribute('role', 'region');
+            notesNode.setAttribute('aria-label', t('orderList.notes'));
+            paintNotes(notesNode, src, !!draft.imported);
+            notesKey = key;
+        }
+        slot.replaceWith(notesNode);
+        notesNode.scrollTop = top;
+    }
+
+    /** The notes in the large editor (or the large read view): every keystroke goes to the draft. */
+    function editNotes(readOnly: boolean): void {
+        if (!draft || notesEditor) return;
+        notesEditor = openNotesEditor({
+            listName: draft.name,
+            value: draft.description || '',
+            imported: !!draft.imported,
+            readOnly,
+            onInput: (value) => {
+                if (!draft) return;
+                draft = { ...draft, description: value };
+                const mark = main.querySelector<HTMLElement>('.olm-unsaved');
+                if (mark) mark.hidden = !dirty();
+                renderFoot();
+            },
+            onSave: async () => (draft && draft.name.trim() ? save() : false),
+            onClose: () => {
+                notesEditor = null;
+                pendingFocus = '.olm-notes-toggle';
+                render();
+            },
+        });
     }
 
     async function refreshPlan(): Promise<void> {
@@ -538,7 +587,6 @@ function run(
         hi = -1;
         confirmDelete = false;
         adding = !draft.entries.length;
-        notesOpen = false;
         render();
         void refreshPlan();
         main.querySelector<HTMLInputElement>('.olm-name')?.focus();
@@ -617,8 +665,13 @@ function run(
 
     function importList(): void {
         const { ov: iov, close: iclose } = dialog('olmi', t('orderList.importTitle'), `
-            <label class="osh-label" for="olmi-text">${escHtml(t('order.import.paste'))}</label>
+            <label class="osh-label" for="olmi-text">${escHtml(t('orderList.importPaste'))}</label>
             <textarea id="olmi-text" class="form-input osh-text" rows="5" spellcheck="false" placeholder="${escAttr(t('order.import.placeholder'))}"></textarea>
+            <div class="osh-row">
+              <button type="button" class="btn btn-secondary btn-sm olmi-file">${I.file}<span>${escHtml(t('orderList.importFile'))}</span></button>
+              <span class="osh-kind olmi-file-name"></span>
+            </div>
+            <input type="file" class="olmi-input" accept=".bmmorder,.json,.txt,application/json,text/plain" hidden>
             <div class="osh-plan olmi-plan" aria-live="polite"></div>`,
             `<span class="osh-status olmi-status"></span>
              <button type="button" class="btn btn-secondary btn-sm olmi-cancel">${escHtml(t('common.cancel'))}</button>
@@ -627,11 +680,16 @@ function run(
         const planEl = iov.querySelector('.olmi-plan') as HTMLElement;
         const st = iov.querySelector('.olmi-status') as HTMLElement;
         const use = iov.querySelector('.olmi-use') as HTMLButtonElement;
+        const fileInput = iov.querySelector('.olmi-input') as HTMLInputElement;
+        const fileName = iov.querySelector('.olmi-file-name') as HTMLElement;
         let got: ImportedList | null = null;
         let timer = 0;
         let iseq = 0;
+        // A file is read whole and handed to the backend as is (it validates and caps it); the
+        // text box shows its name rather than 20 000 characters of JSON.
+        let fileText: string | null = null;
         const read = async () => {
-            const raw = text.value;
+            const raw = fileText ?? text.value;
             got = null;
             use.disabled = true;
             if (!raw.trim()) { planEl.innerHTML = ''; st.textContent = ''; return; }
@@ -645,9 +703,11 @@ function run(
                 const qs = r.matches.map((m) => m.quality);
                 const count = (k: string) => qs.filter((q) => q === k).length;
                 const found = qs.filter((q) => q !== 'missing' && q !== 'ambiguous').length;
+                const notesN = notesLength(r.notes || '');
                 planEl.innerHTML = `
                   <div class="osh-chips">
                     <span class="osh-chip is-ok">${escHtml(fill('order.import.placed', { n: found, m: qs.length }))}</span>
+                    ${notesN ? `<span class="osh-chip" title="${escAttr(t('orderList.importedTip'))}">${escHtml(fill('orderList.importNotes', { n: notesN.toLocaleString() }))}</span>` : ''}
                     ${(['id', 'content', 'source', 'name_version', 'name'] as const).filter((k) => count(k)).map((k) => `<span class="osh-chip">${escHtml(t(`orderList.q.${k}`))}: ${count(k)}</span>`).join('')}
                     ${count('missing') + count('ambiguous') ? `<span class="osh-chip is-warn">${escHtml(fill('orderList.sum.missing', { n: count('missing') + count('ambiguous') }))}</span>` : ''}
                   </div>
@@ -662,7 +722,28 @@ function run(
                 st.textContent = t(String(e));
             }
         };
-        text.addEventListener('input', () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void read(); }, 250); });
+        text.addEventListener('input', () => {
+            fileText = null;
+            fileName.textContent = '';
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => { void read(); }, 250);
+        });
+        iov.querySelector('.olmi-file')?.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            const f = fileInput.files?.[0];
+            fileInput.value = '';
+            if (!f) return;
+            if (f.size > MAX_FILE_BYTES) { st.textContent = t('order.errTooLarge'); return; }
+            const r = new FileReader();
+            r.onload = () => {
+                fileText = String(r.result || '');
+                text.value = '';
+                fileName.textContent = f.name;
+                void read();
+            };
+            r.onerror = () => { st.textContent = t('orderList.errFile'); };
+            r.readAsText(f);
+        });
         iov.querySelector('.olmi-cancel')?.addEventListener('click', iclose);
         use.addEventListener('click', () => {
             if (!got) return;
@@ -670,6 +751,9 @@ function run(
             base.name = got.name || t('orderList.importedName');
             base.game = got.game;
             base.entries = got.entries;
+            // Somebody else's: the notes take the untrusted path, now and after saving.
+            base.description = got.notes || '';
+            base.imported = true;
             iclose();
             open(null, base);
             say(t('orderList.importedDraft'));
@@ -677,14 +761,70 @@ function run(
         text.focus();
     }
 
+    /**
+     * Share the SAVED list: the one-line code when it is short enough for a chat window, and
+     * the .bmmorder file always (the whole list, notes included). Past the code's ceiling the
+     * dialog says so and the file is the primary way.
+     */
     async function share(): Promise<void> {
         if (!saved) return;
+        let out: ListExport;
         try {
-            const out = await invoke('order_list_export', { id: saved.id }) as { code: string };
-            say((await copy(out.code)) ? t('orderList.shareCopied') : t('order.share.copyFailed'));
+            out = await invoke('order_list_export', { id: saved.id }) as ListExport;
         } catch (e) {
             say(fill('order.share.failed', { e: t(String(e)) }));
+            return;
         }
+        const n = (s: number) => s.toLocaleString();
+        const hasCode = !!out.code;
+        const { ov: sov, close: sclose } = dialog('olms', fill('orderList.shareTitle', { m: saved.name }), `
+            <p class="osh-lede">${escHtml(t('orderList.shareLede'))}</p>
+            <section class="olms-way${hasCode ? '' : ' is-off'}" aria-labelledby="olms-code-h">
+              <div class="olms-way-h">
+                <span class="olms-way-ic" aria-hidden="true">${I.copy}</span>
+                <span class="olms-way-t" id="olms-code-h">${escHtml(t('orderList.shareCode'))}</span>
+                <span class="olms-len${hasCode ? '' : ' is-over'}">${escHtml(fill('orderList.shareLen', { n: n(out.code_len), m: n(out.code_max) }))}</span>
+              </div>
+              <p class="osh-note">${escHtml(hasCode ? t('orderList.shareCodeLede') : t('orderList.shareTooLong'))}</p>
+              <div class="olms-acts">
+                <button type="button" class="btn ${hasCode ? 'btn-primary' : 'btn-secondary'} btn-sm olms-copy"${hasCode ? '' : ' disabled'}>${I.copy}<span>${escHtml(t('order.share.copyCode'))}</span></button>
+                <button type="button" class="btn btn-ghost btn-sm olms-text">${escHtml(t('order.share.copyText'))}</button>
+              </div>
+            </section>
+            <section class="olms-way" aria-labelledby="olms-file-h">
+              <div class="olms-way-h">
+                <span class="olms-way-ic" aria-hidden="true">${I.file}</span>
+                <span class="olms-way-t" id="olms-file-h">${escHtml(t('orderList.shareFile'))}</span>
+                <code class="olms-fname">${escHtml(out.file_name)}</code>
+              </div>
+              <p class="osh-note">${escHtml(out.notes_len ? fill('orderList.shareFileLedeNotes', { n: n(out.notes_len) }) : t('orderList.shareFileLede'))}</p>
+              <div class="olms-acts">
+                <button type="button" class="btn ${hasCode ? 'btn-secondary' : 'btn-primary'} btn-sm olms-save">${I.file}<span>${escHtml(t('orderList.shareSave'))}</span></button>
+              </div>
+            </section>`,
+            `<span class="osh-status olms-status" aria-live="polite"></span>
+             <button type="button" class="btn btn-secondary btn-sm olms-done">${escHtml(t('common.close'))}</button>`);
+        const st = sov.querySelector('.olms-status') as HTMLElement;
+        sov.querySelector('.olms-copy')?.addEventListener('click', async () => {
+            if (!out.code) return;
+            st.textContent = (await copy(out.code)) ? t('orderList.shareCopied') : t('order.share.copyFailed');
+        });
+        sov.querySelector('.olms-text')?.addEventListener('click', async () => {
+            st.textContent = (await copy(out.text)) ? t('order.share.copied') : t('order.share.copyFailed');
+        });
+        sov.querySelector('.olms-save')?.addEventListener('click', async () => {
+            const dest = await saveFile({ defaultPath: out.file_name, filters: [{ name: t('orderList.shareFileFilter'), extensions: ['bmmorder'] }] });
+            if (!dest) return;
+            try {
+                await invoke('write_text_file', { path: dest, content: out.file });
+                st.textContent = t('orderList.shareSaved');
+                say(t('orderList.shareSaved'));
+            } catch (e) {
+                st.textContent = fill('order.share.failed', { e: t(String(e)) });
+            }
+        });
+        sov.querySelector('.olms-done')?.addEventListener('click', sclose);
+        (sov.querySelector(hasCode ? '.olms-copy' : '.olms-save') as HTMLElement | null)?.focus();
     }
 
     async function del(): Promise<void> {
@@ -741,31 +881,56 @@ function run(
         } catch { /* keep the old ones */ }
     }
 
+    /** Start the activation as a job (see the header): the dialog may close while it runs. */
     async function activate(): Promise<void> {
-        if (!saved || busy) return;
+        if (!saved || busy || job) return;
+        const list = saved;
+        const pid = activeId;
+        const only = exclusive;
+        let report: ActivateReport | null = null;
         busy = true;
-        renderFoot();
+        changedGame = true;
+        job = runActivationBatch({
+            mods: (activePlan?.to_activate || []).map((m) => ({ id: m.id, name: m.name })),
+            mode: 'enable',
+            profileId: pid,
+            label: fill('orderList.jobLabel', { m: list.name }),
+            source: 'order-list',
+            run: async (scope) => {
+                const r = await invoke('order_list_activate', { id: list.id, exclusive: only, profileId: pid, bypassSha: false, cancelScope: scope }) as ActivateReport;
+                report = r;
+                dispatchBmmAction(BMM_ACTIONS.ORDER_APPLIED, { moved: r.moved });
+                const message = `${fill('orderList.jobLabel', { m: list.name })} · ${fill(r.cancelled ? 'orderList.activatedCancelled' : 'orderList.activated', { n: r.enabled, d: r.disabled, f: r.moved, m: r.missing })}`;
+                return { failed: r.failed, cancelled: r.cancelled, toast: { message, kind: r.failed.length || r.cancelled ? 'warning' : 'success', ms: 6000 } };
+            },
+            failToast: (e) => ({ message: fill('orderList.activateFailed', { e: t(e) }), kind: 'error', ms: 7000 }),
+        });
+        render();
         say(t('orderList.activating'));
-        try {
-            const r = await invoke('order_list_activate', { id: saved.id, exclusive, profileId: activeId, bypassSha: false }) as ActivateReport;
-            changedGame = true;
+        const sum = await job.done;
+        job = null;
+        busy = false;
+        // Closed meanwhile: the job manager's toast and library refresh said everything.
+        if (!ov.isConnected) return;
+        const r = report as ActivateReport | null;
+        if (r) {
             const msg = fill(r.cancelled ? 'orderList.activatedCancelled' : 'orderList.activated', { n: r.enabled, d: r.disabled, f: r.moved, m: r.missing });
-            notify?.(msg, r.failed.length || r.cancelled ? 'warning' : 'success', 6000);
             const failed = r.failed.map((f) => `<li>${escHtml(f.name)}: ${escHtml(f.error.startsWith('MISSING_SHA|') ? t('orderList.failedSha') : t(f.error))}</li>`).join('');
             const res = main.querySelector('.olm-result');
             if (res) res.innerHTML = `<p class="osh-note">${escHtml(msg)}</p>${failed ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.failed', { n: r.failed.length }))}</summary><ul>${failed}</ul></details>` : ''}`;
             say(msg);
-            dispatchBmmAction(BMM_ACTIONS.ORDER_APPLIED, { moved: r.moved });
-            refreshMods();
-            void reloadProfiles();
-            activePlan = await invoke('order_list_plan', { entries: saved.entries, profileId: activeId }).catch(() => activePlan) as ListPlan | null;
-        } catch (e) {
-            say(fill('orderList.activateFailed', { e: t(String(e)) }));
-        } finally {
-            busy = false;
-            try { await invoke('clear_mod_op_cancel'); } catch { /* best-effort */ }
-            renderFoot();
+        } else {
+            // It never ran: refused before its turn (another profile became active) or stopped
+            // while queued.
+            const why = sum.error || sum.failed[0]?.error;
+            say(why ? fill('orderList.activateFailed', { e: t(why) })
+                : t('actjob.summaryCancelled', { label: fill('orderList.jobLabel', { m: list.name }), n: String(sum.done), m: String(sum.total), f: String(sum.failed.length) }));
         }
+        void reloadProfiles();
+        if (mode === 'activate' && saved) {
+            activePlan = await invoke('order_list_plan', { entries: saved.entries, profileId: activeId }).catch(() => activePlan) as ListPlan | null;
+        }
+        renderFoot();
     }
 
     async function apply(): Promise<void> {
@@ -831,7 +996,7 @@ function run(
         else if (c.contains('olm-back')) { if (!busy) { mode = 'edit'; render(); void refreshPlan(); } }
         else if (c.contains('olm-apply-go')) void apply();
         else if (c.contains('olm-activate-go')) void activate();
-        else if (c.contains('olm-cancel-op')) { void invoke('cancel_mod_ops').catch(() => {}); say(t('orderList.stopping')); }
+        else if (c.contains('olm-cancel-op')) { if (job) { void job.cancel(); say(t('orderList.stopping')); } }
     });
 
     main.addEventListener('click', (e) => {
@@ -875,7 +1040,8 @@ function run(
         }
         else if (c.contains('olm-target-all')) { applyTargets = new Set(profiles.map((p) => p.id)); pendingFocus = '.olm-target-none'; render(); }
         else if (c.contains('olm-target-none')) { applyTargets = new Set(); pendingFocus = '.olm-target-all'; render(); }
-        else if (c.contains('olm-notes-toggle')) { notesOpen = !notesOpen; pendingFocus = notesOpen ? '#olm-notes-input' : '.olm-notes-toggle'; render(); }
+        else if (c.contains('olm-notes-toggle')) editNotes(false);
+        else if (c.contains('olm-notes-expand')) editNotes(true);
         else if (c.contains('olm-add-toggle')) toggleAdding(!adding);
         else if (c.contains('olm-add-close')) toggleAdding(false);
         else if (c.contains('olm-add-sel')) addPicked([...picked]);
@@ -895,13 +1061,6 @@ function run(
         if (!draft) return;
         if (el.classList.contains('olm-name')) {
             draft = { ...draft, name: el.value };
-            const mark = main.querySelector<HTMLElement>('.olm-unsaved');
-            if (mark) mark.hidden = !dirty();
-            renderFoot();
-        } else if (el.classList.contains('olm-notes-input')) {
-            draft = { ...draft, description: el.value };
-            const pv = main.querySelector<HTMLElement>('.olm-notes-preview');
-            if (pv) pv.innerHTML = notesHtml(el.value) || `<span class="osh-note">${escHtml(t('orderList.notesEmpty'))}</span>`;
             const mark = main.querySelector<HTMLElement>('.olm-unsaved');
             if (mark) mark.hidden = !dirty();
             renderFoot();

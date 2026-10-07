@@ -47,8 +47,12 @@ expect('ai_embedded.rs PACK_URLS', JSON.stringify(urls), JSON.stringify(lock.pac
 for (const u of lock.pack.urls) if (!u.startsWith('https://')) errors.push(`pack url is not https: ${u}`);
 if (!/^[0-9a-f]{64}$/.test(lock.pack.sha256) || /^0+$/.test(lock.pack.sha256)) errors.push('lock pack.sha256 is not a real SHA-256');
 
-// Every pinned file: name → sha256/size, as written in the PACK_FILES table.
-const fileRows = [...rs.matchAll(/PinnedFile \{ name: ([A-Z_]+|"[^"]+"), sha256: "([0-9a-f]{64})", size: ([0-9_]+) \}/g)];
+// Every pinned file: name → sha256/size, as written in the PACK_FILES table. Read from that
+// table only: a test building its own `PinnedFile { name: "a.bin", … }` (verify_one's tests)
+// is not a pin, and scanning the whole file reported it as one the lock file lacks.
+const table = /pub const PACK_FILES: &\[PinnedFile\] = &\[([\s\S]*?)\];/.exec(rs)?.[1] || '';
+if (!table) errors.push('ai_embedded.rs: the PACK_FILES table was not found (renamed?), so no file pin was read');
+const fileRows = [...table.matchAll(/PinnedFile \{ name: ([A-Z_]+|"[^"]+"), sha256: "([0-9a-f]{64})", size: ([0-9_]+) \}/g)];
 const consts = { MODEL_FILE: 'laya.onnx', TOKENIZER_FILE: 'tokenizer.json', CONFIG_FILE: 'rl_agent_config.json' };
 const seen = new Set();
 for (const [, rawName, sha, size] of fileRows) {

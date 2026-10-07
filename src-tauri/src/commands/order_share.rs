@@ -95,6 +95,12 @@ pub const CODE_PREFIX: &str = "BMMORDER1.";
 /// A pasted order larger than this is not an order.
 const MAX_TEXT: usize = 2 * 1024 * 1024;
 const MAX_ENTRIES: usize = 10_000;
+/// The newest document version this build reads. A newer one is refused with its own message
+/// rather than half-read: a field this build does not know may be the one that matters.
+pub const DOC_VERSION: u32 = 1;
+/// The most a list's notes may hold, in characters (B.MD source). Room for a real write-up with
+/// a table and a diagram or two; enforced on save (order_lists.rs) and on every import path.
+pub const MAX_NOTES: usize = 20_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct OrderEntry {
@@ -128,6 +134,10 @@ pub struct OrderDoc {
     pub game: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub created_at: String,
+    /// A saved list's notes (B.MD source). Absent from a profile's order and from documents
+    /// written before lists had notes; a reader that does not know the field ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
     /// First applied first; the last one wins a shared file.
     pub mods: Vec<OrderEntry>,
 }
@@ -180,6 +190,7 @@ pub fn build_doc(order: &[String], lib: &[LibMod], name: Option<String>, game: O
         name,
         game,
         created_at: chrono::Utc::now().to_rfc3339(),
+        notes: None,
         mods: order
             .iter()
             .map(|id| match by_id.get(id.as_str()) {
@@ -281,10 +292,16 @@ pub fn parse_text(text: &str) -> Result<OrderDoc, String> {
             .filter(|l| !l.is_empty())
             .map(|n| OrderEntry { name: n.to_string(), ..Default::default() })
             .collect();
-        OrderDoc { format: FORMAT.into(), version: 1, name: None, game: None, created_at: String::new(), mods }
+        OrderDoc { format: FORMAT.into(), version: 1, name: None, game: None, created_at: String::new(), notes: None, mods }
     };
     if doc.format != FORMAT {
         return Err("order.errParse".into());
+    }
+    if doc.version == 0 || doc.version > DOC_VERSION {
+        return Err("order.errVersion".into());
+    }
+    if doc.notes.as_deref().map_or(false, |n| n.chars().count() > MAX_NOTES) {
+        return Err("orderList.errNotesTooLong".into());
     }
     if doc.mods.is_empty() {
         return Err("order.errEmpty".into());

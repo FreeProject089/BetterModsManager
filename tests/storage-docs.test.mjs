@@ -12,7 +12,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 const DOCS = join(ROOT, 'BMM Docs', 'docs');
 
-const surfaces = ['frontend/src/features/settings/storage-modal.ts', 'frontend/src/features/settings/resources-dash.ts', 'frontend/src/features/settings/resources-matrix.ts', 'frontend/src/features/settings/graphics-settings.ts'];
+const surfaces = ['frontend/src/features/settings/storage-modal.ts', 'frontend/src/features/settings/resources-dash.ts', 'frontend/src/features/settings/resources-matrix.ts', 'frontend/src/features/settings/graphics-settings.ts', 'frontend/src/features/settings/storage-presets.ts'];
 const used = new Set();
 for (const f of surfaces) {
   if (!existsSync(join(ROOT, f))) continue;

@@ -784,6 +784,26 @@ pub async fn ai_laya_debug_classify(state: State<'_, AppState>, text: String, la
     .map_err(|e| e.to_string())?
 }
 
+/// The panel's « Vérifier l'intégrité »: hash every required file of the model folder against its
+/// pin (a few seconds for the 350 MB model). Through the gate like every Laya command: master
+/// switch off or `--no-ai` = refused, and so is a classifier that is not Laya's own.
+#[tauri::command(async)]
+pub async fn ai_laya_debug_verify(state: State<'_, AppState>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let (settings, _, _, _) = ctx_owned(&dir, None);
+    local_provider(&settings, Feature::Classify, ai_core::kill_switch())?;
+    // Hashing ~350 MB is real disk I/O: one Hash ticket, so it waits behind a deploy and can be
+    // paused or cancelled from the governor before it starts.
+    tauri::async_runtime::spawn_blocking(|| {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Hash, "laya model verify");
+        crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+        Ok(ai_embedded::verify_report())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

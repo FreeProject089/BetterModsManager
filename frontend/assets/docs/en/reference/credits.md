@@ -63,11 +63,49 @@ for a reason recorded in [Architecture](doc-page:how-it-works/architecture).
 | `clap`, `colored`, `comfy-table` | the CLI — parsing, colour, and tables |
 | `open` | handing a URL or folder to the OS |
 
+### Locks, keys and remote repos
+
+| Crate | Job |
+|---|---|
+| `aes-gcm`, `argon2`, `zeroize` | the passphrase lock on a data export and on a mod list carrying credentials; key material wiped on drop |
+| `russh`, `russh-sftp` | publishing a repository over SSH / SFTP |
+| `keyring` | the creator key's sealing key in the OS keyring, off Windows (DPAPI on Windows) |
+
+### Laya, the offline AI
+
+| Component | Job |
+|---|---|
+| `convaiinnovations/laya-multilingual` | the classifier model, Apache-2.0, pinned at one revision in `laya-model.lock.json` |
+| ONNX Runtime (Microsoft, MIT) | runs the model; the official DLL ships inside the model pack and is loaded after its SHA-256 is checked |
+| `ort` | the Rust binding to ONNX Runtime, pinned exactly (a release candidate) |
+| `tokenizers` | Hugging Face's tokenizer, the same version the Python reference is built from |
+
+Laya **classifies** text; it never generates any. Everything it needs runs on your PC.
+
 ### The frontend
 
-TypeScript compiled 1:1 to `frontend/js/`, with **no bundler and no framework**. The only runtime
-dependency of consequence is **rrweb** for session replay. See
-[Architecture](doc-page:how-it-works/architecture) for what that choice does and doesn't buy.
+TypeScript compiled 1:1 to `frontend/js/`, with **no bundler and no framework**. What the window
+loads is vendored next to it, never fetched from a CDN: **DOMPurify** (every rendered markdown is
+sanitised), **marked**, **Prism** (highlighting), **KaTeX** (maths), **Mermaid** (diagrams),
+**rrweb** (session replay), **GSAP** (animation), **svg-pan-zoom** and **Cropper.js**. The icon
+picker's data comes from **Lucide** and **Simple Icons**; the typefaces are **Inter** and
+**JetBrains Mono**. See [Architecture](doc-page:how-it-works/architecture) for what that choice does
+and doesn't buy.
+
+### BetterInstaller and the website
+
+**BetterInstaller**, the installer and updater, is Rust with a **Slint** interface: a native window
+without a browser engine. The **BetterCommunity** site is React and Vite in front of a Fastify API
+on PostgreSQL, with a discord.js bot.
+
+!!! tip "The complete list, with versions and licences"
+
+    Credits → **Technical stack** lists every component of every group above (app shell,
+    interface, Rust core, AI, fonts and icons, these docs, BetterInstaller, the site, build
+    tools), each with the version that ships and its licence. It is generated at build time by
+    `scripts/gen-credits.mjs` from the manifests themselves (`Cargo.lock`, `package-lock.json`,
+    the licence banner of each bundled file, `laya-model.lock.json`), and a CI check fails when
+    it no longer matches them, so it cannot drift the way a hand-written list does.
 
 ---
 

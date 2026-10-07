@@ -20,8 +20,14 @@ pub struct OrderList {
     #[serde(default)]
     pub id: String,
     pub name: String,
+    /// The list's notes, B.MD source (line breaks kept), at most `order_share::MAX_NOTES`.
     #[serde(default)]
     pub description: String,
+    /// Came from somebody else (a code, a link, a file): its notes are rendered on the
+    /// untrusted path — sanitised, nothing fetched from the network, diagrams in strict mode.
+    /// Sticky: editing an imported list does not make what it came with ours.
+    #[serde(default)]
+    pub imported: bool,
     /// The game it was made for, as a hint for the reader.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<String>,

@@ -211,3 +211,134 @@ fn old_documents_and_lists_still_read() {
     let data: crate::state::AppData = serde_json::from_str(r#"{"profiles":[],"mods":[],"active_profile_id":null}"#).unwrap();
     assert!(data.order_lists.is_empty());
 }
+
+// ── Notes, the trust flag, sharing ─────────────────────────────────────────────────────────
+
+fn listed(notes: &str) -> OrderList {
+    OrderList { id: "l1".into(), name: "My list".into(), description: notes.into(), entries: vec![e("Alpha"), e("Nobody")], ..Default::default() }
+}
+
+#[test]
+fn notes_keep_their_line_breaks_once_saved() {
+    // The bug behind "rendered while editing, raw once saved": the single-line cleaner ate
+    // every line break, so headings, lists and fences came back as one paragraph.
+    let src = "# Title\r\n\r\n- one\n- two\n\n```mermaid\ngraph TD\n\tA-->B\n```\u{0007}\n\n";
+    let out = sanitize(&listed(src), None, &lib(), &[], "t").unwrap();
+    assert_eq!(out.description, "# Title\n\n- one\n- two\n\n```mermaid\ngraph TD\n\tA-->B\n```");
+}
+
+#[test]
+fn notes_over_the_cap_are_refused_not_cut() {
+    let at_cap = "é".repeat(MAX_NOTES);
+    assert_eq!(sanitize(&listed(&at_cap), None, &lib(), &[], "t").unwrap().description.chars().count(), MAX_NOTES);
+    let over = "a".repeat(MAX_NOTES + 1);
+    assert_eq!(sanitize(&listed(&over), None, &lib(), &[], "t").unwrap_err(), "orderList.errNotesTooLong");
+    assert!(MAX_NOTES >= 20_000, "much larger than the old 2 000");
+}
+
+#[test]
+fn an_imported_list_stays_imported() {
+    let first = sanitize(&OrderList { imported: true, ..listed("x") }, None, &lib(), &[], "t").unwrap();
+    assert!(first.imported);
+    // The frontend sends the flag back cleared: the stored one wins.
+    let again = sanitize(&OrderList { imported: false, ..first.clone() }, Some(&first), &lib(), &[], "t2").unwrap();
+    assert!(again.imported, "editing an imported list does not make it ours");
+    let own = sanitize(&listed("x"), None, &lib(), &[], "t").unwrap();
+    assert!(!own.imported);
+    let old: OrderList = serde_json::from_str(r#"{"name":"L"}"#).unwrap();
+    assert!(!old.imported, "lists saved before the flag are our own");
+}
+
+#[test]
+fn a_short_list_shares_as_a_code_with_its_notes() {
+    let x = export_list(&listed("## Read me\n\nfirst"), "now");
+    let code = x.code.clone().expect("short enough for a code");
+    assert_eq!(x.code_len, code.chars().count());
+    let doc = parse_any(&code).unwrap();
+    assert_eq!(doc.notes.as_deref(), Some("## Read me\n\nfirst"));
+    let back = imported(&doc, &lib());
+    assert_eq!(back.notes, "## Read me\n\nfirst");
+    assert_eq!(back.name.as_deref(), Some("My list"));
+    assert_eq!(x.file_name, "My-list.bmmorder");
+}
+
+#[test]
+fn a_long_list_has_no_code_but_the_file_carries_everything() {
+    let notes = "Long notes, line one.\n\n".repeat(700);
+    let notes = notes.trim_end().to_string();
+    let x = export_list(&listed(&notes), "now");
+    assert!(x.code.is_none(), "over the ceiling: no code");
+    assert!(x.code_len > MAX_CODE && x.code_max == MAX_CODE);
+    let doc = parse_file(&x.file).unwrap();
+    assert_eq!(doc.notes.as_deref(), Some(notes.as_str()));
+    assert_eq!(doc.mods.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["Alpha", "Nobody"]);
+    // And through the import box, which recognises the file and reads it strictly.
+    assert_eq!(parse_any(&x.file).unwrap(), doc);
+}
+
+fn file_json(extra: &str) -> String {
+    format!(r#"{{"format":"bmm-order-list","version":1,"name":"L","entries":[{{"name":"Alpha"}}]{}}}"#, extra)
+}
+
+#[test]
+fn the_list_file_is_read_strictly() {
+    assert!(parse_file(&file_json("")).is_ok());
+    assert!(parse_file(&format!("\u{feff}{}", file_json(""))).is_ok(), "a BOM is not an error");
+    let err = |s: &str| parse_file(s).unwrap_err();
+    assert_eq!(err(&file_json(r#","script":"x""#)), "orderList.errFile", "unknown field");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"L","entries":[{"name":"A","onload":"x"}]}"#), "orderList.errFile", "unknown entry field");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":2,"name":"L","entries":[],"newer":true}"#), "order.errVersion", "a newer file says so first");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":0,"name":"L","entries":[{"name":"A"}]}"#), "order.errVersion");
+    assert_eq!(err(r#"{"format":"bmm-order","version":1,"name":"L","entries":[{"name":"A"}]}"#), "orderList.errFile", "another format");
+    assert_eq!(err(r#"{"format":"bmm-order-list","name":"L","entries":[{"name":"A"}]}"#), "orderList.errFile", "no version");
+    assert_eq!(err("not json"), "orderList.errFile");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"L","entries":[]}"#), "order.errEmpty");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"  ","entries":[{"name":"A"}]}"#), "orderList.errFile", "nameless");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"L\u0007","entries":[{"name":"A"}]}"#), "orderList.errFile", "control character");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"L","entries":[{"name":"A\nB"}]}"#), "orderList.errFile", "a line break in a one-line field");
+    assert_eq!(err(r#"{"format":"bmm-order-list","version":1,"name":"L","entries":[{"name":" "}]}"#), "orderList.errFile", "an entry naming nothing");
+    let long_name = format!(r#"{{"format":"bmm-order-list","version":1,"name":"{}","entries":[{{"name":"A"}}]}}"#, "n".repeat(121));
+    assert_eq!(err(&long_name), "orderList.errFile", "oversized, not cut");
+    let long_entry = format!(r#"{{"format":"bmm-order-list","version":1,"name":"L","entries":[{{"name":"A","content_id":"{}"}}]}}"#, "c".repeat(257));
+    assert_eq!(err(&long_entry), "orderList.errFile");
+    let notes = file_json(&format!(r#","notes":"{}""#, "a".repeat(MAX_NOTES + 1)));
+    assert_eq!(err(&notes), "orderList.errNotesTooLong");
+    let bell = file_json(r#","notes":"a\u0007b""#);
+    assert_eq!(err(&bell), "orderList.errFile");
+    let ok_notes = file_json(r##","notes":"# T\n\n\tcode\r\n""##);
+    assert!(parse_file(&ok_notes).is_ok(), "line breaks and tabs are what notes are made of");
+    let huge = format!("{}{}", file_json(""), " ".repeat(MAX_FILE));
+    assert_eq!(err(&huge), "order.errTooLarge");
+    let many = format!(r#"{{"format":"bmm-order-list","version":1,"name":"L","entries":[{}]}}"#, vec![r#"{"name":"A"}"#; MAX_ENTRIES + 1].join(","));
+    assert_eq!(err(&many), "order.errTooLarge");
+}
+
+#[test]
+fn a_foreign_local_id_in_a_file_is_only_a_hint() {
+    let f = r#"{"format":"bmm-order-list","version":1,"name":"L","entries":[{"name":"Something else","id":"id-a"},{"name":"Alpha","id":"id-zzz"}]}"#;
+    let out = imported(&parse_file(f).unwrap(), &lib());
+    assert_eq!(out.matches[0].quality, MatchKind::Missing, "an id that exists here does not pull in an unrelated mod");
+    assert_eq!(out.entries[0].id, None);
+    assert_eq!(out.entries[1].id.as_deref(), Some("id-a"), "found by name, named by the local id");
+}
+
+#[test]
+fn codes_carry_notes_under_the_same_cap_and_a_newer_version_is_refused() {
+    use base64::Engine;
+    let enc = |json: String| format!("{}{}", order_share::CODE_PREFIX, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json));
+    let over = enc(format!(r#"{{"format":"bmm-order","version":1,"notes":"{}","mods":[{{"name":"A"}}]}}"#, "a".repeat(MAX_NOTES + 1)));
+    assert_eq!(parse_any(&over).unwrap_err(), "orderList.errNotesTooLong");
+    let newer = enc(r#"{"format":"bmm-order","version":9,"mods":[{"name":"A"}]}"#.to_string());
+    assert_eq!(parse_any(&newer).unwrap_err(), "order.errVersion");
+    // Documents written before notes existed still read, and say nothing.
+    let old = enc(r#"{"format":"bmm-order","version":1,"mods":[{"name":"A"}]}"#.to_string());
+    assert_eq!(parse_any(&old).unwrap().notes, None);
+}
+
+#[test]
+fn file_names_are_made_of_the_list_name() {
+    assert_eq!(file_name_for("Skyrim: base + ENB"), "Skyrim-base-ENB.bmmorder");
+    assert_eq!(file_name_for("../../etc/passwd"), "etc-passwd.bmmorder");
+    assert_eq!(file_name_for("   "), "order-list.bmmorder");
+    assert_eq!(file_name_for("Liste épique"), "Liste-épique.bmmorder");
+}

@@ -12,7 +12,12 @@
 
 .stm {
     --stm-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
-    --stm-gap: 12px;
+    /* One spacing scale for the whole modal: the gap between blocks of a tab, the inside of a
+       card, the gap between the rows of a card. */
+    --stm-gap: 16px;
+    --stm-pad-y: 16px;
+    --stm-pad-x: 18px;
+    --stm-row-gap: 10px;
     display: flex;
     flex-direction: column;
     gap: var(--stm-gap);
@@ -87,9 +92,9 @@
 /* ── First-use line (shown once) ────────────────────────────────────────────────────────── */
 .stm-intro {
     display: flex;
-    gap: 10px;
+    gap: var(--stm-row-gap);
     align-items: center;
-    padding: 8px 8px 8px 14px;
+    padding: 8px 8px 8px var(--stm-pad-x);
     border: 1px solid var(--bmm-border);
     border-radius: 10px;
     background: var(--bmm-accent-dim);
@@ -99,27 +104,31 @@
 .stm-intro-body { flex: 1; min-width: 0; }
 
 /* ── Panels and cards ───────────────────────────────────────────────────────────────────── */
-.stm-panel { display: flex; flex-direction: column; gap: var(--stm-gap); min-width: 0; outline: none; }
+.stm-panel { display: flex; flex-direction: column; gap: var(--stm-gap); min-width: 0; outline: none; padding-bottom: 4px; }
+.stm-presets-host, .stm-matrix-host { display: flex; flex-direction: column; gap: var(--stm-gap); min-width: 0; }
+.stm-presets-host:empty { display: none; }
 .stm-panel[hidden] { display: none; }
-.stm-loading { padding: 24px; text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
+.stm-loading { padding: 28px var(--stm-pad-x); text-align: center; font-size: 13px; color: var(--bmm-text-secondary); }
 
-.stm-lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.stm-lead { margin: 0; max-width: 72ch; font-size: 13px; line-height: 1.55; color: var(--bmm-text-secondary); }
 
 .stm-card {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px;
+    gap: var(--stm-row-gap);
+    padding: var(--stm-pad-y) var(--stm-pad-x);
     border: 1px solid var(--bmm-border);
     border-radius: 12px;
     background: var(--bmm-s03);
     min-width: 0;
 }
 .stm-card-flat { background: none; }
-.stm-card-title { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
-.stm-help { font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.stm-card-title { margin: 0; font-size: 13.5px; font-weight: 700; line-height: 1.4; color: var(--bmm-text-primary); }
+.stm-help { margin: 0; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+/* An empty list says so in a framed line, not a stray sentence between two cards. */
+.stm-empty { padding: 18px var(--stm-pad-x); border: 1px dashed var(--bmm-border); border-radius: 12px; text-align: center; font-size: 12.5px; color: var(--bmm-text-secondary); }
 .stm-help.is-crit { color: var(--bmm-danger); }
-.stm-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.stm-row { display: flex; align-items: center; gap: var(--stm-row-gap); flex-wrap: wrap; min-width: 0; }
 .stm-grow { flex: 1 1 220px; min-width: 0; }
 .stm-msg { font-size: 12px; color: var(--bmm-success); }
 .stm-msg.is-err { color: var(--bmm-danger); }
@@ -196,7 +205,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 14px;
+    padding: 11px var(--stm-pad-x);
     cursor: pointer;
     list-style: none;
     font-size: 13px;
@@ -218,13 +227,13 @@
 .stm-more[open] > summary::before { transform: rotate(45deg); }
 .stm-more > summary:hover { background: var(--bmm-s04); }
 .stm-more > summary:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
-.stm-more-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 14px 14px; min-width: 0; }
+.stm-more-body { display: flex; flex-direction: column; gap: var(--stm-row-gap); padding: 2px var(--stm-pad-x) var(--stm-pad-y); min-width: 0; }
 .stm-more-body p { margin: 0; }
 .stm-more-body .lm-link { align-self: flex-start; }
 
 /* One option = one line: its label, then its control. The explanation is the tooltip. */
-.stm-opt { min-height: 32px; }
-.stm-opt + .stm-opt { border-top: 1px solid var(--bmm-border); padding-top: 8px; }
+.stm-opt { min-height: 34px; }
+.stm-opt + .stm-opt { border-top: 1px solid var(--bmm-border); padding-top: var(--stm-row-gap); }
 .stm-opt-label { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); cursor: pointer; }
 .stm-opt-label .stm-help { font-weight: 400; margin-left: 6px; }
 .stm-opt input[type="number"] { width: 84px; text-align: right; }
@@ -270,8 +279,9 @@
 .stm-legend dd { margin: 0; font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
 .stm-table-wrap { overflow-x: auto; }
 .stm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.stm-table th { text-align: left; padding: 6px 4px; color: var(--bmm-text-secondary); font-weight: 600; border-bottom: 1px solid var(--bmm-border); white-space: nowrap; }
-.stm-table td { padding: 4px; }
+.stm-table th { text-align: left; padding: 8px 8px; color: var(--bmm-text-secondary); font-weight: 600; border-bottom: 1px solid var(--bmm-border); white-space: nowrap; }
+.stm-table td { padding: 5px 8px; vertical-align: middle; }
+.stm-table th:first-child, .stm-table td:first-child { padding-left: 10px; }
 .stm-table tbody tr:nth-child(even) { background: var(--bmm-s02); }
 .stm-table-op { white-space: nowrap; color: var(--bmm-text-primary); }
 .stm-table input:disabled, .stm-table select:disabled { opacity: .45; }
@@ -283,18 +293,18 @@
 .stm-cell-off { display: inline-block; min-width: 24px; text-align: center; color: var(--bmm-text-secondary); opacity: .6; cursor: help; }
 
 /* ── Disks & space ──────────────────────────────────────────────────────────────────────── */
-.stm-disks { display: flex; flex-direction: column; gap: 10px; }
+.stm-disks { display: flex; flex-direction: column; gap: var(--stm-row-gap); }
 .stm-disk {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 12px 14px;
+    gap: 8px;
+    padding: 14px var(--stm-pad-x);
     border: 1px solid var(--bmm-border);
     border-radius: 12px;
     background: var(--bmm-s03);
     min-width: 0;
 }
-.stm-disk-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.stm-disk-top { display: flex; align-items: center; gap: var(--stm-row-gap); flex-wrap: wrap; min-width: 0; }
 .stm-disk-name { flex: 1 1 200px; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
 .stm-disk .stm-more { border: 0; background: none; }
 .stm-disk .stm-more > summary { padding: 2px 0; font-size: 12px; font-weight: 500; color: var(--bmm-text-secondary); }
@@ -354,6 +364,7 @@
 .stm-gfx-hw > summary { cursor: pointer; list-style-position: inside; }
 
 @media (max-width: 560px) {
+    .stm { --stm-gap: 12px; --stm-pad-y: 12px; --stm-pad-x: 14px; }
     .stm-tab span { display: none; }
     .stm-tab { padding: 9px 12px; }
     .stm select.input { max-width: 100%; }
@@ -370,3 +381,52 @@
 
 /* An action row with nothing to show (no pause offered, no message) takes no room. */
 .stm-game-now .stm-row:has(> .stm-game-pause[hidden]):has(> .stm-msg:empty) { display: none; }
+
+/* ── Rules per disk: the presets for this PC (storage-presets.ts) ─────────────────────────── */
+.stp { gap: 14px; }
+.stp-head { display: flex; align-items: flex-start; gap: var(--stm-row-gap); flex-wrap: wrap; }
+.stp-head-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stp .stm-more { background: none; }
+.stp-pc > summary { padding-block: 8px; font-size: 12.5px; }
+.stp-drives { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.stp-drive { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); }
+.stp-drive-name { min-width: 2.5em; font-weight: 700; color: var(--bmm-text-primary); }
+.stp-drive-free { font-variant-numeric: tabular-nums; }
+.stp-drive-free.is-low { color: var(--bmm-danger); font-weight: 700; }
+.stp-drive-roles { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--bmm-border); background: var(--bmm-s04); color: var(--bmm-text-primary); }
+.stp-why { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-accent-dim); font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-primary); }
+.stp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--stm-row-gap); }
+.stp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 12px;
+    background: var(--bmm-s02);
+    color: var(--bmm-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--bmm-transition-fast, .15s), background var(--bmm-transition-fast, .15s);
+}
+.stp-card:hover { background: var(--bmm-s05); }
+.stp-card:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.stp-card[aria-checked="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); box-shadow: inset 0 0 0 1px var(--bmm-accent); }
+.stp-card[aria-disabled="true"] { opacity: .6; }
+.stp-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stp-card-name { font-size: 13px; font-weight: 700; }
+.stp-card-desc { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.stp-card-foot { margin-top: auto; padding-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+.stp-badge-applied { border-color: var(--bmm-success); }
+.stp-preview { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.stp-preview:empty { display: none; }
+.stp-preview-head { display: flex; align-items: center; justify-content: space-between; gap: var(--stm-row-gap); flex-wrap: wrap; }
+.stp-changes { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.stp-change { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: baseline; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-primary); }
+.stp-change-mark { font-weight: 700; text-align: center; color: var(--bmm-text-secondary); }
+.stp-change.is-add .stp-change-mark { color: var(--bmm-success); }
+.stp-change.is-remove .stp-change-mark { color: var(--bmm-danger); }
+.stp-change.is-remove > span:last-child { color: var(--bmm-text-secondary); }
+@media (prefers-reduced-motion: reduce) { .stp-card { transition: none; } }

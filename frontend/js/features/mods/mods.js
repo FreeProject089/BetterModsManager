@@ -7,12 +7,13 @@ import { t } from '../../core/i18n.js';
 import { escHtml, truncate } from '../../core/utils.js';
 import { appState } from '../../core/state.js';
 // Sub-modules
-import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn, ensureModCancelContextMenu } from './mods-list.js';
+import { renderModList, updateCardState, updateBadge, updateSubtitle, updateToggleAllBtn, ensureModCancelContextMenu } from './mods-list.js';
 import { checkAllConflicts, restoreConflictCache } from './mods-conflicts.js';
 import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity, requestCancelModOps, requestCancelCurrentOnly } from './mods-actions.js';
 import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
 import { initLibOrder } from './lib-order.js';
+import { initCardActivityAnimation } from './mods-job-anim.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -49,6 +50,7 @@ export async function initMods() {
     wireLangRerender();
     window._refreshModsFn = refreshMods;
     ensureModCancelContextMenu();
+    initCardActivityAnimation(updateCardState);
     initLibOrder(toast);
     // --- Core Listeners ---
     document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);

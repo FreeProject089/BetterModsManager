@@ -872,6 +872,45 @@ pub fn status() -> Status {
     }
 }
 
+/// The debug panel's « Vérifier l'intégrité »: every required file of the folder the engine would
+/// load from, its size and its SHA-256 against the pin. Read-only (nothing is loaded, moved or
+/// removed); no path in the answer, only file names, so the result can be pasted as is.
+pub fn verify_report() -> Value {
+    let Some((dir, source)) = find_model_dir() else {
+        return json!({ "installed": false, "ok": false, "files": [], "ms": 0 });
+    };
+    let t0 = Instant::now();
+    let files: Vec<Value> = required_files()
+        .into_iter()
+        .map(|name| verify_one(&dir.join(name), name, pinned(name)))
+        .collect();
+    let ok = files.iter().all(|f| f["ok"].as_bool().unwrap_or(false));
+    json!({ "installed": true, "source": source, "ok": ok, "files": files, "ms": t0.elapsed().as_millis() as u64 })
+}
+
+fn verify_one(path: &Path, name: &str, pin: Option<&PinnedFile>) -> Value {
+    let t = Instant::now();
+    let size = std::fs::metadata(path).map(|m| m.len()).ok();
+    // The error of `sha256_file` carries the full path: reduced to a code here.
+    let (ok, why) = match (pin, sha256_file(path)) {
+        (_, Err(_)) => (false, "unreadable"),
+        (Some(p), Ok(h)) if !h.eq_ignore_ascii_case(p.sha256) => (false, "hash_mismatch"),
+        (Some(p), Ok(_)) if p.size > 0 && size != Some(p.size) => (false, "size_mismatch"),
+        (Some(_), Ok(_)) => (true, ""),
+        // A runtime of another platform has no pin: present and not empty is all we can say.
+        (None, Ok(_)) => (size.unwrap_or(0) > 0, if size.unwrap_or(0) > 0 { "unpinned" } else { "empty" }),
+    };
+    json!({
+        "name": name,
+        "size": size,
+        "expected": pin.map(|p| p.size),
+        "pinned": pin.is_some(),
+        "ok": ok,
+        "why": why,
+        "ms": t.elapsed().as_millis() as u64,
+    })
+}
+
 /// Remove the downloaded copy (never the installed one: Program Files belongs to the uninstaller).
 /// The session is dropped first. A runtime DLL still mapped by this process cannot be deleted on
 /// Windows: it is left behind, which is harmless (the folder then reads as « absent »), and the
@@ -1197,6 +1236,26 @@ mod tests {
 
     fn golden() -> Value {
         serde_json::from_str(GOLDEN).expect("golden json")
+    }
+
+    #[test]
+    fn verify_one_reads_hash_size_and_keeps_paths_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.bin");
+        std::fs::write(&path, b"abc").unwrap();
+        let good = PinnedFile { name: "a.bin", sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", size: 3 };
+        let v = verify_one(&path, "a.bin", Some(&good));
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["size"], 3);
+        let bad = PinnedFile { sha256: "00", ..good };
+        assert_eq!(verify_one(&path, "a.bin", Some(&bad))["why"], "hash_mismatch");
+        let missing = verify_one(&dir.path().join("nope.bin"), "nope.bin", Some(&good));
+        assert_eq!(missing["ok"], false);
+        assert_eq!(missing["why"], "unreadable");
+        // No path in the answer: the temp dir's name never appears.
+        let dir_name = dir.path().file_name().unwrap().to_string_lossy().to_string();
+        assert!(!missing.to_string().contains(&dir_name));
+        assert_eq!(verify_one(&path, "a.bin", None)["why"], "unpinned");
     }
 
     /// A tokenizer that only knows the texts Python tokenized. Asking it for any other text is

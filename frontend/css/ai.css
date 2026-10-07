@@ -330,20 +330,111 @@
 .laya-explain-out:empty { display: none; }
 .laya-explain-out { margin-top: var(--space-1); font-size: 12.5px; line-height: 1.5; color: var(--text-primary); }
 .laya-explain-text { white-space: pre-wrap; margin: 0 0 4px; }
-.laya-dbg { display: flex; flex-direction: column; gap: var(--space-1); font-size: 12.5px; color: var(--text-primary); }
-.laya-dbg-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.laya-dbg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px var(--space-3); }
-.laya-dbg-kv { display: flex; justify-content: space-between; gap: var(--space-2); min-width: 0; }
-.laya-dbg-kv span { color: var(--text-secondary); }
+/* The DevTools « Laya » section (laya-debug.ts). Headers are DevTools' .dbg-bar (debug.css);
+   everything else is here. Colour lives in pills, dots and bars; text keeps the theme's ink. */
+.laya-dbg { container: layadbg / inline-size; display: flex; flex-direction: column; min-width: 0; font: 12px/1.45 var(--bmm-font-sans, system-ui), sans-serif; color: var(--text-primary); }
+/* Sticky, so it needs an opaque ground: the sunken wash is translucent on its own. */
+.laya-dbg > .dbg-bar:first-child { position: sticky; top: 0; z-index: 2; background: linear-gradient(var(--debug-sunken, var(--bmm-s04)), var(--debug-sunken, var(--bmm-s04))), var(--debug-bg, var(--bmm-bg-elevated)); }
+.laya-dbg h2.dbg-bar-title, .laya-dbg h3.dbg-bar-title { font-family: inherit; }
+.laya-dbg-msg { margin: 0; padding: 6px 16px; font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--bmm-s05); }
+.laya-dbg-msg:empty { display: none; }
+.laya-dbg-msg[data-tone="bad"] { color: var(--danger); }
+.laya-dbg-sec { min-width: 0; }
+.laya-dbg-in { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.laya-dbg-note { margin: 0; font-size: 11px; color: var(--text-muted, var(--text-secondary)); }
+.laya-dbg .mono, .laya-dbg-table td.mono { font-family: var(--font-mono); }
+
+/* Pills: a tinted chip with a dot; the tone tints, the ink stays readable. */
+.laya-dbg-pill {
+    --ldbg-tone: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    padding: 1px 8px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--ldbg-tone) 40%, var(--border));
+    background: color-mix(in srgb, var(--ldbg-tone) 12%, transparent);
+    color: var(--text-primary); font-size: 11px; font-weight: 600; line-height: 1.5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.laya-dbg-pill::before { content: ''; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ldbg-tone); }
+.laya-dbg [data-tone="ok"] { --ldbg-tone: var(--success); }
+.laya-dbg [data-tone="warn"] { --ldbg-tone: var(--warning); }
+.laya-dbg [data-tone="bad"] { --ldbg-tone: var(--danger); }
+.laya-dbg [data-tone="info"] { --ldbg-tone: var(--bmm-accent); }
+.laya-dbg [data-tone="off"] { --ldbg-tone: var(--text-secondary); }
+
+/* Engine: status cards, then the details as label / value pairs. */
+.laya-dbg-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; }
+.laya-dbg-card {
+    display: flex; flex-direction: column; gap: 4px; min-width: 0;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02);
+    border-left: 3px solid var(--ldbg-tone, var(--border));
+}
+.laya-dbg-card-k { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.laya-dbg-card-sub { font-size: 10.5px; color: var(--text-secondary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.laya-dbg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 0 16px; }
+.laya-dbg-kv { display: flex; justify-content: space-between; gap: 8px; min-width: 0; padding: 4px 0; border-bottom: 1px dashed var(--bmm-s05); }
+.laya-dbg-kv span { color: var(--text-secondary); white-space: nowrap; }
 .laya-dbg-kv b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-weight: 600; }
-.laya-dbg-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.laya-dbg-table th { text-align: left; color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border); padding: 2px 6px; }
-.laya-dbg-table td { padding: 2px 6px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
-.laya-dbg-table tr.is-bad td { color: var(--danger); }
-.laya-dbg-text { width: 100%; }
-.laya-dbg-bars { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.laya-dbg-bars li { display: grid; grid-template-columns: minmax(80px, 160px) 1fr 64px; align-items: center; gap: var(--space-2); }
-.laya-dbg-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
-.laya-dbg-bar-fill { display: block; height: 100%; background: var(--bmm-accent); }
+
+/* Stat tiles (latency summary, benchmark). */
+.laya-dbg-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 92px), 1fr)); gap: 6px; }
+.laya-dbg-stat { display: flex; flex-direction: column; gap: 1px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02); min-width: 0; }
+.laya-dbg-stat span { font-size: 10.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.laya-dbg-stat b { font: 600 13px/1.3 var(--font-mono); color: var(--text-primary); }
+
+/* Tables scroll sideways inside their own box: the panel never does. */
+.laya-dbg-scroll { overflow-x: auto; min-width: 0; border: 1px solid var(--border); border-radius: 8px; }
+.laya-dbg-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.laya-dbg-table th { text-align: left; font-weight: 600; font-size: 10.5px; letter-spacing: 0.02em; color: var(--text-secondary); background: var(--debug-sunken, var(--bmm-s04)); border-bottom: 1px solid var(--border); padding: 6px 10px; white-space: nowrap; }
+.laya-dbg-table td { padding: 5px 10px; border-bottom: 1px solid var(--bmm-s05); vertical-align: middle; white-space: nowrap; }
+.laya-dbg-table tbody tr:last-child td { border-bottom: 0; }
+.laya-dbg-table tbody tr:hover td { background: var(--bmm-s04); }
+.laya-dbg-table .num { text-align: right; font-family: var(--font-mono); }
+.laya-dbg-table tr.is-bad td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.laya-dbg-name { font-weight: 600; }
+
+/* Latency: a bar scaled to the slowest call kept, then the figure. */
+.laya-dbg-lat { display: inline-flex; align-items: center; gap: 8px; min-width: 110px; }
+.laya-dbg-lat-track { flex: 1 1 60px; min-width: 40px; height: 6px; border-radius: 3px; background: var(--bmm-s05); overflow: hidden; }
+.laya-dbg-lat > .mono { white-space: nowrap; }
+.laya-dbg-lat-fill { display: block; height: 100%; border-radius: 3px; background: var(--ldbg-tone, var(--bmm-accent)); }
+
+/* Tester and benchmark forms. */
+.laya-dbg-form { gap: 8px; }
+.laya-dbg-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 11px; color: var(--text-secondary); }
+.laya-dbg-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.laya-dbg-grow { flex: 1 1 180px; }
+.laya-dbg-text { min-height: 56px; }
+.laya-dbg-decision { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+
+/* Tester result: one bar per label, the chosen threshold as a marker on every track. */
+.laya-dbg-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.laya-dbg-bars li { display: grid; grid-template-columns: minmax(60px, 160px) minmax(60px, 1fr) auto; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 6px; }
+.laya-dbg-bars li:hover { background: var(--bmm-s04); }
+.laya-dbg-bars li.is-top .laya-dbg-lbl { font-weight: 700; }
+.laya-dbg-lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.laya-dbg-bars b { font-size: 11px; font-weight: 600; text-align: right; }
+.laya-dbg-bar-track { position: relative; height: 8px; border-radius: 4px; background: var(--bmm-s05); }
+.laya-dbg-bar-fill { display: block; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--bmm-accent) 55%, var(--text-secondary)); }
+.laya-dbg-bars li.is-pass .laya-dbg-bar-fill, .laya-dbg-bars li.is-top .laya-dbg-bar-fill { background: var(--bmm-accent); }
+.laya-dbg-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text-primary); }
+
+/* The section's own width decides (the sidebar may take part of the panel). The calls table
+   drops its provider and question count first, then the padding narrows. */
+@container layadbg (max-width: 680px) {
+    .laya-dbg-narrow-hide { display: none; }
+    .laya-dbg-table td .laya-dbg-pill { max-width: 160px; }
+}
+/* Icon-rail width: the latency keeps its figure, the bar goes; names may wrap. */
+@container layadbg (max-width: 420px) {
+    .laya-dbg-lat-track { display: none; }
+    .laya-dbg-lat { min-width: 0; }
+    .laya-dbg-table td { white-space: normal; }
+    .laya-dbg-table td .laya-dbg-pill { max-width: 110px; }
+}
+@container layadbg (max-width: 520px) {
+    .laya-dbg-in, .laya-dbg-msg { padding-left: 12px; padding-right: 12px; }
+    .laya-dbg-bars li { grid-template-columns: minmax(0, 1fr) auto; }
+    .laya-dbg-bars li .laya-dbg-bar-track { grid-column: 1 / -1; grid-row: 2; }
+}
 .laya-pane-card > .lt-fs { display: flex; flex-direction: column; gap: 10px; }
 .laya-pane-card > .lt-fs > * { margin-top: 0; margin-bottom: 0; }
