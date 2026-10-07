@@ -1,4 +1,4 @@
-// ai-tuning.ts — the « Réponses de Laya » card in Settings (after the AI card).
+// ai-tuning.ts — the « Réponses » tab of the Laya dialog (laya-hub.ts).
 //
 // How sure Laya must be before BMM shows or uses an answer, per feature; the user's own tasks
 // (labels with a description and examples); a « Tester » box; import / export / reset. Short on
@@ -18,7 +18,7 @@ import {
     type Area, type LayaConfig, type PresetTable, type Tuning, type CustomTask, type LabelDef, type Preset,
 } from './ai-tuning-model.js';
 
-const CARD_ID = 'settings-laya-tuning-section';
+const CARD_ID = 'laya-tuning-card';
 
 interface View { config: any; presets: PresetTable; limits?: any }
 
@@ -56,18 +56,15 @@ function errText(raw: string): string {
     return reasonText(raw);
 }
 
-export async function mountLayaTuning(): Promise<void> {
-    const host = document.querySelector('#view-settings .settings-sections');
-    if (!host) return;
+/** Put the card (once) in `host` — a pane of the Laya dialog (laya-hub.ts) — then fill it. */
+export async function mountLayaTuning(host: HTMLElement): Promise<void> {
     ensureCss();
     let card = document.getElementById(CARD_ID);
     if (!card) {
         card = document.createElement('div');
-        card.className = 'glass-card ai-card lt-card';
+        card.className = 'ai-card laya-pane-card lt-card';
         card.id = CARD_ID;
-        const after = document.getElementById('settings-ai-section');
-        if (after && after.parentElement === host) after.insertAdjacentElement('afterend', card);
-        else host.appendChild(card);
+        host.appendChild(card);
     }
     await load();
     render(card);

@@ -2360,20 +2360,11 @@ export async function initSettings() {
     await initSecuritySettings();
     await initLaunchPackSettings();
     initScheduler().catch(() => { });
-    // Optional AI card (features/ai/ai-settings.ts) — slotted in after Privacy, BEFORE the
-    // reorder pass so it gets its handle and its saved place like every other card.
+    // The one « Laya » card (features/ai/laya-hub.ts) — slotted in after Privacy, BEFORE the
+    // reorder pass so it gets its handle and its saved place like every other card. Its
+    // « Gérer Laya » dialog holds the AI card, « Réponses de Laya » and « API Laya locale » as tabs.
     try {
-        await (await import('../ai/ai-settings.js')).mountAiSettings();
-    }
-    catch (e) { }
-    // « API Laya locale » (off by default), right after the AI card.
-    try {
-        await (await import('./ai-api-card.js')).mountAiApiCard();
-    }
-    catch (e) { }
-    // « Réponses de Laya »: thresholds, presets, custom tasks (ai-tuning.ts), slotted between the AI card and the API card.
-    try {
-        await (await import('../ai/ai-tuning.js')).mountLayaTuning();
+        await (await import('../ai/laya-hub.js')).mountLayaHub();
     }
     catch (e) { }
     try {

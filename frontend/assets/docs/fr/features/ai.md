@@ -309,7 +309,7 @@ Si les deux premiers ne trouvent rien, le rapport part directement, comme avant.
 
 ## Réponses de Laya : à quel point sûr, et vos propres tâches
 
-**Paramètres → Réponses de Laya** (sous la carte IA) règle à quel point Laya doit être sûr avant que
+**Paramètres → Laya → Gérer Laya → Réponses** règle à quel point Laya doit être sûr avant que
 BMM propose ou utilise une réponse. Rien ne change tant que vous n'y touchez pas : **Équilibré** est
 le comportement habituel de BMM.
 

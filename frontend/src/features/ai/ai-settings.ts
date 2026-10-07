@@ -14,13 +14,10 @@ import { fmtBytes, embState, fmtSpeed, fmtEta, parseNoSpace, type AiSettings, ty
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
 import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 
-const CARD_ID = 'settings-ai-section';
+// Lives in the « Laya » dialog (laya-hub.ts); Settings keeps one summary card.
+const CARD_ID = 'laya-general-card';
 
 const IC = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>';
-
-function container(): HTMLElement | null {
-    return document.querySelector('#view-settings .settings-sections');
-}
 
 /**
  * The « Laya intégré » box. ONE state at a time (ai-model.ts `embState`): absent → downloading
@@ -122,19 +119,15 @@ function keyWhere(where: string): string {
     }
 }
 
-/** Insert the card (once) after the Privacy card, then fill it. */
-export async function mountAiSettings(): Promise<void> {
-    const c = container();
-    if (!c) return;
+/** Put the card (once) in `host` — a pane of the Laya dialog — then fill it. */
+export async function mountAiSettings(host: HTMLElement): Promise<void> {
     ensureAiCss();
     let card = document.getElementById(CARD_ID);
     if (!card) {
         card = document.createElement('div');
-        card.className = 'glass-card ai-card';
+        card.className = 'ai-card laya-pane-card';
         card.id = CARD_ID;
-        const after = document.getElementById('settings-privacy-section');
-        if (after && after.parentElement === c) after.insertAdjacentElement('afterend', card);
-        else c.appendChild(card);
+        host.appendChild(card);
     }
     const view = await loadAiView();
     render(card, view);

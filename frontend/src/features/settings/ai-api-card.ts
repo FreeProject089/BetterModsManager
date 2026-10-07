@@ -1,4 +1,5 @@
-// « API Laya locale » — the Settings card of the local Laya API (commands/ai_api.rs).
+// « API Laya locale » — the « API locale » tab of the Laya dialog (features/ai/laya-hub.ts),
+// for the local Laya API (commands/ai_api.rs).
 //
 // Off by default. On, it lets programs on THIS PC ask the embedded Laya the same questions
 // laya-serve answers (POST /v1/systemone), behind a token shown once. Short on purpose: one
@@ -10,7 +11,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { ensureAiCss } from '../ai/ai-shared.js';
 
-const CARD_ID = 'settings-ai-api-section';
+const CARD_ID = 'laya-api-card';
 
 interface ApiStatus {
     enabled: boolean; running: boolean; port: number; url: string; allowedOrigins: string[];
@@ -135,10 +136,8 @@ function wire(card: HTMLElement, st: ApiStatus): void {
     });
 }
 
-/** Slot the card after the AI card (or at the end) and paint it. */
-export async function mountAiApiCard(): Promise<void> {
-    const host = document.querySelector('#view-settings .settings-sections');
-    if (!host) return;
+/** Put the card (once) in `host` — a pane of the Laya dialog — and paint it. */
+export async function mountAiApiCard(host: HTMLElement): Promise<void> {
     ensureAiCss();
     if (!document.getElementById('ai-api-css')) {
         const link = document.createElement('link');
@@ -150,22 +149,18 @@ export async function mountAiApiCard(): Promise<void> {
     let card = document.getElementById(CARD_ID);
     if (!card) {
         card = document.createElement('div');
-        card.className = 'glass-card ai-card';
+        card.className = 'ai-card laya-pane-card';
         card.id = CARD_ID;
-        const after = document.getElementById('settings-ai-section');
-        if (after && after.parentElement === host) after.insertAdjacentElement('afterend', card);
-        else host.appendChild(card);
+        host.appendChild(card);
     }
     const st = (await invoke('ai_api_status').catch(() => null)) as ApiStatus | null;
     render(card, st);
     if (!(card as any)._aiApiLang) {
         (card as any)._aiApiLang = true;
-        // The AI card re-renders whole (features/ai/ai-settings.ts): stay right after it, and
-        // repaint, since the master switch there decides whether the API runs.
+        // The AI card re-renders whole (features/ai/ai-settings.ts): repaint, since the master
+        // switch there decides whether the API runs.
         document.addEventListener('bmm:ai-card-rendered', () => {
             const c = document.getElementById(CARD_ID);
-            const ai = document.getElementById('settings-ai-section');
-            if (c && ai && ai.nextElementSibling !== c && ai.parentElement === c.parentElement) ai.insertAdjacentElement('afterend', c);
             if (c?.isConnected) void (invoke('ai_api_status').catch(() => null) as Promise<ApiStatus | null>).then((s) => render(c, s));
         });
         document.addEventListener('langChanged', () => {

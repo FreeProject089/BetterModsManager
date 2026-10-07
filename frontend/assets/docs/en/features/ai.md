@@ -42,8 +42,8 @@ works. It is a separate **model pack** (327 MB to download, 404 MB on disk):
 
 **Where it comes from.** The installer's option *Laya offline (local AI, nothing sent)* is
 ticked by default: setup downloads the pack once, refuses it unless it matches its pinned
-SHA-256, and unpacks it into `<install folder>\models\laya`. If you unticked it, **Settings → AI
-→ Laya built in → Install the model** downloads the same pack into
+SHA-256, and unpacks it into `<install folder>\models\laya`. If you unticked it, **Settings → Laya
+→ Manage Laya → General → Laya built in → Install the model** downloads the same pack into
 `%LOCALAPPDATA%\com.bettermm.desktop\models\laya`. The block always shows ONE state:
 
 | State | What you see |
@@ -176,8 +176,8 @@ Rules BMM enforces before anything is sent — in the Rust core, not in the page
 ## Writing (optional): drafts and written answers
 
 Laya ranks and filters; it never writes. When you want text — a description draft for a mod, or a
-written answer in *Ask Laya* — BMM can ask a **writing model** you choose, in **Settings → AI →
-Writing**:
+written answer in *Ask Laya* — BMM can ask a **writing model** you choose, in **Settings → Laya →
+Manage Laya → General → Writing**:
 
 | Writing | Where the text goes | What you need |
 |---|---|---|
@@ -288,7 +288,7 @@ secrets when they were written.
 
 ## Laya's answers: how sure, and your own tasks
 
-**Settings → Laya answers** (under the AI card) decides how sure Laya must be before BMM shows or
+**Settings → Laya → Manage Laya → Answers** decides how sure Laya must be before BMM shows or
 uses an answer. Nothing changes until you touch it: **Balanced** is BMM's usual behaviour.
 
 | Preset | What it does |
@@ -344,7 +344,7 @@ program can never tick it.
 
 ## Turning it off
 
-- **Settings → AI (optional)**: the master switch. Off means no AI network request anywhere in
+- **Settings → Laya → Manage Laya → General**: the master switch. Off means no AI network request anywhere in
   BMM; this is covered by an automated test that counts requests.
 - **The installer**: *Laya offline (local AI, nothing sent)* on the options page, ticked by
   default because nothing leaves the PC. Ticked installs the model pack and turns the master
