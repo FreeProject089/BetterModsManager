@@ -2,14 +2,28 @@
 //!
 //! A custom page is **untrusted** HTML/CSS/JS/WASM stored under
 //! `<app_data>/custom_pages/<id>/`. It is served read-only through the
-//! `bmmpage://` URI scheme with a strict Content-Security-Policy, and rendered
-//! in an iframe with `sandbox` *without* `allow-same-origin` (opaque `null`
-//! origin). By construction it cannot reach `window.parent`, the BMM DOM,
-//! `__TAURI__`/`invoke`, cookies/localStorage, the network, or sub-frames.
+//! `bmmpage://` URI scheme with a strict Content-Security-Policy (`page_csp`), and
+//! rendered in an iframe with `sandbox` *without* `allow-same-origin` (opaque `null`
+//! origin). It cannot touch the BMM DOM, `__TAURI__`/`invoke`, cookies/localStorage or
+//! another page's bundle; the only thing it can do with `window.parent` is `postMessage`.
 //!
-//! Capabilities (storage / network / …) are **not** wired here — that is a
-//! later, separately-audited phase. Until then a page can compute and render
-//! but has zero access to anything outside its own sandbox.
+//! Capabilities ARE wired, default-deny, per page:
+//!  - the page calls the `bmm.js` SDK (`PAGE_SDK_JS`, written into every bundle), which
+//!    `postMessage`s the parent; the broker (`frontend/src/ui/custom-page-broker.ts`)
+//!    answers only for a capability in the page's grants (`grants.json`, `page_set_grant`:
+//!    ticked in the navbar editor, or re-applied from a `.bmmnav` bundle on import;
+//!    `KNOWN_CAPS` is the whole list):
+//!    `storage` (a per-page key-value file, quota-capped), `notifications`, `network`,
+//!    `read` (app name/version/platform, current theme), `clipboard` (done by the parent
+//!    frame) and `system` (aggregate OS/hardware facts, never names, files or processes);
+//!  - `network` is further limited to the page's own origin allow-list
+//!    (`net_origins.json`, `clean_origin`): those origins are added to the page's CSP, and
+//!    `page_fetch` re-checks the grant and the origin itself, follows redirects only within
+//!    the list and caps the body. `page_system_info` re-checks its grant too;
+//!  - grants, storage and origins live outside the read-only bundle, in
+//!    `<app_data>/custom_pages_data/<id>/`, and `delete_custom_page` removes them with it.
+//!
+//! Without any grant a page can compute and render, and reach nothing outside its bundle.
 
 use std::borrow::Cow;
 use std::path::PathBuf;

@@ -220,3 +220,87 @@ fn the_built_in_key_is_the_publisher_key() {
         .expect("public_key in installer.toml");
     assert!(line.contains(MANIFEST_PUBLIC_KEY_HEX), "{line}");
 }
+
+// ── The full-installer fallback (download_and_install_update) ─────────────────────────────
+
+const SETUP_URL: &str = "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.2.0/BetterModsManager_1.2.0_x64-setup.exe";
+const SETUP_BYTES: &[u8] = b"MZ pretend installer";
+
+fn sha_hex(b: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(b))
+}
+fn installer(url: &str, name: &str, sha: &str) -> serde_json::Value {
+    serde_json::json!({ "path": name, "sha256": sha, "download_url": url, "size": SETUP_BYTES.len() })
+}
+/// A signed manifest whose body carries `installers`.
+fn with_installers(installers: serde_json::Value) -> String {
+    let mut b: serde_json::Value =
+        serde_json::from_str(&body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(7))).unwrap();
+    b["installers"] = installers;
+    doc(&test_key(), MANIFEST_SIG_CONTEXT, &b.to_string())
+}
+
+#[test]
+fn a_manifest_signed_before_installers_existed_still_verifies_and_vouches_for_none() {
+    let m = check(&good_doc()).expect("no `installers` is still a valid manifest");
+    assert!(m.installers.is_empty());
+    let e = installer_for(&m, SETUP_URL).unwrap_err();
+    assert!(e.contains("lists no installer") && e.contains("stays on its current version"), "{e}");
+}
+
+#[test]
+fn only_an_installer_the_signed_body_lists_is_accepted() {
+    let m = check(&with_installers(serde_json::json!([installer(SETUP_URL, "BetterModsManager_1.2.0_x64-setup.exe", &sha_hex(SETUP_BYTES))]))).unwrap();
+    assert_eq!(installer_for(&m, SETUP_URL).unwrap().path, "BetterModsManager_1.2.0_x64-setup.exe", "control");
+    let e = installer_for(&m, "https://evil.example/setup.exe").unwrap_err();
+    assert!(e.contains("not an installer the signed manifest"), "{e}");
+
+    // Listed only in the unsigned top-level copy: not read.
+    let mut d: serde_json::Value = serde_json::from_str(&good_doc()).unwrap();
+    d["installers"] = serde_json::json!([installer(SETUP_URL, "setup.exe", &sha_hex(SETUP_BYTES))]);
+    let m = check(&d.to_string()).unwrap();
+    assert!(installer_for(&m, SETUP_URL).is_err(), "the top-level copy is never trusted");
+}
+
+#[test]
+fn an_installer_whose_bytes_differ_is_not_run() {
+    let m = check(&with_installers(serde_json::json!([installer(SETUP_URL, "setup.exe", &sha_hex(SETUP_BYTES))]))).unwrap();
+    let entry = installer_for(&m, SETUP_URL).unwrap();
+    check_installer_bytes(entry, SETUP_BYTES).expect("control: the right bytes pass");
+    let e = check_installer_bytes(entry, b"MZ something else").unwrap_err();
+    assert!(e.contains("does not match the signed manifest") && e.contains("not run"), "{e}");
+}
+
+#[test]
+fn installer_entries_follow_the_manifest_rules() {
+    let sha = sha_hex(SETUP_BYTES);
+    let http = serde_json::json!([installer("http://github.com/x/setup.exe", "setup.exe", &sha)]);
+    assert!(check(&with_installers(http)).unwrap_err().contains("https"));
+    for bad in [r"..\..\Startup\setup.exe", "sub/setup.exe", r"C:\setup.exe", "setup.bat", "setup", ".."] {
+        let f = serde_json::json!([installer(SETUP_URL, bad, &sha)]);
+        assert!(check(&with_installers(f)).unwrap_err().contains("installer file name"), "{bad:?}");
+    }
+    let upper = serde_json::json!([installer(SETUP_URL, "setup.msi", &sha.to_uppercase())]);
+    assert!(check(&with_installers(upper)).unwrap_err().contains("SHA-256"));
+    assert_eq!(installer_file_name("Setup.MSI").as_deref(), Some("Setup.MSI"));
+}
+
+/// The command refuses without a manifest, and checks signature and hash before it writes or
+/// launches anything.
+#[test]
+fn the_fallback_verifies_before_it_writes_or_launches() {
+    let src = include_str!("autoupdate.rs");
+    let start = src.find("pub async fn download_and_install_update(").expect("the command");
+    let end = start + src[start..].find("std::process::exit(0)").expect("its end");
+    let body = &src[start..end];
+    let no_manifest = body.find("let Some(manifest_url)").expect("refuses without a manifest URL");
+    let verify = body.find("verify_manifest_text(&document").expect("verifies the manifest");
+    let listed = body.find("installer_for(&manifest").expect("checks the URL is listed");
+    let get = body.find(".get(&entry.download_url)").expect("downloads the LISTED url");
+    let hash = body.find("check_installer_bytes(entry").expect("checks the hash");
+    let write = body.find("File::create").expect("writes");
+    let launch = body.find("open::that").expect("launches");
+    assert!(no_manifest < verify && verify < listed && listed < get && get < hash && hash < write && write < launch, "{body}");
+    assert!(!body.contains("temp_dir.join(&filename)") && !body.contains(".join(&filename)"), "never the UI's file name");
+}

@@ -66,7 +66,7 @@ pub struct UpdateManifest {
 //   {
 //     "version": "1.2.0", "files": [ … ],            ← copy for BMM builds that predate signing
 //     "signed": "{\"app_id\":\"com.bettermm.desktop\",\"version\":\"1.2.0\",\"files\":[…],
-//                 \"issued\":\"…Z\",\"expires\":\"…Z\"}",
+//                 \"installers\":[…],\"issued\":\"…Z\",\"expires\":\"…Z\"}",
 //     "signature": "<128 hex>"                         ← Ed25519 over CONTEXT ‖ bytes of `signed`
 //   }
 //
@@ -92,12 +92,18 @@ pub const MANIFEST_PUBLIC_KEY_HEX: &str =
 /// freeze, or a stalled job — stops being believed after this long.
 pub const MANIFEST_MAX_VALIDITY_DAYS: i64 = 7;
 
-/// The signed body. Every field is required: a body missing one is not a manifest.
+/// The signed body. Every field is required (a body missing one is not a manifest), except
+/// `installers`, which manifests signed before the full-installer check do not carry.
 #[derive(Deserialize)]
 struct SignedBody {
     app_id: String,
     version: String,
     files: Vec<ManifestFile>,
+    /// The full installers of this release (`path` = the installer's file name), for the
+    /// fallback `download_and_install_update`: it runs an installer only when it is listed here
+    /// and its bytes have this SHA-256.
+    #[serde(default)]
+    installers: Vec<ManifestFile>,
     issued: String,
     expires: String,
 }
@@ -107,6 +113,7 @@ struct SignedBody {
 pub struct VerifiedManifest {
     pub version: String,
     pub files: Vec<ManifestFile>,
+    pub installers: Vec<ManifestFile>,
 }
 
 /// The argument of `apply_incremental_update`. The UI passes back the object
@@ -252,11 +259,72 @@ pub(crate) fn verify_manifest_text(
             return refuse(format!("{:?} is not a plain relative path", f.path));
         }
         // Lowercase only: the apply loop compares against `format!("{:x}")`.
-        if f.sha256.len() != 64 || !f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        if !is_lower_sha256(&f.sha256) {
             return refuse(format!("{} has no lowercase SHA-256", f.path));
         }
     }
-    Ok(VerifiedManifest { version: body.version, files: body.files })
+    for f in &body.installers {
+        if !is_https(&f.download_url) {
+            return refuse(format!("the installer {} is not downloaded over https", f.path));
+        }
+        if installer_file_name(&f.path).is_none() {
+            return refuse(format!("{:?} is not an installer file name (one .exe or .msi name)", f.path));
+        }
+        if !is_lower_sha256(&f.sha256) {
+            return refuse(format!("the installer {} has no lowercase SHA-256", f.path));
+        }
+    }
+    Ok(VerifiedManifest { version: body.version, files: body.files, installers: body.installers })
+}
+
+fn is_lower_sha256(h: &str) -> bool {
+    h.len() == 64 && h.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// An installer entry's `path` as the file name it is saved under: ONE plain name ending in
+/// `.exe` or `.msi`, or `None`. Never the name the UI derived from the URL: that is where a
+/// `..\` or a drive used to reach `temp_dir().join(..)`.
+pub(crate) fn installer_file_name(path: &str) -> Option<String> {
+    let name = crate::fs_utils::safe_folder_name(path)?;
+    let lower = name.to_ascii_lowercase();
+    (lower.ends_with(".exe") || lower.ends_with(".msi")).then_some(name)
+}
+
+/// The installer the signed manifest vouches for at `url`, or why there is none.
+///
+/// The fallback used to download whatever `url` the UI passed (the release's first `.msi` or
+/// `.exe` asset, taken from an unsigned API answer) and run it: no signature, no hash. Whoever
+/// could answer for the release feed, or sit on a plain-HTTP hop of it, chose the program BMM
+/// launched. Now the URL must be one the publisher signed, with its hash.
+pub(crate) fn installer_for<'a>(manifest: &'a VerifiedManifest, url: &str) -> Result<&'a ManifestFile, String> {
+    if manifest.installers.is_empty() {
+        return Err(format!(
+            "Update refused: the signed manifest of v{} lists no installer, so this download cannot be \
+             checked. BMM stays on its current version; download the installer from the release page.",
+            manifest.version
+        ));
+    }
+    manifest.installers.iter().find(|f| f.download_url == url.trim()).ok_or_else(|| {
+        format!(
+            "Update refused: {url} is not an installer the signed manifest of v{} vouches for. \
+             BMM stays on its current version.",
+            manifest.version
+        )
+    })
+}
+
+/// The downloaded installer is the one the manifest names, byte for byte.
+pub(crate) fn check_installer_bytes(entry: &ManifestFile, bytes: &[u8]) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let actual = format!("{:x}", Sha256::digest(bytes));
+    if actual != entry.sha256 {
+        return Err(format!(
+            "Update refused: the downloaded installer {} does not match the signed manifest \
+             (expected SHA-256 {}, got {}). It was not run; BMM stays on its current version.",
+            entry.path, entry.sha256, actual
+        ));
+    }
+    Ok(())
 }
 
 /// Progress event emitted per file during incremental update.
@@ -518,35 +586,72 @@ fn is_newer_version(latest: &str, current: &str) -> bool {
     is_newer(latest, current)
 }
 
+/// Largest installer accepted, whatever the manifest says (BMM's is well under 100 MB).
+const INSTALLER_MAX_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// The full-installer fallback, for a copy BetterInstaller did not install.
+///
+/// Runs an installer only when the SIGNED incremental manifest (`manifest_url`, the release's
+/// `update-manifest.json`, verified exactly as for a Quick Update: publisher key, app, expiry,
+/// newer version) lists `url` among its `installers`, and the downloaded bytes have the SHA-256
+/// it gives. Anything else is refused before the file is written, and BMM stays where it is.
+/// `filename` is accepted for older callers and ignored: the name comes from the manifest.
 #[tauri::command]
-pub async fn download_and_install_update(url: String, filename: String) -> Result<(), String> {
-    log_line(format!("[UPDATE] Downloading update installer from: {}", url));
-    
-    // Choose temp directory
-    let temp_dir = std::env::temp_dir();
-    let file_path = temp_dir.join(&filename);
+pub async fn download_and_install_update(
+    app_handle: tauri::AppHandle,
+    url: String,
+    manifest_url: Option<String>,
+    filename: Option<String>,
+) -> Result<(), String> {
+    let _ = filename;
+    log_line(format!("[UPDATE] Full installer requested: {}", url));
+    let Some(manifest_url) = manifest_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
+        let e = "Update refused: this release publishes no signed update manifest, so its installer \
+                 cannot be checked. BMM stays on its current version; download the installer from \
+                 the release page.".to_string();
+        log_line(format!("[UPDATE] {}", e));
+        return Err(e);
+    };
+    if !is_https(&url) {
+        return Err("Update refused: the installer URL is not https. BMM stays on its current version.".to_string());
+    }
+    let document = fetch_manifest_document(manifest_url).await?;
+    let current = app_handle.package_info().version.to_string();
+    let manifest = verify_manifest_text(&document, &publisher_key()?, &current, chrono::Utc::now())
+        .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    let entry = installer_for(&manifest, &url).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    let file_name = installer_file_name(&entry.path).ok_or_else(|| "Update refused: bad installer name".to_string())?;
 
-    let client = reqwest::Client::new();
-    let response = client.get(&url).send().await.map_err(|e| format!("Download error: {}", e))?;
-
+    log_line(format!("[UPDATE] Downloading v{} installer from: {}", manifest.version, entry.download_url));
+    let response = crate::commands::net::client().get(&entry.download_url)
+        .header(reqwest::header::USER_AGENT, "BetterModManager")
+        .send().await.map_err(|e| format!("Download error: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("Download failed with status: {}", response.status()));
     }
-
+    let mut cap = crate::fs_utils::DownloadCap::with_limit(INSTALLER_MAX_BYTES);
+    cap.check_announced(response.content_length())?;
     let bytes = response.bytes().await.map_err(|e| format!("Error reading response bytes: {}", e))?;
-    
-    log_line(format!("[UPDATE] Saving installer to: {:?}", file_path));
+    cap.add(bytes.len() as u64)?;
+    check_installer_bytes(entry, &bytes).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+
+    // A folder of our own, new for this download: a fixed name in %TEMP% is one another
+    // program can plant or swap between the check and the launch.
+    let dir = std::env::temp_dir().join(format!("bmm_update_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {}", e))?;
+    let file_path = dir.join(&file_name);
+    log_line(format!("[UPDATE] Installer verified (SHA-256 {}), saving to: {:?}", entry.sha256, file_path));
     let mut file = File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
     file.write_all(&bytes).map_err(|e| format!("Failed to write to file: {}", e))?;
+    drop(file);
 
     log_line("[UPDATE] Launching installer and exiting...");
 
     // Execute installer depending on the OS
     #[cfg(target_os = "windows")]
     {
-        // The installer's filename comes from the update manifest, which is fetched over
-        // the network — so this is the same shell-injection shape as open_external, with a
-        // remote source. open::that never puts it on a command line.
+        // The installer's filename comes from the signed manifest (installer_file_name: one
+        // plain .exe/.msi name). open::that never puts it on a command line anyway.
         open::that(file_path.as_os_str())
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
@@ -572,16 +677,13 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
 /// Largest manifest accepted. It lists a handful of files; anything near this is not one.
 const MANIFEST_MAX_BYTES: usize = 1024 * 1024;
 
-/// Fetches the incremental update manifest from the given URL and verifies it
-/// ([`verify_manifest_text`]). Returns the verified content for display, plus the raw document
-/// that `apply_incremental_update` verifies again.
-#[tauri::command]
-pub async fn fetch_update_manifest(app_handle: tauri::AppHandle, url: String) -> Result<UpdateManifest, String> {
-    log_line(format!("[UPDATE] Fetching incremental manifest from: {}", url));
-    if !is_https(&url) {
+/// The raw `update-manifest.json` at `url` (https only, size-capped, UTF-8). Not verified:
+/// every caller hands it to `verify_manifest_text` next.
+async fn fetch_manifest_document(url: &str) -> Result<String, String> {
+    if !is_https(url) {
         return Err("Update manifest refused: its URL is not https".to_string());
     }
-    let response = crate::commands::net::client().get(&url)
+    let response = crate::commands::net::client().get(url)
         .header(reqwest::header::USER_AGENT, "BetterModManager")
         .timeout(std::time::Duration::from_secs(30))
         .send().await.map_err(|e| format!("Network error: {}", e))?;
@@ -592,7 +694,16 @@ pub async fn fetch_update_manifest(app_handle: tauri::AppHandle, url: String) ->
     if bytes.len() > MANIFEST_MAX_BYTES {
         return Err("Update manifest refused: too large".to_string());
     }
-    let document = String::from_utf8(bytes.to_vec()).map_err(|_| "Update manifest refused: not UTF-8".to_string())?;
+    String::from_utf8(bytes.to_vec()).map_err(|_| "Update manifest refused: not UTF-8".to_string())
+}
+
+/// Fetches the incremental update manifest from the given URL and verifies it
+/// ([`verify_manifest_text`]). Returns the verified content for display, plus the raw document
+/// that `apply_incremental_update` verifies again.
+#[tauri::command]
+pub async fn fetch_update_manifest(app_handle: tauri::AppHandle, url: String) -> Result<UpdateManifest, String> {
+    log_line(format!("[UPDATE] Fetching incremental manifest from: {}", url));
+    let document = fetch_manifest_document(&url).await?;
     let current = app_handle.package_info().version.to_string();
     let verified = verify_manifest_text(&document, &publisher_key()?, &current, chrono::Utc::now())
         .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;

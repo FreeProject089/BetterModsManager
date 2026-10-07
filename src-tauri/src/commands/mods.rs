@@ -395,6 +395,7 @@ fn make_inverse_undo_input(input: &crate::fs_utils::WorkerInput) -> Option<crate
                 other_mods_files: Vec::new(),
                 files_to_remove,
                 other_active_mods: Vec::new(),
+                shared_backup_paths: input.shared_backup_paths.clone(),
                 smart_io: input.smart_io,
                 io: input.io.clone(),
             })
@@ -409,6 +410,7 @@ fn make_inverse_undo_input(input: &crate::fs_utils::WorkerInput) -> Option<crate
                 other_mods_files: Vec::new(),
                 files_to_remove: Vec::new(),
                 other_active_mods: Vec::new(),
+                shared_backup_paths: input.shared_backup_paths.clone(),
                 smart_io: input.smart_io,
                 io: input.io.clone(),
             })
@@ -1230,14 +1232,24 @@ pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mo
     add_mod_to_priority_sha_queue(state.clone(), mod_id.clone());
 
     ensure_cache_populated(&state)?;
+    // Every file a mod has put in this game folder, whichever profile enabled it: the backup
+    // guard's answer to "is what I am about to overwrite a game original?". A profile that
+    // shares only the game folder (its own mods folder) has its mods' files there too; seen
+    // from this profile alone they were backed up into OUR `_original/` as game files and
+    // later restored "as the original" (mod_order::game_folder_share).
     let mut active_files_set = HashSet::<PathBuf>::new();
     {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(p) = data.profiles.iter().find(|p| p.id == profile_data.id) {
-            for mid in &p.active_mods {
+            let share = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id);
+            for mid in p.active_mods.iter().chain(share.owners.iter()) {
                 if let Some(files) = cache.get(mid) {
                     for f in files { active_files_set.insert(f.clone()); }
+                }
+                // What was really deployed, in case the mod folder changed since (or is gone).
+                if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+                    for f in &m.installed_files { active_files_set.insert(PathBuf::from(f)); }
                 }
             }
         }
@@ -1256,7 +1268,7 @@ pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mo
             log_line(format!("[MOD] Enable loop cancelled before mod '{}'", mid));
             break;
         }
-        let (mod_folder, game_path, backup_path, mod_name) = {
+        let (mod_folder, game_path, backup_path, mod_name, shared_backup_paths) = {
             let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             let m = match data.mods.iter().find(|m| m.id == mid) {
                 Some(m) => m.clone(),
@@ -1269,14 +1281,18 @@ pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mo
             };
 
             // --- Block if already active in another profile on same root ---
+            let game_key = crate::commands::mod_order::game_folder_key(&p.game_path);
             for op in &data.profiles {
                 if op.id == profile_data.id { continue; }
-                if op.game_path == p.game_path && op.active_mods.contains(&mid) {
+                if crate::commands::mod_order::game_folder_key(&op.game_path) == game_key && op.active_mods.contains(&mid) {
                     return Err(format!("Le mod '{}' est déjà actif dans le profil '{}'.", m.name, op.name));
                 }
             }
 
-            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name)
+            // The undo of a cancelled enable restores originals: they may sit in the backup of
+            // another profile on this game folder.
+            let shared = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id).backups;
+            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name, shared)
         };
 
         // Archived mods (.zip …) are kept zipped in the mods folder; extract to a
@@ -1375,6 +1391,7 @@ pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mo
                 other_mods_files: active_files_set_clone.into_iter().collect(),
                 files_to_remove: Vec::new(),
                 other_active_mods: Vec::new(),
+                shared_backup_paths,
                 smart_io,
                 io: None, // filled in by run_mod_io_worker_with_mode
             };
@@ -1459,7 +1476,7 @@ pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, m
         return Ok(());
     }
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
-    let (mod_folder, game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods, shared_backup_paths) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -1470,8 +1487,13 @@ pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, m
         // of them that ships a file, the one directly under this mod. This list used to be built
         // newest-first and was then walked backwards by unapply, so the OLDEST copy came back —
         // a layer nobody had seen since the mod above it was enabled (mod_order_tests).
+        //
+        // Mods another profile enabled on the same game folder are providers too (their files
+        // are in that folder; switching profiles moves nothing), BELOW this profile's own stack,
+        // and the original may be in that profile's backup: it was the first to replace it.
         let leaving: HashSet<String> = [mod_id.clone()].into_iter().collect();
-        let others: Vec<(String, PathBuf)> = crate::commands::mod_order::fallback_order(&p.active_mods, &leaving)
+        let share = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id);
+        let others: Vec<(String, PathBuf)> = crate::commands::mod_order::shared_fallback_order(&share.owners, &p.active_mods, &leaving)
             .into_iter()
             .filter_map(|mid| data.mods.iter().find(|om| om.id == mid).map(|om| (om.id.clone(), om.mod_folder_path.clone())))
             .collect();
@@ -1483,7 +1505,7 @@ pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, m
             for s in scanned { unique_files.insert(s.to_string_lossy().to_string()); }
         }
 
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others, share.backups)
     };
 
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
@@ -1534,6 +1556,7 @@ pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, m
             other_mods_files: Vec::new(),
             files_to_remove,
             other_active_mods,
+            shared_backup_paths,
             smart_io,
             io: None, // filled in by run_mod_io_worker_with_mode
         };
@@ -2897,11 +2920,20 @@ pub async fn disable_mods_for_profiles(
         // Unapplying each mod in turn either put a batch member's copy back (it still counted
         // as active until the loop ended) or, once they were excluded, freed the vanilla backup
         // on the first pass and deleted the game's own file on the second.
-        let (files_to_remove, remaining, folders) = {
+        let (files_to_remove, remaining, folders, shared_backups) = {
             let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-            let root_orders: Vec<Vec<String>> = data.profiles.iter()
-                .filter(|p| p.game_path == game_path)
-                .map(|p| p.active_mods.clone())
+            let game_key = crate::commands::mod_order::game_folder_key(&game_path);
+            let on_root: Vec<&crate::models::profile::Profile> = data.profiles.iter()
+                .filter(|p| crate::commands::mod_order::game_folder_key(&p.game_path) == game_key)
+                .collect();
+            let root_orders: Vec<Vec<String>> = on_root.iter().map(|p| p.active_mods.clone()).collect();
+            // The originals may be in any of these profiles' backups (the one that replaced a
+            // file first holds it), not only in the one this task is keyed by.
+            let backup_key = crate::commands::mod_order::game_folder_key(&backup_path);
+            let mut seen_b: HashSet<String> = [backup_key].into_iter().collect();
+            let shared_backups: Vec<PathBuf> = on_root.iter()
+                .filter(|p| seen_b.insert(crate::commands::mod_order::game_folder_key(&p.backup_path)))
+                .map(|p| p.backup_path.clone())
                 .collect();
             let files_of = |id: &str| -> Vec<String> {
                 let Some(m) = data.mods.iter().find(|m| m.id == id) else { return Vec::new() };
@@ -2916,7 +2948,7 @@ pub async fn disable_mods_for_profiles(
                 .filter(|m| plan.remaining.contains(&m.id))
                 .map(|m| (m.id.clone(), m.mod_folder_path.clone()))
                 .collect();
-            (plan.files, plan.remaining, folders)
+            (plan.files, plan.remaining, folders, shared_backups)
         };
         if files_to_remove.is_empty() { continue; }
 
@@ -2928,7 +2960,7 @@ pub async fn disable_mods_for_profiles(
             let wanted: HashSet<String> = files_to_remove.iter().map(|f| crate::commands::mod_order::rel_key(f)).collect();
             let other_active_mods = crate::commands::mod_order::read_roots(&remaining, &folders, Some(&wanted));
             // Takes its own Deploy ticket (in this process: no worker here).
-            fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, smart_io)
+            fs_utils::unapply_mod_stacked_shared(&gp, &bp, &shared_backups, files_to_remove, &other_active_mods, smart_io)
         }).await.map_err(|e| e.to_string())?;
     }
 

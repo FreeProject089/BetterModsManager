@@ -76,17 +76,28 @@ flowchart TD
     SM -- "non" --> SEP["Listes séparées,<br/>un seul dossier de destination"]
 ```
 
-Il y a un détail lié dans la logique de sauvegarde : pour décider si un fichier qu'il va écraser est un
-*véritable fichier de jeu*, BMM regarde les fichiers des mods activés dans le **profil actif** (plus
-ceux que la même activation vient de poser, pour une chaîne de dépendances). Les profils qui partagent
-les deux dossiers ont cette même liste, donc passer de l'un à l'autre ne change rien. Un profil qui ne
-partage que le dossier de jeu n'est **pas** consulté : un fichier de l'un de ses mods présent dans le
-dossier de jeu peut être pris pour un original et sauvegardé comme tel. Voir [Conflits](doc-page:how-it-works/conflicts)
-pour la règle de sauvegarde complète.
+Les fichiers déployés appartiennent au **dossier de jeu**, pas au profil qui se trouve être actif :
+changer de profil ne déplace rien, donc les mods qu'un autre profil y a activés y sont physiquement.
+La logique de sauvegarde et de restauration le lit ainsi :
 
-**Donc : pour garder des loadouts vraiment séparés, donne à chaque profil son propre dossier mods.**
-Partager des dossiers est supporté, mais c'est une seule installation avec plusieurs vues, pas deux
-installations.
+- **Activer.** Pour décider si un fichier qu'il va écraser est un *véritable fichier de jeu*, BMM
+  regarde les fichiers de tous les mods activés sur ce dossier de jeu, **quel que soit le profil qui
+  les a activés** (plus ceux que la même activation vient de poser, pour une chaîne de dépendances).
+  Un fichier posé par le mod d'un autre profil n'est jamais sauvegardé comme original, il ne peut
+  donc jamais être « restauré » par-dessus le vrai plus tard.
+- **Désactiver.** Un fichier revient d'abord aux mods restants de ce profil (le dernier gagne), puis à
+  un mod qu'un autre profil a activé sur le même dossier de jeu, et seulement ensuite à l'original.
+  L'original est cherché dans le dossier de sauvegarde de ce profil, puis dans ceux des autres
+  profils : le profil qui a remplacé un fichier de jeu le premier est celui qui l'a sauvegardé.
+
+Les dossiers de jeu sont comparés comme des chemins, sans tenir compte de la casse sous Windows ni
+d'un séparateur final. Voir [Conflits](doc-page:how-it-works/conflicts) pour la règle de sauvegarde complète.
+
+**Donc : des dossiers mods séparés donnent des listes actives séparées, pas des dossiers de jeu
+séparés.** Deux profils qui ne partagent que le dossier de jeu ne mettent pas en danger les fichiers
+du jeu, mais leurs mods activés cohabitent dans ce dossier et un fichier commun contient la copie
+déployée en dernier. Pour des loadouts qui ne se croisent vraiment jamais, donne à chaque profil son
+propre dossier de **jeu**.
 
 ---
 

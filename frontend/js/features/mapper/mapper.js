@@ -24,6 +24,12 @@ let lastSelectedPath = null;
 let pendingMoves = new Map();
 let pendingDeletions = new Set();
 let pendingNewFolders = new Map();
+/** Every queued change, of the three kinds. ONE count for "is there anything to save?": Save
+ *  used to test moves and deletions only, so a batch of new folders showed the Save button
+ *  (which counted all three) and then did nothing when clicked. Exported for the test. */
+export function pendingChangeCount() {
+    return pendingMoves.size + pendingDeletions.size + pendingNewFolders.size;
+}
 // Input Modal State
 let currentInputCallback = null;
 // Undoes the input dialog's keyboard binding (Escape, Tab trap) and returns the focus.
@@ -125,11 +131,15 @@ export async function initMapper() {
     });
     previewBtn?.addEventListener('click', showMapperPreview);
     refreshBtn?.addEventListener('click', async () => {
-        if (pendingMoves.size > 0) {
+        if (pendingChangeCount() > 0) {
             if (!confirm(t("mapper.confirmRefresh")))
                 return;
         }
+        // All three: the confirm says the unsaved changes go, and a deletion or a new folder
+        // that survived a refresh would be applied by the next Save against a re-read tree.
         pendingMoves.clear();
+        pendingDeletions.clear();
+        pendingNewFolders.clear();
         updateSaveButtonVisibility();
         modSelect.disabled = true;
         profileSelect.disabled = true;
@@ -897,7 +907,7 @@ function updateSelectionCounter() {
 function updateSaveButtonVisibility() {
     const saveBtn = document.getElementById('btn-mapper-save');
     if (saveBtn) {
-        saveBtn.style.display = (pendingMoves.size > 0 || pendingDeletions.size > 0 || pendingNewFolders.size > 0) ? 'flex' : 'none';
+        saveBtn.style.display = pendingChangeCount() > 0 ? 'flex' : 'none';
     }
 }
 const _archiveChoice = new Map();
@@ -1024,7 +1034,7 @@ async function restoreArchiveIfAsked(modId) {
     }
 }
 async function applyAllChanges() {
-    if (pendingMoves.size === 0 && pendingDeletions.size === 0)
+    if (pendingChangeCount() === 0)
         return;
     // Archived mod → ask, unpack, and only then write. Cancelling leaves every queued
     // change pending, so nothing the user lined up is thrown away by saying no.
@@ -1524,7 +1534,7 @@ async function showMapperPreview() {
             deletions: Array.from(pendingDeletions),
             gameTree: gameTreeData || [],
             conflicts: Array.isArray(conflicts) ? conflicts : [],
-            pending: pendingMoves.size + pendingDeletions.size + pendingNewFolders.size,
+            pending: pendingChangeCount(),
             onApply: () => { void applyAllChanges(); },
         });
     }

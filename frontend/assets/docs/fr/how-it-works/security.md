@@ -194,6 +194,15 @@ signée avec la même clé d'éditeur que les paquets, et BMM la refuse si **une
 Seule la partie signée est lue. L'interface ne donne jamais à BMM une liste à appliquer : elle lui
 rend le document reçu, et BMM le vérifie **à nouveau** avant de télécharger ou d'écrire quoi que ce soit.
 
+Le repli **installateur complet** (le bouton *Télécharger et installer*, pour les mêmes copies) suit
+la même liste : le corps signé peut porter une entrée `installers` par installateur de la version,
+avec son URL `https` et son SHA-256. BMM ne lance un installateur que si le manifeste signé liste
+exactement cette URL et que les octets téléchargés ont ce hash ; il l'enregistre sous le nom que donne
+le manifeste, dans un dossier neuf qui lui est propre. Une version sans manifeste signé, un manifeste
+qui ne liste aucun installateur, une autre URL ou un hash divergent sont **refusés avec un message, et
+BMM reste sur sa version actuelle**. Avant, il téléchargeait ce que le flux de versions indiquait et
+le lançait sans contrôle.
+
 Comme la signature expire, l'éditeur la renouvelle deux fois par semaine avec un job automatique (le
 workflow *Re-sign update manifests*, qui renouvelle aussi le `update.json` de BetterInstaller). Si ce
 job s'arrête, les copies installées ne se voient simplement plus proposer de mise à jour au bout de

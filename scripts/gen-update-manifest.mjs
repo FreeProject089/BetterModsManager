@@ -143,28 +143,35 @@ for (const entry of TRACKED_FILES) {
     ok++;
 }
 
-// ── Write manifest ────────────────────────────────────────────────────────────
-const manifest = { version: VERSION, files: manifestFiles };
-const manifestPath = join(OUT_DIR, 'update-manifest.json');
-writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-
-// ── Also copy the NSIS installer if it exists ─────────────────────────────────
+// ── The full installers (NSIS .exe, MSI), when the bundle exists ─────────────
+// Copied next to the manifest AND listed in its `installers`, with their SHA-256: BMM's
+// full-installer fallback (autoupdate.rs, download_and_install_update) runs an installer only
+// when the SIGNED manifest lists its URL and the downloaded bytes have that hash. Every one is
+// listed, because the release check picks the .msi first and the .exe otherwise.
 const nsisDir   = join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
 const msiDir    = join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'msi');
-let   installer = null;
+const installers = [];
 
 for (const dir of [nsisDir, msiDir]) {
     if (!existsSync(dir)) continue;
-    const files = readdirSync(dir).filter(f => f.endsWith('.exe') || f.endsWith('.msi'));
-    if (files.length > 0) {
-        const src  = join(dir, files[0]);
-        const dest = join(OUT_DIR, files[0]);
-        copyFileSync(src, dest);
-        installer = files[0];
-        console.log(`   📦 Installer copied: ${files[0]} (${humanSize(statSync(src).size)})`);
-        break;
+    for (const name of readdirSync(dir).filter(f => f.endsWith('.exe') || f.endsWith('.msi'))) {
+        const src  = join(dir, name);
+        const buffer = readFileSync(src);
+        copyFileSync(src, join(OUT_DIR, name));
+        installers.push({
+            path:         name,
+            sha256:       sha256(buffer),
+            download_url: `https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${name}`,
+            size:         buffer.length,
+        });
+        console.log(`   📦 Installer copied and listed: ${name} (${humanSize(buffer.length)})`);
     }
 }
+
+// ── Write manifest ────────────────────────────────────────────────────────────
+const manifest = { version: VERSION, files: manifestFiles, ...(installers.length ? { installers } : {}) };
+const manifestPath = join(OUT_DIR, 'update-manifest.json');
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(60)}`);
@@ -176,9 +183,9 @@ for (const f of manifestFiles) {
     console.log(`      - ${name}`);
 }
 console.log(`      - update-manifest.json`);
-if (installer) {
-    console.log(`\n    Required (full-install fallback):`);
-    console.log(`      - ${installer}`);
+if (installers.length) {
+    console.log(`\n    Required (full-install fallback, listed in the signed manifest):`);
+    for (const i of installers) console.log(`      - ${i.path}`);
 }
 console.log(`\n    All files are in: dist/release-assets-v${VERSION}/`);
 console.log(`${'─'.repeat(60)}\n`);

@@ -21,8 +21,10 @@ Diagnostic**, and check the final path *before* applying.
 
 Two profiles pointing at the same destination folder. BMM warns about this when you set it up — it is *a major
 source of human error*. Note that profiles sharing **both** the game and mods folders keep their active
-lists in sync, but profiles sharing only the *game* folder do not: each deploys into the same place and
-neither knows what the other left behind. Give each profile its own mods folder. See
+lists in sync, but profiles sharing only the *game* folder do not: each has its own list, and both
+lists' mods are deployed in the same place. BMM tracks that (it never takes the other profile's files
+for game originals), but a file the other profile's mod deployed is still there. Disable it from that
+profile, or give each profile its own game folder. See
 [Profiles & activation](doc-page:how-it-works/profiles-activation).
 
 ### I switched profiles and nothing changed

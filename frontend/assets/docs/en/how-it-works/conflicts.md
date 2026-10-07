@@ -103,8 +103,10 @@ flowchart TD
     COPY --> GAME[("Destination folder")]
 ```
 
-*Another enabled mod's file* means a file shipped by a mod enabled in the active profile, or one this
-same enable has just placed (a dependency chain). The mod's copy always overwrites.
+*Another enabled mod's file* means a file shipped by a mod enabled on that game folder, in the active
+profile **or in any other profile deploying there** (switching profiles moves no file, so theirs are on
+disk too), or one this same enable has just placed (a dependency chain). The mod's copy always
+overwrites.
 
 ---
 
@@ -123,12 +125,14 @@ flowchart TD
 ```
 
 1. **Another enabled mod ships it** → restore from that mod: the **last** one in the activation
-   order that has the file — the same rule as deployment. Disabling the top mod reveals the one
+   order that has the file — the same rule as deployment. A mod another profile enabled on the same
+   game folder counts too, below this profile's own ones. Disabling the top mod reveals the one
    directly underneath, archived (zipped) mods included: their copy is read from the extracted
    cache. (It used to restore the *oldest* copy, and to skip archived mods; both are fixed and
    tested — see [Activation order](doc-page:how-it-works/load-order).)
-2. **Otherwise, `_original/` has it** → restore the game's own file, and then **delete the backup
-   copy**: *"Space optimization: remove the backup file as it has been safely restored."* The backup
+2. **Otherwise, `_original/` has it** (this profile's, or the backup folder of another profile on
+   the same game folder, which holds it when that profile replaced the file first) → restore the
+   game's own file, and then **delete the backup copy**: *"Space optimization: remove the backup file as it has been safely restored."* The backup
    folder shrinks as you disable, instead of growing forever.
 3. **Otherwise** → the mod added a file the game never had, so it is deleted.
 

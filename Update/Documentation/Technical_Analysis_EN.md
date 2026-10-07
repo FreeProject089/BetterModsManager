@@ -792,7 +792,7 @@ An optional subscriber-facing gate for self-hosted repos, distinct from `admin_p
 
 | Subsystem | Implementation |
 | :--- | :--- |
-| **Offline detection** | `core/offline.ts` probes two lightweight endpoints (5 s timeout) instead of trusting `navigator.onLine`; offline state shows a banner, dispatches `bmm-connectivity`, and gates features via `requireOnline()` / `safeFetch()`. Re-probe every 15 s offline / 120 s online. |
+| **Offline detection** | `core/offline.ts` probes two lightweight endpoints (5 s timeout) instead of trusting `navigator.onLine`; offline state shows a banner and dispatches `bmm-connectivity`; it gates nothing (network features report their own error, and a LAN repo keeps working). Re-probe every 15 s offline / 120 s online. |
 | **Telemetry consent** | Opt-in only (`settings.analytics_consent: Option<bool>`, `None` = never asked → nothing collected; declining wipes the buffer). Sub-toggles: benchmark/extra-hardware, session replay, replay unmask. |
 | **Pipeline** | Events buffer to `analytics_queue.jsonl` (10 MB cap) and flush as ONE gzipped batch (packet id) every 90 s while visible; endpoint allow-list accepts `https://` (or loopback) only. |
 | **Session replay** | rrweb with no mouse-move capture, masked-by-default sensitive selectors, animating subtrees blocked; chunks gzip via `CompressionStream`. Local `.bmmreplay` files + a rolling crash-session buffer, pruned by retention limits (30 / 2 GB defaults). |

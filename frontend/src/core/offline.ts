@@ -2,9 +2,13 @@
 //
 // navigator.onLine only tells us whether a network interface exists, not whether
 // the internet is actually reachable. So we also probe a tiny always-on endpoint.
-// Features that load remote content call requireOnline()/safeFetch() so that,
-// when there's no connection, the user gets a clear message instead of a raw
-// error — the feature itself is never removed, it just waits for connectivity.
+//
+// What offline changes: the banner, and a `bmm-connectivity` event. It is a notice, not a
+// lock: network features are not gated, and one started offline fails with its own error.
+// Deliberately so: a repo on the LAN and the local API need no internet, and a gate keyed on
+// reaching the probe endpoints would block them. (`requireOnline()` / `safeFetch()` used to
+// live here for gating, were never called by anything, and the offline-mode diagram drew
+// them as if they were; both are gone, and the diagram shows this behaviour.)
 
 import { t } from './i18n.js';
 
@@ -73,26 +77,4 @@ export function initOffline(): void {
 
     // Expose for any feature module (no import needed):
     (window as any).bmmIsOnline = isOnline;
-    (window as any).bmmRequireOnline = requireOnline;
-    (window as any).bmmSafeFetch = safeFetch;
-}
-
-/** Returns true if online; otherwise toasts a friendly message and returns false. */
-export function requireOnline(feature?: string): boolean {
-    if (_online) return true;
-    const m = (feature ? `${feature} — ` : '') + msg();
-    try { (window as any).toast?.(m, 'warning'); } catch {}
-    return false;
-}
-
-/** fetch() that no-ops (returns null) with a message when offline. */
-export async function safeFetch(url: string, opts?: RequestInit, feature?: string): Promise<Response | null> {
-    if (!requireOnline(feature)) return null;
-    try {
-        return await fetch(url, opts);
-    } catch (e) {
-        // a fetch failure mid-session likely means we just dropped offline
-        recheck();
-        throw e;
-    }
 }

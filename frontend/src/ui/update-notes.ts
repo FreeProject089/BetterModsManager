@@ -1019,9 +1019,11 @@ function showUpdateAvailableModal(info) {
                     await invoke('update_via_installer');
                     return; // BMM is exiting; updater window takes over
                 } catch (_) { /* not installed via BetterInstaller → direct download */ }
-                let filename = info.download_url.split('/').pop() || 'setup.exe';
-                if (!filename.includes('.')) filename += '.exe';
-                await invoke('download_and_install_update', { url: info.download_url, filename });
+                // The backend runs the installer only if the release's SIGNED manifest lists
+                // this URL with its SHA-256 (download_and_install_update); otherwise it refuses
+                // with a message and BMM stays on this version. The file name comes from that
+                // manifest, not from the URL.
+                await invoke('download_and_install_update', { url: info.download_url, manifestUrl: info.manifest_url || null });
                 downloadBtn.innerHTML = t('common.installing');
             } catch (err) {
                 toast(t('common.error') + ' : ' + String(err), 'error');

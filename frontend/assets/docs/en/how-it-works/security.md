@@ -185,6 +185,14 @@ the packages, and BMM refuses it unless **every** rule holds:
 Only the signed part is read. The interface never hands BMM a list to apply: it passes back the
 document it was given, and BMM verifies it **again** before downloading or writing anything.
 
+The **full installer** fallback (the *Download & install* button, for the same copies) is held to
+the same list: the signed body may carry an `installers` entry per release installer, with its
+`https` URL and SHA-256. BMM runs an installer only if the signed manifest lists that exact URL and
+the downloaded bytes have that hash; it saves it under the name the manifest gives, in a fresh folder
+of its own. A release with no signed manifest, a manifest that lists no installer, another URL or a
+hash mismatch is **refused with a message, and BMM stays on its current version**. It used to
+download whatever the release feed pointed at and launch it unchecked.
+
 Because the signature expires, the publisher renews it twice a week with an automated job (the
 workflow *Re-sign update manifests*, which also renews BetterInstaller's `update.json`). If that job
 stops, installed copies are simply no longer offered updates after at most 7 days — nothing wrong is

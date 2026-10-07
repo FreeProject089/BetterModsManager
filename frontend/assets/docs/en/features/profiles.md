@@ -34,9 +34,10 @@ BMM warns about this explicitly, and it's worth repeating.
     From BMM's own warning: sharing the same folder between multiple profiles is *a major
     source of human error*.
 
-    Both profiles deploy into the same place, and neither knows what the other put there.
-    Files survive a profile switch, and you end up debugging a mod you thought was off. Give
-    each profile its own folder unless you know exactly why you're not.
+    Both profiles deploy into the same place. BMM keeps track of whose files are whose, so
+    your game's originals are safe, but files survive a profile switch, and you end up
+    debugging a mod you thought was off. Give each profile its own folder unless you know
+    exactly why you're not.
 
 ## Making them yours
 

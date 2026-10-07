@@ -720,7 +720,7 @@ Une porte optionnelle côté abonnés pour les dépôts auto-hébergés, distinc
 
 | Sous-système | Implémentation |
 | :--- | :--- |
-| **Détection hors ligne** | `core/offline.ts` sonde deux endpoints légers (timeout 5 s) au lieu de croire `navigator.onLine` ; l'état hors ligne affiche un bandeau, émet `bmm-connectivity`, et gate les fonctions via `requireOnline()` / `safeFetch()`. Re-sonde toutes les 15 s hors ligne / 120 s en ligne. |
+| **Détection hors ligne** | `core/offline.ts` sonde deux endpoints légers (timeout 5 s) au lieu de croire `navigator.onLine` ; l'état hors ligne affiche un bandeau et émet `bmm-connectivity` ; il ne bloque rien (les fonctions réseau signalent leur propre erreur, et un dépôt sur le réseau local continue de fonctionner). Re-sonde toutes les 15 s hors ligne / 120 s en ligne. |
 | **Consentement télémétrie** | Opt-in uniquement (`settings.analytics_consent: Option<bool>`, `None` = jamais demandé → rien de collecté ; refuser efface le tampon). Sous-interrupteurs : benchmark/matériel étendu, replay de session, démasquage du replay. |
 | **Pipeline** | Les événements s'accumulent dans `analytics_queue.jsonl` (plafond 10 Mo) et partent en UN lot gzip (id de paquet) toutes les 90 s fenêtre visible ; la liste blanche d'endpoints n'accepte que `https://` (ou loopback). |
 | **Replay de session** | rrweb sans capture de mouvements de souris, sélecteurs sensibles masqués par défaut, sous-arbres animés bloqués ; chunks gzip via `CompressionStream`. Fichiers `.bmmreplay` locaux + tampon de session de crash glissant, élagués par limites de rétention (défauts 30 / 2 Go). |

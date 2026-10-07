@@ -132,6 +132,38 @@ describe('sign-update-manifest', () => {
         assert.equal(pinned.status, 1, 'the pinned key did not sign it');
     });
 
+    // The full-installer fallback (autoupdate.rs, download_and_install_update) runs only an
+    // installer the SIGNED body lists with its SHA-256.
+    const INSTALLERS = [{
+        path: 'BetterModsManager_1.2.0_x64-setup.exe', sha256: 'b'.repeat(64),
+        download_url: 'https://github.com/FreeProject089/BetterModsManager/releases/download/v1.2.0/BetterModsManager_1.2.0_x64-setup.exe',
+        size: 20,
+    }];
+    const withInstallers = (installers = INSTALLERS) => JSON.stringify({ version: '1.2.0', files: FILES, installers });
+
+    test('installers are signed into the body and survive a re-sign', () => {
+        const signed = M.signManifest(withInstallers(), SEED, { now: T0 });
+        const body = M.verifyManifest(signed, { publicKey: PUB, now: T0 + HOUR });
+        assert.deepEqual(body.installers, INSTALLERS);
+        const renewed = M.verifyManifest(M.signManifest(signed, SEED, { now: T0 + 30 * DAY }), { publicKey: PUB, now: T0 + 30 * DAY + HOUR });
+        assert.deepEqual(renewed.installers, INSTALLERS);
+    });
+
+    test('no installers signs to the same bytes as before (the Rust fixture holds)', () => {
+        const a = JSON.parse(M.signManifest(unsigned(), SEED, { now: T0 }));
+        const b = JSON.parse(M.signManifest(withInstallers([]), SEED, { now: T0 }));
+        assert.equal(b.signed, a.signed);
+        assert.ok(!('installers' in JSON.parse(a.signed)));
+    });
+
+    test('an installer entry must be one https .exe/.msi name with a lowercase SHA-256', () => {
+        for (const path of ['..\\setup.exe', 'sub/setup.exe', 'C:\\setup.exe', 'setup.bat', '..']) {
+            assert.throws(() => M.signManifest(withInstallers([{ ...INSTALLERS[0], path }]), SEED), /installer path|relative path/, path);
+        }
+        assert.throws(() => M.signManifest(withInstallers([{ ...INSTALLERS[0], download_url: 'http://x.example/setup.exe' }]), SEED), /not https/);
+        assert.throws(() => M.signManifest(withInstallers([{ ...INSTALLERS[0], sha256: 'B'.repeat(64) }]), SEED), /lowercase hex/);
+    });
+
     test('the constants match the Rust verifier, the app id and the publisher key', () => {
         const rs = readFileSync(join(ROOT, 'src-tauri/src/commands/autoupdate.rs'), 'utf8');
         assert.ok(rs.includes(`"${M.MANIFEST_PUBLIC_KEY_HEX}"`), 'MANIFEST_PUBLIC_KEY_HEX');

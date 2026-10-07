@@ -73,15 +73,26 @@ flowchart TD
     SM -- "no" --> SEP["Separate lists,<br/>one destination folder"]
 ```
 
-There is a related detail in the backup logic: when deciding whether a file it is about to overwrite
-is a *genuine game file*, BMM looks at the files of the mods enabled in the **active profile** (plus
-the ones the same enable has just placed, for a dependency chain). Profiles that share both folders
-have that same list, so switching between them changes nothing. A profile that shares only the game
-folder is **not** consulted: one of its mod files sitting in the game folder can be taken for an
-original and backed up as one. See [Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
+Deployed files belong to the **game folder**, not to the profile that happens to be active: switching
+profiles moves nothing, so the mods another profile enabled there are physically in it. The backup
+and restore logic reads it that way:
 
-**So: to keep genuinely separate loadouts, give each profile its own mods folder.** Sharing folders is
-supported, but it is one setup with several views, not two setups.
+- **Enabling.** When deciding whether a file it is about to overwrite is a *genuine game file*, BMM
+  looks at the files of every mod enabled on that game folder, **whichever profile enabled it** (plus
+  the ones the same enable has just placed, for a dependency chain). A file another profile's mod put
+  there is never backed up as an original, so it can never be "restored" over the real one later.
+- **Disabling.** A file falls back to this profile's own remaining mods first (last wins), then to a
+  mod another profile enabled on the same game folder, and only then to the original. The original
+  is looked up in this profile's backup folder, then in the other profiles' backup folders: the
+  profile that first replaced a game file is the one that backed it up.
+
+Game folders are compared as paths, ignoring case on Windows and a trailing separator. See
+[Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
+
+**So: separate mods folders give separate active lists, not separate game folders.** Two profiles
+that share only the game folder are safe for your game's own files, but their enabled mods sit
+together in that folder and a shared file holds whichever copy was deployed last. For loadouts that
+genuinely never meet, give each profile its own **game** folder.
 
 ---
 

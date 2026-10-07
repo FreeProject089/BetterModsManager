@@ -193,6 +193,70 @@ pub fn fallback_order(active: &[String], leaving: &HashSet<String>) -> Vec<Strin
     active.iter().filter(|id| !leaving.contains(*id)).cloned().collect()
 }
 
+/// One spelling per game folder, for "do these two profiles deploy into the same folder?".
+///
+/// The profiles compared `game_path` with `==`, so `E:\Game`, `E:\Game\` and `e:\game` were
+/// three different folders on Windows, where they are one.
+pub fn game_folder_key(p: &Path) -> String {
+    let s = crate::commands::disk::strip_verbatim(&p.to_string_lossy()).replace('\\', "/");
+    let s = s.trim_end_matches('/');
+    if cfg!(windows) { s.to_lowercase() } else { s.to_string() }
+}
+
+/// What the OTHER profiles deploying into the same game folder as `profile_id` have there.
+///
+/// Deployed files belong to the GAME FOLDER, not to the profile that is active: switching
+/// profiles moves no file, so another profile's enabled mods are physically in that folder
+/// while this one works on it. Two decisions need them:
+///
+///  · the backup guard (`fs_utils::backup_original_file`): a file one of `owners` put there is
+///    a mod's file, not a game original. Seen from this profile alone it was backed up into
+///    this profile's `_original/` and later "restored" as the game's own file;
+///  · the undeploy: a file this profile's mod covered falls back to one of `owners` before the
+///    original, and the original may sit in one of `backups` (the profile that first replaced
+///    it backed it up into ITS backup folder).
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct GameFolderShare {
+    /// Mod ids enabled in another profile on this game folder (and not in this one), in each
+    /// profile's activation order, profiles in their stored order.
+    pub owners: Vec<String>,
+    /// Those profiles' backup roots, without this profile's own and without duplicates.
+    pub backups: Vec<PathBuf>,
+}
+
+pub fn game_folder_share(profiles: &[crate::models::profile::Profile], profile_id: &str) -> GameFolderShare {
+    let Some(me) = profiles.iter().find(|p| p.id == profile_id) else { return GameFolderShare::default() };
+    let key = game_folder_key(&me.game_path);
+    let mine: HashSet<&String> = me.active_mods.iter().collect();
+    let own_backup = game_folder_key(&me.backup_path);
+    let mut share = GameFolderShare::default();
+    let mut seen_mods = HashSet::new();
+    let mut seen_backups: HashSet<String> = [own_backup].into_iter().collect();
+    for p in profiles.iter().filter(|p| p.id != me.id && game_folder_key(&p.game_path) == key) {
+        for id in &p.active_mods {
+            if !mine.contains(id) && seen_mods.insert(id.clone()) {
+                share.owners.push(id.clone());
+            }
+        }
+        if seen_backups.insert(game_folder_key(&p.backup_path)) {
+            share.backups.push(p.backup_path.clone());
+        }
+    }
+    share
+}
+
+/// The providers a file falls back to when this profile disables `leaving`: the other
+/// profiles' mods on the same game folder first, then this profile's own remaining mods, so the
+/// own stack keeps winning (last wins) and another profile's copy comes back before the
+/// original or a delete.
+pub fn shared_fallback_order(owners: &[String], active: &[String], leaving: &HashSet<String>) -> Vec<String> {
+    let own = fallback_order(active, leaving);
+    let own_set: HashSet<&String> = own.iter().collect();
+    let mut out: Vec<String> = fallback_order(owners, leaving).into_iter().filter(|id| !own_set.contains(id)).collect();
+    out.extend(own);
+    out
+}
+
 /// `(id, directory to read the mod's files from)` for `ids`, order kept.
 ///
 /// A folder mod reads from its folder. An archived mod reads from its extracted cache: joining

@@ -28,6 +28,11 @@ pub struct WorkerInput {
     pub other_mods_files: Vec<PathBuf>,
     pub files_to_remove: Vec<String>,
     pub other_active_mods: Vec<(String, PathBuf)>,
+    /// The backup roots of the OTHER profiles deploying into `game_path`
+    /// (`mod_order::game_folder_share`): an unapply looks for the original there too, because
+    /// the profile that first replaced a game file backed it up into its own folder.
+    #[serde(default)]
+    pub shared_backup_paths: Vec<PathBuf>,
     pub smart_io: bool,
     /// The parent's resources document (PLAN-BMM-RESOURCES-2026.md §2.2). The worker is a
     /// separate process with its own governor, which would otherwise start at the default
@@ -337,9 +342,10 @@ pub fn run_mod_worker(input_path: &str, output_path: &str) -> i32 {
                 input.smart_io,
             )
         }
-        "unapply" => unapply_mod_stacked(
+        "unapply" => unapply_mod_stacked_shared(
             &input.game_path,
             &input.backup_path,
+            &input.shared_backup_paths,
             input.files_to_remove,
             &input.other_active_mods,
             input.smart_io,
@@ -747,6 +753,11 @@ pub fn file_matches_hash(path: &Path, stored: &str) -> bool {
 
 /// Backup a file from `game_path/rel` to `backup_root/_original/rel`.
 /// Only if it's NOT provided by another active mod.
+///
+/// `other_mods_files` must hold every file a mod has deployed into `game_path`, whichever
+/// profile enabled it (`mod_order::game_folder_share`): a profile that shares only the game
+/// folder has its mods' files there too, and seen from this profile alone they looked like
+/// game originals, were backed up as such and were later "restored" over the real thing.
 pub fn backup_original_file(
     game_path: &Path,
     rel: &Path,
@@ -1073,14 +1084,30 @@ pub fn unapply_mod_stacked(
     other_active_mods: &[(String, PathBuf)],
     smart_io: bool,
 ) -> Result<()> {
-    let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Deploy, &subject_of(game_path));
-    unapply_mod_stacked_ticketed(game_path, profile_backup_root, files_to_remove, other_active_mods, smart_io, &ticket)
+    unapply_mod_stacked_shared(game_path, profile_backup_root, &[], files_to_remove, other_active_mods, smart_io)
 }
 
-/// `unapply_mod_stacked` on a ticket the caller holds.
-pub fn unapply_mod_stacked_ticketed(
+/// `unapply_mod_stacked` for a game folder other profiles deploy into too: when no mod provides
+/// a file any more, its original is taken from this profile's backup, else from the first of
+/// `shared_backups` (the other profiles' backup roots) that holds it. The profile that first
+/// replaced a game file is the one that backed it up, and it is not always this one.
+pub fn unapply_mod_stacked_shared(
     game_path: &Path,
     profile_backup_root: &Path,
+    shared_backups: &[PathBuf],
+    files_to_remove: Vec<String>,
+    other_active_mods: &[(String, PathBuf)],
+    smart_io: bool,
+) -> Result<()> {
+    let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Deploy, &subject_of(game_path));
+    unapply_mod_stacked_shared_ticketed(game_path, profile_backup_root, shared_backups, files_to_remove, other_active_mods, smart_io, &ticket)
+}
+
+/// `unapply_mod_stacked_shared` on a ticket the caller holds.
+pub fn unapply_mod_stacked_shared_ticketed(
+    game_path: &Path,
+    profile_backup_root: &Path,
+    shared_backups: &[PathBuf],
     files_to_remove: Vec<String>,
     other_active_mods: &[(String, PathBuf)],
     smart_io: bool,
@@ -1108,10 +1135,15 @@ pub fn unapply_mod_stacked_ticketed(
                 }
             }
 
-            // 2. If no other mod has it, restore original or DELETE
+            // 2. If no other mod has it, restore original or DELETE. The original is in this
+            //    profile's backup, or in the backup of another profile on the same game folder
+            //    (the one that replaced it first).
             if !restored {
-                let original_src = profile_backup_root.join("_original").join(&rel);
-                if original_src.exists() {
+                let original_src = std::iter::once(profile_backup_root)
+                    .chain(shared_backups.iter().map(|b| b.as_path()))
+                    .map(|b| b.join("_original").join(&rel))
+                    .find(|p| p.exists());
+                if let Some(original_src) = original_src {
                     copy_file_governed(OpKind::Deploy, &original_src, &dst_path, Some(ticket), smart_io)?;
                     // Space optimization: remove the backup file as it has been safely restored
                     let _ = ensure_removed(&original_src);
@@ -1146,9 +1178,11 @@ pub fn unapply_mod_stacked_ticketed(
     }
 
     // Sequential cleanup of empty backup directories
-    let original_dir = profile_backup_root.join("_original");
-    if original_dir.exists() {
-        let _ = remove_empty_dirs(&original_dir);
+    for root in std::iter::once(profile_backup_root).chain(shared_backups.iter().map(|b| b.as_path())) {
+        let original_dir = root.join("_original");
+        if original_dir.exists() {
+            let _ = remove_empty_dirs(&original_dir);
+        }
     }
 
     Ok(())

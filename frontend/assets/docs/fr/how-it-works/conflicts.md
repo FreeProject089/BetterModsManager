@@ -109,8 +109,10 @@ flowchart TD
     COPY --> GAME[("Dossier de destination")]
 ```
 
-*Fichier d'un autre mod activé* veut dire un fichier livré par un mod activé dans le profil actif, ou
-posé juste avant par la même activation (une chaîne de dépendances). La copie du mod écrase toujours.
+*Fichier d'un autre mod activé* veut dire un fichier livré par un mod activé sur ce dossier de jeu,
+dans le profil actif **ou dans tout autre profil qui y déploie** (changer de profil ne déplace aucun
+fichier, les leurs sont donc aussi sur le disque), ou posé juste avant par la même activation (une
+chaîne de dépendances). La copie du mod écrase toujours.
 
 ---
 
@@ -129,12 +131,14 @@ flowchart TD
 ```
 
 1. **Un autre mod activé le livre** → restaurer depuis ce mod : le **dernier** de l'ordre
-   d'activation qui a le fichier — la même règle que le déploiement. Désactiver le mod du dessus
+   d'activation qui a le fichier — la même règle que le déploiement. Un mod qu'un autre profil a
+   activé sur le même dossier de jeu compte aussi, sous ceux de ce profil. Désactiver le mod du dessus
    révèle celui juste en dessous, mods archivés (zippés) compris : leur copie est lue depuis le cache
    extrait. (Il restaurait la copie *la plus ancienne*, et ignorait les mods archivés ; les deux sont
    corrigés et testés — voir [Ordre d'activation](doc-page:how-it-works/load-order).)
-2. **Sinon, `_original/` l'a** → restaurer le fichier du jeu, puis **supprimer la copie de
-   sauvegarde** : *« Optimisation d'espace : retirer le fichier de sauvegarde puisqu'il a été
+2. **Sinon, `_original/` l'a** (celui de ce profil, ou le dossier de sauvegarde d'un autre profil
+   sur le même dossier de jeu, qui le détient quand ce profil a remplacé le fichier en premier) →
+   restaurer le fichier du jeu, puis **supprimer la copie de sauvegarde** : *« Optimisation d'espace : retirer le fichier de sauvegarde puisqu'il a été
    restauré en sécurité. »* Le dossier de sauvegarde rétrécit à mesure que tu désactives, au lieu de
    grossir indéfiniment.
 3. **Sinon** → le mod a ajouté un fichier que le jeu n'a jamais eu, il est donc supprimé.

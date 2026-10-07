@@ -22,8 +22,10 @@ structure**, et vérifie le chemin final *avant* d'appliquer.
 Deux profils pointent sur le même dossier de destination. BMM prévient à la configuration — c'est *une source
 majeure d'erreur humaine*. Note que les profils partageant **à la fois** le dossier de destination et le dossier
 mods gardent leurs listes actives synchronisées, mais pas ceux qui ne partagent que le dossier de *jeu* :
-chacun déploie au même endroit et aucun ne sait ce que l'autre a laissé. Donne à chaque profil son propre
-dossier mods. Voir [Profils & activation](doc-page:how-it-works/profiles-activation).
+chacun a sa propre liste, et les mods des deux listes sont déployés au même endroit. BMM en tient compte
+(il ne prend jamais les fichiers de l'autre profil pour des originaux du jeu), mais un fichier déployé
+par le mod de l'autre profil est toujours là. Désactive-le depuis ce profil, ou donne à chaque profil
+son propre dossier de jeu. Voir [Profils & activation](doc-page:how-it-works/profiles-activation).
 
 ### J'ai changé de profil et rien n'a changé
 

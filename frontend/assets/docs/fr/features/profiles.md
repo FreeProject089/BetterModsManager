@@ -36,9 +36,9 @@ BMM prévient explicitement, et ça mérite d'être répété.
     D'après l'avertissement de BMM lui-même : partager le même dossier entre plusieurs
     profils est *une source majeure d'erreur humaine*.
 
-    Les deux profils se déploient au même endroit, et aucun ne sait ce que l'autre y a mis.
-    Des fichiers survivent au changement de profil, et tu finis par déboguer un mod que tu
-    croyais désactivé. Donne à chaque profil son propre dossier, sauf si tu sais exactement
+    Les deux profils se déploient au même endroit. BMM sait quels fichiers sont à qui, donc
+    les originaux du jeu sont protégés, mais des fichiers survivent au changement de profil,
+    et tu finis par déboguer un mod que tu croyais désactivé. Donne à chaque profil son propre dossier, sauf si tu sais exactement
     pourquoi tu fais autrement.
 
 ## Les rendre tiens

@@ -643,9 +643,8 @@ export function initNavbarLangDropdown() {
     });
 }
 // ── Offline Detection ─────────────────────────────────────
-// Real reachability (probe), a guard (requireOnline) + safeFetch live in
-// core/offline.ts. Online features call window.bmmRequireOnline(...) so they
-// show a message instead of erroring when there's no connection.
+// Real reachability (probe) and the 'no connection' banner live in core/offline.ts. A notice,
+// not a lock: network features are not gated and report their own error when offline.
 function initOfflineDetection() {
     import('../core/offline.js').then(m => m.initOffline()).catch(() => { });
 }

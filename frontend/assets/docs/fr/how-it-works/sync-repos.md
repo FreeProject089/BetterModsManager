@@ -139,10 +139,36 @@ dans l'autre sens.
     substitué. Sans lui il n'y a rien à comparer, et les trois se ressemblent exactement.
     N'installe des mods non vérifiés que depuis un hôte de confiance.
 
+### La signature est vérifiée avant toute écriture
+
+Le badge *Vérifié* / *Non vérifié* de la carte du dépôt était tout : un manifeste dont la signature
+ne correspondait pas au contenu se synchronisait exactement comme un valide. La synchro en décide
+désormais, avant d'écrire le premier octet :
+
+| Le manifeste | La synchro |
+|---|---|
+| porte une signature (ou un `author_id`) qui se vérifie | se fait, indiquée **signée** |
+| porte une signature (ou un `author_id`) qui ne se vérifie **pas** | est **refusée** : le dépôt a été modifié après la signature |
+| figure dans la liste officielle, qui a enregistré sa signature, et n'en sert aucune | est **refusée** : retirer la signature ne fait pas d'un dépôt validé un dépôt « non signé, installer quand même » |
+| figure dans la liste officielle et sert une autre signature | est **refusée** : son contenu a changé depuis sa validation |
+| ne porte aucune signature | se fait comme avant, indiquée **non signée** dans le résultat |
+
+Il n'y a pas de bouton « faire confiance quand même » : une synchro refusée ne télécharge rien, et la
+correction revient au propriétaire du dépôt (régénérer, ou faire mettre la liste à jour). Un manifeste
+signé est aussi tenu pour complet : les mods que le serveur contient mais que le manifeste ne liste
+pas ne lui sont **pas** ajoutés depuis l'index du dossier, puisque rien de ce que couvre la signature
+ne les garantit.
+
+!!! note "Généré par une très ancienne version de BMM"
+    La signature est vérifiée sur le manifeste tel que ce BMM le lit. Un dépôt signé par une très
+    ancienne version de BMM, avant l'ajout de champs au format, peut échouer à ce contrôle sans avoir
+    été modifié. Le régénérer depuis un BMM récent règle le problème.
+
 ### Ce qu'une synchro garantit réellement
 
 | Étape | Contrôle |
 |---|---|
+| Avant tout | un manifeste signé doit se vérifier, et un manifeste épinglé doit servir sa signature enregistrée (ci-dessus) |
 | Avant de télécharger un fichier | hash local **==** celui du manifeste → fichier ignoré, rien ne transite |
 | Par bloc | le SHA-256 de chaque bloc de 4 Mo est comparé : un transfert repris ne récupère que ce qui diffère |
 | Après le téléchargement | le fichier est re-haché et comparé. Une divergence est une **erreur**, pas un avertissement |

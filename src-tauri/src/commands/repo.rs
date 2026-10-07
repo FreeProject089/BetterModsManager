@@ -34,6 +34,11 @@ pub struct ProfileSyncSummary {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct SyncSummary {
     pub profiles: Vec<ProfileSyncSummary>,
+    /// What the manifest's signature said (`check_repo_signature`): "valid" or "unsigned".
+    /// A signature that did not verify never gets here: the sync is refused before a byte
+    /// is written.
+    #[serde(default)]
+    pub signature: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -224,6 +229,135 @@ pub(crate) fn first_unsafe_manifest_path(repo: &ServerRepo) -> Option<String> {
         .map(|f| &f.relative_path)
         .find(|rel| crate::fs_utils::safe_relative_path(rel).is_none())
         .cloned()
+}
+
+/// What a manifest's signature allows, decided BEFORE a sync writes anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RepoSignatureState {
+    /// Signed, and the signature verifies against the manifest as served.
+    Valid,
+    /// Carries no signature at all, and nothing says it should: syncs as it always did,
+    /// reported as unsigned (the info card's badge, `SyncSummary.signature`).
+    Unsigned,
+}
+
+impl RepoSignatureState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self { Self::Valid => "valid", Self::Unsigned => "unsigned" }
+    }
+}
+
+/// The signature gate of `sync_server_repo`.
+///
+/// The signature used to be displayed (the Verified / Unverified badge) and nothing else: a
+/// manifest whose signature did not verify, or a pinned repo serving no signature at all,
+/// synced exactly like a valid one. Now:
+///
+///  - a manifest that carries a signature or an author id CLAIMS to be signed, so it must
+///    verify (`security::verify_repo_signature`, the check the badge shows), or the sync is
+///    refused: `repo.errSignatureInvalid`;
+///  - `pinned` is the signature the official repo list recorded for this URL when the BMM
+///    team validated it (`__bmmRepoExpectedSig` on the frontend). With a pin, a manifest with
+///    no signature is refused (`repo.errSignatureMissing`: stripping the signature must not
+///    turn a vetted repo into an "unsigned, install anyway" one), and one whose signature is
+///    not the recorded one too (`repo.errSignatureMismatch`: the content changed since it was
+///    validated). ed25519 signatures are deterministic, so equal means same key, same bytes;
+///  - otherwise, no signature: `Unsigned`, synced as before.
+///
+/// There is no override: the repo UI never had a "trust anyway" concept for a signature, and a
+/// one-click bypass of the only integrity check would be the thing people click.
+pub(crate) fn check_repo_signature(repo: &ServerRepo, pinned: Option<&str>) -> Result<RepoSignatureState, String> {
+    let claims = repo.signature.is_some() || repo.author_id.is_some();
+    let pinned = pinned.map(str::trim).filter(|s| !s.is_empty());
+    if claims && !crate::commands::security::verify_repo_signature(repo.clone()) {
+        return Err("repo.errSignatureInvalid".to_string());
+    }
+    if let Some(pin) = pinned {
+        match repo.signature.as_deref() {
+            None => return Err("repo.errSignatureMissing".to_string()),
+            Some(sig) if !sig.trim().eq_ignore_ascii_case(pin) => return Err("repo.errSignatureMismatch".to_string()),
+            Some(_) => {}
+        }
+    }
+    Ok(if claims { RepoSignatureState::Valid } else { RepoSignatureState::Unsigned })
+}
+
+#[cfg(test)]
+mod signature_gate_tests {
+    use super::*;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    fn manifest() -> ServerRepo {
+        serde_json::from_value(serde_json::json!({
+            "name": "R", "description": null, "author": "a", "author_id": null, "signature": null,
+            "version": "1", "game_name": "G", "created_at": "2026-01-01T00:00:00Z",
+            "seed": null, "upload_limit": null, "require_login": null, "modpacks": null,
+            "profiles": [{ "id": "p", "name": "P", "game_name": "G", "mods": [{
+                "id": "m", "name": "M", "version": "1", "author": null, "description": null,
+                "tags": [], "files": [{ "relative_path": "a.txt", "size": 1, "sha256_hash": "00" }],
+                "archive": null, "download_links": [], "dependencies": []
+            }]}]
+        })).unwrap()
+    }
+
+    /// Signed the way `generate_repo` signs: both fields None, compact JSON of the struct.
+    fn signed(mut repo: ServerRepo, seed: u8) -> ServerRepo {
+        let key = SigningKey::from_bytes(&[seed; 32]);
+        repo.author_id = None;
+        repo.signature = None;
+        let sig = key.sign(serde_json::to_string(&repo).unwrap().as_bytes());
+        repo.author_id = Some(hex::encode(key.verifying_key().to_bytes()));
+        repo.signature = Some(hex::encode(sig.to_bytes()));
+        repo
+    }
+
+    #[test]
+    fn an_unsigned_repo_syncs_as_before_and_says_so() {
+        assert_eq!(check_repo_signature(&manifest(), None), Ok(RepoSignatureState::Unsigned));
+        assert_eq!(check_repo_signature(&manifest(), Some("  ")), Ok(RepoSignatureState::Unsigned), "a blank pin is no pin");
+    }
+
+    #[test]
+    fn a_valid_signature_passes() {
+        let r = signed(manifest(), 7);
+        assert_eq!(check_repo_signature(&r, None), Ok(RepoSignatureState::Valid));
+        let pin = r.signature.clone().unwrap().to_uppercase();
+        assert_eq!(check_repo_signature(&r, Some(&pin)), Ok(RepoSignatureState::Valid));
+    }
+
+    /// The server changed a file's hash after signing: the manifest still CLAIMS the author.
+    #[test]
+    fn a_tampered_manifest_is_refused() {
+        let mut r = signed(manifest(), 7);
+        r.profiles[0].mods[0].files[0].sha256_hash = "ff".into();
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+    }
+
+    #[test]
+    fn a_half_signature_is_refused() {
+        let mut r = manifest();
+        r.author_id = Some("ab".repeat(32));
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+        let mut r = manifest();
+        r.signature = Some("garbage".into());
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+    }
+
+    /// Stripping the signature off a pinned repo does not downgrade it to "unsigned".
+    #[test]
+    fn a_pinned_repo_without_a_signature_is_refused() {
+        let pin = signed(manifest(), 7).signature.unwrap();
+        assert_eq!(check_repo_signature(&manifest(), Some(&pin)), Err("repo.errSignatureMissing".to_string()));
+    }
+
+    /// Re-signed with another key (validly!): not the repo the list vouched for.
+    #[test]
+    fn a_pinned_repo_signed_by_someone_else_is_refused() {
+        let pin = signed(manifest(), 7).signature.unwrap();
+        let other = signed(manifest(), 9);
+        assert_eq!(check_repo_signature(&other, None), Ok(RepoSignatureState::Valid));
+        assert_eq!(check_repo_signature(&other, Some(&pin)), Err("repo.errSignatureMismatch".to_string()));
+    }
 }
 
 #[cfg(test)]
@@ -2401,6 +2535,14 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: 
     //
     // Best-effort: a host with directory listing disabled just yields nothing here, and the
     // manifest is served as it always was.
+    //
+    // Never for a SIGNED manifest. Its signature covers exactly the mods it lists: a folder
+    // dropped next to them on the server is precisely what signing exists to keep out, and
+    // appending it here also broke the signature for every later check of this struct (the
+    // badge, check_repo_signature), so a valid repo read as tampered.
+    if repo.signature.is_some() || repo.author_id.is_some() {
+        return Ok(repo);
+    }
     if let Ok(extra) = uncovered_mods(&repo, &base, &client).await {
         if !extra.is_empty() {
             if let Some(p) = repo.profiles.first_mut() {
@@ -2568,6 +2710,10 @@ pub struct SyncArgs {
     /// Optional download password for a password-protected repo (sent as X-Repo-Password).
     #[serde(default)]
     pub password: Option<String>,
+    /// The signature the official repo list recorded for this URL, when it is listed there
+    /// (`check_repo_signature`). A pinned repo must serve exactly that signature.
+    #[serde(default)]
+    pub expected_signature: Option<String>,
     pub game_dir: String,
     pub mods_dir: String,
     pub backup_dir: String,
@@ -2680,6 +2826,9 @@ pub async fn sync_server_repo(
     });
     
     let repo = fetch_repo_info(url.clone(), args.creator_id.clone(), args.password.clone()).await?;
+    // Before anything is written: a signature that does not verify, or a pinned repo that no
+    // longer serves its signature, is refused whole (check_repo_signature).
+    let signature_state = check_repo_signature(&repo, args.expected_signature.as_deref())?;
     // Before anything is written: a manifest naming a file outside its mod folder is refused
     // whole (CWE-22). See first_unsafe_manifest_path.
     if let Some(bad) = first_unsafe_manifest_path(&repo) {
@@ -2701,7 +2850,7 @@ pub async fn sync_server_repo(
     }
 
     let total_tasks = choices.len();
-    let mut overall_summary = SyncSummary::default();
+    let mut overall_summary = SyncSummary { signature: signature_state.as_str().to_string(), ..Default::default() };
     let mut synced_profile_ids = Vec::new();
     let mut folders_to_rollback: Vec<PathBuf> = Vec::new();
 

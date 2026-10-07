@@ -12,6 +12,7 @@
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFiles } from '../../core/api.js';
+import { expectedRepoSignature } from '../repo/repo-pin.js';
 import { t, getLang } from '../../core/i18n.js';
 import { parseLabels, takeAiStep, chargeAiTime, taint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -3304,6 +3305,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 url: p.url,
                 creatorId: await invoke('get_creator_id').catch(() => null),
                 password: p.password || null,
+                expectedSignature: expectedRepoSignature(p.url),
                 gameDir: p.gameDir,
                 modsDir: p.modsDir,
                 backupDir: p.backupDir || '',

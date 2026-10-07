@@ -478,7 +478,30 @@ pub fn sync_profile(profile_id: &str) -> anyhow::Result<String> {
     // However, the "stacked" logic in BMM is more robust: it restores original or previous mod version.
     
     let mut overall_applied = Vec::new();
+    // Files other profiles' mods put in this game folder are mods' files, not game originals
+    // (deployed files belong to the game folder; see mod_order::game_folder_share).
     let mut current_active_files = std::collections::HashSet::new();
+    // (This file is also compiled into the CLI, which does not mount mod_order: the same rule,
+    // spelled locally. Same game folder = same path, ignoring case and a trailing separator.)
+    let folder_key = |p: &std::path::Path| {
+        let s = p.to_string_lossy().replace('\\', "/");
+        let s = s.trim_end_matches('/').to_string();
+        if cfg!(windows) { s.to_lowercase() } else { s }
+    };
+    let game_key = folder_key(game_path);
+    let owners: Vec<&String> = data.profiles.iter()
+        .filter(|p| p.id != profile.id && folder_key(&p.game_path) == game_key)
+        .flat_map(|p| p.active_mods.iter())
+        .filter(|mid| !profile.active_mods.contains(mid))
+        .collect();
+    for mid in owners {
+        if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+            for f in &m.installed_files { current_active_files.insert(std::path::PathBuf::from(f)); }
+            if let Ok(files) = list_files_recursive(&m.mod_folder_path) {
+                current_active_files.extend(files);
+            }
+        }
+    }
 
     // 3. Apply each mod in order
     for (_i, m) in mods_to_apply.iter().enumerate() {

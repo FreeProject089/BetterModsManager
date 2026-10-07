@@ -31,6 +31,7 @@ let lastRepoPassword: string | null = null;
 // caught it; that is the gate's whole job.
 import { promptRepoPassword } from '../../ui/ask-one.js';
 import { uiIcon } from '../../ui/icons.js';
+import { expectedRepoSignature } from './repo-pin.js';
 export { promptRepoPassword };
 
 // Pre-seed the session download password (e.g. from a deeplink / API-driven sync that
@@ -953,7 +954,8 @@ export function initRepoSync(elements) {
                         ...(sshSource ? { ssh: sshSource } : {}),
                         overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
                         unzipArchives: !keepZipped, password: lastRepoPassword,
-                        addRepoAsUpdateSource: addRepoSource
+                        addRepoAsUpdateSource: addRepoSource,
+                        expectedSignature: expectedRepoSignature(url),
                     }
                 });
 
@@ -1114,6 +1116,11 @@ export function showSyncSummary(summary) {
                 </div>
             </div>
         `).join('');
+    }
+    // Synced, but nothing vouches for what came down: say so on the result too, not only on
+    // the badge before it (check_repo_signature; a signature that FAILED never gets here).
+    if (summary?.signature === 'unsigned') {
+        body.insertAdjacentHTML('beforeend', `<div style="font-size:11.5px; color:var(--warning); margin-top:4px;">${escHtml(t('repo.summaryUnsigned'))}</div>`);
     }
 
     modal.classList.add('open');

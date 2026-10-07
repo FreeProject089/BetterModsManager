@@ -172,7 +172,8 @@ jobs:
           node scripts/sign-update-manifest.mjs verify $mf
           if ($LASTEXITCODE -ne 0) { throw "update-manifest.json does not verify against the pinned key" }
           $assets = @($mf)
-          foreach ($f in (Get-Content $mf -Raw | ConvertFrom-Json).files) {
+          $doc = Get-Content $mf -Raw | ConvertFrom-Json
+          foreach ($f in @($doc.files) + @($doc.installers | Where-Object { $_ })) {
             $name = ($f.download_url -split '/')[-1]
             $path = Join-Path $dir $name
             if (-not (Test-Path $path)) { throw "$name is named by the manifest but absent from $dir" }

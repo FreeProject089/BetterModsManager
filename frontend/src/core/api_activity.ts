@@ -16,6 +16,7 @@
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { invoke } from './api.js';
+import { expectedRepoSignature } from '../features/repo/repo-pin.js';
 // The local API is a trusted caller of the deep-link handler (it holds the token). It reaches
 // it through this module; `window.__bmmDeeplink` refuses to carry a trusted origin.
 import { trustedLinkDispatcher } from './link-dispatch.js';
@@ -382,6 +383,7 @@ export async function initApiActivity(): Promise<void> {
                         url: params.url,
                         creatorId: await invoke('get_creator_id').catch(() => null),
                         password: params.password || null,
+                        expectedSignature: expectedRepoSignature(params.url),
                         gameDir: params.gameDir,
                         modsDir: params.modsDir,
                         backupDir: params.backupDir || '',

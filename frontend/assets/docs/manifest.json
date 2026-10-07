@@ -171,7 +171,7 @@
         "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
         "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
       },
-      "words": 823,
+      "words": 830,
       "diagrams": 0,
       "fr": true
     },
@@ -516,7 +516,7 @@
         "en": "A profile is a small record — a name, three folders, and an ordered list of which mods are on. It stores no mod files itself.",
         "fr": "Un profil est un petit enregistrement — un nom, trois dossiers, et une liste ordonnée des mods activés. Il ne stocke aucun fichier de mod."
       },
-      "words": 1290,
+      "words": 1415,
       "diagrams": 3,
       "fr": true
     },
@@ -561,7 +561,7 @@
         "en": "Two mods are in conflict when they ship the same file. Some managers let one silently overwrite the other.",
         "fr": "Deux mods sont en conflit quand ils livrent le même fichier. Certains gestionnaires laissent l'un écraser l'autre en silence."
       },
-      "words": 850,
+      "words": 913,
       "diagrams": 4,
       "fr": true
     },
@@ -621,7 +621,7 @@
         "en": "A server repo turns one person's profile into a hosted source of truth: everyone who subscribes converges on the exact same mods, versions and order — and…",
         "fr": "Un dépôt serveur transforme le profil d'une personne en source de vérité hébergée : tous les abonnés convergent vers exactement les mêmes mods, versions et…"
       },
-      "words": 1293,
+      "words": 1452,
       "diagrams": 2,
       "fr": true
     },
@@ -696,7 +696,7 @@
         "en": "BMM runs on your machine, with your files, and can reach the network. That earns it a clear set of trust boundaries.",
         "fr": "BMM tourne sur ta machine, avec tes fichiers, et peut atteindre le réseau. Cela impose des frontières de confiance nettes."
       },
-      "words": 1120,
+      "words": 1235,
       "diagrams": 3,
       "fr": true
     },
@@ -936,7 +936,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1938,
+      "words": 1969,
       "diagrams": 0,
       "fr": true
     },

@@ -386,3 +386,135 @@ fn only_active_mods_contest_a_file() {
     assert!(contested(&idx, &s(&["a"])).is_empty(), "a file a disabled mod shares is not a conflict yet");
 }
 
+
+// ── Profiles sharing only the game folder ─────────────────────────────────────────────────
+
+fn profile(id: &str, game: &std::path::Path, mods: &std::path::Path, backup: &std::path::Path, active: &[&str]) -> crate::models::profile::Profile {
+    let mut p = crate::models::profile::Profile::new(id.into(), "G".into(), game.to_path_buf(), mods.to_path_buf(), backup.to_path_buf());
+    p.id = id.to_string();
+    p.active_mods = s(active);
+    p
+}
+
+#[test]
+fn one_game_folder_has_one_key() {
+    let a = game_folder_key(std::path::Path::new(r"E:\Games\Foo\"));
+    let b = game_folder_key(std::path::Path::new("E:/Games/Foo"));
+    assert_eq!(a, b);
+    if cfg!(windows) {
+        assert_eq!(a, game_folder_key(std::path::Path::new(r"e:\games\foo")));
+        assert_eq!(a, game_folder_key(std::path::Path::new(r"\\?\E:\Games\Foo")));
+    }
+    assert_ne!(a, game_folder_key(std::path::Path::new("E:/Games/Bar")));
+}
+
+/// The other profiles on the same game folder are the owners, whatever their mods folder; a
+/// profile on another game folder is not; this profile's own mods and backup are left out.
+#[test]
+fn the_share_is_every_other_profile_on_that_game_folder() {
+    let g = std::path::Path::new("C:/game");
+    let profiles = vec![
+        profile("me", g, std::path::Path::new("C:/modsA"), std::path::Path::new("C:/bakA"), &["mine", "both"]),
+        profile("other", std::path::Path::new("C:/game/"), std::path::Path::new("C:/modsB"), std::path::Path::new("C:/bakB"), &["x", "both"]),
+        profile("twin", g, std::path::Path::new("C:/modsA"), std::path::Path::new("C:/bakA"), &["mine", "both"]),
+        profile("elsewhere", std::path::Path::new("C:/other-game"), std::path::Path::new("C:/modsC"), std::path::Path::new("C:/bakC"), &["y"]),
+    ];
+    let share = game_folder_share(&profiles, "me");
+    assert_eq!(share.owners, s(&["x"]));
+    assert_eq!(share.backups, vec![PathBuf::from("C:/bakB")], "own backup (and its twin) left out");
+    assert_eq!(game_folder_share(&profiles, "nobody"), GameFolderShare::default());
+}
+
+#[test]
+fn the_own_stack_stays_on_top_of_the_shared_one() {
+    let leaving: HashSet<String> = ["top".to_string()].into_iter().collect();
+    // Another profile's mods first (under), the own remaining stack last (on top, last wins);
+    // an id in both counts once, at its own place.
+    assert_eq!(shared_fallback_order(&s(&["x", "a"]), &s(&["a", "b", "top"]), &leaving), s(&["x", "a", "b"]));
+    assert_eq!(shared_fallback_order(&[], &s(&["a", "top"]), &leaving), s(&["a"]));
+}
+
+/// Profile A (mods folder A, backup A) deploys `a` over the vanilla file; profile B (mods
+/// folder B, backup B, SAME game folder) then deploys `x` over it. B must not take `a`'s copy
+/// for a game original; disabling `x` must bring `a`'s copy back, and disabling `a` afterwards
+/// the vanilla file, from A's backup.
+#[test]
+fn a_profile_sharing_only_the_game_folder_never_backs_up_the_other_ones_mod_file() {
+    let mut w = World::new("share_game_only");
+    w.folder_mod("a", &[("Data/tex.dds", "A")]);
+    w.folder_mod("x", &[("Data/tex.dds", "X"), ("Data/new.lua", "X-new")]);
+    let backup_b = w.root.join("backup_b");
+    fs::create_dir_all(&backup_b).unwrap();
+    let mut pa = profile("A", &w.game, &w.root.join("modsA"), &w.backup, &[]);
+    let mut pb = profile("B", &w.game, &w.root.join("modsB"), &backup_b, &[]);
+
+    // A enables a (nothing else on the folder).
+    w.enable("a");
+    pa.active_mods = s(&["a"]);
+    assert_eq!(fs::read(w.backup.join("_original/Data/tex.dds")).unwrap(), b"vanilla");
+
+    // B enables x: its guard is built from every profile on that game folder.
+    let profiles = vec![pa.clone(), pb.clone()];
+    let share = game_folder_share(&profiles, "B");
+    assert_eq!(share.owners, s(&["a"]));
+    let others: HashSet<PathBuf> = share.owners.iter().flat_map(|id| crate::fs_utils::list_mod_files(&w.folders[id]).unwrap()).collect();
+    crate::fs_utils::apply_mod_stacked(&w.folders["x"], &w.game, &backup_b, &others, false).unwrap();
+    pb.active_mods = s(&["x"]);
+    assert!(!backup_b.join("_original/Data/tex.dds").exists(), "a's copy is not a game original");
+    assert_eq!(fs::read(w.game.join("Data/tex.dds")).unwrap(), b"X");
+
+    // B disables x: a's copy comes back, the file the game never had goes.
+    let profiles = vec![pa.clone(), pb.clone()];
+    let share = game_folder_share(&profiles, "B");
+    let leaving: HashSet<String> = ["x".to_string()].into_iter().collect();
+    let remaining = shared_fallback_order(&share.owners, &pb.active_mods, &leaving);
+    let roots = read_roots(&remaining, &w.folders, None);
+    crate::fs_utils::unapply_mod_stacked_shared(&w.game, &backup_b, &share.backups, w.files_of("x"), &roots, false).unwrap();
+    pb.active_mods.clear();
+    assert_eq!(fs::read(w.game.join("Data/tex.dds")).unwrap(), b"A");
+    assert!(!w.game.join("Data/new.lua").exists());
+    assert_eq!(fs::read(w.backup.join("_original/Data/tex.dds")).unwrap(), b"vanilla", "A's backup untouched");
+
+    // A disables a: vanilla.
+    w.disable("a");
+    assert_eq!(fs::read(w.game.join("Data/tex.dds")).unwrap(), b"vanilla");
+    let _ = fs::remove_dir_all(&w.root);
+}
+
+/// The other order: A disables its mod while B's covers the file. The vanilla backup is in
+/// A's folder; when B later disables, it must be found there rather than the file deleted.
+#[test]
+fn the_original_is_found_in_the_backup_of_the_profile_that_replaced_it_first() {
+    let mut w = World::new("share_backup_lookup");
+    w.folder_mod("a", &[("Data/tex.dds", "A")]);
+    w.folder_mod("x", &[("Data/tex.dds", "X")]);
+    let backup_b = w.root.join("backup_b");
+    fs::create_dir_all(&backup_b).unwrap();
+    let mut pa = profile("A", &w.game, &w.root.join("modsA"), &w.backup, &[]);
+    let mut pb = profile("B", &w.game, &w.root.join("modsB"), &backup_b, &[]);
+
+    w.enable("a");
+    pa.active_mods = s(&["a"]);
+    let others: HashSet<PathBuf> = crate::fs_utils::list_mod_files(&w.folders["a"]).unwrap().into_iter().collect();
+    crate::fs_utils::apply_mod_stacked(&w.folders["x"], &w.game, &backup_b, &others, false).unwrap();
+    pb.active_mods = s(&["x"]);
+
+    // A disables a: x (B's) is a provider on that folder, so X stays and the backup stays.
+    let profiles = vec![pa.clone(), pb.clone()];
+    let share = game_folder_share(&profiles, "A");
+    let leaving: HashSet<String> = ["a".to_string()].into_iter().collect();
+    let roots = read_roots(&shared_fallback_order(&share.owners, &pa.active_mods, &leaving), &w.folders, None);
+    crate::fs_utils::unapply_mod_stacked_shared(&w.game, &w.backup, &share.backups, w.files_of("a"), &roots, false).unwrap();
+    pa.active_mods.clear();
+    assert_eq!(fs::read(w.game.join("Data/tex.dds")).unwrap(), b"X");
+    assert!(w.backup.join("_original/Data/tex.dds").exists());
+
+    // B disables x: nothing provides it, B has no backup, A's has the vanilla file.
+    let profiles = vec![pa.clone(), pb.clone()];
+    let share = game_folder_share(&profiles, "B");
+    assert_eq!(share.backups, vec![w.backup.clone()]);
+    crate::fs_utils::unapply_mod_stacked_shared(&w.game, &backup_b, &share.backups, w.files_of("x"), &[], false).unwrap();
+    assert_eq!(fs::read(w.game.join("Data/tex.dds")).unwrap(), b"vanilla", "restored, not deleted");
+    assert!(!w.backup.join("_original/Data/tex.dds").exists(), "the backup is reclaimed once restored");
+    let _ = fs::remove_dir_all(&w.root);
+}

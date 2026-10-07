@@ -10,7 +10,7 @@
  *
  *   {
  *     "version": "1.2.0", "files": [ … ],     ← copy for BMM builds that predate signing
- *     "signed":    "<JSON string: {app_id, version, files, issued, expires}>",
+ *     "signed":    "<JSON string: {app_id, version, files, installers?, issued, expires}>",
  *     "signature": "<128 hex: Ed25519 over CONTEXT + the exact bytes of `signed`>"
  *   }
  *
@@ -26,6 +26,12 @@
  * its expiry does not matter, a late weekly job must still renew it), the content is taken from
  * the signed body unchanged, and only `issued` / `expires` are new. That is the weekly job
  * (.github/workflows/resign-manifests.yml).
+ *
+ * `installers` (optional): the release's full installers, `{path: "<file>.exe|.msi", sha256,
+ * download_url, size}`. BMM's fallback (download_and_install_update) runs an installer only when
+ * the signed body lists its URL and the bytes have that SHA-256. Written by gen-update-manifest.mjs
+ * when it finds the bundle; omitted from the body when empty, so a manifest without one signs to
+ * the same bytes as before.
  *
  * `private.key` is BetterInstaller's format: the 32-byte Ed25519 seed as hex text — the same
  * file that signs the .bpkg and update.json. Node built-ins only, so the weekly job needs no
@@ -88,6 +94,17 @@ function checkFiles(files) {
     }
 }
 
+/** The optional `installers` list: same rules, and `path` is one .exe/.msi file name. */
+function checkInstallers(installers) {
+    if (installers === undefined) return;
+    checkFiles(installers);
+    for (const f of installers) {
+        if (/[\\/:]/.test(f.path) || /^\.+$/.test(f.path) || !/\.(exe|msi)$/i.test(f.path)) {
+            throw new Error(`${f.path}: an installer path is one .exe or .msi file name`);
+        }
+    }
+}
+
 /**
  * Check a manifest document (text). Returns the signed body. Throws on any rule BMM enforces,
  * except the version rule (that needs the running version; BMM applies it).
@@ -105,6 +122,7 @@ export function verifyManifest(text, { publicKey = MANIFEST_PUBLIC_KEY_HEX, now 
     if (body.app_id !== MANIFEST_APP_ID) throw new Error(`for ${JSON.stringify(body.app_id)}, not ${MANIFEST_APP_ID}`);
     if (typeof body.version !== 'string' || !body.version) throw new Error('no version');
     checkFiles(body.files);
+    checkInstallers(body.installers);
     const issued = Date.parse(body.issued);
     const expires = Date.parse(body.expires);
     if (!Number.isFinite(issued) || !Number.isFinite(expires)) throw new Error('issued/expires missing or not RFC 3339');
@@ -133,26 +151,29 @@ export function signManifest(text, seedHex, { validDays = MANIFEST_MAX_VALIDITY_
     if (requireSigned && doc.signed === undefined) {
         throw new Error('not signed: --require-signed renews an existing signature only');
     }
-    let version, files;
+    let version, files, installers;
     if (doc.signed !== undefined) {
         // Re-sign: only a manifest THIS key signed, content unchanged.
         const body = verifyManifest(text, { publicKey: createPublicKey(sk), ignoreExpiry: true });
-        ({ version, files } = body);
+        ({ version, files, installers } = body);
     } else {
-        ({ version, files } = doc);
+        ({ version, files, installers } = doc);
         if (typeof version !== 'string' || !version) throw new Error('the manifest has no version');
         checkFiles(files);
+        checkInstallers(installers);
     }
+    const hasInstallers = Array.isArray(installers) && installers.length > 0;
     const body = {
         app_id: MANIFEST_APP_ID,
         version,
         files,
+        ...(hasInstallers ? { installers } : {}),
         issued: rfc3339(now),
         expires: rfc3339(now + validDays * DAY_MS),
     };
     const signed = JSON.stringify(body);
     const signature = edSign(null, message(signed), sk).toString('hex');
-    return JSON.stringify({ version, files, signed, signature }, null, 2) + '\n';
+    return JSON.stringify({ version, files, ...(hasInstallers ? { installers } : {}), signed, signature }, null, 2) + '\n';
 }
 
 function arg(argv, name) {
