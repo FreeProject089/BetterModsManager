@@ -11,6 +11,7 @@
 // code highlights the line and puts the breakpoints in a gutter.
 
 import type { EditorMode } from './sched-modes.js';
+import { LAYA_VARS } from './sched-vars.js';
 
 /** One statement of a BMMScript body: the step it compiles to, and the line it starts on. */
 export interface LineRow { path: string; line: number }
@@ -151,6 +152,10 @@ export function variablesOf(steps: readonly any[], trigger: any, shared: readonl
                 const p = st.action?.params || {};
                 if (st.action?.type === 'var.set' || st.action?.type === 'math.set' || st.action?.type === 'var.ternary') add(p.name || p.target, 'step');
                 for (const k of ['into', 'target']) if (typeof p[k] === 'string') add(p[k], 'step');
+                // A Laya step writes fixed names too ({ai.crash.family}, {ai.lib.findings}…):
+                // the contract in sched-vars.ts. `ai.run_task` is a sort, like `ai.classify`.
+                const type = st.action?.type === 'ai.run_task' ? 'ai.classify' : String(st.action?.type || '');
+                for (const v of LAYA_VARS) if (v.step === type) add(v.name, 'step');
             }
             for (const k of ['then', 'else', 'steps', 'onError', 'default']) if (Array.isArray(st[k])) walk(st[k]);
             if (Array.isArray(st.cases)) for (const c of st.cases) walk(c?.steps || []);

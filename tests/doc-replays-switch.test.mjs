@@ -64,7 +64,7 @@ test('Help & Other: the hub hides its own replay media and never fetches one whe
     const hub = read('frontend/src/docs/docs-hub.ts');
     assert.match(hub, /loadDocReplaysSetting\(invoke\)/, 'the hub must read the app.cfg switch');
     assert.match(hub, /m\.kind === 'replay' && m\.src && docReplaysEnabled\(\)/, 'article media');
-    assert.match(hub, /async function playReplay\(url: string\) \{\n\s*if \(!url \|\| !docReplaysEnabled\(\)\) return;/, 'player');
+    assert.match(hub, /async function playReplay\(url: string\) \{\r?\n\s*if \(!url \|\| !docReplaysEnabled\(\)\) return;/, 'player');
     assert.match(hub, /if \(kind !== 'video' && !docReplaysEnabled\(\)\) return;/, 'clip card fetch');
 });
 

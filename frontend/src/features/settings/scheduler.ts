@@ -10555,9 +10555,13 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         }).catch(() => { /* AI settings unreadable: the typed id stays */ });
     }
     else if (needs === 'aiModClassify') {
+        // Inside a for each the id is `{item.id}` (the « Tag new mods » template): shown as such,
+        // not as an empty « select » that reads as « no mod chosen ».
+        const typed = String(params.id || '');
+        const extra = typed && !_mods.some((m: any) => m.id === typed) ? `<option value="${escAttr(typed)}" selected>${escHtml(typed)}</option>` : '';
         host.innerHTML = `
         <div class="sched-cmd-builder">
-            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}${extra}</select>
             <label class="sched-opt"><input type="checkbox" class="sched-p-aiapply" ${params.apply ? 'checked' : ''}><div><b>${escHtml(t('sched.ai.applyT'))}</b><span>${escHtml(t('sched.ai.apply'))}</span></div></label>
             <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoModPh'))}" value="${escAttr(params.into || '')}">
             <span class="sched-cmd-hint">${escHtml(t('sched.ai.modHint'))}</span>

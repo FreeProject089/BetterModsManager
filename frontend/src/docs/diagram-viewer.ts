@@ -6,7 +6,7 @@
 // keeps true), what leads to it and where it goes. With nothing selected the panel is the
 // diagram's overview: summary, legend of the kinds it uses, related article and diagrams.
 //
-// Interactions: hover a node to light its edges and neighbours; click (or Enter) to select it;
+// Interactions: hover a node to light its edges and neighbours; left click (or Enter) to select it;
 // arrow keys move to the nearest node in that direction; / focuses the search; + - 0 zoom;
 // Escape clears the search, then the selection, then closes. A node that drills into another
 // diagram opens it, and Back returns.
@@ -129,7 +129,13 @@ function wireShell(root: HTMLElement): void {
         const zoom = el.closest('[data-zoom]')?.getAttribute('data-zoom');
         if (zoom) { doZoom(zoom); return; }
         if (el.closest('.dgv-back')) { goBack(); return; }
-        const pick = el.closest('[data-node]')?.getAttribute('data-node');
+        // Clicks on the drawing are answered by the stage's pointerup (below), which can tell a
+        // click from a pan. Mermaid also stamps data-node="true" on every node <g>: reading that
+        // attribute here used to select the node "true", i.e. clear the pick the pointerup had just
+        // made, so a LEFT click on a node did nothing and only a right click (no click event)
+        // opened its detail. The panel's own links are [data-pick].
+        if (el.closest('.dgv-stage svg')) return;
+        const pick = el.closest('[data-pick]')?.getAttribute('data-pick');
         if (pick) { select(pick, true); return; }
         const open = el.closest('[data-open-diagram]')?.getAttribute('data-open-diagram');
         if (open) { void openSpec(open, { push: true }); return; }
@@ -149,9 +155,11 @@ function wireShell(root: HTMLElement): void {
     stage.addEventListener('keydown', onStageKey);
     // A click on the empty canvas clears the selection; a drag (a pan) does not.
     let down: { x: number; y: number } | null = null;
-    stage.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+    // LEFT button only: a node's detail opens on a left click (or Enter); a right click keeps the
+    // platform's default and selects nothing.
+    stage.addEventListener('pointerdown', (e) => { down = e.button === 0 ? { x: e.clientX, y: e.clientY } : null; });
     stage.addEventListener('pointerup', (e) => {
-        if (!down) return;
+        if (!down || e.button !== 0) { down = null; return; }
         const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4;
         down = null;
         if (moved) return;
@@ -554,7 +562,7 @@ function nodeButtons(spec: DiagramSpec, ids: string[]): string {
     if (!ids.length) return `<span class="dgp-none">${esc(t('docs.diagram.ui.none'))}</span>`;
     return ids.map((id) => {
         const n = spec.nodes.find((x) => x.id === id)!;
-        return `<button type="button" class="dgp-link" data-node="${esc(id)}"><span class="dgp-swatch dgs-${n.kind}"></span>${esc(nodeLabel(spec, id))}</button>`;
+        return `<button type="button" class="dgp-link" data-pick="${esc(id)}"><span class="dgp-swatch dgs-${n.kind}"></span>${esc(nodeLabel(spec, id))}</button>`;
     }).join('');
 }
 
@@ -583,7 +591,7 @@ function nodePanel(spec: DiagramSpec, n: DiagramNode): string {
         ? edges.map((e) => {
             const other = side === 'from' ? e.from : e.to;
             const o = spec.nodes.find((x) => x.id === other)!;
-            return `<button type="button" class="dgp-link" data-node="${esc(other)}"><span class="dgp-swatch dgs-${o.kind}"></span><span class="dgp-link-t">${esc(nodeLabel(spec, other))}</span>${edgeNote(spec, e)}</button>`;
+            return `<button type="button" class="dgp-link" data-pick="${esc(other)}"><span class="dgp-swatch dgs-${o.kind}"></span><span class="dgp-link-t">${esc(nodeLabel(spec, other))}</span>${edgeNote(spec, e)}</button>`;
         }).join('')
         : `<span class="dgp-none">${esc(t('docs.diagram.ui.none'))}</span>`;
     return `

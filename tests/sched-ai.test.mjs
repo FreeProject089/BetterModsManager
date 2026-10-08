@@ -127,7 +127,7 @@ describe('the `ai` permission is everywhere a permission is', () => {
     }
   });
   test('an imported task loses it', () => {
-    const m = /export function sanitiseImportedTask[\s\S]*?\n}\n/.exec(sched);
+    const m = /export function sanitiseImportedTask[\s\S]*?\r?\n}\r?\n/.exec(sched);
     assert.ok(m, 'sanitiseImportedTask not found');
     assert.match(m[0], /'network', 'ai'\]/, 'RISKY must list ai');
     assert.match(m[0], /ai: false/, 'the reset perms must turn ai off');

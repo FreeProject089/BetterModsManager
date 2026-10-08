@@ -5,7 +5,8 @@ import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { t, applyTranslations } from '../../core/i18n.js';
-import { escHtml, truncate } from '../../core/utils.js';
+import { escHtml, escAttr, truncate } from '../../core/utils.js';
+import { isPackIcon, renderPackIcon, ensurePacksFor } from '../../ui/icon-pack.js';
 import { appState } from '../../core/state.js';
 
 // Sub-modules
@@ -84,6 +85,13 @@ export async function initMods() {
     redraw: () => { renderModList(true); },
     open: (id) => selectMod(id),
   });
+  // Filter and sort menus: one glyph per choice, so the menus scan like the tag menu does.
+  const decorate = (id: string, map: Record<string, Parameters<typeof uiIcon>[0]>) => {
+    const sel = document.getElementById(id) as HTMLSelectElement | null;
+    sel?.querySelectorAll('option').forEach((o) => { const n = map[o.value]; if (n) o.dataset.icon = uiIcon(n, 14); });
+  };
+  decorate('mod-status-filter', { all: 'layers', enabled: 'success', disabled: 'power' });
+  decorate('mod-sort', { name_asc: 'move-down', name_desc: 'move-up', status: 'power', activation_order: 'list-ordered' });
   // "No mod matches": one button puts the search and every filter back to "all".
   document.getElementById('btn-lib-clear-filters')?.addEventListener('click', () => {
     const search = document.getElementById('mod-search') as HTMLInputElement | null;
@@ -747,9 +755,20 @@ function updateTagFilterUI() {
   let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'All tags'}</option>`;
   if (S.userTags && S.userTags.length > 0) {
     const sortedTags = [...S.userTags].sort((a:any, b:any) => a.name.localeCompare(b.name));
+    // Each row wears the tag's colour (and its icon when it has one), as the chips do.
+    // data-icon is rendered as markup by the custom select: only a checked colour goes in.
+    const hex = (c: any) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : '');
+    let missingPack = false;
     sortedTags.forEach((tag:any) => {
-      html += `<option value="${tag.id}">${escHtml(tag.name)}</option>`;
+      const c = hex(tag.color), c2 = hex(tag.color2);
+      const dot = c ? `<span class="lib-tag-dot" style="background:${c2 ? `linear-gradient(135deg,${c},${c2})` : c}"></span>` : '';
+      let ic = '';
+      if (isPackIcon(tag.icon)) { ic = renderPackIcon(tag.icon, 14, c || undefined); if (!ic) missingPack = true; }
+      const deco = dot || ic ? ` data-icon="${escAttr(`<span class="lib-tag-opt">${dot}${ic}</span>`)}"` : '';
+      html += `<option value="${escAttr(String(tag.id))}"${deco}>${escHtml(tag.name)}</option>`;
     });
+    // An icon pack still loading renders nothing: load it, then draw the menu again.
+    if (missingPack) void ensurePacksFor(sortedTags.map((x: any) => x.icon)).then(() => updateTagFilterUI());
   }
   select.innerHTML = html;
   select.value = currentVal;

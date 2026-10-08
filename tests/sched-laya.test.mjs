@@ -148,6 +148,13 @@ describe('the onEvent filter', () => {
         const rs = readFileSync(join(ROOT, 'src-tauri/src/commands/ai_embedded.rs'), 'utf8');
         assert.match(rs, /"bmm\.ai\.ready"/);
     });
+    test('the variable picker offers what a Laya step writes, under its fixed names', () => {
+        const names = (type) => D.variablesOf([{ kind: 'action', action: { type, params: {} } }], { type: 'manual' }).map((v) => v.name);
+        for (const n of ['ai.crash.family', 'ai.crash.count', 'ai.crashes']) assert.ok(names('ai.crash_label').includes(n), n);
+        assert.ok(names('ai.run_task').includes('ai.scores'), 'a custom task is a sort');
+        assert.ok(names('ai.library_check').includes('ai.library.untagged'));
+        assert.ok(!names('notify').some((n) => n.startsWith('ai.')), 'no Laya step, no Laya names');
+    });
 });
 
 describe('sorts: scores and abstentions', () => {
