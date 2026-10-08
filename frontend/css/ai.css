@@ -312,16 +312,31 @@
 }
 
 /* ── Laya: one Settings card, one dialog with tabs (laya-hub.ts) ─────────── */
-.laya-sum { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--space-3); }
-.laya-sum-row {
-    display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr); gap: var(--space-3); align-items: baseline;
-    width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--text-primary);
-    padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--bmm-radius-chip, 6px);
-    background: var(--bmm-s05); cursor: pointer;
+.laya-hub-hero { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.laya-hub-tile {
+    flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--bmm-accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 30%, transparent);
 }
-.laya-sum-row:hover { background: var(--bg-hover); }
-.laya-sum-row span { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.laya-sum-ic { display: inline-grid; place-items: center; color: var(--bms-accent-ink, var(--text-primary)); }
+.laya-hub-tile svg { width: 20px; height: 20px; }
+.laya-hub-lead { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+.laya-hub-hero > .btn { flex: none; }
+.laya-sum { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.laya-sum-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 2px;
+    align-items: center; width: 100%; text-align: left; font: inherit; color: var(--text-primary);
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--bmm-radius-chip, 8px);
+    background: var(--bmm-s05); cursor: pointer; transition: background .15s, border-color .15s;
+}
+.laya-sum-row:hover { background: var(--bg-hover); border-color: color-mix(in srgb, var(--bmm-accent) 35%, var(--border)); }
+.laya-sum-k { grid-column: 1; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.laya-sum-v { grid-column: 1; font-size: 12.5px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.laya-sum-go { grid-column: 2; grid-row: 1 / span 2; color: var(--text-muted); }
+.laya-sum-row:hover .laya-sum-go { color: var(--text-primary); }
+@media (max-width: 760px) {
+    .laya-sum { grid-template-columns: minmax(0, 1fr); }
+    .laya-hub-hero { flex-wrap: wrap; }
+}
 /* The dialog: house shell (.modal--lg .modal--tall), tabs as the shell's segmented rail. */
 .laya-modal #laya-head-chip[hidden] { display: none; }
 .laya-toolbar .laya-tabs { flex: 0 1 auto; }
