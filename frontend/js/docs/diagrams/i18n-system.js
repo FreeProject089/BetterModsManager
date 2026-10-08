@@ -1,27 +1,51 @@
-// i18n system — external Lang/*.json dictionaries, FR fallback, live switching, synonyms.
+// How a string reaches the screen: Lang/<code>.json files on disk (template.json excluded),
+// read by the Rust commands of commands/settings.rs, loaded all at once by core/i18n.ts, and
+// resolved by t(): active language, then French, then the raw key, with the translation
+// sandbox's overlay on top. Rust errors travel as keys too (scripts/check-i18n-rust.mjs).
 export const i18nSystem = {
-    titleKey: 'docs.diagram.i18nSystem.title',
-    explanationPrefix: 'docs.diagram.i18nSystem.node.',
-    definition: `
-graph TD
-    LANGFILES["Lang/*.json (+ _info, _synonyms)"] --> LOAD["get_language_content (Rust)"]
-    LOAD --> DICTS["In-memory dictionaries"]
-
-    DICTS --> T["t(key, {params})"]
-    T --> CUR{Key in current language?}
-    CUR -- yes --> OUT["Translated string"]
-    CUR -- no --> FRFALL["French fallback"]
-    FRFALL -- "still missing" --> RAWKEY["Raw key shown"]
-
-    OUT --> DOM["applyTranslations: data-i18n / -title / -placeholder"]
-    SWITCH["setLang()"] --> DICTS
-    SWITCH --> EVENTCH["langChanged event (live UI refresh)"]
-
-    SYN["_synonyms groups"] --> SEARCH["Semantic search (palette + docs)"]
-
-    style LANGFILES fill:#f97316,stroke:#fff,stroke-width:2px,color:#fff
-    style FRFALL fill:#6366f1,stroke:#fff,stroke-width:2px,color:#fff
-    style SEARCH fill:#22c55e,stroke:#fff,stroke-width:2px,color:#fff
-    `
+    id: 'i18n-system',
+    i18n: 'docs.diagram.i18n-system',
+    category: 'internals',
+    dir: 'TB',
+    article: 'i18n-system',
+    related: ['semantic-search', 'code-stack', 'theme-system'],
+    groups: [
+        { id: 'DISK' },
+        { id: 'LOOKUP' },
+        { id: 'SCREEN', dir: 'LR' },
+    ],
+    nodes: [
+        { id: 'LANGFILES', kind: 'data', group: 'DISK', icon: 'icon-file', refs: ['frontend/Lang/en.json', 'src-tauri/src/fs_utils.rs › get_lang_dir', 'scripts/check-i18n-parity.mjs'] },
+        { id: 'LOAD', kind: 'rust', group: 'DISK', icon: 'icon-import', refs: ['src-tauri/src/commands/settings.rs › get_available_languages', 'src-tauri/src/commands/settings.rs › get_language_content'] },
+        { id: 'MANAGE', kind: 'rust', group: 'DISK', icon: 'icon-add', refs: ['src-tauri/src/commands/settings.rs › create_language_file', 'src-tauri/src/commands/settings.rs › import_language', 'src-tauri/src/commands/settings.rs › delete_language_file'] },
+        { id: 'RUST_KEYS', kind: 'rust', group: 'DISK', icon: 'icon-alert', refs: ['scripts/check-i18n-rust.mjs', 'src-tauri/src/commands/repo.rs › read_local_repo'] },
+        { id: 'INIT', kind: 'front', group: 'LOOKUP', icon: 'icon-database', refs: ['frontend/src/core/i18n.ts › initI18n', 'frontend/src/core/i18n.ts › loadLang', 'frontend/src/core/i18n.ts › reloadLanguages'] },
+        { id: 'T', kind: 'front', group: 'LOOKUP', icon: 'icon-text', refs: ['frontend/src/core/i18n.ts › t', 'frontend/src/core/i18n.ts › registerRuntimeTexts'] },
+        { id: 'CUR', kind: 'decision', group: 'LOOKUP', refs: ['frontend/src/core/i18n.ts › t'] },
+        { id: 'FRFALL', kind: 'decision', group: 'LOOKUP', refs: ['frontend/src/core/i18n.ts › t'] },
+        { id: 'SANDBOX', kind: 'ui', group: 'LOOKUP', icon: 'icon-edit', refs: ['frontend/src/features/settings/i18n-sandbox.ts › initI18nSandbox', 'frontend/src/core/i18n.ts › setSandboxOverlay'] },
+        { id: 'SYN', kind: 'front', group: 'LOOKUP', icon: 'icon-search', link: 'semantic-search', refs: ['frontend/src/core/i18n.ts › getSynonyms', 'frontend/src/core/commands.ts › getSynonyms'] },
+        { id: 'SWITCH', kind: 'ui', group: 'SCREEN', icon: 'icon-globe', refs: ['frontend/src/core/i18n.ts › setLang', 'frontend/src/features/settings/settings.ts › setLang'] },
+        { id: 'DOM', kind: 'front', group: 'SCREEN', icon: 'icon-layout', refs: ['frontend/src/core/i18n.ts › applyTranslations'] },
+        { id: 'TEXT', kind: 'outcome', group: 'SCREEN', icon: 'icon-check', refs: ['frontend/src/core/i18n.ts › applyTranslations'] },
+        { id: 'RAWKEY', kind: 'outcome', group: 'SCREEN', icon: 'icon-warning', refs: ['frontend/src/core/i18n.ts › t'] },
+    ],
+    edges: [
+        { from: 'LANGFILES', to: 'LOAD', label: '~reads', thick: true },
+        { from: 'MANAGE', to: 'LANGFILES', label: '~writes' },
+        { from: 'SANDBOX', to: 'MANAGE', label: 'newLanguage', dashed: true },
+        { from: 'LOAD', to: 'INIT', label: 'everyLanguage', thick: true },
+        { from: 'INIT', to: 'SYN', label: 'synonyms', dashed: true },
+        { from: 'SWITCH', to: 'DOM', label: 'repaint', thick: true },
+        { from: 'INIT', to: 'DOM', thick: true },
+        { from: 'DOM', to: 'T', thick: true },
+        { from: 'RUST_KEYS', to: 'T', label: 'errorKey', dashed: true },
+        { from: 'T', to: 'CUR', thick: true },
+        { from: 'CUR', to: 'TEXT', label: '~yes', tone: 'ok', thick: true },
+        { from: 'CUR', to: 'FRFALL', label: '~no', tone: 'warn' },
+        { from: 'FRFALL', to: 'TEXT', label: '~yes', tone: 'ok' },
+        { from: 'FRFALL', to: 'RAWKEY', label: '~no', tone: 'danger' },
+        { from: 'SANDBOX', to: 'TEXT', label: 'overrides', tone: 'info', dashed: true },
+    ],
 };
 //# sourceMappingURL=i18n-system.js.map

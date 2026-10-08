@@ -23,6 +23,7 @@ import { pct } from './ai-model.js';
 import { ensureAiCss, reasonText } from './ai-shared.js';
 import { groupCrashes, groupOf, spreadLabels, causeOf, labelCounts, familyCounts, filterFamily, evidenceOf, passes, type CrashDigest, type CrashGroup, type LayaDecision, type Evidence } from './laya-assist-model.js';
 import { causeWord, familyWord, stepWord } from './laya-words.js';
+import { announceCrashLabels, type CrashLabelled } from './laya-crash-events.js';
 
 interface Entry { path: string; category: string; date?: string }
 
@@ -72,6 +73,8 @@ export async function mountCrashInsights(body: HTMLElement, reports: Entry[]): P
             const reps = groups.map((g) => g.rep);
             const byRep = new Map<string, LayaDecision>();
             const evRep = new Map<string, Evidence>();
+            const told: CrashLabelled[] = [];
+            const digestOf = new Map(digests.map((d) => [d.path, d]));
             // At most 12 per call (Rust's bound): the groups in order, newest first.
             for (let i = 0; i < reps.length; i += 12) {
                 const r: any = await invoke('ai_crash_label', { paths: reps.slice(i, i + 12) });
@@ -79,8 +82,17 @@ export async function mountCrashInsights(body: HTMLElement, reports: Entry[]): P
                     if (!it?.decision) continue;
                     byRep.set(String(it.path), it.decision as LayaDecision);
                     evRep.set(String(it.path), evidenceOf(it.evidence));
+                    const c = causeOf(it.decision as LayaDecision);
+                    const dg = digestOf.get(String(it.path));
+                    told.push({
+                        report: String(it.path).split(/[\\/]/).pop() || '', family: c?.family || 'unknown', cause: c?.id || 'unknown',
+                        p: Number(c?.p) || 0, abstained: !c || c.id === 'unknown', uncertain: !!c?.uncertain, cached: !!it.cached,
+                        reason: dg?.reason || '', excerpt: dg?.excerpt || '',
+                    });
                 }
             }
+            // A scheduled task may be waiting for these (`bmm.ai.crashLabelled`, `bmm.ai.crashGroup`).
+            announceCrashLabels(told);
             _labels = spreadLabels(groups, byRep);
             _evidence = spreadLabels(groups, evRep);
             if (out) out.textContent = '';

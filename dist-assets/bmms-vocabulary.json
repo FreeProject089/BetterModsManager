@@ -757,7 +757,7 @@
     },
     {
       "type": "ai.classify",
-      "group": "logic",
+      "group": "ai",
       "params": [
         "task",
         "labels",
@@ -767,8 +767,18 @@
       ]
     },
     {
+      "type": "ai.run_task",
+      "group": "ai",
+      "params": [
+        "task",
+        "text",
+        "path",
+        "into"
+      ]
+    },
+    {
       "type": "ai.ask",
-      "group": "logic",
+      "group": "ai",
       "params": [
         "question",
         "into"
@@ -776,11 +786,60 @@
     },
     {
       "type": "ai.suggest_mod_metadata",
-      "group": "mods",
+      "group": "ai",
       "params": [
         "id",
         "into"
       ]
+    },
+    {
+      "type": "ai.classify_mod",
+      "group": "ai",
+      "params": [
+        "id",
+        "apply",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.library_check",
+      "group": "ai",
+      "params": [
+        "suggest",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.crash_label",
+      "group": "ai",
+      "params": [
+        "scope",
+        "limit",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.explain_crash",
+      "group": "ai",
+      "params": [
+        "allowRemote",
+        "report",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.triage_report",
+      "group": "ai",
+      "params": [
+        "text",
+        "path",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.status",
+      "group": "ai",
+      "params": []
     },
     {
       "type": "wait.http",
@@ -999,7 +1058,13 @@
     "gameRunning",
     "resourcesPresetIs",
     "queueIdle",
-    "aiLabel"
+    "aiLabel",
+    "aiScore",
+    "aiAbstained",
+    "aiAvailable",
+    "crashCause",
+    "aiLibraryCount",
+    "modAiTag"
   ],
   "values": [
     "disk.read_mbps",
@@ -1021,6 +1086,32 @@
     ",\n    // Laya (AI): the last classification",
     "ai.p",
     "ai.suggestions",
+    "ai.abstained",
+    "ai.mod.tagCount",
+    "ai.mod.adult",
+    "ai.mod.adultP",
+    "ai.mod.applied",
+    "ai.mod.abstained",
+    "ai.lib.total",
+    "ai.lib.untagged",
+    "ai.lib.duplicates",
+    "ai.lib.conflicts",
+    "ai.lib.suggested",
+    "ai.lib.findings",
+    "ai.crash.count",
+    "ai.crash.unknown",
+    "ai.crash.groups",
+    "ai.crash.pending",
+    "ai.crash.p",
+    "ai.report.kindP",
+    "ai.report.areaP",
+    "ai.report.abstained",
+    "ai.enabled",
+    "ai.available",
+    "ai.installed",
+    "ai.loaded",
+    "ai.writer",
+    "ai.explain.remote",
     "backup.bytes",
     "order.moved",
     "retry.attempts",
@@ -1113,6 +1204,7 @@
     "waitfor",
     "week",
     "when",
+    "where",
     "while"
   ],
   "permissions": [

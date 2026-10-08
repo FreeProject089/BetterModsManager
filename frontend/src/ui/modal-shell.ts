@@ -20,7 +20,7 @@
 // `modalClassName`) load in node.
 
 import { focusStops, wrapIndex, ownsFocus } from './focus-trap.js';
-import { raiseAboveAll } from './layer.js';
+import { raiseAboveAll, paintedLayerZ, zToTop } from './layer.js';
 import { uiIcon } from './icons.js';
 
 const CSS_ID = 'modal-shell-css';
@@ -250,10 +250,12 @@ export function installGlobalModalKeys(closeLabel: () => string): void {
         // 11000+), a static overlay at its stylesheet z of 5000 would open BEHIND the dialog
         // that asked — the question invisible, the click answered by nobody. It goes on top
         // for as long as it is open, and gets its own value back when it closes.
+        // EVERY painted layer counts, not only the house overlays: a layer of another family
+        // (the old tutorial hub, a [data-layer] panel) left this dialog under it — the
+        // tutorial creator opened behind the hub that launched it.
         const own = Number.parseInt(getComputedStyle(o).zIndex, 10) || 0;
-        const others = openOverlays().filter((x) => x !== o);
-        const highest = Math.max(0, ...others.map((x) => Number.parseInt(getComputedStyle(x).zIndex, 10) || 0));
-        if (others.length && highest >= own) {
+        const highest = paintedLayerZ(o);
+        if (highest > 0 && zToTop(own, highest) !== null) {
             zWas.set(o, o.style.zIndex);
             raiseAboveAll(o, own);
         }

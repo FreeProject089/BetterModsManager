@@ -1,51 +1,65 @@
-export const securitySystem = {
-    titleKey: 'docs.security',
-    explanationPrefix: 'docs.diagram.security.node.',
-    definition: `
-    flowchart TD
-        subgraph CL_USER ["{{docs.diagram.cluster.USER}}"]
-            START["<div class='node-content'><i class='icon-toggle'></i> {{docs.diagram.security.node.START}}</div>"]
-        end
+import type { DiagramSpec } from '../diagram-spec.js';
 
-        subgraph CL_CORE ["{{docs.diagram.cluster.CORE}}"]
-            MODE_FULL["<div class='node-content'><i class='icon-unlock'></i> {{docs.diagram.security.node.MODE_FULL}}</div>"]
-            MODE_LIM["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.security.node.MODE_LIM}}</div>"]
-            RUST["<div class='node-content'><i class='icon-cpu'></i> {{docs.diagram.security.node.RUST}}</div>"]
-        end
+// What BMM enforces at its trust boundaries today. The interface's own disk reach is the Tauri fs
+// and asset:// scope set by fs_security_mode (main.rs › apply_fs_security_mode). Everything that
+// arrives from outside is checked in Rust: bmm:// links (commands/link_guard.rs), the local API
+// (api/mod.rs), custom pages (commands/custom_pages.rs), repository manifests and their files
+// (commands/repo.rs › check_repo_signature) and app updates (commands/autoupdate.rs). Paths built
+// from any of it go through fs_utils.rs › safe_relative_path.
+export const securitySystem: DiagramSpec = {
+    id: 'security-system',
+    i18n: 'docs.diagram.security-system',
+    category: 'integrity',
+    dir: 'TB',
+    article: 'security-system',
+    related: ['custom-pages', 'integrity-engine', 'deeplinks', 'update-system'],
+    groups: [
+        { id: 'DISK' },
+        { id: 'ENTRY', dir: 'LR' },
+        { id: 'SIGNED' },
+    ],
+    nodes: [
+        { id: 'UI', kind: 'ui', group: 'DISK', icon: 'icon-app', refs: ['frontend/src/ui/security-modal.ts › checkSecurityMode', 'src-tauri/src/commands/settings.rs › apply_fs_security_mode_command'] },
+        { id: 'MODE', kind: 'decision', group: 'DISK', refs: ['src-tauri/src/main.rs › apply_fs_security_mode', 'src-tauri/src/state.rs › fs_security_mode'] },
+        { id: 'FULL', kind: 'rust', group: 'DISK', icon: 'icon-unlock', refs: ['src-tauri/src/main.rs › apply_fs_security_mode'] },
+        { id: 'LIMITED', kind: 'rust', group: 'DISK', icon: 'icon-lock', refs: ['src-tauri/src/main.rs › apply_fs_security_mode', 'src-tauri/src/commands/profile.rs › allow_directory'] },
+        { id: 'PATHS', kind: 'rust', icon: 'icon-folder', refs: ['src-tauri/src/fs_utils.rs › safe_relative_path', 'src-tauri/src/fs_utils.rs › safe_folder_name'] },
 
-        subgraph CL_UI ["{{docs.diagram.cluster.UI}}"]
-            JS["<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.security.node.JS}}</div>"]
-            SCOPE["<div class='node-content'><i class='icon-shield'></i> {{docs.diagram.security.node.SCOPE}}</div>"]
-        end
+        { id: 'OUTSIDE', kind: 'ext', icon: 'icon-globe', refs: ['src-tauri/src/commands/link_guard.rs', 'src-tauri/src/api/mod.rs'] },
+        { id: 'LINKS', kind: 'rust', group: 'ENTRY', icon: 'icon-link', link: 'deeplinks', refs: ['src-tauri/src/commands/link_guard.rs › link_install_app', 'src-tauri/src/commands/link_guard.rs › path_refusal'] },
+        { id: 'API', kind: 'rust', group: 'ENTRY', icon: 'icon-server', refs: ['src-tauri/src/api/mod.rs › host_allowed', 'src-tauri/src/api/mod.rs › ct_eq'] },
+        { id: 'PAGES', kind: 'rust', group: 'ENTRY', icon: 'icon-layout', link: 'custom-pages', refs: ['src-tauri/src/commands/custom_pages.rs › require_cap_in', 'src-tauri/src/commands/custom_pages.rs › bmmpage_protocol'] },
 
-        subgraph CL_STORAGE ["{{docs.diagram.cluster.STORAGE}}"]
-            DISK["<div class='node-content'><i class='icon-folder'></i> {{docs.diagram.security.node.DISK}}</div>"]
-        end
+        { id: 'REPO_SIG', kind: 'decision', group: 'SIGNED', refs: ['src-tauri/src/commands/repo.rs › check_repo_signature', 'src-tauri/src/commands/security.rs › verify_repo_signature', 'frontend/src/features/repo/repo-pin.ts › expectedRepoSignature'] },
+        { id: 'REPO_HASH', kind: 'rust', group: 'SIGNED', icon: 'icon-verify', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo', 'src-tauri/src/commands/repo.rs › compute_file_hash_and_chunks'] },
+        { id: 'UPDATE', kind: 'decision', group: 'SIGNED', refs: ['src-tauri/src/commands/autoupdate.rs › verify_manifest_text', 'src-tauri/src/commands/autoupdate.rs › MANIFEST_PUBLIC_KEY_HEX'] },
+        { id: 'INSTALLER', kind: 'rust', group: 'SIGNED', icon: 'icon-download', refs: ['src-tauri/src/commands/autoupdate.rs › installer_for', 'src-tauri/src/commands/autoupdate.rs › check_installer_bytes', 'src-tauri/src/commands/autoupdate.rs › download_and_install_update'] },
 
-        START -- "<span class='label-info'>{{docs.diagram.edge.security.choice}}</span>" --> MODE_FULL
-        START -- "<span class='label-info'>{{docs.diagram.edge.security.choice}}</span>" --> MODE_LIM
+        { id: 'REFUSED', kind: 'outcome', icon: 'icon-stop', refs: ['src-tauri/src/commands/repo.rs › check_repo_signature', 'src-tauri/src/commands/autoupdate.rs › verify_manifest_text'] },
+    ],
+    edges: [
+        { from: 'UI', to: 'MODE', thick: true },
+        { from: 'MODE', to: 'FULL', label: 'full', tone: 'warn' },
+        { from: 'MODE', to: 'LIMITED', label: 'limited', tone: 'ok' },
+        { from: 'PATHS', to: 'REFUSED', label: 'escape', tone: 'danger' },
+        { from: 'LINKS', to: 'PATHS', label: 'paths', dashed: true },
+        { from: 'REPO_HASH', to: 'PATHS', label: 'paths', dashed: true },
+        { from: 'INSTALLER', to: 'PATHS', label: 'paths', dashed: true },
 
-        MODE_FULL -- "<span class='label-success'>{{docs.diagram.edge.security.totalAccess}}</span>" --> JS
-        MODE_LIM -- "<span class='label-purple'>{{docs.diagram.edge.security.restriction}}</span>" --> SCOPE
+        { from: 'OUTSIDE', to: 'LINKS', label: 'link' },
+        { from: 'OUTSIDE', to: 'API', label: 'http' },
+        { from: 'OUTSIDE', to: 'PAGES', label: 'page' },
+        { from: 'OUTSIDE', to: 'REPO_SIG', label: 'manifest', thick: true },
+        { from: 'OUTSIDE', to: 'UPDATE', label: 'release', thick: true },
+        { from: 'LINKS', to: 'REFUSED', label: '~refused', tone: 'danger', dashed: true },
+        { from: 'API', to: 'REFUSED', label: '~refused', tone: 'danger', dashed: true },
+        { from: 'PAGES', to: 'REFUSED', label: '~refused', tone: 'danger', dashed: true },
 
-        JS -- "<span class='label-info'>{{docs.diagram.edge.security.JS_SCOPE}}</span>" --> SCOPE
-        SCOPE -- "<span class='label-success'>{{docs.diagram.edge.security.SCOPE_DISK}}</span>" --> DISK
-
-        RUST -- "<span class='label-purple'>{{docs.diagram.edge.security.RUST_DISK}}</span>" --> DISK
-        MODE_FULL -. "{{docs.diagram.edge.security.config}}" .-> RUST
-        MODE_LIM -. "{{docs.diagram.edge.security.config}}" .-> RUST
-
-        RUST -. "{{docs.diagram.edge.security.whitelistUpdate}}" .-> SCOPE
-
-        %% Styles — same translucent-accent palette as the other diagrams
-        classDef user fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
-        classDef core fill:#f59e0b1A,stroke:#f59e0b,color:#f59e0b;
-        classDef ui fill:#a855f71A,stroke:#a855f7,color:#a855f7;
-        classDef storage fill:#10b9811A,stroke:#10b981,color:#10b981;
-
-        class START user;
-        class MODE_FULL,MODE_LIM,RUST core;
-        class JS,SCOPE ui;
-        class DISK storage;
-    `
+        { from: 'REPO_SIG', to: 'REPO_HASH', label: 'validOrUnsigned', tone: 'ok', thick: true },
+        { from: 'REPO_SIG', to: 'REFUSED', label: '~invalid', tone: 'danger' },
+        { from: 'REPO_HASH', to: 'REFUSED', label: 'mismatch', tone: 'danger' },
+        { from: 'UPDATE', to: 'INSTALLER', label: '~valid', tone: 'ok', thick: true },
+        { from: 'UPDATE', to: 'REFUSED', label: '~invalid', tone: 'danger' },
+        { from: 'INSTALLER', to: 'REFUSED', label: 'notListed', tone: 'danger' },
+    ],
 };

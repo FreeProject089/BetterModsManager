@@ -674,7 +674,7 @@
 
 /* The diagrams card is not a seventh category — it is a different kind of destination, and
    with six categories above it, it was left as an orphan on the last row. Spanning the full
-   width makes that deliberate instead of ragged, and reads as "and also: 41 diagrams". */
+   width makes that deliberate instead of ragged, and reads as "and also: 45 diagrams". */
 .dh-cat-diagram { grid-column: 1 / -1; align-items: center; }
 
 /* ── Tabs, schedules and instants in a bundled page ───────────────────────────

@@ -1,30 +1,51 @@
-export const faqDeletedMod = {
-    titleKey: 'docs.diagram.faq_del.title',
-    definition: `
-graph TD
-    subgraph TRAP ["<div class='group-label' data-cluster-id='PROC'><i class='icon-flow'></i> {{docs.diagram.cluster.PROC}}</div>"]
-        DEL["<div class='node-content'><i class='icon-delete'></i> {{docs.diagram.faq_del.node.DEL}}</div>"]
-    end
-    subgraph SYNC ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-disk'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        SCAN["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.faq_del.node.SCAN}}</div>"]
-        FOUND{"<div class='node-content'><i class='icon-alert'></i> {{docs.diagram.faq_del.node.FOUND}}</div>"}
-    end
-    subgraph FIX ["<div class='group-label' data-cluster-id='FIX'><i class='icon-verify'></i> {{docs.diagram.cluster.FIX}}</div>"]
-        REMOVE["<div class='node-content'><i class='icon-trash'></i> {{docs.diagram.faq_del.node.REMOVE}}</div>"]
-        RESTORE["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.faq_del.node.RESTORE}}</div>"]
-    end
-    DEL["<div class='node-content'><i class='icon-delete'></i> {{docs.diagram.faq_del.node.DEL}}</div>"] -- "<span class='label-info' data-key='event'>{{docs.diagram.label.event}}</span>" --> SCAN["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.faq_del.node.SCAN}}</div>"]
-    SCAN -- "<span class='label-info' data-key='audit'>{{docs.diagram.label.audit}}</span>" --> FOUND{"<div class='node-content'><i class='icon-alert'></i> {{docs.diagram.faq_del.node.FOUND}}</div>"}
-    FOUND -- "<span class='label-success' data-key='yes'>{{docs.diagram.label.yes}}</span>" --> REMOVE["<div class='node-content'><i class='icon-trash'></i> {{docs.diagram.faq_del.node.REMOVE}}</div>"]
-    REMOVE -- "<span class='label-info' data-key='fix'>{{docs.diagram.label.fix}}</span>" --> RESTORE["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.faq_del.node.RESTORE}}</div>"]
-    FOUND -- "<span class='label-error' data-key='no'>{{docs.diagram.label.no}}</span>" --> SCAN
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 2 stroke:#10b981,stroke-width:2px;
-    linkStyle 3 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 4 stroke:#ef4444,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.faq_del.node.'
+// "I deleted a mod": what actually happens, from the code. Inside BMM, an enabled mod cannot be
+// removed (remove_mod refuses). Deleted from Explorer while enabled, its entry survives until the
+// next scan, and disable_mod still works from the recorded installed_files. A scan that finds the
+// folder gone (drive reachable) drops the entry and its place in the active list, but leaves its
+// deployed files and the _original/ backups where they are (mods.rs scan_mods_folder).
+export const faqDeletedMod: DiagramSpec = {
+    id: 'faq-deleted-mod',
+    i18n: 'docs.diagram.faq-deleted-mod',
+    category: 'mods',
+    dir: 'TB',
+    article: 'faq-deleted-mod',
+    related: ['mod-sync', 'mod-activation', 'backup-system', 'integrity-engine'],
+    groups: [
+        { id: 'HOW' },
+        { id: 'BEFORE' },
+        { id: 'AFTER' },
+    ],
+    nodes: [
+        { id: 'IN_APP', kind: 'ui', group: 'HOW', icon: 'icon-trash', refs: ['frontend/src/features/mods/mods-list.ts › performDeletion', 'src-tauri/src/commands/mods.rs › remove_mod'] },
+        { id: 'SAFE', kind: 'outcome', group: 'HOW', icon: 'icon-check', refs: ['src-tauri/src/commands/mods.rs › remove_mod'] },
+        { id: 'EXPLORER', kind: 'ext', group: 'HOW', icon: 'icon-folder', refs: ['src-tauri/src/models/mod_entry.rs › mod_folder_path'] },
+
+        { id: 'SCANNED', kind: 'decision', group: 'BEFORE', link: 'mod-sync', refs: ['src-tauri/src/commands/mods.rs › scan_mods_folder', 'frontend/src/features/mods/mods.ts › refreshMods'] },
+        { id: 'VERIFY', kind: 'ui', group: 'BEFORE', icon: 'icon-verify', link: 'integrity-engine', refs: ['src-tauri/src/commands/mods.rs › verify_integrity', 'frontend/src/features/mods/mods-actions.ts › verifyIntegrity'] },
+        { id: 'DISABLE', kind: 'rust', group: 'BEFORE', icon: 'icon-minus', link: 'mod-activation', refs: ['src-tauri/src/commands/mods.rs › disable_mod_in', 'src-tauri/src/models/mod_entry.rs › installed_files'] },
+        { id: 'CLEAN', kind: 'outcome', group: 'BEFORE', icon: 'icon-done', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed'] },
+
+        { id: 'PRUNED', kind: 'rust', group: 'AFTER', icon: 'icon-delete', refs: ['src-tauri/src/commands/mods.rs › scan_mods_folder'] },
+        { id: 'LEFT', kind: 'data', group: 'AFTER', icon: 'icon-warning', refs: ['src-tauri/src/fs_utils.rs › backup_original_file'] },
+        { id: 'PUT_BACK', kind: 'ui', group: 'AFTER', icon: 'icon-restore', refs: ['frontend/src/features/mods/mods-actions.ts › scanModsFolder', 'src-tauri/src/commands/mods.rs › download_mod'] },
+        { id: 'CYCLE', kind: 'rust', group: 'AFTER', icon: 'icon-refresh', refs: ['src-tauri/src/commands/mods.rs › enable_mod_in', 'src-tauri/src/fs_utils.rs › backup_original_file'] },
+        { id: 'ADDED_LEFT', kind: 'outcome', group: 'AFTER', icon: 'icon-alert', refs: ['src-tauri/src/fs_utils.rs › backup_original_file', 'src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed'] },
+    ],
+    edges: [
+        { from: 'IN_APP', to: 'SAFE', label: 'onlyDisabled', tone: 'ok' },
+        { from: 'EXPLORER', to: 'SAFE', label: 'wasDisabled', tone: 'ok', dashed: true },
+        { from: 'EXPLORER', to: 'SCANNED', label: 'wasEnabled', tone: 'warn', thick: true },
+        { from: 'SCANNED', to: 'VERIFY', label: 'check', tone: 'info', dashed: true },
+        { from: 'SCANNED', to: 'DISABLE', label: '~no', tone: 'ok' },
+        { from: 'VERIFY', to: 'DISABLE', label: 'fix', tone: 'info' },
+        { from: 'DISABLE', to: 'CLEAN', tone: 'ok' },
+        { from: 'SCANNED', to: 'PRUNED', label: '~yes', tone: 'danger', thick: true },
+        { from: 'PRUNED', to: 'LEFT', thick: true },
+        { from: 'LEFT', to: 'PUT_BACK', label: 'fix', tone: 'info', thick: true },
+        { from: 'PUT_BACK', to: 'CYCLE', thick: true },
+        { from: 'CYCLE', to: 'CLEAN', label: 'replacedFiles', tone: 'ok', thick: true },
+        { from: 'CYCLE', to: 'ADDED_LEFT', label: 'addedFiles', tone: 'warn' },
+    ],
 };

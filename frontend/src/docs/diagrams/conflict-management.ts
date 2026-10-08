@@ -1,28 +1,53 @@
-export const conflictManagement = {
-    titleKey: 'docs.diagram.conflict.title',
-    definition: `
-graph TD
-    subgraph DETECTION ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-search'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        SCAN_CF["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.conflict.node.SCAN}}</div>"]
-        MAP["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.conflict.node.MAP}}</div>"]
-    end
-    subgraph RESOLUTION ["<div class='group-label' data-cluster-id='PROC'><i class='icon-settings'></i> {{docs.diagram.cluster.PROC}}</div>"]
-        PRIO["<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.conflict.node.PRIO}}</div>"]
-        OVERRIDE["<div class='node-content'><i class='icon-image-edit'></i> {{docs.diagram.conflict.node.OVERRIDE}}</div>"]
-    end
-    subgraph OUTPUT ["<div class='group-label' data-cluster-id='FINALIZING'><i class='icon-done'></i> {{docs.diagram.cluster.FINALIZING}}</div>"]
-        REPORT["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.conflict.node.REPORT}}</div>"]
-    end
-    SCAN_CF["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.conflict.node.SCAN}}</div>"] -- "<span class='label-info' data-key='audit'>{{docs.diagram.label.audit}}</span>" --> MAP["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.conflict.node.MAP}}</div>"]
-    MAP -- "<span class='label-purple' data-key='graph'>{{docs.diagram.label.graph}}</span>" --> PRIO["<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.conflict.node.PRIO}}</div>"]
-    PRIO -- "<span class='label-success' data-key='solve'>{{docs.diagram.label.solve}}</span>" --> OVERRIDE["<div class='node-content'><i class='icon-image-edit'></i> {{docs.diagram.conflict.node.OVERRIDE}}</div>"]
-    OVERRIDE -- "<span class='label-purple' data-key='report'>{{docs.diagram.label.report}}</span>" --> REPORT["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.conflict.node.REPORT}}</div>"]
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#8b5cf6,stroke-width:2px;
-    linkStyle 2 stroke:#10b981,stroke-width:2px;
-    linkStyle 3 stroke:#8b5cf6,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.conflict.node.'
+// Conflicts as they work today: overlaps are read from the in-memory file -> mods index
+// (mods.rs calculate_conflicts_from_cache, one batched get_all_mod_conflicts call), shown as
+// Intra/Inter badges and a warning before enabling, and RESOLVED by one list only: the profile's
+// activation order (Profile.active_mods, last wins). Changing it re-copies only the files that
+// change hands (mod_order.rs commit / redeploy). The per-file deploy itself is mod-activation.
+export const conflictManagement: DiagramSpec = {
+    id: 'conflict-management',
+    i18n: 'docs.diagram.conflict-management',
+    category: 'mods',
+    dir: 'TB',
+    article: 'conflicts',
+    related: ['mod-activation', 'mod-sync', 'profile-system', 'mod-architecture'],
+    groups: [
+        { id: 'DETECT' },
+        { id: 'SHOW' },
+        { id: 'ORDER' },
+    ],
+    nodes: [
+        { id: 'INDEX', kind: 'data', group: 'DETECT', icon: 'icon-grid', link: 'mod-sync', refs: ['src-tauri/src/state.rs › conflict_index', 'src-tauri/src/commands/mods.rs › ensure_cache_populated'] },
+        { id: 'CALC', kind: 'rust', group: 'DETECT', icon: 'icon-compare', refs: ['src-tauri/src/commands/mods.rs › get_all_mod_conflicts', 'src-tauri/src/commands/mods.rs › calculate_conflicts_from_cache', 'src-tauri/src/models/mod_entry.rs › ConflictReport'] },
+        { id: 'KIND', kind: 'decision', group: 'DETECT', refs: ['src-tauri/src/models/mod_entry.rs › ConflictCategory', 'src-tauri/src/models/mod_entry.rs › ConflictStatus'] },
+
+        { id: 'BADGES', kind: 'ui', group: 'SHOW', icon: 'icon-warning', refs: ['frontend/src/features/mods/mods-conflicts.ts › checkAllConflicts', 'frontend/src/features/mods/mods-conflicts.ts › updateConflictBadgeOnCard', 'frontend/src/features/mods/mods-conflicts.ts › openGlobalConflictModal'] },
+        { id: 'WARN', kind: 'ui', group: 'SHOW', icon: 'icon-alert', refs: ['frontend/src/features/mods/mods-conflicts.ts › showActivationWarning', 'frontend/src/features/mods/mods-list.ts › showActivationWarning'] },
+        { id: 'TREE', kind: 'ui', group: 'SHOW', icon: 'icon-file', refs: ['frontend/src/features/mods/mods-conflicts.ts › openConflictTree', 'src-tauri/src/commands/mods.rs › get_conflict_file_tree', 'src-tauri/src/commands/mods.rs › CONFLICT_TREE_MAX'] },
+
+        { id: 'ACTIVE', kind: 'data', group: 'ORDER', icon: 'icon-list', refs: ['src-tauri/src/models/profile.rs › active_mods', 'src-tauri/src/commands/mod_order.rs › contested'] },
+        { id: 'VIEW', kind: 'ui', group: 'ORDER', icon: 'icon-priority', refs: ['frontend/src/features/profiles/load-order.ts › openLoadOrder', 'src-tauri/src/commands/mod_order.rs › mod_order_get', 'src-tauri/src/commands/mod_order.rs › mod_order_preview'] },
+        { id: 'SET', kind: 'rust', group: 'ORDER', icon: 'icon-save', refs: ['src-tauri/src/commands/mod_order.rs › mod_order_set', 'src-tauri/src/commands/mod_order.rs › is_permutation', 'src-tauri/src/commands/mod_order.rs › commit'] },
+        { id: 'REDEPLOY', kind: 'rust', group: 'ORDER', icon: 'icon-patch', refs: ['src-tauri/src/commands/mod_order.rs › handovers', 'src-tauri/src/commands/mod_order.rs › redeploy', 'src-tauri/src/commands/mod_order.rs › read_roots'] },
+        { id: 'REAPPLY', kind: 'rust', group: 'ORDER', icon: 'icon-refresh', refs: ['src-tauri/src/commands/mod_order.rs › mod_order_reapply'] },
+        { id: 'GAME', kind: 'outcome', icon: 'icon-check', link: 'mod-activation', refs: ['src-tauri/src/fs_utils.rs › copy_file_governed', 'src-tauri/src/commands/mod_order.rs › RedeployReport'] },
+    ],
+    edges: [
+        { from: 'INDEX', to: 'CALC', label: '~reads', thick: true },
+        { from: 'CALC', to: 'KIND', label: 'eachPair', tone: 'info', thick: true },
+        { from: 'KIND', to: 'BADGES', thick: true },
+        { from: 'BADGES', to: 'WARN', label: 'onEnable', tone: 'warn' },
+        { from: 'BADGES', to: 'TREE', label: 'openPair', tone: 'info' },
+        { from: 'WARN', to: 'ACTIVE', label: 'anyway', tone: 'warn' },
+        { from: 'TREE', to: 'SET', label: 'makeWin', tone: 'ok' },
+        { from: 'TREE', to: 'VIEW', label: 'openOrder', dashed: true },
+        { from: 'ACTIVE', to: 'VIEW', label: '~reads' },
+        { from: 'VIEW', to: 'SET', label: 'apply', tone: 'ok', thick: true },
+        { from: 'VIEW', to: 'REAPPLY', label: 'repair', dashed: true },
+        { from: 'SET', to: 'ACTIVE', label: '~writes' },
+        { from: 'SET', to: 'REDEPLOY', label: 'changedHands', thick: true },
+        { from: 'REAPPLY', to: 'REDEPLOY', label: 'allContested' },
+        { from: 'REDEPLOY', to: 'GAME', thick: true },
+    ],
 };

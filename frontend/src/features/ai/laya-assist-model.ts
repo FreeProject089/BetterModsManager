@@ -275,6 +275,28 @@ export function groupCrashes(items: CrashDigest[], threshold = 0.6): CrashGroup[
     return groups.map(({ key, members, rep }) => ({ key, members, rep }));
 }
 
+/** Signatures remembered as « groups already seen », at most. */
+export const SEEN_GROUPS_MAX = 100;
+
+/**
+ * Which of these crashes start a group BMM has not seen before (the `bmm.ai.crashGroup` event):
+ * a crash whose signature overlaps no remembered one enough. Returns the indices that are new
+ * and the memory to keep (new signatures first, bounded). Two new crashes of the same failure in
+ * one call are ONE new group: the second is matched against the first.
+ */
+export function newCrashGroups(seen: readonly string[][], items: ReadonlyArray<{ reason?: string; excerpt?: string }>, threshold = 0.6): { fresh: number[]; seen: string[][] } {
+    const mem: string[][] = (Array.isArray(seen) ? seen : []).filter((s) => Array.isArray(s) && s.length).map((s) => s.map(String));
+    const fresh: number[] = [];
+    (Array.isArray(items) ? items : []).forEach((it, i) => {
+        const sig = crashSignature(String(it?.reason || ''), String(it?.excerpt || ''));
+        if (!sig.length) return;
+        if (mem.some((m) => overlap(m, sig) >= threshold)) return;
+        mem.unshift(sig);
+        fresh.push(i);
+    });
+    return { fresh, seen: mem.slice(0, SEEN_GROUPS_MAX) };
+}
+
 /** Path → its group key. */
 export function groupOf(groups: CrashGroup[]): Map<string, number> {
     const m = new Map<string, number>();

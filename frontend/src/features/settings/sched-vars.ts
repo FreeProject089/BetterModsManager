@@ -289,3 +289,70 @@ export function parseList(raw: unknown, sep = ','): string[] {
     }
     return s.split(sep).map((x) => x.trim()).filter(Boolean);
 }
+
+/**
+ * What Laya's steps leave behind, under names that do not change (Oct 2026).
+ *
+ * A task written against `{ai.crash.family}` must still read it after an update, so these names
+ * are part of the contract, like an action's type. Each entry says which step writes it and
+ * what it holds; `num` is readable by the `value` condition (they are all in VALUE_SOURCES),
+ * `text` by `{name}` and `textIs`, `list` by `for each … list`, `map` by `{map.<name>.<key>}`.
+ * A step given `into: x` ALSO writes the same values under `x.` (x.tags, x.abstained…).
+ *
+ * Only `ai.answer`, `ai.suggestions` and `ai.explanation` are free text: tainted, they may be
+ * shown or stored, never run (sched-ai.ts). Everything else is a word from a fixed list or one
+ * of the user's own tags, labels or mod names.
+ *
+ * tests/sched-laya.test.mjs checks that the runner writes every one of them.
+ */
+export const LAYA_VARS: ReadonlyArray<{ name: string; kind: 'num' | 'text' | 'list' | 'map'; step: string; what: string }> = [
+    // ai.classify / ai.run_task
+    { name: 'ai.label', kind: 'text', step: 'ai.classify', what: 'the label chosen, or none' },
+    { name: 'ai.p', kind: 'num', step: 'ai.classify', what: 'its probability, 0 to 1' },
+    { name: 'ai.abstained', kind: 'num', step: 'ai.classify', what: '1 when Laya said « I do not know »' },
+    { name: 'ai.scores', kind: 'map', step: 'ai.classify', what: 'every label of the ranking → its probability' },
+    // ai.classify_mod
+    { name: 'ai.mod.tags', kind: 'text', step: 'ai.classify_mod', what: 'the tags Laya chose, by name, comma-separated' },
+    { name: 'ai.mod.category', kind: 'text', step: 'ai.classify_mod', what: 'the most confident sure tag, or none' },
+    { name: 'ai.mod.tagCount', kind: 'num', step: 'ai.classify_mod', what: 'how many tags' },
+    { name: 'ai.mod.adult', kind: 'num', step: 'ai.classify_mod', what: '1 when the mod looks like adult content' },
+    { name: 'ai.mod.adultP', kind: 'num', step: 'ai.classify_mod', what: 'the probability of that' },
+    { name: 'ai.mod.applied', kind: 'num', step: 'ai.classify_mod', what: 'tags actually written to the mod' },
+    { name: 'ai.mod.abstained', kind: 'num', step: 'ai.classify_mod', what: '1 when no tag passed the threshold' },
+    // ai.library_check
+    { name: 'ai.lib.total', kind: 'num', step: 'ai.library_check', what: 'mods read' },
+    { name: 'ai.lib.untagged', kind: 'num', step: 'ai.library_check', what: 'mods with no tag' },
+    { name: 'ai.lib.duplicates', kind: 'num', step: 'ai.library_check', what: 'likely duplicate pairs' },
+    { name: 'ai.lib.conflicts', kind: 'num', step: 'ai.library_check', what: 'pairs overwriting each other now' },
+    { name: 'ai.lib.suggested', kind: 'num', step: 'ai.library_check', what: 'untagged mods Laya found tags for' },
+    { name: 'ai.lib.findings', kind: 'num', step: 'ai.library_check', what: 'untagged + duplicates + conflicts' },
+    { name: 'ai.library', kind: 'list', step: 'ai.library_check', what: 'one readable line per finding' },
+    { name: 'ai.library.untagged', kind: 'list', step: 'ai.library_check', what: 'the untagged mods’ ids, for a for each' },
+    { name: 'ai.library.duplicates', kind: 'list', step: 'ai.library_check', what: 'the second mod of each duplicate pair' },
+    // ai.crash_label
+    { name: 'ai.crash.count', kind: 'num', step: 'ai.crash_label', what: 'crash reports labelled' },
+    { name: 'ai.crash.unknown', kind: 'num', step: 'ai.crash_label', what: 'of which Laya could not tell' },
+    { name: 'ai.crash.groups', kind: 'num', step: 'ai.crash_label', what: 'failures BMM had not seen before' },
+    { name: 'ai.crash.pending', kind: 'num', step: 'ai.crash_label', what: 'new reports left for the next run' },
+    { name: 'ai.crash.family', kind: 'text', step: 'ai.crash_label', what: 'the newest crash’s family (disk, mod_files…)' },
+    { name: 'ai.crash.cause', kind: 'text', step: 'ai.crash_label', what: 'its cause (disk_full, mod_conflict…), unknown when Laya abstained' },
+    { name: 'ai.crash.p', kind: 'num', step: 'ai.crash_label', what: 'its probability' },
+    { name: 'ai.crash.report', kind: 'text', step: 'ai.crash_label', what: 'its report’s file name' },
+    { name: 'ai.crashes', kind: 'list', step: 'ai.crash_label', what: 'one line per crash: report: family/cause (p%)' },
+    // ai.triage_report
+    { name: 'ai.report.kind', kind: 'text', step: 'ai.triage_report', what: 'feedback, bug, crash or none' },
+    { name: 'ai.report.kindP', kind: 'num', step: 'ai.triage_report', what: 'its probability' },
+    { name: 'ai.report.area', kind: 'text', step: 'ai.triage_report', what: 'the part of the app (mods, profiles…) or none' },
+    { name: 'ai.report.areaP', kind: 'num', step: 'ai.triage_report', what: 'its probability' },
+    { name: 'ai.report.abstained', kind: 'num', step: 'ai.triage_report', what: '1 when the kind was not clear' },
+    // ai.status
+    { name: 'ai.enabled', kind: 'num', step: 'ai.status', what: '1 when the AI switch is on' },
+    { name: 'ai.available', kind: 'num', step: 'ai.status', what: '1 when a Laya step would run now' },
+    { name: 'ai.installed', kind: 'num', step: 'ai.status', what: '1 when the built-in model is on disk' },
+    { name: 'ai.loaded', kind: 'num', step: 'ai.status', what: '1 when it is loaded in memory' },
+    { name: 'ai.writer', kind: 'num', step: 'ai.status', what: '1 when a writing model is configured' },
+    { name: 'ai.provider', kind: 'text', step: 'ai.status', what: 'embedded, local, other or none' },
+    // ai.explain_crash (free text: tainted)
+    { name: 'ai.explanation', kind: 'text', step: 'ai.explain_crash', what: 'the written explanation (untrusted text)' },
+    { name: 'ai.explain.remote', kind: 'num', step: 'ai.explain_crash', what: '1 when a remote writer wrote it' },
+];

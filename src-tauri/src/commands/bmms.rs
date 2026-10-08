@@ -1325,9 +1325,15 @@ impl P {
                 let path = self.string("the path to watch")?;
                 return Ok(json!({ "type": "watchFile", "path": path }));
             }
-            // `on event "bmm.mod.missing"`
+            // `on event "bmm.mod.missing"`, and `where "family=disk"` after it to fire only
+            // when the event carries those values (`key=value`, `|` between alternatives,
+            // `,` between keys that must all match).
             if self.eat_word("event") {
                 let event = self.string("the event name")?;
+                if self.eat_word("where") {
+                    let filter = self.string("what the event must carry, like \"family=disk\"")?;
+                    return Ok(json!({ "type": "onEvent", "event": event, "where": filter }));
+                }
                 return Ok(json!({ "type": "onEvent", "event": event }));
             }
             // `on feed "https://…/feed.xml" every 15m`, and `lan` after it for a feed served on
@@ -2258,7 +2264,16 @@ fn trigger_str(tr: &Value) -> String {
         // saved back came out DISARMED, with nothing to notice: `manual` is a legitimate
         // trigger, so nothing errored and nothing looked wrong.
         "watchFile" => format!("on file {}", quote(&s("path"))),
-        "onEvent" => format!("on event {}", quote(&s("event"))),
+        "onEvent" => {
+            // The filter goes back out with it: a task opened in code and saved back must not
+            // start firing on every crash because the code view dropped `where`.
+            let w = s("where");
+            if w.trim().is_empty() {
+                format!("on event {}", quote(&s("event")))
+            } else {
+                format!("on event {} where {}", quote(&s("event")), quote(&w))
+            }
+        }
         "rss" => format!(
             "on feed {} every {}m{}",
             quote(&s("url")),
@@ -2598,6 +2613,7 @@ print \"done\"
             ("once", json!({ "type": "once", "at": "2026-01-01T09:00" })),
             ("watchFile", json!({ "type": "watchFile", "path": "C:/games/dcs.log" })),
             ("onEvent", json!({ "type": "onEvent", "event": "bmm.mod.missing" })),
+            ("onEvent where", json!({ "type": "onEvent", "event": "bmm.ai.ready", "where": "what=installed|loaded, model=x" })),
             ("rss", json!({ "type": "rss", "url": "https://example.com/feed.xml", "everyMinutes": 15, "allowLan": true })),
             ("afterTask", json!({ "type": "afterTask", "taskId": "t-42", "outcome": "fail" })),
             (
@@ -2622,7 +2638,7 @@ print \"done\"
             // still a task that watches nothing.
             for key in [
                 "path", "event", "time", "at", "everyMinutes", "everyHours", "day", "taskId",
-                "outcome", "engine", "code", "url", "allowLan",
+                "outcome", "engine", "code", "url", "allowLan", "where",
             ] {
                 if let Some(want) = trigger.get(key) {
                     assert_eq!(&back["trigger"][key], want, "{} lost its {}", name, key);

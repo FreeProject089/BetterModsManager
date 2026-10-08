@@ -109,6 +109,10 @@ pub fn ai_save_settings(state: State<AppState>, settings: AiSettings) -> Result<
     // Saved from the card = the user's own choice of classifier from now on.
     s.classifier_chosen = true;
     ai_core::save_settings(&dir, &s)?;
+    // Switched on: a task waiting for Laya (`bmm.ai.ready`, what=enabled) may go.
+    if s.enabled && !before.enabled {
+        ai_embedded::ring_ready("enabled");
+    }
     crate::commands::crash::log_line(format!(
         "[AI] settings saved: enabled={} classifier={} generative={}",
         s.enabled, s.classifier, s.generative
@@ -170,7 +174,7 @@ pub async fn ai_test_connection(
 
 /// What a mod says about itself now (for the extractor, and to skip suggestions that change
 /// nothing).
-fn mod_facts(m: &crate::models::mod_entry::ModEntry) -> ModFacts {
+pub(crate) fn mod_facts(m: &crate::models::mod_entry::ModEntry) -> ModFacts {
     ModFacts {
         name: m.name.clone(),
         version: m.version.clone(),
@@ -184,7 +188,7 @@ fn mod_facts(m: &crate::models::mod_entry::ModEntry) -> ModFacts {
 
 /// 7z / rar mods: their file NAMES, through the app's archive layer (listed, never extracted).
 /// A folder or a .zip is read by the extractor itself.
-fn archive_names(path: &std::path::Path) -> Vec<String> {
+pub(crate) fn archive_names(path: &std::path::Path) -> Vec<String> {
     let is_zip = path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("zip")).unwrap_or(false);
     if !is_zip && crate::archive::is_archive(path) {
         crate::archive::archive_entries(path).map(|v| v.into_iter().map(|(n, _)| n).take(4000).collect()).unwrap_or_default()

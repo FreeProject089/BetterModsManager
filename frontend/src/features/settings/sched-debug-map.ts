@@ -124,6 +124,14 @@ const EVENT_VARS: Record<string, string[]> = {
     onEvent: [],
 };
 
+/** What BMM's own events carry, for an `onEvent` trigger that names one (core/bmm-events.ts). */
+const NAMED_EVENT_VARS: Record<string, string[]> = {
+    'bmm.ai.crashLabelled': ['event.report', 'event.family', 'event.cause', 'event.p', 'event.abstained', 'event.uncertain'],
+    'bmm.ai.crashGroup': ['event.report', 'event.family', 'event.cause', 'event.p', 'event.abstained', 'event.uncertain'],
+    'bmm.ai.ready': ['event.what', 'event.model'],
+    'bmm.task.done': ['event.id', 'event.name', 'event.ok', 'event.ms', 'event.result', 'event.chain'],
+};
+
 /**
  * Every variable a field in this task could name, for the variable picker: what the steps
  * write (var.set, `into`, `target`, list/map names), what the trigger hands over, the shared
@@ -152,6 +160,7 @@ export function variablesOf(steps: readonly any[], trigger: any, shared: readonl
     };
     walk(steps || []);
     for (const n of EVENT_VARS[String(trigger?.type || '')] || []) add(n, 'event');
+    if (trigger?.type === 'onEvent') for (const n of NAMED_EVENT_VARS[String(trigger?.event || '')] || []) add(n, 'event');
     for (const n of shared) add(n, 'shared');
     for (const n of RESULT_VARS) add(n, 'result');
     for (const n of BUILTIN_VARS) add(n, 'builtin');

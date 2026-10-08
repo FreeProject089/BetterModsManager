@@ -1,7 +1,9 @@
 // @ts-nocheck
+// The interactive diagrams' registry and entry point, plus the Tasky help bubble the rest of the
+// app uses for tooltips. The diagrams themselves are data (./diagrams/*.ts, see diagram-spec.ts);
+// drawing and interaction live in diagram-viewer.ts.
 import { t } from '../core/i18n.js';
-import { ensureMermaid, ensureSvgPanZoom } from '../ui/lazy-vendor.js';
-import { mermaidTheme } from './md-mermaid.js';
+import { setDiagramRegistry, openSpec, closeViewer } from './diagram-viewer.js';
 import { resumableDownloads } from './diagrams/resumable-downloads.js';
 import { modSync } from './diagrams/mod-sync.js';
 import { profileSystem } from './diagrams/profile-system.js';
@@ -45,6 +47,8 @@ import { telemetryPipeline } from './diagrams/telemetry-pipeline.js';
 import { i18nSystem } from './diagrams/i18n-system.js';
 import { customPages } from './diagrams/custom-pages.js';
 import { deeplinks } from './diagrams/deeplinks.js';
+import { layaPipeline } from './diagrams/laya-pipeline.js';
+import { layaCrashAnalysis } from './diagrams/laya-crash-analysis.js';
 
 
 // Diagram Registry
@@ -92,51 +96,33 @@ export const diagrams = {
     'offline-mode': offlineMode,
     'telemetry-pipeline': telemetryPipeline,
     'i18n-system': i18nSystem,
+    'laya-pipeline': layaPipeline,
+    'laya-crash-analysis': layaCrashAnalysis,
 };
 
-
-// State
-let currentDiagramID = null;
-let panZoomInstance = null;
-let isDragging = false;
+// Each spec carries its prefix; the docs hub and analytics read `titleKey`.
+for (const s of Object.values(diagrams)) s.titleKey = `${s.i18n}.title`;
+setDiagramRegistry(diagrams);
 
 /**
- * Initialize Mermaid and Documentation logic
+ * Wire the dialog's close paths. Mermaid is NOT loaded here: it is 3.3 MB and only a diagram
+ * needs it, so ensureMermaid() fetches it when one is actually opened. This runs at every
+ * launch; most launches never open a diagram.
  */
 export function initInteractiveDocs() {
-    console.log('[Docs] Initializing sub-system...');
-
-    // Mermaid is NOT loaded here. It is 3.3 MB and only a diagram needs it, so it is
-    // fetched by ensureMermaid() when one is actually opened — along with the palette
-    // that used to be configured on this line. This function runs at every launch;
-    // most launches never open a diagram.
-
-    // Global listeners
     document.getElementById('btn-close-docs-diagram')?.addEventListener('click', closeDiagram);
-    document.getElementById('btn-docs-reset-zoom')?.addEventListener('click', resetZoom);
 
-    // Click outside to close (Robust version to avoid closing on drag)
+    // Click on the dim area closes; a drag that ends there (a pan that overshot) does not.
     const modal = document.getElementById('modal-docs-diagram');
     if (modal) {
         let mouseMoved = false;
-        
-        modal.addEventListener('mousedown', (e) => {
-            mouseMoved = false;
-        });
-
-        modal.addEventListener('mousemove', () => {
-            mouseMoved = true;
-        });
-
+        modal.addEventListener('mousedown', () => { mouseMoved = false; });
+        modal.addEventListener('mousemove', () => { mouseMoved = true; });
         modal.addEventListener('mouseup', (e) => {
-            // Only close if it was a distinct click on the overlay, NOT a drag
-            if (!mouseMoved && e.target.id === 'modal-docs-diagram') {
-                closeDiagram();
-            }
+            if (!mouseMoved && e.target.id === 'modal-docs-diagram') closeDiagram();
         });
     }
 
-    // Close on Escape
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !e.defaultPrevented && document.getElementById('modal-docs-diagram')?.classList.contains('active')) {
             // Answered here: the shell's global Escape must not press the × a second time.
@@ -144,239 +130,37 @@ export function initInteractiveDocs() {
             closeDiagram();
         }
     });
-
-    console.log('[Docs] Sub-system ready.');
 }
 
 /**
- * Open a specific diagram
+ * Open a diagram by registry id, optionally selecting one of its nodes.
  * @param {string} id - The diagram ID from the registry
+ * @param {string|null} highlightNodeId - a node id to select and centre
  */
 export async function openDiagram(id, highlightNodeId = null) {
-    const diagram = diagrams[id];
-    if (!diagram) {
-        // Console-only used to mean a diagram button that silently did nothing — which is
-        // how `lightweight-architecture` sat broken: the click "worked", and nothing opened.
+    if (!diagrams[id]) {
+        // Console-only used to mean a diagram button that silently did nothing, which is how
+        // `lightweight-architecture` sat broken: the click "worked", and nothing opened.
         console.error(`[Docs] Diagram "${id}" not found.`);
-        (window as any).showToast?.(t('docs.diagram.missing') || `Diagram "${id}" not found`, 'error');
+        (window as any).showToast?.(t('docs.diagram.missing'), 'error');
         return;
     }
+    hideTaskyHelp();
+    await openSpec(id, { highlight: highlightNodeId });
+}
 
+function closeDiagram() {
     const modal = document.getElementById('modal-docs-diagram');
-    const container = document.getElementById('mermaid-diagram-container');
-    const title = document.getElementById('docs-diagram-title');
-    const taskyText = document.getElementById('tasky-explanation');
-
-    currentDiagramID = id;
-    title.textContent = t(diagram.titleKey);
-    taskyText.textContent = t('docs.diagram.taskyInstruction');
-    
-    // Reset Tasky mascot to default
-    updateTaskyMascot('Tasky.png');
-
-    // Show modal
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('active'), 10);
-
-    // Show Global Tasky
-    const taskyContainer = document.getElementById('tasky-bubble-docs');
-    if (taskyContainer) {
-        taskyContainer.style.display = 'flex';
-        setTimeout(() => taskyContainer.style.opacity = '1', 10);
-    }
-
-    // Render Mermaid
-    try {
-        container.innerHTML = '';
-        // First diagram of the session pays for the engine; the rest are instant. The modal
-        // is already open and showing its title, so the wait reads as the diagram drawing.
-        const mermaid = await ensureMermaid();
-        if (!mermaid?.render) throw new Error('mermaid unavailable');
-        const { render } = mermaid;
-        // The same palette as the docs hub and every ```mermaid block (md-mermaid.ts), built from
-        // the live tokens. Without it the modal drew with whatever configuration the last caller
-        // left behind, so the same diagram changed colours depending on what was opened first.
-        try { mermaid.initialize({ ...mermaidTheme('loose'), flowchart: { ...mermaidTheme('loose').flowchart, useMaxWidth: true } }); } catch { /* keep the previous configuration */ }
-
-        // Pre-translate definitions (handles {{key}} placeholders)
-        const translatedDefinition = diagram.definition.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (match, key) => t(key));
-        
-        const { svg } = await render('mermaid-svg-' + id, translatedDefinition);
-        container.innerHTML = svg;
-
-        // Make ALL diagrams theme-aware: the generic node colours AND the semantic ones the
-        // definitions hard-code (linkStyle / style / classDef hex), which used to stay dark-theme
-        // hex on a light theme (white text on a pale fill, near-black boxes on white).
-        retintDiagram(container);
-
-        // Initialize Pan & Zoom
-        await initPanZoom();
-
-        // Fix Cluster Labels Layout (Mermaid Centering override)
-        // We use multiple calls to catch various render cycles
-        fixClusterLabels();
-        setTimeout(fixClusterLabels, 50);
-        setTimeout(fixClusterLabels, 150);
-        setTimeout(fixClusterLabels, 500);
-
-        // Attach interactions
-        attachNodeListeners(id);
-
-        if (highlightNodeId) {
-            // Give Mermaid enough time to finish all layout calculation stages
-            setTimeout(() => applyNodeHighlight(highlightNodeId), 500);
-        }
-    } catch (err) {
-        console.error('[Docs] Mermaid render error:', err);
-        container.innerHTML = `<p style="color:var(--danger)">${t('common.error')}: Mermaid render error</p>`;
-    }
+    if (!modal) return;
+    modal.classList.remove('active');
+    hideTaskyHelp();
+    closeViewer();
+    setTimeout(() => {
+        modal.style.display = 'none';
+        const c = document.getElementById('mermaid-diagram-container');
+        if (c) c.innerHTML = '';
+    }, 250);
 }
-
-/**
- * Rewrite the hex colours a diagram definition hard-codes into theme tokens, in the SVG's own
- * <style> (classDef) and in the inline styles mermaid writes for `style` / `linkStyle`.
- *
- * Each known hex belongs to a family (success, accent, warning, danger, purple, cyan, neutral).
- * A stroke or text colour becomes the family token (text walked toward the node ink so it stays
- * readable on light themes); a SOLID fill becomes a tint of the family over the node colour, so
- * a "highlighted" node keeps its hue without turning into a block of white-on-colour; a dark
- * panel fill becomes the node colour; white text/strokes become the node ink/border.
- */
-const HEX_FAMILY: Record<string, string> = {
-    '10b981': 'success', '22c55e': 'success', '2ecc71': 'success', '14532d': 'success-deep', '134e4a': 'success-deep',
-    '3b82f6': 'info', '6366f1': 'accent', '5865f2': 'accent',
-    'f59e0b': 'warning', 'f97316': 'warning', 'eab308': 'warning',
-    'ef4444': 'danger',
-    '8b5cf6': 'purple', 'a855f7': 'purple', 'bc74ff': 'purple',
-    '06b6d4': 'cyan', '22d3ee': 'cyan',
-    '6b7280': 'muted', '475569': 'border', '94a3b8': 'muted',
-    '0d1117': 'panel', '0a1220': 'panel', '0a1628': 'panel', '1e293b': 'panel', '0a0e17': 'panel', '111827': 'panel',
-    'ffffff': 'ink', 'fff': 'ink', 'e6edf3': 'ink', 'd1fae5': 'ink', 'f1f5f9': 'ink', 'e2e8f0': 'ink',
-};
-const FAMILY_VAR: Record<string, string> = {
-    success: 'var(--bmm-success)', info: 'var(--bmm-info)', accent: 'var(--bmm-accent)', warning: 'var(--bmm-warning)',
-    danger: 'var(--bmm-danger)', purple: 'var(--bmm-purple)', cyan: 'var(--bmm-cyan)', 'success-deep': 'var(--bmm-success)',
-};
-function themedColour(prop: string, hex: string, alpha: string | undefined): string | null {
-    const fam = HEX_FAMILY[hex.toLowerCase()];
-    if (!fam) return null;
-    const node = 'var(--bmm-diagram-node)';
-    if (fam === 'ink') return prop === 'fill' ? node : prop === 'stroke' ? 'var(--bmm-diagram-node-border)' : 'var(--bmm-diagram-node-text)';
-    if (fam === 'panel') return prop === 'fill' || prop === 'background' || prop === 'background-color' ? node : 'var(--bmm-diagram-node-border)';
-    if (fam === 'muted') return 'var(--bmm-text-muted)';
-    if (fam === 'border') return prop === 'fill' ? node : 'var(--bmm-diagram-node-border)';
-    const v = FAMILY_VAR[fam];
-    if (prop === 'fill' || prop === 'background' || prop === 'background-color') {
-        const pct = alpha ? Math.max(6, Math.round(parseInt(alpha, 16) / 255 * 100)) : fam === 'success-deep' ? 16 : 22;
-        return `color-mix(in srgb, ${v} ${pct}%, ${node})`;
-    }
-    if (prop === 'color') return `color-mix(in srgb, ${v} 62%, var(--bmm-diagram-node-text))`;
-    return v;
-}
-function retintCss(css: string): string {
-    return css.replace(/(fill|stroke|color|background-color|background)\s*:\s*#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3})\b/gi, (m, prop, hex) => {
-        const base = hex.length === 8 ? hex.slice(0, 6) : hex;
-        const alpha = hex.length === 8 ? hex.slice(6) : undefined;
-        const out = themedColour(prop.toLowerCase(), base, alpha);
-        return out ? `${prop}:${out}` : m;
-    })
-        // The generic node colours mermaid derives from its defaults.
-        .replace(/#1e293b/gi, 'var(--bmm-diagram-node)')
-        .replace(/#0a0e17/gi, 'var(--bmm-bg-base)')
-        .replace(/#111827/gi, 'var(--bmm-bg-elevated)')
-        .replace(/#475569/gi, 'var(--bmm-diagram-node-border)')
-        .replace(/#f1f5f9/gi, 'var(--bmm-diagram-node-text)')
-        .replace(/#e2e8f0/gi, 'var(--bmm-diagram-node-text)')
-        .replace(/#94a3b8/gi, 'var(--bmm-text-secondary)');
-}
-export function retintDiagram(host: Element): void {
-    host.querySelectorAll('svg style').forEach((el) => { el.textContent = retintCss(el.textContent || ''); });
-    host.querySelectorAll<SVGElement | HTMLElement>('svg [style]').forEach((el) => {
-        const st = el.getAttribute('style') || '';
-        if (/#[0-9a-f]{3,8}/i.test(st)) el.setAttribute('style', retintCss(st));
-    });
-}
-
-/**
- * Robustly fix cluster (subgraph) label positioning.
- * Mermaid default centers labels in a small foreignObject.
- * We expand the foreignObject to match the cluster rect and align left.
- */
-function fixClusterLabels() {
-    const container = document.getElementById('mermaid-diagram-container');
-    const svg = container.querySelector('svg');
-    if (!svg) return;
-
-    // Create a dedicated top layer for labels if it doesn't exist
-    // We append it to the viewport group so it pans and zooms with the diagram
-    const viewport = svg.querySelector('.svg-pan-zoom_viewport');
-    if (!viewport) return; // Wait for pan-zoom to init
-
-    let topLayer = viewport.querySelector('.top-labels-layer');
-    if (!topLayer) {
-        topLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        topLayer.setAttribute('class', 'top-labels-layer');
-        viewport.appendChild(topLayer);
-    }
-
-    const clusters = svg.querySelectorAll('.cluster');
-    clusters.forEach(cluster => {
-        const rect = cluster.querySelector('rect.outer') || cluster.querySelector('rect');
-        const labelGroup = cluster.querySelector('.cluster-label');
-        if (!rect || !labelGroup) return;
-
-        const foreign = labelGroup.querySelector('foreignObject');
-        if (!foreign) return;
-
-        // Get rect bounds in local coordinate system
-        const rectBox = rect.getBBox();
-        
-        // Extract group ID and store it on the cluster element for easier access later
-        const rawId = cluster.getAttribute('id') || "";
-        const groupID = rawId.replace('cluster-', '');
-        cluster.setAttribute('data-cluster-id', groupID);
-
-        // Position the label at the top-left of its cluster
-        // We shift it up by 12px to give breathing room to nodes inside
-        foreign.setAttribute('x', rectBox.x);
-        foreign.setAttribute('y', rectBox.y - 12); 
-        foreign.setAttribute('width', Math.max(rectBox.width, 250)); 
-        foreign.setAttribute('height', 80); 
-
-        // Style the inner div for premium appearance
-        const innerDiv = foreign.querySelector('div');
-        if (innerDiv) {
-            innerDiv.style.width = '100%';
-            innerDiv.style.height = '100%';
-            innerDiv.style.display = 'flex';
-            innerDiv.style.flexDirection = 'column';
-            innerDiv.style.alignItems = 'flex-start';
-            innerDiv.style.justifyContent = 'flex-start';
-            innerDiv.style.paddingLeft = '18px';
-            innerDiv.style.paddingTop = '18px';
-            innerDiv.style.boxSizing = 'border-box';
-            innerDiv.style.textAlign = 'left';
-            innerDiv.style.background = 'transparent';
-            innerDiv.style.pointerEvents = 'none'; // Ensure label doesn't block cluster interaction
-        }
-        foreign.style.pointerEvents = 'none';
-
-
-        // Ensure the labelGroup itself doesn't have a conflicting transform
-        labelGroup.removeAttribute('transform');
-        labelGroup.style.transform = 'none';
-        
-        // Move to the top layer for correct Z-index
-        if (labelGroup.parentElement !== topLayer) {
-            topLayer.appendChild(labelGroup);
-        }
-    });
-}
-
-/**
- * Internal helper to find the SVG path associated with a label
- */
-// findPathForLabel is now integrated into the loop logic above for better sync
 
 /**
  * Show Tasky explanation bubble globally
@@ -619,190 +403,6 @@ export function hideTaskyHelp() {
 }
 
 /**
- * Close the modal
- */
-function closeDiagram() {
-    const modal = document.getElementById('modal-docs-diagram');
-    modal.classList.remove('active');
-    
-    // Use the global helper to hide Tasky
-    hideTaskyHelp();
-
-    if (panZoomInstance) {
-        panZoomInstance.destroy();
-        panZoomInstance = null;
-    }
-
-    // Hide overlay after animation
-    setTimeout(() => {
-        modal.style.display = 'none';
-        document.getElementById('mermaid-diagram-container').innerHTML = '';
-        currentDiagramID = null;
-    }, 250);
-}
-
-/**
- * Attach hover listeners to SVG elements (nodes, edges, clusters)
- */
-function attachNodeListeners(diagramID) {
-    const container = document.getElementById('mermaid-diagram-container');
-    const diagram = diagrams[diagramID];
-    const bubble = document.querySelector('.tasky-speech-bubble');
-    const eyes = document.getElementById('tasky-bubble-eyes');
-    const explanationEl = document.getElementById('tasky-explanation');
-
-    // 1. Class Sync (Ensure .edgeLabel container gets the semantic class from inner span)
-    const edgeLabels = Array.from(container.querySelectorAll('.edgeLabel'));
-    console.log(`[Docs] Syncing ${edgeLabels.length} edge labels...`);
-    edgeLabels.forEach(label => {
-        const innerSpan = label.querySelector('span[class^="label-"]');
-        if (innerSpan) {
-            const cls = Array.from(innerSpan.classList).find(c => c.startsWith('label-'));
-            if (cls) {
-                console.log(`[Docs] Label sync: found ${cls} adding to parent`);
-                label.classList.add(cls);
-                label.classList.add(`${cls}-parent`);
-            }
-        }
-    });
-
-    // 2. Nodes (Steps)
-    const nodes = container.querySelectorAll('.node');
-    nodes.forEach(node => {
-        const parts = node.id.split('-');
-        const cleanId = parts[1]?.toLowerCase().replace(/_/g, '-');
-        if (!cleanId) return;
-        
-        const isJumpLink = !!diagrams[cleanId];
-
-        node.addEventListener('mouseenter', () => {
-            if (isJumpLink) {
-                node.style.cursor = 'pointer';
-                const rect = node.querySelector('rect');
-                if (rect) {
-                    rect.style.strokeWidth = '3px';
-                    rect.style.filter = 'drop-shadow(0 0 8px var(--accent))';
-                }
-            }
-            showTaskyHelp(diagram.explanationPrefix + parts[1], node.querySelector('i')?.className);
-        });
-
-        node.addEventListener('mouseleave', () => {
-            node.style.cursor = 'default';
-            const rect = node.querySelector('rect');
-            if (rect) {
-                rect.style.strokeWidth = '1px';
-                rect.style.filter = 'none';
-            }
-            hideTaskyHelp();
-        });
-
-        // Click to drill-down / jump
-        node.addEventListener('click', () => {
-            if (isJumpLink) {
-                openDiagram(cleanId);
-            }
-        });
-    });
-
-    // 2. Edges (Arrows & Path interactions) - V3 Robust Class Matching
-    const edgePaths = Array.from(container.querySelectorAll('.edgePath'));
-    // edgeLabels already declared above in step 1
-
-    // Helper to extract IDs from class (e.g., "LS-A LE-B")
-    const getEdgePair = (el) => {
-        if (!el) return null;
-        const cls = Array.from(el.classList).join(' ');
-        const sourceMatch = cls.match(/LS-([^\s]+)/);
-        const targetMatch = cls.match(/LE-([^\s]+)/);
-        return sourceMatch && targetMatch ? `${sourceMatch[1]}-${targetMatch[1]}` : null;
-    };
-
-    edgePaths.forEach((pathGroup) => {
-        const pairKey = getEdgePair(pathGroup);
-        if (!pairKey) return;
-
-        const internalPath = pathGroup.querySelector('path');
-        if (!internalPath) return;
-
-        // Use a composite key: docs.diagram.edge.[DIAGRAM_ID].[SOURCE]_[TARGET]
-        const edgeKey = `docs.diagram.edge.${diagramID}.${pairKey.replace('-', '_')}`;
-        
-        // Fallback to label-based if specific key doesn't exist (backwards compatibility)
-        const label = edgeLabels.find(l => getEdgePair(l) === pairKey);
-        const labelSpan = label ? label.querySelector('span') : null;
-        const labelKeyFromData = labelSpan ? labelSpan.getAttribute('data-key') : null;
-        const labelText = label ? label.textContent.trim() : null;
-
-        pathGroup.addEventListener('mouseenter', () => {
-            // Priority: Node-based key > data-key from span > Label-based key
-            const exp = t(edgeKey);
-            if (exp && exp !== edgeKey) {
-                showTaskyHelp(edgeKey, 'network');
-            } else if (labelKeyFromData) {
-                showTaskyHelp(`docs.diagram.edge.${labelKeyFromData}`, 'network');
-            } else if (labelText) {
-                showTaskyHelp(`docs.diagram.edge.${labelText}`, 'network');
-            } else {
-                updateTaskyMascot('Tasky_yeux1.png');
-            }
-        });
-
-        pathGroup.addEventListener('mouseleave', hideTaskyHelp);
-    });
-
-    edgeLabels.forEach((edge) => {
-        const pairKey = getEdgePair(edge);
-        if (!pairKey) return;
-
-        const edgeKey = `docs.diagram.edge.${diagramID}.${pairKey.replace('-', '_')}`;
-        const labelText = edge.textContent.trim();
-
-        edge.addEventListener('mouseenter', () => {
-            const labelSpan = edge.querySelector('span');
-            const labelKeyFromData = labelSpan ? labelSpan.getAttribute('data-key') : null;
-            
-            const exp = t(edgeKey);
-            if (exp && exp !== edgeKey) {
-                showTaskyHelp(edgeKey, 'network');
-            } else if (labelKeyFromData) {
-                showTaskyHelp(`docs.diagram.edge.${labelKeyFromData}`, 'network');
-            } else if (labelText) {
-                showTaskyHelp(`docs.diagram.edge.${labelText}`, 'network');
-            }
-            updateTaskyMascot('Tasky_yeux1.png');
-        });
-        edge.addEventListener('mouseleave', hideTaskyHelp);
-    });
-
-    /**
-     * Internal helper to find the SVG path associated with a label
-     */
-    // findPathForLabel is now integrated into the loop logic above for better sync
-
-    // 3. Clusters (Logical Cards)
-    const clusters = container.querySelectorAll('.cluster');
-    clusters.forEach(cluster => {
-        // ID Priority: data attribute (set in fixClusterLabels) > SVG ID
-        let groupID = cluster.getAttribute('data-cluster-id');
-        
-        if (!groupID) {
-             const rawId = cluster.getAttribute('id') || "";
-             groupID = rawId.replace('cluster-', '');
-        }
-
-        if (groupID) {
-            cluster.addEventListener('mouseenter', () => {
-                // Try to find an icon class from any nested element (optional enhancement)
-                const iconClass = cluster.querySelector('i')?.className;
-                showTaskyHelp(`docs.diagram.cluster.${groupID}`, iconClass);
-            });
-            cluster.addEventListener('mouseleave', hideTaskyHelp);
-        }
-    });
-
-}
-/**
  * Navigation helper to jump to a specific FAQ or documentation section from outside the docs view
  * @param {string} targetKey - The translation key of the question/section (e.g. 'faq.qPat')
  */
@@ -862,171 +462,6 @@ function updateTaskyMascot(file) {
     currentMascotUrl = newUrl;
 }
 
-/**
- * Initialize svg-pan-zoom on the rendered SVG
- */
-async function initPanZoom() {
-    const svgElement = document.querySelector('#mermaid-diagram-container svg');
-    if (!svgElement) return;
-
-    // Loaded next to mermaid rather than at boot. A diagram that cannot be dragged is
-    // still a readable diagram, so a failure here leaves the SVG alone.
-    const svgPanZoom = await ensureSvgPanZoom().catch(() => null);
-    if (!svgPanZoom) return;
-
-    // Remove fixed attributes and styles set by Mermaid to allow pan-zoom control
-    svgElement.removeAttribute('width');
-    svgElement.removeAttribute('height');
-    svgElement.style.maxWidth = 'none';
-    svgElement.style.width = '100%';
-    svgElement.style.height = '100%';
-
-    // Clear existing
-    if (panZoomInstance) panZoomInstance.destroy();
-
-    panZoomInstance = svgPanZoom(svgElement, {
-        zoomEnabled: true,
-        controlIconsEnabled: false,
-        fit: true,
-        center: true,
-        minZoom: 0.05,
-        maxZoom: 20,
-        zoomScaleSensitivity: 0.4
-    });
-
-    // Force fit after a short delay to handle container transition
-    setTimeout(() => {
-        if (panZoomInstance) {
-            panZoomInstance.resize();
-            panZoomInstance.fit();
-            panZoomInstance.center();
-        }
-    }, 50);
-}
-
-/**
- * Reset zoom and pan
- */
-function resetZoom() {
-    if (panZoomInstance) {
-        panZoomInstance.reset();
-        panZoomInstance.fit();
-        panZoomInstance.center();
-    }
-}
-
-/**
- * Apply a glow effect to a specific node with retry logic for async rendering
- */
-function applyNodeHighlight(nodeId: string, retryCount = 0) {
-    const container = document.getElementById('mermaid-diagram-container');
-    if (!container) return;
-
-    // 1. Try to find by specific node class (to avoid matching links/arrows)
-    // We check for exact IDs, data-ids, and prefixed/suffixed Mermaid node patterns
-    let svgNode: HTMLElement | null = 
-                  container.querySelector(`.node[id="${nodeId}"]`) ||
-                  container.querySelector(`.node[data-id="${nodeId}"]`) ||
-                  container.querySelector(`.node[id*="-${nodeId}-"]`) || 
-                  container.querySelector(`.node[id$="-${nodeId}"]`) ||
-                  container.querySelector(`.mermaid-node[id*="${nodeId}"]`) ||
-                  container.querySelector(`#${nodeId}`); // Generic ID fallback if no node class found
-    
-    // 1b. Last resort: any ID that looks like it belongs to our node
-    if (!svgNode) {
-        svgNode = container.querySelector(`[id*="-${nodeId}-"]:not(.edgePath):not(.link)`) || 
-                  container.querySelector(`[id$="-${nodeId}"]:not(.edgePath):not(.link)`);
-    }
-    
-    // 2. Fallback: Search by text content inside node labels
-    if (!svgNode) {
-        const allNodes = Array.from(container.querySelectorAll('.node, .mermaid-node'));
-        for (const node of allNodes) {
-             // Look for node-content div which we use in our definitions
-            const contentDiv = node.querySelector('.node-content');
-            if (contentDiv && contentDiv.textContent?.toLowerCase().includes(nodeId.toLowerCase())) {
-                svgNode = node as HTMLElement;
-                break;
-            }
-            
-            // Generic label search
-            const label = node.querySelector('.nodeLabel, .label');
-            if (label && label.textContent?.toLowerCase().includes(nodeId.toLowerCase())) {
-                svgNode = node as HTMLElement;
-                break;
-            }
-        }
-    }
-
-    if (svgNode) {
-        console.log(`[Docs] Highlighting node: ${nodeId}`);
-        // Remove existing highlights
-        container.querySelectorAll('.node-highlight-glow').forEach(el => el.classList.remove('node-highlight-glow'));
-        
-        // Apply highlight classes
-        svgNode.classList.add('node-highlight-glow');
-        
-        // Ensure parent groups don't clip the filter (critical for SVG filters)
-        let pNode = svgNode.parentElement;
-        while (pNode && pNode.tagName !== 'svg') {
-            (pNode as any).style.overflow = 'visible';
-            pNode = pNode.parentElement;
-        }
-
-
-        // Show Tasky help
-        const diagram = diagrams[currentDiagramID];
-        if (diagram) {
-            // Try to extract clean nodeId from the actual element ID if possible
-            const parts = svgNode.id.split('-');
-            const actualId = parts.length > 2 ? parts[parts.length-2] : nodeId;
-            showTaskyHelp(diagram.explanationPrefix + actualId, svgNode.querySelector('i')?.className);
-        }
-    } else if (retryCount < 3) {
-        // Retry logic: Mermaid rendering can be slow or multi-stage
-        const delays = [200, 600, 1200];
-        console.log(`[Docs] Highlighting node ${nodeId} retry ${retryCount + 1}...`);
-        setTimeout(() => applyNodeHighlight(nodeId, retryCount + 1), delays[retryCount]);
-    } else {
-        console.warn(`[Docs] Node highlight failed after retries: ${nodeId}`);
-    }
-}
-
-// Inject Enhanced Glow CSS
-const dgStyle = document.createElement('style');
-dgStyle.textContent = `
-    .node-highlight-glow rect, 
-    .node-highlight-glow polygon, 
-    .node-highlight-glow circle, 
-    .node-highlight-glow ellipse,
-    .node-highlight-glow path {
-        stroke: var(--accent) !important;
-        stroke-width: 4px !important;
-        filter: drop-shadow(0 0 6px var(--accent)) !important;
-        animation: node-glow-pulse 1.5s infinite alternate ease-in-out !important;
-        paint-order: markers stroke fill !important;
-    }
-    
-    @keyframes node-glow-pulse {
-        0% { 
-            filter: drop-shadow(0 0 4px var(--accent)); 
-            stroke-width: 3px;
-            opacity: 0.85;
-        }
-        100% { 
-            filter: drop-shadow(0 0 12px var(--accent)); 
-            stroke-width: 5px;
-            opacity: 1;
-        }
-    }
-    
-    /* Ensure the highlight isn't clipped by the SVG container */
-    #mermaid-diagram-container svg { overflow: visible !important; }
-`;
-document.head.appendChild(dgStyle);
-
-
-// Auto-init on load if not module
 window.openDiagram = openDiagram;
 window.openDocs = openDiagram;
 window.initInteractiveDocs = initInteractiveDocs;
@@ -1034,5 +469,4 @@ window.showTaskyHelp = showTaskyHelp;
 window.hideTaskyHelp = hideTaskyHelp;
 window.openHelpTo = openHelpTo;
 
-// If imported as module, we need to export
 export default { initInteractiveDocs, openDiagram, showTaskyHelp, hideTaskyHelp, openHelpTo };

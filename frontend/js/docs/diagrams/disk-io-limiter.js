@@ -1,31 +1,53 @@
+// The resource governor (src-tauri/src/governor/), which replaced the old per-copy "disk I/O
+// limiter": every heavy operation takes a ticket of its kind (Deploy, Backup, Install, Extract,
+// Compress, Scan, Hash, Download, Image, Maintenance), gets a policy resolved for the disk it
+// touches (preset, then per-disk rules, then hard bounds), and copies through one rate limiter
+// per volume, checking the ticket for pause and cancel between chunks.
 export const diskIoLimiter = {
-    titleKey: 'docs.diagram.io.title',
-    definition: `
-graph TD
-    subgraph APP ["<div class='group-label' data-cluster-id='ENGINE'><i class='icon-build'></i> {{docs.diagram.cluster.ENGINE}}</div>"]
-        CONFIG["<div class='node-content'><i class='icon-settings'></i> {{docs.diagram.io.node.CONFIG}}</div>"]
-        LIMITER["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.io.node.LIMITER}}</div>"]
-    end
-    subgraph THREAD ["<div class='group-label' data-cluster-id='PROC'><i class='icon-flow'></i> {{docs.diagram.cluster.PROC}}</div>"]
-        READ_CHUNK["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.io.node.READ_CHUNK}}</div>"]
-        SLEEP["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.io.node.SLEEP}}</div>"]
-    end
-    subgraph DISK ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-disk'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        WRITE_CHUNK["<div class='node-content'><i class='icon-add'></i> {{docs.diagram.io.node.WRITE_CHUNK}}</div>"]
-    end
-    CONFIG["<div class='node-content'><i class='icon-settings'></i> {{docs.diagram.io.node.CONFIG}}</div>"] -- "<span class='label-info' data-key='apply'>{{docs.diagram.label.apply}}</span>" --> LIMITER["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.io.node.LIMITER}}</div>"]
-    LIMITER -- "<span class='label-info' data-key='start'>{{docs.diagram.label.start}}</span>" --> READ_CHUNK["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.io.node.READ_CHUNK}}</div>"]
-    READ_CHUNK -- "<span class='label-info' data-key='calc'>{{docs.diagram.label.calc}}</span>" --> SLEEP["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.io.node.SLEEP}}</div>"]
-    SLEEP -- "<span class='label-warning' data-key='wait'>{{docs.diagram.label.wait}}</span>" --> WRITE_CHUNK["<div class='node-content'><i class='icon-add'></i> {{docs.diagram.io.node.WRITE_CHUNK}}</div>"]
-    WRITE_CHUNK -- "<span class='label-success' data-key='loop'>{{docs.diagram.label.loop}}</span>" --> READ_CHUNK
-
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 2 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 3 stroke:#f59e0b,stroke-width:2px;
-    linkStyle 4 stroke:#10b981,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.io.node.'
+    id: 'disk-io-limiter',
+    i18n: 'docs.diagram.disk-io-limiter',
+    category: 'profiles',
+    dir: 'TB',
+    article: 'disk-io-limiter',
+    related: ['mod-activation', 'cache-management', 'faq-disk-full', 'perf-monitoring'],
+    groups: [
+        { id: 'SET', dir: 'LR' },
+        { id: 'GOV' },
+        { id: 'COPY' },
+    ],
+    nodes: [
+        { id: 'PRESET', kind: 'ui', group: 'SET', icon: 'icon-speed', refs: ['src-tauri/src/commands/resources.rs › resources_set_preset', 'src-tauri/src/governor/config.rs › Preset', 'src-tauri/src/commands/storage_presets.rs › storage_preset_apply'] },
+        { id: 'RULES', kind: 'ui', group: 'SET', icon: 'icon-grid', refs: ['src-tauri/src/commands/resources_rules.rs › resources_set_rule', 'src-tauri/src/commands/disk.rs › set_disk_limit', 'src-tauri/src/commands/disk.rs › benchmark_disk'] },
+        { id: 'APP_MODE', kind: 'ext', group: 'SET', icon: 'icon-app', refs: ['src-tauri/src/governor/game_mode.rs › effective_preset', 'src-tauri/src/governor/game_mode.rs › treatment', 'src-tauri/src/governor/procs.rs'] },
+        { id: 'CONFIG', kind: 'data', group: 'SET', icon: 'icon-database', refs: ['src-tauri/src/governor/config.rs › ResourcesConfig', 'src-tauri/src/governor/runtime.rs › configure'] },
+        { id: 'TICKET', kind: 'rust', group: 'GOV', icon: 'icon-list', refs: ['src-tauri/src/governor/runtime.rs › begin', 'src-tauri/src/governor/queue.rs › Ticket', 'src-tauri/src/governor/config.rs › OpKind'] },
+        { id: 'RESOLVE', kind: 'rust', group: 'GOV', icon: 'icon-scales', refs: ['src-tauri/src/governor/runtime.rs › policy_for', 'src-tauri/src/governor/config.rs › resolve', 'src-tauri/src/governor/config.rs › clamp'] },
+        { id: 'POOL', kind: 'rust', group: 'GOV', icon: 'icon-cpu', refs: ['src-tauri/src/governor/runtime.rs › pool', 'src-tauri/src/governor/config.rs › pool_threads', 'src-tauri/src/fs_utils.rs › run_deploy_parallel'] },
+        { id: 'FULL_SPEED', kind: 'decision', group: 'COPY', refs: ['src-tauri/src/fs_utils.rs › legacy_full_speed', 'src-tauri/src/fs_utils.rs › copy_file_governed'] },
+        { id: 'OS_COPY', kind: 'ext', group: 'COPY', icon: 'icon-zap', refs: ['src-tauri/src/fs_utils.rs › copy_file_governed'] },
+        { id: 'CHUNKS', kind: 'rust', group: 'COPY', icon: 'icon-stream', refs: ['src-tauri/src/governor/io.rs › copy_file_governed', 'src-tauri/src/governor/win.rs'] },
+        { id: 'LIMITER', kind: 'rust', group: 'COPY', icon: 'icon-meter', refs: ['src-tauri/src/governor/io.rs › RateLimiter', 'src-tauri/src/governor/io.rs › limiter_for', 'src-tauri/src/governor/config.rs › rate_is_op_specific'] },
+        { id: 'CHECKPOINT', kind: 'decision', group: 'COPY', refs: ['src-tauri/src/governor/queue.rs › checkpoint', 'src-tauri/src/commands/resources.rs › resources_queue'] },
+        { id: 'DONE', kind: 'outcome', group: 'COPY', icon: 'icon-check', refs: ['src-tauri/src/governor/io.rs › copy_file_governed'] },
+        { id: 'CANCELLED', kind: 'outcome', group: 'COPY', icon: 'icon-stop', refs: ['src-tauri/src/governor/io.rs › copy_file_governed', 'src-tauri/src/governor/io.rs › CopyError'] },
+    ],
+    edges: [
+        { from: 'PRESET', to: 'CONFIG', label: '~writes' },
+        { from: 'RULES', to: 'CONFIG', label: '~writes' },
+        { from: 'APP_MODE', to: 'RESOLVE', label: 'appPreset', tone: 'warn', dashed: true },
+        { from: 'APP_MODE', to: 'TICKET', label: 'pausesBg', tone: 'warn', dashed: true },
+        { from: 'CONFIG', to: 'RESOLVE', label: '~reads' },
+        { from: 'TICKET', to: 'RESOLVE', thick: true },
+        { from: 'RESOLVE', to: 'POOL', label: 'threads', tone: 'info' },
+        { from: 'RESOLVE', to: 'FULL_SPEED', label: '~perFile', thick: true },
+        { from: 'FULL_SPEED', to: 'OS_COPY', label: '~yes', tone: 'ok' },
+        { from: 'FULL_SPEED', to: 'CHUNKS', label: '~no', tone: 'info', thick: true },
+        { from: 'CHUNKS', to: 'LIMITER', label: 'perChunk', thick: true },
+        { from: 'LIMITER', to: 'CHECKPOINT', thick: true },
+        { from: 'CHECKPOINT', to: 'CHUNKS', label: '~next', tone: 'ok' },
+        { from: 'CHECKPOINT', to: 'CANCELLED', label: '~cancel', tone: 'danger', dashed: true },
+        { from: 'CHECKPOINT', to: 'DONE', label: 'eof', tone: 'ok', thick: true },
+        { from: 'OS_COPY', to: 'DONE' },
+    ],
 };
 //# sourceMappingURL=disk-io-limiter.js.map

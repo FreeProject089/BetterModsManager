@@ -38,6 +38,8 @@ export interface CustomTutorialDoc {
      *  be sanitised before it could go near innerHTML; a name the app resolves itself has
      *  nothing to sanitise. */
     icon?: string;
+    /** 1 = assumes nothing, 2 = the basics, 3 = a working setup. Shown in the hub. */
+    level?: 1 | 2 | 3;
     parts: Array<{
         id: string;
         title?: LText;
@@ -49,6 +51,8 @@ export interface CustomTutorialDoc {
             selector?: string;
             selectors?: string[];
             optional?: boolean;
+            /** false = outline the target without the spotlight dim. */
+            dim?: boolean;
             action?: { event: string; desc?: LText };
             /** A condition to satisfy before Next unlocks. `kind:'action'` names one of the
              *  app's own moments; the others are watched here. */
@@ -142,6 +146,8 @@ export function toDef(doc: CustomTutorialDoc): TutorialDef {
             ? renderPackIcon(doc.icon as string, 22)
             : '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
         color: /^#[0-9a-fA-F]{3,8}$/.test(doc.color || '') ? (doc.color as string) : 'var(--accent)',
+        category: 'mine',
+        ...(doc.level === 1 || doc.level === 2 || doc.level === 3 ? { level: doc.level } : {}),
         parts: doc.parts.map((p, pi) => ({
             id: p.id || `p${pi}`,
             title_key: put(`p${pi}.title`, p.title, p.id || `Part ${pi + 1}`),
@@ -153,6 +159,7 @@ export function toDef(doc: CustomTutorialDoc): TutorialDef {
                 ...(st.selector ? { selector: st.selector } : {}),
                 ...(st.selectors?.length ? { selectors: st.selectors } : {}),
                 ...(st.optional ? { optional: true } : {}),
+                ...(st.dim === false ? { dim: false } : {}),
                 // `wait` first, `action` as the older spelling. A watched condition is handed
                 // to the engine as an ordinary event name — it cannot tell the difference, and
                 // that is what keeps one engine running both kinds of tutorial.
@@ -371,6 +378,7 @@ export function forkBuiltin(def: TutorialDef, newId: string): CustomTutorialDoc 
         title: both(def.title_key) || { en: newId },
         desc: both(def.desc_key),
         color: /^#/.test(def.color) ? def.color : undefined,
+        ...(def.level ? { level: def.level } : {}),
         parts: def.parts.map((p) => ({
             id: p.id,
             title: both(p.title_key),
@@ -381,6 +389,8 @@ export function forkBuiltin(def: TutorialDef, newId: string): CustomTutorialDoc 
                 nav: st.nav,
                 selector: st.selector,
                 optional: (st as { optional?: boolean }).optional,
+                ...(st.selectors?.length ? { selectors: st.selectors } : {}),
+                ...(st.dim === false ? { dim: false } : {}),
                 // The built-in's action becomes a `wait` of kind 'action' — the same
                 // vocabulary a hand-written step uses, so the copy is editable in the
                 // creator rather than carrying a shape only the engine understands.

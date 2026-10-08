@@ -11,6 +11,7 @@
  * - Live language switching via langChanged event
  */
 
+import { resolveTargets, isBareName } from './tutorial-target.js';
 import { t } from '../core/i18n.js';
 import { escAttr } from '../core/utils.js';
 import { claimDockSpace, releaseDockSpace, makeDock } from './dock-space.js';
@@ -80,7 +81,7 @@ let _demoPrevActive: string | null = null;
 // actions and touches no data, so it needs no sandbox — and creating the 🎓 profile
 // would make a two-minute look-around mutate the profile list, which is exactly the
 // impression a tour must not give. Do not "fix" this by adding it.
-const DEMO_TUTORIALS = new Set(['basics', 'advanced', 'other']);
+const DEMO_TUTORIALS = new Set(['basics', 'advanced', 'other', 'order']);
 
 // Persisted marker so a crash mid-tutorial never strands the example profile:
 // set when the demo is created, cleared on cleanup, checked at next app boot.
@@ -307,8 +308,7 @@ function _cleanup(): void {
  *  button so its cleanup runs. No-op if the modal isn't open. */
 function _closeStepModal(step: TutorialStep | undefined): void {
     if (!step?.modal_selector) return;
-    const el = document.getElementById(step.modal_selector)
-        || document.querySelector(`.${step.modal_selector}`);
+    const el = resolveTargets(step.modal_selector)[0] || null;
     const overlay = el?.closest('.modal-overlay, .modal-generic-overlay') as HTMLElement | null;
     if (overlay && overlay.classList.contains('open')) {
         const closeBtn = overlay.querySelector('[data-close], .modal-close') as HTMLElement | null;
@@ -1043,8 +1043,7 @@ function _advanceStep(step: TutorialStep): void {
 /** True if the step's modal is open AND the user has typed/picked something in it. */
 function _isModalDirty(step: TutorialStep | undefined): boolean {
     if (!step?.modal_selector) return false;
-    const el = document.getElementById(step.modal_selector)
-        || document.querySelector(`.${step.modal_selector}`);
+    const el = resolveTargets(step.modal_selector)[0] || null;
     const overlay = el?.closest('.modal-overlay, .modal-generic-overlay') as HTMLElement | null;
     if (!overlay || !overlay.classList.contains('open')) return false;
     const inputs = overlay.querySelectorAll('input, textarea, select');
@@ -1200,7 +1199,7 @@ function _startModalPoll(modalSelector: string, fields?: { sel: string; key: str
         attempts++;
         if (attempts > 120) { clearInterval(_modalPollInterval!); _modalPollInterval = null; return; } // 30s timeout
 
-        const target = document.getElementById(modalSelector) || document.querySelector(`.${modalSelector}`);
+        const target = (resolveTargets(modalSelector)[0] || null);
         if (target && _isElementVisible(target as HTMLElement)) {
             clearInterval(_modalPollInterval!);
             _modalPollInterval = null;
@@ -1223,6 +1222,8 @@ const _VIEW_ALIAS: Record<string, string> = { modlists: 'modlist', mods: 'librar
 // When true, highlights are drawn as plain numbered rings (no spotlight dim) — used
 // for "field guide" multi-field highlighting where the whole form must stay visible.
 let _suppressDim = false;
+/** A ring with no spotlight and no number badge: a step declared `dim: false`. */
+let _outlineOnly = false;
 
 /** Highlight + number every field in a guide (no dim, so the form stays readable). */
 function _highlightFields(fields: { sel: string; key: string }[]): void {
@@ -1282,9 +1283,9 @@ function _resolveFieldEl(sel: string): HTMLElement | null {
     // No `[id="…"]` fallback: getElementById already returns the first element with
     // that id, so when it is null the attribute selector cannot match either — and
     // an unescaped id containing a quote would make it throw.
-    let target: Element | null = document.getElementById(sel);
+    let target: Element | null = isBareName(sel) ? document.getElementById(sel) : null;
     if (!target) {
-        const all = Array.from(document.querySelectorAll(`.${sel}`));
+        const all = resolveTargets(sel);
         // Prefer a candidate that is actually rendered. Several screens reuse a
         // class name, and picking the copy inside a closed modal over the one the
         // user is looking at is how a ring ends up pointing at nothing.
@@ -1420,7 +1421,11 @@ function _highlightElements(step: TutorialStep): void {
         ...(step.selectors ?? []),
     ];
     if (selectors.length) {
-        selectors.forEach((sel, idx) => _highlightElement(sel, idx));
+        // `dim: false` — an outline without the spotlight, for a control the reader should
+        // see in its surroundings (the creator's "Outline only").
+        _outlineOnly = step.dim === false;
+        try { selectors.forEach((sel, idx) => _highlightElement(sel, idx)); }
+        finally { _outlineOnly = false; }
         return;
     }
     // Every action MUST point somewhere. If a step asks the user to act but declares
@@ -1457,12 +1462,9 @@ function _preferDemo(matches: Element[]): Element | null {
 }
 
 function _highlightElement(selector: string, idx: number = 0): void {
-    let target: Element | null = document.getElementById(selector)
-        || document.querySelector(`[id="${selector}"]`);
-    if (!target) {
-        // Class match — there may be many (one per mod/pack); prefer the demo entity's.
-        target = _preferDemo(Array.from(document.querySelectorAll(`.${selector}`)));
-    }
+    // A bare name is an id, else a class; anything else is CSS (tutorial-target.ts). There may
+    // be many matches (one per mod/pack): prefer the demo entity's.
+    let target: Element | null = _preferDemo(resolveTargets(selector));
     target = _resolveCustomSelect(target) ?? null;
     if (target) _drawHighlight(target, idx);
 }
@@ -1533,7 +1535,7 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     // The primary target (idx 0) carries the spotlight dim: a huge soft box-shadow
     // darkens everything EXCEPT the cut-out, so the eye lands on the right spot.
     // Secondary targets get just the coloured ring (no extra dim, to avoid stacking).
-    const dim = (idx === 0 && !_suppressDim)
+    const dim = (idx === 0 && !_suppressDim && !_outlineOnly)
         ? `0 0 0 3px ${tutColorHex}40, 0 0 0 9999px rgba(8,11,18,0.60), 0 0 34px ${tutColorHex}99`
         : `0 0 0 3px ${tutColorHex}33, 0 0 26px ${tutColorHex}80`;
     const layer = inModal ? null : _hlLayer();

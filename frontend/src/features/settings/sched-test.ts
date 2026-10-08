@@ -17,6 +17,10 @@ export const QUIET_TEST_ACTIONS: ReadonlySet<string> = new Set([
     'var.set', 'var.clear', 'math.set', 'var.ternary', 'rule.table', 'text.extract', 'data.validate',
     'list.set', 'list.push', 'list.clear', 'map.set', 'map.get', 'map.clear', 'id.of',
     'app.buildInfo', 'library.counts', 'perf.diskSpace', 'wait.http',
+    // Laya, on this PC: they read and label, nothing is changed (the budget and the gate still
+    // apply). Not here: `ai.classify_mod` with `apply` (writes tags), `ai.explain_crash` (may
+    // use a remote writer), `ai.crash_label` (moves the task's « new crashes » marker on).
+    'ai.status', 'ai.classify', 'ai.run_task', 'ai.ask', 'ai.suggest_mod_metadata', 'ai.library_check', 'ai.triage_report',
 ]);
 
 /**
@@ -30,6 +34,7 @@ export function testNeedsConfirm(step: { kind?: string; action?: { type?: string
     if (step.kind !== 'action') return true;
     const type = String(step.action?.type || '');
     if (type === 'http.request') return String(step.action?.params?.method || 'GET').toUpperCase() !== 'GET';
+    if (type === 'ai.classify_mod') return step.action?.params?.apply === true;
     return !QUIET_TEST_ACTIONS.has(type);
 }
 

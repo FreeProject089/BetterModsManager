@@ -21,6 +21,12 @@
  *    chose one of your own branches".
  *
  *  · **The `aiLabel` condition**: "the label is X with p ≥ t", read from what `ai.classify` left.
+ *
+ * The other Laya steps (`ai.classify_mod`, `ai.library_check`, `ai.crash_label`,
+ * `ai.triage_report`, `ai.run_task`, `ai.status`) answer with words from fixed lists or the
+ * user's own tags and labels, re-checked in sched-laya.ts: not tainted. `ai.explain_crash` writes
+ * free text from a writing model: tainted like `ai.ask`. Every one of them except `ai.status`
+ * (which runs no model) takes a step of the run's budget.
  */
 
 export const AI_MAX_STEPS = 20;
@@ -48,6 +54,8 @@ export const AI_TEXT_FIELDS: Record<string, readonly string[]> = {
     'map.set': ['key', 'value'],
     'text.extract': ['source'],
     'ai.classify': ['text'],
+    'ai.run_task': ['text'],
+    'ai.triage_report': ['text'],
     'ai.ask': ['question'],
 };
 
@@ -57,6 +65,12 @@ export const AI_TEXT_CONDITIONS: Record<string, readonly string[]> = {
     value: ['source', 'value'],
     enumIs: ['source', 'value'],
     aiLabel: ['var', 'label', 'min'],
+    // Laya's other conditions read this run's variables only: a reference is compared, never opened.
+    aiScore: ['var', 'label', 'op', 'value'],
+    aiAbstained: ['var'],
+    crashCause: ['field', 'value', 'min', 'scope'],
+    aiLibraryCount: ['kind', 'op', 'value'],
+    modAiTag: ['id', 'tag'],
 };
 
 /** The parameters of each AI step that name where a result goes. */

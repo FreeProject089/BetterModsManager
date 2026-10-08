@@ -341,8 +341,8 @@
   },
   "src/commands/ai_ops.rs": {
     "spawn_blocking": {
-      "count": 1,
-      "why": "one scheduled-task Laya classification: one capped inference behind a single global slot, 30 per minute for all tasks, a 30 s timeout and the AI guard (refused in game mode)"
+      "count": 3,
+      "why": "scheduled-task Laya steps, each behind the AI guard (master switch, kill switch, refused in game mode), the per-minute budget for all tasks (30), a single global engine slot and a 30 s timeout: one capped classification of a text (ai.classify), one mod classified from its own files (ai.classify_mod: one capped inference), and the library check suggestions (ai.library_check: at most 10 untagged mods, one capped inference each, stopped inside the same 30 s run timeout); crash labels, triage and explain reuse ai_assist.rs jobs"
     }
   },
   "src/commands/mod_op_progress_tests.rs": {

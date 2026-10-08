@@ -9,7 +9,8 @@ page is the short threat model: what can go wrong, and what stops it.
 | Surface | Who can call it | Where the text goes |
 |---|---|---|
 | Suggest, Ask Laya, report check (in the app) | You, by a click | The built-in Laya; your laya-serve; a writing model you set up |
-| Scheduled tasks (`ai.classify`, `ai.ask`, `ai.suggest_mod_metadata`) | A task you granted **Laya (AI)** | The built-in Laya or your laya-serve (never BetterCommunity) |
+| Scheduled tasks (`ai.classify`, `ai.run_task`, `ai.classify_mod`, `ai.library_check`, `ai.crash_label`, `ai.triage_report`, `ai.ask`, `ai.suggest_mod_metadata`) | A task you granted **Laya (AI)** | The built-in Laya or your laya-serve (never BetterCommunity) |
+| Scheduled task `ai.explain_crash` | A task you granted **Laya (AI)** (and **network** for a remote writer) | Your writing model; a remote one only when the step allows it |
 | [Local Laya API](doc-page:features/ai-api) | A program on this PC with the token | The built-in Laya only |
 | CLI and MCP (`bmm ai-*`, `bmm_ai_*`) | You, or an AI client you connected | Same as the app |
 | BetterCommunity AI (site moderation, smart search, Discord bot) | The site and its members | The site's own provider |
@@ -27,11 +28,13 @@ must be written in the sources, word for word; `javascript:`, `data:` and `ms-�
 commands (`Remove-Item`, `certutil`, `mshta`, `rundll32`, `Invoke-…`, `schtasks`…) are always
 refused.
 
-**An answer used as a command.** In a task, the free text from `ai.ask` and
-`ai.suggest_mod_metadata` is marked untrusted, and so is any copy of it. It may go into a message,
+**An answer used as a command.** In a task, the free text from `ai.ask`,
+`ai.suggest_mod_metadata` and `ai.explain_crash` is marked untrusted, and so is any copy of it. It may go into a message,
 a log line or a file's content. Anywhere else (a program, a script, a path, an address, a header,
 a condition that looks at a file) the step fails. A label from `ai.classify` is always one of the
-task's own labels or `none`, whatever the engine answers.
+task's own labels or `none`, whatever the engine answers; a mod's tags are the user's own tags,
+a crash cause and a report kind come from fixed lists, each checked again before it reaches a
+variable.
 
 **A web page or another program reaching the local API.** It listens on 127.0.0.1 only. A request
 whose `Host` is not this server is refused (DNS rebinding), a request from a web page is refused

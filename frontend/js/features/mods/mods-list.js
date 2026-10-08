@@ -16,6 +16,7 @@ import { runActivationJob } from '../../core/activation-jobs.js';
 import { applyCardActivity } from './mods-job-anim.js';
 import { uiIcon } from '../../ui/icons.js';
 import { askMissingHash } from './integrity-report.js';
+import { cardTabIndex, paintCard, syncSelection } from './lib-select.js';
 /**
  * One mod (and, for a disable, the mods it takes with it) through the app's activation queue
  * (core/activation-jobs.ts) instead of a bare invoke: the work belongs to the app, not to this
@@ -138,6 +139,54 @@ export function getFilteredMods() {
     });
     return filtered;
 }
+/** The mods shown, in display order (the list's own cached filter). */
+export function visibleMods() {
+    if (!ghostFilteredMods.length)
+        ghostFilteredMods = getFilteredMods();
+    return ghostFilteredMods;
+}
+/** "12 of 240" beside the filters while a search or a filter hides some mods. */
+function updateResults() {
+    const el = document.getElementById('lib-results');
+    if (!el)
+        return;
+    const total = (S.allMods || []).length;
+    const shown = ghostFilteredMods.length;
+    const filtering = !!S.searchQuery || (S.currentFilter && S.currentFilter !== 'all') || (S.currentTagFilter && S.currentTagFilter !== 'all');
+    el.textContent = filtering && total ? t('lib.results', { n: String(shown), m: String(total) }) : '';
+}
+/**
+ * Bring one mod into view in the virtual list and return its card (the keyboard's arrows,
+ * lib-select.ts). The list draws only the rows near the scroll position, so a mod further
+ * down has no card until the container has scrolled to its slot.
+ */
+export function revealMod(id) {
+    const list = document.getElementById('mod-list');
+    const viewport = document.getElementById('mod-list-viewport');
+    const sc = document.querySelector('.content-area');
+    if (!list || !viewport || !sc)
+        return null;
+    if (!ghostFilteredMods.length)
+        ghostFilteredMods = getFilteredMods();
+    const index = ghostFilteredMods.findIndex((m) => m.id === id);
+    if (index < 0)
+        return null;
+    const rowHeight = S.isCompact ? CARD_HEIGHTS.compact : CARD_HEIGHTS.standard;
+    const listTop = list.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+    const top = listTop + index * rowHeight;
+    // Leave room for the pinned header when it is on.
+    const shell = document.querySelector('#view-library.lib-sticky-header .lib-header-shell');
+    const pad = shell ? shell.getBoundingClientRect().bottom - sc.getBoundingClientRect().top : 0;
+    if (top < sc.scrollTop + pad)
+        sc.scrollTop = Math.max(0, top - pad - 8);
+    else if (top + rowHeight > sc.scrollTop + sc.clientHeight)
+        sc.scrollTop = top + rowHeight - sc.clientHeight + 8;
+    renderModList(false);
+    for (const c of Array.from(viewport.children))
+        if (c.dataset.id === id)
+            return c;
+    return null;
+}
 export async function renderModList(force = false) {
     const list = document.getElementById('mod-list');
     const viewport = document.getElementById('mod-list-viewport');
@@ -146,33 +195,41 @@ export async function renderModList(force = false) {
     const scrollContainer = document.querySelector('.content-area');
     if (!list || !viewport || !empty || !scrollContainer)
         return;
+    // The first answer is in: the placeholder rows give way to the list or an empty state.
+    const loading = document.getElementById('lib-loading');
+    if (loading && !loading.hidden)
+        loading.hidden = true;
+    const filteredEmpty = document.getElementById('empty-mods-filtered');
     // Only re-filter when necessary to improve performance
     if (force || ghostFilteredMods.length === 0) {
         ghostFilteredMods = getFilteredMods();
+        updateResults();
+        syncSelection();
     }
     const modCount = ghostFilteredMods.length;
     if (modCount === 0) {
         viewport.innerHTML = '';
         if (spacer)
             spacer.style.height = '0px';
+        lastStartIndex = -1;
+        lastEndIndex = -1;
         const hasProfile = !!S.cachedActiveProfileId;
         const noProfileEmpty = document.getElementById('empty-library-no-profile');
-        if (!hasProfile) {
-            if (noProfileEmpty)
-                noProfileEmpty.style.display = 'block';
-            empty.style.display = 'none';
-        }
-        else {
-            if (noProfileEmpty)
-                noProfileEmpty.style.display = 'none';
-            empty.style.display = 'block';
-        }
+        // Mods exist but the search / filters hide them all: say that, not "add your first mod".
+        const hidden = hasProfile && (S.allMods || []).length > 0;
+        if (noProfileEmpty)
+            noProfileEmpty.style.display = hasProfile ? 'none' : 'block';
+        empty.style.display = hasProfile && !hidden ? 'block' : 'none';
+        if (filteredEmpty)
+            filteredEmpty.style.display = hidden ? 'block' : 'none';
         return;
     }
     const noProfileEmpty = document.getElementById('empty-library-no-profile');
     if (noProfileEmpty)
         noProfileEmpty.style.display = 'none';
     empty.style.display = 'none';
+    if (filteredEmpty)
+        filteredEmpty.style.display = 'none';
     const rowHeight = S.isCompact ? CARD_HEIGHTS.compact : CARD_HEIGHTS.standard;
     const scrollTop = scrollContainer.scrollTop;
     const containerHeight = scrollContainer.clientHeight || 800;
@@ -240,6 +297,9 @@ export function createModCard(mod) {
     const card = document.createElement('div');
     card.className = `mod-card ${mod.enabled ? 'enabled' : 'disabled'} ${S.selectedModId === mod.id ? 'selected' : ''}`;
     card.dataset.id = mod.id;
+    // Keyboard: one card in the Tab order, arrows move between them (lib-select.ts).
+    card.tabIndex = cardTabIndex(mod.id, ghostFilteredMods[0]?.id || null);
+    card.setAttribute('aria-label', mod.name || mod.id);
     const ctx = {
         selectedModId: S.selectedModId,
         conflictCache: S.conflictCache,
@@ -247,6 +307,7 @@ export function createModCard(mod) {
         userTags: S.userTags
     };
     card.innerHTML = getModCardHTML(mod, ctx);
+    paintCard(card);
     // Installed from a repo with no hashes. Shown on the card rather than only in the details
     // panel: the whole point of persisting the flag is that it stays visible afterwards, and a
     // fact you have to go looking for is a fact nobody sees.
@@ -710,10 +771,9 @@ export function updateCardState(card, mod) {
         if (!isProcessing && mod.enabled) {
             if (!badge) {
                 badge = document.createElement('span');
-                badge.className = 'badge badge-accent';
-                badge.style.cssText = 'font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)';
-                badge.onmouseenter = () => window.showTaskyHelp('lib.activationOrderTip', 'help');
-                badge.onmouseleave = () => window.hideTaskyHelp();
+                badge.className = 'badge badge-accent mod-order-badge';
+                badge.dataset.tasky = 'mod.activationOrderTip';
+                badge.dataset.taskyIcon = 'help';
                 const nameEl = nameRow.querySelector('.mod-name');
                 if (nameEl && nameEl.nextSibling) {
                     nameRow.insertBefore(badge, nameEl.nextSibling);
@@ -776,7 +836,7 @@ export function updateCardState(card, mod) {
                     return '';
                 return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
             }).join('');
-            const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" ${actAttrsStop('showModTagsModal', mod.id)} style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+            const extraTagsCount = mod.tags.length > 3 ? `<button type="button" ${actAttrsStop('showModTagsModal', mod.id)} class="btn btn-ghost mod-tags-more">+${mod.tags.length - 3}</button>` : '';
             tagsContainer.innerHTML = visibleTags + extraTagsCount;
         }
         else {

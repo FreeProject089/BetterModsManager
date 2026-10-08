@@ -15,8 +15,11 @@ import {
   updateBadge,
   updateSubtitle,
   updateToggleAllBtn,
-  ensureModCancelContextMenu
+  ensureModCancelContextMenu,
+  revealMod,
+  visibleMods
 } from './mods-list.js';
+import { initLibSelect } from './lib-select.js';
 import { 
   checkAllConflicts, 
   restoreConflictCache 
@@ -38,6 +41,7 @@ import {
 import { openQuickApplyModal } from './modpack-creator.js';
 import { initLibOrder } from './lib-order.js';
 import { initCardActivityAnimation } from './mods-job-anim.js';
+import { setAddModSource, takeDrop } from './add-mod.js';
 import { uiIcon } from '../../ui/icons.js';
 
 const S = new Proxy(appState.state, {
@@ -73,6 +77,23 @@ export async function initMods() {
   ensureModCancelContextMenu();
   initCardActivityAnimation(updateCardState);
   initLibOrder(toast);
+  // Selection mode, bulk enable / disable and the list's keyboard (lib-select.ts).
+  initLibSelect({
+    visible: () => visibleMods(),
+    reveal: (id) => revealMod(id),
+    redraw: () => { renderModList(true); },
+    open: (id) => selectMod(id),
+  });
+  // "No mod matches": one button puts the search and every filter back to "all".
+  document.getElementById('btn-lib-clear-filters')?.addEventListener('click', () => {
+    const search = document.getElementById('mod-search') as HTMLInputElement | null;
+    if (search && search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+    for (const id of ['mod-status-filter', 'mod-tag-filter']) {
+      const sel = document.getElementById(id) as HTMLSelectElement | null;
+      if (sel && sel.value !== 'all') { sel.value = 'all'; sel.dispatchEvent(new Event('change')); }
+    }
+    renderModList(true);
+  });
 
   // --- Core Listeners ---
   document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
@@ -104,9 +125,8 @@ export async function initMods() {
   document.getElementById('btn-pick-mod-folder')?.addEventListener('click', async () => {
     try {
       const folder = await pickFolder();
-      if (folder) {
-        document.getElementById('mod-folder').value = folder;
-      }
+      // The path, a name and version guessed from it, and the preview (add-mod.ts).
+      if (folder) setAddModSource(folder);
     } catch (error) {
       console.error('Error picking folder:', error);
       toast((window.t ? window.t('common.error') : 'Error'), 'error');
@@ -117,15 +137,7 @@ export async function initMods() {
   document.getElementById('btn-pick-mod-archive')?.addEventListener('click', async () => {
     try {
       const file = await pickFile([{ name: 'Mod archive', extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz'] }]);
-      if (file) {
-        document.getElementById('mod-folder').value = file;
-        // Auto-fill the name from the archive filename (strip path + extension) if empty
-        const nameEl = document.getElementById('mod-name') as HTMLInputElement | null;
-        if (nameEl && !nameEl.value.trim()) {
-          const base = (file.split(/[\\/]/).pop() || '').replace(/\.(zip|rar|7z|tar\.gz|tgz|tar)$/i, '');
-          nameEl.value = base;
-        }
-      }
+      if (file) setAddModSource(file);
     } catch (error) {
       console.error('Error picking archive:', error);
       toast((window.t ? window.t('common.error') : 'Error'), 'error');
@@ -348,21 +360,15 @@ export async function initMods() {
   // and a mod archive (.zip/.rar/.7z/.tar/.gz) — the backend detects which from
   // the path; the `mod-folder` field holds either.
   listenFileDrop(async paths => {
+    // Dropped on the open Add dialog: it becomes that dialog's source.
+    if (takeDrop(paths)) return;
     const libView = document.getElementById('view-library');
     if (!libView || !libView.classList.contains('active')) return;
     if (document.querySelector('.modal-overlay.open')) return;
     if (!paths || paths.length === 0) return;
 
-    const p = paths[0];
     openAddModModal();
-    const folderInput = document.getElementById('mod-folder') as HTMLInputElement | null;
-    if (folderInput) folderInput.value = p;
-    const nameInput = document.getElementById('mod-name') as HTMLInputElement | null;
-    if (nameInput) {
-      const base = (p.replace(/\\/g, '/').split('/').pop() || '');
-      // Strip a known archive extension; a folder name is kept as-is.
-      nameInput.value = base.replace(/\.(zip|rar|7z|tar\.gz|tgz|tar)$/i, '');
-    }
+    setAddModSource(paths[0]);
   });
 
   // Initial Data Load
@@ -370,7 +376,9 @@ export async function initMods() {
     const settings = await invoke('get_settings').catch(() => null);
     if (settings) {
       S.currentFilter = (settings as any).current_filter || 'all';
-      S.currentSort = (settings as any).current_sort_by || 'name_asc';
+      // An older or unknown value (e.g. "name") left the sort select blank: fall back to A-Z.
+      const savedSort = (settings as any).current_sort_by;
+      S.currentSort = ['name_asc', 'name_desc', 'status', 'activation_order'].includes(savedSort) ? savedSort : 'name_asc';
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', (b as HTMLElement).dataset.filter === S.currentFilter));
       const statusSel = document.getElementById('mod-status-filter') as HTMLSelectElement | null;
       if (statusSel) statusSel.value = S.currentFilter;

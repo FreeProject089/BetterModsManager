@@ -235,5 +235,5 @@ Dans l'ordre :
    approcher.
 
 !!! info "Toujours bloqué ?"
-    Le hub **Aide & autres** dans l'app a les mêmes articles plus 43 diagrammes, et
+    Le hub **Aide & autres** dans l'app a les mêmes articles plus 45 diagrammes, et
     [BetterCommunity](doc-page:features/community) est l'endroit pour demander.

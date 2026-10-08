@@ -123,7 +123,9 @@ describe('every bulk enable goes through the engine', () => {
     assert.match(sched, /\.sched-p-place'\)\?\.addEventListener/);
   });
   test('the modpack screen, Enable all, a list and a deep link', () => {
-    assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /arrangeBlock\(packOrder, pack\.order_mode/);
+    const act = read('frontend/src/features/mods/modpack-activate.ts');
+    assert.match(act, /order: fresh\.order_mode \|\| ''/);
+    assert.match(act, /invoke\('mod_order_arrange', \{ profileId: null, ids: plan\.packOrder, mode: st\.order \|\| null \}\)/);
     assert.match(read('src-tauri/src/commands/mods.rs'), /order_share::arrange_for\(&state, None, &newly, order_mode/);
     const list = read('frontend/src/features/mods/modlist.ts');
     assert.match(list, /invoke\('mod_order_arrange', \{ profileId: null, ids: newly, mode \}\)/);

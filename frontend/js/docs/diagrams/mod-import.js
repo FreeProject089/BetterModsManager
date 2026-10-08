@@ -1,35 +1,46 @@
+// Adding one mod by hand, as it runs today: the Add a mod dialog (picked or dropped folder or
+// archive) calls add_mod, which copies the source into the active profile's mods folder under an
+// Install ticket. An archive is stored as-is (archive.rs extracts it only when it is read), a
+// folder has its content copied. The new entry lands in data.json disabled; its BLAKE3 baseline
+// comes later from the background hash queue (mods.rs populate_sha_queue).
 export const modImport = {
-    titleKey: 'docs.diagram.import.title',
-    definition: `
-graph TD
-    subgraph SCAN ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-search'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        WALK["<div class='node-content'><i class='icon-folder'></i> {{docs.diagram.import.node.WALK}}</div>"]
-        MATCH["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.import.node.MATCH}}</div>"]
-    end
-    subgraph META ["<div class='group-label' data-cluster-id='INPUT'><i class='icon-layers'></i> {{docs.diagram.cluster.INPUT}}</div>"]
-        READ_MM["<div class='node-content'><i class='icon-file'></i> {{docs.diagram.import.node.READ_MM}}</div>"]
-        GEN_HASH["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.import.node.GEN_HASH}}</div>"]
-        ICON_CROP["<div class='node-content'><i class='icon-image'></i> {{docs.diagram.import.node.ICON_CROP}}</div>"]
-    end
-    subgraph INDEX ["<div class='group-label' data-cluster-id='UI'><i class='icon-database'></i> {{docs.diagram.cluster.UI}}</div>"]
-        ADD_DB["<div class='node-content'><i class='icon-add'></i> {{docs.diagram.import.node.ADD_DB}}</div>"]
-        UI_REFRESH["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.import.node.UI_REFRESH}}</div>"]
-    end
-    WALK["<div class='node-content'><i class='icon-folder'></i> {{docs.diagram.import.node.WALK}}</div>"] -- "<span class='label-success' data-key='scan'>{{docs.diagram.label.scan}}</span>" --> MATCH["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.import.node.MATCH}}</div>"]
-    MATCH -- "<span class='label-success' data-key='match'>{{docs.diagram.label.match}}</span>" --> READ_MM["<div class='node-content'><i class='icon-file'></i> {{docs.diagram.import.node.READ_MM}}</div>"]
-    READ_MM -- "<span class='label-success' data-key='parse'>{{docs.diagram.label.parse}}</span>" --> GEN_HASH["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.import.node.GEN_HASH}}</div>"]
-    GEN_HASH -- "<span class='label-success' data-key='secure'>{{docs.diagram.label.secure}}</span>" --> ICON_CROP["<div class='node-content'><i class='icon-image'></i> {{docs.diagram.import.node.ICON_CROP}}</div>"]
-    ICON_CROP -- "<span class='label-success' data-key='gfx'>{{docs.diagram.label.gfx}}</span>" --> ADD_DB["<div class='node-content'><i class='icon-add'></i> {{docs.diagram.import.node.ADD_DB}}</div>"]
-    ADD_DB -- "<span class='label-success' data-key='indexed'>{{docs.diagram.label.indexed}}</span>" --> UI_REFRESH["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.import.node.UI_REFRESH}}</div>"]
-
-    %% Edge Styles
-    linkStyle 0 stroke:#10b981,stroke-width:2px;
-    linkStyle 1 stroke:#10b981,stroke-width:2px;
-    linkStyle 2 stroke:#10b981,stroke-width:2px;
-    linkStyle 3 stroke:#10b981,stroke-width:2px;
-    linkStyle 4 stroke:#10b981,stroke-width:2px;
-    linkStyle 5 stroke:#10b981,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.import.node.'
+    id: 'mod-import',
+    i18n: 'docs.diagram.mod-import',
+    category: 'mods',
+    dir: 'TB',
+    article: 'scan',
+    related: ['mod-sync', 'one-click-install', 'mod-activation', 'mod-architecture'],
+    groups: [
+        { id: 'IN', dir: 'LR' },
+        { id: 'COPY' },
+        { id: 'AFTER' },
+    ],
+    nodes: [
+        { id: 'DIALOG', kind: 'ui', group: 'IN', icon: 'icon-add', refs: ['frontend/src/features/mods/mods-actions.ts › openAddModModal', 'frontend/src/features/mods/mods-actions.ts › confirmAddMod'] },
+        { id: 'DROP', kind: 'ui', group: 'IN', icon: 'icon-import', refs: ['frontend/src/core/api.ts › listenFileDrop', 'frontend/src/features/mods/mods.ts › initMods'] },
+        { id: 'OTHER', kind: 'outcome', group: 'IN', icon: 'icon-download', link: 'one-click-install', refs: ['src-tauri/src/commands/mods.rs › download_mod', 'src-tauri/src/commands/mods.rs › install_from_modlist', 'src-tauri/src/commands/mods.rs › scan_mods_folder'] },
+        { id: 'ADD', kind: 'rust', group: 'COPY', icon: 'icon-plus', refs: ['src-tauri/src/commands/mods.rs › add_mod'] },
+        { id: 'KIND', kind: 'decision', group: 'COPY', refs: ['src-tauri/src/archive.rs › is_archive'] },
+        { id: 'KEEP_ZIP', kind: 'rust', group: 'COPY', icon: 'icon-archive', refs: ['src-tauri/src/commands/mods.rs › add_mod', 'src-tauri/src/fs_utils.rs › copy_file_install'] },
+        { id: 'COPY_DIR', kind: 'rust', group: 'COPY', icon: 'icon-folder', refs: ['src-tauri/src/commands/mods.rs › get_unique_mod_info', 'src-tauri/src/fs_utils.rs › copy_dir_governed'] },
+        { id: 'TICKET', kind: 'rust', group: 'COPY', icon: 'icon-stop', refs: ['src-tauri/src/commands/mods.rs › install_mod_source'] },
+        { id: 'ENTRY', kind: 'data', group: 'AFTER', icon: 'icon-database', refs: ['src-tauri/src/models/mod_entry.rs › ModEntry', 'src-tauri/src/models/mod_entry.rs › derive_content_id', 'src-tauri/src/commands/mods.rs › invalidate_cache'] },
+        { id: 'HASH', kind: 'rust', group: 'AFTER', icon: 'icon-integrity', refs: ['src-tauri/src/commands/mods.rs › populate_sha_queue', 'src-tauri/src/commands/mods.rs › process_single_mod_hashing'] },
+        { id: 'LISTED', kind: 'outcome', group: 'AFTER', icon: 'icon-check', link: 'mod-activation', refs: ['frontend/src/features/mods/mods.ts › refreshMods', 'frontend/src/features/mods/mods-conflicts.ts › checkAllConflicts'] },
+    ],
+    edges: [
+        { from: 'DROP', to: 'DIALOG', label: 'prefill', tone: 'info' },
+        { from: 'DIALOG', to: 'ADD', label: '~invoke', thick: true },
+        { from: 'ADD', to: 'KIND', thick: true },
+        { from: 'KIND', to: 'KEEP_ZIP', label: 'archive', tone: 'info' },
+        { from: 'KIND', to: 'COPY_DIR', label: 'folder', tone: 'info' },
+        { from: 'KEEP_ZIP', to: 'TICKET' },
+        { from: 'COPY_DIR', to: 'TICKET' },
+        { from: 'TICKET', to: 'ENTRY', label: '~ok', tone: 'ok', thick: true },
+        { from: 'TICKET', to: 'DIALOG', label: '~cancel', tone: 'danger', dashed: true },
+        { from: 'ENTRY', to: 'LISTED', thick: true },
+        { from: 'ENTRY', to: 'HASH', label: '~later', dashed: true },
+        { from: 'OTHER', to: 'ENTRY', label: 'sameRecord', dashed: true },
+    ],
 };
 //# sourceMappingURL=mod-import.js.map

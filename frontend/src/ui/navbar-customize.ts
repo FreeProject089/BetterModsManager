@@ -832,7 +832,14 @@ export function openNavbarEditor(): void {
                          the page itself exists. -->
                     <div id="nbe-subpages" class="nbe-subpages" style="display:none">
                         <label class="nbe-flbl">${t('navedit.subpages') || 'Documents in this page'}</label>
-                        <p class="nbe-sub">${t('navedit.subpagesHint') || 'Link between them with an ordinary relative link, e.g. <a href="about.html">. Each one shares this page\u2019s CSS, script, permissions and storage.'}</p>
+                        <!-- ESCAPED, always. This hint once carried a literal, unclosed
+                             anchor tag (to about.html) as an example. Parsed as markup, the HTML
+                             parser kept that anchor open and re-opened a copy of it around every
+                             following input, span and button (adoption agency: "reconstruct the
+                             active formatting elements"), the whole footer included. Clicking
+                             Share / Import then followed about.html and the main window
+                             reloaded: the "BMM crashes / restarts" report. A hint is text. -->
+                        <p class="nbe-sub">${escAttr(t('navedit.subpagesHint') || 'Link between them with an ordinary relative link, e.g. href="about.html". Each one shares this page\u2019s CSS, script, permissions and storage.')}</p>
                         <div id="nbe-subpages-list" class="nbe-subpages-list"></div>
                         <div class="nbe-subpage-add">
                             <input class="input" id="nbe-subpage-slug" placeholder="${t('navedit.subpageSlug') || 'file name (about)'}">

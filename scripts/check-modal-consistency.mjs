@@ -93,11 +93,9 @@ export const OVERLAY_FAMILIES = {
     'mpc-overlay': 'modpack catalogue (house overlay + hook class)',
     'spg-overlay': 'preset gallery (house overlay + hook class)',
     'sched-pc-overlay': 'preset catalogue (generic overlay + hook class)',
-    'tutc-overlay': 'tutorial creator (house overlay + hook class)',
     'legacy-overlay': 'legacy import (house overlay + stacking hook)',
     // -backdrop classes, caught since the family rule learnt the second suffix:
     'update-modal-backdrop': 'update notes / test-build welcome: a notes reader with a folder tree (ui/update-notes.ts)',
-    'tut-hub-backdrop': 'the dim inside the tutorial hub overlay, not a separate dialog',
     'lom-backdrop': 'click-catcher behind the library order menu, not a dialog',
 };
 

@@ -1,0 +1,514 @@
+/* The interactive diagrams: viewer (#modal-docs-diagram) and gallery (docs hub).
+ *
+ * One visual language for every diagram, all from the live tokens so each theme (BMM White
+ * included) restyles them. A node's KIND sets its colour here and its shape in the generator
+ * (diagram-spec.ts):
+ *   ui rectangle · front rounded · rust [[subroutine]] · data cylinder · ext hexagon ·
+ *   decision diamond · outcome stadium
+ * Text always stays the node ink (--bmm-diagram-node-text); the kind colour is the border, a
+ * light tint of the fill and the icon, never the text, so nothing turns pale-on-pale.
+ *
+ * main.css still carries the older .mermaid-container rules (with !important); everything here
+ * is scoped under .dgv and more specific, so it wins without touching them.
+ */
+
+/* ── kind and tone colours ─────────────────────────────────────────────────────────────── */
+.dgk-ui, .dgs-ui, .dgsh-ui { --dg-k: var(--bmm-accent); }
+.dgk-front, .dgs-front, .dgsh-front { --dg-k: var(--bmm-cyan); }
+.dgk-rust, .dgs-rust, .dgsh-rust { --dg-k: var(--bmm-warning); }
+.dgk-data, .dgs-data, .dgsh-data { --dg-k: var(--bmm-success); }
+.dgk-ext, .dgs-ext, .dgsh-ext { --dg-k: var(--bmm-purple); }
+.dgk-decision, .dgs-decision, .dgsh-decision { --dg-k: var(--bmm-text-secondary); }
+.dgk-outcome, .dgs-outcome, .dgsh-outcome { --dg-k: var(--bmm-diagram-node-text); }
+
+.dgv-tone-ok { --dg-t: var(--bmm-success); }
+.dgv-tone-warn { --dg-t: var(--bmm-warning); }
+.dgv-tone-danger { --dg-t: var(--bmm-danger); }
+.dgv-tone-info { --dg-t: var(--bmm-accent); }
+.dgv-tone-none { --dg-t: var(--bmm-text-muted); }
+
+/* ── layout ─────────────────────────────────────────────────────────────────────────────── */
+.dgv {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.dgv-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bmm-border);
+    flex-shrink: 0;
+}
+.dgv-spacer { flex: 1; }
+.dgv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--bmm-radius-input);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.dgv-btn:hover { border-color: var(--bmm-border-hover); background: var(--bmm-s08); }
+.dgv-btn.dgv-icon { width: 32px; padding: 0; justify-content: center; }
+.dgv-btn[hidden] { display: none; }
+.dgv-find {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    min-width: 0;
+    width: min(340px, 46vw);
+    border-radius: var(--bmm-radius-input);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+}
+.dgv-find:focus-within { border-color: var(--bmm-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-accent) 22%, transparent); }
+.dgv-search {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 13px;
+}
+.dgv-count { font-size: 11.5px; color: var(--bmm-text-secondary); white-space: nowrap; }
+
+.dgv-main {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+}
+.dgv-stage {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    outline: none;
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--bmm-text-muted) 22%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px;
+}
+.dgv-stage:focus-visible { box-shadow: inset 0 0 0 2px var(--bmm-accent); }
+.dgv-stage .diagram-wrapper { position: absolute; inset: 0; }
+.dgv-loading, .dgv-error {
+    margin: auto;
+    font-size: 13px;
+    color: var(--bmm-text-secondary);
+}
+.dgv-error { color: var(--bmm-danger); }
+
+.dgv-legend {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    max-width: calc(100% - 24px);
+    padding: 6px 10px;
+    border-radius: var(--bmm-radius-btn);
+    border: 1px solid var(--bmm-border);
+    background: color-mix(in srgb, var(--bmm-bg-elevated) 88%, transparent);
+    font-size: 11.5px;
+    color: var(--bmm-text-secondary);
+    pointer-events: auto;
+}
+.dgv-leg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* Shapes of the legend, in CSS so they match the drawing without an SVG per kind. */
+.dgp-shape {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 18px;
+    height: 12px;
+    border: 1.5px solid var(--dg-k);
+    background: color-mix(in srgb, var(--dg-k) 16%, var(--bmm-diagram-node));
+    border-radius: 2px;
+}
+.dgsh-front { border-radius: 5px; }
+.dgsh-rust { box-shadow: inset 3px 0 0 -1.5px var(--dg-k), inset -3px 0 0 -1.5px var(--dg-k); }
+.dgsh-data { border-radius: 50% / 30%; }
+.dgsh-ext { border: 0; background: var(--dg-k); clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%); }
+.dgsh-decision { width: 13px; height: 13px; border: 0; background: var(--dg-k); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.dgsh-outcome { border-radius: 999px; }
+
+/* ── the drawing ────────────────────────────────────────────────────────────────────────── */
+.dgv .mermaid-container {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.dgv .mermaid-container g.dgv-node { cursor: pointer; transition: opacity 0.15s ease; }
+.dgv .mermaid-container g.dgv-node :is(rect, polygon, path, circle, ellipse) {
+    fill: color-mix(in srgb, var(--dg-k) 13%, var(--bmm-diagram-node)) !important;
+    stroke: color-mix(in srgb, var(--dg-k) 80%, var(--bmm-diagram-node)) !important;
+    stroke-width: 1.5px !important;
+    transition: stroke-width 0.15s ease, filter 0.15s ease;
+}
+.dgv .mermaid-container g.dgv-node.dgk-ui rect { rx: 4px !important; ry: 4px !important; }
+.dgv .mermaid-container g.dgv-node.dgk-front rect { rx: 12px !important; ry: 12px !important; }
+.dgv .mermaid-container g.dgv-node.dgk-outcome rect { rx: 999px !important; ry: 999px !important; }
+.dgv .mermaid-container g.dgv-node.dgk-outcome :is(rect, polygon, path) { stroke-width: 2px !important; }
+.dgv .mermaid-container g.dgv-node.dgk-decision :is(polygon, path) { fill: color-mix(in srgb, var(--dg-k) 8%, var(--bmm-diagram-node)) !important; }
+.dgv .mermaid-container g.dgv-node.dgv-drill :is(rect, polygon, path) { stroke-dasharray: 6 3; }
+.dgv .mermaid-container g.dgv-node:hover :is(rect, polygon, path, circle, ellipse) { stroke-width: 2.5px !important; }
+
+/* Label classes are NOT scoped: mermaid measures a label in a scratch element appended to <body>,
+   and a box sized for unstyled text clips the styled one (that is how labels got cut off). */
+.dg-n {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--bmm-diagram-node-text) !important;
+}
+.dg-n i {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    background-color: var(--dg-k);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+}
+.dgv .mermaid-container .dgk-outcome .dg-n i,
+.dgv .mermaid-container .dgk-decision .dg-n i { background-color: var(--bmm-text-secondary); }
+
+/* Groups: a quiet panel with a small-caps heading. */
+.dgv .mermaid-container g.cluster rect {
+    fill: color-mix(in srgb, var(--bmm-diagram-node-text) 3.5%, transparent) !important;
+    stroke: color-mix(in srgb, var(--bmm-diagram-node-text) 16%, transparent) !important;
+    stroke-width: 1px !important;
+    stroke-dasharray: 4 4;
+    rx: 14px;
+    ry: 14px;
+}
+.dg-g {
+    font-size: 11px !important;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary) !important;
+}
+.dgv .mermaid-container g.cluster { transition: opacity 0.15s ease; }
+
+/* Edges. */
+.dgv .mermaid-container path.dgv-edge {
+    stroke: color-mix(in srgb, var(--dg-t) 70%, var(--bmm-text-muted)) !important;
+    stroke-width: 1.6px;
+    fill: none !important;
+    transition: opacity 0.15s ease, stroke-width 0.15s ease;
+}
+.dgv .mermaid-container path.dgv-edge.dgv-tone-none { stroke: var(--bmm-text-muted) !important; }
+.dgv .mermaid-container path.dgv-edge.dgv-main { stroke-width: 2.4px; }
+.dgv .mermaid-container path.dgv-edge.dgv-weak { stroke-dasharray: 5 4; }
+.dgv .mermaid-container marker path { fill: var(--bmm-text-muted) !important; stroke: none !important; }
+.dgv .mermaid-container .edgeLabel,
+.dgv .mermaid-container .edgeLabel rect,
+.dgv .mermaid-container span.edgeLabel { background: transparent !important; fill: transparent !important; }
+.dgv .mermaid-container .edgeLabel { transition: opacity 0.15s ease; }
+.dg-el {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    border: 1px solid color-mix(in srgb, var(--dg-t) 45%, transparent);
+    background: color-mix(in srgb, var(--dg-t) 14%, var(--bmm-bg-elevated));
+    color: color-mix(in srgb, var(--dg-t) 45%, var(--bmm-diagram-node-text)) !important;
+}
+.dgv .mermaid-container .dg-tone-ok { --dg-t: var(--bmm-success); }
+.dgv .mermaid-container .dg-tone-warn { --dg-t: var(--bmm-warning); }
+.dgv .mermaid-container .dg-tone-danger { --dg-t: var(--bmm-danger); }
+.dgv .mermaid-container .dg-tone-info { --dg-t: var(--bmm-accent); }
+.dgv .mermaid-container .dg-tone-none { --dg-t: var(--bmm-text-muted); }
+
+/* Focus: one node and its neighbourhood lit, the rest stepped back. */
+.dgv-svg.dg-focus g.dgv-node:not(.dg-hl) { opacity: 0.25; }
+.dgv-svg.dg-focus path.dgv-edge:not(.dg-hl-edge) { opacity: 0.12; }
+.dgv-svg.dg-focus .edgeLabel:not(.dg-hl-edge) { opacity: 0.18; }
+.dgv-svg.dg-focus g.cluster { opacity: 0.7; }
+.dgv .mermaid-container path.dgv-edge.dg-hl-edge { stroke-width: 2.8px; stroke: color-mix(in srgb, var(--dg-t) 60%, var(--bmm-accent)) !important; }
+.dgv .mermaid-container path.dgv-edge.dgv-tone-none.dg-hl-edge { stroke: var(--bmm-accent) !important; }
+.dgv .mermaid-container g.dgv-node.dg-sel :is(rect, polygon, path, circle, ellipse) {
+    stroke: var(--bmm-accent) !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--bmm-accent) 55%, transparent));
+}
+.dgv .mermaid-container g.dgv-node.dg-match:not(.dg-sel) :is(rect, polygon, path, circle, ellipse) {
+    stroke: var(--bmm-warning) !important;
+    stroke-width: 2.5px !important;
+}
+
+/* ── the side panel ─────────────────────────────────────────────────────────────────────── */
+.dgv-panel {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 18px 20px;
+    border-left: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    font-size: 13px;
+    color: var(--bmm-text-primary);
+}
+.dgp-summary { margin: 0 0 10px; line-height: 1.55; color: var(--bmm-text-primary); }
+.dgp-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.dgp-stats span {
+    padding: 2px 8px;
+    border-radius: var(--bmm-radius-chip);
+    border: 1px solid var(--bmm-border);
+    font-size: 11.5px;
+    color: var(--bmm-text-secondary);
+}
+.dgp-hint, .dgp-keys {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 12px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--bmm-text-secondary);
+}
+.dgp-hint svg { flex-shrink: 0; margin-top: 2px; }
+.dgp-keys { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.dgp-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 18px 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.dgp-head { margin-bottom: 8px; }
+.dgp-backlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px 2px 2px;
+    margin-bottom: 10px;
+    border: 0;
+    border-radius: var(--bmm-radius-badge);
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.dgp-backlink:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+.dgp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dgp-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 9px 2px 6px;
+    border-radius: var(--bmm-radius-chip);
+    border: 1px solid color-mix(in srgb, var(--dg-k) 45%, transparent);
+    background: color-mix(in srgb, var(--dg-k) 12%, transparent);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+}
+.dgp-group { font-size: 11.5px; color: var(--bmm-text-secondary); }
+.dgp-title { margin: 8px 0 0; font-size: 17px; line-height: 1.3; color: var(--bmm-text-primary); }
+.dgp-desc { margin: 8px 0 0; line-height: 1.6; color: var(--bmm-text-primary); }
+.dgp-swatch {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    flex-shrink: 0;
+    border-radius: 3px;
+    background: var(--dg-k);
+}
+.dgp-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dgp-ref {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 7px 8px 7px 10px;
+    border-radius: var(--bmm-radius-input);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-base);
+}
+.dgp-path {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--bmm-font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    color: var(--bmm-text-primary);
+    background: transparent;
+    padding: 0;
+}
+.dgp-dir { color: var(--bmm-text-secondary); }
+.dgp-file { font-weight: 600; }
+.dgp-sep { color: var(--bmm-text-secondary); }
+.dgp-sym { color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-text-primary)); font-weight: 600; }
+.dgp-copy {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: var(--bmm-radius-badge);
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    cursor: pointer;
+}
+.dgp-copy:hover { background: var(--bmm-s08); color: var(--bmm-text-primary); }
+.dgp-copy.is-done { color: var(--bmm-success); }
+.dgp-links { display: flex; flex-direction: column; gap: 4px; }
+.dgp-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: var(--bmm-radius-input);
+    border: 1px solid transparent;
+    background: var(--bmm-s04);
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+.dgp-link:hover { border-color: var(--bmm-border-hover); background: var(--bmm-s08); }
+.dgp-link-t { flex: 1; min-width: 0; }
+.dgp-elabel {
+    flex-shrink: 0;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    border: 1px solid color-mix(in srgb, var(--dg-t) 45%, transparent);
+    color: color-mix(in srgb, var(--dg-t) 45%, var(--bmm-text-primary));
+}
+.dgp-none { font-size: 12px; color: var(--bmm-text-secondary); }
+.dgp-gblock + .dgp-gblock { margin-top: 10px; }
+.dgp-gname { margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); }
+.dgp-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dgp-leg { display: flex; gap: 10px; align-items: flex-start; }
+.dgp-leg .dgp-shape { margin-top: 3px; }
+.dgp-leg b { display: block; font-size: 12.5px; }
+.dgp-leg small { display: block; font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.dgp-cta, .dgp-rel {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 7px 12px;
+    border-radius: var(--bmm-radius-btn);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent) 12%, transparent);
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.dgp-cta:hover, .dgp-rel:hover { background: color-mix(in srgb, var(--bmm-accent) 20%, transparent); }
+.dgp-rels { display: flex; flex-wrap: wrap; gap: 6px; }
+.dgp-rel { margin-top: 0; padding: 5px 10px; font-weight: 500; border-color: var(--bmm-border); background: var(--bmm-s04); }
+
+@media (max-width: 980px) {
+    .dgv-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(140px, 38%); }
+    .dgv-panel { border-left: 0; border-top: 1px solid var(--bmm-border); }
+}
+
+/* ── gallery (docs hub) ─────────────────────────────────────────────────────────────────── */
+.dgg-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 18px; }
+.dgg-find {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 12px;
+    width: min(360px, 100%);
+    border-radius: var(--bmm-radius-input);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+}
+.dgg-find:focus-within { border-color: var(--bmm-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-accent) 22%, transparent); }
+.dgg-search { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--bmm-text-primary); font: inherit; font-size: 13.5px; }
+.dgg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dgg-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: var(--bmm-radius-chip);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.dgg-chip span { font-size: 11px; opacity: 0.8; }
+.dgg-chip:hover { color: var(--bmm-text-primary); border-color: var(--bmm-border-hover); }
+.dgg-chip.is-on { color: var(--bmm-text-primary); border-color: color-mix(in srgb, var(--bmm-accent) 55%, transparent); background: color-mix(in srgb, var(--bmm-accent) 14%, transparent); }
+.dgg-sec { margin-bottom: 26px; }
+.dgg-sec[hidden], .dgg-card[hidden], .dgg-empty[hidden] { display: none; }
+.dgg-sec-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
+.dgg-sec-ic { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 12%, transparent); }
+.dgg-sec-n { font-size: 12px; font-weight: 500; color: var(--bmm-text-secondary); }
+.dgg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.dgg-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    text-align: left;
+    border-radius: var(--bmm-radius-card);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    color: var(--bmm-text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.dgg-card:hover { border-color: color-mix(in srgb, var(--bmm-purple) 55%, transparent); transform: translateY(-2px); }
+.dgg-thumb {
+    display: block;
+    padding: 8px 10px 4px;
+    border-bottom: 1px solid var(--bmm-border);
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--bmm-text-muted) 22%, transparent) 1px, transparent 1.2px) 0 0 / 14px 14px,
+        var(--bmm-bg-base);
+}
+.dgt { display: block; width: 100%; height: 84px; }
+.dgt-e { stroke: var(--bmm-text-muted); stroke-width: 1; }
+.dgt-e.dgt-main { stroke-width: 1.8; }
+.dgt-e.dgt-weak { stroke-dasharray: 3 2; }
+.dgt-n { fill: color-mix(in srgb, var(--dg-k) 30%, var(--bmm-bg-elevated)); stroke: var(--dg-k); stroke-width: 1.2; }
+.dgg-body { display: flex; flex-direction: column; gap: 5px; padding: 11px 13px 12px; min-width: 0; }
+.dgg-title { font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+.dgg-sum { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dgg-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--bmm-text-secondary); }
+.dgg-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.dgg-empty { font-size: 13px; color: var(--bmm-text-secondary); }

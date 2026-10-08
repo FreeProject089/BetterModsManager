@@ -568,19 +568,61 @@
       "type": "ai.classify",
       "label": "Laya: sort a text into your labels",
       "needs": "aiClassify",
-      "group": "logic"
+      "group": "ai"
+    },
+    {
+      "type": "ai.run_task",
+      "label": "Laya: run one of your Laya tasks",
+      "needs": "aiRunTask",
+      "group": "ai"
     },
     {
       "type": "ai.ask",
       "label": "Laya: ask a question",
       "needs": "aiAsk",
-      "group": "logic"
+      "group": "ai"
     },
     {
       "type": "ai.suggest_mod_metadata",
       "label": "Laya: suggest details for a mod (not applied)",
       "needs": "aiSuggest",
-      "group": "mods"
+      "group": "ai"
+    },
+    {
+      "type": "ai.classify_mod",
+      "label": "Laya: tag a mod from its files",
+      "needs": "aiModClassify",
+      "group": "ai"
+    },
+    {
+      "type": "ai.library_check",
+      "label": "Laya: check the library",
+      "needs": "aiLibrary",
+      "group": "ai"
+    },
+    {
+      "type": "ai.crash_label",
+      "label": "Laya: find the causes of new crashes",
+      "needs": "aiCrash",
+      "group": "ai"
+    },
+    {
+      "type": "ai.explain_crash",
+      "label": "Laya: explain a crash (writing model)",
+      "needs": "aiExplain",
+      "group": "ai"
+    },
+    {
+      "type": "ai.triage_report",
+      "label": "Laya: sort a report (bug, idea, crash)",
+      "needs": "aiTriage",
+      "group": "ai"
+    },
+    {
+      "type": "ai.status",
+      "label": "Laya: read its state",
+      "needs": "aiStatus",
+      "group": "ai"
     },
     {
       "type": "wait.http",

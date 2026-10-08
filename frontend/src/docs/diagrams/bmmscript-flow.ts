@@ -1,66 +1,56 @@
-// How a scheduled task actually runs — trigger, rules, steps, and the two ways it can stop.
-//
-// The one thing this diagram exists to make visible is that a task is not a list of things
-// that happen. It is a TRIGGER that asks *when*, rules that ask *whether*, and steps that
-// carry state forward — and the state is the part people miss. An action writes a variable,
-// a later condition reads it, and the whole shape of a useful task is that loop.
-//
-// The second thing is that a task ends in one of two ways: it finishes, or it stops on
-// purpose. A guard clause and a failure are not the same event and the timeline shows them
-// differently, so the diagram does too.
-export const bmmscriptFlow = {
-    titleKey: 'sched.bmms.title',
-    definition: `
-graph TD
-    subgraph WHEN ["<div class='group-label' data-cluster-id='WHEN'><i class='icon-history'></i> {{docs.diagram.cluster.WHEN}}</div>"]
-        CLOCK["<div class='node-content'><i class='icon-history'></i> {{docs.diagram.bmms.node.CLOCK}}</div>"]
-        WATCH["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.bmms.node.WATCH}}</div>"]
-        HAND["<div class='node-content'><i class='icon-play'></i> {{docs.diagram.bmms.node.HAND}}</div>"]
-    end
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    subgraph GATE ["<div class='group-label' data-cluster-id='GATE'><i class='icon-verify'></i> {{docs.diagram.cluster.GATE}}</div>"]
-        COND["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.bmms.node.COND}}</div>"]
-        PERM["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.bmms.node.PERM}}</div>"]
-    end
+// BMMScript is a COMPILER, not a second engine (commands/bmms.rs): text from the Code tab, a
+// .bmmscript file or a code.run step is compiled to the same Step tree the blocks produce, and the
+// scheduler's runner executes it. bmms_decompile prints a tree back as text, bmms_line_map maps
+// lines to steps for the debugger, and scripts/gen-bmms-reference.mjs generates the vocabulary
+// (completions, docs pages) from the scheduler's own action and condition lists.
+export const bmmscriptFlow: DiagramSpec = {
+    id: 'bmmscript-flow',
+    i18n: 'docs.diagram.bmmscript-flow',
+    category: 'automation',
+    dir: 'TB',
+    article: 'bmmscript',
+    related: ['scheduler', 'mcp-server'],
+    groups: [
+        { id: 'WRITE', dir: 'LR' },
+        { id: 'COMPILE' },
+        { id: 'USE' },
+    ],
+    nodes: [
+        { id: 'REF', kind: 'data', group: 'WRITE', icon: 'icon-list', refs: ['scripts/gen-bmms-reference.mjs', 'frontend/src/docs/bmms-reference.gen.ts › BMMS_INDEX'] },
+        { id: 'CODE_TAB', kind: 'ui', group: 'WRITE', icon: 'icon-code', refs: ['frontend/src/features/settings/scheduler.ts › wireCodeMode', 'frontend/src/features/settings/bmms-complete.ts › mountCompletions', 'frontend/src/features/settings/bmms-prism.ts › registerBmmsLanguage'] },
+        { id: 'FILE', kind: 'data', group: 'WRITE', icon: 'icon-file', refs: ['src-tauri/src/main.rs › register_bmmscript_association', 'src-tauri/src/main.rs › get_pending_script_file', 'frontend/src/features/settings/bmmscript-open.ts › openBmmScriptFile'] },
+        { id: 'CODE_RUN', kind: 'front', group: 'WRITE', icon: 'icon-script', refs: ['frontend/src/features/settings/scheduler.ts › runAction', 'src-tauri/src/commands/bmms.rs › bmms_compile_steps'] },
 
-    subgraph RUN ["<div class='group-label' data-cluster-id='ACTION'><i class='icon-play'></i> {{docs.diagram.cluster.ACTION}}</div>"]
-        STEP["<div class='node-content'><i class='icon-package'></i> {{docs.diagram.bmms.node.STEP}}</div>"]
-        VARS["<div class='node-content'><i class='icon-edit'></i> {{docs.diagram.bmms.node.VARS}}</div>"]
-        WAIT["<div class='node-content'><i class='icon-network'></i> {{docs.diagram.bmms.node.WAIT}}</div>"]
-    end
+        { id: 'LEX', kind: 'rust', group: 'COMPILE', icon: 'icon-cog', refs: ['src-tauri/src/commands/bmms.rs › bmms_compile', 'src-tauri/src/commands/bmms.rs › compile_with', 'src-tauri/src/commands/bmms.rs › lex'] },
+        { id: 'OK', kind: 'decision', group: 'COMPILE', refs: ['src-tauri/src/commands/bmms.rs › Diagnostic', 'src-tauri/src/commands/bmms.rs › CompileOut'] },
+        { id: 'TREE', kind: 'data', group: 'COMPILE', icon: 'icon-blocks', refs: ['src-tauri/src/commands/bmms.rs › CompileOut', 'frontend/src/features/settings/scheduler.ts › Step'] },
+        { id: 'DECOMPILE', kind: 'rust', group: 'COMPILE', icon: 'icon-refresh', refs: ['src-tauri/src/commands/bmms.rs › bmms_decompile'] },
+        { id: 'LINEMAP', kind: 'rust', group: 'COMPILE', icon: 'icon-pin', refs: ['src-tauri/src/commands/bmms.rs › bmms_line_map', 'frontend/src/features/settings/sched-debug-map.ts › debugTargetFor'] },
 
-    subgraph END ["<div class='group-label' data-cluster-id='END'><i class='icon-check'></i> {{docs.diagram.cluster.END}}</div>"]
-        DONE["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.bmms.node.DONE}}</div>"]
-        STOP["<div class='node-content'><i class='icon-alert'></i> {{docs.diagram.bmms.node.STOP}}</div>"]
-    end
+        { id: 'REVIEW', kind: 'ui', group: 'USE', icon: 'icon-shield', refs: ['frontend/src/features/settings/bmmscript-open.ts › showReview', 'frontend/src/features/settings/bmmpa-inspect.ts › grantedPermissions'] },
+        { id: 'SAVED', kind: 'data', group: 'USE', icon: 'icon-database', refs: ['frontend/src/features/settings/scheduler.ts › importTaskObject', 'src-tauri/src/commands/scheduler.rs › save_schedules'] },
+        { id: 'RUNNER', kind: 'front', group: 'USE', icon: 'icon-play', link: 'scheduler', refs: ['frontend/src/features/settings/scheduler.ts › runSteps', 'frontend/src/features/settings/scheduler.ts › runTaskOnce'] },
+    ],
+    edges: [
+        { from: 'REF', to: 'CODE_TAB', label: 'completions', dashed: true },
+        { from: 'CODE_TAB', to: 'LEX', label: 'leaveCode', thick: true },
+        { from: 'FILE', to: 'LEX', label: 'open', tone: 'info' },
+        { from: 'CODE_RUN', to: 'LEX', label: 'atRunTime', dashed: true },
 
-    CLOCK -- "<span class='label-info'>{{docs.diagram.label.due}}</span>" --> COND
-    WATCH -- "<span class='label-info'>{{docs.diagram.label.changed}}</span>" --> COND
-    HAND -- "<span class='label-info'>{{docs.diagram.label.run}}</span>" --> COND
-    COND -- "<span class='label-success'>{{docs.diagram.label.holds}}</span>" --> PERM
-    COND -- "<span class='label-warning'>{{docs.diagram.label.skipped}}</span>" --> DONE
-    PERM -- "<span class='label-success'>{{docs.diagram.label.granted}}</span>" --> STEP
-    PERM -- "<span class='label-danger'>{{docs.diagram.label.refused}}</span>" --> STOP
-    STEP -- "<span class='label-info'>{{docs.diagram.label.writes}}</span>" --> VARS
-    VARS -- "<span class='label-info'>{{docs.diagram.label.reads}}</span>" --> COND
-    STEP -- "<span class='label-info'>{{docs.diagram.label.awaits}}</span>" --> WAIT
-    WAIT -- "<span class='label-warning'>{{docs.diagram.label.timeout}}</span>" --> STOP
-    WAIT -- "<span class='label-success'>{{docs.diagram.label.arrived}}</span>" --> STEP
-    STEP -- "<span class='label-success'>{{docs.diagram.label.last}}</span>" --> DONE
+        { from: 'LEX', to: 'OK', thick: true },
+        { from: 'OK', to: 'TREE', label: '~yes', tone: 'ok', thick: true },
+        { from: 'OK', to: 'CODE_TAB', label: 'lineCol', tone: 'danger' },
+        { from: 'TREE', to: 'DECOMPILE', label: 'openCode', dashed: true },
+        { from: 'DECOMPILE', to: 'CODE_TAB' },
+        { from: 'CODE_TAB', to: 'LINEMAP', label: 'debugger', dashed: true },
 
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 2 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 3 stroke:#10b981,stroke-width:2px;
-    linkStyle 4 stroke:#f59e0b,stroke-width:2px;
-    linkStyle 5 stroke:#10b981,stroke-width:2px;
-    linkStyle 6 stroke:#ef4444,stroke-width:2px;
-    linkStyle 7 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 8 stroke:#3b82f6,stroke-width:2px,stroke-dasharray:4 3;
-    linkStyle 9 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 10 stroke:#f59e0b,stroke-width:2px;
-    linkStyle 11 stroke:#10b981,stroke-width:2px;
-    linkStyle 12 stroke:#10b981,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.bmms.node.'
+        { from: 'TREE', to: 'SAVED', label: 'save', thick: true },
+        { from: 'TREE', to: 'REVIEW', label: 'fromFile', tone: 'info' },
+        { from: 'REVIEW', to: 'RUNNER', label: 'runOnce', tone: 'warn' },
+        { from: 'REVIEW', to: 'SAVED', label: 'addDisabled', tone: 'ok' },
+        { from: 'SAVED', to: 'RUNNER', thick: true },
+        { from: 'RUNNER', to: 'CODE_RUN', label: 'codeRun', dashed: true },
+    ],
 };

@@ -174,7 +174,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~112 actions réparties en neuf groupes :
+Il y a ~120 actions réparties en dix groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -186,6 +186,8 @@ Il y a ~112 actions réparties en neuf groupes :
 | **Confidentialité & enregistreur** | Consentement télémétrie · enregistreur de session · exporter/importer un replay |
 | **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** |
 | **Logique & maths** | Calcul mathématique dans une variable · ternaire · table de décision · garde d'arrêt de tâche |
+| **Notifications & web** | Envoyer un webhook · un message Discord ou Slack · lire un flux (voir [plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
+| **Laya (IA)** | Trier un texte dans tes libellés · lancer une de tes tâches Laya · taguer un mod · vérifier la bibliothèque · trouver les causes des nouveaux crashs · expliquer un crash · trier un rapport · lire l'état de Laya (voir [plus bas](#laya-dans-une-tache)) |
 
 Beaucoup d'actions s'exécutent en émettant un deeplink `bmm://` canonique via le gestionnaire de
 l'app — la même plomberie qu'expose la page [Plugins & API](doc-page:features/plugins), d'où le fait que les deux
@@ -246,7 +248,7 @@ Chaque tâche accorde neuf choses séparément, et chacune dit ce qu'elle déblo
 | **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
 | **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
 | **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
-| **Laya (IA)** | Interroger Laya sur ce PC : classer un texte, poser une question, proposer les infos d'un mod ([plus bas](#laya-dans-une-tache)) |
+| **Laya (IA)** | Interroger Laya sur ce PC : chaque étape `ai.*` (classer un texte, classer un mod, vérifier la bibliothèque, trouver les causes des crashs…) et la condition `aiAvailable` ([plus bas](#laya-dans-une-tache)) |
 
 Les neuf sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
@@ -558,26 +560,74 @@ nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection.
 
 ## Laya dans une tâche
 
-Trois actions interrogent **Laya**, le classifieur qui tourne sur ton PC. Elles demandent la
-permission **Laya (IA)** et l'IA activée dans les Paramètres.
+Le groupe d'actions **Laya (IA)** interroge **Laya**, le classifieur qui tourne sur ton PC.
+Chacune demande la permission **Laya (IA)** et l'IA activée dans les Paramètres.
 
 | Action | Ce qu'elle laisse |
 |---|---|
-| `ai.classify` | Classe un texte (ou le début d'un fichier texte) dans **tes** étiquettes. `{kind}` est l'étiquette, `{kind.p}` sa probabilité ; aussi `{ai.label}` et `{ai.p}` |
+| `ai.classify` | Classe un texte (ou le début d'un fichier texte) dans **tes** étiquettes. `{kind}` est l'étiquette, `{kind.p}` sa probabilité ; aussi `{ai.label}`, `{ai.p}`, `{ai.abstained}` et le score de chaque étiquette dans la map `ai.scores` |
+| `ai.run_task` | Le même classement avec une de tes **tâches Laya** enregistrées (Paramètres → Réponses de Laya → Tâches perso), choisie dans une liste. Mêmes variables |
+| `ai.classify_mod` | Des tags pour un mod, choisis parmi **tes** tags d'après ses propres fichiers, et l'indice de contenu adulte : `{ai.mod.tags}`, `{ai.mod.category}` (le tag le plus sûr), `{ai.mod.adult}`. Avec **Appliquer les tags sûrs**, voir plus bas |
+| `ai.library_check` | Doublons probables, mods qui s'écrasent maintenant, mods sans tag, et les tags de Laya pour 10 d'entre eux au plus. Nombres dans `{ai.lib.findings}`, `{ai.lib.duplicates}`, `{ai.lib.conflicts}`, `{ai.lib.untagged}` ; une liste lisible `ai.library`, les ids sans tag dans la liste `ai.library.untagged`. **Ne change rien** |
+| `ai.crash_label` | « Trouver les causes » sur les rapports de crash arrivés depuis sa dernière exécution (7 jours en arrière la première fois), ou sur les plus récents : famille, cause et probabilité de chacun. Le plus récent dans `{ai.crash.family}`, `{ai.crash.cause}`, `{ai.crash.p}` ; une ligne par crash dans la liste `ai.crashes` |
+| `ai.triage_report` | Un texte (ou un fichier) est-il une idée, un bug ou un crash, et sur quelle partie de BMM : `{ai.report.kind}`, `{ai.report.area}`. Les données personnelles sont masquées avant |
+| `ai.status` | L'état de Laya : `{ai.available}`, `{ai.enabled}`, `{ai.installed}`, `{ai.loaded}`, `{ai.writer}`, `{ai.provider}`. Ne lance aucun modèle |
+| `ai.explain_crash` | Une courte explication écrite d'un crash, dans `{ai.explanation}`. Seulement avec un **modèle de rédaction** configuré |
 | `ai.ask` | Cherche dans la doc et tes mods pour une question. La réponse est du texte dans `{answer}` et `{ai.answer}` |
 | `ai.suggest_mod_metadata` | Liste des suggestions pour un mod (nom, tags, liens…). **Rien n'est appliqué** |
 
-Branche-toi sur le résultat avec la condition **L'étiquette de Laya est…** : `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }`.
+Branche-toi sur le résultat avec les conditions de Laya :
 
-**Une réponse est une donnée, jamais une commande.** Le texte de `ai.ask` et
-`ai.suggest_mod_metadata` vient de choses que BMM ne contrôle pas (le readme d'un mod, un
-fichier). Il peut aller dans un message, une ligne de journal ou un fichier. Il ne peut pas aller
+| Condition | Vraie quand |
+|---|---|
+| `aiLabel` | L'étiquette est X avec une probabilité d'au moins *t* : `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }` |
+| `aiScore` | Le score donné par Laya à **n'importe quelle** étiquette, comparé à un nombre : `aiScore(label: "ui", op: ">=", value: 0.3)` |
+| `aiAbstained` | Le dernier classement (`ai`), les tags du dernier mod (`ai.mod`) ou le dernier tri (`ai.report`) a donné « je ne sais pas » |
+| `aiAvailable` | Laya peut tourner maintenant, est activée, installée, chargée, ou un modèle de rédaction est configuré. Interroge l'application : demande la permission |
+| `crashCause` | La famille (ou la cause) du crash le plus récent, ou d'un crash de l'exécution, est X avec une probabilité minimum. Sans étape de crash dans l'exécution, elle lit ce que le déclencheur a apporté |
+| `aiLibraryCount` | Un nombre de la dernière vérification de la bibliothèque, comparé à une valeur (`>= 1` par défaut) |
+| `modAiTag` | Laya a donné à un mod (par défaut le dernier classé) le tag X. Une supposition signalée ne compte pas |
+
+Chaque nom de variable est stable et listé avec son contenu dans le code (`sched-vars.ts`,
+`LAYA_VARS`). Une étape avec **into: x** écrit aussi les mêmes valeurs sous `x.` (`{x.tags}`,
+`{x.abstained}`…).
+
+**Tes réglages de réponses s'appliquent.** Chaque étape passe par Paramètres → **Réponses de
+Laya** de son domaine : « Tâches et scripts » pour un classement, « Analyse de la bibliothèque »
+pour les tags d'un mod et la vérification, « Rapports de crash » pour les causes, « Rapports de
+bug » pour le tri. Un seuil relevé fait s'abstenir Laya plus souvent (`none`, `unknown`,
+`{…abstained}` = 1) ; « garder la meilleure supposition, signalée » la garde, marquée comme
+supposition (un `?` dans la liste des crashs, jamais appliquée, jamais comptée par `modAiTag`).
+
+**Appliquer des tags.** Avec **Appliquer les tags sûrs** coché, `ai.classify_mod` n'écrit que
+les tags que la fenêtre cocherait d'elle-même : ceux de Laya, au-dessus de ton seuil, pas une
+supposition signalée, et seulement si **appliquer sans demander** est activé dans les réponses
+« Analyse de la bibliothèque ». Les tags sont ajoutés, jamais retirés, et l'historique du mod
+montre le changement. Décoché, les tags restent des propositions dans des variables.
+
+**Rien ne quitte le PC pour ces étapes.** Les fichiers d'un mod, un journal de crash ou un
+rapport sont lus par la Laya intégrée ou ton propre laya-serve, jamais par un serveur : avec
+BetterCommunity comme classifieur, ces étapes sont refusées. `ai.explain_crash` est la seule
+exception, et c'est toi qui la choisis : un modèle de rédaction **distant** est refusé sauf si tu
+coches **Autoriser un modèle de rédaction distant** dans l'étape, ce qui demande aussi la
+permission **réseau**.
+
+**Une réponse est une donnée, jamais une commande.** Le texte de `ai.ask`,
+`ai.suggest_mod_metadata` et `ai.explain_crash` vient de choses que BMM ne contrôle pas (le
+readme d'un mod, un fichier, un journal de crash). Il peut aller dans un message, une ligne de journal ou un fichier. Il ne peut pas aller
 dans un programme, un script, un lien, une adresse ou un en-tête : l'étape échoue et le dit. Une
 copie (`set`, une liste, une map) est refusée de la même façon. Une étiquette d'`ai.classify` est
-toujours un de tes propres mots (ou `none`) : s'en servir pour choisir la suite est sûr.
+toujours un de tes propres mots (ou `none`) : s'en servir pour choisir la suite est sûr. Pareil
+pour les autres étapes : un tag est un des tiens, une cause ou un type de rapport vient d'une
+liste fixe, vérifié à nouveau avant d'arriver dans une variable.
 
-Limites : par exécution, 20 appels à Laya et 2 minutes d'attente ; pour toutes les tâches, 30
-appels par minute, un à la fois. Rien ne tourne pendant un jeu, avec l'IA désactivée, ou avec `--no-ai`.
+Limites : par exécution, 20 appels à Laya et 2 minutes d'attente (`ai.status` ne compte pour
+aucun des deux) ; pour toutes les tâches, 30 appels par minute, un à la fois. Rien ne tourne
+pendant un jeu, avec l'IA désactivée, ou avec `--no-ai`.
+
+Quatre modèles partent d'ici : **Classer les nouveaux mods avec Laya**, **Classer les nouveaux
+crashs et me prévenir**, **Vérification hebdomadaire de la bibliothèque** et **Me prévenir d'un
+nouveau type de crash**.
 
 ## Prévenir le monde extérieur — webhooks, Discord, Slack, flux
 
@@ -1387,6 +1437,14 @@ programme. Celui-ci regarde BMM.
 | `bmm.repo.synced` · `bmm.repo.syncFailed` | Une synchro a fini, ou pas. |
 | `bmm.profile.activated` | Un profil est devenu l'actif. |
 | `bmm.error` | Tout ce que BMM a signalé comme une erreur. |
+| `bmm.ai.crashLabelled` | Laya a classé un rapport de crash pour la première fois (sur la page des crashs ou dans une tâche). Porte `report`, `family`, `cause`, `p`, `abstained`, `uncertain`. |
+| `bmm.ai.crashGroup` | Laya a vu un crash qui ne ressemble à aucun de ceux dont elle se souvient. Mêmes champs. |
+| `bmm.ai.ready` | Laya est devenue disponible : `what` vaut `installed`, `loaded` ou `enabled`. |
+
+**Seulement si.** Le déclencheur prend un filtre sur ce que porte l'événement : `family=disk`
+ne lance la tâche que pour les crashs de cette famille, `family=disk|memory` pour l'une ou
+l'autre, `cause=disk_full, abstained=false` pour les deux conditions à la fois. En code :
+`on event "bmm.ai.crashLabelled" where "family=disk"`.
 
 Ce que porte l'événement arrive en `{event.…}`. Pour un mod manquant : `{event.id}`,
 `{event.name}` et `{event.pack}` — c'est la différence entre une tâche qui sait qu'un mod manque

@@ -35,6 +35,13 @@ export const BMM_EVENTS = [
     // it worked, how long it took and how many chained runs led to it. The "after another
     // task" trigger is a reader of this and nothing more.
     'bmm.task.done',
+    // Laya (features/ai/laya-crash-events.ts, commands/ai_embedded.rs): a crash labelled for
+    // the first time { report, family, cause, p, abstained, uncertain }; a crash of a failure
+    // BMM had not seen before (same fields); Laya became available { what: installed | loaded
+    // | enabled }. The trigger's « only when » filter picks a family, a cause or a `what`.
+    'bmm.ai.crashLabelled',
+    'bmm.ai.crashGroup',
+    'bmm.ai.ready',
 ];
 
 /**

@@ -37,6 +37,7 @@ import { replaceEmoji } from '../core/emoji.js';
 import { sanitizeDocHtml, safeDocUrl } from './md-safe.js';
 import { isoIconUrl } from '../core/icon-cdn.js';
 import { uiIcon } from '../ui/icons.js';
+import { docReplaysEnabled } from './doc-replays.js';
 
 const CALLOUT_KIND: Record<string, string> = {
   note: 'info', info: 'info', hint: 'tip', tip: 'tip', success: 'success', check: 'success',
@@ -482,6 +483,8 @@ function renderBlocks(lines: string[]): string {
       const src = at('src');                      // the bundled copy, when there is one
       const remote = at('remote');                // the same asset on the website
       const kind = /\.(mp4|webm)$/i.test(src || remote) ? 'video' : 'replay';
+      // app.cfg `DocsReplays=false`: a replay is dropped, not replaced by a note. A clip stays.
+      if (kind === 'replay' && !docReplaysEnabled()) continue;
       const title = at('title') || (kind === 'video' ? 'Clip' : 'Session replay');
       // Always a play button. Whether the bytes are on disk or come off the website is the
       // app's problem, not something the reader should have to see in the affordance.
@@ -812,6 +815,8 @@ function renderDirective(dir: { name: string; label: string; attrs: Record<strin
     return `<details class="doc-details"><summary>${esc(label || 'Details')}</summary><div class="doc-details-body">${inner()}</div></details>`;
   }
   if (name === 'replay' || name === 'bmmreplay') {
+    // app.cfg `DocsReplays=false`: nothing at all, the body included (it is the caption).
+    if (!docReplaysEnabled()) return '';
     // The app opens this itself, so a refused URL must not reach the attribute the click
     // handler reads. A player is a thing that follows a link.
     const raw = attrs.src || '';

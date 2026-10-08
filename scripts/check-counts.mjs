@@ -29,10 +29,12 @@ const read = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null);
 // ── What is true ────────────────────────────────────────────────────────────
 const sched = read('frontend/src/features/settings/scheduler.ts');
 if (!sched) { console.error('✗ scheduler.ts is missing — refusing to report success'); process.exit(2); }
-// The same shape the action list is declared with: `{ v: 'x.y', label: '…'`.
+// The same shape the action list is declared with: `{ v: 'x.y', label: '…'`. Ids carry `_`
+// (`ai.suggest_mod_metadata`, `ai.crash_label`): a pattern without it skipped every one of them
+// and the quoted count stayed short of the list.
 const actions = new Set();
 for (const line of sched.split('\n')) {
-  const m = /\{\s*v:\s*'([a-zA-Z.]+)'/.exec(line);
+  const m = /\{\s*v:\s*'([a-zA-Z0-9._]+)'/.exec(line);
   if (m && line.includes('label:')) actions.add(m[1]);
 }
 

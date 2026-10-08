@@ -1,55 +1,63 @@
-// Mod activation as it runs today: every toggle, order list or modpack becomes a background job
-// (core/activation-jobs.ts), one mod at a time; Cancel undoes the mod in flight. No colours here:
-// the renderer (interactive-docs.ts) themes the diagram from the live tokens.
-export const modActivation = {
-    titleKey: 'docs.diagram.modact.title',
-    definition: `
-graph TD
-    subgraph JOB_G ["<div class='group-label' data-cluster-id='MJOB'><i class='icon-list'></i> {{docs.diagram.modact.cl.JOB}}</div>"]
-        direction LR
-        START["<div class='node-content'><i class='icon-toggle'></i> {{docs.diagram.modact.node.START}}</div>"]
-        QUEUE["<div class='node-content'><i class='icon-time'></i> {{docs.diagram.modact.node.QUEUE}}</div>"]
-        CANCEL["<div class='node-content'><i class='icon-stop'></i> {{docs.diagram.modact.node.CANCEL}}</div>"]
-    end
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    subgraph ENABLE_G ["<div class='group-label' data-cluster-id='ACTIVATE'><i class='icon-check'></i> {{docs.diagram.cluster.ACTIVATE}}</div>"]
-        ENABLE["<div class='node-content'><i class='icon-plus'></i> {{docs.diagram.modact.node.ENABLE}}</div>"]
-        CHECK_OWNER["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.modact.node.CHECK_OWNER}}</div>"]
-        BACKUP["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.modact.node.BACKUP}}</div>"]
-        COPY["<div class='node-content'><i class='icon-patch'></i> {{docs.diagram.modact.node.COPY}}</div>"]
-        DONE_ON["<div class='node-content'><i class='icon-play'></i> {{docs.diagram.modact.node.DONE_ON}}</div>"]
-    end
+// Turning a mod on or off, as it runs today: every toggle, order list or modpack becomes a job of
+// core/activation-jobs.ts (one mod at a time, its own cancel scope), and each mod is one
+// enable_mod / disable_mod call whose file work runs in the mod I/O worker (fs_utils.rs).
+// The game folder is shared by every profile pointed at it, so "is this file a game original?"
+// and "who provides it now?" are asked across those profiles (mod_order::game_folder_share).
+export const modActivation: DiagramSpec = {
+    id: 'mod-activation',
+    i18n: 'docs.diagram.mod-activation',
+    category: 'mods',
+    dir: 'TB',
+    article: 'activation',
+    related: ['conflict-management', 'profile-system', 'integrity-engine', 'disk-io-limiter'],
+    groups: [
+        { id: 'JOB', dir: 'LR' },
+        { id: 'ON' },
+        { id: 'OFF' },
+    ],
+    nodes: [
+        { id: 'START', kind: 'ui', group: 'JOB', icon: 'icon-toggle', refs: ['frontend/src/core/activation-jobs.ts › runActivationJob', 'frontend/src/core/activation-jobs.ts › runActivationBatch'] },
+        { id: 'QUEUE', kind: 'front', group: 'JOB', icon: 'icon-list', refs: ['frontend/src/core/activation-jobs.ts › pump', 'frontend/src/core/activation-jobs.ts › runJob'] },
+        { id: 'CANCEL', kind: 'ui', group: 'JOB', icon: 'icon-stop', refs: ['src-tauri/src/commands/mods.rs › cancel_mod_ops', 'src-tauri/src/fs_utils.rs › CancelScope', 'src-tauri/src/commands/mods.rs › make_inverse_undo_input'] },
 
-    subgraph DISABLE_G ["<div class='group-label' data-cluster-id='DEACTIVATE'><i class='icon-x'></i> {{docs.diagram.cluster.DEACTIVATE}}</div>"]
-        DISABLE["<div class='node-content'><i class='icon-minus'></i> {{docs.diagram.modact.node.DISABLE}}</div>"]
-        FIND_SURVIVOR["<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.modact.node.FIND_SURVIVOR}}</div>"]
-        HAS_SURVIVOR{"{{docs.diagram.modact.node.HAS_SURVIVOR}}"}
-        HAS_ORIGINAL{"{{docs.diagram.modact.node.HAS_ORIGINAL}}"}
-        RESTORE_MOD["<div class='node-content'><i class='icon-build'></i> {{docs.diagram.modact.node.RESTORE_MOD}}</div>"]
-        RESTORE_ORIG["<div class='node-content'><i class='icon-disk'></i> {{docs.diagram.modact.node.RESTORE_ORIG}}</div>"]
-        DELETE["<div class='node-content'><i class='icon-trash'></i> {{docs.diagram.modact.node.DELETE}}</div>"]
-        DONE_OFF["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.modact.node.DONE_OFF}}</div>"]
-    end
+        { id: 'ENABLE', kind: 'rust', group: 'ON', icon: 'icon-plus', refs: ['src-tauri/src/commands/mods.rs › enable_mod', 'src-tauri/src/commands/mods.rs › enable_mod_in', 'src-tauri/src/commands/mods.rs › resolve_dependencies'] },
+        { id: 'OWNED', kind: 'decision', group: 'ON', refs: ['src-tauri/src/fs_utils.rs › backup_original_file', 'src-tauri/src/commands/mod_order.rs › game_folder_share'] },
+        { id: 'BACKUP', kind: 'data', group: 'ON', icon: 'icon-disk', refs: ['src-tauri/src/fs_utils.rs › backup_original_file'] },
+        { id: 'COPY', kind: 'rust', group: 'ON', icon: 'icon-patch', refs: ['src-tauri/src/fs_utils.rs › apply_mod_stacked_ticketed', 'src-tauri/src/fs_utils.rs › run_deploy_parallel'] },
 
-    START --> QUEUE
-    CANCEL -.-> QUEUE
-    QUEUE -- "<span class='label-success'>{{docs.diagram.modact.lbl.on}}</span>" --> ENABLE
-    QUEUE -- "<span class='label-warning'>{{docs.diagram.modact.lbl.off}}</span>" --> DISABLE
-    ENABLE -- "<span class='label-info'>{{docs.diagram.label.perFile}}</span>" --> CHECK_OWNER
-    CHECK_OWNER -- "<span class='label-success'>{{docs.diagram.label.free}}</span>" --> BACKUP
-    CHECK_OWNER -- "<span class='label-warning'>{{docs.diagram.label.alreadyOwned}}</span>" --> COPY
-    BACKUP --> COPY
-    COPY -- "<span class='label-success'>{{docs.diagram.label.done}}</span>" --> DONE_ON
+        { id: 'DISABLE', kind: 'rust', group: 'OFF', icon: 'icon-minus', refs: ['src-tauri/src/commands/mods.rs › disable_mod', 'src-tauri/src/commands/mods.rs › disable_mod_in', 'src-tauri/src/commands/mod_order.rs › shared_fallback_order'] },
+        { id: 'PROVIDER', kind: 'decision', group: 'OFF', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed'] },
+        { id: 'RESTORE_MOD', kind: 'rust', group: 'OFF', icon: 'icon-layers', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed', 'src-tauri/src/commands/mod_order.rs › read_roots'] },
+        { id: 'ORIGINAL', kind: 'decision', group: 'OFF', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed'] },
+        { id: 'RESTORE_ORIG', kind: 'rust', group: 'OFF', icon: 'icon-restore', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed'] },
+        { id: 'DELETE', kind: 'rust', group: 'OFF', icon: 'icon-trash', refs: ['src-tauri/src/fs_utils.rs › ensure_removed'] },
+        { id: 'CASCADE', kind: 'rust', group: 'OFF', icon: 'icon-flow', refs: ['src-tauri/src/commands/mods.rs › disable_mod_in', 'src-tauri/src/commands/mods.rs › parse_dep_ref'] },
 
-    DISABLE -- "<span class='label-info'>{{docs.diagram.label.perFile}}</span>" --> FIND_SURVIVOR
-    FIND_SURVIVOR --> HAS_SURVIVOR
-    HAS_SURVIVOR -- "<span class='label-success'>{{docs.diagram.label.yes}}</span>" --> RESTORE_MOD
-    HAS_SURVIVOR -- "<span class='label-warning'>{{docs.diagram.label.no}}</span>" --> HAS_ORIGINAL
-    HAS_ORIGINAL -- "<span class='label-success'>{{docs.diagram.label.yes}}</span>" --> RESTORE_ORIG
-    HAS_ORIGINAL -- "<span class='label-danger'>{{docs.diagram.label.no}}</span>" --> DELETE
-    RESTORE_MOD --> DONE_OFF
-    RESTORE_ORIG --> DONE_OFF
-    DELETE --> DONE_OFF
-`,
-    explanationPrefix: 'docs.diagram.modact.node.'
+        { id: 'SAVED', kind: 'outcome', icon: 'icon-check', refs: ['src-tauri/src/commands/mods.rs › emit_mod_op', 'frontend/src/core/activation-jobs.ts › handleProgressEvent', 'src-tauri/src/commands/history.rs › log_activity'] },
+    ],
+    edges: [
+        { from: 'START', to: 'QUEUE', thick: true },
+        { from: 'CANCEL', to: 'QUEUE', label: 'stop', tone: 'danger', dashed: true },
+        { from: 'QUEUE', to: 'ENABLE', label: 'enable', tone: 'ok', thick: true },
+        { from: 'QUEUE', to: 'DISABLE', label: 'disable', tone: 'warn', thick: true },
+
+        { from: 'ENABLE', to: 'OWNED', label: 'perFile', tone: 'info' },
+        { from: 'OWNED', to: 'BACKUP', label: 'gameFile', tone: 'ok' },
+        { from: 'OWNED', to: 'COPY', label: 'modFile', tone: 'warn' },
+        { from: 'BACKUP', to: 'COPY' },
+        { from: 'COPY', to: 'SAVED', thick: true },
+
+        { from: 'DISABLE', to: 'PROVIDER', label: 'perFile', tone: 'info' },
+        { from: 'PROVIDER', to: 'RESTORE_MOD', label: '~yes', tone: 'ok' },
+        { from: 'PROVIDER', to: 'ORIGINAL', label: '~no', tone: 'warn' },
+        { from: 'ORIGINAL', to: 'RESTORE_ORIG', label: '~yes', tone: 'ok' },
+        { from: 'ORIGINAL', to: 'DELETE', label: '~no', tone: 'danger' },
+        { from: 'RESTORE_MOD', to: 'CASCADE' },
+        { from: 'RESTORE_ORIG', to: 'CASCADE' },
+        { from: 'DELETE', to: 'CASCADE' },
+        { from: 'CASCADE', to: 'DISABLE', label: 'orphans', dashed: true },
+        { from: 'CASCADE', to: 'SAVED', thick: true },
+    ],
 };

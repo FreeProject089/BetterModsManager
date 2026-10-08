@@ -1,54 +1,53 @@
-// How a custom page runs — the sandbox, drawn from the code that enforces it.
-//
-// Every claim in this diagram is checkable against src-tauri/src/commands/custom_pages.rs:
-// the bmmpage:// protocol handler, the CSP it emits, the grants it consults, the per-page
-// storage, and the confinement (a `..` refusal plus a canonicalised starts_with check).
-export const customPages = {
-    titleKey: 'docs.diagram.customPages.title',
-    definition: `
-flowchart TD
-    NAV["<div class='node-content'><i class='icon-nav'></i> {{docs.diagram.customPages.node.NAV}}</div>"]
-    FRAME["<div class='node-content'><i class='icon-window'></i> {{docs.diagram.customPages.node.FRAME}}</div>"]
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    subgraph BUNDLE ["<div class='group-label' data-cluster-id='BUNDLE'><i class='icon-folder'></i> {{docs.diagram.customPages.cluster.BUNDLE}}</div>"]
-        INDEX["<div class='node-content'><i class='icon-file'></i> {{docs.diagram.customPages.node.INDEX}}</div>"]
-        SUBS["<div class='node-content'><i class='icon-files'></i> {{docs.diagram.customPages.node.SUBS}}</div>"]
-        ASSETS["<div class='node-content'><i class='icon-box'></i> {{docs.diagram.customPages.node.ASSETS}}</div>"]
-        SDK["<div class='node-content'><i class='icon-code'></i> {{docs.diagram.customPages.node.SDK}}</div>"]
-    end
+// How a custom page gets its permissions and how it runs, from src-tauri/src/commands/custom_pages.rs
+// (grants, import review, bmmpage:// protocol and its CSP, require_cap) and the front end
+// (ui/nav-bundle-import.ts, ui/nav-grant-review.ts, ui/custom-page-broker.ts). An imported page
+// starts with nothing; every command that acts for a page re-checks the page id and its
+// effective grants, and refuses a call that comes from a page frame itself.
+export const customPages: DiagramSpec = {
+    id: 'custom-pages',
+    i18n: 'docs.diagram.custom-pages',
+    category: 'automation',
+    dir: 'TB',
+    article: 'custom-pages',
+    related: ['security-system', 'deeplinks', 'theme-system'],
+    groups: [
+        { id: 'GRANT' },
+        { id: 'RUN' },
+        { id: 'CALLS' },
+    ],
+    nodes: [
+        { id: 'IMPORT', kind: 'ui', group: 'GRANT', icon: 'icon-import', refs: ['frontend/src/ui/nav-bundle-import.ts › runNavBundleImport', 'frontend/src/ui/nav-bundle-import.ts › planNavBundleImport'] },
+        { id: 'PENDING', kind: 'rust', group: 'GRANT', icon: 'icon-lock', refs: ['src-tauri/src/commands/custom_pages.rs › create_imported_custom_page', 'src-tauri/src/commands/custom_pages.rs › mark_import_pending_in'] },
+        { id: 'REVIEW', kind: 'ui', group: 'GRANT', icon: 'icon-shield', refs: ['frontend/src/ui/nav-grant-review.ts › openGrantReview', 'frontend/src/ui/nav-bundle-import.ts › reviewAnswer'] },
+        { id: 'APPLY', kind: 'rust', group: 'GRANT', icon: 'icon-check', refs: ['src-tauri/src/commands/custom_pages.rs › page_apply_reviewed_grants', 'src-tauri/src/commands/custom_pages.rs › apply_review_in'] },
+        { id: 'EDITOR', kind: 'ui', group: 'GRANT', icon: 'icon-edit', refs: ['src-tauri/src/commands/custom_pages.rs › page_set_grant', 'src-tauri/src/commands/custom_pages.rs › page_set_net_origins'] },
+        { id: 'GRANTS', kind: 'data', group: 'GRANT', icon: 'icon-key', refs: ['src-tauri/src/commands/custom_pages.rs › effective_grants_in', 'src-tauri/src/commands/custom_pages.rs › GRANTS_META', 'src-tauri/src/commands/custom_pages.rs › KNOWN_CAPS'] },
 
-    PROTO["<div class='node-content'><i class='icon-shield'></i> {{docs.diagram.customPages.node.PROTO}}</div>"]
-    CSP["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.customPages.node.CSP}}</div>"]
+        { id: 'FRAME', kind: 'ui', group: 'RUN', icon: 'icon-layout', refs: ['frontend/src/ui/navbar-customize.ts › activateCustom', 'frontend/src/ui/navbar-customize.ts › pageBundleUrl'] },
+        { id: 'PROTO', kind: 'rust', group: 'RUN', icon: 'icon-shield', refs: ['src-tauri/src/commands/custom_pages.rs › bmmpage_protocol', 'src-tauri/src/commands/custom_pages.rs › page_csp'] },
 
-    subgraph GRANTS ["<div class='group-label' data-cluster-id='GRANTS'><i class='icon-shield'></i> {{docs.diagram.customPages.cluster.GRANTS}}</div>"]
-        STORE["<div class='node-content'><i class='icon-database'></i> {{docs.diagram.customPages.node.STORE}}</div>"]
-        NET["<div class='node-content'><i class='icon-globe'></i> {{docs.diagram.customPages.node.NET}}</div>"]
-        DENY["<div class='node-content'><i class='icon-ban'></i> {{docs.diagram.customPages.node.DENY}}</div>"]
-    end
+        { id: 'BROKER', kind: 'front', group: 'CALLS', icon: 'icon-message', refs: ['frontend/src/ui/custom-page-broker.ts › initPageBroker', 'frontend/src/ui/custom-page-broker.ts › pageIdFor'] },
+        { id: 'GATE', kind: 'decision', group: 'CALLS', refs: ['src-tauri/src/commands/custom_pages.rs › require_cap_in', 'src-tauri/src/commands/custom_pages.rs › refuse_page_caller', 'src-tauri/src/commands/custom_pages.rs › page_installed_in'] },
+        { id: 'DENIED', kind: 'outcome', group: 'CALLS', icon: 'icon-stop', refs: ['src-tauri/src/commands/custom_pages.rs › require_cap_in', 'frontend/src/ui/custom-page-broker.ts › initPageBroker'] },
+        { id: 'STORAGE', kind: 'rust', group: 'CALLS', icon: 'icon-database', refs: ['src-tauri/src/commands/custom_pages.rs › page_storage_set', 'src-tauri/src/commands/custom_pages.rs › MAX_STORAGE_BYTES', 'src-tauri/src/commands/custom_pages.rs › page_system_info'] },
+        { id: 'FETCH', kind: 'rust', group: 'CALLS', icon: 'icon-globe', refs: ['src-tauri/src/commands/custom_pages.rs › page_fetch', 'src-tauri/src/commands/custom_pages.rs › page_fetch_client', 'src-tauri/src/commands/custom_pages.rs › MAX_FETCH_BYTES'] },
+    ],
+    edges: [
+        { from: 'IMPORT', to: 'PENDING', label: 'bmmnav', thick: true },
+        { from: 'PENDING', to: 'REVIEW', label: 'requests', tone: 'info', thick: true },
+        { from: 'REVIEW', to: 'APPLY', label: 'ticked', tone: 'warn', thick: true },
+        { from: 'APPLY', to: 'GRANTS', label: '~writes', thick: true },
+        { from: 'EDITOR', to: 'GRANTS', label: '~writes' },
 
-    NAV --> FRAME
-    FRAME -->|"bmmpage://&lt;id&gt;/index.html"| PROTO
-    PROTO --> INDEX
-    INDEX -->|"&lt;a href='about.html'&gt;"| SUBS
-    SUBS --> PROTO
-    INDEX --> ASSETS
-    INDEX --> SDK
-    PROTO --> CSP
-    CSP --> SDK
-    SDK --> STORE
-    SDK --> NET
-    CSP --> DENY
-
-    %% Styles
-    classDef host fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
-    classDef files fill:#f59e0b1A,stroke:#f59e0b,color:#f59e0b;
-    classDef guard fill:#ef44441A,stroke:#ef4444,color:#ef4444;
-    classDef ok fill:#10b9811A,stroke:#10b981,color:#10b981;
-
-    class NAV,FRAME host;
-    class INDEX,SUBS,ASSETS,SDK files;
-    class PROTO,CSP,DENY guard;
-    class STORE,NET ok;
-`,
-    explanationPrefix: 'docs.diagram.customPages.node.'
+        { from: 'FRAME', to: 'PROTO', label: 'bmmpage', thick: true },
+        { from: 'GRANTS', to: 'PROTO', label: 'origins', dashed: true },
+        { from: 'FRAME', to: 'BROKER', label: 'postMessage', tone: 'info', thick: true },
+        { from: 'BROKER', to: 'GATE', label: '~invoke', thick: true },
+        { from: 'GRANTS', to: 'GATE', label: '~reads', dashed: true },
+        { from: 'GATE', to: 'DENIED', label: '~refused', tone: 'danger' },
+        { from: 'GATE', to: 'STORAGE', label: 'granted', tone: 'ok' },
+        { from: 'GATE', to: 'FETCH', label: 'network', tone: 'ok' },
+    ],
 };

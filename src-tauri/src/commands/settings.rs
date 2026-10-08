@@ -731,6 +731,61 @@ pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
     BcConfig { test_mode, base_url }
 }
 
+/// `DocsReplays=false` (or `off`) in app.cfg: Help & Other shows no session replay
+/// (.bmmreplay) at all. Line-parsed like `BCTestMode` — key case-insensitive, spaces around
+/// `=` allowed — and NOT a substring search, so `#DocsReplays=false` does not count (a line
+/// starting with `#` is a key named `#docsreplays`, which nothing reads). Anything else, a
+/// missing line or a missing file leaves replays ON: a file nobody wrote must not hide content.
+pub fn docs_replays_from_cfg(content: &str) -> bool {
+    let mut on = true;
+    for line in content.lines() {
+        if let Some((k, v)) = line.trim().split_once('=') {
+            if k.trim().eq_ignore_ascii_case("docsreplays") {
+                let v = v.trim();
+                on = !(v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off"));
+            }
+        }
+    }
+    on
+}
+
+/// Whether the in-app documentation shows `.bmmreplay` embeds. Read by docs/doc-replays.ts.
+#[tauri::command]
+pub fn docs_replays_enabled(app_handle: tauri::AppHandle) -> bool {
+    resolve_path(&app_handle, "app.cfg")
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .map(|c| docs_replays_from_cfg(&c))
+        .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod docs_replays_cfg_tests {
+    use super::docs_replays_from_cfg;
+
+    #[test]
+    fn replays_are_on_unless_the_file_says_otherwise() {
+        assert!(docs_replays_from_cfg(""));
+        assert!(docs_replays_from_cfg("Prod=true\nPTB=true\n"));
+        assert!(docs_replays_from_cfg("DocsReplays=true"));
+        assert!(docs_replays_from_cfg("DocsReplays=maybe"));
+    }
+
+    #[test]
+    fn false_or_off_hides_them_whatever_the_spelling() {
+        assert!(!docs_replays_from_cfg("DocsReplays=false"));
+        assert!(!docs_replays_from_cfg("docsreplays=OFF"));
+        assert!(!docs_replays_from_cfg("Prod=true\r\n  DocsReplays = False  \r\nPTB=true"));
+    }
+
+    #[test]
+    fn a_commented_line_is_not_read_and_the_last_line_wins() {
+        assert!(docs_replays_from_cfg("#DocsReplays=false"));
+        assert!(docs_replays_from_cfg("DocsReplays=false\nDocsReplays=true"));
+        // A key that merely CONTAINS the name is another key.
+        assert!(docs_replays_from_cfg("NoDocsReplays=false"));
+    }
+}
+
 #[derive(serde::Serialize)]
 pub struct QuickLinksConfig {
     pub card1_disabled: bool,

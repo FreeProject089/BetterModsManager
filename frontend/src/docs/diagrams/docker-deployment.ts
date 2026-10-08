@@ -1,48 +1,54 @@
-export const dockerDeployment = {
-    titleKey: 'docs.diagram.dockerDeployment.title',
-    explanationPrefix: 'docs.diagram.dockerDeployment.',
-    definition: `
-graph TD
-    subgraph HOST["Machine hote (Windows / Linux / macOS)"]
-        CMD["docker compose up -d"]
-        DC["Docker Engine"]
-        subgraph CONTAINER["Conteneur BMM Server"]
-            APP["BMM Server :8080"]
-            DATA["Volume ./data"]
-            APP --- DATA
-        end
-        CMD --> DC
-        DC --> CONTAINER
-        NGROK["ngrok Agent"]
-    end
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    subgraph CLOUD["ngrok Cloud"]
-        TUNNEL["Tunnel HTTPS - abc123.ngrok-free.app"]
-    end
+// Running a standalone repo server in Docker. BMM does not run Docker itself: with "Docker"
+// ticked, generate_mini_server_files (repo.rs) writes a Dockerfile picked from four templates
+// (Node server or script server, Linux or Windows host), a docker-compose.yml and a private
+// .env holding ADMIN_PASSWORD (docker_export.rs) next to repo.json. The owner then runs
+// `docker compose up -d` on the machine that will serve the repo.
+export const dockerDeployment: DiagramSpec = {
+    id: 'docker-deployment',
+    i18n: 'docs.diagram.docker-deployment',
+    category: 'sharing',
+    dir: 'TB',
+    article: 'docker-deployment',
+    related: ['hosting-flow', 'server-mode'],
+    groups: [
+        { id: 'BMM', dir: 'LR' },
+        { id: 'FILES', dir: 'LR' },
+        { id: 'HOST' },
+    ],
+    nodes: [
+        { id: 'CARD', kind: 'ui', group: 'BMM', icon: 'icon-settings', refs: ['frontend/src/features/repo/repo-server.ts › initRepoServer', 'frontend/src/features/repo/repo.ts › initRepo'] },
+        { id: 'GEN', kind: 'rust', group: 'BMM', icon: 'icon-build', refs: ['src-tauri/src/commands/repo.rs › generate_standalone_server', 'src-tauri/src/commands/repo.rs › generate_mini_server_files', 'src-tauri/src/commands/repo.rs › MiniServerExportOptions'] },
+        { id: 'KIND', kind: 'decision', group: 'BMM', refs: ['src-tauri/src/commands/repo.rs › generate_mini_server_files'] },
 
-    subgraph CLIENTS["Clients BMM"]
-        C1["Client 1"]
-        C2["Client 2"]
-        C3["Client 3"]
-    end
+        { id: 'SERVER', kind: 'data', group: 'FILES', icon: 'icon-script', refs: ['src-tauri/src/templates/mini-server/server.express.js.template', 'src-tauri/src/templates/mini-server/server.v2.sh.template', 'src-tauri/src/commands/repo.rs › write_access_starter'] },
+        { id: 'DOCKERFILE', kind: 'data', group: 'FILES', icon: 'icon-box', refs: ['src-tauri/src/templates/docker/Dockerfile.server.linux.template', 'src-tauri/src/templates/docker/Dockerfile.linux.template', 'src-tauri/src/templates/docker/Dockerfile.server.windows.template'] },
+        { id: 'COMPOSE', kind: 'data', group: 'FILES', icon: 'icon-file', refs: ['src-tauri/src/templates/docker/docker-compose.server.yml.template', 'src-tauri/src/templates/docker/docker-compose.yml.template'] },
+        { id: 'ENV', kind: 'data', group: 'FILES', icon: 'icon-key', refs: ['src-tauri/src/commands/docker_export.rs › write_docker_files', 'src-tauri/src/commands/docker_export.rs › env_line'] },
 
-    APP -->|"port 8080"| NGROK
-    NGROK -->|"TLS tunnel"| TUNNEL
-    C1 -->|"HTTPS"| TUNNEL
-    C2 -->|"HTTPS"| TUNNEL
-    C3 -->|"HTTPS"| TUNNEL
+        { id: 'UP', kind: 'ext', group: 'HOST', icon: 'icon-terminal', refs: ['src-tauri/src/templates/docker/docker-compose.server.yml.template'] },
+        { id: 'VOLUMES', kind: 'data', group: 'HOST', icon: 'icon-folder', refs: ['src-tauri/src/templates/docker/docker-compose.yml.template'] },
+        { id: 'CONTAINER', kind: 'ext', group: 'HOST', icon: 'icon-server', refs: ['src-tauri/src/templates/docker/Dockerfile.server.linux.template', 'src-tauri/src/templates/mini-server/server.express.js.template'] },
+        { id: 'EXPOSE', kind: 'ext', group: 'HOST', icon: 'icon-globe', refs: ['src-tauri/src/templates/docker/docker-compose.yml.template'] },
 
-    style HOST fill:#0d1117,stroke:#06b6d4,stroke-width:2px,color:#e6edf3
-    style CONTAINER fill:#0a1628,stroke:#22d3ee,stroke-width:1.5px,color:#e6edf3
-    style CLOUD fill:#0a1220,stroke:#3b82f6,stroke-width:2px,color:#e6edf3
-    style CLIENTS fill:#0a1220,stroke:#22c55e,stroke-width:2px,color:#e6edf3
-    style APP fill:#06b6d4,stroke:#fff,stroke-width:2px,color:#fff
-    style NGROK fill:#6366f1,stroke:#fff,stroke-width:2px,color:#fff
-    style TUNNEL fill:#3b82f6,stroke:#fff,stroke-width:2px,color:#fff
-    style CMD fill:#1e293b,stroke:#475569,stroke-width:1px,color:#94a3b8
-    style DATA fill:#134e4a,stroke:#10b981,stroke-width:1px,color:#d1fae5
-    style C1 fill:#14532d,stroke:#22c55e,stroke-width:1px,color:#d1fae5
-    style C2 fill:#14532d,stroke:#22c55e,stroke-width:1px,color:#d1fae5
-    style C3 fill:#14532d,stroke:#22c55e,stroke-width:1px,color:#d1fae5
-    `
+        { id: 'CLIENTS', kind: 'outcome', icon: 'icon-users', link: 'server-mode', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo'] },
+    ],
+    edges: [
+        { from: 'CARD', to: 'GEN', thick: true },
+        { from: 'GEN', to: 'SERVER', label: '~writes' },
+        { from: 'GEN', to: 'KIND', label: 'docker', thick: true },
+        { from: 'KIND', to: 'DOCKERFILE', thick: true },
+        { from: 'KIND', to: 'COMPOSE' },
+        { from: 'KIND', to: 'ENV' },
+        { from: 'SERVER', to: 'UP' },
+        { from: 'DOCKERFILE', to: 'UP', label: 'build', thick: true },
+        { from: 'COMPOSE', to: 'UP' },
+        { from: 'ENV', to: 'UP', label: 'envFile', dashed: true },
+        { from: 'COMPOSE', to: 'VOLUMES', label: 'mounts', dashed: true },
+        { from: 'UP', to: 'CONTAINER', thick: true },
+        { from: 'VOLUMES', to: 'CONTAINER', dashed: true },
+        { from: 'CONTAINER', to: 'EXPOSE', thick: true },
+        { from: 'EXPOSE', to: 'CLIENTS', thick: true },
+    ],
 };

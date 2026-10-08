@@ -18398,51 +18398,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .ssh-src-hint { font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 2px 0 0; }
 
 
-/* ── Tutorial creator & catalogues ──
-   One family: both are children of the hub, and both borrow .modal-overlay for the dim. */
-/* ABOVE the tutorial hub.
-   The hub overlay sits at z-index 2000000 so a lesson's spotlight can cover the whole app.
-   These two are opened FROM it and inherit .modal-overlay's 11000 — which put them behind
-   the thing that opened them: visible as a dim, unreachable, and looking like nothing
-   happened. Measured, not guessed: 2000000 is what .tut-hub-overlay declares. */
-.tutc-overlay { z-index: 2000100; }
-
-.tutc-panel {
-    width: min(760px, 92vw); max-height: 84vh; overflow-y: auto;
-    background: var(--bmm-bg-elevated); border: 1px solid var(--border);
-    border-radius: 16px; padding: 18px 20px;
-    display: flex; flex-direction: column; gap: 12px;
-}
-.tutc-head { display: flex; align-items: center; justify-content: space-between; }
-.tutc-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
-.tutc-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; }
-.tutc-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tutc-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
-.tutc-color { height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; }
-.tutc-parts { display: flex; gap: 6px; flex-wrap: wrap; }
-.tutc-part-chip {
-    padding: 4px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
-    border: 1px solid var(--border); background: var(--bmm-s03); color: var(--text-secondary);
-}
-.tutc-part-chip.on { border-color: var(--accent); color: var(--text-primary); background: var(--bmm-s05); }
-.tutc-part-chip.tutc-add { border-style: dashed; }
-.tutc-part-head { display: flex; align-items: flex-end; gap: 10px; }
-.tutc-steps { display: flex; flex-direction: column; gap: 10px; }
-.tutc-step { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bmm-s02); }
-.tutc-step-head { display: flex; align-items: center; gap: 8px; }
-.tutc-step-n {
-    width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
-    display: grid; place-items: center; font-size: 11px; font-weight: 700;
-    background: var(--bmm-s05); color: var(--text-secondary);
-}
-.tutc-step-title { flex: 1; min-width: 0; }
-.tutc-step-del { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 15px; }
-.tutc-step-del:hover { color: var(--danger); }
-.tutc-step-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.tutc-step-row > .input { flex: 1 1 150px; min-width: 130px; }
-.tutc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.tutc-hint { font-size: 11px; color: var(--text-muted); }
-.tut-hub-tools { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--border); }
 
 
 
@@ -18478,15 +18433,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .tut-pick-esc { font-size: 11px; color: var(--text-muted); }
 
-/* The condition editor answers as you type. Bad reads red; good and the help line read
-   quiet — a green message for "this parses" would be louder than the fact deserves. */
-.tutc-hint { font-size: 11px; color: var(--text-muted); margin: 3px 2px 0; line-height: 1.4; }
-.tutc-hint.is-bad { color: var(--danger, #ef4444); }
-
-/* The icon button shows the chosen glyph, or a placeholder that reads as an invitation
-   rather than as a missing image. */
-.tutc-iconbtn { display: inline-flex; align-items: center; gap: 6px; }
-.tutc-iconempty { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; border: 1px dashed var(--border-color, #232d42); color: var(--text-muted, #64748b); font-size: 12px; line-height: 1; }
 
 
 /* A quiet footer inside a mapper panel: the one fact the screen does not show by itself,

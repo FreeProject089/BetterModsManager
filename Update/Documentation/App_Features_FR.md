@@ -648,7 +648,7 @@ Une seule barre de recherche sur toute l'app : appuyez sur **Ctrl/⌘+K** n'impo
 
 | Fonctionnalité | Description |
 | :--- | :--- |
-| **Hub Help & Other** | Articles bilingues pilotés par les données (parties utilisateur + développeur), recherche classique & sémantique, 41 diagrammes Mermaid interactifs avec explications par nœud. |
+| **Hub Help & Other** | Articles bilingues pilotés par les données (parties utilisateur + développeur), recherche classique & sémantique, 45 diagrammes Mermaid interactifs avec explications par nœud. |
 | **Site BMM Docs** | Le site miroite le contenu in-app (sans les éléments interactifs) avec diagrammes Mermaid et une référence API complète — prêt pour le PDF. |
 | **Tutoriels interactifs** | Tutoriels guidés (coach-card) pilotant la vraie UI, avec un bac à sable auto-nettoyant (profil d'exemple, mods avec conflit volontaire, modpack d'exemple). Couvre désormais aussi la palette de commandes & les raccourcis. |
 | **Traduire BMM** | Le Bac à sable de traduction : créez une langue, traduisez clé par clé avec aperçus en direct et barre de progression, exportez/importez — sans recompilation. |

@@ -360,6 +360,498 @@ pub async fn ai_task_suggest(app: tauri::AppHandle, state: State<'_, AppState>, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// The Laya building blocks of a task (Oct 2026): a mod's tags, the library check, crash
+// labels, report triage, Laya's state, a crash explanation. Same rules as the three above:
+// the guard and the slot first, local Laya only for anything a model reads, nothing written
+// unless the user's own « apply without asking » says so, and logs with counts only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Mods whose tags the library check asks Laya about, at most, per step.
+pub const MAX_LIBRARY_SUGGEST: usize = 10;
+/// Rows of each finding the library check returns.
+pub const MAX_LIBRARY_ROWS: usize = 100;
+/// Crash reports labelled per step (the same bound as « Trouver les causes »).
+pub const MAX_CRASH_LABELS: usize = crate::commands::ai_assist::MAX_LABEL_PATHS;
+
+/// The provider an UNATTENDED step may use when a model reads the user's files: the embedded
+/// engine or the user's own laya-serve. BetterCommunity is refused even with its consent — a
+/// task that fires at night does not send a mod's readme or a crash log to a server.
+pub fn local_only(s: &ai_core::AiSettings, feature: ai_core::Feature, killed: bool) -> Result<ai_core::Provider, String> {
+    use ai_core::Provider;
+    match ai_core::gate(s, feature, killed) {
+        Ok(p @ (Provider::Embedded | Provider::Local)) => Ok(p),
+        Ok(_) => Err("ai.task.blocked|no_provider".into()),
+        Err(w) => Err(format!("ai.task.blocked|{}", w)),
+    }
+}
+
+/// A core error (`classifier:ai_off`, `generative:no_model`, `mod_not_found`) as a task code.
+fn task_err(e: &str) -> String {
+    if e.starts_with("ai.task.") {
+        return e.to_string();
+    }
+    if e == "mod_not_found" {
+        return "ai.task.noMod".into();
+    }
+    format!("ai.task.blocked|{}", e.split(':').next_back().unwrap_or("failed").chars().take(40).collect::<String>())
+}
+
+// ── ai.status ───────────────────────────────────────────────────────────────
+
+/// What a task can know about Laya without running it. `available` = an AI step would be let
+/// through now (switch on, no kill switch, no game, a local classifier that is really there).
+/// `writer`: `None` = no writing model; `Some(remote)` = one is configured.
+pub fn laya_state(s: &ai_core::AiSettings, killed: bool, game: bool, installed: bool, loaded: bool, writer: Option<bool>) -> Value {
+    use ai_core::{Feature, Provider};
+    let provider = match ai_core::gate(s, Feature::Classify, killed) {
+        Ok(Provider::Embedded) => "embedded",
+        Ok(Provider::Local) => "local",
+        Ok(_) => "other",
+        Err(_) => "none",
+    };
+    let ready = match provider {
+        "embedded" => installed,
+        "local" => true,
+        _ => false,
+    };
+    json!({
+        "enabled": s.enabled && !killed,
+        "killed": killed,
+        "game": game,
+        "provider": provider,
+        "installed": installed,
+        "loaded": installed && loaded,
+        "available": guard_with(s.enabled, killed, game).is_none() && ready,
+        "writer": writer.is_some(),
+        "writerRemote": writer.unwrap_or(false),
+    })
+}
+
+/// `ai.status`: Laya's state for a task's variables. Reads settings and the engine's status;
+/// runs no model, so it costs no budget and answers with AI off (that is what it reports).
+#[tauri::command]
+pub fn ai_task_status(state: State<AppState>) -> Value {
+    let dir = data_dir(&state);
+    let (settings, lk, ek, _) = crate::commands::ai::ctx_owned(&dir, None);
+    let emb = ai_embedded::status();
+    let killed = ai_core::kill_switch();
+    let t = HttpTransport;
+    let ctx = Ctx { settings: &settings, transport: &t, local_model: None, killed, local_key: lk, external_key: ek, bc: None };
+    // Only reads the settings: `gen_target` builds an address, it calls nothing.
+    let writer = ai_core::gen_target(&ctx, ai_core::Feature::CrashExplain).ok().map(|g| g.provider == ai_core::Provider::External);
+    laya_state(&settings, killed, game_active(), emb.installed, emb.loaded, writer)
+}
+
+// ── ai.classify_mod ─────────────────────────────────────────────────────────
+
+/// A mod's classification as a task keeps it: the tags Laya chose (ids of the user's OWN tags,
+/// with their names), the adult-content hint, and which tags would be applied. A tag is
+/// applied only as « Analyser la bibliothèque » applies one without asking: Laya's, applicable,
+/// not a flagged guess — and only when the user's « apply without asking » is on.
+pub fn mod_classes(sugg: &[ai_core::Suggestion], vocab: &ai_core::Vocab, auto_apply: bool) -> Value {
+    let mut tags: Vec<Value> = Vec::new();
+    let mut apply: Vec<String> = Vec::new();
+    let mut adult: Option<(bool, f64)> = None;
+    for s in sugg {
+        let from_laya = s.source == "laya" || s.source == "embedded";
+        if !from_laya {
+            continue;
+        }
+        match s.field.as_str() {
+            "tags" => {
+                let Some(id) = s.value.as_str() else { continue };
+                // Only a tag the user has: a provider cannot name one of its own.
+                let Some((_, name)) = vocab.iter().find(|(v, _)| v == id) else { continue };
+                if tags.iter().any(|t| t["id"] == id) {
+                    continue;
+                }
+                tags.push(json!({ "id": id, "name": name, "p": (s.confidence as f64 * 10_000.0).round() / 10_000.0, "uncertain": s.uncertain }));
+                if auto_apply && s.applicable && !s.uncertain {
+                    apply.push(id.to_string());
+                }
+            }
+            "nsfw" => {
+                let p = s.note.parse::<f64>().ok().filter(|p| p.is_finite()).map(|p| p.clamp(0.0, 1.0));
+                if let Some(p) = p {
+                    adult = Some((p >= 0.5, p));
+                }
+            }
+            _ => {}
+        }
+    }
+    tags.sort_by(|a, b| b["p"].as_f64().unwrap_or(0.0).partial_cmp(&a["p"].as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal));
+    json!({
+        "tags": tags,
+        "abstained": tags.is_empty(),
+        "adult": adult.map(|(a, _)| a).unwrap_or(false),
+        "adultP": adult.map(|(_, p)| p).unwrap_or(0.0),
+        "toApply": apply,
+        "autoApply": auto_apply,
+    })
+}
+
+/// `ai.classify_mod`: tags and the adult hint for one mod, from its own files, by local Laya
+/// with the « Analyser la bibliothèque » answer settings. `apply` writes the tags the user's
+/// « apply without asking » would (tags only, added, never removed), through the same apply
+/// as the dialog (history line included). Off = nothing written, the tags are proposals.
+#[tauri::command(async)]
+pub async fn ai_task_classify_mod(state: State<'_, AppState>, mod_id: String, apply: Option<bool>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let id = mod_id.trim().to_string();
+    if id.is_empty() || id.len() > 200 {
+        return Err("ai.task.noMod".into());
+    }
+    let (facts, vocab) = {
+        let data = state.data.lock().map_err(|_| "ai.task.failed".to_string())?;
+        let m = data.mods.iter().find(|m| m.id == id).ok_or_else(|| "ai.task.noMod".to_string())?;
+        let vocab: ai_core::Vocab = data.custom_tags.iter().map(|t| (t.id.clone(), t.name.clone())).collect();
+        (crate::commands::ai::mod_facts(m), vocab)
+    };
+    let permit = slot(&dir).await?;
+    let (settings, lk, _, _) = crate::commands::ai::ctx_owned(&dir, None);
+    local_only(&settings, ai_core::Feature::ModSuggest, ai_core::kill_switch())?;
+    let auto_apply = settings.laya.resolve(ai_tuning::Area::Library).auto_apply;
+    let job = tauri::async_runtime::spawn_blocking(move || {
+        let _permit = permit;
+        let t = HttpTransport;
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed: ai_core::kill_switch(), local_key: lk, external_key: None, bc: None };
+        let extra = crate::commands::ai::archive_names(&facts.path);
+        let ex = ai_core::extract(&facts, &vocab, &extra);
+        let text = ai_core::provider_text(&facts, &ex);
+        let (s, notes) = ai_core::classify_mod_in(&ctx, &text, &vocab, ai_tuning::Area::Library);
+        (s, notes, vocab)
+    });
+    let (sugg, notes, vocab) = match tokio::time::timeout(RUN_TIMEOUT, job).await {
+        Err(_) => return Err("ai.task.blocked|timeout".into()),
+        Ok(Err(_)) => return Err("ai.task.failed".into()),
+        Ok(Ok(r)) => r,
+    };
+    // The engine refused (absent, broken): said as such, not as « no tag ».
+    if sugg.is_empty() {
+        if let Some(n) = notes.iter().find(|n| n.starts_with("classifier:") || n.starts_with("laya:") || n.starts_with("embedded:")) {
+            return Err(task_err(n));
+        }
+    }
+    let mut out = mod_classes(&sugg, &vocab, auto_apply);
+    let to_apply: Vec<String> = out["toApply"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+    let mut applied: Vec<String> = Vec::new();
+    if apply.unwrap_or(false) && !to_apply.is_empty() {
+        let r = crate::commands::ai::ai_apply_mod_metadata(state, id.clone(), json!({ "tags": to_apply }))?;
+        if r["applied"].as_array().map(|a| a.iter().any(|x| x == "tags")).unwrap_or(false) {
+            let skipped: Vec<String> = r["skippedTags"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            applied = to_apply.into_iter().filter(|t| !skipped.contains(t)).collect();
+        }
+    }
+    out["applied"] = json!(applied);
+    crate::commands::crash::log_line(format!("[AI-TASK] classify_mod tags={} applied={}", out["tags"].as_array().map(|a| a.len()).unwrap_or(0), applied.len()));
+    Ok(out)
+}
+
+// ── ai.library_check ────────────────────────────────────────────────────────
+
+/// One mod as the library check reads it.
+#[derive(Debug, Clone, Default)]
+pub struct LibMod {
+    pub id: String,
+    pub name: String,
+    pub tags: usize,
+    pub content_id: Option<String>,
+    /// Other mods this one overwrites files of, right now (`ConflictStatus::Active`).
+    pub active_conflicts: Vec<String>,
+}
+
+/// A name with case, spaces, punctuation and a trailing version set aside: « My Mod v1.2 »
+/// and « my_mod » are the same mod twice.
+pub fn name_key(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let cut = lower.split(|c: char| c == '(' || c == '[').next().unwrap_or("");
+    let words: Vec<&str> = cut.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let keep: Vec<&str> = words.iter().copied().filter(|w| !(w.starts_with('v') && w[1..].chars().all(|c| c.is_ascii_digit()) && w.len() > 1) && !w.chars().all(|c| c.is_ascii_digit())).collect();
+    keep.concat()
+}
+
+/// The three findings of « Vérifier la bibliothèque », computed from the library alone (no
+/// model): untagged mods, likely duplicates (same content id, or the same name once case,
+/// punctuation and a version are set aside), and pairs that overwrite each other's files now.
+pub fn library_findings(mods: &[LibMod]) -> Value {
+    let row = |m: &LibMod| json!({ "id": m.id, "name": m.name });
+    let untagged: Vec<Value> = mods.iter().filter(|m| m.tags == 0).take(MAX_LIBRARY_ROWS).map(row).collect();
+    let mut dups: Vec<Value> = Vec::new();
+    let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (i, m) in mods.iter().enumerate() {
+        let keys: Vec<String> = [m.content_id.clone().filter(|c| !c.trim().is_empty()).map(|c| format!("c:{}", c)), Some(name_key(&m.name)).filter(|k| k.chars().count() >= 3).map(|k| format!("n:{}", k))].into_iter().flatten().collect();
+        let mut matched = None;
+        for k in &keys {
+            if let Some(&j) = seen.get(k) {
+                matched = Some(j);
+                break;
+            }
+        }
+        match matched {
+            Some(j) if dups.len() < MAX_LIBRARY_ROWS => dups.push(json!({ "a": row(&mods[j]), "b": row(m) })),
+            Some(_) => {}
+            None => {
+                for k in keys {
+                    seen.entry(k).or_insert(i);
+                }
+            }
+        }
+    }
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut conflicts: Vec<Value> = Vec::new();
+    for m in mods {
+        for other in &m.active_conflicts {
+            let key = if m.id < *other { (m.id.clone(), other.clone()) } else { (other.clone(), m.id.clone()) };
+            if pairs.contains(&key) || conflicts.len() >= MAX_LIBRARY_ROWS {
+                continue;
+            }
+            let Some(o) = mods.iter().find(|x| x.id == *other) else { continue };
+            pairs.push(key);
+            conflicts.push(json!({ "a": row(m), "b": row(o) }));
+        }
+    }
+    json!({ "total": mods.len(), "untagged": untagged, "duplicates": dups, "conflicts": conflicts })
+}
+
+/// `ai.library_check`: the findings above, then — for at most `suggest` untagged mods
+/// ([`MAX_LIBRARY_SUGGEST`]) — the tags local Laya would give them. Writes nothing.
+#[tauri::command(async)]
+pub async fn ai_task_library_check(state: State<'_, AppState>, suggest: Option<u32>) -> Result<Value, String> {
+    use crate::models::mod_entry::ConflictStatus;
+    let dir = data_dir(&state);
+    let (lib, facts, vocab) = {
+        let data = state.data.lock().map_err(|_| "ai.task.failed".to_string())?;
+        let lib: Vec<LibMod> = data
+            .mods
+            .iter()
+            .take(crate::commands::ai::ANALYZE_MAX)
+            .map(|m| LibMod {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                tags: m.tags.len(),
+                content_id: m.content_id.clone(),
+                active_conflicts: m.conflicts.iter().filter(|c| matches!(c.status, ConflictStatus::Active)).map(|c| c.other_mod_id.clone()).collect(),
+            })
+            .collect();
+        let n = (suggest.unwrap_or(5) as usize).min(MAX_LIBRARY_SUGGEST);
+        let facts: Vec<(String, ai_core::ModFacts)> = data.mods.iter().filter(|m| m.tags.is_empty()).take(n).map(|m| (m.id.clone(), crate::commands::ai::mod_facts(m))).collect();
+        let vocab: ai_core::Vocab = data.custom_tags.iter().map(|t| (t.id.clone(), t.name.clone())).collect();
+        (lib, facts, vocab)
+    };
+    let permit = slot(&dir).await?;
+    let mut out = library_findings(&lib);
+    let (settings, lk, _, _) = crate::commands::ai::ctx_owned(&dir, None);
+    // The findings need no model; the suggestions need a LOCAL one. Another classifier (or
+    // none) is a note, not a failure: the check itself still stands.
+    let local = local_only(&settings, ai_core::Feature::ModSuggest, ai_core::kill_switch());
+    let mut notes: Vec<String> = Vec::new();
+    let mut suggested: Vec<Value> = Vec::new();
+    if let Err(e) = &local {
+        notes.push(e.clone());
+    } else if !facts.is_empty() && !vocab.is_empty() {
+        let job = tauri::async_runtime::spawn_blocking(move || {
+            let _permit = permit;
+            let t = HttpTransport;
+            let ctx = Ctx { settings: &settings, transport: &t, local_model: Some(&ai_embedded::Embedded), killed: ai_core::kill_switch(), local_key: lk, external_key: None, bc: None };
+            let t0 = Instant::now();
+            let mut rows: Vec<Value> = Vec::new();
+            for (id, f) in &facts {
+                // Inside the run timeout, whatever the number of mods asked for.
+                if t0.elapsed() > RUN_TIMEOUT - Duration::from_secs(8) {
+                    break;
+                }
+                let extra = crate::commands::ai::archive_names(&f.path);
+                let ex = ai_core::extract(f, &vocab, &extra);
+                let (s, _) = ai_core::classify_mod_in(&ctx, &ai_core::provider_text(f, &ex), &vocab, ai_tuning::Area::Library);
+                let c = mod_classes(&s, &vocab, false);
+                let names: Vec<Value> = c["tags"].as_array().map(|a| a.iter().filter(|t| t["uncertain"] != true).map(|t| t["name"].clone()).collect()).unwrap_or_default();
+                if !names.is_empty() {
+                    rows.push(json!({ "id": id, "name": f.name, "tags": names }));
+                }
+            }
+            rows
+        });
+        match tokio::time::timeout(RUN_TIMEOUT, job).await {
+            Ok(Ok(rows)) => suggested = rows,
+            Ok(Err(_)) => notes.push("ai.task.failed".into()),
+            Err(_) => notes.push("ai.task.blocked|timeout".into()),
+        }
+    }
+    out["suggested"] = json!(suggested);
+    out["notes"] = json!(notes);
+    crate::commands::crash::log_line(format!(
+        "[AI-TASK] library total={} untagged={} duplicates={} conflicts={} suggested={}",
+        out["total"], out["untagged"].as_array().map(|a| a.len()).unwrap_or(0), out["duplicates"].as_array().map(|a| a.len()).unwrap_or(0), out["conflicts"].as_array().map(|a| a.len()).unwrap_or(0), out["suggested"].as_array().map(|a| a.len()).unwrap_or(0)
+    ));
+    Ok(out)
+}
+
+// ── ai.crash_label / ai.explain_crash ───────────────────────────────────────
+
+/// A crash report as a task picks it: (name, path, date in seconds).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrashRow {
+    pub name: String,
+    pub path: String,
+    pub date: u64,
+}
+
+fn crash_rows(list: Vec<crate::commands::crash::CrashReportEntry>) -> Vec<CrashRow> {
+    // « Crash » only: a session report is not a crash, and the archive is what the user put away.
+    list.into_iter().filter(|e| e.category == "Crash").map(|e| CrashRow { date: e.date.parse().unwrap_or(0), name: e.name, path: e.path }).collect()
+}
+
+/// The reports newer than `since`, OLDEST first, at most `limit`: a run that finds twenty new
+/// crashes labels the first twelve and the next run carries on from there. `newest_first`
+/// (« the latest ones », no memory) takes the most recent instead.
+pub fn pick_new(rows: &[CrashRow], since: u64, limit: usize, newest_first: bool) -> Vec<CrashRow> {
+    let mut fresh: Vec<CrashRow> = rows.iter().filter(|r| r.date > since).cloned().collect();
+    fresh.sort_by(|a, b| a.date.cmp(&b.date).then(a.name.cmp(&b.name)));
+    if newest_first {
+        fresh.reverse();
+    }
+    fresh.truncate(limit.clamp(1, MAX_CRASH_LABELS));
+    fresh
+}
+
+/// The report a step names: by its file name (`{ai.crash.report}`) or its full path, else the
+/// newest. Only a report BMM lists can be named, so a step cannot point « explain » elsewhere.
+pub fn resolve_report(rows: &[CrashRow], want: &str) -> Option<CrashRow> {
+    let w = want.trim();
+    if w.is_empty() {
+        return rows.iter().max_by_key(|r| r.date).cloned();
+    }
+    rows.iter().find(|r| r.name == w || r.path == w).cloned()
+}
+
+/// One labelled crash for a task: the cause and its family (from the fixed list, never a word
+/// of the model's), the probability, and whether Laya abstained or kept a flagged guess.
+pub fn crash_item(row: &CrashRow, label: &Value, digest: Option<&Value>) -> Value {
+    let d = &label["decision"];
+    let abstained = d["abstained"].as_bool().unwrap_or(true) || label.get("error").is_some();
+    let cause = if abstained { "unknown".to_string() } else { d["label"].as_str().unwrap_or("unknown").to_string() };
+    let cause = if crate::commands::ai_assist::cause_ids().contains(&cause.as_str()) { cause } else { "unknown".to_string() };
+    let family = crate::commands::ai_assist::family_of(&cause).unwrap_or("unknown");
+    json!({
+        "report": row.name,
+        "date": row.date,
+        "cause": cause,
+        "family": family,
+        "p": if abstained { 0.0 } else { d["p"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0) },
+        "abstained": abstained,
+        "uncertain": d["uncertain"].as_bool().unwrap_or(false),
+        "cached": label["cached"].as_bool().unwrap_or(false),
+        // For grouping on the page side only (masked in Rust, never put in a variable).
+        "reason": digest.and_then(|g| g["reason"].as_str()).unwrap_or(""),
+        "excerpt": digest.and_then(|g| g["excerpt"].as_str()).map(|s| s.chars().take(600).collect::<String>()).unwrap_or_default(),
+    })
+}
+
+/// `ai.crash_label`: « Trouver les causes » on the crash reports newer than `since` (seconds),
+/// with the « Rapports de crash » answer settings, local Laya only. Returns one item per report
+/// and the date to remember for the next run.
+#[tauri::command(async)]
+pub async fn ai_task_crash_label(state: State<'_, AppState>, since: Option<u64>, limit: Option<u32>, newest_first: Option<bool>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let _permit = slot(&dir).await?;
+    let rows = crash_rows(crate::commands::crash::list_crash_reports().await.unwrap_or_default());
+    let since = since.unwrap_or(0);
+    let fresh = pick_new(&rows, since, limit.map(|l| l as usize).unwrap_or(MAX_CRASH_LABELS), newest_first.unwrap_or(false));
+    let waiting = rows.iter().filter(|r| r.date > since).count();
+    if fresh.is_empty() {
+        return Ok(json!({ "items": [], "newest": since, "pending": 0 }));
+    }
+    let paths: Vec<String> = fresh.iter().map(|r| r.path.clone()).collect();
+    let digests = match tokio::time::timeout(RUN_TIMEOUT, crate::commands::ai_assist::ai_crash_digests(state.clone(), paths.clone())).await {
+        Err(_) => return Err("ai.task.blocked|timeout".into()),
+        Ok(r) => r.map_err(|e| task_err(&e))?,
+    };
+    let labels = match tokio::time::timeout(RUN_TIMEOUT, crate::commands::ai_assist::ai_crash_label(state, paths)).await {
+        Err(_) => return Err("ai.task.blocked|timeout".into()),
+        Ok(r) => r.map_err(|e| task_err(&e))?,
+    };
+    let find = |v: &Value, p: &str| v["items"].as_array().and_then(|a| a.iter().find(|x| x["path"] == p).cloned());
+    let mut items = Vec::new();
+    let mut newest = since;
+    for r in &fresh {
+        let Some(l) = find(&labels, &r.path) else { continue };
+        items.push(crash_item(r, &l, find(&digests, &r.path).as_ref()));
+        newest = newest.max(r.date);
+    }
+    crate::commands::crash::log_line(format!("[AI-TASK] crash_label new={} labelled={}", waiting, items.len()));
+    Ok(json!({ "items": items, "newest": newest, "pending": waiting.saturating_sub(items.len()) }))
+}
+
+/// May « explain » use this writer? A remote one only when the step says so.
+pub fn writer_allowed(remote: bool, allow_remote: bool) -> Result<(), String> {
+    if remote && !allow_remote {
+        Err("ai.task.remoteWriter".into())
+    } else {
+        Ok(())
+    }
+}
+
+/// `ai.explain_crash`: « Expliquer » for one crash report (the newest when none is named), by
+/// the WRITING model the user configured — refused without one, and refused for a remote one
+/// unless the step allows it. The text is free text: the scheduler marks it untrusted.
+#[tauri::command(async)]
+pub async fn ai_task_explain_crash(state: State<'_, AppState>, report: Option<String>, allow_remote: Option<bool>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    let remote = {
+        let (settings, lk, ek, _) = crate::commands::ai::ctx_owned(&dir, None);
+        if let Some(why) = guard(&dir) {
+            return Err(format!("ai.task.blocked|{}", why));
+        }
+        let t = HttpTransport;
+        let ctx = Ctx { settings: &settings, transport: &t, local_model: None, killed: ai_core::kill_switch(), local_key: lk, external_key: ek, bc: None };
+        let g = ai_core::gen_target(&ctx, ai_core::Feature::CrashExplain).map_err(|_| "ai.task.noWriter".to_string())?;
+        g.provider == ai_core::Provider::External
+    };
+    writer_allowed(remote, allow_remote.unwrap_or(false))?;
+    let _permit = slot(&dir).await?;
+    let rows = crash_rows(crate::commands::crash::list_crash_reports().await.unwrap_or_default());
+    let row = resolve_report(&rows, report.as_deref().unwrap_or("")).ok_or_else(|| "ai.task.noCrash".to_string())?;
+    let v = match tokio::time::timeout(RUN_TIMEOUT, crate::commands::ai_assist::ai_crash_explain(state, row.path.clone())).await {
+        Err(_) => return Err("ai.task.blocked|timeout".into()),
+        Ok(r) => r.map_err(|e| task_err(&e))?,
+    };
+    let text: String = ai_core::clean_untrusted(v["text"].as_str().unwrap_or("")).chars().take(1200).collect();
+    crate::commands::crash::log_line(format!("[AI-TASK] explain_crash chars={} remote={}", text.chars().count(), remote));
+    Ok(json!({ "text": text, "report": row.name, "remote": remote, "untrusted": true }))
+}
+
+// ── ai.triage_report ────────────────────────────────────────────────────────
+
+/// One half of the report assist (`kind` or `area`) for a task: a label from the fixed list
+/// or `none`, its probability, abstained / flagged guess.
+pub fn triage_half(d: &Value, allowed: &[&str]) -> Value {
+    let abstained = d["abstained"].as_bool().unwrap_or(true);
+    let label = d["label"].as_str().unwrap_or("none");
+    let label = if !abstained && allowed.contains(&label) { label } else { "none" };
+    json!({ "label": label, "p": if label == "none" { 0.0 } else { d["p"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0) }, "abstained": label == "none", "uncertain": d["uncertain"].as_bool().unwrap_or(false) })
+}
+
+/// `ai.triage_report`: is this text a suggestion, a bug or a crash, and which part of the app
+/// is it about — the feedback dialog's assist, with the « Rapports de bug » answer settings,
+/// local Laya only. The text (or a file's head) is masked before the model reads it.
+#[tauri::command(async)]
+pub async fn ai_task_triage(state: State<'_, AppState>, text: Option<String>, path: Option<String>) -> Result<Value, String> {
+    let dir = data_dir(&state);
+    // The guard BEFORE the file is touched.
+    let _permit = slot(&dir).await?;
+    let body = task_text(text.as_deref(), path.as_deref())?;
+    let v = match tokio::time::timeout(RUN_TIMEOUT, crate::commands::ai_assist::ai_report_assist(state, body)).await {
+        Err(_) => return Err("ai.task.blocked|timeout".into()),
+        Ok(r) => r.map_err(|e| task_err(&e))?,
+    };
+    let kinds: Vec<&str> = crate::commands::ai_assist::REPORT_KINDS.iter().map(|(k, _)| *k).collect();
+    let areas: Vec<&str> = crate::commands::ai_assist::APP_AREAS.iter().map(|(k, _)| *k).collect();
+    let out = json!({ "kind": triage_half(&v["kind"], &kinds), "area": triage_half(&v["area"], &areas) });
+    crate::commands::crash::log_line(format!("[AI-TASK] triage kind={} area={}", out["kind"]["label"], out["area"]["label"]));
+    Ok(out)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -488,5 +980,157 @@ mod tests {
         assert_eq!(compact_suggestions(&v).len(), 24);
         let v = json!({ "suggestions": [ { "field": "links", "value": { "url": "https://a.example", "label": "x" } } ] });
         assert_eq!(compact_suggestions(&v)[0]["value"], "https://a.example");
+    }
+
+    // ── The Laya building blocks (Oct 2026) ────────────────────────────────
+
+    fn on(classifier: &str) -> AiSettings {
+        AiSettings { enabled: true, classifier: classifier.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn an_unattended_step_uses_local_laya_or_nothing() {
+        use ai_core::{Feature, Provider};
+        let off = AiSettings { enabled: false, classifier: "embedded".into(), ..Default::default() };
+        assert_eq!(local_only(&off, Feature::ModSuggest, false).unwrap_err(), "ai.task.blocked|ai_off", "master switch off = refused");
+        assert_eq!(local_only(&on("embedded"), Feature::ModSuggest, true).unwrap_err(), "ai.task.blocked|killed");
+        assert_eq!(local_only(&on("embedded"), Feature::ModSuggest, false).unwrap(), Provider::Embedded);
+        assert_eq!(local_only(&on("local"), Feature::ModSuggest, false).unwrap(), Provider::Local);
+        // BetterCommunity, even with its consent: a task does not send a mod's files to a server.
+        let bc = AiSettings { bc_consent: true, ..on("bettercommunity") };
+        assert_eq!(local_only(&bc, Feature::ModSuggest, false).unwrap_err(), "ai.task.blocked|no_provider");
+        assert_eq!(local_only(&on("off"), Feature::ModSuggest, false).unwrap_err(), "ai.task.blocked|no_provider");
+    }
+
+    #[test]
+    fn core_errors_become_task_codes() {
+        assert_eq!(task_err("classifier:ai_off"), "ai.task.blocked|ai_off");
+        assert_eq!(task_err("generative:no_model"), "ai.task.blocked|no_model");
+        assert_eq!(task_err("mod_not_found"), "ai.task.noMod");
+        assert_eq!(task_err("ai.task.noCrash"), "ai.task.noCrash");
+    }
+
+    #[test]
+    fn laya_state_says_what_a_step_would_meet() {
+        let off = AiSettings { enabled: false, classifier: "embedded".into(), ..Default::default() };
+        let v = laya_state(&off, false, false, true, true, None);
+        assert_eq!((v["enabled"].as_bool(), v["available"].as_bool(), v["provider"].as_str()), (Some(false), Some(false), Some("none")));
+        let v = laya_state(&on("embedded"), false, false, false, false, None);
+        assert_eq!(v["available"], false, "the built-in engine without its model is not available");
+        let v = laya_state(&on("embedded"), false, false, true, true, Some(true));
+        assert_eq!((v["available"].as_bool(), v["loaded"].as_bool(), v["writer"].as_bool(), v["writerRemote"].as_bool()), (Some(true), Some(true), Some(true), Some(true)));
+        assert_eq!(laya_state(&on("embedded"), false, true, true, true, None)["available"], false, "a game running holds Laya");
+        assert_eq!(laya_state(&on("local"), false, false, false, false, None)["available"], true, "laya-serve needs no local model");
+        assert_eq!(laya_state(&on("embedded"), false, false, false, true, None)["loaded"], false, "not loaded when not installed");
+    }
+
+    fn sug(field: &str, value: Value, source: &str, conf: f32, uncertain: bool, note: &str) -> ai_core::Suggestion {
+        ai_core::Suggestion { field: field.into(), value, source: source.into(), origin: String::new(), confidence: conf, applicable: field == "tags", note: note.into(), uncertain }
+    }
+
+    #[test]
+    fn a_mod_gets_only_the_users_own_tags_and_applies_only_sure_ones() {
+        let vocab: ai_core::Vocab = vec![("t1".into(), "Maps".into()), ("t2".into(), "Sounds".into()), ("t3".into(), "UI".into())];
+        let s = vec![
+            sug("tags", json!("t1"), "laya", 0.9, false, "Maps"),
+            sug("tags", json!("t2"), "laya", 0.55, true, "Sounds"),
+            sug("tags", json!("evil; rm -rf"), "laya", 0.99, false, ""),
+            sug("tags", json!("t3"), "file", 0.8, false, "UI"),
+            sug("nsfw", json!(true), "laya", 0.8, false, "0.80"),
+            sug("description", json!("text"), "laya", 0.9, false, ""),
+        ];
+        let off = mod_classes(&s, &vocab, false);
+        let ids: Vec<&str> = off["tags"].as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["t1", "t2"], "a tag the user does not have, or a file's, is not Laya's tag");
+        assert_eq!(off["toApply"].as_array().unwrap().len(), 0, "« apply without asking » off = nothing applied");
+        assert_eq!((off["adult"].as_bool(), off["adultP"].as_f64()), (Some(true), Some(0.8)));
+        let auto = mod_classes(&s, &vocab, true);
+        assert_eq!(auto["toApply"], json!(["t1"]), "a flagged guess is never applied");
+        let none = mod_classes(&[], &vocab, true);
+        assert_eq!((none["abstained"].as_bool(), none["adult"].as_bool()), (Some(true), Some(false)));
+    }
+
+    fn lm(id: &str, name: &str, tags: usize, cid: Option<&str>, conflicts: &[&str]) -> LibMod {
+        LibMod { id: id.into(), name: name.into(), tags, content_id: cid.map(str::to_string), active_conflicts: conflicts.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn the_library_check_finds_duplicates_untagged_and_overlaps() {
+        assert_eq!(name_key("My Mod v1.2"), name_key("my_mod"));
+        assert_eq!(name_key("Sky (HD) [2024]"), "sky");
+        assert_ne!(name_key("Sky"), name_key("Sea"));
+        let mods = vec![
+            lm("a", "Better Skies v2", 1, None, &["c"]),
+            lm("b", "better-skies", 0, None, &[]),
+            lm("c", "Clouds", 2, Some("cid-1"), &["a"]),
+            lm("d", "Clouds Reloaded", 0, Some("cid-1"), &[]),
+            lm("e", "UI", 0, None, &["ghost"]),
+        ];
+        let f = library_findings(&mods);
+        assert_eq!(f["total"], 5);
+        let untagged: Vec<&str> = f["untagged"].as_array().unwrap().iter().map(|r| r["id"].as_str().unwrap()).collect();
+        assert_eq!(untagged, vec!["b", "d", "e"]);
+        let dups: Vec<(String, String)> = f["duplicates"].as_array().unwrap().iter().map(|d| (d["a"]["id"].as_str().unwrap().into(), d["b"]["id"].as_str().unwrap().into())).collect();
+        assert_eq!(dups, vec![("a".into(), "b".into()), ("c".into(), "d".into())], "same name once tidied, same content id");
+        let c = f["conflicts"].as_array().unwrap();
+        assert_eq!(c.len(), 1, "a pair is counted once, an unknown mod not at all");
+        assert!(name_key("UI").chars().count() < 3, "a two-letter name is too short to call a duplicate");
+    }
+
+    fn cr(name: &str, date: u64) -> CrashRow {
+        CrashRow { name: name.into(), path: format!("C:/crash/{}", name), date }
+    }
+
+    #[test]
+    fn new_crashes_are_taken_oldest_first_and_bounded() {
+        let rows = vec![cr("c3.zip", 30), cr("c1.zip", 10), cr("c2.zip", 20), cr("c4.zip", 40)];
+        let p = pick_new(&rows, 10, 2, false);
+        assert_eq!(p.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["c2.zip", "c3.zip"]);
+        let p = pick_new(&rows, 0, 2, true);
+        assert_eq!(p.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["c4.zip", "c3.zip"], "« the latest »: newest first");
+        assert!(pick_new(&rows, 40, 12, false).is_empty());
+        assert_eq!(pick_new(&rows, 0, 999, false).len(), 4.min(MAX_CRASH_LABELS));
+        assert_eq!(pick_new(&rows, 0, 0, false).len(), 1, "a limit of 0 is 1, not « everything »");
+    }
+
+    #[test]
+    fn explain_names_only_a_listed_report() {
+        let rows = vec![cr("a.zip", 1), cr("b.zip", 5)];
+        assert_eq!(resolve_report(&rows, "").unwrap().name, "b.zip", "nothing named = the newest");
+        assert_eq!(resolve_report(&rows, "a.zip").unwrap().name, "a.zip");
+        assert_eq!(resolve_report(&rows, "C:/crash/a.zip").unwrap().name, "a.zip");
+        assert!(resolve_report(&rows, r"\\attacker\share\x.zip").is_none());
+        assert!(resolve_report(&[], "").is_none());
+    }
+
+    #[test]
+    fn a_remote_writer_needs_the_steps_say_so() {
+        assert!(writer_allowed(false, false).is_ok());
+        assert_eq!(writer_allowed(true, false).unwrap_err(), "ai.task.remoteWriter");
+        assert!(writer_allowed(true, true).is_ok());
+    }
+
+    #[test]
+    fn a_crash_label_is_a_known_cause_or_unknown() {
+        let row = cr("x.zip", 9);
+        let ok = json!({ "path": row.path, "decision": { "label": "disk_full", "p": 0.81, "abstained": false, "uncertain": false } });
+        let v = crash_item(&row, &ok, Some(&json!({ "reason": "No space left", "excerpt": "e" })));
+        assert_eq!((v["cause"].as_str(), v["family"].as_str(), v["p"].as_f64()), (Some("disk_full"), Some("disk"), Some(0.81)));
+        let made_up = json!({ "decision": { "label": "format c:", "p": 0.99, "abstained": false } });
+        assert_eq!(crash_item(&row, &made_up, None)["cause"], "unknown", "a word of the model's is not a cause");
+        let abst = json!({ "decision": { "label": "none", "p": 0.4, "abstained": true } });
+        let v = crash_item(&row, &abst, None);
+        assert_eq!((v["cause"].as_str(), v["abstained"].as_bool(), v["p"].as_f64()), (Some("unknown"), Some(true), Some(0.0)));
+        assert_eq!(crash_item(&row, &json!({ "error": "unreadable" }), None)["abstained"], true);
+    }
+
+    #[test]
+    fn triage_keeps_only_the_fixed_lists() {
+        let kinds = ["feedback", "bug", "crash"];
+        let v = triage_half(&json!({ "label": "bug", "p": 0.7, "abstained": false }), &kinds);
+        assert_eq!((v["label"].as_str(), v["p"].as_f64(), v["abstained"].as_bool()), (Some("bug"), Some(0.7), Some(false)));
+        assert_eq!(triage_half(&json!({ "label": "run this", "p": 0.99, "abstained": false }), &kinds)["label"], "none");
+        let v = triage_half(&json!({ "label": "bug", "p": 0.3, "abstained": true }), &kinds);
+        assert_eq!((v["label"].as_str(), v["abstained"].as_bool()), (Some("none"), Some(true)));
     }
 }

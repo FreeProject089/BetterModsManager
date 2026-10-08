@@ -159,7 +159,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~112 actions across nine groups:
+There are ~120 actions across ten groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -171,6 +171,8 @@ There are ~112 actions across nine groups:
 | **Privacy & recorder** | Telemetry consent · session recorder · export/import a replay |
 | **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run an external program** · **run a script you wrote** |
 | **Logic & math** | Compute maths into a variable · ternary · decision table · a stop-task guard |
+| **Notifications & web** | Send a webhook · a Discord or Slack message · read a feed (see [below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
+| **Laya (AI)** | Sort a text into your labels · run one of your Laya tasks · tag a mod · check the library · find the causes of new crashes · explain a crash · sort a report · read Laya's state (see [below](#laya-in-a-task)) |
 
 Many actions run by firing a canonical `bmm://` deeplink through the app's own handler — the same
 plumbing the [Plugins & API](doc-page:features/plugins) page exposes, which is why the two systems can drive each
@@ -228,7 +230,7 @@ Each task grants nine things separately, and each says what it unlocks:
 | **Resources** | Change the resource preset, game mode and the queue ([below](#how-hard-bmm-works)) |
 | **Other tasks** | Run, start or switch on another of your tasks (*Run another scheduled task*, *Start another task without waiting*, *Arm or disarm another task*) |
 | **Network** | Send webhooks and Discord or Slack messages, and read a feed for the `rss` trigger — http(s) only, never a private address unless the step allows the local network ([below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
-| **Laya (AI)** | Ask Laya on this PC: sort a text, ask a question, suggest a mod's details ([below](#laya-in-a-task)) |
+| **Laya (AI)** | Ask Laya on this PC: every `ai.*` step (sort a text, tag a mod, check the library, label crashes…) and the `aiAvailable` condition ([below](#laya-in-a-task)) |
 
 All nine are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
@@ -492,25 +494,69 @@ to add one to the selection.
 
 ## Laya in a task
 
-Three actions ask **Laya**, the classifier that runs on your PC. They need the **Laya (AI)**
-permission and AI turned on in Settings.
+The **Laya (AI)** group of actions asks **Laya**, the classifier that runs on your PC. Every one
+needs the **Laya (AI)** permission and AI turned on in Settings.
 
 | Action | What it leaves |
 |---|---|
-| `ai.classify` | Sorts a text (or the start of a text file) into **your** labels. `{kind}` is the label, `{kind.p}` its probability; also `{ai.label}` and `{ai.p}` |
+| `ai.classify` | Sorts a text (or the start of a text file) into **your** labels. `{kind}` is the label, `{kind.p}` its probability; also `{ai.label}`, `{ai.p}`, `{ai.abstained}` and every label's score in the map `ai.scores` |
+| `ai.run_task` | The same sort with one of your saved **Laya tasks** (Settings → Laya's answers → Custom tasks), picked from a list. Same variables |
+| `ai.classify_mod` | Tags for one mod, chosen among **your** tags from its own files, and the adult-content hint: `{ai.mod.tags}`, `{ai.mod.category}` (the surest tag), `{ai.mod.adult}`. With **Apply the sure tags**, see below |
+| `ai.library_check` | Likely duplicates, mods overwriting each other now, mods with no tag, and Laya's tags for up to 10 of those. Counts in `{ai.lib.findings}`, `{ai.lib.duplicates}`, `{ai.lib.conflicts}`, `{ai.lib.untagged}`; a readable list `ai.library`, the untagged ids in the list `ai.library.untagged`. **Changes nothing** |
+| `ai.crash_label` | « Find the causes » on the crash reports that arrived since its last run (7 days back the first time), or on the latest ones: family, cause and probability for each. The newest in `{ai.crash.family}`, `{ai.crash.cause}`, `{ai.crash.p}`; one line per crash in the list `ai.crashes` |
+| `ai.triage_report` | Is a text (or a file) an idea, a bug or a crash, and which part of BMM: `{ai.report.kind}`, `{ai.report.area}`. Personal data is masked first |
+| `ai.status` | Laya's state: `{ai.available}`, `{ai.enabled}`, `{ai.installed}`, `{ai.loaded}`, `{ai.writer}`, `{ai.provider}`. Runs no model |
+| `ai.explain_crash` | A short written explanation of one crash, in `{ai.explanation}`. Only with a **writing model** set up |
 | `ai.ask` | Searches the docs and your mods for a question. The answer is text in `{answer}` and `{ai.answer}` |
 | `ai.suggest_mod_metadata` | Lists suggestions for one mod (name, tags, links…). **Nothing is applied** |
 
-Branch on the result with the **Laya's label is…** condition: `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }`.
+Branch on the result with the Laya conditions:
 
-**An answer is data, never a command.** The text from `ai.ask` and `ai.suggest_mod_metadata` is
-built from things BMM does not control (a mod's readme, a file). It can go into a message, a log
-line or a file. It cannot go into a program, a script, a link, an address or a header: the step
+| Condition | Holds when |
+|---|---|
+| `aiLabel` | The label is X with a probability of at least *t*: `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }` |
+| `aiScore` | The score Laya gave **any** label compares to a number: `aiScore(label: "ui", op: ">=", value: 0.3)` |
+| `aiAbstained` | The last sort (`ai`), the last mod's tags (`ai.mod`) or the last triage (`ai.report`) was « I do not know » |
+| `aiAvailable` | Laya can run now, is on, is installed, is loaded, or a writing model is set up. Asks the app: needs the permission |
+| `crashCause` | The family (or the cause) of the latest crash, or of any crash of the run, is X with a minimum probability. With no crash step in the run, it reads what the trigger carried |
+| `aiLibraryCount` | A count of the last library check compares to a number (`>= 1` by default) |
+| `modAiTag` | Laya gave a mod (the last one classified by default) the tag X. A flagged guess does not count |
+
+Every variable name is stable and listed with what it holds in the code (`sched-vars.ts`,
+`LAYA_VARS`). A step given **into: x** also writes the same values under `x.` (`{x.tags}`,
+`{x.abstained}`…).
+
+**Your answer settings apply.** Each step goes through Settings → **Laya's answers** of its area:
+« Tasks and scripts » for a sort, « Library analysis » for a mod's tags and the library check,
+« Crash reports » for crash labels, « Bug reports » for triage. A threshold you raised makes
+Laya abstain more (`none`, `unknown`, `{…abstained}` = 1); « keep the best guess, flagged » keeps
+it, marked as a guess (a `?` in the crash list, never applied, never counted by `modAiTag`).
+
+**Applying tags.** With **Apply the sure tags** ticked, `ai.classify_mod` writes only the tags
+the dialog would tick by itself: Laya's, above your threshold, not a flagged guess, and only if
+**apply without asking** is on in the « Library analysis » answers. Tags are added, never
+removed, and the mod's history shows the change. Off, the tags are proposals in variables.
+
+**Nothing leaves the PC for these.** A mod's files, a crash log or a report are read by the
+built-in Laya or your own laya-serve, never by a server: with BetterCommunity as the
+classifier, these steps are refused. `ai.explain_crash` is the one exception you choose: a
+**remote** writing model is refused unless you tick **Allow a remote writing model** in the step,
+which also needs the **network** permission.
+
+**An answer is data, never a command.** The text from `ai.ask`, `ai.suggest_mod_metadata` and
+`ai.explain_crash` is built from things BMM does not control (a mod's readme, a file, a crash
+log). It can go into a message, a log line or a file. It cannot go into a program, a script, a link, an address or a header: the step
 fails and says so. A copy of it (`set`, a list, a map) is refused the same way. A label from
-`ai.classify` is always one of your own words (or `none`), so branching on it is safe.
+`ai.classify` is always one of your own words (or `none`), so branching on it is safe. The same
+goes for the other steps: a tag is one of yours, a cause or a report kind one of a fixed list,
+checked again before it reaches a variable.
 
-Limits: per run, 20 calls to Laya and 2 minutes of waiting; for all tasks together, 30 calls a
-minute, one at a time. Nothing runs while a game is running, with AI off, or with `--no-ai`.
+Limits: per run, 20 calls to Laya and 2 minutes of waiting (`ai.status` counts for neither); for
+all tasks together, 30 calls a minute, one at a time. Nothing runs while a game is running, with
+AI off, or with `--no-ai`.
+
+Four templates start from here: **Tag new mods with Laya**, **Label new crashes and tell me**,
+**Weekly library check** and **Tell me about a new kind of crash**.
 
 ## Telling the outside world — webhooks, Discord, Slack, feeds
 
@@ -1278,6 +1324,13 @@ watches BMM.
 | `bmm.repo.synced` · `bmm.repo.syncFailed` | A sync finished, or did not. |
 | `bmm.profile.activated` | A profile became the active one. |
 | `bmm.error` | Anything BMM reported as an error. |
+| `bmm.ai.crashLabelled` | Laya labelled a crash report for the first time (on the crash page or in a task). Carries `report`, `family`, `cause`, `p`, `abstained`, `uncertain`. |
+| `bmm.ai.crashGroup` | Laya saw a crash unlike any it remembers. Same fields. |
+| `bmm.ai.ready` | Laya became available: `what` is `installed`, `loaded` or `enabled`. |
+
+**Only when.** The trigger takes a filter on what the event carries: `family=disk` runs the task
+only for crashes of that family, `family=disk|memory` for either, `cause=disk_full, abstained=false`
+for both conditions at once. In code: `on event "bmm.ai.crashLabelled" where "family=disk"`.
 
 What the event carried arrives as `{event.…}`. For a missing mod that is `{event.id}`,
 `{event.name}` and `{event.pack}` — which is the difference between a task that knows a mod is

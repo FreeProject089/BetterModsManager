@@ -11,6 +11,7 @@ import { setModLoading, updateCardState, updateBadge, updateSubtitle, updateTogg
 import { isActivationBusy, markCurrentSkipped, cancelAllActivationJobs, announceExternal, clearAnnounced, registerExternalCancel } from '../../core/activation-jobs.js';
 import { uiIcon } from '../../ui/icons.js';
 import { gameReportHtml, showIntegrityModal } from './integrity-report.js';
+import { prepareAddModForm, confirmAddModFlow } from './add-mod.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -252,59 +253,12 @@ export function openAddModModal() {
 
   document.getElementById('modal-add-mod')?.classList.add('open');
   setupDependencyInput('mod-dependency-input', 'mod-dependencies-list', 'mod-dependency-suggestions');
+  void prepareAddModForm();
 }
 
+/** Add: the copy, its progress and its errors live in add-mod.ts. */
 export async function confirmAddMod() {
-  const nameEl = document.getElementById('mod-name');
-  const folderEl = document.getElementById('mod-folder');
-  if (!nameEl || !folderEl) return;
-  
-  const name = nameEl.value.trim();
-  const folder = folderEl.value.trim();
-  const version = document.getElementById('mod-version')?.value.trim() || '1.0.0';
-  const author = document.getElementById('mod-author')?.value.trim() || '';
-  const description = document.getElementById('mod-desc')?.value.trim() || '';
-  const tagSelect = document.getElementById('mod-tag');
-  const tagId = tagSelect ? tagSelect.value : '';
-
-  if (!name || !folder) {
-    toast(t('mod.folderRequired') || "Name and folder required.", 'error');
-    return;
-  }
-
-  const btn = document.getElementById('btn-confirm-add-mod');
-  const originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px' })} ${t('common.processing') || 'Copie en cours...'}`;
-
-  const modal = document.getElementById('modal-add-mod');
-  const download_links = (modal as any)?._pendingLinks || null;
-  const dependencies = (document.getElementById('mod-dependency-input') as any)?._selectedDeps || [];
-
-  try {
-    await invoke('add_mod', {
-      payload: {
-          name, modFolderPath: folder, author, description, version,
-          tags: tagId ? [tagId] : [], downloadLinks: download_links, dependencies
-      }
-    });
-    
-    if (modal) {
-      (modal as any)._pendingLinks = null;
-      (document.getElementById('mod-dependency-input') as any)._selectedDeps = [];
-    }
-    document.getElementById('modal-add-mod').classList.remove('open');
-    toast(t('mod.added', { name }), 'success');
-    dispatchBmmAction(BMM_ACTIONS.MOD_ADDED, { name });
-    await refreshMods(false, true); // Force immediate refresh
-  } catch (err) {
-    toast(t('common.error') + ' : ' + err, 'error');
-  } finally {
-    if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-    }
-  }
+  await confirmAddModFlow();
 }
 
 export async function toggleAllMods(forcedEnable = null) {

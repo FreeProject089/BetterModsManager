@@ -524,12 +524,21 @@ export const ACTION_PERMS: Record<string, PermRule> = {
     'webhook.send': NET, 'discord.send': NET, 'slack.send': NET,
     // Laya on this PC (commands/ai_ops.rs).
     'ai.classify': AI, 'ai.ask': AI, 'ai.suggest_mod_metadata': AI,
+    'ai.run_task': AI, 'ai.classify_mod': AI, 'ai.library_check': AI, 'ai.crash_label': AI,
+    'ai.explain_crash': AI, 'ai.triage_report': AI, 'ai.status': AI,
+};
+
+/** Second needs of one step: « explain » with a remote writer also reaches the network. */
+export const EXTRA_PERMS: Record<string, PermRule> = {
+    'ai.explain_crash': { ...NET, when: (p) => p.allowRemote === true },
 };
 
 export const CONDITION_PERMS: Record<string, PermRule> = {
     commandSucceeds: { perm: 'command', label: 'sched.perm.command' },
     catalogOk: { perm: 'command', label: 'sched.perm.net' },
     repoOk: { perm: 'command', label: 'sched.perm.net' },
+    // Asks the app for Laya's state (the other Laya conditions only read variables).
+    aiAvailable: AI,
 };
 
 export interface PermNeed { path: string; perm: PermKey; label: string; what: string }
@@ -555,6 +564,8 @@ export function permNeeds(steps: AnyStep[], trigger?: any): PermNeed[] {
             const type = String(st.action?.type || '');
             const r = ACTION_PERMS[type];
             if (r && (!r.when || r.when(st.action?.params || {}))) out.push({ path, perm: r.perm, label: r.label, what: type });
+            const x = EXTRA_PERMS[type];
+            if (x && (!x.when || x.when(st.action?.params || {}))) out.push({ path, perm: x.perm, label: x.label, what: type });
         }
         if (st.condition) condNeeds(st.condition, path, out);
         if (st.kind === 'switch') for (const c of st.cases || []) condNeeds(c?.condition, path, out);

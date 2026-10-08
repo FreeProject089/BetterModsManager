@@ -39,6 +39,9 @@ const MOD_ACTIONS: Record<string, string> = {
     'mods.disableAll': 'all',
 };
 
+/** `ai.classify_mod` with `apply`: tags added to a mod. */
+const TAGS = 'tags';
+
 /**
  * Every array of steps hanging off this one, and whether it is certain to run.
  *
@@ -96,6 +99,11 @@ export function planOf(steps: any[], certain = true): PlannedChange[] {
             const what = MOD_ACTIONS[String(st.action?.type || '')];
             if (what) {
                 out.push({ what, id: String(st.action?.params?.id ?? ''), certain });
+            }
+            // Laya's tags for a mod, when the step may write them. Never certain: what is written
+            // depends on what Laya answers and on « apply without asking » (ai_ops.rs).
+            if (st.action?.type === 'ai.classify_mod' && st.action?.params?.apply === true) {
+                out.push({ what: TAGS, id: String(st.action?.params?.id ?? ''), certain: false });
             }
             continue;
         }

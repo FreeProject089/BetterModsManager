@@ -14,7 +14,15 @@ import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFiles } from '../../core/api.js';
 import { expectedRepoSignature } from '../repo/repo-pin.js';
 import { t, getLang } from '../../core/i18n.js';
-import { parseLabels, takeAiStep, chargeAiTime, taint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
+import { parseLabels, takeAiStep, chargeAiTime, taint, untaint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
+import {
+    eventMatches, scoresName, scoresOf, aiScoreHolds, aiAbstainedHolds, modClassOf, topTag, rememberModTags, modAiTagHolds,
+    libraryOf, libraryCountHolds, crashItemsOf, crashLines, crashSummary, rememberCrashes, crashCauseHolds, crashSince,
+    triageOf, stateOf, statusHolds, LIBRARY_KINDS, STATUS_WHATS,
+} from './sched-laya.js';
+import { announceCrashLabels } from '../ai/laya-crash-events.js';
+import { CAUSE_FAMILY, CRASH_CAUSES, CRASH_FAMILIES, REPORT_KINDS, APP_AREAS } from '../ai/laya-assist-model.js';
+import { causeWord, familyWord } from '../ai/laya-words.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
@@ -105,7 +113,7 @@ type Trigger =
      * `bmm.<something>`, and this polls it. One mechanism, so an event and a webhook are the
      * same kind of thing and everything that works for one works for the other.
      */
-    | { type: 'onEvent'; event: string }
+    | { type: 'onEvent'; event: string; where?: string }
     /**
      * Fires when ANOTHER task finishes.
      *
@@ -210,7 +218,8 @@ interface TaskPerms {
      *  allows the local network, a timeout and a size cap on every request. Off for every
      *  existing task: none of them could do this when its consent was given. */
     network?: boolean;
-    /** Ask Laya: `ai.classify`, `ai.ask`, `ai.suggest_mod_metadata` and the `aiLabel` condition.
+    /** Ask Laya: every `ai.*` step (sort a text, a mod's tags, the library check, crash labels,
+     *  report triage, Laya's state, a crash explanation…) and the `aiAvailable` condition.
      *  Its own key because a model run costs CPU and reads text the task hands it; what comes
      *  back is DATA (sched-ai.ts marks the free text untrusted). Off for every existing task
      *  and reset on import, like the others. */
@@ -773,18 +782,23 @@ const _eventSeen = new Map<string, number>();
 const _eventData = new Map<string, Record<string, unknown>>();
 
 async function eventFired(task: Task): Promise<boolean> {
-    const tr = task.trigger as { type: 'onEvent'; event: string };
+    const tr = task.trigger as { type: 'onEvent'; event: string; where?: string };
     const name = String(tr.event || '').trim();
     if (!name) return false;
     const since = _eventSeen.get(task.id);
     const now = Date.now();
     if (since === undefined) { _eventSeen.set(task.id, now); return false; }
-    const hits = await (invoke('hook_poll', { name, since: since + 1 }) as Promise<any[]>).catch(() => []);
+    const all = await (invoke('hook_poll', { name, since: since + 1 }) as Promise<any[]>).catch(() => []);
+    if (!all.length) return false;
+    // Considered, matched or not: a hit the filter refused is not read again next tick.
+    _eventSeen.set(task.id, Number(all[all.length - 1]?.at) || now);
+    // « Only when » (sched-laya.ts): `family=disk` keeps the crashes of that family, and the
+    // others are simply not this task's business.
+    const hits = all.filter((h) => eventMatches(tr.where, h?.data));
     if (!hits.length) return false;
     // The LAST one. A burst of five missing mods in one modpack should run the repair task
     // once with the most recent, not five times racing each other over the same folder.
     const last = hits[hits.length - 1];
-    _eventSeen.set(task.id, Number(last?.at) || now);
     _eventData.set(task.id, (last && typeof last.data === 'object' && last.data) || {});
     return true;
 }
@@ -1652,7 +1666,10 @@ async function forEachItems(source: string): Promise<any[]> {
  *  once per mod, silently. Each loop now substitutes only what belongs to it and
  *  leaves an inner loop's body untouched for that loop to resolve itself. */
 function substituteItem(steps: Step[], item: any): Step[] {
-    const src = item?.mod_entry ?? item ?? {};
+    // A `list` or `mapKeys` loop walks plain strings: {item.id} and {item.name} are the string
+    // itself. Without this they read `'x'['id']` and became empty, so « for each id in the list,
+    // tag that mod » ran every step on no mod at all.
+    const src = typeof item === 'string' ? { id: item, name: item } : (item?.mod_entry ?? item ?? {});
     const rep = (v: any): any => {
         if (typeof v === 'string') {
             return v.replace(/\{item\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_m, k) => {
@@ -2075,6 +2092,49 @@ async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0
 }
 
 /**
+ * What a sort (`ai.classify`, `ai.run_task`) leaves: the label and its probability, whether Laya
+ * abstained, and every label's score as a map (`ai.scores`, or `<into>.scores`) for `aiScore`.
+ * The label is one the TASK gave, or `none` (ai_ops.rs `constrain`): not tainted, and a variable
+ * it overwrites is clean again.
+ */
+function keepSort(ctx: RunCtx, res: any, into: string, allowed?: string[]): void {
+    const label = String(res?.label || 'none');
+    const pr = Number(res?.p) || 0;
+    const abst = res?.abstained === true || label === 'none' ? 1 : 0;
+    ctx.text['ai.label'] = label; ctx.nums['ai.p'] = pr; ctx.text['ai.p'] = String(pr);
+    ctx.nums['ai.abstained'] = abst;
+    ctx.maps = ctx.maps || {};
+    const scores = scoresOf(res?.ranked, allowed);
+    ctx.maps[scoresName('')] = scores;
+    if (into) {
+        untaint(ctx, into);
+        ctx.text[into] = label; ctx.nums[into] = pr;
+        ctx.text[`${into}.p`] = String(pr); ctx.nums[`${into}.p`] = pr;
+        ctx.nums[`${into}.abstained`] = abst;
+        ctx.maps[scoresName(into)] = scores;
+    }
+    ctx.text['last.out'] = label;
+}
+
+/** Where each task's `ai.crash_label` stopped (the newest report it labelled, in seconds). */
+const CRASH_MARKERS_KEY = 'bmm.sched.ai.crashSeen';
+function readCrashMarkers(): Record<string, unknown> {
+    try {
+        const v = JSON.parse(localStorage.getItem(CRASH_MARKERS_KEY) || '{}');
+        return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+}
+function writeCrashMarker(taskId: string, secs: number): void {
+    try {
+        const all = readCrashMarkers();
+        all[taskId] = Math.floor(secs);
+        // Tasks that no longer exist are forgotten, so the map does not grow with every deleted task.
+        for (const k of Object.keys(all)) if (k !== taskId && !_tasks.some((x) => x.id === k)) delete all[k];
+        localStorage.setItem(CRASH_MARKERS_KEY, JSON.stringify(all));
+    } catch { /* private mode: the next run looks back 7 days again */ }
+}
+
+/**
  * One AI step: the run's budget first (sched-ai.ts), then the call, its time charged whatever
  * happened. Errors come back as codes (`ai.task.blocked|game_mode`) and leave in words.
  */
@@ -2481,15 +2541,157 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
                 text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels: taskId ? null : labels, task: taskId || null,
             }));
-            const label = String(res?.label || 'none');
-            const pr = Number(res?.p) || 0;
-            ctx.text['ai.label'] = label; ctx.nums['ai.p'] = pr; ctx.text['ai.p'] = String(pr);
+            keepSort(ctx, res, String(p.into || '').trim(), taskId ? undefined : labels.map((l) => l.id));
+            break;
+        }
+        // The same sort, by one of the user's saved Laya tasks (« Tâches perso »): its labels, its
+        // wording, its answer settings. `ai.classify` with a task id does this too; this step is
+        // the one that says so, and offers the tasks in a list.
+        case 'ai.run_task': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const lt = String(p.task || '').trim();
+            if (!lt) throw new Error(t('sched.ai.noTask') || 'Pick one of your Laya tasks.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
+                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels: null, task: lt,
+            }));
+            keepSort(ctx, res, String(p.into || '').trim());
+            break;
+        }
+        // A mod's tags (from the user's own tags) and the adult-content hint, read from its files
+        // by local Laya. `apply` writes only what « apply without asking » would (ai_ops.rs).
+        case 'ai.classify_mod': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.ai.noMod') || 'Pick a mod.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify_mod', { modId: id, apply: p.apply === true }));
+            const c = modClassOf(res);
+            const names = c.tags.map((x) => x.name);
+            ctx.text['ai.mod.tags'] = names.join(', ');
+            ctx.text['ai.mod.category'] = topTag(c);
+            ctx.nums['ai.mod.tagCount'] = names.length;
+            ctx.nums['ai.mod.adult'] = c.adult ? 1 : 0;
+            ctx.nums['ai.mod.adultP'] = c.adultP;
+            ctx.nums['ai.mod.applied'] = c.applied.length;
+            ctx.nums['ai.mod.abstained'] = c.abstained ? 1 : 0;
+            ctx.lists = ctx.lists || {};
+            ctx.lists['ai.mod.tags'] = names;
             const into = String(p.into || '').trim();
             if (into) {
-                ctx.text[into] = label; ctx.nums[into] = pr;
-                ctx.text[`${into}.p`] = String(pr); ctx.nums[`${into}.p`] = pr;
+                untaint(ctx, into);
+                ctx.text[`${into}.tags`] = names.join(', ');
+                ctx.text[`${into}.category`] = topTag(c);
+                ctx.nums[`${into}.tagCount`] = names.length;
+                ctx.nums[`${into}.adult`] = c.adult ? 1 : 0;
+                ctx.nums[`${into}.abstained`] = c.abstained ? 1 : 0;
             }
-            ctx.text['last.out'] = label;
+            rememberModTags(ctx, id, c);
+            ctx.text['last.out'] = names.join(', ');
+            break;
+        }
+        // « Vérifier la bibliothèque »: untagged mods, likely duplicates, mods overwriting each
+        // other now (read from the library), and Laya's tags for a few untagged ones. Writes nothing.
+        case 'ai.library_check': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const suggest = clampInt(p.suggest, 0, 10, 5);
+            const res: any = await aiCall(ctx, () => invoke('ai_task_library_check', { suggest }));
+            const v = libraryOf(res, {
+                untagged: t('sched.ai.lib.wUntagged'), duplicate: t('sched.ai.lib.wDuplicate'),
+                conflict: t('sched.ai.lib.wConflict'), suggest: t('sched.ai.lib.wSuggest'),
+            });
+            ctx.nums['ai.lib.total'] = v.counts.total;
+            ctx.nums['ai.lib.untagged'] = v.counts.untagged;
+            ctx.nums['ai.lib.duplicates'] = v.counts.duplicates;
+            ctx.nums['ai.lib.conflicts'] = v.counts.conflicts;
+            ctx.nums['ai.lib.suggested'] = v.counts.suggested;
+            ctx.nums['ai.lib.findings'] = v.counts.findings;
+            const into = String(p.into || '').trim() || 'ai.library';
+            ctx.lists = ctx.lists || {};
+            ctx.lists[into] = v.lines;
+            ctx.lists['ai.library.untagged'] = v.untaggedIds;
+            ctx.lists['ai.library.duplicates'] = v.duplicateIds;
+            ctx.nums[`list.${into}.length`] = v.lines.length;
+            ctx.text['last.out'] = v.lines.slice(0, 30).join('\n');
+            break;
+        }
+        // « Trouver les causes » on the crash reports that arrived since this step last ran (the
+        // last 7 days the first time), or on the latest ones. Rings `bmm.ai.crashLabelled` and
+        // `bmm.ai.crashGroup` (laya-crash-events.ts) for other tasks to react to.
+        case 'ai.crash_label': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const recent = p.scope === 'recent';
+            const since = recent ? 0 : crashSince(readCrashMarkers(), task.id, Date.now() / 1000);
+            const limit = clampInt(p.limit, 1, 12, 12);
+            const res: any = await aiCall(ctx, () => invoke('ai_task_crash_label', { since, limit, newestFirst: recent }));
+            const items = crashItemsOf(res, CAUSE_FAMILY);
+            const sum = crashSummary(items);
+            const groups = announceCrashLabels(items);
+            if (!recent) writeCrashMarker(task.id, Math.max(since, Number(res?.newest) || 0));
+            ctx.nums['ai.crash.count'] = sum.count;
+            ctx.nums['ai.crash.unknown'] = sum.unknown;
+            ctx.nums['ai.crash.groups'] = groups;
+            ctx.nums['ai.crash.pending'] = Math.max(0, Number(res?.pending) || 0);
+            ctx.text['ai.crash.family'] = sum.latest?.family || 'none';
+            ctx.text['ai.crash.cause'] = sum.latest?.cause || 'none';
+            ctx.nums['ai.crash.p'] = sum.latest?.p || 0;
+            ctx.text['ai.crash.report'] = sum.latest?.report || '';
+            const into = String(p.into || '').trim() || 'ai.crashes';
+            const lines = crashLines(items);
+            ctx.lists = ctx.lists || {};
+            ctx.lists[into] = lines;
+            ctx.nums[`list.${into}.length`] = lines.length;
+            rememberCrashes(ctx, items);
+            ctx.text['last.out'] = lines.join('\n');
+            break;
+        }
+        // The feedback dialog's assist on a text or a file: suggestion / bug / crash, and which
+        // part of the app. Masked before Laya reads it; the answer is one word of two fixed lists.
+        case 'ai.triage_report': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            if (!String(p.text || '').trim() && !String(p.path || '').trim()) throw new Error(t('sched.ai.noReport') || 'There is no text to read.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_triage', { text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null }));
+            const tri = triageOf(res, REPORT_KINDS, APP_AREAS);
+            ctx.text['ai.report.kind'] = tri.kind.label;
+            ctx.nums['ai.report.kindP'] = tri.kind.p;
+            ctx.text['ai.report.area'] = tri.area.label;
+            ctx.nums['ai.report.areaP'] = tri.area.p;
+            ctx.nums['ai.report.abstained'] = tri.kind.abstained ? 1 : 0;
+            const into = String(p.into || '').trim();
+            if (into) {
+                untaint(ctx, into);
+                ctx.text[`${into}.kind`] = tri.kind.label;
+                ctx.text[`${into}.area`] = tri.area.label;
+                ctx.nums[`${into}.abstained`] = tri.kind.abstained ? 1 : 0;
+            }
+            ctx.text['last.out'] = `${tri.kind.label}/${tri.area.label}`;
+            break;
+        }
+        // Laya's state: switch, model on disk and in memory, provider, a writing model. Runs no
+        // model (no budget), and answers with AI off — that is what it is for.
+        case 'ai.status': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const st = stateOf(await invoke('ai_task_status'));
+            ctx.nums['ai.enabled'] = st.enabled ? 1 : 0;
+            ctx.nums['ai.available'] = st.available ? 1 : 0;
+            ctx.nums['ai.installed'] = st.installed ? 1 : 0;
+            ctx.nums['ai.loaded'] = st.loaded ? 1 : 0;
+            ctx.nums['ai.writer'] = st.writer ? 1 : 0;
+            ctx.text['ai.provider'] = st.provider;
+            ctx.text['last.out'] = st.available ? 'available' : 'unavailable';
+            break;
+        }
+        // « Expliquer »: a written explanation of one crash — only with a writing model, a remote
+        // one only when the step allows it (and the task may reach the network). FREE TEXT: tainted.
+        case 'ai.explain_crash': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const allowRemote = p.allowRemote === true;
+            if (allowRemote) requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const report = String(p.report || '').trim();
+            const res: any = await aiCall(ctx, () => invoke('ai_task_explain_crash', { report: report || null, allowRemote }));
+            const text = String(res?.text ?? '');
+            ctx.text['ai.explanation'] = text;
+            ctx.nums['ai.explain.remote'] = res?.remote ? 1 : 0;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.explanation', 'last.out', String(p.into || '').trim());
             break;
         }
         case 'ai.ask': {
@@ -3993,6 +4195,24 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         // only, so it needs no permission: the step that asked Laya already did.
         case 'aiLabel':
             return aiLabelHolds(ctx, p);
+        // The other Laya conditions read what this run's Laya steps left (sched-laya.ts): no
+        // model runs in a condition, so none of them costs budget or needs a permission…
+        case 'aiScore':
+            return aiScoreHolds(ctx, p);
+        case 'aiAbstained':
+            return aiAbstainedHolds(ctx, p);
+        case 'crashCause':
+            return crashCauseHolds(ctx, p);
+        case 'aiLibraryCount':
+            return libraryCountHolds(ctx, p);
+        case 'modAiTag':
+            return modAiTagHolds(ctx, p);
+        // …except this one, which asks the app about Laya's state: the task's `ai` grant, like a step.
+        case 'aiAvailable': {
+            needPerm('ai', t('sched.permAi') || 'ask Laya');
+            const st = stateOf(await invoke('ai_task_status').catch(() => null));
+            return statusHolds(st, p.what);
+        }
         case 'online':
             return navigator.onLine;
         case 'timeReached': {
@@ -4642,7 +4862,8 @@ function triggerLabel(tr: Trigger): string {
         }
         case 'onEvent': {
             const ev = String(tr.event || '').trim();
-            return ev ? `${t('sched.trEvent')}: ${ev}` : t('sched.trEventNone');
+            const where = String(tr.where || '').trim();
+            return ev ? `${t('sched.trEvent')}: ${ev}${where ? ` (${t('sched.trEventWhere')}: ${where})` : ''}` : t('sched.trEventNone');
         }
         case 'afterTask': {
             const other = _tasks.find((x) => x.id === tr.taskId);
@@ -5485,6 +5706,95 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
                     then: [ { kind: 'action', action: { type: 'theme.set', params: { id: '' } } } ],
                     else: [],
                 },
+            ],
+        }),
+    },
+    // ── Laya ──────────────────────────────────────────────────────────────────
+    //
+    // Each asks for the `ai` grant (listed, not granted: the user ticks it) and each starts with
+    // what Laya can do on THIS PC — a task that fires with AI off is refused at its first Laya
+    // step anyway, but saying « not available » is better than a failed run every night.
+    {
+        cat: 'mods', key: 'layaTagMods', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        title: 'Tag new mods with Laya',
+        desc: 'Every night, finds the mods with no tag and lets Laya tag them from their own files. Tags are written only if « apply without asking » is on in Laya’s answer settings.',
+        make: () => ({
+            name: 'Laya — tag untagged mods',
+            trigger: { type: 'dailyAt', time: '03:00' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.status', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'ai.available', op: '==', value: 1 } },
+                    then: [
+                        // No Laya suggestions here: the loop below asks for each mod itself.
+                        { kind: 'action', action: { type: 'ai.library_check', params: { suggest: 0 } } },
+                        // Ten at most: each mod is one step of the run's Laya budget.
+                        { kind: 'forEach', source: 'list', listName: 'ai.library.untagged', maxIters: 10, everySec: 0, steps: [
+                            { kind: 'action', action: { type: 'ai.classify_mod', params: { id: '{item.id}', apply: true } } },
+                        ] },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'layaCrashNotify', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        title: 'Label new crashes and tell me',
+        desc: 'When BMM starts, Laya finds the probable cause of each crash report that arrived since last time, and you get one message with the latest.',
+        make: () => ({
+            name: 'Laya — label new crashes',
+            // A crash closes BMM: the report is there the next time it starts.
+            trigger: { type: 'appStart' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.crash_label', params: { scope: 'new', limit: 12 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'ai.crash.count', op: '>', value: 0 } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'crashCause', params: { field: 'family', value: 'disk', min: 0.5, scope: 'latest' } },
+                            then: [ { kind: 'action', action: { type: 'notify', params: { message: 'Laya: the latest crash looks like a disk problem (space, access, a missing file).' } } } ],
+                            else: [ { kind: 'action', action: { type: 'notify', params: { message: 'Laya labelled {ai.crash.count} new crash report(s). Latest: {ai.crash.family} / {ai.crash.cause}.' } } } ],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'layaWeeklyCheck', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        title: 'Weekly library check',
+        desc: 'Every Monday, lists likely duplicate mods, mods overwriting each other and mods with no tag — and Laya’s tags for a few of them. Nothing is changed.',
+        make: () => ({
+            name: 'Laya — weekly library check',
+            trigger: { type: 'weeklyAt', days: [1], time: '10:00' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.library_check', params: { suggest: 5 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'aiLibraryCount', params: { kind: 'findings', op: '>=', value: 1 } },
+                    then: [ { kind: 'action', action: { type: 'notify', params: { message: 'Library check: {ai.lib.duplicates} likely duplicate(s), {ai.lib.conflicts} overlap(s), {ai.lib.untagged} mod(s) with no tag.' } } } ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'layaNewCrashKind', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        title: 'Tell me about a new kind of crash',
+        desc: 'Waits for Laya to see a crash unlike any before (from the crash page or another task) and tells you its probable cause. Needs no permission: it only reads the event.',
+        make: () => ({
+            name: 'Laya — new kind of crash',
+            trigger: { type: 'onEvent', event: 'bmm.ai.crashGroup' },
+            steps: [
+                { kind: 'action', action: { type: 'notify', params: { message: 'A new kind of crash: {event.family} / {event.cause} ({event.report}).' } } },
             ],
         }),
     },
@@ -6542,7 +6852,9 @@ function renderTriggerEditor(host: HTMLElement): void {
             </select>
             <input class="input" id="sched-tr-ev-custom" spellcheck="false"
                 placeholder="${escAttr(t('sched.trEventCustomPh'))}" value="${escAttr(BMM_EVENTS.includes(tr.event) ? '' : (tr.event || ''))}">
-            <p class="sched-hint">${escHtml(t('sched.trEventHint'))}</p>`;
+            <input class="input" id="sched-tr-ev-where" spellcheck="false" aria-label="${escAttr(t('sched.trEventWhere'))}"
+                placeholder="${escAttr(t('sched.trEventWherePh'))}" value="${escAttr(tr.where || '')}">
+            <p class="sched-hint">${escHtml(t('sched.trEventHint'))} ${escHtml(t('sched.trEventWhereHint'))}</p>`;
         ph.querySelector('#sched-tr-ev')?.addEventListener('change', (e) => {
             (_draft.trigger as any).event = (e.target as HTMLSelectElement).value;
             const custom = ph.querySelector('#sched-tr-ev-custom') as HTMLInputElement | null;
@@ -6553,6 +6865,10 @@ function renderTriggerEditor(host: HTMLElement): void {
         ph.querySelector('#sched-tr-ev-custom')?.addEventListener('input', (e) => {
             const v = (e.target as HTMLInputElement).value.trim();
             if (v) (_draft.trigger as any).event = v;
+        });
+        ph.querySelector('#sched-tr-ev-where')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value.trim();
+            if (v) (_draft.trigger as any).where = v; else delete (_draft.trigger as any).where;
         });
     }
     if (tr.type === 'afterTask') {
@@ -8150,6 +8466,7 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
     { g: 'logic',   label: 'Logic & math' },
     { g: 'notify',  label: 'Notifications & web' },
     { g: 'system',  label: 'System & flow' },
+    { g: 'ai',      label: 'Laya (AI)' },
 ];
 
 // icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
@@ -8167,6 +8484,7 @@ const GROUP_ICON: Record<string, string> = {
     logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
     // A paper plane: something leaves BMM for somewhere else.
     notify:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
+    ai:      (uiIcon('ai', 14)),
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
@@ -8597,9 +8915,16 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
     // Laya on this PC. Needs the `ai` permission; what comes back is data, never run.
-    { v: 'ai.classify', label: 'Laya: sort a text into your labels', needs: 'aiClassify', group: 'logic' },
-    { v: 'ai.ask', label: 'Laya: ask a question', needs: 'aiAsk', group: 'logic' },
-    { v: 'ai.suggest_mod_metadata', label: 'Laya: suggest details for a mod (not applied)', needs: 'aiSuggest', group: 'mods' },
+    { v: 'ai.classify', label: 'Laya: sort a text into your labels', needs: 'aiClassify', group: 'ai' },
+    { v: 'ai.run_task', label: 'Laya: run one of your Laya tasks', needs: 'aiRunTask', group: 'ai' },
+    { v: 'ai.ask', label: 'Laya: ask a question', needs: 'aiAsk', group: 'ai' },
+    { v: 'ai.suggest_mod_metadata', label: 'Laya: suggest details for a mod (not applied)', needs: 'aiSuggest', group: 'ai' },
+    { v: 'ai.classify_mod', label: 'Laya: tag a mod from its files', needs: 'aiModClassify', group: 'ai' },
+    { v: 'ai.library_check', label: 'Laya: check the library', needs: 'aiLibrary', group: 'ai' },
+    { v: 'ai.crash_label', label: 'Laya: find the causes of new crashes', needs: 'aiCrash', group: 'ai' },
+    { v: 'ai.explain_crash', label: 'Laya: explain a crash (writing model)', needs: 'aiExplain', group: 'ai' },
+    { v: 'ai.triage_report', label: 'Laya: sort a report (bug, idea, crash)', needs: 'aiTriage', group: 'ai' },
+    { v: 'ai.status', label: 'Laya: read its state', needs: 'aiStatus', group: 'ai' },
     // Waiting for something OUTSIDE BMM to be ready. A task could wait for a clock and for
     // a file; these are the two cases that kept coming up and had no answer.
     { v: 'wait.http', label: 'Wait until an address answers', needs: 'waitHttp', group: 'system' },
@@ -8809,7 +9134,8 @@ const actionPickItems = (): PickItem[] => ACTION_TYPES.map((a) => { const ad = t
 const actionPickGroups = (): PickGroup[] => ACTION_GROUPS.map((g) => ({ g: g.g, label: t('sched.grp.' + g.g) || g.label, icon: GROUP_ICON[g.g] || '' }));
 // Conditions grouped the same way, each with its one-line description (sched.condd.*).
 const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
-    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs', 'aiLabel'] },
+    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
+    { g: 'ai', label: 'Laya (AI)', kinds: ['aiLabel', 'aiScore', 'aiAbstained', 'aiAvailable', 'crashCause', 'aiLibraryCount', 'modAiTag'] },
     { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
     { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
     { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive', 'gameRunning', 'resourcesPresetIs', 'queueIdle'] },
@@ -10204,6 +10530,87 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <span class="sched-cmd-hint">${escHtml(t('sched.ai.suggestHint'))}</span>
         </div>`;
     }
+    // One of the user's saved Laya tasks, picked from a list (filled from the Laya settings).
+    else if (needs === 'aiRunTask') {
+        const cur = String(params.task || '');
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.runTask'))}</label>
+            <select class="input sched-p-aitasksel" style="max-width:280px">
+                <option value="">${escHtml(t('sched.ai.runTaskPick'))}</option>
+                ${cur ? `<option value="${escAttr(cur)}" selected>${escHtml(cur)}</option>` : ''}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.text'))}</label>
+            <textarea class="input sched-p-aitext" rows="2" spellcheck="false" placeholder="${escAttr(t('sched.ai.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.runTaskHint'))}</span>
+        </div>`;
+        void (invoke('ai_laya_get') as Promise<any>).then((v) => {
+            const sel = host.querySelector<HTMLSelectElement>('.sched-p-aitasksel');
+            const tasks: any[] = Array.isArray(v?.config?.tasks) ? v.config.tasks : [];
+            if (!sel || !tasks.length) return;
+            sel.innerHTML = `<option value="">${escHtml(t('sched.ai.runTaskPick'))}</option>` + tasks.map((x) =>
+                `<option value="${escAttr(String(x.id))}"${String(x.id) === cur ? ' selected' : ''}>${escHtml(String(x.name || x.id))}${x.enabled === false ? ` (${escHtml(t('sched.ai.runTaskOff'))})` : ''}</option>`).join('');
+        }).catch(() => { /* AI settings unreadable: the typed id stays */ });
+    }
+    else if (needs === 'aiModClassify') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+            <label class="sched-opt"><input type="checkbox" class="sched-p-aiapply" ${params.apply ? 'checked' : ''}><div><b>${escHtml(t('sched.ai.applyT'))}</b><span>${escHtml(t('sched.ai.apply'))}</span></div></label>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoModPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.modHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiLibrary') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.libSuggest'))}</label>
+            <input class="input sched-p-aisuggest" type="number" min="0" max="10" style="max-width:90px" value="${escAttr(String(params.suggest ?? 5))}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoListPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.libHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiCrash') {
+        const scope = params.scope === 'recent' ? 'recent' : 'new';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.crashWhich'))}</label>
+            <select class="input sched-p-aiscope" style="max-width:280px">
+                <option value="new"${scope === 'new' ? ' selected' : ''}>${escHtml(t('sched.ai.crashNew'))}</option>
+                <option value="recent"${scope === 'recent' ? ' selected' : ''}>${escHtml(t('sched.ai.crashRecent'))}</option>
+            </select>
+            <input class="input sched-p-ailimit" type="number" min="1" max="12" style="max-width:90px" title="${escAttr(t('sched.ai.crashLimit'))}" aria-label="${escAttr(t('sched.ai.crashLimit'))}" value="${escAttr(String(params.limit ?? 12))}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoCrashPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.crashHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiExplain') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <input class="input sched-p-aireport" spellcheck="false" placeholder="${escAttr(t('sched.ai.reportPh'))}" value="${escAttr(params.report || '')}">
+            <label class="sched-opt"><input type="checkbox" class="sched-p-airemote" ${params.allowRemote ? 'checked' : ''}><div><b>${escHtml(t('sched.ai.remoteT'))}</b><span>${escHtml(t('sched.ai.remote'))}</span></div></label>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.explainHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiTriage') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.triageText'))}</label>
+            <textarea class="input sched-p-aitext" rows="3" spellcheck="false" placeholder="${escAttr(t('sched.ai.triageTextPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoReportPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.triageHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiStatus') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.statusHint'))}</span>
+        </div>`;
+    }
     else if (needs === 'benchmark') {
         const profOpts = _profiles.filter((p: any) => p.mods_path)
             .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
@@ -10715,6 +11122,13 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-ailabels')?.addEventListener('input', (e) => { params.labels = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-aitask')?.addEventListener('input', (e) => { params.task = (e.target as HTMLInputElement).value.trim(); });
     host.querySelector('.sched-p-aiq')?.addEventListener('input', (e) => { params.question = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-aitasksel')?.addEventListener('change', (e) => { params.task = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-aiapply')?.addEventListener('change', (e) => { params.apply = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-aisuggest')?.addEventListener('input', (e) => { params.suggest = parseInt((e.target as HTMLInputElement).value, 10) || 0; });
+    host.querySelector('.sched-p-aiscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-ailimit')?.addEventListener('input', (e) => { params.limit = parseInt((e.target as HTMLInputElement).value, 10) || 12; });
+    host.querySelector('.sched-p-aireport')?.addEventListener('input', (e) => { params.report = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-airemote')?.addEventListener('change', (e) => { params.allowRemote = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');
         const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);
@@ -10929,7 +11343,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle', 'aiLabel'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle', 'aiLabel', 'aiScore', 'aiAbstained', 'aiAvailable', 'crashCause', 'aiLibraryCount', 'modAiTag'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -10991,6 +11405,13 @@ const VALUE_SOURCES = [
     'retry.task_attempt',
     // Laya (AI): the last classification's probability, and how many suggestions came back.
     'ai.p', 'ai.suggestions',
+    // …and the other Laya steps (sched-vars.ts LAYA_VARS lists them with what they hold).
+    'ai.abstained',
+    'ai.mod.tagCount', 'ai.mod.adult', 'ai.mod.adultP', 'ai.mod.applied', 'ai.mod.abstained',
+    'ai.lib.total', 'ai.lib.untagged', 'ai.lib.duplicates', 'ai.lib.conflicts', 'ai.lib.suggested', 'ai.lib.findings',
+    'ai.crash.count', 'ai.crash.unknown', 'ai.crash.groups', 'ai.crash.pending', 'ai.crash.p',
+    'ai.report.kindP', 'ai.report.areaP', 'ai.report.abstained',
+    'ai.enabled', 'ai.available', 'ai.installed', 'ai.loaded', 'ai.writer', 'ai.explain.remote',
     // How big the backup came out. A task can then warn when a nightly bundle suddenly
     // triples — which is what a replays section left ticked by accident looks like.
     'backup.bytes',
@@ -11280,6 +11701,93 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.var = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.label = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.min = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiScore') {
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:140px"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(p.var || '')}">
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:140px"
+                placeholder="${escAttr(t('sched.ai.condLabelPh'))}" value="${escAttr(p.label || '')}">
+            <select class="input sched-cp-op" style="max-width:70px">${['>=', '>', '<=', '<'].map(o => `<option value="${o}"${(p.op || '>=') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condScore'))}" aria-label="${escAttr(t('sched.ai.condScore'))}" value="${escAttr(String(p.value ?? 0.5))}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.var = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.label = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiAbstained') {
+        const which: [string, string][] = [['', t('sched.ai.abstSort')], ['ai.mod', t('sched.ai.abstMod')], ['ai.report', t('sched.ai.abstReport')]];
+        const known = which.some(([v]) => v === String(p.var || ''));
+        host.innerHTML = `
+            <select class="input sched-cp-which" style="max-width:230px">
+                ${which.map(([v, l]) => `<option value="${escAttr(v)}"${known && String(p.var || '') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                <option value="*"${known ? '' : ' selected'}>${escHtml(t('sched.ai.abstNamed'))}</option>
+            </select>
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:140px${known ? ';display:none' : ''}"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(known ? '' : (p.var || ''))}">`;
+        const src = host.querySelector<HTMLInputElement>('.sched-cp-src');
+        host.querySelector('.sched-cp-which')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            if (src) src.style.display = v === '*' ? '' : 'none';
+            p.var = v === '*' ? (src?.value || '') : v;
+        });
+        src?.addEventListener('input', () => { p.var = src.value; });
+    } else if (cond.type === 'aiAvailable') {
+        const words: Record<string, string> = {
+            available: t('sched.ai.st.available'), enabled: t('sched.ai.st.enabled'), installed: t('sched.ai.st.installed'),
+            loaded: t('sched.ai.st.loaded'), writer: t('sched.ai.st.writer'),
+        };
+        host.innerHTML = `
+            <select class="input sched-cp-what" style="max-width:260px">
+                ${STATUS_WHATS.map((w) => `<option value="${w}"${(p.what || 'available') === w ? ' selected' : ''}>${escHtml(words[w])}</option>`).join('')}
+            </select>`;
+        host.querySelector('.sched-cp-what')?.addEventListener('change', (e) => { p.what = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'crashCause') {
+        const field = p.field === 'cause' ? 'cause' : 'family';
+        const ids: readonly string[] = field === 'cause' ? CRASH_CAUSES : CRASH_FAMILIES;
+        const word = (id: string) => field === 'cause' ? causeWord(id) : familyWord(id);
+        host.innerHTML = `
+            <select class="input sched-cp-field" style="max-width:120px">
+                <option value="family"${field === 'family' ? ' selected' : ''}>${escHtml(t('sched.ai.crashFamily'))}</option>
+                <option value="cause"${field === 'cause' ? ' selected' : ''}>${escHtml(t('sched.ai.crashCause'))}</option>
+            </select>
+            <select class="input sched-cp-val" style="max-width:220px">
+                <option value="">${escHtml(t('sched.pick') || 'select')}</option>
+                ${ids.map((id) => `<option value="${escAttr(id)}"${String(p.value || '') === id ? ' selected' : ''}>${escHtml(word(id))}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condMin'))}" aria-label="${escAttr(t('sched.ai.condMin'))}" value="${escAttr(String(p.min ?? 0))}">
+            <select class="input sched-cp-scope" style="max-width:190px">
+                <option value="latest"${p.scope !== 'any' ? ' selected' : ''}>${escHtml(t('sched.ai.crashLatest'))}</option>
+                <option value="any"${p.scope === 'any' ? ' selected' : ''}>${escHtml(t('sched.ai.crashAny'))}</option>
+            </select>`;
+        host.querySelector('.sched-cp-field')?.addEventListener('change', (e) => { p.field = (e.target as HTMLSelectElement).value; p.value = ''; renderCondParams(host, cond); });
+        host.querySelector('.sched-cp-val')?.addEventListener('change', (e) => { p.value = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.min = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-scope')?.addEventListener('change', (e) => { p.scope = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'aiLibraryCount') {
+        const words: Record<string, string> = {
+            findings: t('sched.ai.lk.findings'), untagged: t('sched.ai.lk.untagged'), duplicates: t('sched.ai.lk.duplicates'),
+            conflicts: t('sched.ai.lk.conflicts'), suggested: t('sched.ai.lk.suggested'), total: t('sched.ai.lk.total'),
+        };
+        host.innerHTML = `
+            <select class="input sched-cp-kind" style="max-width:220px">
+                ${LIBRARY_KINDS.map((k) => `<option value="${k}"${(p.kind || 'findings') === k ? ' selected' : ''}>${escHtml(words[k])}</option>`).join('')}
+            </select>
+            <select class="input sched-cp-op" style="max-width:70px">${['>=', '>', '<=', '<', '==', '!='].map(o => `<option value="${o}"${(p.op || '>=') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-val" type="number" min="0" style="max-width:90px" value="${escAttr(String(p.value ?? 1))}">`;
+        host.querySelector('.sched-cp-kind')?.addEventListener('change', (e) => { p.kind = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'modAiTag') {
+        host.innerHTML = `
+            <select class="input sched-cp-mod" style="max-width:220px">
+                <option value="">${escHtml(t('sched.ai.lastMod'))}</option>
+                ${_mods.map((m: any) => `<option value="${escAttr(m.id)}"${String(p.id || '') === m.id ? ' selected' : ''}>${escHtml(m.name || m.id)}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.tagPh'))}" value="${escAttr(p.tag || '')}">`;
+        host.querySelector('.sched-cp-mod')?.addEventListener('change', (e) => { p.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.tag = (e.target as HTMLInputElement).value; });
     } else if (cond.type === 'fileContains') {
         host.innerHTML = `${condFileInput(p)}
             <input class="input sched-cp-val" spellcheck="false" style="min-width:190px"

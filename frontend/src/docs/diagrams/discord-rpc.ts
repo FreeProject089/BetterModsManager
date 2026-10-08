@@ -1,34 +1,50 @@
-export const discordRpc = {
-    titleKey: 'docs.diagram.discordRpc.title',
-    definition: `
-flowchart TD
-    EVENT["<div class='node-content'><i class='icon-flash'></i> {{docs.diagram.discordRpc.node.EVENT}}</div>"]
-    SYNC["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.discordRpc.node.SYNC}}</div>"]
-    
-    subgraph BACKEND ["BMM Core (Rust)"]
-        BRIDGE["<div class='node-content'><i class='icon-command'></i> {{docs.diagram.discordRpc.node.BRIDGE}}</div>"]
-        SOCKET["<div class='node-content'><i class='icon-terminal'></i> {{docs.diagram.discordRpc.node.SOCKET}}</div>"]
-    end
-    
-    subgraph EXTERNAL ["External Client"]
-        DISCORD["<div class='node-content'><svg width='16' height='16' viewBox='0 0 24 24' fill='currentColor' style='margin-right:8px; vertical-align:middle;'><path d='M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037 19.736 19.736 0 0 0-4.885 1.515.069.069 0 0 0-.032.027C.533 9.048-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z'/></svg> {{docs.diagram.discordRpc.node.DISCORD}}</div>"]
-        STATUS["<div class='node-content'><i class='icon-layout'></i> {{docs.diagram.discordRpc.node.STATUS}}</div>"]
-    end
-    
-    EVENT --> SYNC
-    SYNC --> BRIDGE
-    BRIDGE --> SOCKET
-    SOCKET --> DISCORD
-    DISCORD --> STATUS
-    
-    %% Styles
-    classDef highlight fill:#5865f2,stroke:#5865f2,color:#ffffff,stroke-width:2px;
-    classDef logic fill:#5865f21A,stroke:#5865f2,color:#5865f2;
-    classDef external fill:#ffffff0D,stroke:#ffffff26,color:#ffffff;
-    
-    class EVENT,BRIDGE,SOCKET highlight;
-    class SYNC logic;
-    class DISCORD,STATUS external;
-`,
-    explanationPrefix: 'docs.diagram.discordRpc.node.'
+import type { DiagramSpec } from '../diagram-spec.js';
+
+// Discord Rich Presence (commands/discord.rs): off by default (settings.discord_rpc_enabled). Every
+// update goes through set_discord_presence, which checks the setting, connects the IPC client once
+// (kept in AppState.discord_client) and sets the activity: details + state text, the BMM logo with
+// the version and creator id, and two buttons whose URLs come from links.json.
+export const discordRpc: DiagramSpec = {
+    id: 'discord-rpc',
+    i18n: 'docs.diagram.discord-rpc',
+    category: 'automation',
+    dir: 'TB',
+    article: 'integrations',
+    related: ['scheduler', 'mcp-server', 'profile-system'],
+    groups: [
+        { id: 'TRIGGER', dir: 'LR' },
+        { id: 'CORE' },
+        { id: 'DISCORD' },
+    ],
+    nodes: [
+        { id: 'SETTING', kind: 'ui', group: 'TRIGGER', icon: 'icon-toggle', refs: ['frontend/src/features/settings/settings.ts › initDiscordRpcSettings', 'frontend/src/features/settings/settings.ts › setDiscordRpc', 'src-tauri/src/state.rs › discord_rpc_enabled'] },
+        { id: 'EVENTS', kind: 'front', group: 'TRIGGER', icon: 'icon-activity', refs: ['frontend/src/features/settings/settings.ts › updateDiscordStatus', 'frontend/src/features/misc/flappy-tasky.ts › presence'] },
+        { id: 'INIT', kind: 'rust', group: 'TRIGGER', icon: 'icon-start', refs: ['src-tauri/src/commands/discord.rs › init_discord_rpc', 'src-tauri/src/main.rs › init_discord_rpc'] },
+
+        { id: 'PRESENCE', kind: 'rust', group: 'CORE', icon: 'icon-message', refs: ['src-tauri/src/commands/discord.rs › set_discord_presence'] },
+        { id: 'ENABLED', kind: 'decision', group: 'CORE', refs: ['src-tauri/src/commands/discord.rs › set_discord_presence', 'src-tauri/src/state.rs › discord_rpc_enabled'] },
+        { id: 'CONNECT', kind: 'rust', group: 'CORE', icon: 'icon-link', refs: ['src-tauri/src/commands/discord.rs › DISCORD_CLIENT_ID', 'src-tauri/src/state.rs › discord_client'] },
+        { id: 'LINKS', kind: 'data', group: 'CORE', icon: 'icon-file', refs: ['src-tauri/src/commands/discord.rs › load_rpc_links', 'src-tauri/src/commands/discord.rs › rpc_links_from_json', 'src-tauri/src/commands/discord.rs › REMOTE_LINKS_URL'] },
+        { id: 'ACTIVITY', kind: 'rust', group: 'CORE', icon: 'icon-user', refs: ['src-tauri/src/commands/discord.rs › set_discord_presence', 'src-tauri/src/commands/security.rs › get_creator_id'] },
+        { id: 'NONE', kind: 'outcome', group: 'CORE', icon: 'icon-stop', refs: ['src-tauri/src/commands/discord.rs › set_discord_presence'] },
+
+        { id: 'CLIENT', kind: 'ext', group: 'DISCORD', icon: 'icon-message', refs: ['src-tauri/src/commands/discord.rs › DiscordIpcClient'] },
+        { id: 'SHOWN', kind: 'outcome', group: 'DISCORD', icon: 'icon-check', refs: ['src-tauri/src/commands/discord.rs › set_discord_presence'] },
+    ],
+    edges: [
+        { from: 'SETTING', to: 'INIT', label: 'toggle', tone: 'info' },
+        { from: 'SETTING', to: 'EVENTS', label: 'ifOn', dashed: true },
+        { from: 'INIT', to: 'PRESENCE', label: 'ifOn', tone: 'info' },
+        { from: 'EVENTS', to: 'PRESENCE', thick: true },
+
+        { from: 'PRESENCE', to: 'ENABLED', thick: true },
+        { from: 'ENABLED', to: 'NONE', label: '~no', tone: 'warn' },
+        { from: 'ENABLED', to: 'CONNECT', label: '~yes', tone: 'ok', thick: true },
+        { from: 'CONNECT', to: 'CLIENT', label: 'ipc', dashed: true },
+        { from: 'CONNECT', to: 'NONE', label: '~fail', tone: 'danger', dashed: true },
+        { from: 'CONNECT', to: 'ACTIVITY', thick: true },
+        { from: 'LINKS', to: 'ACTIVITY', label: '~reads', dashed: true },
+        { from: 'ACTIVITY', to: 'CLIENT', label: 'setActivity', thick: true },
+        { from: 'CLIENT', to: 'SHOWN', thick: true },
+    ],
 };

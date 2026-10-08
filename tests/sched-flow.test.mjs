@@ -283,7 +283,12 @@ describe('permissions: the flow flags exactly what the executor refuses', () => 
       if (req.length) fromRunner[type] = [...new Set(req)].sort().join(',');
     }
     assert.ok(Object.keys(fromRunner).length >= 30, 'too few gated actions read — the parse is broken');
-    const fromTable = Object.fromEntries(Object.entries(M.ACTION_PERMS).map(([k, r]) => [k, `${r.perm}|${r.label}`]));
+    // A step with a second, conditional need (EXTRA_PERMS: « explain » with a remote writer
+    // also needs `network`) lists both, as the runner asks for both.
+    const fromTable = Object.fromEntries(Object.entries(M.ACTION_PERMS).map(([k, r]) => {
+      const x = (M.EXTRA_PERMS || {})[k];
+      return [k, [`${r.perm}|${r.label}`, ...(x ? [`${x.perm}|${x.label}`] : [])].sort().join(',')];
+    }));
     assert.deepEqual(fromTable, fromRunner);
   });
 

@@ -57,6 +57,9 @@ export interface TutorialStep {
    *                  `optional` action step wants.
    *  A step with no `action` is always 'next'. */
   advance?: 'next' | 'interact';
+  /** false = outline the target without dimming the rest of the window (the spotlight is
+   *  the default). For a step about a control the reader should see IN CONTEXT. */
+  dim?: boolean;
   /** Where Next goes, overriding the linear next step — the "jump to a specific step" choice.
    *  Either a step id in THIS part, or `{ part, step }` to jump into another part. Lets a
    *  tutorial branch instead of always walking straight through. Unknown targets fall back to
@@ -93,7 +96,13 @@ export interface TutorialDef {
   color: string;
   parts: TutorialPart[];
   assets?: TutorialAsset[];
+  /** Where the hub files it. Custom tutorials are always 'mine'. */
+  category?: TutorialCategory;
+  /** How much the lesson assumes: 1 = nothing, 2 = the basics, 3 = a working setup. */
+  level?: 1 | 2 | 3;
 }
+
+export type TutorialCategory = 'start' | 'essentials' | 'advanced' | 'tools' | 'mine';
 
 // ── Progress store ──────────────────────────────────────────────────────────
 

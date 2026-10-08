@@ -43,7 +43,7 @@ different pieces of code, and they do not agree:
 | Parser | Keys | Does `Key = value` work? |
 |---|---|---|
 | substring search over the lowercased file | `Prod`, `PTB`, `DisableUpdate`, `FSDM`, `AutoEULA_on_first_Start`, `quicklink1_disabled`, `quicklink2_disabled` | **No** — silently reads as the default |
-| line parser, splits on the first `=`, trims both sides | `BCTestMode`, `BCTestBase` | Yes |
+| line parser, splits on the first `=`, trims both sides | `BCTestMode`, `BCTestBase`, `DocsReplays` | Yes |
 
 So `BCTestMode = true` works and `PTB = true` does not, in the same file, with no warning
 either way. Write every key tight: `Key=value`.
@@ -137,6 +137,30 @@ leaving `BCTestMode=true` in a shipped build is not, because every user's blog w
 a machine that is not theirs.
 
 Read once at startup, after the Tauri bridge is up. Changing it needs a restart.
+
+### `DocsReplays`
+
+`DocsReplays=false` removes every **session replay** (`.bmmreplay`) from the documentation in
+Help & Other: the article media, the `:::replay{…}` blocks and the recordings embedded in the
+bundled BMM Docs pages. They are not replaced by anything, no note, no greyed-out button, and
+no recording is ever downloaded or opened from there. Video clips (`.mp4`, `.webm`) are not
+replays and stay. `DocsReplays=off` means the same.
+
+```ini
+DocsReplays=false
+```
+
+Any other value, a missing line or a missing file leaves replays on: this is a key you add to
+take something away, never one whose absence hides content. It is line-parsed like
+`BCTestMode` (spaces around `=` are fine) and, unlike the substring keys, a line written
+`#DocsReplays=false` really is ignored. If the line appears twice, the last one wins.
+
+Only the documentation is affected. Recording, exporting and watching your own sessions
+(Settings, crash reports, DevTools) work as before, and so does a replay in the update notes.
+The website has its own switch: `extra: bmm_replays: false` in `BMM Docs/mkdocs.yml`, or
+`BMM_DOCS_REPLAYS=off` in the build environment (see `BMM Docs/WRITING.md`).
+
+Read once when Help & Other starts. Changing it needs a restart.
 
 ---
 

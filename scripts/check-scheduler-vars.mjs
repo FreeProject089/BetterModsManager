@@ -101,7 +101,9 @@ const badRefs = [];
     const freeSourced = new Set(
         [...body.matchAll(/type: 'textIs', params: \{[^}]*source: '([a-zA-Z0-9._]+)'/g)].map((m) => m[1]),
     );
-    for (const m of body.matchAll(/source: '([a-zA-Z0-9._]+)'/g)) {
+    // A `for each` names a LOOP source (`mods`, `list`…), not a value: `kind: 'forEach', source:`
+    // is skipped, or every preset that loops over a list would be reported as reading `list`.
+    for (const m of body.matchAll(/(?<!kind: 'forEach', )source: '([a-zA-Z0-9._]+)'/g)) {
         const suffix = m[1].includes('.') ? m[1].slice(m[1].indexOf('.') + 1) : '';
         if (!offered.has(m[1]) && !freeSourced.has(m[1]) && !templatedSuffixes.has(suffix)) {
             badRefs.push(`preset reads value source '${m[1]}', which is not in VALUE_SOURCES and is not a prefixed write either`);

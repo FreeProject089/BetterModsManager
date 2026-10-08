@@ -694,6 +694,7 @@ pub fn predict_raw(state_text: &str, qs: &[Question]) -> Result<(Vec<Vec<f64>>, 
         s.eng = None;
         s.eng = Some(load(&dir)?);
         start_reaper(&mut s);
+        ring_ready("loaded");
     }
     s.last_used = Instant::now();
     s.runs += 1;
@@ -1218,7 +1219,15 @@ pub fn install_user_copy(progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Re
     progress(Progress { phase: "unpack", received: PACK_SIZE, total: PACK_SIZE, bytes_per_sec: 0, eta_secs: None, mirror: 0, host: String::new() });
     unpack(&part, &dest)?;
     let _ = std::fs::remove_file(&part);
+    ring_ready("installed");
     Ok(json!({ "installed": true, "dir": dest.display().to_string() }))
+}
+
+/// « Laya became available »: the `bmm.ai.ready` event a scheduled task can wait on (the
+/// `onEvent` trigger, filtered with `what=installed` or `what=loaded`). Never fails, never waits:
+/// an event that could fail the load it describes would be worse than none.
+pub fn ring_ready(what: &str) {
+    let _ = crate::commands::hooks::hook_fire("bmm.ai.ready".into(), Some(json!({ "what": what, "model": MODEL_ID })));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

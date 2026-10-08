@@ -128,8 +128,12 @@ describe('load-order wiring', () => {
 
   test('the profile card opens it, and the modpack apply places the pack by its mode', () => {
     assert.match(read('frontend/src/features/profiles/profiles.ts'), /btn-load-order/);
-    // Through the one bulk engine (order_share.rs `arrange`), with the pack's own mode.
-    assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /arrangeBlock\(packOrder, pack\.order_mode \|\| null, null, toast/);
+    // Through the one bulk engine (order_share.rs `arrange`), with the pack's own mode as the
+    // activation dialog's default placement (features/mods/modpack-activate.ts).
+    const act = read('frontend/src/features/mods/modpack-activate.ts');
+    assert.match(act, /order: fresh\.order_mode \|\| ''/);
+    assert.match(act, /invoke\('mod_order_arrange', \{ profileId: null, ids: plan\.packOrder, mode: st\.order \|\| null \}\)/);
+    assert.match(read('frontend/src/features/mods/modpack-creator.ts'), /openModpackActivation\(pack,/);
     assert.match(view, /invoke\('mod_order_arrange'/);
   });
 });

@@ -31,7 +31,7 @@ export function getModCardHTML(mod, ctx) {
             // a miss just renders the name — the next re-render finds the glyph.
             return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
         }).join('');
-        const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" ${actAttrsStop('showModTagsModal', mod.id)} style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+        const extraTagsCount = mod.tags.length > 3 ? `<button type="button" ${actAttrsStop('showModTagsModal', mod.id)} class="btn btn-ghost mod-tags-more">+${mod.tags.length - 3}</button>` : '';
         tagsHtml = `<div class="mod-tags-container" style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;
     }
     else {
@@ -67,6 +67,7 @@ export function getModCardHTML(mod, ctx) {
     catch { }
     const processingHtml = isProcessing ? getLoadingOverlayHTML() : '';
     return `
+        <span class="mod-pick" aria-hidden="true">${uiIcon('check', 12)}</span>
         <label class="mod-toggle" data-tasky="mod.toggleTip" data-tasky-icon="toggle">
             <input type="checkbox" class="mod-toggle-input" ${mod.enabled ? 'checked' : ''} />
             <div class="mod-toggle-track">
@@ -87,7 +88,7 @@ export function getModCardHTML(mod, ctx) {
                      style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')};opacity:${isMissing ? '0.5' : '0.9'}; transition: all 0.2s ease;">
                     ${uiIcon('shield', 12)}
                 </div>
-                ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" data-tasky="mod.activationOrderTip" data-tasky-icon="help">#${mod.activation_order}</span>` : ''}
+                ${mod.enabled ? `<span class="badge badge-accent mod-order-badge" data-tasky="mod.activationOrderTip" data-tasky-icon="help">#${mod.activation_order}</span>` : ''}
                 ${/\.(zip|rar|7z|tar|gz|tgz)$/i.test(mod.mod_folder_path || '') ? `<span class="mod-archive-badge" data-tasky="mod.archiveBadgeTip" data-tasky-icon="package">${uiIcon('box', 12)}${t('mod.archiveBadge') || 'Archive'}</span>` : ''}
                 ${conflictHtml}
                 ${updateHtml}
@@ -106,11 +107,9 @@ export function getModCardHTML(mod, ctx) {
 
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
-            <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
+            <button type="button" class="btn btn-sm btn-icon btn-dropdown-toggle mod-more-btn"
                 ${actAttrsStop('showGlobalDropdown')} data-act-with="element,next"
-                data-tasky="mod.moreActionsTip" data-tasky-icon="help";"
-                
-                style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+                data-tasky="mod.moreActionsTip" data-tasky-icon="help">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         <polyline points="6 9 12 15 18 9" stroke-width="2.5" style="opacity: 0.8; transform: scale(0.6); transform-origin: center; translate: 0 4px;"/>
@@ -182,13 +181,13 @@ export function getModCardHTML(mod, ctx) {
                 </div>
             </div>
             
-            <button class="btn btn-sm btn-icon btn-edit-mod" data-tasky="mod.editTip" data-tasky-icon="edit" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+            <button type="button" class="btn btn-sm btn-icon btn-edit-mod mod-edit-btn" data-tasky="mod.editTip" data-tasky-icon="edit" data-id="${mod.id}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M12 20h9"/>
                     <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3l-12 12L3 20l1.5-4.5z"/>
                 </svg>
             </button>
-            <button class="btn btn-danger btn-sm btn-icon btn-remove-mod" data-tasky="mod.removeTip" data-tasky-icon="trash" data-id="${mod.id}">
+            <button type="button" class="btn btn-danger btn-sm btn-icon btn-remove-mod" data-tasky="mod.removeTip" data-tasky-icon="trash" data-id="${mod.id}">
                 ${uiIcon('delete', 12)}
             </button>
         </div>

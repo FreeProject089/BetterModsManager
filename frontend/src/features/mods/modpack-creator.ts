@@ -15,6 +15,7 @@ import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { MODAL_CLOSE_SVG, openModal } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { uiIcon } from '../../ui/icons.js';
+import { openModpackActivation, openModpackPicker, deactivateModpack } from './modpack-activate.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -1343,123 +1344,33 @@ async function _showRepairModal(container, pack, report, onComplete) {
     });
 }
 
-async function _executeApplyModpack(container, pack, isApplying) {
-    toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
-
-    let appliedCount = 0;
-    let missingCount = 0;
-    // Mods the backend refused, kept apart from the ones that were not found at all: "you do
-    // not have it" and "it is here and would not turn on" are different problems with different
-    // fixes, and reporting them as one number sends people looking in the wrong place.
-    const failed: string[] = [];
-
-    const shaIndex = await _resolveHashesToModIds(pack.mods);
-
-    // Each toggle is guarded on its own.
-    //
-    // Every `invoke` below used to be unguarded inside this loop, so the FIRST mod the backend
-    // refused threw straight out of it — every mod after that one was silently skipped, and the
-    // pack was left half applied with a single generic error. `enable_mod` refuses for ordinary
-    // reasons: MISSING_SHA when hashes have not been computed yet, an archive that cannot be
-    // extracted. One awkward mod should cost you that mod, not the pack.
-    const toggle = async (id: string, on: boolean, label: string) => {
-        try {
-            await invoke(on ? 'enable_mod' : 'disable_mod', { modId: id });
-            appliedCount++;
-            return true;
-        } catch (e: any) {
-            const raw = String(e?.message || e || '');
-            // The backend encodes this one as `MISSING_SHA|id|name` — shown as the name, since
-            // the pipe-delimited form is for the caller, not the reader.
-            failed.push(raw.startsWith('MISSING_SHA|') ? `${label} (SHA)` : label);
-            return false;
-        }
-    };
-
-    // The pack's own order, as local ids: once its mods are on, the block is placed in the
-    // profile's activation order by the pack's mode (or the setting): on top in this sequence
-    // by default, so the pack wins as it was built (commands/order_share.rs).
-    const packOrder: string[] = [];
-    for (const mref of pack.mods) {
-        // Find local mod by ID or SHA-256
-        const local = _findLocalByMref(mref, shaIndex);
-        if (local) packOrder.push(local.id);
-        if (local) {
-            if (isApplying && !local.enabled) {
-                await toggle(local.id, true, local.name || local.id);
-                if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
-                    for (const depId of local.dependencies) {
-                        const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && !depLocal.enabled) await toggle(depId, true, depLocal.name || depId);
-                    }
-                }
-            } else if (!isApplying && local.enabled) {
-                await toggle(local.id, false, local.name || local.id);
-                if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
-                    for (const depId of local.dependencies) {
-                        const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && depLocal.enabled) await toggle(depId, false, depLocal.name || depId);
-                    }
-                }
-            }
-        } else {
-            if (isApplying) missingCount++;
-        }
-    }
-
-    if (failed.length > 0) {
-        // Named, and capped at three: a list of forty names is a wall nobody reads, and the
-        // first few are enough to go and look.
-        const shown = failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` +${failed.length - 3}` : '');
-        toast(`${t('modpack.applyFailed') || 'Could not toggle'}: ${shown}`, 'error');
-    } else if (isApplying && missingCount > 0) {
-        toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
-    } else {
-        toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
-    }
-    if (isApplying && packOrder.length > 0) {
-        const { arrangeBlock } = await import('../profiles/load-order.js');
-        await arrangeBlock(packOrder, pack.order_mode || null, null, toast);
-    }
-    if (isApplying) dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
-
-    await _loadData();
-    if (container) _renderModpackList(container);
-
-    if (window._refreshModsFn) {
-        window._refreshModsFn(false, true);
-    } else {
-        window.dispatchEvent(new CustomEvent('bmm://mods-updated'));
-    }
-}
-
+/**
+ * A pack's switch. Off → the activation dialog (what will change, options), which runs the pack
+ * as one background job (modpack-activate.ts). On → the pack's mods that are on go off, also
+ * as a job. Either way the list redraws once the job has finished.
+ */
 async function _applyModpack(container, pack) {
     if (!pack || !pack.mods || pack.mods.length === 0) return;
-
+    const onDone = async () => {
+        await _loadData();
+        if (container && container.isConnected && !_editingPack) _renderModpackList(container);
+    };
     try {
         const shaIndex = await _resolveHashesToModIds(pack.mods);
         const anyEnabled = pack.mods.some(mref => {
             const local = _findLocalByMref(mref, shaIndex);
             return local && local.enabled;
         });
-
-        const isApplying = !anyEnabled;
-
-        if (isApplying && !pack.skip_integrity_check) {
-            const report = await invoke('check_modpack_integrity', { modpack: pack });
-
-            if (report.missingMods.length > 0 || report.corruptedMods.length > 0) {
-                _showRepairModal(container, pack, report, async () => {
-                    await _executeApplyModpack(container, pack, true);
-                });
-                return;
-            }
-        }
-
-        await _executeApplyModpack(container, pack, isApplying);
+        if (anyEnabled) await deactivateModpack(pack, { onDone });
+        else await openModpackActivation(pack, { onDone, repair: _repairFor(container) });
     } catch (err) {
-        toast((window.t ? window.t('common.error') : 'Error') + ': ' + err.toString(), 'error');
+        toast(t('common.error') + ': ' + String(err), 'error');
     }
+}
+
+/** The repair dialog for the activation dialog's "Repair": re-plans once it is done. */
+function _repairFor(container) {
+    return (pack, report, after) => { void _showRepairModal(container, pack, report, async () => { after(); }); };
 }
 
 async function _exportModpack(pack) {
@@ -1545,154 +1456,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
 }
 
 // ── Quick Apply Modal ────────────────────────────────────────────────────────
+/** The library's "Activate a modpack": the packs, then the chosen one's plan (modpack-activate.ts). */
 export async function openQuickApplyModal() {
-    await _loadData();
-
-    // The house shell, like the mod picker: header, a search/filter toolbar band, the list.
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-
-    const content = document.createElement('div');
-    content.className = 'modal bms modal--md modal--tall';
-    content.setAttribute('role', 'dialog');
-    content.setAttribute('aria-modal', 'true');
-
-    // Header + toolbar written straight into the card; `header` is where the queries look.
-    const header = content;
-    content.innerHTML = `
-        <div class="modal-header">
-            <div class="bms-icon" aria-hidden="true">${uiIcon('run', 18)}</div>
-            <div class="bms-titles">
-                <h2 class="modal-title">${t('modpack.quickApplyTitle') || 'Activate a modpack'}</h2>
-                <p class="bms-sub">${_modpacks.length} ${t('modpack.available') || 'available'}</p>
-            </div>
-            <button type="button" class="modal-close" id="qa-close" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
-        </div>
-        <div class="modal-toolbar">
-            <div class="mp-ms-search" id="qa-search-wrap">
-                ${uiIcon('search', 14)}
-                <input type="text" id="qa-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
-            </div>
-            <select id="qa-filter" class="form-input" style="flex:none;width:auto;">
-                <option value="all">${t('modpack.filterAll') || 'Tous'}</option>
-                <option value="single">${t('modpack.singleProfile') || 'Profil unique'}</option>
-                <option value="multi">${t('modpack.multiProfile') || 'Multi-profil'}</option>
-            </select>
-        </div>
-    `;
-
-    // Body
-    const body = document.createElement('div');
-    body.className = 'modal-body custom-scrollbar';
-    body.style.cssText = 'gap:8px;';
-
-    const cards = [];
-
-    if (_modpacks.length === 0) {
-        body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
- ${uiIcon('folders', 18)}            <span>${t('modpack.noModpacks') || 'No modpack found'}</span>
-        </div>`;
-    }
-
-    _modpacks.forEach(pack => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:background 0.2s, border-color 0.2s;';
-        row.onmouseenter = () => {
-            row.style.background = 'var(--bmm-s05)';
-            row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 20%, transparent)';
-        };
-        row.onmouseleave = () => {
-            row.style.background = 'var(--bmm-s03)';
-            row.style.borderColor = 'var(--bmm-s05)';
-        };
-
-        const modsCount = pack.mods ? pack.mods.length : 0;
-
-        let anyEnabled = false;
-        if (pack.mods) {
-            anyEnabled = pack.mods.some(mref => {
-                // Hash matching now lives in the dedicated apply/deactivate flow (resolved
-// in one batch backend call) — for the row toggle indicator we only need
-// mod_id match here, which covers ~all real cases.
-const local = _allMods.find(m => m.id === mref.mod_id);
-                return local && local.enabled;
-            });
-        }
-
-        row.innerHTML = `
-            <div style="flex:1; min-width:0; padding-right:16px;">
-                <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escHtml(pack.name)}</div>
-                <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; align-items:center;">
-                    <span>${t('modpack.modsCount', { count: modsCount }) || modsCount + ' mods'}</span>
-                    <span style="opacity:0.3">•</span>
-                    <span style="color:var(--text-secondary);">${pack.multi_profile ? t('modpack.multiProfile') : escHtml(pack.game_name || t('modpack.general'))}</span>
-                </div>
-            </div>
-            ${_switchHtml(!!anyEnabled, `${anyEnabled ? (t('modpack.deactivate') || 'Deactivate') : t('modpack.apply')}: ${pack.name}`)}
-        `;
-
-        const applyBtn = row.querySelector('.btn-apply');
-        applyBtn.onclick = async () => {
-            const wrap = applyBtn as HTMLElement;
-            wrap.style.opacity = '0.5';
-            wrap.style.pointerEvents = 'none';
-            await _applyModpack(null, pack);
-
-            // Recalculate anyEnabled after apply
-            await _loadData();
-            let newAnyEnabled = false;
-            const updatedPack = _modpacks.find(p => p.id === pack.id);
-            if (updatedPack && updatedPack.mods) {
-                newAnyEnabled = updatedPack.mods.some(mref => {
-                    // Hash matching now lives in the dedicated apply/deactivate flow (resolved
-// in one batch backend call) — for the row toggle indicator we only need
-// mod_id match here, which covers ~all real cases.
-const local = _allMods.find(m => m.id === mref.mod_id);
-                    return local && local.enabled;
-                });
-            }
-
-            _setSwitch(wrap, newAnyEnabled);
-            wrap.style.opacity = '1';
-            wrap.style.pointerEvents = 'auto';
-        };
-
-        body.appendChild(row);
-        cards.push({ card: row, name: pack.name.toLowerCase(), isMulti: pack.multi_profile });
-    });
-
-    const searchInput = header.querySelector('#qa-search');
-    const filterSelect = header.querySelector('#qa-filter');
-
-    const applyFilters = () => {
-        const q = searchInput.value.toLowerCase().trim();
-        const f = filterSelect.value;
-        cards.forEach(({ card, name, isMulti }) => {
-            let match = true;
-            if (q && !name.includes(q)) match = false;
-            if (f === 'single' && isMulti) match = false;
-            if (f === 'multi' && !isMulti) match = false;
-            card.style.display = match ? 'flex' : 'none';
-        });
-    };
-
-    searchInput.addEventListener('input', applyFilters);
-    filterSelect.addEventListener('change', applyFilters);
-
-    content.appendChild(body);
-    overlay.appendChild(content);
-
-    const appOuter = document.getElementById('app-window-outer') || document.body;
-    appOuter.appendChild(overlay);
-    raiseAboveAll(overlay);
-
-    const closeBtn = header.querySelector('#qa-close');
-
-    const closeModal = () => { overlay.remove(); };
-
-    closeBtn.addEventListener('click', closeModal);
-    overlay.addEventListener('mousedown', (e) => {
-        if (e.target === overlay) closeModal();
-    });
+    await openModpackPicker({ repair: _repairFor(null) });
 }
-

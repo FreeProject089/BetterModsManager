@@ -231,7 +231,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 10779,
+      "words": 11129,
       "diagrams": 0,
       "fr": true
     },
@@ -258,10 +258,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "113 actions · 41 conditions · 39 values · 8 loop sources",
-        "fr": "113 actions · 41 conditions · 39 valeurs · 8 sources de boucle"
+        "en": "120 actions · 47 conditions · 65 values · 8 loop sources",
+        "fr": "120 actions · 47 conditions · 65 valeurs · 8 sources de boucle"
       },
-      "words": 494,
+      "words": 568,
       "diagrams": 0,
       "fr": true
     },
@@ -426,7 +426,7 @@
         "en": "BMM can help you fill in a mod's details and check a bug report before you send it. All of it is optional.",
         "fr": "BMM peut vous aider à remplir les informations d'un mod et à vérifier un rapport de bug avant de l'envoyer. Tout est optionnel."
       },
-      "words": 3426,
+      "words": 3591,
       "diagrams": 1,
       "fr": true
     },
@@ -711,7 +711,7 @@
         "en": "Laya is optional, and most of it runs on your PC. It still reads text BMM does not control (a mod's readme, a report, a file a task names) and some of it can…",
         "fr": "Laya est optionnelle, et l'essentiel tourne sur ton PC. Elle lit pourtant du texte que BMM ne contrôle pas (le readme d'un mod, un rapport, un fichier qu'une…"
       },
-      "words": 832,
+      "words": 862,
       "diagrams": 0,
       "fr": true
     },

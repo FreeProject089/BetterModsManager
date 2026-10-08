@@ -1388,6 +1388,11 @@ async function initSecurityInfoCard() {
     };
     _setupCopy('btn-sic-copy-creator', 'sic-creator-id');
     _setupCopy('btn-sic-copy-token', 'sic-api-token');
+    // The same moment the Plugins page announces from its own Copy: the "Plugins and the API"
+    // lesson sends the reader HERE and waits for it, and only the other button ever said it.
+    document.getElementById('btn-sic-copy-token')?.addEventListener('click', () => {
+        void import('../../ui/tutorial-events.js').then((m) => m.dispatchBmmAction(m.BMM_ACTIONS.API_TOKEN_COPIED));
+    });
     _setupCopy('btn-sic-copy-url', 'sic-api-url');
     // ── Configurable API port ──
     // The displayed URL + port field reflect settings.api_port; changing the

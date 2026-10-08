@@ -279,117 +279,223 @@ body.tut-docked.tut-min.tut-dock-left .app-shell {
     }
 }
 
-/* ═══ The hub, rebuilt ══════════════════════════════════════════════════════
-   Loaded after main.css, so these override the old .tut-hub-* rules. The markup they
-   styled is gone (see tutorial-hub.ts) — what remains of it here is dead, and only the
-   overlay/backdrop/close rules are still shared.
+/* ═══ The hub and the creator: house dialogs (modal-shell) ═════════════════════
+   Both are openModal() cards (.modal.thub / .modal.tcr) with a flush body; these rules are
+   their CONTENT only. The shell (overlay, header, footer, stacking) is modal-shell.css's.
+   The lesson colour is a FILL (tile, progress, the "you are here" edge); text stays on the
+   ink tokens so BMM White reads as well as the dark themes. */
 
-   Two panes: the lessons on the left, the selected one on the right. The old layout gave
-   every lesson a card carrying a percentage bar, an "n/m steps" label AND a row of part
-   chips with their own counts — three answers to one question. Here each level answers
-   once: the rail says how far through a lesson you are, the parts list says where inside
-   it, and neither repeats the other. */
-
-.tut-hub-shell {
-    position: relative;
+/* ── Hub ── */
+.thub-grid {
     display: grid;
-    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-    width: min(920px, calc(100vw - 64px));
-    height: min(560px, calc(100vh - 96px));
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
 }
-
-/* ── Left: the lessons ───────────────────────────────────────────────────── */
-.tut-hub-rail {
+.thub-rail {
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    background: var(--bmm-bg-base);
-    border-right: 1px solid var(--border);
+    gap: 10px;
+    min-height: 0;
+    padding: 16px 14px 12px 20px;
+    border-right: 1px solid var(--bmm-border);
 }
-.tut-hub-rail-head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; padding: 16px 14px 12px;
+.thub-rail .thub-search { max-width: none; flex: none; height: 34px; }
+.thub-tabs { flex-wrap: wrap; flex: none; }
+.thub-tab { gap: 6px; }
+.thub-tab-n { font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--bmm-text-secondary); }
+.thub-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px;
 }
-.tut-hub-rail-title { font-size: 14px; font-weight: 800; color: var(--bmm-text-primary); }
-.tut-hub-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 2px; }
-
-.tut-hub-row {
-    display: flex; align-items: center; gap: 10px;
-    width: 100%; padding: 9px 10px;
-    background: none; border: 0; border-radius: 9px;
-    text-align: left; cursor: pointer;
+.thub-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
     color: var(--bmm-text-secondary);
-    transition: background 0.12s, color 0.12s;
 }
-.tut-hub-row:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
-/* Selection is a filled row, not a coloured border: at this size a 2px edge reads as an
-   accident rather than as "this one". */
-.tut-hub-row.on { background: var(--bmm-bg-overlay); color: var(--bmm-text-primary); }
-.tut-hub-row.on .tut-hub-row-icon { color: var(--tut-color); border-color: var(--tut-color); }
+.thub-row:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+.thub-row[aria-selected="true"] { background: var(--bmm-s05); border-color: var(--bmm-border-accent); color: var(--bmm-text-primary); }
+.thub-row:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.thub-row-tile, .thub-d-tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    border-radius: 10px;
+    color: var(--bmm-text-primary);
+    background: color-mix(in srgb, var(--thub-color, var(--bmm-accent)) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--thub-color, var(--bmm-accent)) 45%, transparent);
+}
+.thub-row-tile { width: 34px; height: 34px; }
+.thub-row-tile svg { width: 18px; height: 18px; }
+.thub-row-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.thub-row-name { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thub-row-meta { font-size: 11px; color: var(--bmm-text-secondary); }
+.thub-status { font-size: 10.5px; }
+.thub-empty { margin: 12px 0; }
 
-.tut-hub-row-icon {
-    flex: none; display: grid; place-items: center;
-    width: 30px; height: 30px;
-    border: 1px solid var(--border); border-radius: 8px;
-    color: var(--bmm-text-muted);
+.thub-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 24px;
 }
-.tut-hub-row.done .tut-hub-row-icon { color: var(--bmm-success, #22c55e); border-color: color-mix(in srgb, var(--bmm-success, #22c55e) 40%, transparent); }
-.tut-hub-row-mid { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.tut-hub-row-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tut-hub-row-sub { font-size: 10.5px; color: var(--bmm-text-muted); font-variant-numeric: tabular-nums; }
+.thub-d-head { display: flex; gap: 14px; align-items: center; }
+.thub-d-tile { width: 48px; height: 48px; border-radius: 14px; }
+.thub-d-tile svg { width: 22px; height: 22px; }
+.thub-d-titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.thub-d-title { margin: 0; font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); }
+.thub-d-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.thub-d-desc { max-width: 68ch; }
+.thub-d-progress { display: flex; align-items: center; gap: 10px; }
+.thub-d-progress .bms-progress { flex: 1; }
+.thub-d-progress .bms-progress > span { background: var(--thub-color, var(--bmm-accent)); }
+.thub-d-count { font-size: 12px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.thub-d-where { font-size: 12px; color: var(--bmm-text-secondary); }
+.thub-d-label { margin-top: 6px; }
+.thub-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.thub-part {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    color: var(--bmm-text-secondary);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+.thub-part:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+.thub-part:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+/* Where Resume would drop you: the one thing this list is asked at a glance. */
+.thub-part.is-here { border-color: var(--thub-color, var(--bmm-accent)); color: var(--bmm-text-primary); }
+.thub-part-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border: 1.5px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+}
+.thub-part.is-progress .thub-part-dot { border-color: var(--thub-color, var(--bmm-accent)); }
+.thub-part.is-done .thub-part-dot { border-color: var(--bmm-success); color: var(--bmm-success); }
+.thub-part-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thub-part-n { font-size: 11px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+.thub-d-own { margin-top: 4px; }
+.thub-danger:hover, .tcr-danger:hover { color: var(--bmm-danger); }
+.thub-d-foot { margin-top: auto; font-size: 11.5px; }
 
-/* ── Right: the selected lesson ──────────────────────────────────────────── */
-.tut-hub-detail {
-    display: flex; flex-direction: column; min-width: 0;
-    padding: 22px 24px; overflow-y: auto;
+/* ── Creator ── */
+.tcr-head-end { display: flex; align-items: center; gap: 8px; }
+.tcr-grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
 }
-.tut-hub-detail-title { font-size: 19px; font-weight: 800; color: var(--bmm-text-primary); margin: 0 0 6px; }
-.tut-hub-detail-desc {
-    /* The description is the content of this pane, so it is not the palest thing in it. */
-    font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); margin: 0 0 16px; max-width: 62ch;
+.tcr-side, .tcr-editor { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.tcr-side { padding: 16px 14px 16px 20px; border-right: 1px solid var(--bmm-border); }
+.tcr-editor { padding: 16px 24px; }
+.tcr-step-editor { display: flex; flex-direction: column; gap: 12px; }
+.tcr-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
 }
-.tut-hub-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; }
-.tut-hub-cta {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: var(--tut-color); border-color: var(--tut-color);
-    color: var(--bmm-btn-primary-text, #fff);
+.tcr-card-head, .tcr-ed-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tcr-card-title { margin: 0; font-size: 13px; font-weight: 800; color: var(--bmm-text-primary); }
+.tcr-sub { margin: 0; font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+.tcr-hint { font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.tcr-hint.is-bad { color: var(--bmm-danger); }
+.tcr-textarea { resize: vertical; min-height: 56px; font: inherit; font-size: 13px; }
+.tcr-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tcr-color { width: 100%; height: 32px; padding: 0; border: 1px solid var(--bmm-border); border-radius: 8px; background: none; cursor: pointer; }
+.tcr-iconbtn { display: inline-flex; align-items: center; gap: 6px; }
+.tcr-parts { flex-wrap: wrap; }
+.tcr-part-row { display: flex; align-items: flex-end; gap: 8px; }
+.tcr-part-row .tcr-field { flex: 1; }
+.tcr-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tcr-step-row {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 9px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    cursor: pointer;
 }
-.tut-hub-cta:hover { filter: brightness(1.08); }
+.tcr-step-row:hover { color: var(--bmm-text-primary); }
+.tcr-step-row.is-on { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); color: var(--bmm-text-primary); }
+.tcr-step-row:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.tcr-step-row.is-dragging { opacity: 0.5; }
+.tcr-step-row.is-drop { box-shadow: 0 -2px 0 0 var(--bmm-accent); }
+.tcr-grip { display: grid; place-items: center; color: var(--bmm-text-secondary); cursor: grab; }
+.tcr-step-n { min-width: 18px; font-size: 11px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.tcr-step-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcr-step-marks { display: flex; gap: 4px; color: var(--bmm-text-secondary); }
+.tcr-mark { display: grid; place-items: center; }
+.tcr-step-warn { display: none; color: var(--bmm-warning); }
+.tcr-step-row.has-issue .tcr-step-warn { display: grid; }
+.tcr-step-tools { gap: 6px; }
+.tcr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tcr-step-issues {
+    list-style: none;
+    margin: 0;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--bmm-warning) 45%, var(--bmm-border));
+    background: var(--bmm-warning-dim);
+    font-size: 12px;
+    color: var(--bmm-text-primary);
+}
+.tcr-step-issues[hidden] { display: none; }
+.tcr-step-issues li { display: flex; align-items: center; gap: 6px; }
+.tcr-step-issues svg { color: var(--bmm-warning); flex: none; }
+.tcr-target { display: flex; flex-direction: column; gap: 4px; }
+.tcr-target-row { display: flex; gap: 6px; align-items: center; }
+.tcr-target-input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.tcr-target-status { font-size: 11.5px; color: var(--bmm-text-secondary); }
+.tcr-target-status.is-ok { color: var(--bmm-success); }
+.tcr-target-status.is-bad { color: var(--bmm-danger); }
+.tcr-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--bmm-text-primary); cursor: pointer; }
+.tcr-issues { font-size: 12px; color: var(--bmm-text-secondary); }
+.tcr-issues.is-bad { color: var(--bmm-warning); }
 
-.tut-hub-parts { display: flex; flex-direction: column; gap: 4px; }
-.tut-hub-part {
-    display: flex; align-items: center; gap: 10px;
-    width: 100%; padding: 9px 11px;
-    background: none; border: 1px solid transparent; border-radius: 9px;
-    color: var(--bmm-text-secondary); text-align: left; cursor: pointer;
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-.tut-hub-part:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
-/* Where Resume would drop you. The one thing the screen is asked at a glance. */
-.tut-hub-part.here { border-color: var(--tut-color); background: var(--bmm-bg-overlay); color: var(--bmm-text-primary); }
-.tut-hub-part-dot {
-    flex: none; display: grid; place-items: center;
-    width: 18px; height: 18px; border-radius: 50%;
-    border: 1.5px solid var(--border); color: var(--bmm-success, #22c55e);
-}
-.tut-hub-part.doing .tut-hub-part-dot { border-color: var(--tut-color); background: color-mix(in srgb, var(--tut-color) 22%, transparent); }
-.tut-hub-part.done  .tut-hub-part-dot { border-color: color-mix(in srgb, var(--bmm-success, #22c55e) 45%, transparent); }
-.tut-hub-part-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tut-hub-part-count { flex: none; font-size: 10.5px; color: var(--bmm-text-muted); font-variant-numeric: tabular-nums; }
-
-.tut-hub-foot { margin-top: auto; padding-top: 18px; font-size: 10.5px; color: var(--bmm-text-muted); line-height: 1.5; }
-.tut-hub-empty { margin: auto; color: var(--bmm-text-muted); font-size: 12px; }
-
-/* One column when there is no room for two — the rail becomes a scrollable strip on top
-   rather than squeezing the detail pane to nothing. */
-@media (max-width: 780px) {
-    .tut-hub-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: min(620px, calc(100vh - 48px)); }
-    .tut-hub-rail { border-right: 0; border-bottom: 1px solid var(--border); max-height: 190px; }
+/* One column when there is no room for two: the list on top, the detail / editor under it. */
+@media (max-width: 860px) {
+    .thub-grid, .tcr-grid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 45%) minmax(0, 1fr); }
+    .thub-rail, .tcr-side { border-right: 0; border-bottom: 1px solid var(--bmm-border); }
+    .tcr-row3 { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── The minimised pill floats ────────────────────────────────────────────────

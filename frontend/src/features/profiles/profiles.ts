@@ -15,6 +15,7 @@ import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { uiIcon } from '../../ui/icons.js';
+import { wireNewProfileForm, resetNewProfileForm, newProfileReady, showCreateError, setCreateBusy } from './profile-create.js';
 
 /**
  * `Cropper` is a real global, set by `<script src="assets/cropper/cropper.min.js">` in
@@ -203,20 +204,8 @@ export async function initProfiles() {
         });
     }
 
-    document.getElementById('btn-pick-game-path').addEventListener('click', async () => {
-        const path = await pickFolder();
-        if (path) document.getElementById('prof-game-path').value = path;
-    });
-
-    document.getElementById('btn-pick-mods-path').addEventListener('click', async () => {
-        const path = await pickFolder();
-        if (path) document.getElementById('prof-mods-path').value = path;
-    });
-
-    document.getElementById('btn-pick-backup-path').addEventListener('click', async () => {
-        const path = await pickFolder();
-        if (path) document.getElementById('prof-backup-path').value = path;
-    });
+    // The three folder fields of "New profile": pickers, checks and suggestions (profile-create.ts).
+    wireNewProfileForm();
 
     // Edit profile specific buttons
     document.getElementById('btn-edit-pick-game-path').addEventListener('click', async () => {
@@ -618,6 +607,8 @@ export function openNewProfileModal() {
         document.getElementById('prof-remove-bg')?.addEventListener('click', () => { _pendingCreateBg = null; renderCreateBgUI(); });
     }
     document.getElementById('modal-new-profile').classList.add('open');
+    void resetNewProfileForm();
+    setTimeout(() => (document.getElementById('prof-name') as HTMLInputElement | null)?.focus(), 60);
 }
 
 async function checkDuplicateModsFolder(targetPath, currentProfileId = null) {
@@ -679,10 +670,9 @@ async function confirmCreateProfile() {
     // backupPath is optional: create_profile puts it under the app's own data folder when
     // it is blank. Requiring it here made a folder BMM can pick for you look like a decision
     // you had to make before you could start.
-    if (!name || !gamePath || !modsPath) {
-        toast(t('prof.missingFields'), 'error');
-        return;
-    }
+    // What is missing or wrong is said in the dialog itself (profile-create.ts): the field
+    // gets the focus and the footer names it.
+    if (!newProfileReady() || !name || !gamePath || !modsPath) return;
 
     // Duplicate Check
     const conflictingName = await checkDuplicateModsFolder(modsPath);
@@ -691,6 +681,7 @@ async function confirmCreateProfile() {
         if (!confirmed) return;
     }
 
+    setCreateBusy(true);
     try {
         const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
         // Make the just-created profile active so Library immediately reflects it —
@@ -736,7 +727,13 @@ async function confirmCreateProfile() {
             await loadProfilesForExport(profilesListEl);
         }
     } catch (err) {
-        toast(cleanRustErr(err) || t('common.error'), 'error');
+        const msg = cleanRustErr(err) || t('common.error');
+        // Refused by create_profile: said beside the button, the dialog stays as filled in.
+        // Anything after it closed (a list refresh) still goes to a toast.
+        if (document.getElementById('modal-new-profile')?.classList.contains('open')) showCreateError(msg);
+        else toast(msg, 'error');
+    } finally {
+        setCreateBusy(false);
     }
 }
 

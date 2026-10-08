@@ -333,6 +333,18 @@ the built-in Laya or your own laya-serve only, from a masked excerpt of the log,
 button says so before you click. Its answer is shown as B.MD, the safe way: no images, embeds or
 scripts, and it can be wrong.
 
+## Laya in scheduled tasks
+
+The scheduler has a **Laya (AI)** group of actions and conditions, so the same work can run on
+its own: tag a mod from its files, check the library (duplicates, overlapping mods, mods with no
+tag), find the causes of new crash reports, sort a report, run one of your own tasks, read
+Laya's state, or explain a crash with your writing model. A task needs the **Laya (AI)**
+permission, every step goes through the master switch, the run's budget (20 calls, 2 minutes)
+and the answer settings of its area, and nothing a model reads leaves the PC (a remote writing
+model only when the step allows it). Three events let a task wait for Laya:
+`bmm.ai.crashLabelled`, `bmm.ai.crashGroup` and `bmm.ai.ready`. The whole list, the variables
+and the templates are in [Scheduling & automation](doc-page:features/scheduler#laya-in-a-task).
+
 ## Laya in the debug menu
 
 The debug menu has a **Laya** section: engine state (installed, loaded, pinned model, runtime,
@@ -385,8 +397,9 @@ is never created: a label without a tag of the same name is reported.
 
 - **Run on my mods** answers for each mod; **Apply** per mod, or at once with *Apply without
   asking*.
-- In a scheduled task or a script: `ai.classify` with `task: "<id>"` (the labels come from the
-  task). In BMMScript: `do ai.classify(task: "kind", text: "{event.title}", into: "kind")`.
+- In a scheduled task or a script: **Laya: run one of your Laya tasks** (`ai.run_task`, the task
+  picked from a list), or `ai.classify` with `task: "<id>"` (the labels come from the task). In
+  BMMScript: `do ai.run_task(task: "kind", text: "{event.title}", into: "kind")`.
 - Programs: `bmm ai-classify "<text>" --task kind`, `bmm_ai_classify` with `task`, or
   `POST /v1/classify` on the [local API](doc-page:features/ai-api).
 - **Try it**: type a text, pick a task (or type labels) and see the answer and every label's

@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="css/activation-jobs.css" />
     <!-- Page head + tab rail shared by Plugins & API and the App Catalog, then the Plugins page. -->
     <link rel="stylesheet" href="css/page-head.css" />
+    <link rel="stylesheet" href="css/mod-flows.css" />
     <link rel="stylesheet" href="css/plugins.css" />
     <!-- Laya's dialogs and cards. Linked here, not only on demand (ai-shared.ts ensureAiCss sees
          the id and skips): a Laya dialog drawn before a lazily added sheet arrived showed raw text
@@ -472,10 +473,14 @@
 
                 <!-- ══ LIBRARY VIEW ══ -->
                 <section class="view active" id="view-library">
-                    <!-- Title row: outside the glass shell -->
-                    <div class="lib-header-title">
-                        <h1 class="view-title" data-i18n="lib.title">Bibliothèque de Mods</h1>
-                        <p class="view-subtitle" id="lib-subtitle" data-i18n="lib.subtitlePickProfile">Sélectionnez un profil pour commencer</p>
+                    <!-- Title row: outside the glass shell. The shared page head (css/page-head.css):
+                         icon tile, title, one line (the counts, set by mods-list.ts). -->
+                    <div class="lib-header-title pg-head lib-head">
+                        <div class="pg-head-icon" aria-hidden="true"><svg class="ic ic-package" data-icon="package" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg></div>
+                        <div class="pg-head-titles">
+                            <h1 class="view-title pg-head-title" data-i18n="lib.title">Bibliothèque de Mods</h1>
+                            <p class="view-subtitle pg-head-sub" id="lib-subtitle" data-i18n="lib.subtitlePickProfile">Sélectionnez un profil pour commencer</p>
+                        </div>
                     </div>
                     <!-- Action buttons tab: right-aligned, floats above the filter bar (creates notch shape) -->
                     <div class="lib-actions-tab">
@@ -587,21 +592,27 @@
                         <div id="mod-action-menu" style="display:none;" aria-hidden="true"></div>
 
                         <!-- Filter bar: search + filter pills + selects + profile selector -->
-                        <div class="filter-bar"
-                            style="display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px;overflow:visible;padding:8px 12px;">
+                        <div class="filter-bar lib-filter-bar">
 
                             <!-- LEFT: search + filter pills + selects (single row; shrinks, wraps cleanly when very narrow) -->
-                            <div class="lib-filter-left" style="display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;flex-wrap:nowrap;">
+                            <div class="lib-filter-left">
                                 <div class="search-box">
                                     <svg class="ic ic-search" data-icon="search" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-                                    <input type="text" id="mod-search" placeholder="Rechercher un mod..."
-                                        style="width:100%;min-width:130px;" data-i18n-placeholder="lib.search" />
+                                    <input type="text" id="mod-search" class="lib-search-input" placeholder="Rechercher un mod..."
+                                        data-i18n-placeholder="lib.search" data-i18n-title="lib.search" autocomplete="off" />
                                 </div>
                                 <div class="filter-buttons">
                                     <button id="btn-view-mode" class="btn btn-icon btn-ghost btn-compact-toggle"
                                         data-tasky="lib.toggleViewTip" data-tasky-icon="icon-list"
                                        >
                                         <svg class="ic ic-menu" data-icon="menu" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
+                                    </button>
+                                    <!-- Selection mode: tick several mods, then enable / disable them as one job
+                                         (features/mods/lib-select.ts). -->
+                                    <button id="btn-lib-select" type="button" class="btn btn-icon btn-ghost btn-compact-toggle"
+                                        aria-pressed="false" data-i18n-tooltip="lib.sel.toggle"
+                                        data-tasky="lib.sel.toggleTip" data-tasky-icon="check">
+                                        <svg class="ic ic-check" data-icon="check" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                                     </button>
                                     <!-- Check-for-updates: same style as the view-mode toggle, its own icon -->
                                     <button id="btn-lib-check-updates" class="btn btn-icon btn-ghost btn-compact-toggle"
@@ -610,19 +621,17 @@
                                        >
                                         <svg class="ic ic-refresh" data-icon="refresh" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                                     </button>
-                                    <select id="mod-status-filter" class="profile-select"
-                                        style="flex:0 1 120px;min-width:96px;">
+                                    <select id="mod-status-filter" class="profile-select lib-select" data-i18n-title="lib.sel.statusFilter">
                                         <option value="all" data-i18n="lib.filterAll">All</option>
                                         <option value="enabled" data-i18n="lib.filterEnabled">Enabled</option>
                                         <option value="disabled" data-i18n="lib.filterDisabled">Disabled</option>
                                     </select>
 
-                                    <select id="mod-tag-filter" class="profile-select"
-                                        style="flex:0 1 130px;min-width:96px;margin-left:6px;">
+                                    <select id="mod-tag-filter" class="profile-select lib-select lib-select--tag" data-i18n-title="lib.tagFilterAll">
                                         <option value="all" data-i18n="lib.tagFilterAll">Tous les tags</option>
                                     </select>
 
-                                    <select id="mod-sort" class="profile-select" style="flex:0 1 120px;min-width:96px;margin-left:3px;">
+                                    <select id="mod-sort" class="profile-select lib-select" data-i18n-title="lib.sel.sort">
                                         <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
                                         <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
                                         <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)
@@ -630,6 +639,7 @@
                                         <option value="activation_order" data-i18n="lib.sortOrder">Ordre d'Activation
                                         </option>
                                     </select>
+                                    <span class="pg-results lib-results" id="lib-results" aria-live="polite"></span>
                                 </div>
                             </div>
 
@@ -644,6 +654,19 @@
                             </div>
                         </div>
                     </div><!-- end .lib-header-shell -->
+
+                    <!-- Selection bar: shown in selection mode (features/mods/lib-select.ts). -->
+                    <div class="lib-select-bar" id="lib-select-bar" role="toolbar" data-i18n-title="lib.sel.toggle" hidden>
+                        <span class="lib-select-count" id="lib-select-count" aria-live="polite"></span>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-lib-select-all"><span data-i18n="lib.sel.all">Tout sélectionner</span></button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-lib-select-none"><span data-i18n="lib.sel.none">Aucun</span></button>
+                        <span class="bms-sep" aria-hidden="true"></span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-lib-select-enable"><svg class="ic ic-play" data-icon="play" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg><span data-i18n="lib.sel.enable">Activer</span></button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-lib-select-disable"><svg class="ic ic-power" data-icon="power" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg><span data-i18n="lib.sel.disable">Désactiver</span></button>
+                        <span class="bms-spacer"></span>
+                        <span class="lib-select-keys" data-i18n="lib.sel.keys">Espace coche · Échap termine</span>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-lib-select-done"><span data-i18n="lib.sel.done">Terminé</span></button>
+                    </div>
 
                     <!-- Mod list -->
                     <div class="mod-list" id="mod-list" style="position: relative;">
@@ -706,37 +729,30 @@
                             </button>
                         </div>
 
-                        <div class="empty-state" id="empty-mods"
-                            style="position: absolute; top: 0; left: 0; right: 0; padding-top: 60px;">
-                            <div class="empty-icon">
-                                <svg class="ic ic-box" data-icon="box" width="48" height="48" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                            </div>
-                            <p class="empty-title" data-i18n="lib.emptyTitle">Aucun mod trouvé</p>
-                            <p class="empty-desc" data-i18n="lib.emptyDesc">Créez un profil et ajoutez vos premiers
-                                mods.
-                            </p>
-                            <div
-                                style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:24px;">
-                                <div style="display:flex; justify-content:center; gap:12px;">
-                                    <button class="btn btn-primary"
-                                        data-click-proxy="#btn-scan-mods"
-                                        style="padding:10px 20px; font-size:13px">
-                                        <svg class="ic ic-refresh" data-icon="refresh" width="14" height="14" viewBox="0 0 24 24" style="margin-right:8px" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                                        <span data-i18n="lib.scan">Scanner</span>
-                                    </button>
-                                    <button class="btn btn-secondary"
-                                        data-click-proxy="#btn-add-mod"
-                                        style="padding:10px 20px; font-size:13px">
-                                        <svg class="ic ic-add" data-icon="add" width="14" height="14" viewBox="0 0 24 24" style="margin-right:8px" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                        <span data-i18n="lib.addMod">Ajouter un mod</span>
-                                    </button>
-                                </div>
+                        <!-- First load: a few placeholder rows until get_mods answers (mods-list.ts hides it). -->
+                        <div class="lib-loading" id="lib-loading" aria-hidden="true">
+                            <div class="lib-skel"></div><div class="lib-skel"></div><div class="lib-skel"></div><div class="lib-skel"></div>
+                        </div>
 
-                                <button class="btn btn-ghost btn-sm" data-act="openDocsArticleById" data-act-args='["scan"]'
-                                    style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
-                                    <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-                                    <span data-i18n="prof.howItWorks">How it works?</span>
-                                </button>
+                        <!-- A profile, no mod at all: how to get the first ones in. -->
+                        <div class="empty-state lib-empty" id="empty-mods" style="display:none">
+                            <div class="lib-empty-ic"><svg class="ic ic-box" data-icon="box" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
+                            <p class="empty-title" data-i18n="lib.emptyTitle">Aucun mod trouvé</p>
+                            <p class="empty-desc" data-i18n="lib.emptyDesc">Créez un profil et ajoutez vos premiers mods.</p>
+                            <div class="lib-empty-actions">
+                                <button type="button" class="btn btn-primary" data-click-proxy="#btn-scan-mods"><svg class="ic ic-refresh" data-icon="refresh" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span data-i18n="lib.scan">Scanner</span></button>
+                                <button type="button" class="btn btn-secondary" data-click-proxy="#btn-add-mod"><svg class="ic ic-add" data-icon="add" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="lib.addMod">Ajouter un mod</span></button>
+                            </div>
+                            <button type="button" class="btn btn-ghost btn-sm lib-empty-help" data-act="openDocsArticleById" data-act-args='["scan"]'><svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span data-i18n="prof.howItWorks">How it works?</span></button>
+                        </div>
+
+                        <!-- Mods exist, the search or filters hide them all. -->
+                        <div class="empty-state lib-empty" id="empty-mods-filtered" style="display:none">
+                            <div class="lib-empty-ic"><svg class="ic ic-search" data-icon="search" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></div>
+                            <p class="empty-title" data-i18n="lib.noMatchTitle">Aucun mod ne correspond</p>
+                            <p class="empty-desc" data-i18n="lib.noMatchDesc">Changez la recherche ou les filtres.</p>
+                            <div class="lib-empty-actions">
+                                <button type="button" class="btn btn-secondary" id="btn-lib-clear-filters"><svg class="ic ic-clear" data-icon="clear" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg><span data-i18n="lib.clearFilters">Effacer les filtres</span></button>
                             </div>
                         </div>
                         <!-- Actual container for visible cards -->
@@ -4596,75 +4612,93 @@
             </div>
         </div>
 
-        <!-- Add Mod Modal -->
+        <!-- Add Mod Modal: a source (drop, folder or archive), what BMM read from it, the details.
+             Detection, progress and errors: features/mods/add-mod.ts. -->
         <div class="modal-overlay" id="modal-add-mod">
-            <div class="modal glass">
+            <div class="modal glass modal--md bms am-modal" role="dialog" aria-modal="true" aria-labelledby="am-title">
                 <div class="modal-header">
-                    <h2 class="modal-title" data-i18n="lib.addMod">Ajouter un mod</h2>
+                    <div class="bms-icon" aria-hidden="true"><svg class="ic ic-package" data-icon="package" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg></div>
+                    <div class="bms-titles">
+                        <h2 class="modal-title" id="am-title" data-i18n="lib.addMod">Ajouter un mod</h2>
+                        <p class="bms-sub" data-i18n="mod.add.lead">Copié dans le dossier des mods du profil.</p>
+                    </div>
                 <button type="button" class="modal-close" data-close="modal-add-mod"><svg class="ic ic-close" data-icon="close" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label class="form-label"><span data-i18n="detail.name">Nom du mod</span> <span
-                                class="required">*</span></label>
-                        <input type="text" class="form-input" id="mod-name" placeholder="Mon super mod..."
-                            data-i18n-placeholder="mod.namePlaceholder" />
+                    <div class="am-drop" id="mod-drop-zone" role="button" tabindex="0" aria-describedby="am-drop-sub">
+                        <span class="am-drop-ic" aria-hidden="true"><svg class="ic ic-upload" data-icon="upload" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></span>
+                        <span class="am-drop-text">
+                            <b data-i18n="mod.add.dropTitle">Déposez un dossier ou une archive</b>
+                            <span id="am-drop-sub" data-i18n="mod.add.dropSub">.zip .rar .7z .tar .tar.gz</span>
+                        </span>
                     </div>
                     <div class="form-group">
-                        <label class="form-label"><span data-i18n="detail.folder">Dossier du mod</span> <span
-                                class="required">*</span></label>
+                        <label class="form-label" for="mod-folder"><span data-i18n="mod.add.source">Source</span> <span class="required">*</span></label>
                         <div class="path-picker">
                             <input type="text" class="form-input" id="mod-folder"
                                 placeholder="Chemin vers le dossier..." data-i18n-placeholder="mod.folderPlaceholder"
                                 readonly />
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-mod-folder"
-                                data-i18n="prof.browse">Parcourir</button>
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-mod-archive"
-                                data-i18n="mod.pickArchive" data-i18n-tooltip="mod.pickArchiveTip"
-                                data-tooltip="Add an archived mod (.zip .rar .7z .tar .tar.gz) — kept compressed, extracted on activation">Archive</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-mod-folder"><svg class="ic ic-folder" data-icon="folder" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span data-i18n="mod.add.pickFolder">Dossier</span></button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-mod-archive"
+                                data-i18n-tooltip="mod.pickArchiveTip"><svg class="ic ic-archive" data-icon="archive" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg><span data-i18n="mod.pickArchive">Archive</span></button>
                         </div>
+                    </div>
+                    <div class="am-preview" id="mod-add-preview" aria-live="polite" hidden></div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="mod-name"><span data-i18n="detail.name">Nom du mod</span> <span
+                                class="required">*</span></label>
+                        <input type="text" class="form-input" id="mod-name" placeholder="Mon super mod..."
+                            data-i18n-placeholder="mod.namePlaceholder" autocomplete="off" />
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label" data-i18n="detail.version">Version</label>
-                            <input type="text" class="form-input" id="mod-version" placeholder="1.0.0" />
+                            <label class="form-label" for="mod-version" data-i18n="detail.version">Version</label>
+                            <input type="text" class="form-input" id="mod-version" placeholder="1.0.0" autocomplete="off" />
                         </div>
                         <div class="form-group">
-                            <label class="form-label" data-i18n="detail.author">Auteur</label>
+                            <label class="form-label" for="mod-author" data-i18n="detail.author">Auteur</label>
                             <input type="text" class="form-input" id="mod-author" placeholder="Auteur..."
-                                data-i18n-placeholder="mod.authorPlaceholder" />
+                                data-i18n-placeholder="mod.authorPlaceholder" autocomplete="off" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label" data-i18n="detail.description">Description</label>
+                            <label class="form-label" for="mod-desc" data-i18n="detail.description">Description</label>
                             <input type="text" class="form-input" id="mod-desc" placeholder="Description courte..."
-                                data-i18n-placeholder="mod.descPlaceholder" />
+                                data-i18n-placeholder="mod.descPlaceholder" autocomplete="off" />
                         </div>
                         <div class="form-group">
-                            <label class="form-label" data-i18n="detail.tags">Tags</label>
+                            <label class="form-label" for="mod-tag" data-i18n="detail.tags">Tags</label>
                             <select class="form-input" id="mod-tag">
                                 <option value="" data-i18n="prof.none">Aucun</option>
                                 <!-- filled dynamically -->
                             </select>
                         </div>
                     </div>
-                    <div class="form-group" style="margin-top: 10px;">
-                        <label class="form-label" data-i18n="mod.dependencies">Dépendances (Mods requis)</label>
-                        <div id="mod-dependencies-list"
-                            style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px"></div>
-                        <div style="position:relative">
+                    <div class="form-group">
+                        <label class="form-label" for="mod-dependency-input" data-i18n="mod.dependencies">Dépendances (Mods requis)</label>
+                        <div id="mod-dependencies-list" class="am-deps-list"></div>
+                        <div class="am-deps-field">
                             <input type="text" id="mod-dependency-input" class="form-input"
                                 placeholder="Ajouter un mod requis..."
-                                data-i18n-placeholder="mod.addDependencyPlaceholder" />
-                            <div id="mod-dependency-suggestions" class="glass"
-                                style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px">
-                            </div>
+                                data-i18n-placeholder="mod.addDependencyPlaceholder" autocomplete="off" />
+                            <div id="mod-dependency-suggestions" class="glass am-deps-suggest" style="display:none"></div>
                         </div>
+                    </div>
+                    <label class="am-ai" id="mod-add-ai-row" hidden>
+                        <input type="checkbox" id="mod-add-ai" />
+                        <span class="am-ai-ic" aria-hidden="true"><svg class="ic ic-ai" data-icon="ai" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg></span>
+                        <span data-i18n="mod.add.aiAfter">Demander à Laya des tags et des détails après l'ajout</span>
+                    </label>
+                    <div class="am-progress" id="mod-add-progress" hidden>
+                        <div class="am-progress-h"><span id="mod-add-progress-label"></span><span class="am-progress-time" id="mod-add-progress-time"></span></div>
+                        <div class="bms-progress am-progress-bar" role="progressbar" aria-labelledby="mod-add-progress-label"><span></span></div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-ghost" data-close="modal-add-mod" data-i18n="prof.cancel">Annuler</button>
-                    <button class="btn btn-primary" id="btn-confirm-add-mod">
+                    <div class="modal-footer-start"><span class="modal-footer-note am-hint" id="mod-add-hint" role="status" aria-live="polite"></span></div>
+                    <button type="button" class="btn btn-ghost" data-close="modal-add-mod" data-i18n="prof.cancel">Annuler</button>
+                    <button type="button" class="btn btn-primary" id="btn-confirm-add-mod">
                         <svg class="ic ic-add" data-icon="add" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                         <span data-i18n="lib.addMod">Ajouter</span>
                     </button>
@@ -4672,93 +4706,107 @@
             </div>
         </div>
 
-        <!-- New Profile Modal -->
+        <!-- New Profile Modal: three steps (name it, its folders, its look). The folder checks,
+             the mods-folder suggestion and the footer hint are features/profiles/profile-create.ts. -->
         <div class="modal-overlay" id="modal-new-profile">
-            <div class="modal glass modal--md">
+            <div class="modal glass modal--md bms np-modal" role="dialog" aria-modal="true" aria-labelledby="np-title">
                 <div class="modal-header">
-                    <h2 class="modal-title" data-i18n="prof.new">Nouveau profil</h2>
+                    <div class="bms-icon" aria-hidden="true"><svg class="ic ic-profile" data-icon="profile" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+                    <div class="bms-titles">
+                        <h2 class="modal-title" id="np-title" data-i18n="prof.new">Nouveau profil</h2>
+                        <p class="bms-sub" data-i18n="prof.newLead">Un profil relie un jeu à un dossier de mods.</p>
+                    </div>
                 <button type="button" class="modal-close" data-close="modal-new-profile"><svg class="ic ic-close" data-icon="close" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label class="form-label" data-i18n="prof.nameLabel">Nom du profil <span
-                                class="required">*</span></label>
-                        <input type="text" class="form-input" id="prof-name" placeholder="Mon profil DCS..."
-                            data-i18n-placeholder="prof.namePlaceholder" />
-                    </div>
-                    <div class="form-row" style="align-items:flex-end">
-                        <div class="form-group" style="flex:2">
-                            <label class="form-label" data-i18n="prof.gameLabel">Nom du jeu</label>
-                            <input type="text" class="form-input" id="prof-game" placeholder="DCS World..."
-                                data-i18n-placeholder="prof.gamePlaceholder" />
+                    <section class="np-step" aria-labelledby="np-step-1">
+                        <h3 class="np-step-h" id="np-step-1"><span class="np-step-n" aria-hidden="true">1</span><span data-i18n="prof.stepName">Nom</span></h3>
+                        <div class="np-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="prof-name"><span data-i18n="prof.nameLabel">Nom du profil</span> <span class="required">*</span></label>
+                                <input type="text" class="form-input" id="prof-name" placeholder="Mon profil DCS..."
+                                    data-i18n-placeholder="prof.namePlaceholder" aria-describedby="prof-name-error" autocomplete="off" />
+                                <div class="np-field-error" id="prof-name-error" hidden></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="prof-game" data-i18n="prof.gameLabel">Nom du jeu</label>
+                                <input type="text" class="form-input" id="prof-game" placeholder="DCS World..."
+                                    data-i18n-placeholder="prof.gamePlaceholder" autocomplete="off" />
+                            </div>
                         </div>
-                        <div class="form-group" style="flex:0.8">
-                            <label class="form-label" data-i18n="prof.color">Couleur</label>
-                            <input type="color" class="form-input" id="prof-color" value="#3b82f6"
-                                style="padding:0;height:38px;cursor:pointer;width:100%" />
+                    </section>
+
+                    <section class="np-step" aria-labelledby="np-step-2">
+                        <h3 class="np-step-h" id="np-step-2"><span class="np-step-n" aria-hidden="true">2</span><span data-i18n="prof.stepFolders">Dossiers</span></h3>
+                        <p class="bms-note np-lead" data-i18n="prof.stepFoldersLead">Activer un mod copie ses fichiers du dossier des mods vers le dossier du jeu.</p>
+                        <div class="form-group">
+                            <label class="form-label" for="prof-game-path"><svg class="ic ic-game" data-icon="game" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg><span data-i18n="prof.gameDir">Dossier de destination</span> <span class="required">*</span></label>
+                            <div class="path-picker">
+                                <input type="text" class="form-input" id="prof-game-path" placeholder="C:\Games\..."
+                                    data-i18n-placeholder="prof.gameDirPlaceholder" readonly aria-describedby="prof-game-path-check" />
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-game-path"><svg class="ic ic-open-folder" data-icon="open-folder" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="prof.browse">Parcourir</span></button>
+                            </div>
+                            <div class="np-check" id="prof-game-path-check" aria-live="polite"></div>
                         </div>
-                        <div class="form-group full-width" style="margin-top:12px">
-                            <label class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</label>
+                        <div class="form-group">
+                            <label class="form-label" for="prof-mods-path"><svg class="ic ic-package" data-icon="package" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/></svg><span data-i18n="prof.modsDir">Dossier des mods</span> <span class="required">*</span></label>
+                            <div class="path-picker">
+                                <input type="text" class="form-input" id="prof-mods-path" placeholder="C:\Mods\..."
+                                    data-i18n-placeholder="prof.modsDirPlaceholder" readonly aria-describedby="prof-mods-path-check" />
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-mods-path"><svg class="ic ic-open-folder" data-icon="open-folder" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="prof.browse">Parcourir</span></button>
+                            </div>
+                            <div class="np-suggest" id="prof-mods-suggest" hidden></div>
+                            <div class="np-check" id="prof-mods-path-check" aria-live="polite"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="prof-backup-path"><svg class="ic ic-archive" data-icon="archive" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg><span data-i18n="prof.backupDir">Dossier de sauvegarde</span> <span class="np-optional" data-i18n="common.optional">optionnel</span></label>
+                            <div class="path-picker">
+                                <input type="text" class="form-input" id="prof-backup-path" placeholder="C:\Backups\..."
+                                    data-i18n-placeholder="prof.backupDirOptional" readonly aria-describedby="prof-backup-hint prof-backup-path-check" />
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-backup-path"><svg class="ic ic-open-folder" data-icon="open-folder" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="prof.browse">Parcourir</span></button>
+                            </div>
+                            <!-- Optional: left blank, create_profile puts it under the app's own
+                                 data folder, named after the profile. It only has to exist and
+                                 belong to this profile alone. -->
+                            <div class="form-hint" id="prof-backup-hint" data-i18n="prof.backupDirHint">Laisse vide et BMM en crée un pour toi.</div>
+                            <div class="np-check" id="prof-backup-path-check" aria-live="polite"></div>
+                        </div>
+                    </section>
+
+                    <section class="np-step" aria-labelledby="np-step-3">
+                        <h3 class="np-step-h" id="np-step-3"><span class="np-step-n" aria-hidden="true">3</span><span data-i18n="prof.stepLook">Apparence</span></h3>
+                        <div class="np-look">
+                            <div class="form-group np-color">
+                                <label class="form-label" for="prof-color" data-i18n="prof.color">Couleur</label>
+                                <input type="color" class="form-input np-color-input" id="prof-color" value="#3b82f6" />
+                            </div>
+                            <div class="form-group np-bg">
+                                <span class="form-label" data-i18n="prof.bgImage">Image de fond</span>
+                                <div class="prof-custom-icon-row np-inline">
+                                    <div id="prof-bg-preview" class="np-bg-preview" style="display:none"></div>
+                                    <button type="button" class="btn btn-sm btn-ghost" id="prof-pick-bg" data-i18n="prof.bgImage">Image de fond…</button>
+                                    <button type="button" class="btn btn-sm btn-ghost" id="prof-remove-bg" style="display:none" data-i18n="prof.bgRemove">Retirer le fond</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <span class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</span>
                             <div class="icon-picker-grid" id="prof-icon-grid"></div>
                             <input type="hidden" id="prof-icon" value="" />
-                            <div class="prof-custom-icon-row" style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                            <div class="prof-custom-icon-row np-inline">
                                 <div id="prof-custom-icon-preview" class="prof-custom-icon-preview" style="display:none"></div>
                                 <button type="button" class="btn btn-sm btn-ghost" id="prof-import-icon" data-i18n="prof.importIcon">Import an icon…</button>
                                 <button type="button" class="btn btn-sm btn-ghost" id="prof-remove-icon" style="display:none" data-i18n="prof.removeIcon">Remove icon</button>
                             </div>
                             <input type="hidden" id="prof-icon-image" value="" />
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" data-i18n="prof.bgImage">Image de fond</label>
-                        <div class="prof-custom-icon-row" style="display:flex;align-items:center;gap:10px">
-                            <div id="prof-bg-preview" style="display:none;width:52px;height:34px;border-radius:6px;overflow:hidden;background-size:cover;background-position:center;border:1px solid var(--border);flex-shrink:0"></div>
-                            <button type="button" class="btn btn-sm btn-ghost" id="prof-pick-bg" data-i18n="prof.bgImage">Image de fond…</button>
-                            <button type="button" class="btn btn-sm btn-ghost" id="prof-remove-bg" style="display:none" data-i18n="prof.bgRemove">Retirer le fond</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" data-i18n="prof.gameDir">Dossier de destination <span
-                                class="required">*</span></label>
-                        <div class="path-picker">
-                            <input type="text" class="form-input" id="prof-game-path" placeholder="C:\Games\..."
-                                data-i18n-placeholder="prof.gameDirPlaceholder" readonly />
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-game-path"
-                                data-i18n="prof.browse">Parcourir</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" data-i18n="prof.modsDir">Dossier des mods <span
-                                class="required">*</span></label>
-                        <div class="path-picker">
-                            <input type="text" class="form-input" id="prof-mods-path" placeholder="C:\Mods\..."
-                                data-i18n-placeholder="prof.modsDirPlaceholder" readonly />
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-mods-path"
-                                data-i18n="prof.browse">Parcourir</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" data-i18n="prof.backupDir">Dossier de sauvegarde</label>
-                        <div class="path-picker">
-                            <input type="text" class="form-input" id="prof-backup-path" placeholder="C:\Backups\..."
-                                data-i18n-placeholder="prof.backupDirOptional" readonly />
-                            <button class="btn btn-secondary btn-sm" id="btn-pick-backup-path"
-                                data-i18n="prof.browse">Parcourir</button>
-                        </div>
-                        <!-- Optional: left blank, create_profile puts it under the app's own
-                             data folder, named after the profile. It only has to exist and
-                             belong to this profile alone. -->
-                        <div class="form-hint" data-i18n="prof.backupDirHint">Laisse vide et BMM en crée un pour toi.</div>
-                    </div>
+                    </section>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-ghost" data-close="modal-new-profile"
+                    <div class="modal-footer-start"><span class="modal-footer-note np-hint" id="prof-create-hint" role="status" aria-live="polite"></span></div>
+                    <button type="button" class="btn btn-ghost" data-close="modal-new-profile"
                         data-i18n="prof.cancel">Annuler</button>
-                    <button class="btn btn-primary" id="btn-confirm-profile">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" aria-hidden="true">
-                            <polyline points="9 11 12 14 22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                        </svg>
+                    <button type="button" class="btn btn-primary" id="btn-confirm-profile">
+                        <svg class="ic ic-check" data-icon="check" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                         <span data-i18n="prof.createBtn">Créer</span>
                     </button>
                 </div>
@@ -5459,20 +5507,15 @@
                     <div class="bms-titles">
                         <h2 class="modal-title" id="docs-diagram-title"></h2>
                     </div>
-                    <div class="bms-head-end">
-                        <button type="button" class="btn-docs-util" id="btn-docs-reset-zoom"
-                            data-tasky="benchmark.resetZoomTip" data-tasky-icon="refresh">
-                            <svg class="ic ic-reset" data-icon="reset" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                        </button>
-                    </div>
                     <button type="button" class="modal-close" id="btn-close-docs-diagram"><svg class="ic ic-close" data-icon="close" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 </div>
+                <!-- The toolbar, the stage and the side panel are built around this by
+                     src/docs/diagram-viewer.ts (css/diagrams.css). -->
                 <div class="modal-body modal-body--flush modal-docs-content">
                     <div class="diagram-wrapper">
                         <div id="mermaid-diagram-container" class="mermaid-container"></div>
                     </div>
                 </div>
-                <!-- Tasky mascot overlay - REMOVED FROM HERE, MOVED TO GLOBAL BODY LEVEL -->
             </div>
         </div>
 

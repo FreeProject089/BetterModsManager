@@ -355,6 +355,19 @@ recalculées.
 distant, le bouton le dit avant le clic. Sa réponse s'affiche en B.MD, de façon sûre : ni images,
 ni intégrations, ni scripts, et elle peut se tromper.
 
+## Laya dans les tâches planifiées
+
+Le planificateur a un groupe d'actions et de conditions **Laya (IA)**, pour que le même travail
+tourne tout seul : classer un mod d'après ses fichiers, vérifier la bibliothèque (doublons, mods
+qui se chevauchent, mods sans tag), trouver les causes des nouveaux rapports de crash, trier un
+rapport, lancer une de tes tâches, lire l'état de Laya, ou expliquer un crash avec ton modèle de
+rédaction. Une tâche demande la permission **Laya (IA)**, chaque étape passe par l'interrupteur
+général, le budget de l'exécution (20 appels, 2 minutes) et les réglages de réponses de son
+domaine, et rien de ce qu'un modèle lit ne quitte le PC (un modèle de rédaction distant
+seulement si l'étape l'autorise). Trois événements permettent à une tâche d'attendre Laya :
+`bmm.ai.crashLabelled`, `bmm.ai.crashGroup` et `bmm.ai.ready`. La liste complète, les variables
+et les modèles sont dans [Planification et automatisation](doc-page:features/scheduler.fr#laya-dans-une-tache).
+
 ## Laya dans le menu de débogage
 
 Le menu de débogage a une section **Laya** : état du moteur (installé, chargé, modèle épinglé,
@@ -410,8 +423,9 @@ du même nom est signalée.
 
 - **Lancer sur mes mods** répond pour chaque mod ; **Appliquer** mod par mod, ou d'un coup avec
   *Appliquer sans demander*.
-- Dans une tâche planifiée ou un script : `ai.classify` avec `task: "<id>"` (les étiquettes
-  viennent de la tâche). En BMMScript : `do ai.classify(task: "genre", text: "{event.title}", into: "genre")`.
+- Dans une tâche planifiée ou un script : **Laya : lancer une de tes tâches Laya**
+  (`ai.run_task`, la tâche choisie dans une liste), ou `ai.classify` avec `task: "<id>"` (les
+  étiquettes viennent de la tâche). En BMMScript : `do ai.run_task(task: "genre", text: "{event.title}", into: "genre")`.
 - Programmes : `bmm ai-classify "<texte>" --task genre`, `bmm_ai_classify` avec `task`, ou
   `POST /v1/classify` sur l'[API locale](doc-page:features/ai-api.fr).
 - **Tester** : tapez un texte, choisissez une tâche (ou tapez des étiquettes) et voyez la réponse

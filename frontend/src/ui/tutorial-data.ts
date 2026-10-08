@@ -44,6 +44,8 @@ const ICON = {
 
 const BASICS: TutorialDef = {
     id: 'basics',
+    category: 'essentials',
+    level: 1,
     title_key: 'tut.basics.meta.title',
     desc_key:  'tut.basics.meta.desc',
     icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
@@ -243,7 +245,7 @@ const BASICS: TutorialDef = {
                         { sel: 'detail-version',   key: 'tut.basics.moddetails.f.version' },
                         { sel: 'detail-author',    key: 'tut.basics.moddetails.f.author' },
                         { sel: 'detail-desc',      key: 'tut.basics.moddetails.f.desc' },
-                        { sel: 'detail-tag-select', key: 'tut.basics.moddetails.f.tags' },
+                        { sel: 'detail-tag-open',   key: 'tut.basics.moddetails.f.tags' },
                         { sel: 'detail-dep-input', key: 'tut.basics.moddetails.f.deps' },
                         { sel: 'btn-save-detail',  key: 'tut.basics.moddetails.f.edit' },
                     ],
@@ -538,6 +540,8 @@ const BASICS: TutorialDef = {
 
 const ADVANCED: TutorialDef = {
     id: 'advanced',
+    category: 'advanced',
+    level: 3,
     title_key: 'tut.advanced.meta.title',
     desc_key:  'tut.advanced.meta.desc',
     // lucide: book-open-text
@@ -604,9 +608,9 @@ const ADVANCED: TutorialDef = {
                         // password row and the no-manifest inspector.
                         { sel: 'btn-sync-pass-toggle',  key: 'tut.advanced.repo.f.password' },
                         { sel: 'btn-discover-server',   key: 'tut.advanced.repo.f.inspect' },
-                        { sel: 'repo-sync-game-path',   key: 'tut.advanced.repo.f.gamedir' },
-                        { sel: 'repo-sync-mods-path',   key: 'tut.advanced.repo.f.modsdir' },
-                        { sel: 'repo-sync-backup-path', key: 'tut.advanced.repo.f.backupdir' },
+                        // The destination / mods / backup fields only exist for a NEW
+                        // profile (repo-sync-paths-section is hidden otherwise); the step
+                        // text says so instead of ringing three invisible fields.
                     ],
                 },
                 {
@@ -687,6 +691,8 @@ const ADVANCED: TutorialDef = {
 
 const OTHER: TutorialDef = {
     id: 'other',
+    category: 'tools',
+    level: 2,
     title_key: 'tut.other.meta.title',
     desc_key:  'tut.other.meta.desc',
     // Book (lucide book) with a wrench on the cover — "extra tools".
@@ -869,6 +875,7 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.pluginsapi.s2.title',
                     text_key:  'tut.other.pluginsapi.s2.text',
                     nav: 'plugins',
+                    selectors: ['.plug-tabs [data-tab="catalog"]', 'plug-head-import'],
                     optional: true,
                     action: { event: BMM_ACTIONS.PLUGIN_INSTALLED, desc_key: 'tut.other.pluginsapi.s2.action' },
                 },
@@ -877,6 +884,7 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.pluginsapi.s3.title',
                     text_key:  'tut.other.pluginsapi.s3.text',
                     nav: 'plugins',
+                    selector: '.plug-tabs [data-tab="perms"]',
                     icon: ICON.shield,
                 },
                 {
@@ -884,6 +892,7 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.pluginsapi.s4.title',
                     text_key:  'tut.other.pluginsapi.s4.text',
                     nav: 'plugins',
+                    selector: '.plug-tabs [data-tab="scripts"]',
                     icon: ICON.api,
                     optional: true,
                     action: { event: BMM_ACTIONS.SCRIPT_GENERATED, desc_key: 'tut.other.pluginsapi.s4.action' },
@@ -893,13 +902,16 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.pluginsapi.s5.title',
                     text_key:  'tut.other.pluginsapi.s5.text',
                     nav: 'plugins',
+                    selector: 'plug-api-chip',
                     icon: ICON.api,
                 },
                 {
                     id: 's6',
                     title_key: 'tut.other.pluginsapi.s6.title',
                     text_key:  'tut.other.pluginsapi.s6.text',
-                    // The API token lives in Settings → Identity, not the Plugins page.
+                    // The token is in two places: the API & Scripts card on the Plugins page
+                    // and Settings → Identity & API. This step uses Settings, whose Copy now
+                    // announces API_TOKEN_COPIED like the Plugins page's does.
                     nav: 'settings',
                     optional: true,
                     // The local-API config fields (Settings → Identity).
@@ -1058,7 +1070,8 @@ const OTHER: TutorialDef = {
                     id: 's3',
                     title_key: 'tut.other.updates.s3.title',
                     text_key:  'tut.other.updates.s3.text',
-                    nav: 'repo',
+                    nav: 'library',
+                    selector: 'btn-lib-check-updates',
                 },
             ],
         },
@@ -1072,6 +1085,7 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.automation.s1.title',
                     text_key:  'tut.other.automation.s1.text',
                     nav: 'settings',
+                    selector: 'settings-scheduler-section',
                     icon: ICON.activate,
                 },
                 {
@@ -1082,7 +1096,10 @@ const OTHER: TutorialDef = {
                     // Clicking "Load example" builds a real, ready-to-use simple-loop
                     // automation (createExampleAutomation) and opens it, so the fields
                     // below actually contain a working loop the user can inspect.
-                    selector: 'sched-example-btn',
+                    // "Load example" lives in the Files… menu, whose items are a hidden
+                    // template until the menu opens — so the ring goes on Files…, and the
+                    // field guide starts once the editor it builds is on screen.
+                    selector: 'sched-more-btn',
                     modal_selector: 'sched-save',
                     modal_fields: [
                         { sel: 'sched-name',    key: 'tut.other.automation.f.name' },
@@ -1146,7 +1163,10 @@ const OTHER: TutorialDef = {
                     id: 's4',
                     title_key: 'tut.other.palette.s4.title',
                     text_key:  'tut.other.palette.s4.text',
-                    selector: 'nav-customize-btn',
+                    // The navbar editor's trigger is "Customize navigation" in the Settings
+                    // layout bar (card-order.ts); the old sidebar button is gone.
+                    nav: 'settings',
+                    selector: 'cardorder-navbar',
                     icon: ICON.share,
                 },
             ],
@@ -1170,6 +1190,8 @@ const OTHER: TutorialDef = {
 
 const QUICK: TutorialDef = {
     id: 'quick',
+    category: 'start',
+    level: 1,
     title_key: 'tut.quick.meta.title',
     desc_key:  'tut.quick.meta.desc',
     icon: ICON.rocket,
@@ -1200,7 +1222,139 @@ const QUICK: TutorialDef = {
     ],
 };
 
-export const TUTORIALS: TutorialDef[] = [QUICK, BASICS, ADVANCED, OTHER];
+// ── Tutorial: Order and integrity ────────────────────────────────────────────
+//
+// The two questions a working setup keeps asking: "which mod's file is in the game?" and
+// "is that file still the one I installed?". Basics touches both in passing; this is the
+// whole of each — the activation order dialog, the saved order lists, and the Integrity
+// dialog behind the Library's Verify. Every target is a stable id or class; steps inside a
+// dialog declare the dialog's own element as modal_selector, so the ring waits for it.
+
+const ORDER: TutorialDef = {
+    id: 'order',
+    category: 'essentials',
+    level: 2,
+    title_key: 'tut.order.meta.title',
+    desc_key:  'tut.order.meta.desc',
+    icon: `${uiIcon('list-ordered', 20)}`,
+    color: '#0ea5e9',
+    parts: [
+        {
+            id: 'order',
+            title_key: 'tut.order.order.title',
+            steps: [
+                { id: 's1', title_key: 'tut.order.order.s1.title', text_key: 'tut.order.order.s1.text', nav: 'profiles', icon: ICON.conflict },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.order.s2.title',
+                    text_key:  'tut.order.order.s2.text',
+                    nav: 'profiles',
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-list',
+                    action: { event: BMM_ACTIONS.ORDER_OPENED, desc_key: 'tut.order.order.s2.action' },
+                },
+                { id: 's3', title_key: 'tut.order.order.s3.title', text_key: 'tut.order.order.s3.text', nav: 'profiles', selector: 'lo-list' },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.order.s4.title',
+                    text_key:  'tut.order.order.s4.text',
+                    nav: 'profiles',
+                    selector: 'lo-apply',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.ORDER_APPLIED, desc_key: 'tut.order.order.s4.action' },
+                },
+            ],
+        },
+        {
+            id: 'lists',
+            title_key: 'tut.order.lists.title',
+            steps: [
+                { id: 's1', title_key: 'tut.order.lists.s1.title', text_key: 'tut.order.lists.s1.text', nav: 'profiles' },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.lists.s2.title',
+                    text_key:  'tut.order.lists.s2.text',
+                    nav: 'profiles',
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-lists',
+                },
+                { id: 's3', title_key: 'tut.order.lists.s3.title', text_key: 'tut.order.lists.s3.text', nav: 'profiles', selector: 'olm-name', dim: false },
+                { id: 's4', title_key: 'tut.order.lists.s4.title', text_key: 'tut.order.lists.s4.text', nav: 'profiles' },
+            ],
+        },
+        {
+            id: 'integrity',
+            title_key: 'tut.order.integrity.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.order.integrity.s1.title',
+                    text_key:  'tut.order.integrity.s1.text',
+                    nav: 'library',
+                    selector: 'btn-verify-integrity',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.INTEGRITY_CHECK, desc_key: 'tut.order.integrity.s1.action' },
+                },
+                { id: 's2', title_key: 'tut.order.integrity.s2.title', text_key: 'tut.order.integrity.s2.text', nav: 'library', icon: ICON.shield },
+                { id: 's3', title_key: 'tut.order.integrity.s3.title', text_key: 'tut.order.integrity.s3.text', nav: 'settings', selector: 'settings-sha-card' },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.integrity.s4.title',
+                    text_key:  'tut.order.integrity.s4.text',
+                    nav: 'settings',
+                    selector: '#settings-sha-card [data-act="showHashingStats"]',
+                    modal_selector: 'modal-sha-stats',
+                },
+            ],
+        },
+    ],
+};
+
+// ── Tutorial: Laya ───────────────────────────────────────────────────────────
+//
+// The optional assistant. Off by default, and a classifier rather than a writer: it picks
+// tags from the user's own list, detects a language and ranks answers. The lesson says
+// that plainly, shows where it is switched on, and never turns it on by itself.
+
+const LAYA: TutorialDef = {
+    id: 'laya',
+    category: 'tools',
+    level: 1,
+    title_key: 'tut.laya.meta.title',
+    desc_key:  'tut.laya.meta.desc',
+    icon: `${uiIcon('ai', 20)}`,
+    color: '#a855f7',
+    parts: [
+        {
+            id: 'meet',
+            title_key: 'tut.laya.meet.title',
+            steps: [
+                { id: 's1', title_key: 'tut.laya.meet.s1.title', text_key: 'tut.laya.meet.s1.text', nav: 'settings' },
+                { id: 's2', title_key: 'tut.laya.meet.s2.title', text_key: 'tut.laya.meet.s2.text', nav: 'settings', selector: 'settings-ai-section' },
+                {
+                    id: 's3',
+                    title_key: 'tut.laya.meet.s3.title',
+                    text_key:  'tut.laya.meet.s3.text',
+                    nav: 'settings',
+                    selector: 'laya-open',
+                    modal_selector: 'modal-laya',
+                },
+                { id: 's4', title_key: 'tut.laya.meet.s4.title', text_key: 'tut.laya.meet.s4.text', nav: 'settings', selector: '.laya-tab[data-tab="general"]', dim: false },
+            ],
+        },
+        {
+            id: 'use',
+            title_key: 'tut.laya.use.title',
+            steps: [
+                { id: 's1', title_key: 'tut.laya.use.s1.title', text_key: 'tut.laya.use.s1.text', nav: 'library', selector: 'mod-search' },
+                { id: 's2', title_key: 'tut.laya.use.s2.title', text_key: 'tut.laya.use.s2.text', nav: 'library' },
+                { id: 's3', title_key: 'tut.laya.use.s3.title', text_key: 'tut.laya.use.s3.text', nav: 'settings', selector: 'settings-ai-section' },
+            ],
+        },
+    ],
+};
+
+export const TUTORIALS: TutorialDef[] = [QUICK, BASICS, ORDER, ADVANCED, OTHER, LAYA];
 
 /** Get all step keys for a tutorial (used for completion counting). */
 export function getAllStepKeys(tutorial: TutorialDef): string[] {

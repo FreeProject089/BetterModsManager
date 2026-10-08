@@ -1,36 +1,52 @@
-export const resumableDownloads = {
-    titleKey: 'docs.diagram.resumableDownloads.title',
-    definition: `
-flowchart TD
-    START["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.resumableDownloads.node.START}}</div>"]
-    CHECK["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumableDownloads.node.CHECK}}</div>"]
-    
-    subgraph RESUME ["<div class='group-label' data-cluster-id='RESUME'><i class='icon-refresh'></i> {{docs.diagram.resumableDownloads.cluster.RESUME}}</div>"]
-        PARTIAL["<div class='node-content'><i class='icon-file-text'></i> {{docs.diagram.resumableDownloads.node.PARTIAL}}</div>"]
-        RANGE["<div class='node-content'><i class='icon-arrow-right'></i> {{docs.diagram.resumableDownloads.node.RANGE}}</div>"]
-    end
-    
-    STREAM["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.resumableDownloads.node.STREAM}}</div>"]
-    VERIFY["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumableDownloads.node.VERIFY}}</div>"]
-    DONE["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumableDownloads.node.DONE}}</div>"]
-    
-    START --> CHECK
-    CHECK -- "<span class='label-info'>{{docs.diagram.edge.Existing}}</span>" --> PARTIAL
-    CHECK -- "<span class='label-warning'>{{docs.diagram.edge.New}}</span>" --> STREAM
-    PARTIAL --> RANGE
-    RANGE --> STREAM
-    STREAM --> VERIFY
-    VERIFY -- "<span class='label-success'>{{docs.diagram.edge.OK}}</span>" --> DONE
-    VERIFY -- "<span class='label-error'>{{docs.diagram.edge.Fail}}</span>" --> START
-    
-    %% Styles
-    classDef main fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
-    classDef logic fill:#22c55e1A,stroke:#22c55e,color:#22c55e;
-    classDef warn fill:#ef44441A,stroke:#ef4444,color:#ef4444;
-    
-    class START,STREAM,DONE main;
-    class CHECK,PARTIAL,RANGE logic;
-    class VERIFY warn;
-`,
-    explanationPrefix: 'docs.diagram.resumableDownloads.node.'
+import type { DiagramSpec } from '../diagram-spec.js';
+
+// How a download avoids starting over. In a repo sync (repo.rs sync_server_repo) a file that is
+// already on disk is compared by SHA-256, then chunk by chunk (4 MB), and only the chunks that
+// differ are fetched with HTTP Range; everything else streams under the 4 GiB DownloadCap and
+// the governor's Download budget, and is hashed again before it counts. The Laya offline pack
+// (ai_embedded.rs fetch_pack) is the one download that resumes a .part file from its length.
+export const resumableDownloads: DiagramSpec = {
+    id: 'resumable-downloads',
+    i18n: 'docs.diagram.resumable-downloads',
+    category: 'sharing',
+    dir: 'TB',
+    article: 'resumable-downloads',
+    related: ['server-mode', 'hosting-flow', 'disk-io-limiter'],
+    groups: [
+        { id: 'DECIDE' },
+        { id: 'TRANSFER' },
+        { id: 'CHECK', dir: 'LR' },
+        { id: 'PACK' },
+    ],
+    nodes: [
+        { id: 'FILE', kind: 'outcome', group: 'DECIDE', icon: 'icon-file', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo', 'src-tauri/src/models/repo.rs › RepoChunk'] },
+        { id: 'SAME', kind: 'decision', group: 'DECIDE', refs: ['src-tauri/src/commands/repo.rs › compute_file_hash_and_chunks'] },
+        { id: 'CHUNKS', kind: 'decision', group: 'DECIDE', refs: ['src-tauri/src/commands/repo.rs › compute_local_chunk_hashes', 'src-tauri/src/commands/repo.rs › CHUNK_SIZE'] },
+
+        { id: 'RANGE', kind: 'rust', group: 'TRANSFER', icon: 'icon-patch', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo', 'src-tauri/src/commands/repo.rs › mod_file_url'] },
+        { id: 'FULL', kind: 'rust', group: 'TRANSFER', icon: 'icon-download', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo', 'src-tauri/src/commands/repo_ssh.rs › open_for_sync'] },
+        { id: 'CAP', kind: 'rust', group: 'TRANSFER', icon: 'icon-meter', link: 'disk-io-limiter', refs: ['src-tauri/src/fs_utils.rs › DownloadCap', 'src-tauri/src/fs_utils.rs › MAX_DOWNLOAD_BYTES', 'src-tauri/src/governor/runtime.rs › limiter'] },
+        { id: 'PAUSE', kind: 'ui', group: 'TRANSFER', icon: 'icon-stop', refs: ['src-tauri/src/commands/repo.rs › pause_repo_sync', 'src-tauri/src/commands/repo.rs › cancel_repo_sync', 'src-tauri/src/commands/repo.rs › sync_wait'] },
+
+        { id: 'VERIFY', kind: 'decision', group: 'CHECK', icon: 'icon-integrity', refs: ['src-tauri/src/commands/repo.rs › compute_file_hash_and_chunks', 'src-tauri/src/models/mod_entry.rs › unverified'] },
+        { id: 'DONE', kind: 'outcome', group: 'CHECK', icon: 'icon-check', refs: ['src-tauri/src/commands/repo.rs › ProfileSyncSummary'] },
+        { id: 'FAIL', kind: 'outcome', group: 'CHECK', icon: 'icon-alert', refs: ['src-tauri/src/commands/repo.rs › sync_server_repo'] },
+
+        { id: 'PART', kind: 'rust', group: 'PACK', icon: 'icon-brain', refs: ['src-tauri/src/commands/ai_embedded.rs › fetch_pack', 'src-tauri/src/commands/ai_embedded.rs › hash_prefix'] },
+    ],
+    edges: [
+        { from: 'FILE', to: 'SAME', thick: true },
+        { from: 'SAME', to: 'DONE', label: 'skip', tone: 'ok' },
+        { from: 'SAME', to: 'CHUNKS', label: '~no', tone: 'warn', thick: true },
+        { from: 'CHUNKS', to: 'RANGE', label: '~yes', tone: 'ok', thick: true },
+        { from: 'CHUNKS', to: 'FULL', label: '~no', tone: 'warn' },
+        { from: 'RANGE', to: 'CAP' , thick: true },
+        { from: 'FULL', to: 'CAP' },
+        { from: 'PAUSE', to: 'CAP', label: 'between', tone: 'info', dashed: true },
+        { from: 'CAP', to: 'VERIFY', thick: true },
+        { from: 'CAP', to: 'FAIL', label: 'tooLarge', tone: 'danger' },
+        { from: 'VERIFY', to: 'DONE', label: '~ok', tone: 'ok', thick: true },
+        { from: 'VERIFY', to: 'FAIL', label: '~fail', tone: 'danger' },
+        { from: 'PART', to: 'VERIFY', label: 'sameRule', tone: 'info', dashed: true },
+    ],
 };

@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    113 actions · 41 conditions · 39 values · 8 loop sources
+    120 actions · 47 conditions · 65 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -41,7 +41,6 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `mods.autoImportOmm` | Imports mods found in the OvGME/OMM folders BMM knows about. | — |
 | `mods.clearHistory` | Empties the mod history list. The mods themselves are untouched. | `id` |
 | `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
-| `ai.suggest_mod_metadata` | Lists suggestions only. Nothing is written to the mod. | `id` · `into` |
 | `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` · `placement` |
 | `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` · `into` |
 
@@ -126,8 +125,6 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `id.of` | Stores the content id of a modpack, plugin or automation in a variable. Compare it to check you have the right thing, without downloading. | `into` · `kind` · `id` |
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
-| `ai.classify` | Picks one of your labels, with its probability. Needs the Laya permission. | `task` · `labels` · `text` · `path` · `into` |
-| `ai.ask` | Searches the docs and your mods. The answer is data, never run. | `question` · `into` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 | `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
 | `data.validate` | Works out what a document IS from its shape, and what is wrong with it. Use it before acting on something you downloaded. | `path` · `text` · `expect` · `strict` |
@@ -167,6 +164,21 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `wait.http` | Polls it until it answers (by status or reply content), or gives up. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
+
+### Laya (AI)
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `ai.classify` | Picks one of your labels, with its probability. Needs the Laya permission. | `task` · `labels` · `text` · `path` · `into` |
+| `ai.run_task` | Sorts a text with a task saved in Laya’s settings. | `task` · `text` · `path` · `into` |
+| `ai.ask` | Searches the docs and your mods. The answer is data, never run. | `question` · `into` |
+| `ai.suggest_mod_metadata` | Lists suggestions only. Nothing is written to the mod. | `id` · `into` |
+| `ai.classify_mod` | Picks tags among yours, and flags adult content. Can apply the sure tags. | `id` · `apply` · `into` |
+| `ai.library_check` | Lists duplicates, overlapping mods and mods with no tag. Changes nothing. | `suggest` · `into` |
+| `ai.crash_label` | Family, cause and probability for each new crash report. | `scope` · `limit` · `into` |
+| `ai.explain_crash` | A short written explanation. Needs a writing model. Untrusted text. | `allowRemote` · `report` · `into` |
+| `ai.triage_report` | Says if a text is a bug, an idea or a crash, and which part of BMM. | `text` · `path` · `into` |
+| `ai.status` | Is Laya on, installed, loaded? Runs no model. | — |
 
 ## Conditions
 
@@ -215,6 +227,12 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `resourcesPresetIs` | Resource preset is |
 | `queueIdle` | BMM is idle (queue empty) |
 | `aiLabel` | Laya’s label is… |
+| `aiScore` | Laya’s score for a label |
+| `aiAbstained` | Laya could not tell |
+| `aiAvailable` | Laya is available |
+| `crashCause` | Crash cause is… |
+| `aiLibraryCount` | Library check found… |
+| `modAiTag` | Laya tagged the mod… |
 
 `all` and `any` are the grouping conditions; in script you normally write `and` and `or` instead and get the same thing. `value` is the comparison row, which is what `count >= 3` compiles to.
 
@@ -228,7 +246,7 @@ Written by an action into the task, and readable afterwards in a comparison or a
     ` · `, ` · `,
     // Which attempt of a task-level retry this run is (1 on the first run).
     ` · `,
-    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `ai.abstained` · `ai.mod.tagCount` · `ai.mod.adult` · `ai.mod.adultP` · `ai.mod.applied` · `ai.mod.abstained` · `ai.lib.total` · `ai.lib.untagged` · `ai.lib.duplicates` · `ai.lib.conflicts` · `ai.lib.suggested` · `ai.lib.findings` · `ai.crash.count` · `ai.crash.unknown` · `ai.crash.groups` · `ai.crash.pending` · `ai.crash.p` · `ai.report.kindP` · `ai.report.areaP` · `ai.report.abstained` · `ai.enabled` · `ai.available` · `ai.installed` · `ai.loaded` · `ai.writer` · `ai.explain.remote` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

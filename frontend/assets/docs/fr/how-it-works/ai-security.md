@@ -10,7 +10,8 @@ tourner, et ce qui l'arrête.
 | Surface | Qui peut l'appeler | Où va le texte |
 |---|---|---|
 | Suggérer, Demander à Laya, vérification de rapport (dans l'app) | Toi, par un clic | La Laya intégrée ; ton laya-serve ; un modèle de rédaction que tu as configuré |
-| Tâches planifiées (`ai.classify`, `ai.ask`, `ai.suggest_mod_metadata`) | Une tâche à qui tu as accordé **Laya (IA)** | La Laya intégrée ou ton laya-serve (jamais BetterCommunity) |
+| Tâches planifiées (`ai.classify`, `ai.run_task`, `ai.classify_mod`, `ai.library_check`, `ai.crash_label`, `ai.triage_report`, `ai.ask`, `ai.suggest_mod_metadata`) | Une tâche à qui tu as accordé **Laya (IA)** | La Laya intégrée ou ton laya-serve (jamais BetterCommunity) |
+| Tâche planifiée `ai.explain_crash` | Une tâche à qui tu as accordé **Laya (IA)** (et **réseau** pour un rédacteur distant) | Ton modèle de rédaction ; un distant seulement si l'étape l'autorise |
 | [API Laya locale](doc-page:features/ai-api) | Un programme de ce PC qui a le jeton | La Laya intégrée seulement |
 | CLI et MCP (`bmm ai-*`, `bmm_ai_*`) | Toi, ou un client IA que tu as branché | Comme l'app |
 | IA de BetterCommunity (modération du site, recherche, bot Discord) | Le site et ses membres | Le fournisseur du site |
@@ -29,12 +30,13 @@ peut répondre « aucune ». La sortie d'un modèle de rédaction est revérifi�
 liens `javascript:`, `data:` et `ms-…:` et les commandes (`Remove-Item`, `certutil`, `mshta`,
 `rundll32`, `Invoke-…`, `schtasks`…) sont toujours refusés.
 
-**Une réponse utilisée comme commande.** Dans une tâche, le texte libre d'`ai.ask` et
-d'`ai.suggest_mod_metadata` est marqué non fiable, ainsi que toute copie. Il peut aller dans un
+**Une réponse utilisée comme commande.** Dans une tâche, le texte libre d'`ai.ask`,
+d'`ai.suggest_mod_metadata` et d'`ai.explain_crash` est marqué non fiable, ainsi que toute copie. Il peut aller dans un
 message, une ligne de journal ou le contenu d'un fichier. Partout ailleurs (un programme, un
 script, un chemin, une adresse, un en-tête, une condition qui regarde un fichier) l'étape échoue.
 Une étiquette d'`ai.classify` est toujours une des étiquettes de la tâche ou `none`, quoi que
-réponde le moteur.
+réponde le moteur ; les tags d'un mod sont les tags de l'utilisateur, une cause de crash et un
+type de rapport viennent de listes fixes, chacun revérifié avant d'arriver dans une variable.
 
 **Une page web ou un autre programme qui vise l'API locale.** Elle n'écoute que sur 127.0.0.1.
 Une requête dont le `Host` ne nomme pas ce serveur est refusée (DNS rebinding), une requête venant

@@ -1,33 +1,54 @@
-export const backupSystem = {
-    titleKey: 'docs.diagram.backup.title',
-    definition: `
-graph TD
-    subgraph TRIG ["<div class='group-label' data-cluster-id='PROC'><i class='icon-flow'></i> {{docs.diagram.cluster.PROC}}</div>"]
-        ACTIVATE["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.backup.node.ACTIVATE}}</div>"]
-        DEACTIVATE["<div class='node-content'><i class='icon-delete'></i> {{docs.diagram.backup.node.DEACTIVATE}}</div>"]
-    end
-    subgraph CORE ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-disk'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        EXIST_CHECK{"<div class='node-content'><i class='icon-search'></i> {{docs.diagram.backup.node.EXIST_CHECK}}</div>"}
-        MOVE_TO_BKP["<div class='node-content'><i class='icon-share'></i> {{docs.diagram.backup.node.MOVE_TO_BKP}}</div>"]
-        RESTORE_ORIG["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.backup.node.RESTORE_ORIG}}</div>"]
-    end
-    subgraph SAFETY ["<div class='group-label' data-cluster-id='SYNC'><i class='icon-verify'></i> {{docs.diagram.cluster.SYNC}}</div>"]
-        INTEGRITY["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.backup.node.INTEGRITY}}</div>"]
-    end
-    ACTIVATE["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.backup.node.ACTIVATE}}</div>"] -- "<span class='label-info' data-key='init'>{{docs.diagram.label.init}}</span>" --> EXIST_CHECK{"<div class='node-content'><i class='icon-search'></i> {{docs.diagram.backup.node.EXIST_CHECK}}</div>"}
-    EXIST_CHECK -- "<span class='label-success' data-key='yes'>{{docs.diagram.label.yes}}</span>" --> MOVE_TO_BKP["<div class='node-content'><i class='icon-share'></i> {{docs.diagram.backup.node.MOVE_TO_BKP}}</div>"]
-    EXIST_CHECK -- "<span class='label-error' data-key='no'>{{docs.diagram.label.no}}</span>" --> INTEGRITY["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.backup.node.INTEGRITY}}</div>"]
-    DEACTIVATE["<div class='node-content'><i class='icon-delete'></i> {{docs.diagram.backup.node.DEACTIVATE}}</div>"] -- "<span class='label-info' data-key='init'>{{docs.diagram.label.init}}</span>" --> RESTORE_ORIG["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.backup.node.RESTORE_ORIG}}</div>"]
-    MOVE_TO_BKP -- "<span class='label-success' data-key='secured'>{{docs.diagram.label.secured}}</span>" --> INTEGRITY
-    RESTORE_ORIG -- "<span class='label-success' data-key='restored'>{{docs.diagram.label.restored}}</span>" --> INTEGRITY
+import type { DiagramSpec } from '../diagram-spec.js';
 
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#10b981,stroke-width:2px;
-    linkStyle 2 stroke:#ef4444,stroke-width:2px;
-    linkStyle 3 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 4 stroke:#10b981,stroke-width:2px;
-    linkStyle 5 stroke:#10b981,stroke-width:2px;
-`,
-    explanationPrefix: 'docs.diagram.backup.node.'
+// The two kinds of backup BMM keeps, and nothing else.
+//  · Game originals: the first time a mod replaces a real game file, the original goes to the
+//    profile's backup folder under _original/ (fs_utils::backup_original_file); disabling the last
+//    mod that covers the file puts it back and deletes the copy. The per-file detail of
+//    enable/disable is in mod-activation; this shows the backup folder's life.
+//  · BMM's own data: data.json is written with a rolling data.json.bak (state.rs), and a
+//    .DATABMM archive is written on demand or by a scheduled task (data-backup.ts,
+//    export_bundle.rs) and restored with a safety copy first (restore_bundle.rs).
+// There is no per-profile snapshot of the game folder.
+export const backupSystem: DiagramSpec = {
+    id: 'backup-system',
+    i18n: 'docs.diagram.backup-system',
+    category: 'profiles',
+    dir: 'TB',
+    article: 'backups',
+    related: ['mod-activation', 'profile-system', 'faq-disk-full', 'scheduler'],
+    groups: [
+        { id: 'ORIG' },
+        { id: 'APP' },
+    ],
+    nodes: [
+        { id: 'ENABLE', kind: 'rust', group: 'ORIG', icon: 'icon-plus', refs: ['src-tauri/src/fs_utils.rs › apply_mod_stacked_ticketed', 'src-tauri/src/commands/mods.rs › enable_mod_in'], link: 'mod-activation' },
+        { id: 'IS_ORIGINAL', kind: 'decision', group: 'ORIG', refs: ['src-tauri/src/fs_utils.rs › backup_original_file', 'src-tauri/src/commands/mod_order.rs › game_folder_share'] },
+        { id: 'ORIGINALS', kind: 'data', group: 'ORIG', icon: 'icon-archive', refs: ['src-tauri/src/fs_utils.rs › backup_original_file', 'src-tauri/src/fs_utils.rs › copy_file_governed', 'src-tauri/src/commands/profile.rs › create_profile'] },
+        { id: 'DISABLE', kind: 'rust', group: 'ORIG', icon: 'icon-minus', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed', 'src-tauri/src/commands/mods.rs › disable_mod_in'], link: 'mod-activation' },
+        { id: 'RESTORED', kind: 'outcome', group: 'ORIG', icon: 'icon-restore', refs: ['src-tauri/src/fs_utils.rs › unapply_mod_stacked_shared_ticketed', 'src-tauri/src/fs_utils.rs › remove_empty_dirs'] },
+
+        { id: 'SAVE', kind: 'rust', group: 'APP', icon: 'icon-save', refs: ['src-tauri/src/state.rs › save', 'src-tauri/src/state.rs › load_with_recovery'] },
+        { id: 'DATA_BAK', kind: 'data', group: 'APP', icon: 'icon-database', refs: ['src-tauri/src/state.rs › load_with_recovery'] },
+        { id: 'EXPORT_UI', kind: 'ui', group: 'APP', icon: 'icon-export', refs: ['frontend/src/features/settings/data-backup.ts › writeBackup', 'frontend/src/features/settings/data-backup.ts › DEFAULT_SECTIONS'], link: 'scheduler' },
+        { id: 'BUNDLE', kind: 'rust', group: 'APP', icon: 'icon-package', refs: ['src-tauri/src/commands/export_bundle.rs › export_data_bundle', 'src-tauri/src/commands/settings.rs › backup_dest_path'] },
+        { id: 'DATABMM', kind: 'data', group: 'APP', icon: 'icon-archive', refs: ['src-tauri/src/commands/settings.rs › backup_dest_path', 'src-tauri/src/commands/secret_box.rs'] },
+        { id: 'RESTORE', kind: 'rust', group: 'APP', icon: 'icon-restore', refs: ['src-tauri/src/commands/restore_bundle.rs › inspect_data_bundle', 'src-tauri/src/commands/restore_bundle.rs › restore_data_bundle', 'src-tauri/src/commands/restore_bundle.rs › foreign_restore_refusal'] },
+        { id: 'BEFORE', kind: 'data', group: 'APP', icon: 'icon-history', refs: ['src-tauri/src/commands/restore_bundle.rs › restore_data_bundle'] },
+    ],
+    edges: [
+        { from: 'ENABLE', to: 'IS_ORIGINAL', label: '~perFile', tone: 'info', thick: true },
+        { from: 'IS_ORIGINAL', to: 'ORIGINALS', label: 'firstTime', tone: 'ok', thick: true },
+        { from: 'IS_ORIGINAL', to: 'ENABLE', label: 'skip', tone: 'warn', dashed: true },
+        { from: 'ORIGINALS', to: 'DISABLE', label: '~later', dashed: true },
+        { from: 'DISABLE', to: 'RESTORED', label: 'lastProvider', tone: 'ok', thick: true },
+        { from: 'RESTORED', to: 'ORIGINALS', label: 'deleted', tone: 'warn', dashed: true },
+
+        { from: 'SAVE', to: 'DATA_BAK', label: 'everySave', thick: true },
+        { from: 'EXPORT_UI', to: 'BUNDLE', thick: true },
+        { from: 'DATA_BAK', to: 'SAVE', label: 'recover', tone: 'warn', dashed: true },
+        { from: 'BUNDLE', to: 'DATABMM', label: '~writes', thick: true },
+        { from: 'DATABMM', to: 'RESTORE', label: 'restore', tone: 'info' },
+        { from: 'RESTORE', to: 'BEFORE', label: 'firstCopy', tone: 'warn' },
+        { from: 'RESTORE', to: 'SAVE', label: 'replaces', tone: 'danger' },
+    ],
 };
