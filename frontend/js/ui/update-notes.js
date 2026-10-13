@@ -1242,6 +1242,12 @@ function showUpdateAvailableModal(info) {
         const lead = mismatch
             ? (t('update.mismatchLead') || 'It may be corrupted or tampered with. Installing it is not recommended.')
             : (t('update.unverifiedLead') || 'Nothing confirms that this file is the one the publisher released. Install it only if you trust where it comes from.');
+        // The reason in the reader's language; Rust's own (English) sentence stays as fine print
+        // only for an untrustworthy update.json, where it names the check that failed.
+        const whyKey = u.kind === 'missing' ? 'update.why.missing' : u.kind === 'no-entry' ? 'update.why.noEntry'
+            : u.kind === 'invalid' ? 'update.why.invalid' : '';
+        const why = !mismatch && whyKey ? t(whyKey) : String(u.detail || '');
+        const showDetail = !mismatch && u.kind === 'invalid' && !!u.detail;
         const gh = u.github_matches === true
             ? (t('update.githubDigestMatch') || 'For information: the file matches the checksum GitHub publishes for it.')
             : u.github_matches === false
@@ -1253,7 +1259,8 @@ function showUpdateAvailableModal(info) {
                 <div class="upd-error-body">
                     <div class="upd-error-title">${escHtml(title)}</div>
                     <div class="upd-error-msg">${escHtml(lead)}</div>
-                    <div class="upd-error-msg">${escHtml(String(u.detail || ''))}</div>
+                    <div class="upd-error-msg">${escHtml(why)}</div>
+                    ${showDetail ? `<div class="upd-error-msg" style="font-size:11px;opacity:.8">${escHtml(String(u.detail))}</div>` : ''}
                     ${gh ? `<div class="upd-error-msg">${escHtml(gh)}</div>` : ''}
                     <div class="upd-error-msg"><code>${escHtml(String(u.file || ''))} · SHA-256 ${escHtml(String(u.sha256))}</code></div>
                     <div class="upd-error-actions">
