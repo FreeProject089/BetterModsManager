@@ -23,6 +23,7 @@ import { resolveEntryUrl } from '../../core/catalog-url.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../../core/catalog-publish.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { fetchCatalogText, asLegacy } from '../../core/catalog-read.js';
 import { importListAsking } from './modlist.js';
 
 /** One row of a mod-list catalogue, after sanitising. */
@@ -106,9 +107,10 @@ export function writeListCatalogs(v: string[]): void {
 async function loadOne(src: string): Promise<{ lists: ListEntry[]; dropped: string[] }> {
     if (src.startsWith('bundle:')) {
         const res: any = await invoke('catalog_bundle_open', { path: src.slice('bundle:'.length) });
-        return parseListFeed(JSON.parse(String(res?.catalog || '')), src, String(res?.dir || ''));
+        return parseListFeed(await asLegacy(JSON.parse(String(res?.catalog || '')), 'list'), src, String(res?.dir || ''));
     }
-    return parseListFeed(JSON.parse(await fetchSourceText(src, true)), src);
+    // Through the cache and the universal format: any variant reads as its list view.
+    return parseListFeed(await asLegacy(JSON.parse(await fetchCatalogText(src, true)), 'list', src), src);
 }
 
 /**

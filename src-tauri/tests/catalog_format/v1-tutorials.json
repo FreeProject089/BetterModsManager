@@ -1,0 +1,6 @@
+{
+  "version": "1.0",
+  "name": "Tutorials",
+  "tutorials": [ { "id": "first-steps", "name": "First steps", "title": "First steps", "description": "Start here", "url": "https://example.org/first-steps.bmmtut" } ],
+  "items": [ { "kind": "tutorial", "id": "first-steps", "name": "First steps", "meta": { "download_url": "https://example.org/first-steps.bmmtut" } } ]
+}

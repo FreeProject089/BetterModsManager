@@ -20,7 +20,7 @@ import { invoke, pickFolder, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { uiIcon, type IconName } from '../../ui/icons.js';
-import { openConvertDialog } from './repo-format.js';
+import { openConvertDialog, paintRun, listenRun } from './repo-format.js';
 import { revealRepoTool } from './repo-advanced.js';
 
 // window.toast rather than ui/app.js: ui/app.ts imports repo.ts, which imports this module, so
@@ -246,14 +246,15 @@ async function quickCreate(): Promise<void> {
 // ── Validate ────────────────────────────────────────────────────────────────────────────────
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info';
-interface Row { tone: Tone; title: string; detail?: string; act?: { id: string; label: string } }
+interface Row { tone: Tone; title: string; detail?: string; act?: { id: string; label: string }; list?: string[] }
 
 const TONE_ICON: Record<Tone, IconName> = { ok: 'success', warn: 'warning', bad: 'error', info: 'info' };
 
 function rowsHtml(rows: Row[]): string {
     return `<ul class="rp-checklist">${rows.map((r) => `<li class="rp-ck rp-tone--${r.tone}">
         <span class="rp-ck-ic">${uiIcon(TONE_ICON[r.tone], 14)}</span>
-        <span class="rp-ck-txt"><b>${escHtml(r.title)}</b>${r.detail ? `<span>${escHtml(r.detail)}</span>` : ''}</span>
+        <span class="rp-ck-txt"><b>${escHtml(r.title)}</b>${r.detail ? `<span>${escHtml(r.detail)}</span>` : ''}${r.list?.length
+            ? `<details class="rp-ck-more"><summary>${escHtml(t('repo.validate.which', { n: String(r.list.length) }))}</summary><ul class="rp-ck-list">${r.list.map((p) => `<li class="rp-mono">${escHtml(p)}</li>`).join('')}</ul></details>` : ''}</span>
         ${r.act ? `<button type="button" class="btn btn-sm btn-secondary" data-ck-act="${escAttr(r.act.id)}">${escHtml(r.act.label)}</button>` : ''}
     </li>`).join('')}</ul>`;
 }
@@ -268,87 +269,133 @@ function totals(repo: any): { profiles: number; mods: number; files: number; byt
     return { profiles: repo?.profiles?.length || 0, mods, files, bytes };
 }
 
+/** What `repo_validate` answers (commands/repo_validate.rs): one Rust pass, files hashed in
+ *  parallel on the governor's Hash pool, unchanged files answered from a size+date cache. */
+interface ValidateReport {
+    manifestPath: string;
+    format: { version: string; status: string } | null;
+    current: string;
+    readable: boolean;
+    readError: string | null;
+    name: string; version: string; author: string;
+    profiles: number; mods: number; files: number; bytes: number;
+    emptyProfiles: string[];
+    duplicateIds: string[];
+    signature: 'valid' | 'invalid' | 'unsigned' | 'legacy';
+    authorId: string | null;
+    filesBaseUrl: string | null;
+    filesChecked: boolean;
+    filesMissing: number; hashesChanged: number; hashesFilled: number; sizesChanged: number;
+    problems: Array<{ kind: string; path: string }>;
+    cacheHits: number;
+    elapsedMs: number;
+}
+
+let validateRun = '';
+let validating = false;
+
 async function validate(): Promise<void> {
     const dir = needDir();
-    if (!dir) return;
+    if (!dir || validating) return;
+    validating = true;
     const btn = $<HTMLButtonElement>('btn-repo-validate');
     const out = $('repo-validate-report');
-    busy('repo-validate-progress', btn, true);
+    const run = $('repo-validate-progress');
+    const runId = `v${Date.now().toString(36)}`;
+    validateRun = runId;
+    if (btn) btn.disabled = true;
     if (out) out.hidden = true;
+    if (run) { run.hidden = false; paintRun(run, null, 'repo.validate.phaseRead'); }
+    let unlisten: (() => void) | null = null;
     const rows: Row[] = [];
+    let cancelled = false;
     try {
-        // 1. A manifest at all, and its format.
-        let fmt: any;
-        try { fmt = await invoke('repo_format_inspect', { path: dir }); }
-        catch (e) {
-            rows.push({ tone: 'bad', title: t('repo.validate.noManifest'), detail: errText(e) });
+        if (run) {
+            unlisten = await listenRun(runId, (p) => {
+                paintRun(run, p, p.phase === 'hashed' ? 'repo.validate.phaseReport' : 'repo.validate.phaseHash');
+            });
+        }
+        let r: ValidateReport;
+        try {
+            r = await invoke('repo_validate', { args: { path: dir, runId, deep: !!$<HTMLInputElement>('repo-validate-deep')?.checked } }) as ValidateReport;
+        } catch (e) {
+            if (/repo\.cancelled/.test(String(e))) { cancelled = true; rows.push({ tone: 'info', title: t('repo.validate.cancelled') }); }
+            else rows.push({ tone: 'bad', title: t('repo.validate.noManifest'), detail: errText(e) });
             return;
         }
-        const st: string = fmt?.info?.status || 'invalid';
-        const v = String(fmt?.info?.version ?? '');
-        if (st === 'current') rows.push({ tone: 'ok', title: t('repo.validate.formatOk', { v }) });
-        else if (st === 'legacy' || st === 'needs_conversion') rows.push({ tone: 'warn', title: t('repo.validate.formatOld', { v, cur: String(fmt?.current ?? '') }), detail: t('repo.validate.formatOldHint'), act: { id: 'convert', label: t('repo.validate.convert') } });
-        else if (st === 'newer_minor') rows.push({ tone: 'info', title: t('repo.validate.formatNewer', { v }) });
-        else if (st === 'too_new') rows.push({ tone: 'bad', title: t('repo.validate.formatTooNew', { v }) });
-        else rows.push({ tone: 'bad', title: t('repo.validate.formatInvalid') });
-
-        // 2. The manifest as BMM reads it.
-        let repo: any = null;
-        try { repo = await invoke('read_local_repo', { repoDir: dir }); }
-        catch (e) { rows.push({ tone: 'bad', title: t('repo.validate.unreadable'), detail: errText(e) }); }
-        if (repo) {
-            const n = totals(repo);
-            rows.unshift({
-                tone: 'info',
-                title: `${repo.name || basename(dir)} · v${repo.version || '?'}`,
-                detail: t('repo.validate.summary', { profiles: String(n.profiles), mods: String(n.mods), files: String(n.files), size: formatBytes(n.bytes) }),
-            });
-            if (!n.profiles) rows.push({ tone: 'warn', title: t('repo.validate.noProfiles') });
-            const empty = (repo.profiles || []).filter((p: any) => !(p.mods?.length)).map((p: any) => p.name);
-            if (empty.length) rows.push({ tone: 'warn', title: t('repo.validate.emptyProfiles', { n: String(empty.length) }), detail: empty.join(', ') });
-            if (!repo.author) rows.push({ tone: 'warn', title: t('repo.validate.noAuthor') });
-
-            // 3. The signature subscribers will see.
-            if (!repo.signature || !repo.author_id) {
-                rows.push({ tone: 'warn', title: t('repo.validate.unsigned'), detail: t('repo.validate.unsignedHint'), act: { id: 'convert', label: t('repo.validate.repair') } });
-            } else {
-                const ok = await invoke('verify_repo_signature', { repo }).catch(() => false);
-                rows.push(ok
-                    ? { tone: 'ok', title: t('repo.validate.signed'), detail: String(repo.author_id).slice(0, 16) + '…' }
-                    : { tone: 'bad', title: t('repo.validate.badSignature'), detail: t('repo.validate.badSignatureHint'), act: { id: 'convert', label: t('repo.validate.repair') } });
-            }
-        }
-
-        // 4. Files and hashes: the conversion's dry run re-hashes every listed file and writes nothing.
-        if (repo?.files_base_url) {
-            rows.push({ tone: 'info', title: t('repo.validate.filesElsewhere'), detail: String(repo.files_base_url) });
-        } else if (st !== 'too_new' && st !== 'newer_minor' && st !== 'invalid') {
-            try {
-                const plan = await invoke('repo_format_convert', { args: { path: dir, dryRun: true, rehash: true, sign: false } }) as any;
-                const c = plan?.counts || {};
-                const problems = (c.filesMissing || 0) + (c.hashesChanged || 0);
-                if (c.filesMissing) rows.push({ tone: 'bad', title: t('repo.validate.missing', { n: String(c.filesMissing) }), detail: t('repo.validate.missingHint') });
-                if (c.hashesChanged) rows.push({ tone: 'bad', title: t('repo.validate.changed', { n: String(c.hashesChanged) }), detail: t('repo.validate.changedHint'), act: { id: 'convert', label: t('repo.validate.repair') } });
-                if (c.hashesFilled) rows.push({ tone: 'warn', title: t('repo.validate.filled', { n: String(c.hashesFilled) }), act: { id: 'convert', label: t('repo.validate.repair') } });
-                if (!problems && !c.hashesFilled) rows.push({ tone: 'ok', title: t('repo.validate.filesOk') });
-            } catch (e) {
-                rows.push({ tone: 'warn', title: t('repo.validate.filesUnchecked'), detail: errText(e) });
-            }
-        }
+        rows.push(...reportRows(r, dir));
     } finally {
-        busy('repo-validate-progress', btn, false);
+        unlisten?.();
+        validating = false;
+        validateRun = '';
+        if (btn) btn.disabled = false;
+        if (run) run.hidden = true;
         if (out && rows.length) {
             const bad = rows.filter((r) => r.tone === 'bad').length;
             const warn = rows.filter((r) => r.tone === 'warn').length;
-            const verdict: Row = bad
+            const verdict: Row | null = cancelled ? null : bad
                 ? { tone: 'bad', title: t('repo.validate.verdictBad', { n: String(bad) }) }
                 : warn ? { tone: 'warn', title: t('repo.validate.verdictWarn', { n: String(warn) }) }
                     : { tone: 'ok', title: t('repo.validate.verdictOk') };
-            out.innerHTML = rowsHtml([verdict, ...rows]);
+            out.innerHTML = rowsHtml(verdict ? [verdict, ...rows] : rows);
             out.hidden = false;
             out.dataset.dir = dir;
         }
     }
+}
+
+/** Stop a running check: its governor ticket is cancelled, the hashing stops at the next file. */
+function cancelValidate(): void {
+    if (!validating) return;
+    // The run's governor ticket, found by the token this page gave it (repo_validate_cancel).
+    if (validateRun) void invoke('repo_validate_cancel', { runId: validateRun }).catch(() => {});
+    const phase = $('repo-validate-phase');
+    if (phase) phase.textContent = t('repo.validate.cancelling');
+}
+
+/** The report's rows: the summary, then format, content, signature, files. */
+function reportRows(r: ValidateReport, dir: string): Row[] {
+    const rows: Row[] = [];
+    const st = r.format?.status || 'invalid';
+    const v = String(r.format?.version ?? '');
+    rows.push({
+        tone: 'info',
+        title: `${r.name || basename(dir)} · v${r.version || '?'}`,
+        detail: `${t('repo.validate.summary', { profiles: String(r.profiles), mods: String(r.mods), files: String(r.files), size: formatBytes(r.bytes) })} ${t('repo.validate.took', { s: (r.elapsedMs / 1000).toFixed(1) })}`,
+    });
+    // 1. The format, and whether BMM can open it at all.
+    if (st === 'current') rows.push({ tone: 'ok', title: t('repo.validate.formatOk', { v }) });
+    else if (st === 'legacy' || st === 'needs_conversion') rows.push({ tone: 'warn', title: t('repo.validate.formatOld', { v, cur: r.current }), detail: t('repo.validate.formatOldHint'), act: { id: 'convert', label: t('repo.validate.convert') } });
+    else if (st === 'newer_minor') rows.push({ tone: 'info', title: t('repo.validate.formatNewer', { v }) });
+    else if (st === 'too_new') rows.push({ tone: 'bad', title: t('repo.validate.formatTooNew', { v }) });
+    else rows.push({ tone: 'bad', title: t('repo.validate.formatInvalid') });
+    if (!r.readable) rows.push({ tone: 'bad', title: t('repo.validate.unreadable'), detail: r.readError || undefined });
+
+    // 2. What subscribers will see.
+    if (!r.profiles) rows.push({ tone: 'warn', title: t('repo.validate.noProfiles') });
+    if (r.emptyProfiles.length) rows.push({ tone: 'warn', title: t('repo.validate.emptyProfiles', { n: String(r.emptyProfiles.length) }), detail: r.emptyProfiles.join(', ') });
+    if (r.duplicateIds.length) rows.push({ tone: 'bad', title: t('repo.validate.duplicateIds', { n: String(r.duplicateIds.length) }), detail: t('repo.validate.duplicateIdsHint'), list: r.duplicateIds });
+    if (!r.author) rows.push({ tone: 'warn', title: t('repo.validate.noAuthor') });
+
+    // 3. The signature.
+    if (r.signature === 'valid') rows.push({ tone: 'ok', title: t('repo.validate.signed'), detail: `${String(r.authorId || '').slice(0, 16)}…` });
+    else if (r.signature === 'invalid') rows.push({ tone: 'bad', title: t('repo.validate.badSignature'), detail: t('repo.validate.badSignatureHint'), act: { id: 'convert', label: t('repo.validate.repair') } });
+    else if (r.signature === 'legacy') rows.push({ tone: 'warn', title: t('repo.validate.legacySignature'), detail: t('repo.validate.formatOldHint'), act: { id: 'convert', label: t('repo.validate.convert') } });
+    else rows.push({ tone: 'warn', title: t('repo.validate.unsigned'), detail: t('repo.validate.unsignedHint'), act: { id: 'convert', label: t('repo.validate.repair') } });
+
+    // 4. Files and hashes.
+    if (r.filesBaseUrl) rows.push({ tone: 'info', title: t('repo.validate.filesElsewhere'), detail: r.filesBaseUrl });
+    else if (!r.filesChecked) rows.push({ tone: 'warn', title: t('repo.validate.filesUnchecked') });
+    else {
+        const list = (kind: string) => r.problems.filter((p) => p.kind === kind).map((p) => p.path);
+        if (r.filesMissing) rows.push({ tone: 'bad', title: t('repo.validate.missing', { n: String(r.filesMissing) }), detail: t('repo.validate.missingHint'), list: list('file_missing') });
+        if (r.hashesChanged) rows.push({ tone: 'bad', title: t('repo.validate.changed', { n: String(r.hashesChanged) }), detail: t('repo.validate.changedHint'), act: { id: 'convert', label: t('repo.validate.repair') }, list: list('hash_changed') });
+        if (r.hashesFilled) rows.push({ tone: 'warn', title: t('repo.validate.filled', { n: String(r.hashesFilled) }), act: { id: 'convert', label: t('repo.validate.repair') } });
+        if (!r.filesMissing && !r.hashesChanged && !r.hashesFilled) {
+            rows.push({ tone: 'ok', title: t('repo.validate.filesOk'), detail: r.cacheHits ? t('repo.validate.cacheHits', { n: String(r.cacheHits) }) : undefined });
+        }
+    }
+    return rows;
 }
 
 // ── Version ─────────────────────────────────────────────────────────────────────────────────
@@ -671,10 +718,12 @@ export function initRepoTools(): void {
 
     // Validate, and its « Convert » / « Repair » buttons (the existing dialog: dry run first).
     $('btn-repo-validate')?.addEventListener('click', () => { void validate(); });
+    $('btn-repo-validate-cancel')?.addEventListener('click', cancelValidate);
     $('repo-validate-report')?.addEventListener('click', (e) => {
         const b = (e.target as HTMLElement).closest<HTMLElement>('[data-ck-act="convert"]');
         const dir = ($('repo-validate-report') as HTMLElement | null)?.dataset.dir || toolsDir();
-        if (b && dir) void openConvertDialog(dir).then(() => validate());
+        // Check again only once the dialog has written something (it resolves on close).
+        if (b && dir) void openConvertDialog(dir).then((written) => { if (written) void validate(); });
     });
 
     // Version.

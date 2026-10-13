@@ -858,6 +858,26 @@ function registerCore() {
     registerCommand({ id: 'palette.open', category: 'tools', title: { en: 'Open command palette', fr: 'Ouvrir la palette de commandes' }, keywords: 'palette search command ctrl k', run: () => openCommandPalette(), defaultChord: { ctrl: true, key: 'k' } });
     registerCommand({ id: 'tools.checkAppUpdates', category: 'tools', title: { en: 'Check for app updates', fr: 'Vérifier les mises à jour de l’app' }, keywords: 'update app version check upgrade mise à jour application', run: clickId('btn-check-updates'), defaultChord: null });
     registerCommand({ id: 'tools.restartOnboarding', category: 'tools', title: { en: 'Restart the onboarding tour', fr: 'Relancer la visite d’accueil' }, keywords: 'onboarding tour welcome restart guide accueil tutoriel', run: clickId('btn-restart-onboarding'), defaultChord: null });
+    // BMM Tools (features/tools/tools-hub.ts): read-only diagnostics in one dialog, one palette
+    // entry per tool. Loaded on demand like style.open: the hub is not in the boot path.
+    const openTools = (tool) => () => { void import('../features/tools/tools-hub.js').then((m) => m.openToolsHub(tool, allCommands)); };
+    if (typeof window !== 'undefined')
+        window.openToolsHub = (tool) => openTools(tool)();
+    registerCommand({ id: 'tools.hub', category: 'tools', title: { en: 'BMM Tools…', fr: 'Outils BMM…' }, keywords: 'tools toolbox utilities diagnostics outils boîte à outils utilitaires diagnostic', run: openTools(), defaultChord: null });
+    registerCommand({ id: 'tools.duplicates', category: 'tools', title: { en: 'Find duplicate mods and files', fr: 'Trouver les mods et fichiers en double' }, keywords: 'duplicate duplicates same identical copy twice space wasted doublon doublons identique copie espace', run: openTools('duplicates'), defaultChord: null });
+    registerCommand({ id: 'tools.conflicts', category: 'tools', title: { en: 'Conflict summary for a profile', fr: 'Résumé des conflits d’un profil' }, keywords: 'conflict conflicts overwrite overlap files profile conflit écrase chevauchement fichiers profil', run: openTools('conflicts'), defaultChord: null });
+    registerCommand({ id: 'tools.disk', category: 'tools', title: { en: 'Disk usage by profile and mod', fr: 'Espace disque par profil et par mod' }, keywords: 'disk usage size space weight backups cache folder espace disque taille poids sauvegardes dossier', run: openTools('disk'), defaultChord: null });
+    registerCommand({ id: 'tools.diff', category: 'tools', title: { en: 'Compare two profiles', fr: 'Comparer deux profils' }, keywords: 'diff compare profiles difference version order comparer profils différence ordre', run: openTools('diff'), defaultChord: null });
+    registerCommand({ id: 'tools.orphans', category: 'tools', title: { en: 'Find missing and orphaned mods', fr: 'Trouver les mods manquants et orphelins' }, keywords: 'orphan orphans missing broken dangling leftover unregistered folder orphelin manquant cassé restes dossier', run: openTools('orphans'), defaultChord: null });
+    registerCommand({ id: 'tools.hash', category: 'tools', title: { en: 'Hash checker (BLAKE3 / SHA-256)', fr: 'Vérificateur d’empreinte (BLAKE3 / SHA-256)' }, keywords: 'hash checksum sha256 sha-256 blake3 verify compare file empreinte somme contrôle vérifier fichier', run: openTools('hash'), defaultChord: null });
+    registerCommand({ id: 'tools.validate', category: 'tools', title: { en: 'Validate a manifest or catalogue', fr: 'Valider un manifeste ou un catalogue' }, keywords: 'validate validator manifest modpack modlist catalog catalogue json check valider validateur manifeste vérifier', run: openTools('validate'), defaultChord: null });
+    // The same hub as a DevTools section. debug-sections is already loaded (ui/app.ts imports
+    // debug-menu at boot), so this import costs nothing; the section's body loads on first view.
+    void import('../features/debug/debug-sections.js').then((m) => m.registerDebugSection({
+        id: 'tools', titleKey: 'tools.title',
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+        mount: (host) => import('../features/tools/tools-hub.js').then((h) => h.mountToolsDebug(host)),
+    })).catch(() => { });
     // ── Settings ────────────────────────────────────────────────────────────────
     registerCommand({ id: 'settings.graphics', category: 'settings', title: { en: 'Graphics & display', fr: 'Graphismes et affichage' }, keywords: 'graphics gpu card webview hardware acceleration animations reduce motion display graphismes carte graphique accélération matérielle animations affichage', run: callGlobal('openGraphicsSettings'), defaultChord: null });
     registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('openStorageManager'), defaultChord: null });

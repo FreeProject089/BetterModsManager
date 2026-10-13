@@ -1,0 +1,218 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Settings page: the index column, the search, and one rhythm for the cards.
+   The markup of the index is built by ui/settings-nav.ts; the cards are the
+   ones in index.html, untouched. Colours are tokens only, so every theme,
+   light ones included, reads it: the accent is used as a FILL (the active
+   entry's tint and rail), never as the colour of text.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Room for the index beside the cards. */
+#view-settings.stg-has-index { max-width: 1360px; }
+
+.stg-layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+}
+.stg-main { min-width: 0; }
+
+/* ── The index ─────────────────────────────────────────────────────────── */
+.stg-index {
+    position: sticky;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100vh - 150px);
+    min-height: 0;
+}
+
+.stg-search { position: relative; }
+.stg-search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+}
+.stg-search .stg-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 54px 8px 32px;
+    font-size: 12.5px;
+    border-radius: 10px;
+}
+.stg-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.stg-search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+}
+.stg-search-clear[hidden] { display: none; }
+.stg-search-clear:hover { color: var(--text-primary); background: var(--bmm-s06); }
+.stg-search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.stg-search-count { font-size: 11px; color: var(--text-muted); padding: 0 4px; }
+.stg-search-count:empty { display: none; }
+
+.stg-nav {
+    overflow-y: auto;
+    min-height: 0;
+    padding: 2px 4px 8px 0;
+    /* Standard properties only: in Chromium, setting them disables ::-webkit-scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+.stg-nav:hover { scrollbar-color: var(--bmm-s15) transparent; }
+.stg-nav-group[hidden] { display: none; }
+.stg-nav-group + .stg-nav-group { margin-top: 12px; }
+.stg-nav-head {
+    padding: 4px 10px 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.stg-nav-link {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.stg-nav-link[hidden] { display: none; }
+.stg-nav-link:hover { background: var(--bmm-s04); color: var(--text-primary); }
+.stg-nav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stg-nav-link.is-active {
+    color: var(--text-primary);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ── Search results ────────────────────────────────────────────────────── */
+.stg-filtered-out { display: none !important; }
+/* While searching the layout toolbar is noise: it reorders cards you cannot all see. */
+.settings-sections.stg-searching > .cardorder-bar { display: none; }
+
+.stg-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 48px 24px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-card);
+    color: var(--text-muted);
+    text-align: center;
+}
+.stg-empty[hidden] { display: none; }
+.stg-empty-text { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+/* A card reached from the index says so for a moment. */
+@keyframes stg-flash {
+    0%   { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+    100% { box-shadow: 0 0 0 2px transparent; }
+}
+#view-settings .glass-card.stg-flash { animation: stg-flash 1.1s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    #view-settings .glass-card.stg-flash { animation: none; }
+    .stg-nav-link { transition: none; }
+}
+
+/* ── The cards: one heading style, one rhythm ──────────────────────────── */
+#view-settings .settings-sections > .glass-card {
+    margin-bottom: 0;
+    scroll-margin-top: 16px;
+}
+#view-settings .settings-sections { gap: 14px; }
+#view-settings .settings-sections > .glass-card + .glass-card { margin-top: 0; }
+
+/* Card titles in sentence case: twenty-five shouted headings in a column read as one wall. */
+#view-settings .settings-sections > .glass-card > .card-title,
+#view-settings .settings-sections > .glass-card > .bmm-fold-head > .card-title,
+#view-settings .settings-sections > .glass-card > .bmm-fold-head .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-primary);
+}
+
+/* A folded card is a single tidy line, without the rule under a title that has nothing below. */
+#view-settings .settings-sections > .glass-card.bmm-collapsed:not(.stg-search-open) {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) .bmm-fold-head,
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) .bmm-fold-head .card-title,
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) > .card-title {
+    border-bottom-color: transparent;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+#view-settings .glass-card.bmm-collapsed:hover { border-color: var(--bmm-border-hover, var(--border)); }
+
+/* Rows: label and description on the left, the control on the right, centred on the label. */
+#view-settings .set-row > :not(:first-child) { flex-shrink: 0; }
+#view-settings .set-row-title { line-height: 1.35; }
+
+/* The layout toolbar is a tool, not content: quieter than the cards. */
+#view-settings .cardorder-bar { margin-bottom: 0; background: transparent; }
+
+/* ── Narrow windows: the index becomes a bar above the cards ───────────── */
+@media (max-width: 1240px) {
+    .stg-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .stg-index {
+        top: 0;
+        z-index: 20;
+        max-height: none;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bmm-bg-elevated);
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .stg-search { flex: 1 1 260px; }
+    .stg-search-count { order: 3; }
+    .stg-nav {
+        flex: 1 1 100%;
+        display: flex;
+        gap: 4px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 0 2px;
+    }
+    .stg-nav-group { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+    .stg-nav-group + .stg-nav-group { margin-top: 0; padding-left: 8px; border-left: 1px solid var(--border); }
+    .stg-nav-head { padding: 0 4px 0 0; }
+    .stg-nav-link { width: auto; flex-shrink: 0; padding: 4px 9px; }
+    .stg-nav-link.is-active { box-shadow: inset 0 -2px 0 var(--accent); }
+}
+
+/* The shortcut, shown while the field is empty and unfocused. */
+.stg-search-kbd {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    padding: 1px 5px;
+    font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
+    color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 5px;
+    background: var(--bmm-s03);
+    pointer-events: none;
+}
+.stg-search-input:focus ~ .stg-search-kbd,
+.stg-search-input:not(:placeholder-shown) ~ .stg-search-kbd { display: none; }
+
+/* A folded card shown open by the search points its chevron the way it looks. */
+#view-settings .glass-card.bmm-collapsed.stg-search-open .bmm-fold-chevron { transform: none; }

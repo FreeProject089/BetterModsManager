@@ -917,6 +917,10 @@ async function fetchCommunityCatalog(src: string): Promise<any[]> {
         dir = String(res?.dir || '');
         cat = JSON.parse(String(res?.catalog || ''));
     } else if (isUrlSource(src)) {
+        // A BetterCommunity v2 signed feed (v2 mode only): pin its root's keys first, so the
+        // backend checks the signature against them instead of reading it as `unknown_key`.
+        const { isV2SignedFeed, ensureFeedKeys } = await import('../../core/catalog-read.js');
+        if (await isV2SignedFeed(src)) await ensureFeedKeys();
         cat = await invoke('fetch_plugin_catalog', { catalogUrl: src });
     } else {
         const text = await invoke('read_file_text', { path: src });
@@ -6959,6 +6963,63 @@ function getEndpointDefs(): EndpointDef[] {
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "from": "0.9", "to": "1.0", "written": true }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/validate', auth: true,
+            desc: t('plugins.ep.repoValidate'),
+            about: t('plugins.epAbout.repoValidate'),
+            fields: [
+                { name: 'path',  type: 'string',  required: true,  desc: t('plugins.epF.convPath') },
+                { name: 'deep',  type: 'boolean', required: false, desc: t('plugins.epF.validateDeep') },
+                { name: 'runId', type: 'string',  required: false, desc: t('plugins.epF.validateRunId') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "report": { "signature": "valid", "files": 120, "filesMissing": 0, "hashesChanged": 0 } }' },
+                { code: 400, label: 'Bad Request', body: '{ "ok": false, "error": "repo.convert.errRead" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
+            method: 'GET', path: '/api/repo/follow', auth: true,
+            desc: t('plugins.ep.repoFollowList'),
+            about: t('plugins.epAbout.repoFollowList'),
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "repos": [{ "url": "http://host:8080", "name": "My repo", "due": false, "follow": { "enabled": true, "intervalMin": 360, "action": "notify" } }] }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/follow', auth: true,
+            desc: t('plugins.ep.repoFollowSet'),
+            about: t('plugins.epAbout.repoFollowSet'),
+            fields: [
+                { name: 'url',         type: 'string',  required: true,  desc: t('plugins.epF.followUrl') },
+                { name: 'name',        type: 'string',  required: false, desc: t('plugins.epF.followName') },
+                { name: 'enabled',     type: 'boolean', required: false, desc: t('plugins.epF.followEnabled') },
+                { name: 'intervalMin', type: 'number',  required: false, desc: t('plugins.epF.followInterval') },
+                { name: 'action',      type: 'string',  required: false, desc: t('plugins.epF.followAction') },
+                { name: 'remove',      type: 'boolean', required: false, desc: t('plugins.epF.followRemove') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "repo": { "url": "http://host:8080", "follow": { "enabled": true, "intervalMin": 360, "action": "notify" } } }' },
+                { code: 400, label: 'Bad Request', body: '{ "ok": false, "error": "repo.follow.errNoUrl" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/follow/check', auth: true,
+            desc: t('plugins.ep.repoFollowCheck'),
+            about: t('plugins.epAbout.repoFollowCheck'),
+            fields: [
+                { name: 'url',      type: 'string',  required: true,  desc: t('plugins.epF.followUrl') },
+                { name: 'password', type: 'string',  required: false, desc: t('plugins.epF.followPassword') },
+                { name: 'force',    type: 'boolean', required: false, desc: t('plugins.epF.followForce') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "check": { "notModified": false, "updates": [{ "mod_id": "…", "new_version": "1.2" }], "plan": [], "gameRunning": false } }' },
                 { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
             ],
         },

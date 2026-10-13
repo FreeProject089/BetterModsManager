@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "plugins": [
+    { "id": "fast-loader", "name": "Fast Loader", "version": "1.2.0", "author": "Ana", "description": "Loads faster",
+      "game": "DCS World", "official": false, "download_url": "https://example.org/fast-loader.bmmplug",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "tags": ["speed"], "icon_url": null },
+    { "id": "notes", "name": "Notes", "download_url": "plugins/notes.bmmplug",
+      "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210" }
+  ]
+}

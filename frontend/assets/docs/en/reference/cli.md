@@ -2,7 +2,7 @@
 
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
-running it with a subcommand instead of `serve` gives you 79 commands from a terminal, a
+running it with a subcommand instead of `serve` gives you 81 commands from a terminal, a
 `.bat`, a cron job or a CI step.
 
 ```bash
@@ -39,7 +39,7 @@ bmm-mcp-server api --reveal
 
 ## The commands
 
-79 of them. `*` marks a required argument; a value in brackets is the default. Positional
+81 of them. `*` marks a required argument; a value in brackets is the default. Positional
 arguments are written `<like-this>`, flags `--like-this`.
 
 ### Getting your bearings
@@ -122,6 +122,8 @@ arguments are written `<like-this>`, flags `--like-this`.
 | `repo-extras` | `<url>`\*, `--password` | What a repo carries besides mods — plugins, automations, themes, mod lists, catalogues to follow. Reads the manifest and downloads nothing |
 | `repo-take` | `<url>`\*, `<kind>`\*, `<id>`\*, `--password` | Take ONE of them, named by kind and id from `repo-extras`. A plugin or an automation arrives **disabled**; a catalogue is followed rather than downloaded; a mod list is saved and its path printed |
 | `repo-convert` | `<path>`\*, `--dry-run`, `--no-sign`, `--no-rehash` | Convert a repo folder's `repo.json` to the current format (1.0): missing keys filled, files re-hashed, `format_version` stamped, old manifest kept as `repo.json.v<old>-<stamp>.bak`, re-signed by the running app. `--dry-run` prints the detected format and every change and writes nothing; it and `--no-sign` (an UNSIGNED result) work with BMM closed. See [the repo format](doc-page:reference/repo-format#9-format-versions-and-converting-an-old-manifest) |
+| `repo-validate` | `<path>`\*, `--deep` | Check a repo folder without changing it: format, readability, signature, duplicate mod ids, empty profiles, and every listed file against its size and sha256 (hashed in parallel; unchanged files come from a cache unless `--deep`). Needs the running app. When it reports stale hashes, an old format or a bad signature, `repo-convert` is the fix |
+| `repo-follow` | `<op>` (`list` default, `set`, `remove`, `check`), `<url>`, `--interval`, `--action`, `--pause`, `--force` | Followed repos: BMM checks them on a schedule and says when one of your mods has an update there. `set` follows a repo or changes how (`--interval` minutes, 15 or more; `--action notify\|download\|apply`; `--pause`); `remove` stops; `check` checks one now and prints the updates and the install plan without installing anything (`--force` ignores the stored ETag). Needs the running app |
 
 ### Identity keys
 
@@ -234,7 +236,7 @@ sixty-eighth, and nothing about a wrong reference page fails to compile.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 93 MCP tools it exposes
+- [MCP server reference](doc-page:reference/mcp) — the same binary's other half, and the 95 MCP tools it exposes
 - [Local API &amp; deeplinks](doc-page:reference/api) — what `call` is calling
 - [BMMScript reference](doc-page:features/bmmscript-reference) — the language `bmms-compile` reads
 - [Action reference](doc-page:reference/actions) — what `actions` lists

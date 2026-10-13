@@ -39,10 +39,13 @@
     <link rel="stylesheet" href="css/legacy-import.css" />
     <link rel="stylesheet" href="css/server-modal.css" />
     <link rel="stylesheet" href="css/activation-jobs.css" />
+    <link rel="stylesheet" href="css/activity-center.css" />
     <!-- Page head + tab rail shared by Plugins & API and the App Catalog, then the Plugins page. -->
     <link rel="stylesheet" href="css/page-head.css" />
     <link rel="stylesheet" href="css/mod-flows.css" />
     <link rel="stylesheet" href="css/plugins.css" />
+    <!-- Settings: the index + search column and the cards' one rhythm (ui/settings-nav.ts). -->
+    <link rel="stylesheet" href="css/settings-page.css" />
     <!-- Laya's dialogs and cards. Linked here, not only on demand (ai-shared.ts ensureAiCss sees
          the id and skips): a Laya dialog drawn before a lazily added sheet arrived showed raw text
          and a browser-default button. -->
@@ -1694,8 +1697,19 @@
                                 <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.validate.t">Validate a repo</span><span class="rp-tool-d" data-i18n="repo.tool.validate.d">Manifest, files, hashes, signature and format version, in one readable report.</span></span></summary>
                                 <div class="rp-tool-body">
                                     <p class="rp-lede" data-i18n="repo.validate.lede">Reads repo.json, re-hashes every file it lists, checks the signature and the format version. Nothing is written.</p>
-                                    <div class="rp-tool-actions"><button type="button" class="btn btn-secondary" id="btn-repo-validate"><span data-i18n="repo.validate.go">Check this repo</span></button></div>
-                                    <div id="repo-validate-progress" class="rp-indeterminate" hidden><span></span></div>
+                                    <div class="rp-tool-actions">
+                                        <label class="checkbox-container rp-check-row" data-i18n-title="repo.validate.deepHint" title="Re-read every file, even the ones that have not changed since the last check."><input type="checkbox" id="repo-validate-deep"><span data-i18n="repo.validate.deep">Re-read every file</span></label>
+                                        <button type="button" class="btn btn-primary" id="btn-repo-validate"><span data-i18n="repo.validate.go">Check this repo</span></button>
+                                    </div>
+                                    <div id="repo-validate-progress" class="rp-run" role="status" aria-live="polite" hidden>
+                                        <div class="rp-run-top">
+                                            <span class="rp-run-phase" id="repo-validate-phase" data-run="phase"></span>
+                                            <span class="rp-run-count rp-mono" id="repo-validate-count" data-run="count"></span>
+                                            <button type="button" class="btn btn-sm btn-secondary" id="btn-repo-validate-cancel"><span data-i18n="common.cancel">Cancel</span></button>
+                                        </div>
+                                        <div class="rp-run-bar" id="repo-validate-bar-wrap"><span id="repo-validate-bar" data-run="bar"></span></div>
+                                        <div class="rp-run-file rp-mono" id="repo-validate-file" data-run="file"></div>
+                                    </div>
                                     <div id="repo-validate-report" class="rp-report" hidden></div>
                                 </div>
                             </details>
@@ -2327,6 +2341,20 @@
                             </section>
                                 </div>
                             </details>
+
+                            <!-- Followed repos: checked on a schedule for updates to YOUR mods
+                                 (features/repo/repo-follow.ts, commands/repo_follow.rs). -->
+                            <div class="repo-card rp-plain rp-follow" id="repo-follow-card">
+                                <div class="repo-card-body">
+                                    <div class="rp-follow-h">
+                                        <span class="rp-follow-t" data-i18n="repo.follow.title">Followed repos</span>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="btn-repo-follow-add"><span data-i18n="repo.follow.add">Follow this repo</span></button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="btn-repo-follow-check-all"><span data-i18n="repo.follow.checkAll">Check now</span></button>
+                                    </div>
+                                    <p class="rp-lede" data-i18n="repo.follow.lede">BMM checks these repos on a schedule and tells you when a mod you installed from them has an update. Nothing is installed unless you choose it per repo, and never while a game is running.</p>
+                                    <div id="repo-follow-list" class="rp-follow-list"></div>
+                                </div>
+                            </div>
                         </div><!-- /repo-column join (sync panel) -->
 
                     </div><!-- /repo-tab-body -->
@@ -3005,20 +3033,30 @@
                                 </label>
                             </div>
 
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;margin-top:8px;background:rgba(245,158,11,0.04);border-radius:10px;border:1px solid rgba(245,158,11,0.18)">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px">
-                                        <svg class="ic ic-star" data-icon="star" width="12" height="12" viewBox="0 0 24 24" style="color:var(--bmm-warning)" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
-                                        <span data-i18n="settings.preReleaseToggle">Enable pre-releases</span>
-                                    </div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.preReleaseToggleDesc">Receive beta / release-candidate builds before stable</div>
+                            <!-- Channel, background interval and last check: ui/update-notes.ts
+                                 (initUpdateSettings) wires them. The channel used to be a
+                                 "pre-releases" switch; it is the same setting (bmm_prerelease_enabled). -->
+                            <div class="upd-set-row">
+                                <div class="upd-set-text">
+                                    <div class="upd-set-title" data-i18n="update.channelLabel">Update channel</div>
+                                    <div class="upd-set-desc" data-i18n="update.channelDesc">Stable gets tested releases only. Pre-release also gets beta builds before they are final.</div>
                                 </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-prerelease">
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
+                                <div class="bmm-seg upd-seg" id="upd-channel" role="group">
+                                    <button type="button" class="bmm-seg-item" data-channel="stable" aria-pressed="true" data-i18n="update.channelStable">Stable</button>
+                                    <button type="button" class="bmm-seg-item" data-channel="prerelease" aria-pressed="false" data-i18n="update.channelPre">Pre-release</button>
+                                </div>
+                            </div>
+
+                            <div class="upd-set-row">
+                                <div class="upd-set-text">
+                                    <div class="upd-set-title" data-i18n="update.intervalLabel">Check in the background</div>
+                                    <div class="upd-set-desc" data-i18n="update.intervalDesc">While BMM stays open, in addition to the check at startup.</div>
+                                </div>
+                                <div class="bmm-seg upd-seg" id="upd-interval" role="group">
+                                    <button type="button" class="bmm-seg-item" data-interval="0" aria-pressed="true" data-i18n="update.intervalOff">Off</button>
+                                    <button type="button" class="bmm-seg-item" data-interval="6" aria-pressed="false" data-i18n="update.interval6">Every 6 h</button>
+                                    <button type="button" class="bmm-seg-item" data-interval="24" aria-pressed="false" data-i18n="update.interval24">Daily</button>
+                                </div>
                             </div>
 
                             <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
@@ -3028,6 +3066,7 @@
                                 </button>
                                 <span id="update-status-msg"
                                     style="font-size:11px;color:var(--text-muted);min-height:16px"></span>
+                                <span id="upd-last-check" class="upd-last-check"></span>
                             </div>
                         </div>
 

@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 79
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 81
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-79 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+81 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -123,6 +123,8 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 | `repo-extras` | `<url>`\*, `--password` | Ce qu'un dépôt porte en plus des mods — plugins, automatisations, thèmes, listes de mods, catalogues à suivre. Lit le manifeste et ne télécharge rien |
 | `repo-take` | `<url>`\*, `<kind>`\*, `<id>`\*, `--password` | En prend UN, nommé par type et id d'après `repo-extras`. Un plugin ou une automatisation arrive **désactivé** ; un catalogue est suivi plutôt que téléchargé ; une liste de mods est enregistrée et son chemin affiché |
 | `repo-convert` | `<path>`\*, `--dry-run`, `--no-sign`, `--no-rehash` | Convertit le `repo.json` d'un dossier de dépôt au format actuel (1.0) : clés manquantes ajoutées, fichiers re-hachés, `format_version` inscrit, ancien manifeste gardé sous `repo.json.v<ancien>-<date>.bak`, nouvelle signature par l'application ouverte. `--dry-run` affiche le format détecté et chaque changement sans rien écrire ; lui et `--no-sign` (résultat NON SIGNÉ) fonctionnent BMM fermé. Voir [le format des dépôts](doc-page:reference/repo-format.fr#9-versions-de-format-et-convertir-un-ancien-manifeste) |
+| `repo-validate` | `<path>`\*, `--deep` | Vérifie un dossier de dépôt sans le modifier : format, lisibilité, signature, identifiants de mod en double, profils vides, et chaque fichier listé contre sa taille et son sha256 (hachage en parallèle ; les fichiers inchangés viennent d'un cache sauf avec `--deep`). Exige l'application ouverte. Quand il signale des empreintes périmées, un ancien format ou une signature invalide, `repo-convert` corrige |
+| `repo-follow` | `<op>` (`list` par défaut, `set`, `remove`, `check`), `<url>`, `--interval`, `--action`, `--pause`, `--force` | Dépôts suivis : BMM les vérifie à intervalle régulier et prévient quand un de vos mods y a une mise à jour. `set` suit un dépôt ou change la façon (`--interval` en minutes, 15 ou plus ; `--action notify\|download\|apply` ; `--pause`) ; `remove` arrête ; `check` vérifie maintenant et affiche les mises à jour et le plan d'installation sans rien installer (`--force` ignore l'ETag enregistré). Exige l'application ouverte |
 
 ### Clés d'identité
 
@@ -237,7 +239,7 @@ compiler.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 93 outils MCP
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 95 outils MCP
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — ce que `call` appelle
 - [Référence BMMScript](doc-page:features/bmmscript-reference.fr) — le langage que lit `bmms-compile`
 - [Référence des actions](doc-page:reference/actions.fr) — ce que liste `actions`

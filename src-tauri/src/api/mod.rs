@@ -3189,6 +3189,7 @@ pub async fn start_api_server(
                         name: repo_name.clone(),
                         auto_sync: false,
                         auto_sync_mode: None,
+                        follow: None,
                     });
                 }
             }
@@ -3631,6 +3632,96 @@ pub async fn start_api_server(
                     warp::reply::json(&serde_json::json!({ "ok": false, "error": e.to_string() })),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 ),
+            }
+        });
+
+    // POST /api/repo/validate  (auth) — check a repo folder: format, readability, signature,
+    // every listed file against its hash (parallel, governed, cancellable from the dashboard).
+    // Writes nothing. The Server Repo page's « Check this repo »; `bmm repo-validate` and
+    // `bmm_repo_validate` call this.
+    let tok_repo_validate = token.clone();
+    let handle_repo_validate = app_handle.clone();
+    let repo_validate = warp::path!("api" / "repo" / "validate")
+        .and(warp::post())
+        .and(require_token(tok_repo_validate))
+        .and(require_permission(token.clone(), "repo.read"))
+        .and(warp::body::json::<crate::commands::repo_validate::ValidateArgs>())
+        .and(with_app_handle(handle_repo_validate))
+        .then(|args: crate::commands::repo_validate::ValidateArgs, handle: tauri::AppHandle| async move {
+            let res = tauri::async_runtime::spawn_blocking(move || {
+                crate::commands::repo_validate::validate(&handle, &args)
+            }).await;
+            match res {
+                Ok(Ok(report)) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "report": report })),
+                    StatusCode::OK,
+                ),
+                Ok(Err(e)) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "error": e })),
+                    StatusCode::BAD_REQUEST,
+                ),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "error": e.to_string() })),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ),
+            }
+        });
+
+    // GET /api/repo/follow  (auth) — the followed repos (commands/repo_follow.rs): each one's
+    // switch, interval, action and last check.
+    let tok_repo_follow_list = token.clone();
+    let handle_repo_follow_list = app_handle.clone();
+    let repo_follow_list = warp::path!("api" / "repo" / "follow")
+        .and(warp::get())
+        .and(require_token(tok_repo_follow_list))
+        .and(require_permission(token.clone(), "repo.read"))
+        .and(with_app_handle(handle_repo_follow_list))
+        .map(|handle: tauri::AppHandle| {
+            match crate::commands::repo_follow::repo_follow_list(handle.state()) {
+                Ok(list) => warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": true, "repos": list })), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": false, "error": e })), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // POST /api/repo/follow  (auth) — follow a repo or change how (`enabled`, `intervalMin`,
+    // `action`: notify · download · apply), or stop following it (`remove: true`).
+    let tok_repo_follow_set = token.clone();
+    let handle_repo_follow_set = app_handle.clone();
+    let repo_follow_set = warp::path!("api" / "repo" / "follow")
+        .and(warp::post())
+        .and(require_token(tok_repo_follow_set))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<crate::commands::repo_follow::FollowApiArgs>())
+        .and(with_app_handle(handle_repo_follow_set))
+        .map(|a: crate::commands::repo_follow::FollowApiArgs, handle: tauri::AppHandle| {
+            use crate::commands::repo_follow as rf;
+            let res = if a.remove {
+                rf::repo_follow_remove(handle.state(), a.url).map(|removed| serde_json::json!({ "ok": true, "removed": removed }))
+            } else {
+                let patch = rf::FollowPatch { enabled: a.enabled, interval_min: a.interval_min, action: a.action };
+                rf::repo_follow_set(handle.state(), a.url, a.name, patch).map(|r| serde_json::json!({ "ok": true, "repo": r }))
+            };
+            match res {
+                Ok(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": false, "error": e })), StatusCode::BAD_REQUEST),
+            }
+        });
+
+    // POST /api/repo/follow/check  (auth) — check one followed repo now (a conditional GET:
+    // an unchanged repo costs one 304). Returns the updates found and the install plan; it
+    // installs nothing (the app's follow runner does that, per the repo's action).
+    let tok_repo_follow_check = token.clone();
+    let handle_repo_follow_check = app_handle.clone();
+    let repo_follow_check = warp::path!("api" / "repo" / "follow" / "check")
+        .and(warp::post())
+        .and(require_token(tok_repo_follow_check))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<crate::commands::repo_follow::FollowCheckArgs>())
+        .and(with_app_handle(handle_repo_follow_check))
+        .then(|a: crate::commands::repo_follow::FollowCheckArgs, handle: tauri::AppHandle| async move {
+            match crate::commands::repo_follow::repo_follow_check(handle.state(), handle.clone(), a.url, a.password, Some(a.force)).await {
+                Ok(c) => warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": true, "check": c })), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": false, "error": e })), StatusCode::BAD_REQUEST),
             }
         });
 
@@ -5375,6 +5466,15 @@ pub async fn start_api_server(
         .or(mods_order_set)
         .boxed();
 
+    // Server Repo tools (convert, validate) and followed repos, their own boxed group for the
+    // same reason: four more `or`s in group_c went past the query depth in the test build.
+    let group_repo_tools = repo_convert
+        .or(repo_validate)
+        .or(repo_follow_check)  // POST /api/repo/follow/check, before the shorter path
+        .or(repo_follow_list)
+        .or(repo_follow_set)
+        .boxed();
+
     let group_c = schedules_list
         .or(schedules_set)
         .or(group_order)
@@ -5399,7 +5499,7 @@ pub async fn start_api_server(
         .or(repo_sync)
         .or(repo_gen_cancel)
         .or(repo_manifest)
-        .or(repo_convert)
+        .or(group_repo_tools)
         .or(repo_gen)
         .or(repo_update)        // POST /api/repo/update
         .or(repo_host_stop)     // DELETE /api/repo/host

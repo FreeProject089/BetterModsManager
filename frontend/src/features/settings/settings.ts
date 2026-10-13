@@ -1701,6 +1701,7 @@ async function initCatalogIndexSettings() {
                     <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${type}`) || type)}</span>
                     <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
                     ${from ? `<span class="cat-index-from" title="${escAttr(from)}">${escHtml(originLabel(from))}</span>` : ''}
+                    <span class="cat-index-state" data-state-for="${escAttr(u)}"></span>
                     <button class="btn btn-ghost btn-sm cat-index-toggle" data-u="${escAttr(u)}"
                             title="${escAttr(off ? (t('settings.catIndex.enable.h') || 'Fetch this one again') : (t('settings.catIndex.disable.h') || 'Keep it in the list but stop fetching it'))}">${escHtml(off ? (t('settings.catIndex.enable') || 'Off') : (t('settings.catIndex.disable') || 'On'))}</button>
                     <button class="btn btn-ghost btn-sm cat-index-unfollow"
@@ -1711,6 +1712,7 @@ async function initCatalogIndexSettings() {
         followHost.innerHTML = rows.length
             ? rows.join('')
             : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noneFollowed') || 'You follow no community catalogs yet.')}</div>`;
+        paintSourceStates(all).catch(() => {});
 
         // On/off, which is NOT remove. Removing the only copy of a URL you might want back is
         // what makes people keep catalogs they do not want; this keeps it listed and skips it.
@@ -1744,6 +1746,27 @@ async function initCatalogIndexSettings() {
                 toast(`${t('common.failed') || 'Failed'} — ${String(e).slice(0, 80)}`, 'error');
             }
         }));
+    };
+
+    // Per-source health, from the catalogue index (features/catalogs/catalog-hub.ts): what
+    // was known at once, then again after an incremental refresh of the sources that are due.
+    // One failing source is marked on its own row and never hides the others.
+    const paintSourceStates = async (all: Record<string, string[]>) => {
+        if (!followHost) return;
+        const hub = await import('../catalogs/catalog-hub.js');
+        const paint = (list: Array<{ url: string; state: string; error?: string; items: number }>) => {
+            const by = new Map(list.map((x) => [x.url.toLowerCase(), x]));
+            followHost.querySelectorAll<HTMLElement>('.cat-index-state').forEach((el) => {
+                const st = by.get(String(el.dataset.stateFor || '').toLowerCase());
+                if (!st || st.state === 'pending') { el.textContent = ''; el.removeAttribute('data-state'); return; }
+                el.dataset.state = st.state;
+                el.textContent = t(`settings.catIndex.state.${st.state}`, { n: String(st.items) });
+                el.title = st.error || '';
+            });
+        };
+        paint(hub.catalogIndexStatus());
+        const extra = (all.app || []).filter((u) => !isDisabled(u)).map((url) => ({ url, kind: 'app' }));
+        paint(await hub.refreshCatalogIndex({ extra }));
     };
 
     // ── History ─────────────────────────────────────────────────────────────────
@@ -1838,7 +1861,10 @@ async function initCatalogIndexSettings() {
             // asked for the password that would have opened it.
             const { fetchSourceText } = await import('../../core/source-fetch.js');
             const text = await fetchSourceText(url);
-            const parsed = parseCatalogIndex(JSON.parse(text));
+            // Through the universal format: a v1 index is read as it is; a BetterCommunity v2
+            // signed index (`/v2/feeds/catalog`) is verified by the backend and read as one.
+            const { asLegacy } = await import('../../core/catalog-read.js');
+            const parsed = parseCatalogIndex(await asLegacy(JSON.parse(text), 'index', url));
             // Kept only once it has actually answered. Saving on every keystroke would fill
             // the list with half-typed addresses, and saving a URL that failed would keep a
             // dead one around forever.
@@ -1857,6 +1883,13 @@ async function initCatalogIndexSettings() {
      *  buttons can act without re-fetching, and re-planned after every add. */
     let shown: CatalogIndex | null = null;
     let shownFrom = '';
+
+    // v2 mode only: offer the BetterCommunity v2 signed index of public catalogues. An empty
+    // field only — never over an address the user typed. v1 mode: unchanged.
+    try {
+        const bc = await import('../../core/bc-client.js');
+        if (bc.bcUsesV2() && !input.value.trim()) input.value = bc.bcSignedFeeds().index;
+    } catch { /* no switch: v1 */ }
 
     const renderContents = async () => {
         if (!contentsHost) return;
@@ -1989,6 +2022,8 @@ export async function initSettings() {
     // « Gérer Laya » dialog holds the AI card, « Réponses de Laya » and « API Laya locale » as tabs.
     try { await (await import('../ai/laya-hub.js')).mountLayaHub(); } catch (e) {}
     try { initCardReorder(); } catch (e) {}
+    // The index and search beside the cards (ui/settings-nav.ts), once the cards are in order.
+    try { (await import('../../ui/settings-nav.js')).initSettingsNav(); } catch (e) {}
     try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
     initSecurityInfoCard().catch(() => {});
     

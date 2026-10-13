@@ -17,6 +17,7 @@ import { enabledOnly } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, getActiveTheme, isLightTheme, BmmTheme } from './theme-engine.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { asLegacy, isV2SignedFeed, ensureFeedKeys } from '../../core/catalog-read.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
 import { openModal } from '../../ui/modal-shell.js';
 import { uiIcon } from '../../ui/icons.js';
@@ -382,6 +383,11 @@ async function fetchCatalog(force = false): Promise<void> {
             // does not — the backend skips those silently too.
             try { extraDocs.push(await fetchSourceText(u)); } catch { /* skipped */ }
         }
+        // A BetterCommunity v2 signed feed among them (v2 mode only): pin its root's keys
+        // first, so the backend checks the signature against them.
+        for (const u of httpSources) {
+            if (await isV2SignedFeed(u)) { await ensureFeedKeys(); break; }
+        }
         try {
             const fromBackend: string = await invoke('fetch_theme_catalogs', {
                 officialUrl: OFFICIAL_CATALOG,
@@ -395,7 +401,9 @@ async function fetchCatalog(force = false): Promise<void> {
         for (const path of fileSources) {
             try {
                 const text: string = await invoke('read_file_text', { path });
-                const json = JSON.parse(text);
+                // Any catalogue variant reads as its theme view (the URL sources are
+                // normalised by the backend in fetch_theme_catalogs).
+                const json = await asLegacy(JSON.parse(text), 'theme');
                 const list = Array.isArray(json) ? json : (json?.themes || []);
                 all.push(...list);
             } catch {}

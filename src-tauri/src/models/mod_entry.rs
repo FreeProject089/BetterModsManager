@@ -106,6 +106,12 @@ pub struct ModEntry {
     /// version bumps, unlike content_id). Used to detect repo updates.
     #[serde(default)]
     pub repo_mod_id: Option<String>,
+    /// Fingerprint of this mod's files in its repo manifest when it was last synced
+    /// (`repo::mod_content_hash`: relative paths + sha256). A manifest that changes the files
+    /// without bumping the version is still an update. None for mods not synced from a repo,
+    /// and for records written before this field (the version alone decides for those).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_content_hash: Option<String>,
     /// Optional per-mod "own repo" URL for mods added outside a repo (e.g. a
     /// site download that publishes its own repo.json). Checked independently.
     #[serde(default)]
@@ -244,6 +250,7 @@ impl ModEntry {
             content_id: None,
             source_repo: None,
             repo_mod_id: None,
+            repo_content_hash: None,
             update_url: None,
             update_sources: Vec::new(),
             direct_url: None,

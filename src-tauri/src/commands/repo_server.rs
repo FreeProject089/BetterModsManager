@@ -342,7 +342,11 @@ pub async fn start_repo_server(
         .and(identity_filter)
         .and(password_filter)
         .and(proof_filter)
-        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>, key_proof: Option<String>| {
+        // A follower's light check: the ETag it got last time. And the address it asked on,
+        // for the links in feed.xml.
+        .and(warp::header::optional::<String>("if-none-match"))
+        .and(warp::header::optional::<String>("host"))
+        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>, key_proof: Option<String>, if_none_match: Option<String>, host_hdr: Option<String>| {
             let handle = handle_clone.clone();
             let required_password = required_password.clone();
             let authorized_pubkeys = authorized_pubkeys.clone();
@@ -490,6 +494,31 @@ pub async fn start_repo_server(
                     return Ok(warp::Reply::into_response(warp::reply::json(&response)));
                 }
 
+                // The Atom feed of the repo (commands/repo_follow.rs): built from repo.json on
+                // each request, behind the same gates as repo.json itself.
+                if rel_path.eq_ignore_ascii_case("feed.xml") {
+                    let manifest = serve_dir.join("repo.json");
+                    let body = tokio::fs::read_to_string(&manifest).await.map_err(|_| warp::reject::not_found())?;
+                    let repo = serde_json::from_str::<crate::models::repo::ServerRepo>(body.trim_start_matches('\u{feff}')).ok()
+                        .or_else(|| crate::commands::repo_convert::read_legacy(&body))
+                        .ok_or_else(warp::reject::not_found)?;
+                    let updated = tokio::fs::metadata(&manifest).await.ok().and_then(|m| m.modified().ok())
+                        .map(chrono::DateTime::<chrono::Utc>::from).unwrap_or_else(chrono::Utc::now);
+                    let host = host_hdr.as_deref().filter(|h| !h.is_empty() && !h.contains(['/', '"', '<', ' '])).unwrap_or("localhost");
+                    let feed = crate::commands::repo_follow::atom_feed(&repo, &format!("http://{host}"), updated);
+                    let etag = crate::commands::repo_follow::etag_of(feed.as_bytes());
+                    if crate::commands::repo_follow::etag_matches(if_none_match.as_deref(), &etag) {
+                        return Ok(warp::Reply::into_response(warp::http::Response::builder().status(304).header("ETag", etag).body(String::new()).expect("304")));
+                    }
+                    let response = warp::http::Response::builder()
+                        .header("Content-Type", "application/atom+xml; charset=utf-8")
+                        .header("ETag", etag)
+                        .header("Cache-Control", "no-cache")
+                        .body(feed)
+                        .expect("Failed to build warp response");
+                    return Ok(warp::Reply::into_response(response));
+                }
+
                 if rel_path.starts_with("admin/") || rel_path == "dashboard" {
                     return Ok(warp::Reply::into_response(warp::reply::with_status(warp::reply::json(&serde_json::json!({})), warp::hyper::StatusCode::UNAUTHORIZED)));
                 }
@@ -556,8 +585,18 @@ pub async fn start_repo_server(
                                 repo.modpacks = Some(packs);
                             }
                             if let Ok(filtered_json) = serde_json::to_string(&repo) {
+                                // A strong ETag over exactly what THIS client gets (the modpack
+                                // filter differs per client): an unchanged repo answers a
+                                // follower's check with a 304 and no body.
+                                let etag = crate::commands::repo_follow::etag_of(filtered_json.as_bytes());
+                                if crate::commands::repo_follow::etag_matches(if_none_match.as_deref(), &etag) {
+                                    return Ok::<_, warp::Rejection>(warp::Reply::into_response(
+                                        warp::http::Response::builder().status(304).header("ETag", etag).body(String::new()).expect("304")));
+                                }
                                 let response = warp::http::Response::builder()
                                     .header("Content-Type", "application/json")
+                                    .header("ETag", etag)
+                                    .header("Cache-Control", "no-cache")
                                     .header("Content-Length", filtered_json.len())
                                     .body(filtered_json)
                                     .expect("Failed to build warp response");
@@ -1012,7 +1051,7 @@ fn builtin_may_serve(rel: &str) -> bool {
         [] => false,
         [one] => {
             let n = one.to_ascii_lowercase();
-            n == "repo.json" || n == "info.json" || n == "monitoring.json"
+            n == "repo.json" || n == "info.json" || n == "monitoring.json" || n == "feed.xml"
         }
         [first, ..] => !first.eq_ignore_ascii_case("node_modules"),
     }

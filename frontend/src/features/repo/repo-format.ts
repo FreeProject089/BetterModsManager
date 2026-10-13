@@ -7,7 +7,7 @@
 // are missing, whether the author id changes — and writes only on a second, explicit click.
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { escHtml } from '../../core/utils.js';
+import { escHtml, formatBytes } from '../../core/utils.js';
 // window.toast, not ui/app.js: repo.ts imports this module and ui/app.ts imports repo.ts
 // (through profiles.ts), so a static import here closed one more import cycle.
 const toast = (msg: string, type = 'info', duration?: number): void => {
@@ -176,49 +176,133 @@ function planBody(r: ConvertReport): string {
         </details>`;
 }
 
-/** Plan, show, then convert on confirmation. */
-export async function openConvertDialog(path: string): Promise<void> {
-    let plan: ConvertReport;
-    try {
-        plan = await invoke('repo_format_convert', { args: { path, dryRun: true, rehash: true, sign: true } }) as ConvertReport;
-    } catch (e) {
-        toast(errText(e), 'error');
-        return;
+/** One `bmm://repo-validate-progress` event: the hashing of Validate and of a conversion. */
+export interface HashProgress { runId: string; ticket: number; phase: string; done: number; total: number; bytesDone: number; bytesTotal: number; current: string }
+
+/** The markup of a run panel; `paintRun` fills it. */
+export function runPanelHtml(): string {
+    return `<div class="rp-run" role="status" aria-live="polite">
+        <div class="rp-run-top"><span class="rp-run-phase" data-run="phase"></span><span class="rp-run-count rp-mono" data-run="count"></span></div>
+        <div class="rp-run-bar is-indeterminate"><span data-run="bar"></span></div>
+        <div class="rp-run-file rp-mono" data-run="file"></div>
+    </div>`;
+}
+
+/** Paint a running hash into a run panel (`[data-run=phase|count|bar|file]` inside `root`). */
+export function paintRun(root: ParentNode, p: HashProgress | null, phaseKey: string): void {
+    const q = (sel: string) => root.querySelector<HTMLElement>(sel);
+    const bar = q('[data-run="bar"]');
+    const known = !!p && p.total > 0;
+    bar?.parentElement?.classList.toggle('is-indeterminate', !known);
+    if (bar) {
+        const ratio = known ? (p!.bytesTotal ? p!.bytesDone / p!.bytesTotal : p!.done / p!.total) : 0;
+        bar.style.width = known ? `${Math.min(100, Math.round(ratio * 100))}%` : '';
     }
-    if (plan.upToDate) {
-        toast(t('repo.convert.upToDate', { v: plan.to }), 'success');
-        void paintRepoFormat(path);
-        return;
-    }
-    // Cancel, then the one action, last — the house footer order.
-    const footer = `
-        <button type="button" class="btn btn-secondary" data-cv="cancel">${escHtml(t('common.cancel'))}</button>
-        <button type="button" class="btn btn-primary" data-cv="go">${uiIcon('reapply', 14)}<span>${escHtml(t('repo.convert.go', { v: plan.to }))}</span></button>`;
-    const m = openModal({
-        title: t('repo.convert.title'),
-        subtitle: plan.manifestPath,
-        icon: uiIcon('reapply', 18),
-        tone: plan.signerChanges || plan.counts.filesMissing ? 'warn' : 'accent',
-        size: 'lg',
-        className: 'rp-cv',
-        body: planBody(plan),
-        footer,
-        closeLabel: t('common.close'),
+    const phase = q('[data-run="phase"]');
+    if (phase) phase.textContent = t(phaseKey);
+    const count = q('[data-run="count"]');
+    if (count) count.textContent = known ? t('repo.validate.progress', { done: String(p!.done), total: String(p!.total), size: formatBytes(p!.bytesDone), of: formatBytes(p!.bytesTotal) }) : '';
+    const file = q('[data-run="file"]');
+    if (file) file.textContent = p?.current || '';
+}
+
+/** Listen to the hashing progress of one run; returns the unlisten. */
+export async function listenRun(runId: string, on: (p: HashProgress) => void): Promise<() => void> {
+    const ev = (window as any).__TAURI__?.event;
+    if (!ev?.listen) return () => {};
+    return ev.listen('bmm://repo-validate-progress', (e: { payload: HashProgress }) => {
+        if (e.payload?.runId === runId) on(e.payload);
     });
-    m.q('[data-cv="cancel"]')?.addEventListener('click', () => m.close());
-    const go = m.q<HTMLButtonElement>('[data-cv="go"]')!;
-    go.addEventListener('click', async () => {
-        const sign = !!m.q<HTMLInputElement>('#rp-cv-sign')?.checked;
-        go.disabled = true;
-        try {
-            const done = await invoke('repo_format_convert', { args: { path, dryRun: false, rehash: true, sign } }) as ConvertReport;
-            m.close();
-            toast(t(done.signature === 'signed' ? 'repo.convert.doneSigned' : 'repo.convert.doneUnsigned', { v: done.to, backup: (done.backupPath || '').split(/[\\/]/).pop() || '' }), 'success', 7000);
-            void paintRepoFormat(path);
-        } catch (e) {
-            go.disabled = false;
-            toast(errText(e), 'error');
-        }
+}
+
+/** Plan, show, then convert on confirmation. Resolves when the dialog is gone: `true` when
+ *  repo.json was written. The dialog opens AT ONCE, with the hashing progress in it: the dry
+ *  run re-hashes every file and used to leave the page silent until it was done. */
+export function openConvertDialog(path: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        let written = false;
+        let running = '';
+        let unlisten: () => void = () => {};
+        const m = openModal({
+            title: t('repo.convert.title'),
+            subtitle: path,
+            icon: uiIcon('reapply', 18),
+            tone: 'accent',
+            size: 'lg',
+            className: 'rp-cv',
+            body: runPanelHtml(),
+            footer: `<button type="button" class="btn btn-secondary" data-cv="cancel">${escHtml(t('common.cancel'))}</button>`,
+            closeLabel: t('common.close'),
+            onClose: () => {
+                unlisten();
+                // Closed while hashing: stop the work nobody is waiting for any more.
+                if (running) void invoke('repo_validate_cancel', { runId: running }).catch(() => {});
+                resolve(written);
+            },
+        });
+        const wire = () => m.q('[data-cv="cancel"]')?.addEventListener('click', () => m.close());
+        wire();
+        paintRun(m.body, null, 'repo.convert.phasePlan');
+
+        const runId = `c${Date.now().toString(36)}`;
+        void (async () => {
+            unlisten = await listenRun(runId, (p) => paintRun(m.body, p, 'repo.convert.phasePlan'));
+            running = runId;
+            let plan: ConvertReport;
+            try {
+                plan = await invoke('repo_format_convert', { args: { path, dryRun: true, rehash: true, sign: true }, runId }) as ConvertReport;
+            } catch (e) {
+                running = '';
+                if (!m.overlay.isConnected) return;
+                if (/repo\.cancelled/.test(String(e))) { m.close(); return; }
+                m.body.innerHTML = `<div class="rp-note rp-tone--bad">${uiIcon('error', 14)}<span class="rp-note-txt">${escHtml(errText(e))}</span></div>`;
+                return;
+            }
+            running = '';
+            if (!m.overlay.isConnected) return;
+            if (plan.upToDate) {
+                m.close();
+                toast(t('repo.convert.upToDate', { v: plan.to }), 'success');
+                void paintRepoFormat(path);
+                return;
+            }
+            const tile = m.header.querySelector<HTMLElement>('.bms-icon');
+            if (tile && (plan.signerChanges || plan.counts.filesMissing > 0)) tile.classList.add('bms-icon--warn');
+            m.body.innerHTML = planBody(plan);
+            if (m.footer) {
+                // Cancel, then the one action, last — the house footer order.
+                m.footer.innerHTML = `
+                    <button type="button" class="btn btn-secondary" data-cv="cancel">${escHtml(t('common.cancel'))}</button>
+                    <button type="button" class="btn btn-primary" data-cv="go">${uiIcon('reapply', 14)}<span>${escHtml(t(plan.from.status === 'current' ? 'repo.convert.goRepair' : 'repo.convert.go', { v: plan.to }))}</span></button>`;
+                wire();
+            }
+            const go = m.q<HTMLButtonElement>('[data-cv="go"]')!;
+            go.addEventListener('click', async () => {
+                const sign = !!m.q<HTMLInputElement>('#rp-cv-sign')?.checked;
+                go.disabled = true;
+                const run = document.createElement('div');
+                run.innerHTML = runPanelHtml();
+                m.body.prepend(run);
+                paintRun(run, null, 'repo.convert.phaseWrite');
+                const runId2 = `${runId}w`;
+                unlisten();
+                unlisten = await listenRun(runId2, (p) => paintRun(run, p, 'repo.convert.phaseWrite'));
+                running = runId2;
+                try {
+                    const done = await invoke('repo_format_convert', { args: { path, dryRun: false, rehash: true, sign }, runId: runId2 }) as ConvertReport;
+                    running = '';
+                    written = done.written;
+                    m.close();
+                    toast(t(done.signature === 'signed' ? 'repo.convert.doneSigned' : 'repo.convert.doneUnsigned', { v: done.to, backup: (done.backupPath || '').split(/[\\/]/).pop() || '' }), 'success', 7000);
+                    void paintRepoFormat(path);
+                } catch (e) {
+                    running = '';
+                    run.remove();
+                    go.disabled = false;
+                    if (!/repo\.cancelled/.test(String(e))) toast(errText(e), 'error');
+                }
+            });
+        })();
     });
 }
 

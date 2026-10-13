@@ -219,10 +219,11 @@ strands every copy that reads only it.
 
 | Installed | What it does on « update » | What it needs on the release |
 |---|---|---|
-| **0.9.11** and older | GitHub `/releases/latest`; no major-version guard; downloads the first `.msi`, else the first `.exe`, and runs it through `cmd /C start` (no signature, no hash) | `BMM-Setup.exe` as the **only** `.exe`/`.msi` asset, on a release marked **Latest** |
+| **0.9.11** and older | GitHub `/releases/latest` (never a pre-release); no major-version guard; downloads the first asset ending in `.msi`, else the first ending in `.exe` **or `.zip`** (case-sensitive), and runs it through `cmd /C start` (no signature, no hash) | `BMM-Setup.exe` as the **only** `.exe`/`.msi` asset and **no `.zip`**, on a release marked **Latest** (`release.ps1` refuses anything else) |
+| **0.9.12** (the bridge, see below) | the release **list**: newest stable, or a newer pre-release when opted in **or when it opens a newer major line** (1.0.x); installs the installer the signed `update-manifest.json` lists (signature + SHA-256, as 1.0.2), else checks `BMM-Setup.exe` against the release's signed `update.json`, else warns and asks; ShellExecuteExW launch, interactive | the signed `update-manifest.json` with `installers = [BMM-Setup.exe]` (or an `update.json` whose signed body lists it) |
 | **1.0.0 / 1.0.1**, installed by BetterInstaller | `uninstall.exe --check-update` / `--update` reads `releases/latest/download/update.json` and fetches `bmm.bpkg` | `update.json` signed for the new version **at publish time** (it expires 7 days after signing) and the matching `bmm.bpkg` |
 | **1.0.0 / 1.0.1**, other installs | `download_and_install_update`: needs `update-manifest.json` whose signed `installers` lists the **exact** URL of the asset it picked (`…/v<version>/BMM-Setup.exe`), then runs it with `open::that` | the signed `update-manifest.json` with `installers = [BMM-Setup.exe]` |
-| **1.0.2+** | the same two paths; resumable verified download with progress; ShellExecuteExW launch with the real Windows error; « Download from the release page » on any failure | the same |
+| **1.0.2+** | the same two paths; a **channel** (stable = `/releases/latest`, a « latest » that is a pre-release is not followed; pre-release = the highest non-draft of the list); resumable verified download with size, speed and time left; « install on next launch » (the verified installer is kept and verified again before it runs); ShellExecuteExW launch with the real Windows error; no signed manifest: checked against `update.json`, else a warning and the person's choice; a BetterInstaller install runs the downloaded `BMM-Setup.exe --update --wait-pid <pid> --launch`; « Download from the release page » on any failure | the same |
 
 Two facts about the « 1.0.1 » release that this fixes:
 
@@ -238,6 +239,142 @@ Two facts about the « 1.0.1 » release that this fixes:
 PowerShell `Start-Process`); where that fails on a machine, the person has to run
 `BMM-Setup.exe` from the release page once. From 1.0.2 on, the launch goes through
 `proc::shell_launch` and reports the Windows reason.
+
+### Channels (1.0.2)
+
+Settings → Auto Update → **Update channel**: *Stable* (default) or *Pre-release*
+(`bmm_prerelease_enabled`). A build installed from a pre-release, or whose version carries a
+pre-release tag (`1.1.0-beta.1`), keeps following the pre-release channel; it is offered the final
+`1.1.0` too (`1.1.0` > `1.1.0-beta.1`). A BetterInstaller install on the pre-release channel gets
+pre-releases through `BMM-Setup.exe`, because `uninstall.exe --update` reads the stable feed only.
+So **publish a pre-release with the same assets as a release** (signed `update-manifest.json`
+listing `BMM-Setup.exe`), just without `--latest`.
+
+**One click, whatever the release carries** (stable and pre-release alike). « Install now »
+downloads the installer, checks it and starts it; nobody is sent to GitHub. What vouches for the
+file, in this order (`UpdateInfo.verification`, shown in the dialog):
+
+1. **`signed`**: the release's signed `update-manifest.json` lists the installer with its SHA-256
+   (the path above, unchanged, always preferred).
+2. **`update-json`**: no `update-manifest.json`, so BMM re-reads the release from
+   `api.github.com/…/releases/tags/<tag>` (nothing the dialog sends is reused), takes
+   `BMM-Setup.exe` (else the only `.exe`, else the only `.msi`; two of a kind is refused), only
+   from `https://github.com/FreeProject089/BetterModsManager/releases/download/`, and compares
+   its SHA-256 with the one the release's **`update.json`** declares for that file. update.json is
+   read the way BetterInstaller reads it with a pinned key: signature with the same publisher key
+   (context `BetterInstaller update manifest v1`), app `com.bettermm.desktop`, at most 7 days
+   valid and not expired, a version newer than the running one. The entry is
+   `installers: [{ "path": "BMM-Setup.exe", "sha256": "<64 hex>" }]` **inside the signed body**.
+3. **`unverified`**: no update.json, an invalid one, no entry for the installer, or bytes that do
+   not match. BMM downloads the file, says in plain words what failed (GitHub's own `digest` for
+   the asset is shown as extra information) and asks: **Cancel** (focused) or **Install anyway**.
+   A file that does not match what the release declares, or differs from GitHub's digest, is shown
+   in red as possibly corrupted or tampered with. Only the « Install anyway » button sends the
+   SHA-256 of the exact bytes it showed (`confirm_sha256`); Rust runs those bytes (kept in memory,
+   never on disk) and nothing else.
+
+**To publish:** BetterInstaller's `update.json` carries no installer checksum today (the published
+v1.0.1 one verifies with the pinned key but describes only `bmm.bpkg`, and says `1.0.0`). Until the
+release script adds the `installers` entry to the signed body, a release without
+`update-manifest.json` lands in case 3: installable, with the warning. Releases made with
+`release.ps1 -Publish` carry `update-manifest.json` and stay in case 1.
+
+**How the installer starts:** in a fresh `%TEMP%\bmm_update_<uuid>\` folder, through
+ShellExecuteExW. When this copy was installed by BetterInstaller and the file is `BMM-Setup.exe`,
+BMM runs `BMM-Setup.exe --update --wait-pid <BMM's pid> --launch` (updates the install in place
+with no questions, waits for BMM to exit, starts it again); if it exits at once with code 3 (« no
+existing install ») BMM starts it again interactively. Otherwise it runs with no arguments (a fresh
+install needs the person's consent screens). A BetterInstaller install whose release could not be
+read falls back to `<install>/uninstall.exe --update`. « Install on next launch » is offered only
+for a signed installer (it is verified again at start).
+
+---
+
+## Bridge 0.9.12
+
+A micro-release of 0.9.11 that changes **only its updater**, so 0.9.x copies can follow
+pre-releases and install the BetterInstaller setup 1.0.2 ships, verified like 1.0.2 does it.
+
+**Where it is:** git worktree `E:\Travaille\CodageAutres\Better Project\bmm-bridge-0.9.12`,
+branch `bridge-0.9.12`, commit `85010e85`, based on commit `74d7fa95` (« 0.9.11 »). **The tag `v0.9.11` is wrong:**
+it points at `90afd8b4`, the same commit as `V0.9.10`, whose `tauri.conf.json` says 0.9.9. The
+0.9.11 that people run was built from `74d7fa95`. Nothing was pushed or tagged.
+
+**What 0.9.11 does** (read at `74d7fa95`, `src-tauri/src/commands/autoupdate.rs` +
+`frontend/src/ui/update-notes.ts`): `GET api.github.com/repos/FreeProject089/BetterModsManager/releases/latest`,
+so it never sees a pre-release (that is why nobody on 0.9.11 was offered 1.0.1); it compares
+dotted numbers; it takes the first asset whose name ends in `.msi`, else the first ending in `.exe`
+or `.zip` (case-sensitive), downloads it into `%TEMP%\<asset name>` with no signature and no hash,
+runs `cmd /C start "" <file>` and exits.
+
+**What 0.9.12 changes** (`src-tauri/src/commands/autoupdate.rs`, `frontend/src/ui/update-notes.ts`,
+one switch in `index.html`, six i18n keys, the version, its release notes):
+
+- reads the release list (`/releases?per_page=30`) and offers the newest stable release, a newer
+  pre-release when « Enable pre-releases » is on, and **always a release of a newer major line**
+  (1.0.x) even marked pre-release; releases without `update-manifest.json` are skipped;
+- installs only the installer the signed `update-manifest.json` lists (BMM-Setup.exe): Ed25519
+  signature with the key 1.0.2 pins (`8e0647c2…168b`), the same context string, app id
+  `com.bettermm.desktop`, at most 7 days valid and not expired, a newer version, then the
+  SHA-256 of the bytes; written to a fresh `%TEMP%\bmm_update_<uuid>\` folder and started with
+  ShellExecuteExW (the UAC prompt works);
+- a release **without** `update-manifest.json` (the published 1.0.1) is offered and installed in
+  the same click: the release is re-read by tag, its installer (`BMM-Setup.exe`, else the only
+  `.exe`/`.msi`, from BMM's own GitHub releases only) is checked against the checksum the
+  release's signed `update.json` declares, exactly as 1.0.2 does (see « Channels » above). When
+  that is impossible or the file does not match, the dialog explains it and asks « Cancel »
+  (focused) or « Install anyway »; a mismatch is shown in red. 0.9.12 always starts the installer
+  interactively (no arguments: a 0.9.x copy is never a BetterInstaller install, and the fresh
+  install needs the consent screens);
+- the dialog shows what will check the file, the download progress, then « Checking the file »,
+  then « Starting the installer »; a failure shows the reason with « Try again » and « Open the
+  release page ».
+
+Commit `a44d1345` on `bridge-0.9.12` (on top of `1243ecc8`).
+
+**Build it** (in the worktree; it has no `node_modules` yet):
+
+```bash
+cd "E:\Travaille\CodageAutres\Better Project\bmm-bridge-0.9.12"
+npm install
+npm run build          # tsc + tauri build (Tauri 1): MSI + NSIS in src-tauri/target/release/bundle/
+```
+
+The `frontend/src/features/betahub/betahub-config.local.ts` that 0.9.11 was built with is
+gitignored: copy it into the worktree before building, or tsc reports it missing.
+
+**Publish, in this order:**
+
+1. **0.9.12 first, as Latest, while 1.0.2 is not out yet.** Tag `v0.9.12` on branch
+   `bridge-0.9.12`. Attach **one** installer, of the kind the 0.9.11 release carried (0.9.11 runs
+   the first `.msi` it finds, so if the 0.9.11 release had an `.msi`, attach only
+   `Better Mod Manager_0.9.12_x64_en-US.msi`), no `.zip`. Not a pre-release, « Set as the latest
+   release » ticked. 0.9.11 copies then update to 0.9.12 the usual (unverified) 0.9.11 way.
+   While 0.9.12 is Latest, 0.9.12 offers the existing 1.0.1 pre-release (a newer major line). It
+   has no signed manifest and its update.json lists no installer checksum, so the person gets the
+   « could not be checked » warning and decides; 1.0.x copies see nothing newer.
+2. **Then 1.0.2, as Latest**, with `release.ps1 -Publish` or the tag workflow (`BMM-Setup.exe`,
+   `bmm.bpkg`, `update.json`, signed `update-manifest.json`, `lang-*.json`, `links.json`; manifests
+   signed the day you publish). It takes Latest from 0.9.12.
+3. **Never mark 0.9.12 Latest after 1.0.2 is out**: `releases/latest/download/update.json` is how
+   BetterInstaller installs of 1.0.x find their update, and 0.9.12 carries none.
+
+**How a 0.9.x user reaches 1.0.2:**
+
+| Installed | Path |
+|---|---|
+| 0.9.11 that updated during step 1 | 0.9.11 → 0.9.12 (its `.msi`/`.exe`) → 0.9.12 sees 1.0.2 → verified `BMM-Setup.exe` → 1.0.2 |
+| 0.9.11 that did not | 0.9.11 sees 1.0.2 at `/releases/latest` → runs `BMM-Setup.exe` (the only `.exe`, unverified, as 0.9.11 always did) → 1.0.2 |
+| 0.9.12, pre-release line later (1.1.0-beta) | offered automatically only if it is a newer major; otherwise with « Enable pre-releases » on |
+
+1.0's first start copies the 0.9.x data (`%APPDATA%\com.bettermm.app` → `com.bettermm.desktop`).
+BetterInstaller installs into `Program Files\Better Mods Manager`; the 0.9.x MSI/NSIS copy (Tauri 1,
+`Better Mod Manager`) is **not** removed by it: check on a test machine whether both stay in
+« Apps & features » and tell users to uninstall 0.9.x if so.
+
+**Not verified:** a real 0.9.11 → 0.9.12 → 1.0.2 run on a machine (no installer was run while
+preparing this); the 0.9.12 MSI build (only `cargo check` / `cargo test` and the frontend compile
+ran in the worktree).
 
 ---
 

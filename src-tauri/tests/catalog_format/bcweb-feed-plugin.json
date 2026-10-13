@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "name": "BetterCommunity bmm plugin catalog",
+  "plugins": [
+    { "id": "auto-sort", "name": "Auto sort", "version": "0.9.1", "author": "Fe", "description": "Sorts", "game": "", "official": false,
+      "download_url": "https://bettercommunity.ch/api/catalog/auto-sort/dl", "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "tags": ["sort"], "icon_url": null }
+  ]
+}

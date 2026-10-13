@@ -1,0 +1,5 @@
+{
+  "version": "1.0",
+  "name": "Mod lists",
+  "lists": [ { "id": "campaign", "name": "Campaign set", "author": "Ed", "mods": 40, "downloadUrl": "lists/campaign.mm", "sha256": "9999999999999999999999999999999999999999999999999999999999999999" } ]
+}

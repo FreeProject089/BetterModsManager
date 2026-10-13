@@ -822,7 +822,8 @@ function beaconSessionEnd(props: Record<string, any>): void {
             timestamp: new Date().toISOString(),
             properties: { ...baseProps(), ...props },
         };
-        const body = JSON.stringify({ api_key: links.analytics_key || '', packet_id: `beacon-${_sessionId}`, batch: [ev] });
+        // Same versioned envelope as the Rust flush (analytics.rs TELEMETRY_SCHEMA / _V).
+        const body = JSON.stringify({ schema: 'bmm-telemetry', v: 1, api_key: links.analytics_key || '', packet_id: `beacon-${_sessionId}`, batch: [ev] });
         navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }));
     } catch {}
 }

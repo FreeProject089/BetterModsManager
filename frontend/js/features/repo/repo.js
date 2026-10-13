@@ -20,6 +20,7 @@ import { initRepoTools } from './repo-tools.js';
 import { learnMore } from '../../core/learn-more.js';
 import { initRepoSync, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
+import { initRepoFollow } from './repo-follow.js';
 import { initRepoAdmin } from './repo-admin.js';
 import { initManifestOnly } from './manifest-only.js';
 import { initRemoteRefresh } from './remote-refresh.js';
@@ -836,6 +837,7 @@ export function initRepo() {
     initRemoteRefresh();
     initDiscover();
     initModUpdates();
+    initRepoFollow();
     // ── Sync / Hosting tab switcher ──────────────────────────────────────
     const activateRepoTab = (name) => {
         const view = document.getElementById('view-repo');

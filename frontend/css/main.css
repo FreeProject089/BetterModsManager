@@ -5537,7 +5537,8 @@ body.tut-docked.tut-min .app-shell {
 .bmm-fold-chevron:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
 .glass-card.bmm-collapsed .bmm-fold-chevron { transform: rotate(-90deg); }
 /* Collapsed → hide everything but the header row (which holds the title). */
-.glass-card.bmm-collapsed > :not(.bmm-fold-head) { display: none !important; }
+/* …except while the Settings search shows it as a match (ui/settings-nav.ts). */
+.glass-card.bmm-collapsed:not(.stg-search-open) > :not(.bmm-fold-head) { display: none !important; }
 .glass-card.bmm-collapsed > .bmm-fold-head { margin-bottom: 0 !important; }
 
 /* ── Navbar customization (Phase A) ── */
@@ -16617,6 +16618,9 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cm-listh { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
 .cm-listh > span { flex: 1; }
 .cm-list { display: flex; flex-direction: column; gap: 5px; }
+/* Browse search (catalog-modal): rows are hidden and re-ordered in place. */
+.cm-search { width: 100%; margin-bottom: 8px; }
+.cm-browse-row[hidden], .cm-empty[hidden] { display: none; }
 .cm-row-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-row-sub { flex: none; font-size: 10.5px; color: var(--text-muted); }
 /* A note beside a name is short; an entry DESCRIPTION is whatever somebody wrote, and a
@@ -17382,6 +17386,12 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cat-index-from { flex: none; font-size: 10px; color: var(--text-secondary);
     background: var(--bg-secondary); border-radius: 4px; padding: 1px 5px; }
 .cat-index-have { flex: none; font-size: 10px; color: var(--success, #22c55e); }
+/* A followed source's health from the catalogue index: ok, stale (last good copy), error. */
+.cat-index-state { flex: none; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+.cat-index-state:empty { display: none; }
+.cat-index-state[data-state="ok"] { color: var(--success); }
+.cat-index-state[data-state="stale"] { color: var(--warning); }
+.cat-index-state[data-state="error"] { color: var(--danger); }
 /* Already followed, dimmed rather than hidden: seeing that an index lists something you
    already have is the answer to "why did adding it change nothing". */
 .cat-index-row.is-followed { opacity: .6; }
@@ -20565,22 +20575,31 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .sub-contributors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
 
-/* Code contributors: from the git history (credits-extras.ts, gen-credits.mjs). One wide card
-   per person: picture, name, the repositories they committed to, GitHub. */
+/* Code contributors: from the git history (credits-extras.ts, gen-credits.mjs). One card per
+   person in a responsive grid: picture + name + "N commits · since YYYY" on top, the
+   repositories as a wrapping row of chips (each with its commit count) in the middle, the
+   actions in one aligned row at the bottom, pinned there so cards of a row line up. */
 .credits-code-blurb { margin: -4px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
-.credits-code-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; margin-bottom: 20px; }
-.credits-code-card { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 16px; }
-.credits-code-pfp { flex: none; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--bmm-border-hover); }
+.credits-code-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; margin-bottom: 20px; }
+.credits-code-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; }
+.credits-code-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.credits-code-pfp { flex: none; width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--bmm-border-hover); }
 .credits-code-pfp.is-initial { display: grid; place-items: center; background: var(--bmm-accent-dim); color: var(--credits-accent-ink); font-size: 18px; font-weight: 800; }
-.credits-code-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
-.credits-code-name { font-size: 14.5px; font-weight: 800; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.credits-code-meta { font-size: 12px; color: var(--bmm-text-secondary); }
-.credits-code-repos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-.credits-code-repo { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11px; }
-button.credits-code-repo { cursor: pointer; }
-button.credits-code-repo:hover { border-color: var(--bmm-accent); }
-button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
-.credits-code-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.credits-code-main { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.credits-code-name { font-size: 15px; font-weight: 800; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.credits-code-meta { font-size: 12px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+.credits-code-repos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.credits-code-repos > li { display: flex; min-width: 0; max-width: 100%; }
+.credits-code-repo { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 3px 4px 3px 9px; border: 1px solid var(--bmm-border); border-radius: 999px; background: var(--bmm-s03); color: var(--bmm-text-secondary); font: inherit; font-size: 11.5px; line-height: 1.5; }
+.credits-code-repo > svg { flex: none; }
+.credits-code-repo-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.credits-code-repo-n { flex: none; padding: 0 7px; border-radius: 999px; background: var(--bmm-s05); color: var(--bmm-text-primary); font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.credits-code-repo:not(:has(.credits-code-repo-n)) { padding-right: 9px; }
+button.credits-code-repo { cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s; }
+button.credits-code-repo:hover { border-color: var(--bmm-accent); color: var(--bmm-text-primary); background: var(--bmm-s05); }
+button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.credits-code-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.credits-code-actions > .btn { flex: 1 1 0; justify-content: center; min-width: max-content; }
 
 /* The licence reader inside the stack dialog's detail pane (credits-extras.ts). */
 .stk-lic-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -20763,6 +20782,27 @@ button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); o
 .upd-error-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .upd-gh { font-size: 12px; color: var(--bms-accent-ink); text-decoration: none; }
 .upd-gh:hover { text-decoration: underline; }
+.upd-sub-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 11px; color: var(--bmm-text-secondary); }
+.upd-sub-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+/* Download → verify → install, then the bar and the numbers (size, speed, time left). */
+.upd-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+.upd-step { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bmm-text-secondary); }
+.upd-step::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--bmm-s10); flex-shrink: 0; }
+.upd-step.is-active { color: var(--bmm-text-primary); }
+.upd-step.is-active::before { background: var(--bmm-accent); box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+.upd-step.is-done::before { background: var(--bmm-success); }
+.upd-progress-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.upd-progress-label { font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); }
+.upd-progress-pct { font-size: 11px; color: var(--bmm-text-secondary); font-family: var(--font-mono, monospace); }
+.upd-progress-meta { min-height: 14px; margin-top: 6px; font-size: 10.5px; color: var(--bmm-text-secondary); font-family: var(--font-mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The settings card: channel, background interval, last check. */
+.upd-set-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bmm-s02); }
+.upd-set-text { flex: 1 1 200px; min-width: 0; }
+.upd-set-title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.upd-set-desc { font-size: 10px; line-height: 1.45; color: var(--text-muted); }
+.upd-seg { flex: 0 0 auto; min-width: 210px; }
+.upd-seg .bmm-seg-item[aria-pressed="true"] { background: var(--bmm-accent-dim); color: var(--bms-accent-ink); }
+.upd-last-check { margin-left: auto; font-size: 10.5px; color: var(--text-muted); }
 .langsel-body { overflow: visible; }
 
 /* ── Icons (ui/icons.ts) ──────────────────────────────────────────────────────

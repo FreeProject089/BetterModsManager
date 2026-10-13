@@ -137,7 +137,14 @@ async fn fetch_raw_catalog(app: &tauri::AppHandle, url: &str) -> Option<AppCatal
     let resp = crate::commands::net::catalog_get(app, &bust)
         .timeout(std::time::Duration::from_secs(15)).send().await.ok()?;
     if !resp.status().is_success() { return None; }
-    resp.json::<AppCatalog>().await.ok()
+    // Through the universal format (see catalog_convert::legacy_for); a refused document
+    // (invalid signature) is a failed source, like an unreachable one.
+    let text = resp.text().await.ok()?;
+    match crate::commands::catalog_convert::legacy_for(app, &text, "app", Some(url)) {
+        Ok(Some(v)) => serde_json::from_value::<AppCatalog>(v).ok(),
+        Ok(None) => serde_json::from_str::<AppCatalog>(&text).ok(),
+        Err(_) => None,
+    }
 }
 
 /// Assign trust from WHERE an entry was fetched, never from what it says about itself.

@@ -624,25 +624,160 @@ if (typeof document !== 'undefined') {
 
 
 // ── Auto Update System ──────────────────────────────────
+//
+// check (startup, « Check now », optional background interval) → notification (badge on the
+// update buttons; the dialog the first time a version is seen, a clickable toast after that,
+// nothing while « Remind me tomorrow » holds) → dialog (notes, size, channel) → download
+// (progress, speed, time left; resumable) → verify (signature + SHA-256, in Rust) → install now
+// (BMM closes) or on the next launch (staged, verified again before it runs).
+//
+// Settings live in localStorage, as they always have: bmm_auto_update_enabled,
+// bmm_prerelease_enabled (= the channel), plus the keys below.
 
 const AUTO_UPDATE_KEY = 'bmm_auto_update_enabled';
 const PRERELEASE_KEY  = 'bmm_prerelease_enabled';
+const INTERVAL_KEY    = 'bmm_update_interval_h';
+const LAST_CHECK_KEY  = 'bmm_update_last_check';
+const SNOOZE_KEY      = 'bmm_update_snooze';
+const SEEN_KEY        = 'bmm_update_seen';
+/** BetterInstaller installs: « install on next launch » is a flag; its updater downloads itself. */
+const NEXT_LAUNCH_BI_KEY = 'bmm_update_next_launch_bi';
+/** The version installed from a pre-release: that build keeps following the pre-release channel. */
+const INSTALLED_PRE_KEY = 'bmm_installed_prerelease';
+const SNOOZE_MS = 24 * 3600 * 1000;
+const STAGED_COUNTDOWN_S = 10;
+
+const store = {
+    get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k: string, v: string | null) {
+        try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode */ }
+    },
+};
 
 function isAutoUpdateEnabled() {
-    const val = localStorage.getItem(AUTO_UPDATE_KEY);
-    return val !== 'false'; // Default to enabled
+    return store.get(AUTO_UPDATE_KEY) !== 'false'; // Default to enabled
 }
 
 function setAutoUpdateEnabled(enabled) {
-    localStorage.setItem(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
+    store.set(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
 }
 
 export function isPreReleaseEnabled() {
-    return localStorage.getItem(PRERELEASE_KEY) === 'true'; // Default OFF
+    return store.get(PRERELEASE_KEY) === 'true'; // Default OFF: the stable channel
 }
 
 function setPreReleaseEnabled(enabled) {
-    localStorage.setItem(PRERELEASE_KEY, enabled ? 'true' : 'false');
+    store.set(PRERELEASE_KEY, enabled ? 'true' : 'false');
+}
+
+function intervalHours(): number {
+    const h = Number(store.get(INTERVAL_KEY) || '0');
+    return h === 6 || h === 24 ? h : 0;
+}
+
+/** Numeric dotted compare, the suffix ignored: enough for the « already installed? » checks here
+ *  (the real version rule, with pre-release tags, is Rust's `is_newer`). */
+function cmpVersion(a: string, b: string): number {
+    const p = (v: string) => (String(v || '').match(/\d+(?:\.\d+)*/)?.[0] || '0').split('.').map(Number);
+    const x = p(a), y = p(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+        const d = (x[i] || 0) - (y[i] || 0);
+        if (d) return d;
+    }
+    return 0;
+}
+
+const mb = (n: number) => ((n || 0) / 1048576).toFixed(1);
+
+function relTime(at: number): string {
+    const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+    if (s < 60) return t('update.justNow') || 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return t('update.minutesAgo', { n: m }) || `${m} min ago`;
+    const h = Math.round(m / 60);
+    if (h < 48) return t('update.hoursAgo', { n: h }) || `${h} h ago`;
+    return t('update.daysAgo', { n: Math.round(h / 24) }) || `${Math.round(h / 24)} days ago`;
+}
+
+function recordCheck(result: 'update' | 'uptodate' | 'error', version = '') {
+    store.set(LAST_CHECK_KEY, JSON.stringify({ at: Date.now(), result, version }));
+    renderLastCheck();
+}
+
+function lastCheck(): { at: number; result: string; version: string } | null {
+    try { const v = JSON.parse(store.get(LAST_CHECK_KEY) || 'null'); return v && typeof v.at === 'number' ? v : null; } catch { return null; }
+}
+
+function renderLastCheck() {
+    const el = document.getElementById('upd-last-check');
+    if (!el) return;
+    const lc = lastCheck();
+    el.textContent = !lc
+        ? (t('update.never') || 'Never checked yet')
+        : lc.result === 'error'
+            ? (t('update.lastCheckFailed', { when: relTime(lc.at) }) || `Last check failed: ${relTime(lc.at)}`)
+            : (t('update.lastCheck', { when: relTime(lc.at) }) || `Last check: ${relTime(lc.at)}`);
+}
+
+function isSnoozed(version: string): boolean {
+    try {
+        const s = JSON.parse(store.get(SNOOZE_KEY) || 'null');
+        return !!s && s.version === version && Date.now() < s.until;
+    } catch { return false; }
+}
+
+/** The channel buttons, the interval buttons and the last-check line of the settings card. */
+function initUpdateSettings(isDisabled: boolean) {
+    const press = (group: HTMLElement | null, attr: string, value: string) => {
+        group?.querySelectorAll<HTMLButtonElement>(`[${attr}]`).forEach((b) => {
+            b.setAttribute('aria-pressed', String(b.getAttribute(attr) === value));
+        });
+    };
+    const channel = document.getElementById('upd-channel');
+    press(channel, 'data-channel', isPreReleaseEnabled() ? 'prerelease' : 'stable');
+    channel?.querySelectorAll<HTMLButtonElement>('[data-channel]').forEach((b) => {
+        b.disabled = isDisabled;
+        b.addEventListener('click', () => {
+            const pre = b.dataset.channel === 'prerelease';
+            if (pre === isPreReleaseEnabled()) return;
+            setPreReleaseEnabled(pre);
+            press(channel, 'data-channel', pre ? 'prerelease' : 'stable');
+            toast(pre
+                ? (t('settings.preReleaseEnabled') || 'Pre-releases enabled')
+                : (t('settings.preReleaseDisabled') || 'Pre-releases disabled'), 'info', 3000, '', 'Updates');
+            // Re-check at once so the effect is visible.
+            void performUpdateCheck(true);
+        });
+    });
+
+    const interval = document.getElementById('upd-interval');
+    press(interval, 'data-interval', String(intervalHours()));
+    interval?.querySelectorAll<HTMLButtonElement>('[data-interval]').forEach((b) => {
+        b.disabled = isDisabled;
+        b.addEventListener('click', () => {
+            store.set(INTERVAL_KEY, b.dataset.interval || '0');
+            press(interval, 'data-interval', String(intervalHours()));
+            scheduleBackgroundChecks();
+        });
+    });
+
+    renderLastCheck();
+    // Keeps « 5 min ago » true while the settings page stays open.
+    setInterval(renderLastCheck, 60_000);
+}
+
+let bgTimer: ReturnType<typeof setInterval> | null = null;
+/** A tick every 15 minutes, comparing with the last check rather than counting on a long timer
+ *  (which a sleeping PC stretches): after a night in sleep, the first tick checks. */
+function scheduleBackgroundChecks() {
+    if (bgTimer) { clearInterval(bgTimer); bgTimer = null; }
+    if (intervalHours() === 0) return;
+    bgTimer = setInterval(() => {
+        const h = intervalHours();
+        if (!h || !isAutoUpdateEnabled()) return;
+        const lc = lastCheck();
+        if (!lc || Date.now() - lc.at >= h * 3600 * 1000) void performUpdateCheck(false);
+    }, 15 * 60 * 1000);
 }
 
 export async function initAutoUpdate() {
@@ -654,7 +789,6 @@ export async function initAutoUpdate() {
     }
 
     const updateCheckButtonsState = () => {
-        const isAuto = isAutoUpdateEnabled();
         const sidebarBtn = document.getElementById('btn-check-updates');
         const settingsBtn = document.getElementById('btn-settings-check-update');
 
@@ -691,6 +825,7 @@ export async function initAutoUpdate() {
             chk.addEventListener('change', () => {
                 setAutoUpdateEnabled(chk.checked);
                 updateCheckButtonsState();
+                scheduleBackgroundChecks();
                 toast(chk.checked
                     ? (t('settings.autoUpdateEnabled') || 'Auto-update enabled')
                     : (t('settings.autoUpdateDisabled') || 'Auto-update disabled'), 'info');
@@ -698,51 +833,88 @@ export async function initAutoUpdate() {
         }
     }
 
-    // Pre-release toggle
-    const chkPre = document.getElementById('chk-prerelease') as HTMLInputElement | null;
-    if (chkPre) {
-        if (isDisabled) {
-            chkPre.checked = false;
-            chkPre.disabled = true;
-        } else {
-            chkPre.checked = isPreReleaseEnabled();
-            chkPre.addEventListener('change', () => {
-                setPreReleaseEnabled(chkPre.checked);
-                toast(chkPre.checked
-                    ? (t('settings.preReleaseEnabled') || 'Pre-releases enabled — you will receive beta builds')
-                    : (t('settings.preReleaseDisabled') || 'Pre-releases disabled'), 'info');
-                // Re-check immediately so the user sees the effect
-                performUpdateCheck(true);
-            });
-        }
-    }
+    initUpdateSettings(isDisabled);
 
-    // Sidebar button listener
+    // « Check now »: the sidebar button and the settings one.
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
-        sidebarBtn.addEventListener('click', () => {
-            performUpdateCheck(true);
-        });
+        sidebarBtn.addEventListener('click', () => { void performUpdateCheck(true); });
     }
-
-    // Settings button listener
     const settingsBtn = document.getElementById('btn-settings-check-update');
     if (settingsBtn && !isDisabled) {
-        settingsBtn.addEventListener('click', () => performUpdateCheck(true));
+        settingsBtn.addEventListener('click', () => { void performUpdateCheck(true); });
     }
 
-    // Apply initial state
     updateCheckButtonsState();
+    if (isDisabled) return;
 
-    // Auto-check on startup
-    if (!isDisabled && isAutoUpdateEnabled()) {
-        setTimeout(() => performUpdateCheck(false), 3000);
+    // An update chosen « on next launch » runs first; the regular check waits for the next start.
+    const staged = await checkStagedUpdate();
+    if (!staged && isAutoUpdateEnabled()) {
+        setTimeout(() => { void performUpdateCheck(false); }, 3000);
     }
+    scheduleBackgroundChecks();
 }
 
-async function performUpdateCheck(showNoUpdateToast = false) {
+/**
+ * The release check, merged with BetterInstaller's when BMM was installed by it.
+ *
+ * BetterInstaller's updater (`uninstall.exe --check-update`) reads the STABLE feed only
+ * (`releases/latest/download/update.json`). It used to overwrite every answer, so a person on the
+ * pre-release channel with a BetterInstaller install was told « up to date » forever. Now a newer
+ * pre-release from the release check wins, and installs through BMM-Setup.exe (`force_setup`).
+ * When the release check fails (rate limit, offline mirror) BetterInstaller's answer is used alone.
+ */
+async function resolveUpdateInfo(): Promise<any> {
+    let current = '';
+    try { current = String(await invoke('get_app_version') || ''); } catch { /* the check still runs */ }
+    const installedPre = store.get(INSTALLED_PRE_KEY);
+    const onPreBuild = !!current && installedPre === current;
+    if (installedPre && current && !onPreBuild) store.set(INSTALLED_PRE_KEY, null);
+
+    let info: any = null;
+    let ghErr: unknown = null;
+    try {
+        info = await invoke('check_for_update', {
+            includePrerelease: isPreReleaseEnabled() || onPreBuild,
+            apiBaseUrl: getLinks().autoupdate_api,
+            // Empty string disables it, which is what an older links.json yields — the
+            // Rust side treats blank as absent rather than as a URL to try.
+            fallbackApiUrl: getLinks().autoupdate_api_fallback || '',
+        });
+    } catch (e) { ghErr = e; }
+
+    let bi: any = null;
+    try { bi = await invoke('check_update_via_installer'); } catch { /* unavailable: keep the release check */ }
+    if (bi && !bi.error) {
+        if (info && info.is_prerelease && info.has_update) {
+            info.force_setup = true;
+            return info;
+        }
+        const base = info || {
+            current_version: bi.current_version || current,
+            release_url: 'https://github.com/FreeProject089/BetterModsManager/releases/latest',
+            release_notes: '', download_url: '', manifest_url: null, is_prerelease: false,
+            major_bump: false, download_size: 0, channel: 'stable',
+        };
+        base.has_update = !!bi.update_available;
+        base.current_version = bi.current_version ?? base.current_version;
+        base.latest_version = bi.latest_version ?? base.latest_version;
+        if (bi.notes) base.release_notes = bi.notes;
+        base.via_installer = true;
+        return base;
+    }
+    if (!info) throw ghErr;
+    return info;
+}
+
+let checking = false;
+async function performUpdateCheck(manual = false) {
+    if (checking) return;
+    checking = true;
     const sidebarBtn = document.getElementById('btn-check-updates');
     const statusMsg = document.getElementById('update-status-msg');
+    const buttons = [sidebarBtn, document.getElementById('btn-settings-check-update')];
 
     if (sidebarBtn) {
         sidebarBtn.classList.add('checking');
@@ -753,43 +925,29 @@ async function performUpdateCheck(showNoUpdateToast = false) {
     }
 
     try {
-        const info = await invoke('check_for_update', {
-            includePrerelease: isPreReleaseEnabled(),
-            apiBaseUrl: getLinks().autoupdate_api,
-            // Empty string disables it, which is what an older links.json yields — the
-            // Rust side treats blank as absent rather than as a URL to try.
-            fallbackApiUrl: getLinks().autoupdate_api_fallback || '',
-        });
-
-        // When BMM was installed by BetterInstaller, its bundled updater is the source of
-        // truth (it's exactly what an --update will apply): override the version/notes from
-        // its manifest. Skipped (kept on the GitHub result) when not installed via
-        // BetterInstaller, or when its check errored (e.g. no manifest published yet) — so
-        // older MSI/NSIS installs still get updates through the GitHub path.
-        try {
-            const bi: any = await invoke('check_update_via_installer');
-            if (bi && !bi.error) {
-                info.has_update       = !!bi.update_available;
-                info.current_version  = bi.current_version ?? info.current_version;
-                info.latest_version   = bi.latest_version  ?? info.latest_version;
-                if (bi.notes) info.release_notes = bi.notes;
-            }
-        } catch (_) { /* installer check unavailable → keep the GitHub result */ }
+        const info = await resolveUpdateInfo();
+        recordCheck(info.has_update ? 'update' : 'uptodate', info.latest_version || '');
 
         if (info.has_update) {
-            showUpdateAvailableModal(info);
-            [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {
-                if (btn) btn.classList.add('has-update');
-            });
+            buttons.forEach(btn => { if (btn) btn.classList.add('has-update'); });
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
             }
+            if (manual) {
+                showUpdateAvailableModal(info);
+            } else if (!isSnoozed(info.latest_version)) {
+                // The dialog the first time this version is seen; a toast that opens it after that.
+                if (store.get(SEEN_KEY) !== info.latest_version) {
+                    store.set(SEEN_KEY, info.latest_version);
+                    showUpdateAvailableModal(info);
+                } else {
+                    notifyUpdate(info);
+                }
+            }
         } else {
-            [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {
-                if (btn) btn.classList.remove('has-update');
-            });
-            if (showNoUpdateToast) {
-                toast(t('settings.upToDate') || 'You are running the latest version!', 'success');
+            buttons.forEach(btn => { if (btn) btn.classList.remove('has-update'); });
+            if (manual) {
+                toast(t('settings.upToDate') || 'You are running the latest version!', 'success', 3000, '', 'Updates');
             }
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.upToDate') || 'Up to date'} (v${escHtml(info.current_version)})</span>`;
@@ -797,20 +955,23 @@ async function performUpdateCheck(showNoUpdateToast = false) {
         }
     } catch (err) {
         const errStr = String(err);
-        // Silently swallow network/timeout errors — don't log as [RPC ERROR]
-        if (errStr.includes('NETWORK_ERROR') || errStr.includes('NO_RELEASE')) {
+        recordCheck('error');
+        // Network trouble and « nothing published » are not failures worth a red toast.
+        if (errStr.includes('NETWORK_ERROR') || errStr.includes('NO_RELEASE') || errStr.includes('RATE_LIMITED')) {
             if (statusMsg) {
                 statusMsg.innerHTML = errStr.includes('NO_RELEASE')
                     ? `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`
                     : `<span style="color:var(--text-muted)">— ${t('settings.updateUnavailable') || 'Unavailable'}</span>`;
             }
-            if (errStr.includes('NO_RELEASE') && showNoUpdateToast) {
-                toast(t('settings.noRelease') || 'No releases on GitHub yet.', 'info');
+            if (manual) {
+                toast(errStr.includes('NO_RELEASE')
+                    ? (t('settings.noRelease') || 'No releases on GitHub yet.')
+                    : (t('settings.updateUnavailable') || 'Unavailable'), 'info', 3000, '', 'Updates');
             }
         } else {
             console.warn('[BMM] Update check failed:', err);
-            if (showNoUpdateToast) {
-                toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error');
+            if (manual) {
+                toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error', 5000, '', 'Updates');
             }
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--danger)">✗ ${t('settings.updateCheckFailed') || 'Check failed'}</span>`;
@@ -821,7 +982,24 @@ async function performUpdateCheck(showNoUpdateToast = false) {
             sidebarBtn.classList.remove('checking');
             sidebarBtn.querySelector('span').textContent = t('settings.checkUpdates') || 'Check for Updates';
         }
+        checking = false;
     }
+}
+
+/** A toast that opens the dialog when clicked (the « Updates » notification source). */
+function notifyUpdate(info) {
+    toast(t('update.availableToast', { version: info.latest_version }) || `BMM v${info.latest_version} is available.`, 'info', 10000, '', 'Updates');
+    setTimeout(() => {
+        const el = document.querySelector('#toast-container .toast:last-child') as HTMLElement | null;
+        if (!el) return;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => showUpdateAvailableModal(info), { once: true });
+    }, 0);
+}
+
+/** The Tauri event listener, read off the global (see the note in the incremental path). */
+function tauriListen(): ((e: string, cb: (evt: any) => void) => Promise<() => void>) | undefined {
+    return (window as any).__TAURI__?.event?.listen;
 }
 
 function showUpdateAvailableModal(info) {
@@ -832,9 +1010,23 @@ function showUpdateAvailableModal(info) {
     // buttons, tables…) instead of a raw marked.parse — much nicer notes.
     const releaseNotes = info.release_notes ? renderMarkdown(info.release_notes) : '';
     const isPre = !!info.is_prerelease;
+    const viaBi = !!info.via_installer && !info.force_setup;
+    const canQuick = !!info.manifest_url && !info.major_bump && !viaBi;
+    const sizeText = info.download_size > 0 ? (t('update.sizeMb', { size: mb(info.download_size) }) || `${mb(info.download_size)} MB`) : '';
+    const channelText = info.channel === 'prerelease' ? (t('update.channelPre') || 'Pre-release') : (t('update.channelStable') || 'Stable');
+    // What vouches for the installer, said before anything is downloaded: the signed
+    // update-manifest.json, the checksum in the release's update.json, or nothing (BMM asks).
+    const verification: string = info.verification || (info.manifest_url ? 'signed' : 'unverified');
+    const verificationText = verification === 'signed'
+        ? (t('update.verifiedSigned') || "Checked with the publisher's signature before it runs.")
+        : verification === 'update-json'
+            ? (t('update.verifiedUpdateJson') || 'Checked against the checksum the release declares (its update.json) before it runs.')
+            : (t('update.verifiedNone') || 'This release declares no checksum BMM can use: BMM will tell you and ask before running the installer.');
+    // « Install on next launch » keeps a SIGNED installer only (stage_update re-verifies it at start).
+    const canStage = viaBi || !!info.manifest_url;
 
     // The house shell (.modal-overlay > .modal.modal--md): Tasky and the version in the header,
-    // the diff, the notes and the progress in the body, the three ways out in the footer.
+    // the diff, the notes and the progress in the body, the ways out in the footer.
     const modal = document.createElement('div');
     modal.id = 'update-available-modal';
     modal.className = 'modal-overlay open';
@@ -845,32 +1037,33 @@ function showUpdateAvailableModal(info) {
                 <img src="assets/Tasky_Happy.png" alt="" class="upd-tasky">
                 <div class="bms-titles">
                     <span class="upd-kicker${isPre ? ' is-pre' : ''}">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        ${uiIcon('star', 12)}
                         ${isPre ? (t('update.preReleaseTag') || 'PRE-RELEASE') : (t('update.newVersion') || 'NEW VERSION')}
                     </span>
                     <h2 class="modal-title" id="upd-title">${t('settings.updateAvailableTitle') || 'Update Available!'}</h2>
                     <p class="bms-sub">${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}</p>
+                    <div class="upd-sub-meta">
+                        ${sizeText ? `<span>${uiIcon('package', 12)} ${escHtml(sizeText)}</span>` : ''}
+                        <span>${uiIcon('git-branch', 12)} ${escHtml(channelText)}</span>
+                        ${viaBi && !info.release_tag ? '' : `<span id="upd-verification" title="${escAttr(info.verification_note || '')}">${uiIcon(verification === 'unverified' ? 'warning' : 'shield-check', 12)} ${escHtml(verificationText)}</span>`}
+                    </div>
                 </div>
                 <button type="button" class="modal-close" id="close-update-modal" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
             </div>
 
             <div class="modal-body">
-                <!-- Version diff -->
                 <div class="upd-diff">
                     <div class="upd-ver is-old">
                         <div class="upd-ver-label">${t('settings.currentVersion') || 'CURRENT'}</div>
                         <div class="upd-ver-num">v${escHtml(info.current_version)}</div>
                     </div>
-                    <div class="upd-arrow" aria-hidden="true">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </div>
+                    <div class="upd-arrow" aria-hidden="true">${uiIcon('arrow-right', 16)}</div>
                     <div class="upd-ver is-new">
                         <div class="upd-ver-label">${t('settings.latestVersion') || 'LATEST'}</div>
                         <div class="upd-ver-num">v${escHtml(info.latest_version)}</div>
                     </div>
                 </div>
 
-                <!-- Release notes -->
                 ${releaseNotes ? `
                 <div class="upd-notes">
                     <div class="upd-notes-head">
@@ -885,16 +1078,21 @@ function showUpdateAvailableModal(info) {
                 </div>
                 ` : ''}
 
-                <!-- Progress bar (incremental update) -->
-                <div id="incremental-progress-section" class="upd-progress" style="display:none;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <span id="incremental-progress-label" style="font-size:12px;font-weight:600;color:var(--text-secondary);">Applying update...</span>
-                        <span id="incremental-progress-count" style="font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);">0 / 0</span>
+                <!-- Download → verify → install -->
+                <div id="upd-progress" class="upd-progress" hidden>
+                    <div class="upd-steps">
+                        <span class="upd-step" data-step="download">${t('update.stepDownload') || 'Download'}</span>
+                        <span class="upd-step" data-step="verify">${t('update.stepVerify') || 'Verify'}</span>
+                        <span class="upd-step" data-step="install">${t('update.stepInstall') || 'Install'}</span>
+                    </div>
+                    <div class="upd-progress-head">
+                        <span id="upd-progress-label" class="upd-progress-label"></span>
+                        <span id="upd-progress-pct" class="upd-progress-pct"></span>
                     </div>
                     <div class="upd-progress-track">
-                        <div id="incremental-progress-bar" class="upd-progress-bar" style="width:0%;"></div>
+                        <div id="upd-progress-bar" class="upd-progress-bar" style="width:0%;"></div>
                     </div>
-                    <div id="incremental-progress-file" style="font-size:10px;color:var(--text-secondary);margin-top:5px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                    <div id="upd-progress-meta" class="upd-progress-meta"></div>
                 </div>
 
                 <!-- Why the update did not go through, and the way out that always works -->
@@ -904,35 +1102,31 @@ function showUpdateAvailableModal(info) {
                         <div class="upd-error-title">${t('update.failedTitle') || 'The update did not go through'}</div>
                         <div class="upd-error-msg" id="upd-error-msg"></div>
                         <div class="upd-error-actions">
-                            <button type="button" class="btn btn-primary btn-sm" id="btn-upd-release-page">${uiIcon('download', 12)} ${t('update.openReleasePage') || 'Download from the release page'}</button>
-                            <button type="button" class="btn btn-ghost btn-sm" id="btn-upd-retry">${t('update.retry') || 'Try again'}</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-upd-retry">${uiIcon('refresh', 12)} ${t('update.retry') || 'Try again'}</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-upd-release-page">${uiIcon('external', 12)} ${t('update.openReleasePage') || 'Download from the release page'}</button>
                         </div>
                     </div>
                 </div>
 
+                <!-- The installer could not be checked: what failed, and the person's choice -->
+                <div id="upd-unverified" role="alertdialog" aria-live="assertive"></div>
+
                 ${info.major_bump ? `
                 <div class="upd-major">
                     ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
-                    <div>${t('update.majorManual') || 'This is a <b>major version</b>. It installs by hand: download the installer below and run it — it migrates your existing data and settings. There is no in-place quick update for a major version.'}</div>
+                    <div>${t('update.majorManual') || 'This is a <b>major version</b>.'}</div>
                 </div>
                 ` : ''}
             </div>
 
             <div class="modal-footer">
                 <div class="modal-footer-start">
-                    <a class="upd-gh" href="${escAttr(info.release_url)}" target="_blank">${t('settings.viewOnGithub') || 'View release on GitHub'} ↗</a>
+                    <a class="upd-gh" href="${escAttr(info.release_url)}" target="_blank">${t('settings.viewOnGithub') || 'View release on GitHub'}</a>
+                    ${canQuick ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-incremental-update" data-tooltip="${escAttr(t('update.quickUpdateTip') || '')}">${uiIcon('download', 12)} ${t('update.quickUpdate') || 'Quick Update'}</button>` : ''}
                 </div>
-                <button type="button" class="btn btn-ghost" id="btn-update-later">${t('settings.later') || 'Later'}</button>
-                <button type="button" class="btn ${info.manifest_url && !info.major_bump ? 'btn-secondary' : 'btn-primary'}" id="btn-download-install-update">
-                    ${uiIcon('download', 12)}
-                    ${t('update.fullInstaller') || 'Full Installer (.msi)'}
-                </button>
-                ${info.manifest_url && !info.major_bump ? `
-                <button type="button" class="btn btn-primary" id="btn-incremental-update" data-tooltip="${escAttr(t('update.recommended') || 'Recommended')}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    <span>${t('update.quickUpdate') || 'Quick Update'}</span>
-                </button>
-                ` : ''}
+                <button type="button" class="btn btn-ghost" id="btn-update-later">${t('update.remindLater') || 'Remind me tomorrow'}</button>
+                ${canStage ? `<button type="button" class="btn btn-secondary" id="btn-update-next">${uiIcon('clock', 12)} ${t('update.installNextLaunch') || 'Install on next launch'}</button>` : ''}
+                <button type="button" class="btn btn-primary" id="btn-download-install-update">${uiIcon('download', 12)} ${t('update.installNow') || 'Install now'}</button>
             </div>
         </div>
     `;
@@ -942,174 +1136,373 @@ function showUpdateAvailableModal(info) {
     // Release notes are the surface most likely to carry a command someone will copy.
     void import('./code-highlight.js').then((m) => m.highlightIn(modal)).catch(() => {});
 
-    // Incremental update button
-    const incrementalBtn = modal.querySelector('#btn-incremental-update');
-    if (incrementalBtn && info.manifest_url && !info.major_bump) {
-        incrementalBtn.addEventListener('click', async () => {
-            const progressSection = modal.querySelector('#incremental-progress-section') as HTMLElement;
-            const progressBar = modal.querySelector('#incremental-progress-bar') as HTMLElement;
-            const progressLabel = modal.querySelector('#incremental-progress-label') as HTMLElement;
-            const progressCount = modal.querySelector('#incremental-progress-count') as HTMLElement;
-            const progressFile = modal.querySelector('#incremental-progress-file') as HTMLElement;
+    const q = <T extends HTMLElement = HTMLElement>(sel: string) => modal.querySelector(sel) as T;
+    const progress = q('#upd-progress');
+    const bar = q('#upd-progress-bar');
+    const label = q('#upd-progress-label');
+    const pct = q('#upd-progress-pct');
+    const meta = q('#upd-progress-meta');
+    const errorBox = q('#upd-error');
+    const actionBtns = ['#btn-download-install-update', '#btn-update-next', '#btn-incremental-update', '#btn-update-later']
+        .map((s) => q<HTMLButtonElement>(s)).filter(Boolean);
 
-            incrementalBtn.disabled = true;
-            const fullBtn = modal.querySelector('#btn-download-install-update') as HTMLButtonElement;
-            if (fullBtn) fullBtn.disabled = true;
-            progressSection.style.display = 'block';
-            progressLabel.textContent = t('update.fetchingManifest') || 'Fetching manifest...';
-
-            try {
-                // Fetch the manifest
-                const manifest = await invoke('fetch_update_manifest', { url: info.manifest_url });
-                progressLabel.textContent = t('update.applyingUpdate') || 'Applying update...';
-
-                // Listen to progress events.
-                //
-                // Read `listen` off the global rather than importing it. The import used to
-                // be `../../node_modules/@tauri-apps/api/event.js`, which could never resolve:
-                // from frontend/js/ui/ that points at frontend/node_modules (there isn't one),
-                // and the real node_modules sits outside `frontendDist` so the webview cannot
-                // reach it at all. The `.catch` below meant it still worked — but the browser
-                // logs the failed module fetch first, which is the console error people kept
-                // reporting: "Expected a JavaScript-or-Wasm module script but the server
-                // responded with a MIME type of text/html". That text/html is index.html, served
-                // because the path 404s.
-                //
-                // `withGlobalTauri: true` in tauri.conf.json means the global is always there.
-                const listen = (window as any).__TAURI__?.event?.listen as
-                    | ((e: string, cb: (evt: any) => void) => Promise<() => void>)
-                    | undefined;
-                let unlisten: (() => void) | null = null;
-                if (listen) {
-                    unlisten = await listen('update-progress', (evt: any) => {
-                        const d = evt.payload;
-                        const pct = Math.round(((d.index + 1) / d.total) * 100);
-                        progressBar.style.width = pct + '%';
-                        progressCount.textContent = `${d.index + 1} / ${d.total}`;
-                        progressFile.textContent = d.file;
-                        progressLabel.textContent = d.status === 'skipped'
-                            ? (t('update.skipped') || 'Skipping unchanged files...')
-                            : (t('update.applyingUpdate') || 'Applying update...');
-                    });
-                }
-
-                // Apply the update
-                const result: any = await invoke('apply_incremental_update', { manifest });
-                if (unlisten) unlisten();
-
-                progressBar.style.width = '100%';
-
-                if (result.errors && result.errors.length > 0) {
-                    toast(t('toast.updatePartial', { applied: result.applied, errors: result.errors.length }) || `Update partial: ${result.applied} applied, ${result.errors.length} errors`, 'warning');
-                } else {
-                    toast(t('update.incrementalSuccess') || `Update applied! ${result.applied} files updated, ${result.skipped} unchanged. Restart BMM to complete.`, 'success');
-                }
-                progressLabel.textContent = t('update.done') || 'Done! Restart BMM to apply changes.';
-                progressSection.classList.add('is-done');
-            } catch (err) {
-                showUpdateError(err);
-                progressLabel.textContent = t('update.errTryFullInstaller');
-                incrementalBtn.disabled = false;
-                if (modal.querySelector('#btn-download-install-update')) {
-                    (modal.querySelector('#btn-download-install-update') as HTMLButtonElement).disabled = false;
-                }
-            }
+    const close = () => modal.remove();
+    const setBusy = (busy: boolean) => actionBtns.forEach((b) => { b.disabled = busy; });
+    const setStep = (step: 'download' | 'verify' | 'install' | null) => {
+        const order = ['download', 'verify', 'install'];
+        const at = step ? order.indexOf(step) : -1;
+        modal.querySelectorAll<HTMLElement>('.upd-step').forEach((el) => {
+            const i = order.indexOf(el.dataset.step || '');
+            el.classList.toggle('is-done', at >= 0 && i < at);
+            el.classList.toggle('is-active', i === at);
         });
-    }
-
+    };
+    const showProgress = (text: string) => {
+        errorBox.hidden = true;
+        progress.hidden = false;
+        progress.classList.remove('is-done');
+        bar.style.width = '0%';
+        label.textContent = text;
+        pct.textContent = '';
+        meta.textContent = '';
+        setStep('download');
+    };
     // Failures land in the modal, in words, next to the one way out that always works: the
     // release page, where the installer can be downloaded and run by hand.
-    const errorBox = modal.querySelector('#upd-error') as HTMLElement;
     const showUpdateError = (err: unknown) => {
-        const msg = String(err).replace(/^Error:\s*/, '');
-        (modal.querySelector('#upd-error-msg') as HTMLElement).textContent = msg;
+        (q('#upd-error-msg')).textContent = String(err).replace(/^Error:\s*/, '');
         errorBox.hidden = false;
+        progress.hidden = true;
+        setBusy(false);
     };
-    modal.querySelector('#btn-upd-release-page')?.addEventListener('click', () => {
-        openExternal(info.release_url || 'https://github.com/FreeProject089/BetterModsManager/releases/latest');
-    });
 
-    const downloadBtn = modal.querySelector('#btn-download-install-update') as HTMLButtonElement | null;
-    const runFullInstall = async () => {
-        if (!downloadBtn) return;
-        const originalContent = downloadBtn.innerHTML;
-        const incBtn = modal.querySelector('#btn-incremental-update') as HTMLButtonElement | null;
-        const progressSection = modal.querySelector('#incremental-progress-section') as HTMLElement;
-        const progressBar = modal.querySelector('#incremental-progress-bar') as HTMLElement;
-        const progressLabel = modal.querySelector('#incremental-progress-label') as HTMLElement;
-        const progressCount = modal.querySelector('#incremental-progress-count') as HTMLElement;
-        const progressFile = modal.querySelector('#incremental-progress-file') as HTMLElement;
+    // Size, speed and time left, from the last few seconds of progress events.
+    let samples: { at: number; bytes: number }[] = [];
+    const onProgress = (evt: any) => {
+        const d = evt?.payload || {};
+        if (d.phase === 'downloading') {
+            setStep('download');
+            const now = performance.now();
+            samples.push({ at: now, bytes: d.received });
+            while (samples.length > 2 && now - samples[0].at > 4000) samples.shift();
+            const secs = (now - samples[0].at) / 1000;
+            const speed = secs > 0.3 ? Math.max(0, (d.received - samples[0].bytes) / secs) : 0;
+            const p = d.total > 0 ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0;
+            bar.style.width = p + '%';
+            pct.textContent = p + '%';
+            label.textContent = t('update.dlProgress', { done: mb(d.received), total: mb(d.total) }) || `Downloading ${mb(d.received)} / ${mb(d.total)} MB`;
+            const parts: string[] = [];
+            if (speed > 0) {
+                parts.push(t('update.speed', { speed: mb(speed) }) || `${mb(speed)} MB/s`);
+                const left = d.total > d.received ? (d.total - d.received) / speed : 0;
+                if (left >= 1) {
+                    parts.push(left < 90
+                        ? (t('update.etaSec', { n: Math.ceil(left) }) || `about ${Math.ceil(left)} s left`)
+                        : (t('update.etaMin', { n: Math.ceil(left / 60) }) || `about ${Math.ceil(left / 60)} min left`));
+                }
+            }
+            if (d.resumed) parts.push(t('update.dlResumed') || 'resumed where it stopped');
+            meta.textContent = parts.join(' · ');
+        } else if (d.phase === 'verifying') {
+            setStep('verify');
+            bar.style.width = '100%';
+            pct.textContent = '';
+            label.textContent = info.manifest_url
+                ? (t('update.verifying') || 'Checking the signature and the SHA-256...')
+                : (t('update.verifyingChecksum') || 'Checking the file against the checksum the release declares...');
+            meta.textContent = '';
+        } else if (d.phase === 'launching') {
+            setStep('install');
+            progress.classList.add('is-done');
+            label.textContent = t('update.launching') || 'Starting the installer. BMM closes now.';
+        }
+    };
+
+    // The installer could not be checked (no usable update.json, or a file that does not match
+    // what the release declares): say what failed and let the person choose. « Cancel » has the
+    // focus; only « Install anyway » runs it, naming the exact bytes it was shown.
+    const unverifiedBox = q('#upd-unverified');
+    const clearUnverified = () => { unverifiedBox.innerHTML = ''; };
+    const showUnverified = (u: any) => {
+        setBusy(false);
+        progress.hidden = true;
         errorBox.hidden = true;
-        downloadBtn.disabled = true;
-        if (incBtn) incBtn.disabled = true;
-        downloadBtn.innerHTML = (uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite' }) + ' ') + (t('update.downloading') || 'Downloading...');
-        progressSection.classList.remove('is-done');
-        progressSection.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressCount.textContent = '';
-        progressFile.textContent = '';
-
-        // check -> notes (this modal) -> download (resumable, with progress) -> verify (signature +
-        // SHA-256) -> install (the verified installer) -> restart (BMM closes; reopened from the
-        // installer). The events come from autoupdate.rs (download_installer / emit_download).
-        const listen = (window as any).__TAURI__?.event?.listen as
-            | ((e: string, cb: (evt: any) => void) => Promise<() => void>)
-            | undefined;
-        let unlisten: (() => void) | null = null;
-        const mb = (n: number) => ((n || 0) / 1048576).toFixed(1);
+        const mismatch = u.kind === 'mismatch';
+        const title = mismatch
+            ? (t('update.mismatchTitle') || 'The downloaded file does not match what the release declares')
+            : (t('update.unverifiedTitle') || 'This installer could not be checked');
+        const lead = mismatch
+            ? (t('update.mismatchLead') || 'It may be corrupted or tampered with. Installing it is not recommended.')
+            : (t('update.unverifiedLead') || 'Nothing confirms that this file is the one the publisher released. Install it only if you trust where it comes from.');
+        const gh = u.github_matches === true
+            ? (t('update.githubDigestMatch') || 'For information: the file matches the checksum GitHub publishes for it.')
+            : u.github_matches === false
+                ? (t('update.githubDigestNoMatch') || 'The file does NOT match the checksum GitHub publishes for it.')
+                : '';
+        unverifiedBox.innerHTML = `
+            <div class="${mismatch ? 'upd-error' : 'upd-major'}">
+                ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
+                <div class="upd-error-body">
+                    <div class="upd-error-title">${escHtml(title)}</div>
+                    <div class="upd-error-msg">${escHtml(lead)}</div>
+                    <div class="upd-error-msg">${escHtml(String(u.detail || ''))}</div>
+                    ${gh ? `<div class="upd-error-msg">${escHtml(gh)}</div>` : ''}
+                    <div class="upd-error-msg"><code>${escHtml(String(u.file || ''))} · SHA-256 ${escHtml(String(u.sha256))}</code></div>
+                    <div class="upd-error-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-upd-cancel">${escHtml(t('update.cancel') || 'Cancel')}</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-upd-unv-page">${uiIcon('external', 12)} ${escHtml(t('update.openReleasePage') || 'Download from the release page')}</button>
+                        <button type="button" class="btn ${mismatch ? 'btn-danger' : 'btn-secondary'} btn-sm" id="btn-upd-anyway">${escHtml(t('update.installAnyway') || 'Install anyway')}</button>
+                    </div>
+                </div>
+            </div>`;
+        const cancel = unverifiedBox.querySelector('#btn-upd-cancel') as HTMLButtonElement | null;
+        cancel?.addEventListener('click', clearUnverified);
+        unverifiedBox.querySelector('#btn-upd-unv-page')?.addEventListener('click', () => {
+            openExternal(info.release_url || 'https://github.com/FreeProject089/BetterModsManager/releases/latest');
+        });
+        unverifiedBox.querySelector('#btn-upd-anyway')?.addEventListener('click', () => { void runInstall('now', String(u.sha256)); });
+        cancel?.focus();
+    };
+    /** The installer details a refused, unchecked download carries (`UNVERIFIED:{json}`), or null. */
+    const unverifiedOf = (err: unknown): any => {
+        const msg = String(err).replace(/^Error:\s*/, '');
+        if (!msg.startsWith('UNVERIFIED:')) return null;
         try {
-            if (listen) {
-                unlisten = await listen('update-download-progress', (evt: any) => {
-                    const d = evt.payload || {};
-                    if (d.phase === 'downloading') {
-                        const pct = d.total > 0 ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0;
-                        progressBar.style.width = pct + '%';
-                        progressLabel.textContent = t('update.dlProgress', { done: mb(d.received), total: mb(d.total) }) || `Downloading ${mb(d.received)} / ${mb(d.total)} MB`;
-                        progressCount.textContent = pct + '%';
-                        progressFile.textContent = d.resumed ? (t('update.dlResumed') || 'resumed where it stopped') : '';
-                    } else if (d.phase === 'verifying') {
-                        progressBar.style.width = '100%';
-                        progressLabel.textContent = t('update.verifying') || 'Checking the signature and the SHA-256...';
-                        progressCount.textContent = '';
-                    } else if (d.phase === 'launching') {
-                        progressSection.classList.add('is-done');
-                        progressLabel.textContent = t('update.launching') || 'Starting the installer. BMM closes now.';
-                    }
-                });
+            const u = JSON.parse(msg.slice('UNVERIFIED:'.length));
+            return u && u.sha256 ? u : null;
+        } catch { return null; }
+    };
+
+    // « Install now » and « Install on next launch ».
+    let lastAction: 'now' | 'next' | 'quick' = 'now';
+    const runInstall = async (mode: 'now' | 'next', confirmSha256: string | null = null) => {
+        lastAction = mode;
+        clearUnverified();
+        setBusy(true);
+        samples = [];
+        showProgress(mode === 'next' ? (t('update.staging') || 'Downloading for the next launch...') : (t('update.downloading') || 'Downloading...'));
+        const listen = tauriListen();
+        let unlisten: (() => void) | null = null;
+        // A BetterInstaller install that could not get an installer downloaded: its own
+        // <install>/uninstall.exe --update (delta + signature + rollback) is the fallback.
+        const viaMaintenanceExe = async () => {
+            label.textContent = t('update.viaInstaller') || "Starting BetterInstaller's updater...";
+            setStep('install');
+            await invoke('update_via_installer');
+        };
+        try {
+            if (listen) unlisten = await listen('update-download-progress', onProgress);
+
+            if (viaBi) {
+                // « Next launch » is a flag here: BetterInstaller's updater downloads by itself.
+                if (mode === 'next') {
+                    store.set(NEXT_LAUNCH_BI_KEY, info.latest_version);
+                    toast(t('update.nextLaunchBi') || 'The update installs the next time you start BMM.', 'success', 5000, '', 'Updates');
+                    close();
+                    return;
+                }
+                // No release to download from (the GitHub check failed): the installed updater.
+                if (!info.release_tag) {
+                    await viaMaintenanceExe();
+                    return; // BMM is exiting; the updater window takes over
+                }
             }
-            // Prefer BetterInstaller's updater (delta + signature + rollback via the bundled
-            // <install>/uninstall.exe). On success it starts the updater and quits BMM, so this
-            // invoke never returns. "not installed via BetterInstaller" leads to the direct
-            // download below; any other failure (the updater did not start) is shown, not swallowed.
+
+            // That build follows the pre-release channel from now on (resolveUpdateInfo).
+            if (isPre) store.set(INSTALLED_PRE_KEY, info.latest_version);
+            // The backend downloads and checks the installer itself: against the release's SIGNED
+            // update-manifest.json when it has one (`url` only chooses among its entries), else
+            // against the checksum its update.json declares, re-reading the release by `tag`. A
+            // BetterInstaller install is then updated in place (BMM-Setup.exe --update --wait-pid
+            // <pid> --launch). `confirmSha256` comes only from « Install anyway ».
+            const args = { url: info.download_url, manifestUrl: info.manifest_url || null };
+            if (mode === 'next') {
+                const st: any = await invoke('stage_update', args);
+                setStep('install');
+                progress.classList.add('is-done');
+                label.textContent = t('update.stagedToast', { version: st.version }) || `v${st.version} installs on the next start.`;
+                toast(t('update.stagedToast', { version: st.version }) || `v${st.version} installs on the next start.`, 'success', 6000, '', 'Updates');
+                setTimeout(close, 1500);
+                return;
+            }
             try {
-                progressLabel.textContent = t('update.viaInstaller') || "Starting BetterInstaller's updater...";
-                await invoke('update_via_installer');
-                return; // BMM is exiting; updater window takes over
+                await invoke('download_and_install_update', { ...args, tag: info.release_tag || null, confirmSha256 });
             } catch (e) {
-                if (!String(e).includes('not installed via BetterInstaller')) throw e;
+                if (viaBi && !unverifiedOf(e)) {
+                    await viaMaintenanceExe();
+                    return;
+                }
+                throw e;
             }
-            progressLabel.textContent = t('update.downloading') || 'Downloading...';
-            // The backend runs the installer only if the release's SIGNED manifest lists it with
-            // its SHA-256 (download_and_install_update); `url` only chooses among those entries.
-            // An interrupted download resumes on the next try.
-            await invoke('download_and_install_update', { url: info.download_url, manifestUrl: info.manifest_url || null });
-            downloadBtn.innerHTML = t('common.installing');
         } catch (err) {
-            showUpdateError(err);
-            progressSection.style.display = 'none';
-            downloadBtn.disabled = false;
-            if (incBtn) incBtn.disabled = false;
-            downloadBtn.innerHTML = originalContent;
+            const u = unverifiedOf(err);
+            if (u) showUnverified(u); else showUpdateError(err);
         } finally {
             if (unlisten) unlisten();
         }
     };
-    downloadBtn?.addEventListener('click', () => { void runFullInstall(); });
-    modal.querySelector('#btn-upd-retry')?.addEventListener('click', () => { void runFullInstall(); });
 
-    modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
-    modal.querySelector('#btn-update-later').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    // Quick Update: the interface and language files the signed manifest lists, without the
+    // installer (the version number does not change).
+    const runQuick = async () => {
+        lastAction = 'quick';
+        setBusy(true);
+        showProgress(t('update.fetchingManifest') || 'Fetching update manifest...');
+        const listen = tauriListen();
+        let unlisten: (() => void) | null = null;
+        try {
+            const manifest = await invoke('fetch_update_manifest', { url: info.manifest_url });
+            label.textContent = t('update.applyingUpdate') || 'Applying update...';
+            if (listen) {
+                unlisten = await listen('update-progress', (evt: any) => {
+                    const d = evt.payload;
+                    const p = Math.round(((d.index + 1) / d.total) * 100);
+                    bar.style.width = p + '%';
+                    pct.textContent = `${d.index + 1} / ${d.total}`;
+                    meta.textContent = d.file;
+                    setStep(d.status === 'verifying' ? 'verify' : d.status === 'applied' ? 'install' : 'download');
+                });
+            }
+            const result: any = await invoke('apply_incremental_update', { manifest });
+            bar.style.width = '100%';
+            setStep('install');
+            progress.classList.add('is-done');
+            if (result.errors && result.errors.length > 0) {
+                toast(t('toast.updatePartial', { applied: result.applied, errors: result.errors.length }) || `Update partial: ${result.applied} applied, ${result.errors.length} errors`, 'warning', 5000, '', 'Updates');
+            } else {
+                toast(t('update.incrementalSuccess') || 'Update applied! Restart BMM to complete.', 'success', 5000, '', 'Updates');
+            }
+            label.textContent = t('update.done') || 'Done! Restart BMM to apply changes.';
+            setBusy(false);
+        } catch (err) {
+            showUpdateError(err);
+        } finally {
+            if (unlisten) unlisten();
+        }
+    };
+
+    q('#btn-download-install-update')?.addEventListener('click', () => { void runInstall('now'); });
+    q('#btn-update-next')?.addEventListener('click', () => { void runInstall('next'); });
+    q('#btn-incremental-update')?.addEventListener('click', () => { void runQuick(); });
+    q('#btn-upd-retry')?.addEventListener('click', () => {
+        if (lastAction === 'quick') void runQuick(); else void runInstall(lastAction);
+    });
+    q('#btn-upd-release-page')?.addEventListener('click', () => {
+        openExternal(info.release_url || 'https://github.com/FreeProject089/BetterModsManager/releases/latest');
+    });
+    q('#btn-update-later')?.addEventListener('click', () => {
+        store.set(SNOOZE_KEY, JSON.stringify({ version: info.latest_version, until: Date.now() + SNOOZE_MS }));
+        // The dialog comes back once the snooze is over.
+        store.set(SEEN_KEY, null);
+        toast(t('update.remindedToast') || 'BMM reminds you about this version tomorrow.', 'info', 3000, '', 'Updates');
+        close();
+    });
+    q('#close-update-modal')?.addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+}
+
+/**
+ * « Install on next launch », the next launch: a verified installer staged by `stage_update`
+ * (or, for a BetterInstaller install, the flag), offered with a short countdown that can be
+ * stopped. True when a prompt is shown.
+ */
+async function checkStagedUpdate(): Promise<boolean> {
+    const biVersion = store.get(NEXT_LAUNCH_BI_KEY);
+    if (biVersion) {
+        let current = '';
+        try { current = String(await invoke('get_app_version') || ''); } catch { /* unknown */ }
+        if (current && cmpVersion(biVersion, current) > 0) {
+            showStagedPrompt({ version: biVersion, size: 0 }, 'bi');
+            return true;
+        }
+        store.set(NEXT_LAUNCH_BI_KEY, null);
+    }
+    let staged: any = null;
+    try { staged = await invoke('staged_update'); } catch { /* none */ }
+    if (staged) {
+        showStagedPrompt(staged, 'file');
+        return true;
+    }
+    return false;
+}
+
+function showStagedPrompt(staged: { version: string; size: number }, kind: 'file' | 'bi') {
+    document.getElementById('update-staged-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'update-staged-modal';
+    modal.className = 'modal-overlay open';
+    modal.innerHTML = `
+        <div class="modal bms modal--sm" role="dialog" aria-modal="true" aria-labelledby="upd-staged-title">
+            <div class="modal-header">
+                <img src="assets/Tasky_Happy.png" alt="" class="upd-tasky">
+                <div class="bms-titles">
+                    <h2 class="modal-title" id="upd-staged-title">${t('update.stagedTitle') || 'Update ready to install'}</h2>
+                    <p class="bms-sub" id="upd-staged-body"></p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="upd-staged-error" class="upd-error" role="alert" hidden>
+                    ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
+                    <div class="upd-error-body">
+                        <div class="upd-error-title">${t('update.failedTitle') || 'The update did not go through'}</div>
+                        <div class="upd-error-msg" id="upd-staged-error-msg"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" id="btn-staged-discard">${t('update.stagedDiscard') || 'Discard'}</button>
+                <button type="button" class="btn btn-secondary" id="btn-staged-later">${t('update.stagedNotNow') || 'Not now'}</button>
+                <button type="button" class="btn btn-primary" id="btn-staged-install">${uiIcon('download', 12)} ${t('update.installNow') || 'Install now'}</button>
+            </div>
+        </div>
+    `;
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    raiseAboveAll(modal);
+
+    const body = modal.querySelector('#upd-staged-body') as HTMLElement;
+    const installBtn = modal.querySelector('#btn-staged-install') as HTMLButtonElement;
+    let left = STAGED_COUNTDOWN_S;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const renderBody = () => {
+        body.textContent = timer
+            ? (t('update.stagedBody', { version: staged.version, n: left }) || `v${staged.version} installs in ${left} s.`)
+            : (t('update.stagedReady', { version: staged.version }) || `v${staged.version} is downloaded and verified.`);
+    };
+    const install = async () => {
+        stop();
+        renderBody();
+        installBtn.disabled = true;
+        installBtn.innerHTML = uiIcon('loader', 12, { style: 'animation:spin 1s linear infinite' }) + ' ' + (t('update.installing') || 'Installing...');
+        try {
+            if (kind === 'bi') {
+                store.set(NEXT_LAUNCH_BI_KEY, null);
+                await invoke('update_via_installer');
+            } else {
+                await invoke('install_staged_update');
+            }
+        } catch (err) {
+            (modal.querySelector('#upd-staged-error-msg') as HTMLElement).textContent = String(err).replace(/^Error:\s*/, '');
+            (modal.querySelector('#upd-staged-error') as HTMLElement).hidden = false;
+            installBtn.disabled = false;
+            installBtn.innerHTML = uiIcon('refresh', 12) + ' ' + (t('update.retry') || 'Try again');
+        }
+    };
+    timer = setInterval(() => {
+        left -= 1;
+        if (left <= 0) { void install(); return; }
+        renderBody();
+    }, 1000);
+    renderBody();
+
+    installBtn.addEventListener('click', () => { void install(); });
+    modal.querySelector('#btn-staged-later')?.addEventListener('click', () => { stop(); modal.remove(); });
+    modal.querySelector('#btn-staged-discard')?.addEventListener('click', async () => {
+        stop();
+        if (kind === 'bi') store.set(NEXT_LAUNCH_BI_KEY, null);
+        else { try { await invoke('discard_staged_update'); } catch { /* already gone */ } }
+        modal.remove();
+    });
 }
 
 // ── PTB (Public Test Build) Modal ───────────────────────

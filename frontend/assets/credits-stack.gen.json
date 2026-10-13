@@ -34,6 +34,13 @@
      "docs",
      "installer"
     ],
+    "commits": {
+     "bmm": 1666,
+     "bcw": 1736,
+     "docs": 303,
+     "installer": 99
+    },
+    "total": 3804,
     "since": "2026"
    }
   ]

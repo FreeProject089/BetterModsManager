@@ -2,7 +2,7 @@
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { fetchSourceText } from '../../core/source-fetch.js';
+import { fetchCatalogText, asLegacy } from '../../core/catalog-read.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { uiIcon } from '../../ui/icons.js';
@@ -163,7 +163,8 @@ export async function openModpackCatalog(notify) {
                 await invoke('read_modpack_catalog', { source: url });
             }
             else {
-                const doc = JSON.parse(await fetchSourceText(url, true));
+                // Any catalogue variant (universal, v2 feed, signed) reads as its modpack view.
+                const doc = await asLegacy(JSON.parse(await fetchCatalogText(url, true)), 'modpack', url);
                 if (!looksLikeModpackFeed(doc)) {
                     toast(t('modpack.cat.notFeed'), 'warning', 7000);
                     return;
@@ -458,7 +459,7 @@ async function refresh() {
                     source: u,
                 }));
             }
-            return parseModpackFeed(JSON.parse(await fetchSourceText(u, true)), u).packs;
+            return parseModpackFeed(await asLegacy(JSON.parse(await fetchCatalogText(u, true)), 'modpack', u), u).packs;
         }
         catch {
             return null;

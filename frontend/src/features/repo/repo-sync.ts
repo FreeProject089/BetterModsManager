@@ -38,6 +38,17 @@ export { promptRepoPassword };
 // already carries it), so the auto-driven fetch doesn't have to prompt the user.
 export function setRepoPassword(pw: string | null): void { lastRepoPassword = pw && pw.length ? pw : null; }
 
+/** The repo mod ids « Mod updates » asked to update from `url`, once (the selection is
+ *  consumed), or null = no selection for this repo (tick everything, as before). */
+function updateSelectionFor(url: string): Set<string> | null {
+    const sel = (window as any).__bmmUpdateSelection as { repoUrl: string; repoModIds?: string[] } | null | undefined;
+    if (!sel?.repoModIds?.length) return null;
+    const norm = (u: string) => u.trim().replace(/\/repo\.json$/i, '').replace(/\/+$/, '').toLowerCase();
+    if (norm(sel.repoUrl) !== norm(url)) return null;
+    (window as any).__bmmUpdateSelection = null;
+    return new Set(sel.repoModIds);
+}
+
 /** The collapsed "this repo has a password" row under the URL field. Wired here rather
  *  than in app.ts so everything about repo passwords lives in one file. */
 function initSyncPasswordField(): void {
@@ -517,6 +528,7 @@ export function initRepoSync(elements) {
     if (btnFetchInfo) {
         btnFetchInfo.addEventListener('click', async () => {
             const url = inputSyncUrl.value.trim();
+            const updatePick = updateSelectionFor(url);
             if (!url) return toast(t('repo.errNoUrl'), 'warning');
 
             try {
@@ -768,7 +780,9 @@ export function initRepoSync(elements) {
 
                                 const cb = document.createElement('input');
                                 cb.type = 'checkbox';
-                                cb.checked = true;
+                                // Opened from « Mod updates »: only the mods the user ticked
+                                // there; otherwise every mod, as before.
+                                cb.checked = !updatePick || updatePick.has(String(mod.id));
                                 cb.dataset.repoProfileId = rp.id;
                                 cb.dataset.modId = mod.id;
                                 cb.className = 'repo-sync-mod-cb';

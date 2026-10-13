@@ -157,6 +157,25 @@ fn the_version_order_mirrors_bpkg_core() {
     assert!(is_newer_version("1.2.3-rc1", "1.2.2"), "the release check uses the same order");
 }
 
+/// The one rule bpkg-core does not have: a release beats its own pre-releases, and pre-releases
+/// order naturally. Without it a person on 1.2.0-rc.1 was never offered 1.2.0.
+#[test]
+fn a_release_is_newer_than_its_pre_releases() {
+    assert!(is_newer("1.2.0", "1.2.0-rc.1"));
+    assert!(is_newer("v1.2.0", "1.2.0-beta"));
+    assert!(!is_newer("1.2.0-rc.1", "1.2.0"));
+    assert!(is_newer("1.2.0-rc.2", "1.2.0-rc.1"));
+    assert!(is_newer("1.2.0-rc.10", "1.2.0-rc.9"), "numbers in the tag compare as numbers");
+    assert!(is_newer("1.2.0-rc.1", "1.2.0-beta.3"), "rc after beta");
+    assert!(!is_newer("1.2.0-rc.1", "1.2.0-rc.1"));
+    assert!(!is_newer("1.2.0+build.5", "1.2.0"), "build metadata is not a pre-release");
+    assert!(is_prerelease_version("1.1.0-beta.2") && !is_prerelease_version("1.1.0") && !is_prerelease_version("1.1.0+abc"));
+    // And the signed manifest follows it: 1.2.0 is offered to 1.2.0-rc.1.
+    let key = test_key().verifying_key();
+    let m = verify_manifest_text(&good_doc(), &key, "1.2.0-rc.1", t0() + Duration::hours(1)).expect("1.2.0 > 1.2.0-rc.1");
+    assert_eq!(m.version, "1.2.0");
+}
+
 #[test]
 fn only_https_and_plain_relative_paths_are_accepted() {
     let http = serde_json::json!([file("http://github.com/x/lang-en.json", "_up_/frontend/Lang/en.json")]);
@@ -292,22 +311,30 @@ fn installer_entries_follow_the_manifest_rules() {
 fn the_fallback_verifies_before_it_writes_or_launches() {
     let src = include_str!("autoupdate.rs");
     let start = src.find("pub async fn download_and_install_update(").expect("the command");
-    let end = start + src[start..].find("std::process::exit(0)").expect("its end");
+    let end = start + src[start..].find("\n}\n").expect("its end");
     let body = &src[start..end];
     let no_manifest = body.find("let Some(manifest_url)").expect("refuses without a manifest URL");
     let verify = body.find("verify_manifest_text(&document").expect("verifies the manifest");
     let listed = body.find("pick_installer(&manifest").expect("picks among the signed entries");
     let get = body.find("download_installer(&app_handle, entry)").expect("downloads the LISTED entry");
     let hash = body.find("check_installer_bytes(entry").expect("checks the hash");
-    let write = body.find("File::create").expect("writes");
-    let launch = body.find("shell_launch(&target, None)").expect("launches");
+    let write = body.find("write_installer_to_fresh_dir(entry, &bytes)").expect("writes");
+    let launch = body.find("launch_installer_and_exit(").expect("launches");
     assert!(no_manifest < verify && verify < listed && listed < get && get < hash && hash < write && write < launch, "{body}");
-    assert!(!body.contains("temp_dir.join(&filename)") && !body.contains(".join(&filename)"), "never the UI's file name");
-    assert!(!body.contains("open::that"), "installers never go through open::that's PowerShell launcher");
+    assert!(!body.contains(".join(&filename)"), "never the UI's file name");
+
+    // The writer uses the signed entry's name, in a fresh folder; the launcher goes through
+    // ShellExecuteExW, never open::that's PowerShell launcher.
+    let start = src.find("pub(crate) fn write_installer_to_fresh_dir(").expect("the writer");
+    let writer = &src[start..start + src[start..].find("\n}\n").unwrap()];
+    assert!(writer.contains("installer_file_name(&entry.path)") && writer.contains("Uuid::new_v4()"), "{writer}");
+    let start = src.find("async fn launch_installer_and_exit(").expect("the launcher");
+    let launcher = &src[start..start + src[start..].find("\n}\n").unwrap()];
+    assert!(launcher.contains("shell_launch(&target, None)") && !launcher.contains("open::that"), "{launcher}");
 
     // The download helper only hands back bytes that passed the hash, and fetches the entry's
     // own URL, never the UI's.
-    let start = src.find("async fn download_installer(").expect("the helper");
+    let start = src.find("pub(crate) async fn download_installer_into(").expect("the helper");
     let end = start + src[start..].find("\n}\n").expect("its end");
     let helper = &src[start..end];
     assert!(helper.contains(".get(&entry.download_url)"), "{helper}");

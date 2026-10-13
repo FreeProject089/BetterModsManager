@@ -777,24 +777,7 @@
 
 /* ── Markdown ── */
 .adm-md { padding: 14px 16px; font-size: 12.5px; line-height: 1.72; color: var(--text-secondary); }
-.adm-h1 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 14px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-.adm-h2 { font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 10px 0 4px; }
-.adm-h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 8px 0 3px; }
-.adm-p  { margin: 0 0 6px; }
-.adm-br { height: 4px; }
-.adm-pre {
-    background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 7px;
-    padding: 10px 12px; overflow-x: auto; font-size: 11px; font-family: monospace;
-    margin: 6px 0; white-space: pre; line-height: 1.5;
-}
-.adm-code { background: var(--bmm-s08); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 11px; }
-.adm-ul, .adm-ol { padding-left: 18px; margin: 4px 0; }
-.adm-ul li, .adm-ol li { margin-bottom: 3px; }
-.adm-blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; color: var(--text-muted); margin: 6px 0; font-style: italic; background: var(--bmm-s02); border-radius: 0 6px 6px 0; }
-.adm-hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
-.adm-link { color: var(--accent); text-decoration: none; }
-.adm-link:hover { text-decoration: underline; }
-.adm-md-img { max-width: 100%; border-radius: 6px; margin: 6px 0; display: block; }
+/* The README and the description are B.MD now: their element styles are .adm-md-body below. */
 .adm-md-error { color: var(--text-muted); font-size: 12px; padding: 10px 14px; }
 
 /* ── Uninstall (in-body, no footer) ── */
@@ -1362,3 +1345,217 @@
 /* Create › reopen: "Start again" throws the draft away, so it stands apart at the end of the
    row instead of touching "From a URL". */
 .apps-create-open .apps-create-clear { margin-left: auto; }
+
+/* ── Card footer: state + the one next action ────────────────────────────────
+   Install / Update / Launch live on the card, and so does a running job (a moving bar,
+   the words, the button disabled) and a failed one (the message and Retry). The accent is
+   only ever a FILL here: the update state's text goes through --bms-accent-ink. */
+.apps-card-open {
+    /* The title is the card's keyboard way in: a real button that looks like the title. */
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+}
+.apps-card-open:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.apps-card:focus-within { border-color: var(--bmm-border-accent); }
+.apps-card-source {
+    margin-top: -3px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-card-update { border-color: var(--bmm-border-accent); }
+.apps-card.is-busy { cursor: progress; }
+
+.apps-card-foot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bmm-s02);
+}
+.apps-card-foot .btn { flex: none; }
+.apps-card-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-card-state--muted { font-weight: 500; color: var(--text-muted); }
+.apps-card-foot.is-installed .apps-card-state { color: var(--success); }
+.apps-card-foot.is-update { background: var(--bmm-accent-dim); }
+.apps-card-foot.is-update .apps-card-state { color: var(--bms-accent-ink); }
+.apps-card-state-ver { font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Running: an indeterminate bar along the footer's top edge. install_app reports no
+   percentage, so the bar moves instead of inventing one. */
+.apps-card-progress {
+    position: absolute;
+    left: 0; right: 0; top: -1px;
+    height: 2px;
+    overflow: hidden;
+    background: var(--border);
+}
+.apps-card-progress > span,
+.apps-install-progress-bar.is-indeterminate .apps-install-progress-fill {
+    display: block;
+    width: 35%;
+    height: 100%;
+    background: var(--bmm-accent);
+    animation: apps-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes apps-indeterminate {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(290%); }
+}
+.apps-install-progress-bar.is-error .apps-install-progress-fill { background: var(--danger); }
+.apps-install-status { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.apps-install-progress-bar.is-error + .apps-install-status { color: var(--danger); }
+.apps-install-ver { font-family: var(--font-mono); }
+
+.apps-spinner.apps-spinner--xs { width: 12px; height: 12px; border-width: 2px; flex: none; }
+
+/* Failed: what failed, the backend's message (two lines, the rest in the tooltip), Retry. */
+.apps-card-foot.is-error {
+    /* Two rows: the message gets the card's full width, the actions sit under it on the right. */
+    flex-wrap: wrap;
+    row-gap: 6px;
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.apps-card-error { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 100%; }
+.apps-card-foot.is-error .apps-card-foot-actions { margin-left: auto; }
+.apps-card-error-title {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; font-weight: 700; color: var(--danger);
+}
+.apps-card-error-msg {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.apps-card-foot-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .apps-card-progress > span,
+    .apps-install-progress-bar.is-indeterminate .apps-install-progress-fill { animation: none; width: 100%; opacity: 0.6; }
+}
+
+/* Some sources failed: one quiet line above the grid, with Retry. */
+.apps-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 8%, transparent);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.apps-notice > svg { color: var(--warning); flex: none; }
+.apps-notice-text { flex: 1; min-width: 0; }
+
+/* Detail: a failed job, the version row when an update is waiting, the README states. */
+.adm-job-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    color: var(--danger);
+}
+.adm-job-error-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.adm-job-error-text span { color: var(--text-secondary); overflow-wrap: anywhere; }
+.adm-info-update .adm-info-value { color: var(--bms-accent-ink); font-weight: 600; }
+.adm-readme-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.adm-readme-state.adm-md-error { justify-content: space-between; }
+
+/* B.MD output (md-lite, untrusted) inside the detail: the description and the README. */
+.adm-md-body { min-width: 0; overflow-wrap: break-word; }
+.adm-md-body > :first-child { margin-top: 0; }
+.adm-md-body > :last-child { margin-bottom: 0; }
+.adm-md-body p { margin: 0 0 8px; }
+.adm-md-body h1, .adm-md-body h2, .adm-md-body h3, .adm-md-body h4 {
+    color: var(--text-primary);
+    line-height: 1.3;
+    margin: 14px 0 6px;
+}
+.adm-md-body h1 { font-size: 16px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.adm-md-body h2 { font-size: 14px; }
+.adm-md-body h3, .adm-md-body h4 { font-size: 13px; }
+.adm-md-body ul, .adm-md-body ol { padding-left: 20px; margin: 4px 0 8px; }
+.adm-md-body li { margin-bottom: 3px; }
+.adm-md-body a { color: var(--bms-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.adm-md-body :not(pre) > code {
+    background: var(--bmm-s06);
+    border: 1px solid var(--bmm-s08);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+.adm-md-body pre {
+    background: var(--bmm-bg-base);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 6px 0 10px;
+}
+.adm-md-body blockquote {
+    margin: 6px 0;
+    padding: 4px 12px;
+    border-left: 3px solid var(--bmm-accent);
+    background: var(--bmm-s02);
+    border-radius: 0 6px 6px 0;
+    color: var(--text-secondary);
+}
+.adm-md-body img { max-width: 100%; height: auto; border-radius: 6px; }
+.adm-md-body hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.adm-md-body table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; font-size: 12px; }
+.adm-md-body th, .adm-md-body td { border: 1px solid var(--border); padding: 4px 8px; }
+
+/* Narrow window: the filters share rows two by two, and the grid goes down to one column. */
+@media (max-width: 640px) {
+    .apps-toolbar .apps-filter { flex: 1 1 calc(50% - 8px); max-width: none; }
+    .apps-grid { grid-template-columns: 1fr; }
+}

@@ -172,6 +172,16 @@ function observe(command: string, args: Record<string, unknown>, ok: boolean, re
     try { _observer.fn(command, args, ok, result, ms); } catch { /* statistics never break a call */ }
 }
 
+// The activity centre (core/activity-sources.ts) registers here: told when a command starts, it
+// may return the function to call when that command ends. Commands it does not list cost a lookup.
+export type InvokeActivityHook = (command: string, args: Record<string, unknown>) => ((ok: boolean, result: unknown) => void) | null;
+let _activityHook: InvokeActivityHook | null = null;
+export function setInvokeActivityHook(fn: InvokeActivityHook | null): void { _activityHook = fn; }
+function activityStart(command: string, args: Record<string, unknown>): ((ok: boolean, result: unknown) => void) | null {
+    if (!_activityHook) return null;
+    try { return _activityHook(command, args); } catch { return null; }
+}
+
 export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -184,17 +194,20 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
     }
     const startTime = performance.now();
     const _call = debugHub.recordIPC(command, args, 'pending');
+    const _act = activityStart(command, args);
 
     try {
         const res = await _invoke(command, args);
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
         observe(command, args, true, res, duration);
+        if (_act) { try { _act(true, res); } catch { /* the activity centre never breaks a call */ } }
         return res;
     } catch (err) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'error', err, duration);
         observe(command, args, false, err, duration);
+        if (_act) { try { _act(false, err); } catch { /* the activity centre never breaks a call */ } }
         // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
         const errStr = String(err);
         const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel'

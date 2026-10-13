@@ -82,6 +82,12 @@ export function knownSourcePasswords(): Record<string, string> {
     return out;
 }
 
+/** The password typed for this source in this run, if any. For core/catalog-read.ts, which
+ *  fetches through the cache and must send the same password `fetchHttp` would. */
+export function sessionPasswordFor(url: string): string | null {
+    return _sessionPasswords[passwordKey(url)] ?? null;
+}
+
 /** Remember a password for a source, for this run only. */
 export function rememberSourcePassword(url: string, password: string): void {
     _sessionPasswords[passwordKey(url)] = password;

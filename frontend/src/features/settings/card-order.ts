@@ -28,43 +28,66 @@ const ORDER_KEY = 'bmm_settings_card_order';
  * This is the DEFAULT, not a lock: the page has been reorderable by drag for a while, and a
  * saved order still wins.
  */
-const DEFAULT_ORDER: string[] = [
-    // ─ How it looks and reads ─
-    'k:settings.language',
-    'k:themes.settingsTitle',
-    'settings-graphics-card',
-    'k:settings.taskyTitle',
-    'k:settings.shortcutsTitle',
-    // ─ The library itself ─
-    'settings-scan-updates-card',
-    'settings-sha-card',
-    'k:settings.tagsTitle',
-    'settings-catalog-index-card',
-    // ─ Automation ─
-    'settings-scheduler-section',
-    'settings-launchpack-section',
-    'settings-identity-card',
-    // ─ Performance ─
-    'settings-storage-section',
-    'settings-benchmark-section',
-    // ─ Accounts it talks to ─
-    'k:settings.githubPatTitle',
-    'settings-discord-rpc-card',
-    // ─ Privacy and security. The two security cards sit together on purpose: one is system
-    //   access, the other is the app's own, and split across the page they read as a
-    //   duplicate rather than as two halves of one subject.
-    'settings-privacy-section',
-    'settings-ai-section',
-    'settings-watcher-section',
-    'settings-security-section',
-    'settings-security-card',
-    // ─ The app looking after itself ─
-    'settings-auto-update-card',
-    'k:settings.dataTitle',
-    'k:settings.crashTitle',
-    'k:betahub.cardTitle',
-    'debug-menu-card',
+/**
+ * The same grouping, named: the Settings index (ui/settings-nav.ts) lists the cards under
+ * these headings. One list feeds both the default order and the index, so a card cannot sit
+ * in one group on the page and another in the index. `label` is an i18n key.
+ */
+export const SETTINGS_GROUPS: { id: string; label: string; keys: string[] }[] = [
+    { id: 'look', label: 'settings.group.look', keys: [
+        'k:settings.language',
+        'k:themes.settingsTitle',
+        'settings-graphics-card',
+        'k:settings.taskyTitle',
+        'k:settings.shortcutsTitle',
+    ] },
+    { id: 'library', label: 'settings.group.library', keys: [
+        'settings-scan-updates-card',
+        'settings-sha-card',
+        'k:settings.tagsTitle',
+        'settings-catalog-index-card',
+    ] },
+    { id: 'automation', label: 'settings.group.automation', keys: [
+        'settings-scheduler-section',
+        'settings-launchpack-section',
+        'settings-identity-card',
+    ] },
+    { id: 'performance', label: 'settings.group.performance', keys: [
+        'settings-storage-section',
+        'settings-benchmark-section',
+    ] },
+    { id: 'accounts', label: 'settings.group.accounts', keys: [
+        'k:settings.githubPatTitle',
+        'settings-discord-rpc-card',
+    ] },
+    // Privacy and security. The two security cards sit together on purpose: one is system
+    // access, the other is the app's own, and split across the page they read as a
+    // duplicate rather than as two halves of one subject.
+    { id: 'privacy', label: 'settings.group.privacy', keys: [
+        'settings-privacy-section',
+        'settings-ai-section',
+        'settings-watcher-section',
+        'settings-security-section',
+        'settings-security-card',
+    ] },
+    // The app looking after itself. Debug stays last but for feedback, which was already
+    // after it when it was unlisted.
+    { id: 'app', label: 'settings.group.app', keys: [
+        'settings-auto-update-card',
+        'k:settings.dataTitle',
+        'k:settings.crashTitle',
+        'k:betahub.cardTitle',
+        'debug-menu-card',
+        'settings-feedback-card',
+    ] },
 ];
+
+const DEFAULT_ORDER: string[] = SETTINGS_GROUPS.flatMap((g) => g.keys);
+
+/** The stable key of a settings card (its id, its title's i18n key, or its position). */
+export function settingsCardKey(card: HTMLElement, index: number): string {
+    return cardKey(card, index);
+}
 const CODE_PREFIX = 'BMMUI1.';
 
 function container(): HTMLElement | null {

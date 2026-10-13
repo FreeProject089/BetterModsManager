@@ -33,6 +33,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/data` | oui | **Export complet des données BMM** (`data.json`) — profils, mods, modpacks, plugins, réglages, tags… | fichier JSON (`bmm-data.json`) |
 | `/api/repo/info?url=` | non | Métadonnées d'un repo distant. `&password=` optionnel pour un dépôt auto-hébergé protégé (envoyé en `X-Repo-Password` ; absent/faux → 401) | résumé du manifeste repo |
 | `/api/repo/list` | non | Repos connectés | `{ ok, data:[{url,name,…}] }` |
+| `/api/repo/follow` | oui · `repo.read` | Dépôts suivis : interrupteur, intervalle, action, dernière vérification | `{ ok, repos:[{url,name,follow,due}] }` |
 | `/api/apps` | oui · `app.read` | Apps installées du Catalogue + stats d'usage | `{ installed:{ id:{…} } }` |
 | `/api/catalog` | oui · `catalog.read` | `apps-catalog.json` local | objet catalogue |
 | `/api/language/template` | non | Télécharge `lang-template.json` (toutes les clés i18n → valeurs anglaises) | fichier JSON (`Content-Disposition: attachment`) |
@@ -150,6 +151,9 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mod/config` | `mods.write` | `{ modId, repoModId?, updateUrl?, updateSources?, directUrl? }` — définit où un mod vérifie ses propres mises à jour |
 | `/api/repo/manifest` | `repo.write` | `{ modsDir, outputPath?, name?, author?, gameName?, filesBaseUrl?, filesLayout?, reuseExisting?, only? }` — écrit un `repo.json` pour un dossier déjà hébergé. Ne copie rien et n'exige aucun profil ; synchrone, donc un script de publication peut agir sur le diff renvoyé. `reuseExisting` vaut **true** par défaut : réexécuter produit une nouvelle révision du MÊME dépôt, pas un dépôt différent |
 | `/api/repo/convert` | `repo.write` | `{ path, dryRun?, rehash?, sign? }` — convertit le manifeste d'un dossier de dépôt au format 1.0 : clés manquantes complétées, fichiers re-hachés, `format_version` inscrit, ancien manifeste sauvegardé (`repo.json.v<ancien>-<date>.bak`), re-signé avec la clé de ce BMM. `dryRun` renvoie seulement le plan |
+| `/api/repo/validate` | `repo.read` | `{ path, deep? }` — vérifie un dossier de dépôt sans le modifier : format, signature, identifiants en double, chaque fichier contre son empreinte (en parallèle, annulable). Renvoie `{ ok, report }` |
+| `/api/repo/follow` | `repo.write` | `{ url, name?, enabled?, intervalMin?, action?, remove? }` — suit un dépôt ou change la façon (`action` : notify · download · apply) ; `remove: true` arrête le suivi |
+| `/api/repo/follow/check` | `repo.write` | `{ url, password?, force? }` — vérifie maintenant un dépôt suivi (GET conditionnel). Renvoie les mises à jour et le plan d'installation ; n'installe rien |
 | `/api/discord/rpc` | oui | `{ enabled: bool }` — active/désactive Discord Rich Presence |
 | `/api/data/export-auto` | oui | `{ dir, name? (modèle : `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — sauvegarde automatique, renvoie le chemin écrit |
 | `/api/launchpack/run` | oui | `{ id }` — lance un launch pack enregistré |

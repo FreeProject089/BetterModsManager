@@ -1,0 +1,33 @@
+{
+  "catalog_version": "1.0",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "author": "Di",
+      "description": "Everything",
+      "download": {
+        "url": "https://example.org/f18.bmp"
+      },
+      "extra": {
+        "mods": 12
+      },
+      "game": "DCS World",
+      "id": "f18-full",
+      "kind": "modpack",
+      "name": "F/A-18 full",
+      "version": "3"
+    },
+    {
+      "extra": {
+        "file": "packs/packed.bmp",
+        "mods": 2
+      },
+      "id": "packed",
+      "kind": "modpack",
+      "name": "Packed one",
+      "version": "1"
+    }
+  ],
+  "name": "Packs"
+}

@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "name": "Packs",
+  "modpacks": [
+    { "id": "f18-full", "name": "F/A-18 full", "description": "Everything", "author": "Di", "version": "3", "download_url": "https://example.org/f18.bmp", "game": "DCS World", "mods": 12 },
+    { "id": "packed", "name": "Packed one", "version": "1", "file": "packs/packed.bmp", "mods": 2 }
+  ]
+}

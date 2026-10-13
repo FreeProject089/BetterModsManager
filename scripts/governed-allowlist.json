@@ -5,8 +5,8 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     },
     "spawn_blocking": {
-      "count": 2,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt. Second: POST /api/repo/convert, one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt. Third: POST /api/repo/validate, off the async runtime only; its hashing runs on the governor Hash pool behind its own ticket (repo_validate::validate). Second: POST /api/repo/convert, one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
     },
     "fs::copy": {
       "count": 1,
@@ -41,6 +41,12 @@
     "spawn_blocking": {
       "count": 3,
       "why": "not heavy work: waiting on uninstall.exe --check-update (time-boxed) and on ShellExecuteExW while a Windows permission prompt is open; kept off the async runtime and the main thread"
+    }
+  },
+  "src/commands/autoupdate_flow_tests.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "test-only (included under cfg(test) by autoupdate.rs): the loopback HTTP server the update-flow tests download the manifest and the installer from; never compiled into the app"
     }
   },
   "src/commands/benchmark.rs": {
@@ -237,6 +243,12 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
+  "src/commands/tools.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "governed: tools_find_duplicates holds a Hash ticket (checkpoint per mod during the walk and per file before each BLAKE3, bytes reported); tools_disk_usage holds a Scan ticket with a checkpoint every 512 entries; both also stop on tools_cancel"
+    }
+  },
   "src/commands/verify.rs": {
     "spawn_blocking": {
       "count": 1,
@@ -377,6 +389,16 @@
     "fs::copy": {
       "count": 1,
       "why": "one backup copy of repo.json (a single small file) before it is rewritten"
+    }
+  },
+  "src/commands/repo_validate.rs": {
+    "par_iter": {
+      "count": 1,
+      "why": "governed: governed_hasher runs the files on the governor's Hash pool (gov.pool(OpKind::Hash).install), each file behind the Hash ticket's checkpoint (pause / cancel / step aside), bytes counted on the ticket"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed: repo_validate off the async runtime; validate() holds a Hash ticket and hashes on the Hash pool through governed_hasher"
     }
   }
 }

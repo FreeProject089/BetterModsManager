@@ -218,13 +218,14 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
     const repoBlocks = [...byRepo.entries()].map(([repoUrl, mods]) => {
         const rows = mods.map(m => `
             <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--bmm-s06);cursor:pointer;">
-                <input type="checkbox" class="mod-update-cb" data-repo-url="${escAttr(repoUrl)}" data-mod-id="${escAttr(m.mod_id)}" checked style="margin-top:3px;flex-shrink:0;">
+                <input type="checkbox" class="mod-update-cb" data-repo-url="${escAttr(repoUrl)}" data-mod-id="${escAttr(m.mod_id)}" data-repo-mod-id="${escAttr(m.repo_mod_id || '')}" checked style="margin-top:3px;flex-shrink:0;">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(m.name)}</div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
                         <span style="opacity:0.8;">${escHtml(m.current_version)}</span>
                         <span style="margin:0 5px;">→</span>
                         <span style="color:var(--bmm-success);font-weight:700;">${escHtml(m.new_version)}</span>
+                        ${m.detail === 'content' ? `<span style="margin-left:6px;">· ${escHtml(t('repo.updateFilesChanged'))}</span>` : ''}
                     </div>
                     ${m.changelog ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;line-height:1.45;background:var(--bmm-s04);padding:6px 8px;border-radius:5px;">${escHtml(m.changelog)}</div>` : ''}
                 </div>
@@ -326,11 +327,10 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
         btn.addEventListener('click', () => {
             const repoUrl = (btn as HTMLElement).dataset.repoUrl || '';
             const block = (btn as HTMLElement).closest('.mod-updates-repo-block');
-            const selected = block
-                ? Array.from(block.querySelectorAll('.mod-update-cb:checked')).map(c => (c as HTMLElement).dataset.modId)
-                : [];
+            const boxes = block ? Array.from(block.querySelectorAll<HTMLElement>('.mod-update-cb:checked')) : [];
+            const selected = boxes.map(c => c.dataset.modId || '');
             if (selected.length === 0) return;
-            applyRepoUpdate(repoUrl, selected as string[]);
+            applyRepoUpdate(repoUrl, selected, boxes.map(c => c.dataset.repoModId || '').filter(Boolean));
         });
     });
 
@@ -338,12 +338,13 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
 }
 
 /** Jump to the sync flow pre-filled with the repo URL; delta-sync performs the update. */
-function applyRepoUpdate(repoUrl: string, selectedModIds?: string[]): void {
+function applyRepoUpdate(repoUrl: string, selectedModIds?: string[], repoModIds?: string[]): void {
     closeUpdatesModal();
-    // Remember the user's per-mod choice so the sync screen can pre-tick exactly
-    // those mods (it falls back to "all" when no selection is provided).
+    // Remember the user's per-mod choice so the sync screen pre-ticks exactly those mods
+    // (repo-sync.ts updateSelectionFor). The sync lists REPO mod ids, so those are what it
+    // matches; the local ids are kept for anything else that reads the selection.
     (window as any).__bmmUpdateSelection = (selectedModIds && selectedModIds.length)
-        ? { repoUrl, modIds: selectedModIds } : null;
+        ? { repoUrl, modIds: selectedModIds, repoModIds: repoModIds || [] } : null;
     document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
         detail: { section: 'connect', prefill: { url: repoUrl } }
     }));

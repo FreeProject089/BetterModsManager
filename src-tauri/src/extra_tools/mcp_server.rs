@@ -508,6 +508,39 @@ enum Commands {
         no_rehash: bool,
     },
 
+    /// Check a repo folder without changing it: format, signature, duplicate ids, every
+    /// file against its hash (running app)
+    #[command(name = "repo-validate")]
+    RepoValidate {
+        /// The repo folder, or its repo.json
+        path: String,
+        /// Re-read every file, even the ones whose size and date have not changed
+        #[arg(long)]
+        deep: bool,
+    },
+
+    /// Followed repos: list them, follow one, change how, stop, or check one now (running app)
+    #[command(name = "repo-follow")]
+    RepoFollow {
+        /// list | set | remove | check
+        #[arg(default_value = "list")]
+        op: String,
+        /// The repo's address (all but list)
+        url: Option<String>,
+        /// set: minutes between two checks (15 or more)
+        #[arg(long)]
+        interval: Option<u32>,
+        /// set: notify | download | apply
+        #[arg(long)]
+        action: Option<String>,
+        /// set: pause the repo's checks instead of running them
+        #[arg(long)]
+        pause: bool,
+        /// check: ignore the stored ETag and read the manifest in full
+        #[arg(long)]
+        force: bool,
+    },
+
     // ── Identity keys ────────────────────────────────────
 
     /// List the identity keys BMM can prove with — names and paths only.
@@ -1423,6 +1456,28 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
                 http_ok(&res)?;
             }
+        }
+        Commands::RepoValidate { path, deep } => {
+            let res = state_bridge::api_call("POST", "/api/repo/validate", Some(serde_json::json!({ "path": path, "deep": deep }))).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+            http_ok(&res)?;
+        }
+        Commands::RepoFollow { op, url, interval, action, pause, force } => {
+            let need_url = || url.clone().filter(|u| !u.trim().is_empty()).ok_or_else(|| anyhow::anyhow!("{} needs the repo's address", op));
+            let res = match op.as_str() {
+                "list" => state_bridge::api_call("GET", "/api/repo/follow", None).await?,
+                "check" => state_bridge::api_call("POST", "/api/repo/follow/check", Some(serde_json::json!({ "url": need_url()?, "force": force }))).await?,
+                "remove" => state_bridge::api_call("POST", "/api/repo/follow", Some(serde_json::json!({ "url": need_url()?, "remove": true }))).await?,
+                "set" => {
+                    let mut body = serde_json::json!({ "url": need_url()?, "enabled": !pause });
+                    if let Some(m) = interval { body["intervalMin"] = serde_json::json!(m); }
+                    if let Some(a) = action { body["action"] = serde_json::json!(a); }
+                    state_bridge::api_call("POST", "/api/repo/follow", Some(body)).await?
+                }
+                other => anyhow::bail!("unknown op '{}': list, set, remove or check", other),
+            };
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+            http_ok(&res)?;
         }
 
         // ── Identity keys ───────────────────────────────────

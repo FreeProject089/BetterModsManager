@@ -1,0 +1,33 @@
+{
+  "catalog_version": "1.0",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "author": "Bo",
+      "download": {
+        "url": "themes/aurora.bmmtheme"
+      },
+      "id": "aurora",
+      "kind": "theme",
+      "name": "Aurora",
+      "tags": [
+        "dark"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "extra": {
+        "mode": "light",
+        "vars": {
+          "--bg": "#fafafa",
+          "--text": "#111111"
+        }
+      },
+      "id": "paper",
+      "kind": "theme",
+      "name": "Paper"
+    }
+  ],
+  "name": "Themes"
+}

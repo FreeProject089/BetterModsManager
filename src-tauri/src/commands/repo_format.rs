@@ -446,9 +446,24 @@ pub fn hash_file(path: &Path) -> std::io::Result<(u64, String, Option<Vec<Value>
     Ok((size, format!("{:x}", whole.finalize()), if want_chunks && !chunks.is_empty() { Some(chunks) } else { None }))
 }
 
-/// Re-hash one file entry against the disk.
-fn rehash_entry(entry: &mut Map<String, Value>, on_disk: &Path, at: &str, changes: &mut Vec<Change>, missing: &mut usize) {
-    let Ok((size, hash, chunks)) = hash_file(on_disk) else {
+/// What hashing one file gives: its size, the sha256 of the whole, the chunk table.
+pub type Hashed = (u64, String, Option<Vec<Value>>);
+
+/// Hashes a list of files, in order, one result per path (`Err` = not readable). The app
+/// injects one that runs on the resource governor's Hash pool, reports progress and can be
+/// cancelled (`Err` from the whole call); this file stays mountable alone with
+/// [`hash_in_order`], the plain sequential one.
+pub type HashAll<'a> = &'a dyn Fn(&[PathBuf]) -> Result<Vec<std::io::Result<Hashed>>, String>;
+
+/// The plain hasher: one file after the other, on this thread.
+#[allow(dead_code)] // the CLI's mount (mcp/server.rs) and the tests; the app injects its hasher
+pub fn hash_in_order(paths: &[PathBuf]) -> Result<Vec<std::io::Result<Hashed>>, String> {
+    Ok(paths.iter().map(|p| hash_file(p)).collect())
+}
+
+/// Apply one file's hash to its entry.
+fn rehash_entry(entry: &mut Map<String, Value>, hashed: std::io::Result<Hashed>, at: &str, changes: &mut Vec<Change>, missing: &mut usize) {
+    let Ok((size, hash, chunks)) = hashed else {
         *missing += 1;
         changes.push(change("file_missing", at.to_string(), None, None));
         return;
@@ -473,54 +488,82 @@ fn rehash_entry(entry: &mut Map<String, Value>, on_disk: &Path, at: &str, change
     entry.insert("chunks".into(), new_chunks);
 }
 
-/// Re-hash every file the manifest lists, from the repo folder. Returns how many were not
-/// found. Files hosted elsewhere (`files_base_url`) are not on this disk: left as they are.
-pub fn rehash(v: &mut Value, repo_dir: &Path, changes: &mut Vec<Change>, warnings: &mut Vec<String>) -> usize {
-    let mut missing = 0usize;
-    if v.get("files_base_url").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty()) {
-        warnings.push("files_base_url: the files live on another host, so their hashes were kept as they are".into());
-        return 0;
-    }
+/// One file the manifest lists: where its entry is (a JSON pointer), how a report names it,
+/// and where it is on disk.
+struct Target { pointer: String, at: String, disk: PathBuf }
+
+/// Every file the manifest lists that is on this disk, in manifest order.
+fn targets(v: &Value, repo_dir: &Path, warnings: &mut Vec<String>) -> Vec<Target> {
+    let mut out = Vec::new();
     let layout = v.get("files_layout").and_then(Value::as_str).map(str::to_string);
-    if let Some(profiles) = v.get_mut("profiles").and_then(Value::as_array_mut) {
-        for (pi, p) in profiles.iter_mut().enumerate() {
-            let Some(mods) = p.get_mut("mods").and_then(Value::as_array_mut) else { continue };
-            for (mi, m) in mods.iter_mut().enumerate() {
-                let Some(mo) = m.as_object_mut() else { continue };
-                let id = mo.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+    let str_at = |o: &Value, k: &str| o.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    if let Some(profiles) = v.get("profiles").and_then(Value::as_array) {
+        for (pi, p) in profiles.iter().enumerate() {
+            let Some(mods) = p.get("mods").and_then(Value::as_array) else { continue };
+            for (mi, m) in mods.iter().enumerate() {
+                if !m.is_object() { continue; }
+                let id = str_at(m, "id");
                 let at = format!("profiles[{pi}].mods[{mi}]");
-                if let Some(arch) = mo.get_mut("archive").and_then(Value::as_object_mut) {
-                    let rel = arch.get("relative_path").and_then(Value::as_str).unwrap_or("").to_string();
+                let ptr = format!("/profiles/{pi}/mods/{mi}");
+                if let Some(arch) = m.get("archive").filter(|a| a.is_object()) {
+                    let rel = str_at(arch, "relative_path");
                     match safe_join(repo_dir, &rel) {
-                        Some(p) => rehash_entry(arch, &p, &format!("{at}.archive"), changes, &mut missing),
+                        Some(disk) => out.push(Target { pointer: format!("{ptr}/archive"), at: format!("{at}.archive"), disk }),
                         None => warnings.push(format!("{at}.archive: unsafe path {rel:?} left unhashed")),
                     }
                 }
-                let Some(files) = mo.get_mut("files").and_then(Value::as_array_mut) else { continue };
-                for (fi, f) in files.iter_mut().enumerate() {
-                    let Some(fo) = f.as_object_mut() else { continue };
-                    let rel = fo.get("relative_path").and_then(Value::as_str).unwrap_or("").to_string();
+                let Some(files) = m.get("files").and_then(Value::as_array) else { continue };
+                for (fi, f) in files.iter().enumerate() {
+                    if !f.is_object() { continue; }
+                    let rel = str_at(f, "relative_path");
                     let tail = file_tail(layout.as_deref(), &id, &rel);
                     match safe_join(repo_dir, &tail) {
-                        Some(p) => rehash_entry(fo, &p, &format!("{at}.files[{fi}]"), changes, &mut missing),
+                        Some(disk) => out.push(Target { pointer: format!("{ptr}/files/{fi}"), at: format!("{at}.files[{fi}]"), disk }),
                         None => warnings.push(format!("{at}.files[{fi}]: unsafe path {rel:?} left unhashed")),
                     }
                 }
             }
         }
     }
-    if let Some(extras) = v.get_mut("extras").and_then(Value::as_array_mut) {
-        for (ei, e) in extras.iter_mut().enumerate() {
-            let kind = e.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
-            let Some(fo) = e.get_mut("file").and_then(Value::as_object_mut) else { continue };
-            let rel = fo.get("relative_path").and_then(Value::as_str).unwrap_or("").to_string();
+    if let Some(extras) = v.get("extras").and_then(Value::as_array) {
+        for (ei, e) in extras.iter().enumerate() {
+            let kind = str_at(e, "kind");
+            let Some(fo) = e.get("file").filter(|f| f.is_object()) else { continue };
+            let rel = str_at(fo, "relative_path");
             match safe_join(repo_dir, &format!("extras/{kind}/{rel}")) {
-                Some(p) => rehash_entry(fo, &p, &format!("extras[{ei}].file"), changes, &mut missing),
+                Some(disk) => out.push(Target { pointer: format!("/extras/{ei}/file"), at: format!("extras[{ei}].file"), disk }),
                 None => warnings.push(format!("extras[{ei}]: unsafe path {rel:?} left unhashed")),
             }
         }
     }
-    missing
+    out
+}
+
+/// Re-hash every file the manifest lists, from the repo folder. Returns how many were not
+/// found. Files hosted elsewhere (`files_base_url`) are not on this disk: left as they are.
+#[allow(dead_code)] // the CLI's mount (mcp/server.rs) and the tests; the app injects its hasher
+pub fn rehash(v: &mut Value, repo_dir: &Path, changes: &mut Vec<Change>, warnings: &mut Vec<String>) -> usize {
+    rehash_with(v, repo_dir, changes, warnings, &hash_in_order).unwrap_or(0)
+}
+
+/// [`rehash`] with the hasher injected: every path is collected first, hashed in ONE call
+/// (in parallel, in the app), then applied in manifest order, so the report reads the same
+/// whatever the hasher. `Err` = the hasher stopped (cancelled); nothing was applied.
+pub fn rehash_with(v: &mut Value, repo_dir: &Path, changes: &mut Vec<Change>, warnings: &mut Vec<String>, hash_all: HashAll<'_>) -> Result<usize, String> {
+    let mut missing = 0usize;
+    if v.get("files_base_url").and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty()) {
+        warnings.push("files_base_url: the files live on another host, so their hashes were kept as they are".into());
+        return Ok(0);
+    }
+    let list = targets(v, repo_dir, warnings);
+    let paths: Vec<PathBuf> = list.iter().map(|t| t.disk.clone()).collect();
+    let results = hash_all(&paths)?;
+    for (t, hashed) in list.into_iter().zip(results) {
+        if let Some(entry) = v.pointer_mut(&t.pointer).and_then(Value::as_object_mut) {
+            rehash_entry(entry, hashed, &t.at, changes, &mut missing);
+        }
+    }
+    Ok(missing)
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -557,7 +600,13 @@ pub struct ConvertPlan {
 /// `repo_dir` = the folder holding `repo.json`; `Some` re-hashes every file from it. The
 /// result is unsigned — signing needs the user's key (the caller's job). Refuses a manifest
 /// declaring a NEWER format: converting it "down" would drop what this BMM cannot see.
-pub fn convert(mut v: Value, repo_dir: Option<&Path>) -> Result<ConvertPlan, String> {
+#[allow(dead_code)] // the CLI's mount (mcp/server.rs) and the tests; the app injects its hasher
+pub fn convert(v: Value, repo_dir: Option<&Path>) -> Result<ConvertPlan, String> {
+    convert_with_hasher(v, repo_dir, &hash_in_order)
+}
+
+/// [`convert`] with the hasher injected (see [`HashAll`]).
+pub fn convert_with_hasher(mut v: Value, repo_dir: Option<&Path>, hash_all: HashAll<'_>) -> Result<ConvertPlan, String> {
     let from = detect(&v);
     match from.status {
         FormatStatus::Invalid if !from.declared => return Err("repo.convert.errNotManifest".into()),
@@ -572,7 +621,7 @@ pub fn convert(mut v: Value, repo_dir: Option<&Path>) -> Result<ConvertPlan, Str
 
     upgrade_keys(&mut v, &mut changes);
     let files_missing = match repo_dir {
-        Some(dir) => rehash(&mut v, dir, &mut changes, &mut warnings),
+        Some(dir) => rehash_with(&mut v, dir, &mut changes, &mut warnings, hash_all)?,
         None => 0,
     };
 

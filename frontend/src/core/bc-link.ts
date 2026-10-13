@@ -20,6 +20,7 @@
 import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { bcRoot } from './links-config.js';
+import { bcUrl } from './bc-client.js';
 import { creatorProofFor } from './canvas-fingerprint.js';
 import { pinProblemOf, recordPinProblem, readPinProblem, clearPinProblem, type KeyPinProblem } from './key-pin.js';
 
@@ -78,7 +79,7 @@ export async function bcLinkState(force = false): Promise<BcLinkState> {
     let data: { linked?: boolean; displayName?: string; discord?: { linked: boolean; username?: string | null } } | null = null;
     try {
         const raw = await invoke('bc_api_get',
-            { url: `${bcRoot()}/api/link/status?creatorId=${encodeURIComponent(cid)}` },
+            { url: bcUrl(`/link/status?creatorId=${encodeURIComponent(cid)}`) },
             { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch { /* offline, tunnelled elsewhere, or down */ }
@@ -119,7 +120,7 @@ async function registerKeyV5(): Promise<void> {
     const proof = await creatorProofFor(aud);
     if (!proof.startsWith('bmmc5.')) return;
     try {
-        await invoke('bc_api_post', { url: `${bcRoot()}/api/link/upgrade`, body: JSON.stringify({ proof }) }, { quiet: true });
+        await invoke('bc_api_post', { url: bcUrl('/link/upgrade'), body: JSON.stringify({ proof }) }, { quiet: true });
         try { localStorage.setItem('bc_key_v5', kid); } catch { /* private mode */ }
         clearPinProblem();
     } catch (e) {
@@ -159,7 +160,7 @@ export async function openAccountLinkFlow(onLinked?: (st: BcLinkState) => void):
     let data: { linked?: boolean; code?: string } | undefined;
     try {
         const raw = await invoke('bc_api_post',
-            { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId: cid, proof: (await creatorProofFor(bcAudience())) || undefined }) },
+            { url: bcUrl('/link/request'), body: JSON.stringify({ creatorId: cid, proof: (await creatorProofFor(bcAudience())) || undefined }) },
             { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch (e) {

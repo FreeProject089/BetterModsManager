@@ -22,6 +22,9 @@ import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js
 import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { isActivationBusy, configureActivationJobs } from '../core/activation-jobs.js';
+import { attachActivitySources } from '../core/activity-sources.js';
+import { setInvokeActivityHook } from '../core/api.js';
+import { initActivityCenter } from './activity-center.js';
 import { initActivationIndicator } from './activation-indicator.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
@@ -1056,6 +1059,15 @@ async function main() {
     }
     catch (e) {
         console.warn('[BMM] activation indicator', e);
+    }
+    // The activity centre: every running action (activations, downloads, syncs, exports…) in one
+    // title-bar button and panel. Sources: core/activity-sources.ts.
+    try {
+        attachActivitySources({ t, invoke: (cmd, args) => invoke(cmd, args || {}), listen, setInvokeHook: setInvokeActivityHook });
+        initActivityCenter();
+    }
+    catch (e) {
+        console.warn('[BMM] activity centre', e);
     }
     initModlist();
     initRepo();

@@ -387,7 +387,13 @@ pub async fn fetch_theme_catalogs(
         // Identity header on first-party URLs → private theme catalogs resolve here (the
         // front-end's own fetch of the same URL just gets an empty 403 and is ignored).
         if let Ok(resp) = crate::commands::net::catalog_get(&app, &url).timeout(std::time::Duration::from_secs(8)).send().await {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
+            // Through the universal format: a universal catalogue, a v2 feed or a signed
+            // envelope becomes its theme view; an invalid signature serves nothing.
+            let json = match resp.json::<serde_json::Value>().await {
+                Ok(v) => crate::commands::catalog_convert::legacy_value(&app, v, "theme", Some(&url)).ok(),
+                Err(_) => None,
+            };
+            if let Some(json) = json {
                 // Where each entry came from, stamped on it before the documents are merged.
                 // After this loop there is one flat list and no way to tell which catalog any
                 // row belongs to — so an entry that points at a file BESIDE its catalog
@@ -406,7 +412,9 @@ pub async fn fetch_theme_catalogs(
     for doc in extra_docs.unwrap_or_default() {
         // A source that answers with something unparseable is skipped, exactly as an HTTP one
         // is above: one broken catalog must not empty the list.
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&doc) {
+        if let Some(json) = serde_json::from_str::<serde_json::Value>(&doc).ok()
+            .and_then(|v| crate::commands::catalog_convert::legacy_value(&app, v, "theme", None).ok())
+        {
             all.extend(themes_in(&json));
         }
     }

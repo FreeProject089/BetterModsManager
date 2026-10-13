@@ -1538,6 +1538,7 @@ function modalActionDefs(): ModalActionDef[] {
         opener('tos', 'Terms of service', 'openTosModal'),
         opener('eula', 'EULA', 'openEulaModal'),
         opener('hashStats', 'Hashing stats', 'showHashingStats'),
+        opener('tools', 'BMM Tools', 'openToolsHub'),
         trigger('storage', 'Storage manager', 'btn-open-storage'),
         trigger('benchmark', 'Benchmark', 'btn-open-benchmark'),
         trigger('themeEditor', 'Theme editor', 'btn-open-theme-editor'),

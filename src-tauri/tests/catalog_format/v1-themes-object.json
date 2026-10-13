@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "name": "Themes",
+  "themes": [
+    { "id": "aurora", "name": "Aurora", "author": "Bo", "version": "1.0.0", "url": "themes/aurora.bmmtheme", "tags": ["dark"] },
+    { "id": "paper", "name": "Paper", "mode": "light", "vars": { "--bg": "#fafafa", "--text": "#111111" } }
+  ]
+}

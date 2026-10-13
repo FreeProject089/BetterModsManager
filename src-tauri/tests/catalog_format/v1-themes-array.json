@@ -1,0 +1,4 @@
+[
+  { "id": "night", "name": "Night", "vars": { "--bg": "#000000" } },
+  { "id": "day", "name": "Day", "download_url": "https://example.org/day.bmmtheme", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+]

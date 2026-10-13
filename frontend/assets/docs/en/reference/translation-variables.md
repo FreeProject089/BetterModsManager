@@ -23,16 +23,17 @@ when a translation and the code disagree. It cannot go out of date.
 | `{name}` | a name (mod, profile, task, file…) |
 | `{m}` | a second number, or a name, next to {n} |
 | `{v}` | a version or a value |
-| `{count}` | a number of items |
 | `{total}` | the total the count is out of |
+| `{count}` | a number of items |
 | `{err}` | an error message |
-| `{id}` | an identifier |
 | `{s}` | seconds, or a short word the code picks |
+| `{id}` | an identifier |
 | `{e}` | an error message |
 | `{size}` | a size, already formatted (KB, MB…) |
 | `{label}` | a short title |
 | `{path}` | a file or folder path |
 | `{profile}` | a profile name |
+| `{version}` | a version number |
 | `{mod}` | a mod name |
 | `{error}` | an error message |
 | `{file}` | a file name |
@@ -41,7 +42,6 @@ when a translation and the code disagree. It cannot go out of date.
 | `{date}` | a date |
 | `{type}` | a kind of thing (an importer, a format…) |
 | `{url}` | a web address |
-| `{version}` | a version number |
 | `{time}` | a time |
 
 ## Braces that are text
@@ -73,7 +73,19 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-890 keys, grouped by their first segment. The text is the English one, shortened.
+957 keys, grouped by their first segment. The text is the English one, shortened.
+
+### activity
+
+| Key | Variables | Text |
+|---|---|---|
+| `activity.btnRunning` | `{n}` | Activity: {n} running |
+| `activity.cancelOne` | `{title}` | Cancel {title} |
+| `activity.doneCount` | `{m}` `{n}` | {n} of {m} done |
+| `activity.failedCount` | `{m}` `{n}` | {n} of {m} failed. |
+| `activity.hourMin` | `{h}` `{m}` | {h} h {m} min |
+| `activity.minSec` | `{m}` `{s}` | {m} min {s} s |
+| `activity.sec` | `{s}` | {s} s |
 
 ### actjob
 
@@ -181,6 +193,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `apps.card.from` | `{source}` | from {source} |
+| `apps.card.openAria` | `{name}` | Details for {name} |
 | `apps.create.bundled` | `{f}` `{n}` | Published: {n} app(s) packed, {f} |
 | `apps.create.clearBody` | `{n}` | This throws away the draft ({n} entr(ies)). Export it first to keep it. |
 | `apps.create.opened` | `{n}` | Opened: {n} app(s) |
@@ -191,12 +205,16 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `apps.create.pbNoUrl` | `{id}` | {id}: no download URL. Readers will skip this entry. |
 | `apps.create.problems` | `{n}` | {n} thing(s) to look at |
 | `apps.create.stillNeeded` | `{x}` | Still needed: {x} |
+| `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installed, v{latest} in the catalog |
 | `apps.shownOf` | `{n}` `{total}` | {n} of {total} |
+| `apps.someSourcesFailed` | `{n}` | {n} source(s) did not answer. Their apps are missing below. |
 | `apps.sources.bundleAdded` | `{n}` | Following: {n} app(s) |
 | `apps.sources.fromIndex` | `{n}` | Added {n} app catalog(s) from that index. |
 | `apps.sources.indexAll` | `{n}` | That index lists {n} app catalog(s) and you already follow them all. |
 | `apps.sources.indexNone` | `{n}` | That index lists no app catalogs, only {n} entr(y/ies) of other kinds. |
 | `apps.sources.indexNone2` | `{what}` | No app catalogs in that index, only {what}. Add those from their own screens. |
+| `apps.state.updatedToast` | `{name}` | {name} updated |
+| `apps.updatesMany` | `{n}` | {n} updates |
 
 ### bench
 
@@ -247,6 +265,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `cm.fromIndex` | `{n}` | Added {n} catalogue(s) from that index. |
 | `cm.indexAll` | `{n}` | That index lists {n} catalogue(s) of this kind and you already follow them all. |
 | `cm.indexNone` | `{what}` | No catalogue of this kind in that index. It holds {what}; add those from their own screens. |
+| `cm.searchNone` | `{q}` | Nothing here matches "{q}". |
 | `cm.someFailed` | `{list}` | These could not be written: {list} |
 
 ### common
@@ -296,6 +315,9 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `credits.codeCommits` | `{n}` | {n} commits |
+| `credits.codeOpenRepo` | `{repo}` | Open the {repo} repository |
+| `credits.codeRepoCommits` | `{n}` `{repo}` | {n} commits in {repo} |
 | `credits.codeRepos` | `{n}` | Commits in {n} repositories |
 | `credits.codeSince` | `{year}` | since {year} |
 | `credits.stackGroupsN` | `{n}` | {n} groups |
@@ -842,6 +864,21 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.extras.pending` | `{n}` | Kept: {n} thing(s) will go in when a repo is made |
 | `repo.extras.pendingTag` | `{n}` | {n} waiting |
 | `repo.extras.taskAdded` | `{n}` | {n} automation(s) added, disabled. |
+| `repo.follow.added` | `{name}` | Following {name}. |
+| `repo.follow.applied` | `{n}` `{name}` | {name}: {n} mod(s) updated and applied. |
+| `repo.follow.checkFailed` | `{err}` `{name}` | Could not check {name}: {err} |
+| `repo.follow.downloaded` | `{n}` `{name}` | {name}: {n} mod(s) downloaded. |
+| `repo.follow.everyMin` | `{n}` | every {n} minutes |
+| `repo.follow.found` | `{n}` `{name}` | {name}: {n} of your mods have an update. |
+| `repo.follow.foundManual` | `{n}` `{name}` | {name}: {n} update(s) found, but BMM cannot tell which profile they belong to. Update them from the mod list. |
+| `repo.follow.heldGame` | `{n}` `{name}` | {name}: {n} update(s) found. A game is running, so nothing was installed; BMM tries again at the next check. |
+| `repo.follow.installFailed` | `{err}` `{name}` | {name}: the update failed: {err} |
+| `repo.follow.jobOff` | `{name}` | Update from {name}: turning mods off |
+| `repo.follow.jobOn` | `{name}` | Update from {name}: turning mods back on |
+| `repo.follow.lastCheck` | `{when}` | checked {when} |
+| `repo.follow.lastError` | `{err}` | Last check failed: {err} |
+| `repo.follow.updates` | `{n}` | {n} update(s) |
+| `repo.follow.upToDate` | `{name}` | {name}: your mods are up to date. |
 | `repo.format.label` | `{v}` | format {v} |
 | `repo.format.legacy` | `{v}` | legacy {v} |
 | `repo.format.legacyHint` | `{cur}` | Written by an older BMM. It still works; converting brings it to format {cur}. |
@@ -917,7 +954,9 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.updatesBaselined` | `{count}` | Now tracking {count} direct download(s). Re-check later to detect changes. |
 | `repo.updatesFound` | `{count}` | {count} update(s) available |
 | `repo.updatesRepoErrors` | `{count}` | {count} repo(s) could not be reached |
+| `repo.validate.cacheHits` | `{n}` | {n} unchanged files were not read again (tick « Re-read every file » to force it). |
 | `repo.validate.changed` | `{n}` | Files that differ from repo.json: {n}. |
+| `repo.validate.duplicateIds` | `{n}` | Mods listed twice in one profile: {n}. |
 | `repo.validate.emptyProfiles` | `{n}` | Profiles with no mods: {n}. |
 | `repo.validate.filled` | `{n}` | Files with no hash yet: {n}. |
 | `repo.validate.formatNewer` | `{v}` | Format {v}: newer than this BMM. Readable, some fields may be ignored. |
@@ -925,9 +964,12 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.validate.formatOld` | `{cur}` `{v}` | Format {v}: older than {cur}. |
 | `repo.validate.formatTooNew` | `{v}` | Format {v}: too new for this BMM. Update BMM to check it. |
 | `repo.validate.missing` | `{n}` | Listed files that are missing: {n}. |
+| `repo.validate.progress` | `{done}` `{of}` `{size}` `{total}` | {done} / {total} files · {size} of {of} |
 | `repo.validate.summary` | `{files}` `{mods}` `{profiles}` `{size}` | {profiles} profiles, {mods} mods, {files} files, {size}. |
+| `repo.validate.took` | `{s}` | Checked in {s} s. |
 | `repo.validate.verdictBad` | `{n}` | Problems to fix before sharing: {n}. |
 | `repo.validate.verdictWarn` | `{n}` | Usable. Points to look at: {n}. |
+| `repo.validate.which` | `{n}` | Show which ({n}) |
 | `repo.version.alsoConverts` | `{v}` | The manifest is converted to format {v} at the same time. |
 | `repo.version.confirm` | `{from}` `{to}` | Set the version from {from} to {to} and re-sign repo.json? |
 | `repo.version.done` | `{backup}` `{v}` | Version {v} set and signed. Old manifest kept as {backup}. |
@@ -1116,6 +1158,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `settings.catIndex.holds` | `{n}` | This index lists {n} catalog(s). |
 | `settings.catIndex.makeDone` | `{n}` | Index written with {n} catalogue(s). |
 | `settings.catIndex.skipped` | `{n}` | {n} skipped. |
+| `settings.catIndex.state.ok` | `{n}` | OK · {n} items |
 | `settings.catIndex.willAdd` | `{what}` | Will add: {what}. |
 | `settings.creatorKey.protection` | `{what}` | Creator key protection: {what} |
 | `settings.creatorKey.refused` | `{why}` | The creator key store was refused: {why} |
@@ -1136,6 +1179,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `settings.link.done` | `{name}` | Linked as {name}. |
 | `settings.lpImported` | `{n}` | Imported "{n}" |
 | `settings.lpImportedMissing` | `{c}` `{n}` | Imported "{n}": {c} program(s) not found on this PC |
+| `settings.searchCount` | `{n}` | Matching sections: {n} |
+| `settings.searchEmpty` | `{q}` | No setting matches "{q}". |
 | `settings.shortcutError` | `{err}` | Failed to save shortcut: {err} |
 | `settings.shortcutUpdated` | `{key}` | Shortcut updated ({key}) |
 | `settings.tagCreateError` | `{err}` | Tag creation error: {err} |
@@ -1270,6 +1315,25 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `toast.openError` | `{err}` `{id}` | Error opening {id}: {err} |
 | `toast.updatePartial` | `{applied}` `{errors}` | Update partial: {applied} applied, {errors} errors |
 
+### tools
+
+| Key | Variables | Text |
+|---|---|---|
+| `tools.conflicts.files` | `{n}` | {n} file(s) |
+| `tools.conflicts.summary` | `{a}` `{n}` | {n} conflicting pair(s), {a} active. |
+| `tools.diff.onlyA` | `{a}` | Only in {a} |
+| `tools.diff.onlyB` | `{b}` | Only in {b} |
+| `tools.diff.summary` | `{a}` `{b}` `{n}` `{s}` | {a} and {b}: {n} difference(s), {s} mod(s) identical. |
+| `tools.disk.perMod` | `{n}` | Per mod ({n}) |
+| `tools.disk.summary` | `{p}` `{t}` | {t} in total across {p} profile(s) and BMM's data. |
+| `tools.duplicates.copies` | `{n}` | {n} copies |
+| `tools.duplicates.summary` | `{f}` `{h}` `{m}` `{s}` `{w}` | {m} duplicate mod(s), {f} set(s) of identical files, {w} that could be saved. {s} files listed, {h} hashed. |
+| `tools.duplicates.wasted` | `{w}` | {w} duplicated |
+| `tools.moreInExport` | `{n}` | {n} more in the export. |
+| `tools.orphans.summary` | `{m}` `{n}` `{p}` | {n} finding(s) in {p} profile(s) and {m} mod(s). |
+| `tools.validate.bad` | `{f}` `{n}` | Format {f}: {n} problem(s). |
+| `tools.validate.ok` | `{f}` `{n}` | Format {f}: no problem found ({n} entries). |
+
 ### tut
 
 | Key | Variables | Text |
@@ -1302,5 +1366,18 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `update.availableToast` | `{version}` | BMM v{version} is available. Click here to see what is new. |
+| `update.daysAgo` | `{n}` | {n} days ago |
 | `update.dlProgress` | `{done}` `{total}` | Downloading {done} / {total} MB |
+| `update.etaMin` | `{n}` | about {n} min left |
+| `update.etaSec` | `{n}` | about {n} s left |
+| `update.hoursAgo` | `{n}` | {n} h ago |
+| `update.lastCheck` | `{when}` | Last check: {when} |
+| `update.lastCheckFailed` | `{when}` | Last check failed: {when} |
+| `update.minutesAgo` | `{n}` | {n} min ago |
 | `update.pageNotFound` | `{name}` | Page not found: {name} |
+| `update.sizeMb` | `{size}` | {size} MB |
+| `update.speed` | `{speed}` | {speed} MB/s |
+| `update.stagedBody` | `{n}` `{version}` | v{version} was downloaded and verified last time. It installs in {n} s. |
+| `update.stagedReady` | `{version}` | v{version} was downloaded and verified last time. |
+| `update.stagedToast` | `{version}` | v{version} is downloaded and verified. It installs the next time you start BMM. |

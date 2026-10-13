@@ -43,7 +43,7 @@ different pieces of code, and they do not agree:
 | Parser | Keys | Does `Key = value` work? |
 |---|---|---|
 | substring search over the lowercased file | `Prod`, `PTB`, `DisableUpdate`, `FSDM`, `AutoEULA_on_first_Start`, `quicklink1_disabled`, `quicklink2_disabled` | **No** — silently reads as the default |
-| line parser, splits on the first `=`, trims both sides | `BCTestMode`, `BCTestBase`, `DocsReplays` | Yes |
+| line parser, splits on the first `=`, trims both sides | `BCTestMode`, `BCTestBase`, `BCApiVersion`, `BCv2Base`, `DocsReplays` | Yes |
 
 So `BCTestMode = true` works and `PTB = true` does not, in the same file, with no warning
 either way. Write every key tight: `Key=value`.
@@ -137,6 +137,28 @@ leaving `BCTestMode=true` in a shipped build is not, because every user's blog w
 a machine that is not theirs.
 
 Read once at startup, after the Tauri bridge is up. Changing it needs a restart.
+
+### `BCApiVersion` and `BCv2Base`
+
+The switch for **BetterCommunity v2**, for test builds while v2 runs beside v1. Not in the
+shipped file: without the line, BMM is on v1 and nothing changes.
+
+```ini
+BCApiVersion=v2
+BCv2Base=https://v2.example.org
+```
+
+`BCApiVersion=v2` (or `2`, any case) moves only what has a v2 adapter: feedback and bug reports
+go to the v2 feedback centre (`/v2/projects/bmm/feedback`), consent receipts are offered to the
+v2 consent ledger (`POST /v2/consents`, under the same permission as the telemetry copy), and the
+v1 paths v2 serves itself (`catalog.json`, `repos.json`, hosted repos, feedback) are read from v2.
+Every other BetterCommunity call stays on the v1 address. Any other value is v1.
+
+`BCv2Base` is where v2 lives; empty or missing means the same address as v1 (after the cut-over
+one domain serves both). It must be `https://`, or plain `http://` to this machine only
+(`localhost`, `127.0.0.1`, `*.localhost`); anything else is ignored and v2 uses the v1 address.
+Line-parsed like `BCTestMode`. Read once at startup. The full map of calls and what each does
+in v2 is `Update/Documentation/BC-v2-readiness.md`.
 
 ### `DocsReplays`
 

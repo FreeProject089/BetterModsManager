@@ -281,6 +281,9 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             // is kept for the run, so the fetch that follows does not ask a second time.
             const { fetchSourceText } = await import('../core/source-fetch.js');
             doc = JSON.parse(await fetchSourceText(url, true));
+            // A v2 feed index or a universal catalogue of links reads as an index too.
+            const { asLegacy } = await import('../core/catalog-read.js');
+            doc = await asLegacy(doc, 'index', url);
         } catch { return false; }
         const ix = await import('../features/catalogs/catalog-index.js');
         if (!ix.looksLikeIndex(doc)) return false;
@@ -316,6 +319,13 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 doc = JSON.parse(String(res?.catalog || ''));
             } else {
                 doc = JSON.parse(await invoke('read_file_text', { path }) as string);
+            }
+            // A universal catalogue, a v2 feed or a signed one is checked as its view of this kind.
+            {
+                const { asLegacy } = await import('../core/catalog-read.js');
+                const { CATALOG_KIND_ARRAYS } = await import('../core/catalog-format.js');
+                const kind = CATALOG_KIND_ARRAYS.find(([, a]) => a === spec.feedField)?.[0] || spec.indexType;
+                if (kind) doc = await asLegacy(doc, kind);
             }
             // Checked when it is opened, not when it is next read: a file that is not a
             // catalogue of this kind should fail here, with the reason, rather than become
@@ -448,8 +458,11 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     const browsePane = (): string => {
         if (!browseLoaded) return `<p class="cm-empty">${escHtml(t('common.loading'))}</p>`;
         return `
-        ${browsed.length ? `<div class="cm-list">${browsed.map((e, i) => `
-            <div class="cat-pub-row cm-browse-row">
+        ${browsed.length > 1 ? `<input class="input cm-search" id="${P}-q" type="search" spellcheck="false" autocomplete="off"
+            placeholder="${escAttr(t('cm.searchPh'))}" aria-label="${escAttr(t('cm.searchPh'))}">
+            <p class="cm-empty" id="${P}-qnone" hidden></p>` : ''}
+        ${browsed.length ? `<div class="cm-list" id="${P}-blist">${browsed.map((e, i) => `
+            <div class="cat-pub-row cm-browse-row" data-row="${i}">
                 <div class="cm-browse-main">
                     <div class="cm-row-name">${escHtml(e.name)}</div>
                     ${e.sub ? `<div class="cm-row-sub cm-browse-sub">${escHtml(e.sub)}</div>` : ''}
@@ -608,6 +621,27 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         }));
 
         if (tab === 'browse') {
+            // Ranked, accent- and case-folded, prefix-matching: the catalogue index's search
+            // (features/catalogs/catalog-search.ts), on this list. Rows are re-ordered and
+            // hidden in place, so typing never repaints the pane and never loses focus.
+            const q = ov.querySelector<HTMLInputElement>(`#${P}-q`);
+            const list = ov.querySelector<HTMLElement>(`#${P}-blist`);
+            const none = ov.querySelector<HTMLElement>(`#${P}-qnone`);
+            if (q && list) {
+                const rows = new Map<number, HTMLElement>();
+                list.querySelectorAll<HTMLElement>('[data-row]').forEach((r) => rows.set(Number(r.dataset.row), r));
+                q.addEventListener('input', async () => {
+                    const { rankRows } = await import('../features/catalogs/catalog-search.js');
+                    const order = rankRows(browsed, q.value);
+                    const shown = new Set(order);
+                    for (const [i, r] of rows) r.hidden = !shown.has(i);
+                    for (const i of order) { const r = rows.get(i); if (r) list.appendChild(r); }
+                    if (none) {
+                        none.hidden = order.length > 0;
+                        none.textContent = order.length ? '' : t('cm.searchNone').replace('{q}', q.value.trim());
+                    }
+                });
+            }
             ov.querySelectorAll<HTMLElement>('[data-open]').forEach((b) => b.addEventListener('click', async () => {
                 const e = browsed[Number(b.dataset.open)];
                 if (!e || !spec.browse) return;

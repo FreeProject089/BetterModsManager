@@ -16,6 +16,7 @@ import { t } from '../core/i18n.js';
 import { invoke } from '../core/api.js';
 import { toast } from './app.js';
 import { fetchSourceText } from '../core/source-fetch.js';
+import { fetchCatalogText, asLegacy } from '../core/catalog-read.js';
 import { importCustomTutorialText, signatureLabel } from './tutorial-custom.js';
 
 const STORE = 'bmm.tutorialCatalogs';
@@ -114,8 +115,11 @@ export async function openTutorialCatalog(onInstalled: () => void): Promise<void
                         // Cache-busted: a catalogue somebody just republished is the one case
                         // where a stale copy is worse than a slow fetch.
                         const sep = source.includes('?') ? '&' : '?';
-                        const raw = await fetchSourceText(`${source}${sep}t=${Date.now()}`);
-                        const found = entriesOf(JSON.parse(raw));
+                        // Through the HTTP cache: the cache-buster still defeats a CDN, the
+                        // conditional request makes an unchanged catalogue a 304, and a server
+                        // that is down serves the last good copy instead of nothing.
+                        const raw = await fetchCatalogText(`${source}${sep}t=${Date.now()}`);
+                        const found = entriesOf(await asLegacy(JSON.parse(raw), 'tutorial', source));
                         if (!found.length) { problems.push(`${source} — ${t('tutcat.empty')}`); continue; }
                         for (const e of found) {
                             // Kept apart per SOURCE: two catalogues may list the same id, and

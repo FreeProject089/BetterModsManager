@@ -1,0 +1,16 @@
+{
+  "catalog_version": "1.0",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "download": {
+        "url": "https://example.org/mapper-101.bmmtut"
+      },
+      "id": "mapper-101",
+      "kind": "tutorial",
+      "name": "Mapper 101"
+    }
+  ],
+  "name": "Pooled catalogue"
+}

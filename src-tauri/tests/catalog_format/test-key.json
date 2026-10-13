@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "keyid": "feed_test",
+      "alg": "ed25519",
+      "public_key": "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=",
+      "created_at": "2026-10-08T00:00:00.000Z",
+      "retired_at": null
+    }
+  ],
+  "note": "public half of the fixed TEST key (seed = 32 bytes of 0x07); never a real key"
+}

@@ -19,6 +19,8 @@ pub mod restore_bundle;
 pub mod net;
 pub mod proc;
 pub mod verify;
+// BMM Tools hub: read-only diagnostics (duplicates, disk usage, profile diff, orphans).
+pub mod tools;
 pub mod profile;
 pub mod mods;
 pub mod modlist;
@@ -62,6 +64,9 @@ pub mod repo_extras;
 pub mod game_watch;
 pub mod catalog_sources;
 pub mod catalog_store;
+pub mod catalog_format;
+pub mod catalog_convert;
+pub mod catalog_cache;
 pub mod plugin_assets_core;
 pub mod plugin_assets;
 pub mod hooks;
@@ -69,6 +74,9 @@ pub mod repo_remote;
 // Repo manifest format versions + the converter (core, mountable by the CLI) and its app side.
 pub mod repo_format;
 pub mod repo_convert;
+pub mod repo_validate;
+pub mod mod_ids;
+pub mod repo_follow;
 pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;
@@ -85,6 +93,8 @@ pub mod analytics;
 pub mod live_issues;
 // Proof of consent: the append-only, hash-chained "My consents" ledger (Settings → Privacy).
 pub mod consent_ledger;
+// BetterCommunity v2 readiness: v2 root from app.cfg (BCApiVersion/BCv2Base) + consent receipts → v2 ledger.
+pub mod bc_v2;
 pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;

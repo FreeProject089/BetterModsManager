@@ -17,6 +17,7 @@
 import { invoke } from './api.js';
 import { t, getLang } from './i18n.js';
 import { getLinks } from './links-config.js';
+import { bcUsesV2 } from './bc-client.js';
 import { escHtml } from './utils.js';
 import { openModal } from '../ui/modal-shell.js';
 
@@ -99,6 +100,13 @@ export async function hasProof(doc: ConsentDoc): Promise<boolean> {
  *  or `force` (the user pressed « Send to the server »). */
 export async function syncConsents(force = false): Promise<any> {
     const links = getLinks();
+    // BetterCommunity v2 consent ledger, only when app.cfg selects v2 (BCApiVersion=v2). Same
+    // permission as the telemetry copy, enforced again in Rust (bc_v2.rs): telemetry consent on,
+    // or `force` from « Send to the server ». Its result never replaces the telemetry one.
+    if (bcUsesV2()) {
+        const appKey = String((links as unknown as Record<string, unknown>).bc_v2_app_key || '');
+        void invoke('consent_sync_bc_v2', { appKey, force }, { quiet: true } as any).catch(() => {});
+    }
     try {
         return await invoke('consent_sync', { endpoint: links.analytics_endpoint || '', apiKey: links.analytics_key || '', force }, { quiet: true } as any);
     } catch (e) {
@@ -115,7 +123,7 @@ const CHOICE_LABEL: Record<string, string> = {
     withdrawn: 'consent.choice.withdrawn', reset: 'consent.choice.reset',
 };
 const SOURCE_LABEL: Record<string, string> = {
-    installer: 'consent.source.installer', first_run: 'consent.source.first_run', reconsent: 'consent.source.reconsent',
+    installer: 'consent.source.installer', 'installer-cli': 'consent.source.installer_cli', first_run: 'consent.source.first_run', reconsent: 'consent.source.reconsent',
     settings: 'consent.source.settings', link: 'consent.source.link', api: 'consent.source.api', cli: 'consent.source.cli',
     mcp: 'consent.source.mcp', import: 'consent.source.import',
 };

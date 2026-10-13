@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-93 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+95 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -119,6 +119,8 @@ donne les valeurs acceptées.
 | `bmm_follow_catalog` | `type`\*, `url`\*, `follow` | app | En suivre un, ou arrêter. Passe par les écrans de l'app, donc il apparaît dans la liste des suivis avec son origine |
 | `bmm_repo_extras` | `url`\*, `password` | app | Liste ce qu'un dépôt transporte en plus des mods — plugins, automatisations, thèmes, listes de mods, catalogues à suivre. Lit le manifeste ; ne télécharge rien. `locked: true` sur une liste signifie que son contenu est chiffré |
 | `bmm_repo_convert` | `path`\*, `dry_run`, `rehash`, `sign` | app | Convertit le `repo.json` d'un dossier de dépôt (sur cette machine) au format actuel, 1.0 : détecte « format 1.0 » ou « ancien 0.x », ajoute les clés manquantes, re-hache les fichiers, inscrit `format_version`, sauvegarde l'ancien manifeste et signe avec la clé de ce BMM. `dry_run: true` renvoie le plan et fonctionne BMM fermé ; à appeler d'abord |
+| `bmm_repo_validate` | `path`\*, `deep` | app | Vérifie un dossier de dépôt sans le modifier : format, lisibilité, signature (valide / invalide / non signée / ancienne), identifiants de mod en double, profils vides, chaque fichier listé contre sa taille et son sha256. `deep` relit les fichiers qu'un cache dit inchangés. Renvoie le rapport ; `bmm_repo_convert` corrige ce qu'il trouve |
+| `bmm_repo_follow` | `op` (list/set/remove/check), `url`, `enabled`, `interval_min`, `action` (notify/download/apply), `force` | app | Dépôts suivis : les lister, en suivre un ou changer la façon, arrêter de le suivre, ou en vérifier un maintenant. Une vérification renvoie les mises à jour trouvées et le plan d'installation ; elle n'installe jamais rien |
 | `bmm_repo_extra_take` | `url`\*, `kind`\*, `id`\*, `password` | app | En installe UN. Un plugin ou une automatisation arrive **désactivé**, et un plugin sans aucune permission — en prendre un n'est pas une décision de l'exécuter. Un catalogue est suivi, pas téléchargé ; une liste de mods est enregistrée et son chemin renvoyé, parce que l'ouvrir pose des questions qui reviennent à une personne |
 | `bmm_list_keys` | — | app | Les clés d'identité avec lesquelles BMM peut prouver : `{name, path}` et laquelle est active. **Noms et chemins uniquement** — aucun outil ne lit une clé privée |
 | `bmm_create_key` | `name`\*, `kind` | app | Fabrique une paire de clés. Renvoie la ligne **publique** — celle à donner à qui gère une source protégée — et où la moitié privée a été écrite. La moitié privée n'est jamais renvoyée. `ed25519` sauf si un serveur dit le contraire |
@@ -285,19 +287,19 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 93 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 95 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 93 et sont identiques,
+où ces lignes sont écrites, les deux ensembles font 95 et sont identiques,
 et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---
 
 ## Voir aussi
 
-- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 79 sous-commandes CLI pour un terminal ou un `.bat`
+- [Référence CLI](doc-page:reference/cli.fr) — l’autre moitié du même exécutable : 81 sous-commandes CLI pour un terminal ou un `.bat`
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — la surface REST, ses jetons et ses permissions
 - [Référence des actions](doc-page:reference/actions) — ce que les plugins et le planificateur peuvent déclencher
 - [Étendre BMM](doc-page:how-it-works/extending) — la place du serveur MCP dans la conception

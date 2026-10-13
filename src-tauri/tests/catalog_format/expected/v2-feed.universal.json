@@ -1,0 +1,65 @@
+{
+  "description": "Plugins for BMM",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "homepage": "https://bc.example/en/catalogues/bmm-plugins",
+  "id": "bmm-plugins",
+  "issuer": "https://bc.example",
+  "items": [
+    {
+      "compatibility": [
+        "DCS 2.9"
+      ],
+      "description": "# Fast Loader\nLoads **faster**.",
+      "download": {
+        "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "size": 4096,
+        "url": "https://bc.example/v2/catalog-files/f_120"
+      },
+      "extra": {
+        "external_id": "itm_0123456789abcdefghjkmnpqrs",
+        "revision": "0123456789abcdef0123456789abcdef"
+      },
+      "homepage": "https://example.org/fast",
+      "id": "fast-loader",
+      "kind": "plugin",
+      "license": "MIT",
+      "name": "Fast Loader",
+      "summary": "Loads faster",
+      "tags": [
+        "speed"
+      ],
+      "version": "1.2.0",
+      "versions": [
+        {
+          "changelog": "Faster",
+          "files": [
+            {
+              "name": "fast-loader.bmmplug",
+              "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+              "size": 4096,
+              "url": "https://bc.example/v2/catalog-files/f_120"
+            }
+          ],
+          "published_at": "2026-10-07T10:00:00.000Z",
+          "version": "1.2.0"
+        },
+        {
+          "files": [
+            {
+              "name": "fast-loader.bmmplug",
+              "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+              "size": 4000,
+              "url": "https://bc.example/v2/catalog-files/f_110"
+            }
+          ],
+          "published_at": "2026-09-01T10:00:00.000Z",
+          "version": "1.1.0"
+        }
+      ]
+    }
+  ],
+  "name": "BMM plugins",
+  "publisher": "Better Mod Manager",
+  "updated_at": "2026-10-08T12:00:00.000Z"
+}

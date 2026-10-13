@@ -32,6 +32,7 @@ import { inspectBmmpa } from './bmmpa-inspect.js';
 import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
+import { startActivity, type ActivityHandle } from '../../core/activity.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { reasonNotRunning, gameHoldsTasks, listNextRun } from './sched-why.js';
@@ -1355,6 +1356,10 @@ async function runTask(task: Task): Promise<void> {
         }
         // In a finally: a task that threw must not stay in the panel as "running" forever,
         // which is the state that makes a Stop button appear broken.
+        const act = _acts.get(task.id);
+        _acts.delete(task.id);
+        const res = String(task.lastResult || '');
+        if (act) { if (res.startsWith('cancelled')) act.cancelled(); else if (res.startsWith('error')) act.fail(res.replace(/^error:\s*/, '')); else act.done(); }
         _running.delete(task.id);
         renderRunningPanel();
     }
@@ -4431,6 +4436,19 @@ export interface RunState {
 }
 
 const _running = new Map<string, RunState>();
+/** Each run's row in the activity centre (core/activity.ts), kept in step by syncActivityRows. */
+const _acts = new Map<string, ActivityHandle>();
+
+/** A run is a row in the activity centre; its Stop is this panel's Stop. runTask ends its row
+ *  with the outcome; a run that left otherwise (a test run) ends as done here. */
+function syncActivityRows(): void {
+    for (const r of _running.values()) {
+        let a = _acts.get(r.id);
+        if (!a) { a = startActivity({ kind: 'schedule', title: r.name, cancel: () => requestStop(r.id), source: 'scheduler' }); _acts.set(r.id, a); }
+        a.update({ detail: r.step, progress: r.total ? Math.min(r.done, r.total) / r.total : null });
+    }
+    for (const [id, a] of _acts) if (!_running.has(id)) { a.done(); _acts.delete(id); }
+}
 
 export function listRunning(): RunState[] {
     return [..._running.values()].sort((a, b) => a.startedAt - b.startedAt);
@@ -4550,6 +4568,7 @@ function triggerIcon(tr: Trigger): string {
  * that is noise in the normal case, and the normal case is nothing running.
  */
 export function renderRunningPanel(): void {
+    syncActivityRows();
     const host = document.getElementById('scheduler-running');
     if (!host) return;
     const runs = listRunning();
@@ -12251,7 +12270,8 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
                 // about neither.
                 text = await fetchSourceText(url);
             }
-            const doc = JSON.parse(text);
+            // Any catalogue variant (universal, v2 feed, signed) reads as its preset view.
+            const doc = await (await import('../../core/catalog-read.js')).asLegacy(JSON.parse(text), 'preset', url);
             if (!looksLikePresetFeed(doc)) {
                 // Told apart from "empty" on purpose: a plugin catalog reported as an empty
                 // preset catalog sends somebody looking for a problem that is not there.

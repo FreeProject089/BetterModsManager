@@ -50,6 +50,7 @@
     "reference/repo-format",
     "reference/passphrases",
     "reference/catalog-index",
+    "reference/catalog-format",
     "reference/commands",
     "reference/links-and-updates",
     "reference/app-cfg",
@@ -807,6 +808,21 @@
       "fr": true
     },
     {
+      "path": "reference/catalog-format",
+      "section": "reference",
+      "title": {
+        "en": "The universal catalogue format",
+        "fr": "Le format de catalogue universel"
+      },
+      "summary": {
+        "en": "BMM reads catalogues of eight kinds — apps, plugins, themes, presets (automations), modpacks, repos, tutorials and mod lists — and over time each kind grew…",
+        "fr": "BMM lit des catalogues de huit sortes (apps, plugins, thèmes, presets d'automatisation, modpacks, repos, tutoriels et listes de mods) et, avec le temps,…"
+      },
+      "words": 995,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
       "path": "reference/commands",
       "section": "reference",
       "title": {
@@ -982,7 +998,7 @@
         "en": "Some texts in BMM contain a word between braces, such as {n} or {name}. BMM replaces it with a value when it shows the text: \"{n} new mods added\" becomes « 3…",
         "fr": "Certains textes de BMM contiennent un mot entre accolades, comme {n} ou {name}."
       },
-      "words": 332,
+      "words": 334,
       "diagrams": 0,
       "fr": true
     }

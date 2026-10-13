@@ -33,6 +33,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/creator-id` | no | This user's creator ID (public key) | `{ ok, creator_id }` |
 | `/api/repo/info?url=` | no | Metadata for a remote repo. Optional `&password=` for a password-protected self-hosted repo (sent as `X-Repo-Password`; wrong/missing → 401) | repo manifest summary |
 | `/api/repo/list` | no | Connected repos | `{ ok, data:[{url,name,…}] }` |
+| `/api/repo/follow` | yes · `repo.read` | Followed repos: switch, interval, action, last check | `{ ok, repos:[{url,name,follow,due}] }` |
 | `/api/apps` | yes · `app.read` | Installed App-Catalog apps + usage stats | `{ installed:{ id:{…} } }` |
 | `/api/catalog` | yes · `catalog.read` | Local `apps-catalog.json` | catalog object |
 | `/api/language/template` | no | Download `lang-template.json` (all i18n keys → English defaults) | JSON file (`Content-Disposition: attachment`) |
@@ -150,6 +151,9 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mod/config` | `mods.write` | `{ modId, repoModId?, updateUrl?, updateSources?, directUrl? }` — set where a mod checks for its own updates |
 | `/api/repo/manifest` | `repo.write` | `{ modsDir, outputPath?, name?, author?, gameName?, filesBaseUrl?, filesLayout?, reuseExisting?, only? }` — write a `repo.json` for a folder that is already hosted. Copies nothing and needs no profile; synchronous, so a publish script can act on the diff it returns. `reuseExisting` defaults to **true**: re-running produces a new revision of the SAME repo, not a different one |
 | `/api/repo/convert` | `repo.write` | `{ path, dryRun?, rehash?, sign? }` — convert a repo folder's manifest to format 1.0: missing keys filled, files re-hashed, `format_version` stamped, old manifest backed up (`repo.json.v<old>-<stamp>.bak`), re-signed with this BMM's key. `dryRun` returns the plan only |
+| `/api/repo/validate` | `repo.read` | `{ path, deep? }` — check a repo folder without changing it: format, signature, duplicate ids, every file against its hash (parallel, cancellable). Returns `{ ok, report }` |
+| `/api/repo/follow` | `repo.write` | `{ url, name?, enabled?, intervalMin?, action?, remove? }` — follow a repo or change how (`action`: notify · download · apply); `remove: true` stops following |
+| `/api/repo/follow/check` | `repo.write` | `{ url, password?, force? }` — check one followed repo now (conditional GET). Returns the updates and the install plan; installs nothing |
 | `/api/discord/rpc` | yes | `{ enabled: bool }` — enable/disable Discord Rich Presence |
 | `/api/data/export-auto` | yes | `{ dir, name? (template: `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — unattended backup, returns the path written |
 | `/api/launchpack/run` | yes | `{ id }` — run a saved launch pack |

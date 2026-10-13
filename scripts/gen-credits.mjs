@@ -38,9 +38,11 @@
 //
 // Contributors. `contributors` lists who wrote the code, read from `git log` of BMM, BCW, BMM
 // Docs and BetterInstaller (authors and Co-authored-by trailers). scripts/credits-authors.json
-// folds the aliases of one person into one entry and names their GitHub; emails are matched
-// there and never written out. A repository that is not checked out keeps the previous
-// output's rows for it.
+// folds the aliases of one person into one entry and names their GitHub; two names that used
+// the same email are folded too, and a GitHub noreply address names the profile. Emails are
+// matched and never written out. Each person carries a commit count per repository; --check
+// ignores the counts (they move with every commit) and `npm run gen` / `npm run build`
+// refreshes them. A repository that is not checked out keeps the previous output's rows for it.
 //
 // Usage: node scripts/gen-credits.mjs          write the file
 //        node scripts/gen-credits.mjs --check  exit 1 when the file is not what the manifests say
@@ -361,20 +363,34 @@ if (APPS.every((a) => has(`BCW/BCWEB/apps/${a}/package.json`))) {
 } else for (const g of prev.groups || []) if (g.id === 'site') site.push(...g.items);
 
 // ── Code contributors (git history) ────────────────────────────────────────────────────────
+// One identity per person, folded three ways (mailmap-like): the `people` of
+// scripts/credits-authors.json (name, aliases and optional `emails`, case-insensitive), the
+// repository's own .mailmap (git log %aN/%aE already applies it), and any two names that
+// committed with the same email address. The GitHub profile comes from the config, or else
+// from a GitHub noreply address (<id>+<login>@users.noreply.github.com). Emails are matched
+// here and never written out. Each person carries their commit count per repository.
 const authorsCfg = json('scripts/credits-authors.json');
 const ignored = (authorsCfg.ignore || []).map((r) => new RegExp(r, 'i'));
 const personOf = new Map();
-for (const p of authorsCfg.people || []) for (const a of [p.name, ...(p.aliases || [])]) personOf.set(a.toLowerCase(), p);
-/** name → { name, github, contributor, repos:Set, since } */
+for (const p of authorsCfg.people || []) {
+  for (const a of [p.name, ...(p.aliases || [])]) personOf.set(a.toLowerCase(), p);
+  for (const m of p.emails || []) personOf.set('<' + m.toLowerCase() + '>', p);
+}
+const keyOfEmail = new Map(); // email → the person key it was first seen under
+const ghFromEmail = (email) => { const m = (email || '').match(/^(?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$/i); return m ? `https://github.com/${m[1]}` : null; };
+/** key → { name, github, contributor, commits: { repo: n }, since } */
 const people = new Map();
-const addAuthor = (name, email, repo, year) => {
+const addAuthor = (name, email, repo, year, n = 1) => {
   name = (name || '').trim();
+  email = (email || '').trim().toLowerCase();
   if (!name || ignored.some((r) => r.test(name) || (email && r.test(email)))) return;
-  const p = personOf.get(name.toLowerCase());
-  const key = p ? p.name : name;
-  if (!people.has(key)) people.set(key, { name: key, github: p?.github || null, contributor: p?.contributor || null, repos: new Set(), since: year });
+  const p = personOf.get(name.toLowerCase()) || (email ? personOf.get('<' + email + '>') : null);
+  const key = p ? p.name : (email && keyOfEmail.get(email)) || name;
+  if (email && !keyOfEmail.has(email)) keyOfEmail.set(email, key);
+  if (!people.has(key)) people.set(key, { name: key, github: p?.github || null, contributor: p?.contributor || null, commits: {}, since: year });
   const e = people.get(key);
-  e.repos.add(repo);
+  if (!e.github) e.github = ghFromEmail(email);
+  e.commits[repo] = (e.commits[repo] || 0) + n;
   if (year && (!e.since || year < e.since)) e.since = year;
 };
 const prevPeople = prev.contributors?.people || [];
@@ -389,7 +405,7 @@ for (const r of authorsCfg.repos) {
   } catch { log = null; }
   if (log == null) {
     // Not checked out here: keep what the previous output said about this repository.
-    for (const p of prevPeople) if (p.repos?.includes(r.id)) addAuthor(p.name, null, r.id, p.since);
+    for (const p of prevPeople) if (p.repos?.includes(r.id)) addAuthor(p.name, null, r.id, p.since, p.commits?.[r.id] || 0);
     continue;
   }
   for (const rec of log.split('\x1e')) {
@@ -406,8 +422,12 @@ const repoOrder = authorsCfg.repos.map((r) => r.id);
 const contributors = {
   repos: authorsCfg.repos.map((r) => ({ id: r.id, label: r.label, url: r.url || null })),
   people: [...people.values()]
-    .map((p) => ({ name: p.name, github: p.github, contributor: p.contributor, repos: repoOrder.filter((id) => p.repos.has(id)), since: p.since || null }))
-    .sort((a, b) => b.repos.length - a.repos.length || String(a.since).localeCompare(String(b.since)) || a.name.localeCompare(b.name)),
+    .map((p) => {
+      const repos = repoOrder.filter((id) => id in p.commits);
+      const commits = Object.fromEntries(repos.map((id) => [id, p.commits[id]]));
+      return { name: p.name, github: p.github, contributor: p.contributor, repos, commits, total: repos.reduce((n, id) => n + commits[id], 0), since: p.since || null };
+    })
+    .sort((a, b) => b.total - a.total || b.repos.length - a.repos.length || String(a.since).localeCompare(String(b.since)) || a.name.localeCompare(b.name)),
 };
 
 const out = {
@@ -447,10 +467,16 @@ if (problems.length) {
   process.exit(1);
 }
 const total = out.groups.reduce((n, g) => n + g.items.length, 0);
+/** The output without the per-person commit counts (what --check compares). */
+function countless(t) {
+  try { const j = JSON.parse(t); for (const q of j.contributors?.people || []) { delete q.commits; delete q.total; } return JSON.stringify(j); } catch { return t; }
+}
 if (CHECK) {
   for (const [file, want] of [[OUT, text], [LIC_OUT, licText]]) {
     const cur = has(file) ? rd(file).replace(/\r\n/g, '\n') : '';
-    if (cur !== want) {
+    // Commit counts move with every commit: the gate checks who is listed and where; the counts
+    // are refreshed by `npm run gen` (which `npm run build` runs).
+    if (countless(cur) !== countless(want)) {
       console.error(`✗ ${file} is not what the manifests and the git history say (a dependency was added, removed or bumped, a licence file changed, or a new contributor). Run: node scripts/gen-credits.mjs`);
       process.exit(1);
     }

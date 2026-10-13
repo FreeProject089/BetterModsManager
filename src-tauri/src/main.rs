@@ -425,6 +425,15 @@ fn main() {
                 // (e.g. BMM closed mid-tutorial before cleanup could run).
                 crate::commands::tutorial_demo::purge_tutorial_demo(&mut data);
                 crate::commands::tutorial_demo::purge_demo_files();
+                // One record, one id: repair duplicates older syncs left (the same repo in
+                // two profiles, a mod the repo renamed). data.json is copied aside first.
+                {
+                    let d = &mut *data;
+                    let fixed = crate::commands::mod_ids::repair_at_startup(&app_dir.join("data.json"), &mut d.mods, &mut d.profiles);
+                    if !fixed.is_empty() {
+                        println!("mod ids: {} duplicate id(s) given their own id", fixed.len());
+                    }
+                }
                 // Fifty API routes gained a permission this version. Carry the read half of
                 // each domain a plugin was already trusted with, once, or upgrading BMM
                 // stops every installed plugin for a reason nobody would connect to it.
@@ -540,6 +549,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::verify::file_meta,
             commands::verify::hash_file,
+            commands::tools::tools_cancel,
+            commands::tools::tools_find_duplicates,
+            commands::tools::tools_disk_usage,
+            commands::tools::tools_profile_diff,
+            commands::tools::tools_find_orphans,
             commands::profile::get_profiles,
             commands::profile::get_active_profile_id,
             commands::profile::set_active_profile,
@@ -715,6 +729,7 @@ fn main() {
             commands::consent_ledger::consent_verify,
             commands::consent_ledger::consent_export,
             commands::consent_ledger::consent_sync,
+            commands::bc_v2::consent_sync_bc_v2,
             commands::consent_ledger::consent_prepare_launch,
             commands::analytics::analytics_request_deletion,
             commands::analytics::analytics_request_data,
@@ -782,6 +797,10 @@ fn main() {
             commands::autoupdate::apply_incremental_update,
             commands::autoupdate::check_update_via_installer,
             commands::autoupdate::update_via_installer,
+            commands::autoupdate::stage_update,
+            commands::autoupdate::staged_update,
+            commands::autoupdate::install_staged_update,
+            commands::autoupdate::discard_staged_update,
             commands::custom_pages::list_custom_pages,
             commands::custom_pages::create_custom_page,
             commands::custom_pages::create_imported_custom_page,
@@ -902,6 +921,14 @@ fn main() {
             commands::catalog_store::catalog_entry,
             commands::catalog_store::catalog_drop,
             commands::catalog_store::catalog_authored_get,
+            commands::catalog_convert::catalog_validate,
+            commands::catalog_convert::catalog_normalize,
+            commands::catalog_convert::catalog_convert,
+            commands::catalog_convert::catalog_verify_signature,
+            commands::catalog_convert::catalog_keys,
+            commands::catalog_cache::catalog_fetch,
+            commands::catalog_cache::catalog_cache_status,
+            commands::catalog_cache::catalog_cache_clear,
             commands::game_watch::file_stamp,
             commands::game_watch::read_text_tail,
             commands::scheduler::run_scheduled_script_full,
@@ -953,6 +980,13 @@ fn main() {
             commands::repo_convert::repo_format_registry,
             commands::repo_convert::repo_format_inspect,
             commands::repo_convert::repo_format_convert,
+            commands::repo_validate::repo_validate,
+            commands::repo_validate::repo_validate_cancel,
+            commands::repo_follow::repo_follow_list,
+            commands::repo_follow::repo_follow_due,
+            commands::repo_follow::repo_follow_set,
+            commands::repo_follow::repo_follow_remove,
+            commands::repo_follow::repo_follow_check,
             commands::crash::finalize_and_close_app,
             commands::disk::read_file_base64,
             // commands::debug::get_project_files and read_project_file

@@ -1,0 +1,7 @@
+{
+  "name": "Repos",
+  "repos": [
+    { "name": "EU mirror", "url": "https://eu.example/repo", "description": "Europe", "region": "eu" },
+    { "id": "us", "name": "US mirror", "url": "https://us.example/repo", "region": "us" }
+  ]
+}

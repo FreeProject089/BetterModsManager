@@ -23,16 +23,17 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{name}` | un nom (mod, profil, tâche, fichier…) |
 | `{m}` | un second nombre, ou un nom, à côté de {n} |
 | `{v}` | une version ou une valeur |
-| `{count}` | un nombre d’éléments |
 | `{total}` | le total sur lequel porte le compte |
+| `{count}` | un nombre d’éléments |
 | `{err}` | un message d’erreur |
-| `{id}` | un identifiant |
 | `{s}` | des secondes, ou un mot court choisi par le code |
+| `{id}` | un identifiant |
 | `{e}` | un message d’erreur |
 | `{size}` | une taille déjà formatée (Ko, Mo…) |
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{profile}` | un nom de profil |
+| `{version}` | un numéro de version |
 | `{mod}` | un nom de mod |
 | `{error}` | un message d’erreur |
 | `{file}` | un nom de fichier |
@@ -41,7 +42,6 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{date}` | une date |
 | `{type}` | un genre (un importateur, un format…) |
 | `{url}` | une adresse web |
-| `{version}` | un numéro de version |
 | `{time}` | une heure |
 
 ## Accolades qui sont du texte
@@ -73,7 +73,19 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-890 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+957 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+
+### activity
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `activity.btnRunning` | `{n}` | Activité : {n} en cours |
+| `activity.cancelOne` | `{title}` | Annuler {title} |
+| `activity.doneCount` | `{m}` `{n}` | {n} sur {m} faits |
+| `activity.failedCount` | `{m}` `{n}` | {n} sur {m} en échec. |
+| `activity.hourMin` | `{h}` `{m}` | {h} h {m} min |
+| `activity.minSec` | `{m}` `{s}` | {m} min {s} s |
+| `activity.sec` | `{s}` | {s} s |
 
 ### actjob
 
@@ -181,6 +193,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `apps.card.from` | `{source}` | de {source} |
+| `apps.card.openAria` | `{name}` | Détails de {name} |
 | `apps.create.bundled` | `{f}` `{n}` | Publié : {n} application(s) empaquetée(s), {f} |
 | `apps.create.clearBody` | `{n}` | Ceci jette le brouillon ({n} entrée(s)). Exportez-le d'abord pour le garder. |
 | `apps.create.opened` | `{n}` | Ouvert : {n} application(s) |
@@ -191,12 +205,16 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `apps.create.pbNoUrl` | `{id}` | {id} : pas d'URL de téléchargement. Les lecteurs ignoreront cette entrée. |
 | `apps.create.problems` | `{n}` | {n} chose(s) à regarder |
 | `apps.create.stillNeeded` | `{x}` | Il manque encore : {x} |
+| `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installée, v{latest} dans le catalogue |
 | `apps.shownOf` | `{n}` `{total}` | {n} sur {total} |
+| `apps.someSourcesFailed` | `{n}` | {n} source(s) n'ont pas répondu. Leurs apps manquent ci-dessous. |
 | `apps.sources.bundleAdded` | `{n}` | Suivi : {n} application(s) |
 | `apps.sources.fromIndex` | `{n}` | {n} catalogue(s) d’apps ajouté(s) depuis cet index. |
 | `apps.sources.indexAll` | `{n}` | Cet index liste {n} catalogue(s) d’apps et vous les suivez déjà tous. |
 | `apps.sources.indexNone` | `{n}` | Cet index ne liste aucun catalogue d’apps, seulement {n} entrée(s) d’autres types. |
 | `apps.sources.indexNone2` | `{what}` | Aucun catalogue d’apps dans cet index, seulement {what}. Ajoute-les depuis leurs écrans. |
+| `apps.state.updatedToast` | `{name}` | {name} : mise à jour terminée |
+| `apps.updatesMany` | `{n}` | {n} mises à jour |
 
 ### bench
 
@@ -247,6 +265,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `cm.fromIndex` | `{n}` | {n} catalogue(s) ajouté(s) depuis cet index. |
 | `cm.indexAll` | `{n}` | Cet index liste {n} catalogue(s) de ce type et tu les suis déjà tous. |
 | `cm.indexNone` | `{what}` | Aucun catalogue de ce type dans cet index. Il contient {what} ; ajoute-les depuis leurs propres écrans. |
+| `cm.searchNone` | `{q}` | Rien ici ne correspond à « {q} ». |
 | `cm.someFailed` | `{list}` | Ceux-ci n'ont pas pu être écrits : {list} |
 
 ### common
@@ -296,6 +315,9 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `credits.codeCommits` | `{n}` | {n} commits |
+| `credits.codeOpenRepo` | `{repo}` | Ouvrir le dépôt {repo} |
+| `credits.codeRepoCommits` | `{n}` `{repo}` | {n} commits dans {repo} |
 | `credits.codeRepos` | `{n}` | Commits dans {n} dépôts |
 | `credits.codeSince` | `{year}` | depuis {year} |
 | `credits.stackGroupsN` | `{n}` | {n} groupes |
@@ -842,6 +864,21 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.extras.pending` | `{n}` | Gardé : {n} élément(s) y entreront quand un dépôt sera fait |
 | `repo.extras.pendingTag` | `{n}` | {n} en attente |
 | `repo.extras.taskAdded` | `{n}` | {n} automatisation(s) ajoutée(s), désactivée(s). |
+| `repo.follow.added` | `{name}` | {name} est maintenant suivi. |
+| `repo.follow.applied` | `{n}` `{name}` | {name} : {n} mod(s) mis à jour et appliqué(s). |
+| `repo.follow.checkFailed` | `{err}` `{name}` | Impossible de vérifier {name} : {err} |
+| `repo.follow.downloaded` | `{n}` `{name}` | {name} : {n} mod(s) téléchargé(s). |
+| `repo.follow.everyMin` | `{n}` | toutes les {n} minutes |
+| `repo.follow.found` | `{n}` `{name}` | {name} : {n} de vos mods ont une mise à jour. |
+| `repo.follow.foundManual` | `{n}` `{name}` | {name} : {n} mise(s) à jour trouvée(s), mais BMM ne sait pas à quel profil elles appartiennent. Mettez-les à… |
+| `repo.follow.heldGame` | `{n}` `{name}` | {name} : {n} mise(s) à jour trouvée(s). Un jeu est lancé, donc rien n'a été installé ; BMM réessaiera à la pr… |
+| `repo.follow.installFailed` | `{err}` `{name}` | {name} : la mise à jour a échoué : {err} |
+| `repo.follow.jobOff` | `{name}` | Mise à jour depuis {name} : désactivation des mods |
+| `repo.follow.jobOn` | `{name}` | Mise à jour depuis {name} : réactivation des mods |
+| `repo.follow.lastCheck` | `{when}` | vérifié le {when} |
+| `repo.follow.lastError` | `{err}` | La dernière vérification a échoué : {err} |
+| `repo.follow.updates` | `{n}` | {n} mise(s) à jour |
+| `repo.follow.upToDate` | `{name}` | {name} : vos mods sont à jour. |
 | `repo.format.label` | `{v}` | format {v} |
 | `repo.format.legacy` | `{v}` | ancien {v} |
 | `repo.format.legacyHint` | `{cur}` | Écrit par un ancien BMM. Il fonctionne toujours ; le convertir le passe au format {cur}. |
@@ -917,7 +954,9 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.updatesBaselined` | `{count}` | Suivi de {count} téléchargement(s) direct(s) activé. Revérifiez plus tard pour détecter les changements. |
 | `repo.updatesFound` | `{count}` | {count} mise(s) à jour disponible(s) |
 | `repo.updatesRepoErrors` | `{count}` | {count} repo(s) injoignable(s) |
+| `repo.validate.cacheHits` | `{n}` | {n} fichiers inchangés n'ont pas été relus (cochez « Relire chaque fichier » pour forcer). |
 | `repo.validate.changed` | `{n}` | Fichiers différents du repo.json : {n}. |
+| `repo.validate.duplicateIds` | `{n}` | Mods présents deux fois dans un profil : {n}. |
 | `repo.validate.emptyProfiles` | `{n}` | Profils sans aucun mod : {n}. |
 | `repo.validate.filled` | `{n}` | Fichiers sans empreinte : {n}. |
 | `repo.validate.formatNewer` | `{v}` | Format {v} : plus récent que ce BMM. Lisible, certains champs peuvent être ignorés. |
@@ -925,9 +964,12 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.validate.formatOld` | `{cur}` `{v}` | Format {v} : plus ancien que {cur}. |
 | `repo.validate.formatTooNew` | `{v}` | Format {v} : trop récent pour ce BMM. Mettez BMM à jour pour le vérifier. |
 | `repo.validate.missing` | `{n}` | Fichiers listés absents : {n}. |
+| `repo.validate.progress` | `{done}` `{of}` `{size}` `{total}` | {done} / {total} fichiers · {size} sur {of} |
 | `repo.validate.summary` | `{files}` `{mods}` `{profiles}` `{size}` | {profiles} profils, {mods} mods, {files} fichiers, {size}. |
+| `repo.validate.took` | `{s}` | Vérifié en {s} s. |
 | `repo.validate.verdictBad` | `{n}` | Problèmes à corriger avant de partager : {n}. |
 | `repo.validate.verdictWarn` | `{n}` | Utilisable. Points à regarder : {n}. |
+| `repo.validate.which` | `{n}` | Voir lesquels ({n}) |
 | `repo.version.alsoConverts` | `{v}` | Le manifeste est converti au format {v} en même temps. |
 | `repo.version.confirm` | `{from}` `{to}` | Passer la version de {from} à {to} et re-signer le repo.json ? |
 | `repo.version.done` | `{backup}` `{v}` | Version {v} appliquée et signée. Ancien manifeste gardé sous {backup}. |
@@ -1116,6 +1158,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `settings.catIndex.holds` | `{n}` | Cet index liste {n} catalogue(s). |
 | `settings.catIndex.makeDone` | `{n}` | Index écrit avec {n} catalogue(s). |
 | `settings.catIndex.skipped` | `{n}` | {n} ignoré(s). |
+| `settings.catIndex.state.ok` | `{n}` | OK · {n} éléments |
 | `settings.catIndex.willAdd` | `{what}` | Sera ajouté : {what}. |
 | `settings.creatorKey.protection` | `{what}` | Protection de la clé créateur : {what} |
 | `settings.creatorKey.refused` | `{why}` | Le magasin de la clé créateur a été refusé : {why} |
@@ -1136,6 +1179,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `settings.link.done` | `{name}` | Lié en tant que {name}. |
 | `settings.lpImported` | `{n}` | « {n} » importé |
 | `settings.lpImportedMissing` | `{c}` `{n}` | « {n} » importé : {c} programme(s) introuvable(s) sur ce PC |
+| `settings.searchCount` | `{n}` | Sections trouvées : {n} |
+| `settings.searchEmpty` | `{q}` | Aucun réglage ne correspond à « {q} ». |
 | `settings.shortcutError` | `{err}` | Erreur sauvegarde raccourci : {err} |
 | `settings.shortcutUpdated` | `{key}` | Raccourci mis à jour ({key}) |
 | `settings.tagCreateError` | `{err}` | Erreur création tag : {err} |
@@ -1270,6 +1315,25 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `toast.openError` | `{err}` `{id}` | Erreur ouverture {id} : {err} |
 | `toast.updatePartial` | `{applied}` `{errors}` | Mise à jour partielle : {applied} appliqués, {errors} erreurs |
 
+### tools
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `tools.conflicts.files` | `{n}` | {n} fichier(s) |
+| `tools.conflicts.summary` | `{a}` `{n}` | {n} paire(s) en conflit, dont {a} active(s). |
+| `tools.diff.onlyA` | `{a}` | Seulement dans {a} |
+| `tools.diff.onlyB` | `{b}` | Seulement dans {b} |
+| `tools.diff.summary` | `{a}` `{b}` `{n}` `{s}` | {a} et {b} : {n} différence(s), {s} mod(s) identique(s). |
+| `tools.disk.perMod` | `{n}` | Par mod ({n}) |
+| `tools.disk.summary` | `{p}` `{t}` | {t} au total pour {p} profil(s) et les données de BMM. |
+| `tools.duplicates.copies` | `{n}` | {n} copies |
+| `tools.duplicates.summary` | `{f}` `{h}` `{m}` `{s}` `{w}` | {m} mod(s) en double, {f} groupe(s) de fichiers identiques, {w} récupérables. {s} fichiers listés, {h} hachés. |
+| `tools.duplicates.wasted` | `{w}` | {w} en double |
+| `tools.moreInExport` | `{n}` | {n} de plus dans l’export. |
+| `tools.orphans.summary` | `{m}` `{n}` `{p}` | {n} résultat(s) dans {p} profil(s) et {m} mod(s). |
+| `tools.validate.bad` | `{f}` `{n}` | Format {f} : {n} problème(s). |
+| `tools.validate.ok` | `{f}` `{n}` | Format {f} : aucun problème trouvé ({n} entrées). |
+
 ### tut
 
 | Clé | Variables | Texte |
@@ -1302,5 +1366,18 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `update.availableToast` | `{version}` | BMM v{version} est disponible. Cliquez ici pour voir les nouveautés. |
+| `update.daysAgo` | `{n}` | il y a {n} jours |
 | `update.dlProgress` | `{done}` `{total}` | Téléchargement {done} / {total} Mo |
+| `update.etaMin` | `{n}` | environ {n} min restantes |
+| `update.etaSec` | `{n}` | environ {n} s restantes |
+| `update.hoursAgo` | `{n}` | il y a {n} h |
+| `update.lastCheck` | `{when}` | Dernière vérification : {when} |
+| `update.lastCheckFailed` | `{when}` | Échec de la dernière vérification : {when} |
+| `update.minutesAgo` | `{n}` | il y a {n} min |
 | `update.pageNotFound` | `{name}` | Page non trouvée : {name} |
+| `update.sizeMb` | `{size}` | {size} Mo |
+| `update.speed` | `{speed}` | {speed} Mo/s |
+| `update.stagedBody` | `{n}` `{version}` | La v{version} a été téléchargée et vérifiée la dernière fois. Installation dans {n} s. |
+| `update.stagedReady` | `{version}` | La v{version} a été téléchargée et vérifiée la dernière fois. |
+| `update.stagedToast` | `{version}` | La v{version} est téléchargée et vérifiée. Elle s'installera au prochain démarrage de BMM. |

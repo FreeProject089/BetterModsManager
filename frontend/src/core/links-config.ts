@@ -219,18 +219,23 @@ export function catalogSources(key: keyof BmmLinks): string[] {
 let _bcTestMode = false;
 let _bcTestBase = 'http://localhost:5176';
 let _bcLoaded = false;
+let _bcApiVersion: 'v1' | 'v2' = 'v1';
+let _bcV2Base = '';
 
 export async function loadBcConfig(): Promise<void> {
     if (_bcLoaded) return;
     try {
         const { invoke } = await import('./api.js');
-        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string };
+        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string; api_version?: string; v2_base?: string };
         if (cfg) {
             _bcTestMode = !!(cfg.testMode ?? cfg.test_mode);
             const base = cfg.baseUrl ?? cfg.base_url;
             if (base && base.trim()) _bcTestBase = base.trim();
+            // BetterCommunity v2 switch (app.cfg BCApiVersion / BCv2Base) — read by core/bc-client.ts.
+            _bcApiVersion = String(cfg.api_version || '').trim().toLowerCase() === 'v2' ? 'v2' : 'v1';
+            _bcV2Base = String(cfg.v2_base || '').trim();
         }
-        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}`);
+        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}, api=${_bcApiVersion}`);
     } catch (_) { /* not in Tauri / cfg unreadable → production defaults */ }
     // Mark loaded only AFTER the attempt — never before (a premature call that
     // failed once must not lock the config to defaults forever).
@@ -239,6 +244,10 @@ export async function loadBcConfig(): Promise<void> {
 
 /** Whether the in-app BetterCommunity blog/community points at a test/staging base. */
 export function bcTestMode(): boolean { return _bcTestMode; }
+/** app.cfg `BCApiVersion` (v1 unless the file says v2) and `BCv2Base` ('' = same root). Raw
+ *  values: core/bc-client.ts turns them into URLs. */
+export function bcApiVersionCfg(): 'v1' | 'v2' { return _bcApiVersion; }
+export function bcV2BaseCfg(): string { return _bcV2Base; }
 /** The configured test base URL (with or without a port), trailing slash trimmed. */
 export function bcTestBase(): string { return _bcTestBase.replace(/\/+$/, ''); }
 /** The effective BetterCommunity root: the test base when test mode is on, else the

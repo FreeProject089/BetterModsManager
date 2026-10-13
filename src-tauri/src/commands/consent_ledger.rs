@@ -64,7 +64,7 @@ pub const GENESIS: &str = "00000000000000000000000000000000000000000000000000000
 pub const DOCS: &[&str] = &["tos", "privacy", "telemetry", "crash_reports"];
 /// Where the answer was given. `app` is accepted on input and resolved to `first_run` /
 /// `reconsent` from the ledger itself.
-pub const SOURCES: &[&str] = &["installer", "first_run", "reconsent", "settings", "link", "api", "cli", "mcp", "import"];
+pub const SOURCES: &[&str] = &["installer", "installer-cli", "first_run", "reconsent", "settings", "link", "api", "cli", "mcp", "import"];
 pub const CHOICES: &[&str] = &["accepted", "declined", "custom", "withdrawn", "reset"];
 
 /// Version of the telemetry consent text (the categories and what each sends). Bump it when the
@@ -632,6 +632,16 @@ pub struct InstallerConsent {
     pub categories: BTreeMap<String, bool>,
     #[serde(default)]
     pub at: String,
+    /// How the installer was driven: "cli" (`BMM-Setup.exe --update ...`, no screen shown) or
+    /// "ui". Absent in handoffs written before BetterInstaller recorded it.
+    #[serde(default)]
+    pub source: String,
+}
+
+/// The ledger source of an installer receipt: `installer-cli` when the installer ran from its
+/// command line, `installer` otherwise (its screens, or a handoff that does not say).
+pub fn installer_source(source: &str) -> &'static str {
+    if source.trim().eq_ignore_ascii_case("cli") { "installer-cli" } else { "installer" }
 }
 
 /// Record what the installer says was answered. Legal texts are checked against what BMM ships
@@ -662,7 +672,7 @@ pub fn record_installer(state: &AppState, app: &AppHandle, items: &[InstallerCon
             lang: clean(&c.lang, 16),
             choice: c.choice.trim().to_string(),
             categories: c.categories.clone(),
-            source: "installer".into(),
+            source: installer_source(&c.source).into(),
             app_version: app.package_info().version.to_string(),
             note,
         };
@@ -1011,6 +1021,19 @@ mod tests {
         assert!(doc_status(&l.receipts(), "telemetry", Some("2099-01-01"), true).needs_reconsent);
         l.append(draft("telemetry", "withdrawn", "settings", TELEMETRY_VERSION), t0()).unwrap();
         assert!(!doc_status(&l.receipts(), "telemetry", Some(TELEMETRY_VERSION), true).proof, "the newest answer counts");
+    }
+
+    #[test]
+    fn an_installer_receipt_says_whether_the_cli_or_the_screens_asked() {
+        assert_eq!(installer_source("cli"), "installer-cli");
+        assert_eq!(installer_source(" CLI "), "installer-cli");
+        assert_eq!(installer_source("ui"), "installer");
+        assert_eq!(installer_source(""), "installer", "an older handoff without the field");
+        let c: InstallerConsent = serde_json::from_str(r#"{"doc":"tos","choice":"accepted"}"#).unwrap();
+        assert_eq!(installer_source(&c.source), "installer");
+        let c: InstallerConsent = serde_json::from_str(r#"{"doc":"tos","choice":"accepted","source":"cli"}"#).unwrap();
+        assert_eq!(installer_source(&c.source), "installer-cli");
+        assert!(SOURCES.contains(&"installer-cli"));
     }
 
     /// Every source a receipt can name is accepted; `app` resolves from the ledger.

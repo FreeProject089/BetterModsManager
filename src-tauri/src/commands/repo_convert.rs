@@ -112,10 +112,22 @@ pub fn inspect(path: &str) -> Result<FormatReport, String> {
 
 /// The conversion, with the signer injected — `security::sign_message` in the app, a fixed
 /// key in tests. `own_author_id` is this BMM's public key, to say whether the signer changes.
+#[allow(dead_code)] // the tests' entry; the app goes through convert_reporting
 pub fn convert_with(
     args: &ConvertArgs,
     own_author_id: Option<&str>,
     sign: impl Fn(&[u8]) -> Result<(String, String), String>,
+) -> Result<ConvertReport, String> {
+    convert_with_hasher(args, own_author_id, sign, &repo_format::hash_in_order)
+}
+
+/// [`convert_with`] with the file hasher injected: the app passes the governed, parallel,
+/// cached one (`repo_validate::governed_hasher`); tests and the CLI the sequential one.
+pub fn convert_with_hasher(
+    args: &ConvertArgs,
+    own_author_id: Option<&str>,
+    sign: impl Fn(&[u8]) -> Result<(String, String), String>,
+    hash_all: repo_format::HashAll<'_>,
 ) -> Result<ConvertReport, String> {
     let new_version = match args.set_version.as_deref().map(str::trim) {
         None | Some("") => None,
@@ -125,12 +137,30 @@ pub fn convert_with(
     let file = manifest_path(&args.path)?;
     let original = read_value(&file)?;
     let dir = file.parent().map(Path::to_path_buf);
-    let mut plan = repo_format::convert(original, if args.rehash { dir.as_deref() } else { None })?;
+    let mut plan = repo_format::convert_with_hasher(original, if args.rehash { dir.as_deref() } else { None }, hash_all)?;
 
     // The real reader must accept the result, or the conversion produced a file BMM cannot
     // open — the one outcome worse than not converting.
     let mut repo: ServerRepo = serde_json::from_value(plan.manifest.clone())
         .map_err(|e| format!("repo.convert.errResult:{e}"))?;
+
+    // A current manifest whose only fault is its signature — none at all, or one that does not
+    // verify (repo.json edited by hand after signing). « Repair » on the Validate report opens
+    // this dialog for exactly those two, and it used to answer "already up to date" and do
+    // nothing. Signing is the repair; the version tool keeps its own "same version" answer.
+    if plan.up_to_date && args.sign && new_version.is_none() {
+        let fix = if !plan.was_signed {
+            Some(Change { kind: "signature_added", path: "signature".into(), before: None, after: Some("ed25519".into()) })
+        } else if !crate::commands::security::verify_repo_signature(repo.clone()) {
+            Some(Change { kind: "signature_invalid", path: "signature".into(), before: Some("ed25519".into()), after: Some("ed25519".into()) })
+        } else {
+            None
+        };
+        if let Some(c) = fix {
+            plan.changes.push(c);
+            plan.up_to_date = false;
+        }
+    }
 
     // The version, when asked and different: one more change, and a reason to write and sign
     // even when the format itself was already current.
@@ -200,8 +230,18 @@ pub fn convert_with(
 }
 
 pub fn convert(handle: &tauri::AppHandle, args: &ConvertArgs) -> Result<ConvertReport, String> {
+    convert_reporting(handle, args, None)
+}
+
+/// [`convert`], hashing on the governor's Hash pool (parallel, cached by size and mtime,
+/// cancellable from the resources dashboard), with progress sent to `progress` when given.
+pub fn convert_reporting(handle: &tauri::AppHandle, args: &ConvertArgs, progress: Option<crate::commands::repo_validate::Progress>) -> Result<ConvertReport, String> {
     let own = crate::commands::security::get_creator_id(handle.clone()).ok();
-    convert_with(args, own.as_deref(), |bytes| crate::commands::security::sign_message(handle, bytes))
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("repo convert {}", args.path));
+    let _run = progress.as_ref().and_then(|p| crate::commands::repo_validate::RunGuard::new(&p.run_id, ticket.id()));
+    let hasher = crate::commands::repo_validate::governed_hasher(&ticket, progress, false);
+    convert_with_hasher(args, own.as_deref(), |bytes| crate::commands::security::sign_message(handle, bytes), &hasher)
 }
 
 /// The registry, for the page's « what changed between formats » table.
@@ -217,8 +257,13 @@ pub fn repo_format_inspect(path: String) -> Result<FormatReport, String> {
 
 /// Hashing a large repo is long: off the async runtime, like the export.
 #[tauri::command]
-pub async fn repo_format_convert(handle: tauri::AppHandle, args: ConvertArgs) -> Result<ConvertReport, String> {
-    tauri::async_runtime::spawn_blocking(move || convert(&handle, &args))
+/// `run_id`: the page's token; given, the hashing progress goes out as
+/// `bmm://repo-validate-progress` (the same event and payload as Validate).
+pub async fn repo_format_convert(handle: tauri::AppHandle, args: ConvertArgs, run_id: Option<String>) -> Result<ConvertReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let progress = run_id.map(|run_id| crate::commands::repo_validate::Progress { handle: handle.clone(), run_id });
+        convert_reporting(&handle, &args, progress)
+    })
         .await
         .map_err(|e| e.to_string())?
 }

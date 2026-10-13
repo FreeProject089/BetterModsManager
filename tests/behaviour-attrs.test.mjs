@@ -133,6 +133,7 @@ const HARMLESS = {
     'data-var': 'theme editor, own panel', 'data-bte-tab': 'theme editor, own panel',
     'data-repo-profile-id': 'custom event detail, not a DOM read', 'data-repo-tab': 'custom event detail, not a DOM read',
     'data-path': 'tooltip key source (data-tasky-from)',
+    'data-cancel': 'activity centre panel, own element (listener bound to the panel, not the document)',
     'data-rp-html': 'repo-page header: a render cache on its own slot, deleted on langChanged; no action',
     // agent-bmm-sched: read inside dialogs the scheduler builds itself (the first-task mode question,
     // the variable picker popover, the flow inspector), never from a document-wide selector.

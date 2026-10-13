@@ -456,6 +456,37 @@ pub(crate) fn endpoint_allowed(e: &str) -> bool {
         || e.starts_with("http://telemetry.localhost:5176")
 }
 
+/// The name and version of the upload format. Two top-level fields of the `/batch` envelope,
+/// beside `api_key` / `packet_id` / `batch`: the telemetry server (BCW telemetry-dashboard,
+/// `ingest_handler`) reads the envelope as free JSON and ignores keys it does not know, so a
+/// server older than them is unaffected, and a newer one can tell which shape it is reading
+/// before it reads it. Not data about anybody: two constants, the same in every upload.
+/// Bump `TELEMETRY_SCHEMA_V` when an event's shape changes in a way the server must know about.
+/// The webview's session-end beacon (core/analytics.ts) sends the same pair.
+pub const TELEMETRY_SCHEMA: &str = "bmm-telemetry";
+pub const TELEMETRY_SCHEMA_V: u32 = 1;
+
+/// The `/batch` body: the versioned envelope around the queued events.
+pub fn envelope(api_key: &str, packet_id: &str, batch: &[Value]) -> Value {
+    json!({ "schema": TELEMETRY_SCHEMA, "v": TELEMETRY_SCHEMA_V, "api_key": api_key, "packet_id": packet_id, "batch": batch })
+}
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::*;
+    #[test]
+    fn the_envelope_is_versioned_and_keeps_the_fields_the_server_reads() {
+        let b = envelope("bmm_pk_x", "p1", &[json!({ "event": "app_open", "distinct_id": "d" })]);
+        assert_eq!(b["schema"], "bmm-telemetry");
+        assert_eq!(b["v"], 1);
+        // what ingest_handler reads, unchanged
+        assert_eq!(b["api_key"], "bmm_pk_x");
+        assert_eq!(b["packet_id"], "p1");
+        assert_eq!(b["batch"][0]["event"], "app_open");
+        assert_eq!(b.as_object().unwrap().len(), 5);
+    }
+}
+
 /// Flush the queued events to a PostHog-compatible capture endpoint in one batch.
 /// `endpoint`/`api_key` come from the frontend config; empty endpoint = keep local.
 #[tauri::command]
@@ -476,7 +507,7 @@ pub async fn analytics_flush(
     // Each flush is a "packet" with a random id. The id lets the user later request
     // erasure of that exact batch (the dashboard deletes everything tagged with it).
     let packet_id = uuid::Uuid::new_v4().to_string();
-    let body = json!({ "api_key": api_key.unwrap_or_default(), "packet_id": packet_id, "batch": batch });
+    let body = envelope(&api_key.unwrap_or_default(), &packet_id, &batch);
     // Gzip the payload (telemetry batches — especially rrweb replay chunks —
     // compress heavily) to cut upload size & bandwidth. The server transparently
     // decompresses Content-Encoding: gzip request bodies.

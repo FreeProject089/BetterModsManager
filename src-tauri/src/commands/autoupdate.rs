@@ -22,6 +22,19 @@ pub struct UpdateInfo {
     /// bundle id, the data layout and the installer itself, so an in-place incremental patch is
     /// unsafe — the UI must offer only the full installer (run by hand), never "Quick Update".
     pub major_bump: bool,
+    /// Size in bytes of the installer asset `download_url` names (0 when unknown), for the
+    /// « 62 MB » the update dialog shows before anything is downloaded.
+    pub download_size: u64,
+    /// The channel this check read: "stable" or "prerelease" (the setting, or forced to
+    /// "prerelease" when this build is itself a pre-release).
+    pub channel: String,
+    /// The release's tag exactly as published (`v1.0.1`), which the install step re-reads.
+    pub release_tag: String,
+    /// What will vouch for the installer: "signed" (update-manifest.json), "update-json" (the
+    /// checksum in the release's update.json) or "unverified" (nothing; BMM asks first).
+    pub verification: String,
+    /// Why it is "unverified", in plain words ("" otherwise).
+    pub verification_note: String,
 }
 
 /// A single file entry in the incremental update manifest.
@@ -168,12 +181,73 @@ fn cmp_version(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
-/// Is `a` strictly newer than `b`? `bpkg_core::version::is_newer`'s rule: `a` with no number is
-/// never newer; `b` with no number counts as 0.
+/// The pre-release tag right after the first number run (`1.2.3-rc.1+abc` → `rc.1`), `None`
+/// for a plain release. Build metadata (`+…`) is not a pre-release.
+fn prerelease_tag(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    let start = bytes.iter().position(|b| b.is_ascii_digit())?;
+    let mut i = start;
+    while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+        if bytes[i] == b'.' && (i + 1 >= bytes.len() || !bytes[i + 1].is_ascii_digit()) {
+            break;
+        }
+        i += 1;
+    }
+    let rest = text[i..].strip_prefix('-')?;
+    let tag = rest.split('+').next().unwrap_or("").trim();
+    (!tag.is_empty()).then_some(tag)
+}
+
+/// True for a pre-release build version (`1.1.0-beta.2`). Such a build follows the
+/// pre-release channel whatever the setting says: it is already on it.
+pub(crate) fn is_prerelease_version(v: &str) -> bool {
+    prerelease_tag(v).is_some()
+}
+
+/// Natural order of two pre-release tags: digit runs compare as numbers (`rc10` > `rc9`).
+fn cmp_tag(a: &str, b: &str) -> std::cmp::Ordering {
+    let split = |s: &str| -> Vec<(bool, String)> {
+        let mut out: Vec<(bool, String)> = Vec::new();
+        for c in s.to_ascii_lowercase().chars() {
+            let d = c.is_ascii_digit();
+            match out.last_mut() {
+                Some((kind, run)) if *kind == d => run.push(c),
+                _ => out.push((d, c.to_string())),
+            }
+        }
+        out
+    };
+    let (xa, xb) = (split(a), split(b));
+    for (pa, pb) in xa.iter().zip(xb.iter()) {
+        let o = match (pa.0, pb.0) {
+            (true, true) => pa.1.parse::<u64>().unwrap_or(0).cmp(&pb.1.parse::<u64>().unwrap_or(0)),
+            _ => pa.1.cmp(&pb.1),
+        };
+        if o != std::cmp::Ordering::Equal {
+            return o;
+        }
+    }
+    xa.len().cmp(&xb.len())
+}
+
+/// Is `a` strictly newer than `b`? `bpkg_core::version::is_newer`'s rule — `a` with no number is
+/// never newer; `b` with no number counts as 0 — plus ONE rule bpkg-core does not need: at the
+/// same number, the release is newer than its pre-releases (`1.2.0` > `1.2.0-rc.1`), and two
+/// pre-releases order naturally (`rc.2` > `rc.1`). Without it a person on `1.2.0-rc.1` was never
+/// offered `1.2.0`. BetterInstaller's own path only ever serves plain versions, so the two still
+/// agree on everything it sees.
 pub(crate) fn is_newer(a: &str, b: &str) -> bool {
     let Some(va) = extract_version(a) else { return false };
     let vb = extract_version(b).unwrap_or_default();
-    cmp_version(&va, &vb) == std::cmp::Ordering::Greater
+    match cmp_version(&va, &vb) {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Less => false,
+        std::cmp::Ordering::Equal => match (prerelease_tag(a), prerelease_tag(b)) {
+            (None, Some(_)) => true,
+            (Some(x), Some(y)) => cmp_tag(x, y) == std::cmp::Ordering::Greater,
+            _ => false,
+        },
+    }
 }
 
 /// A manifest path is relative and made of plain names only: no `..`, no root, no drive.
@@ -186,7 +260,17 @@ fn safe_relative_path(p: &str) -> bool {
 }
 
 fn is_https(url: &str) -> bool {
-    reqwest::Url::parse(url).map(|u| u.scheme() == "https" && u.host_str().is_some()).unwrap_or(false)
+    let Ok(u) = reqwest::Url::parse(url) else { return false };
+    if u.scheme() == "https" && u.host_str().is_some() {
+        return true;
+    }
+    // Tests only: the flow tests serve the manifest and the installer from a plain-HTTP
+    // server on the loopback (autoupdate_flow_tests.rs). Never compiled into the app.
+    #[cfg(test)]
+    if u.scheme() == "http" && u.host_str() == Some("127.0.0.1") {
+        return true;
+    }
+    false
 }
 
 /// Read an `update-manifest.json`, refusing it unless every rule holds:
@@ -360,13 +444,36 @@ fn emit_download(app: &tauri::AppHandle, phase: &str, received: u64, total: u64,
 /// with the rest: a wrong byte anywhere fails the hash, the partial file is deleted, and a
 /// resumed download is retried once from zero before giving up.
 async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Result<Vec<u8>, String> {
-    use std::io::{Read as _, Seek as _};
+    let dir = updates_dir(app)?;
+    let mut report = |p: DownloadProgress| {
+        let _ = app.emit("update-download-progress", p);
+    };
+    download_installer_into(&dir, entry, &mut report).await
+}
+
+/// `<local app data>/updates`, created on demand: partial downloads and staged installers.
+fn updates_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let dir = app
         .path()
         .app_local_data_dir()
         .map_err(|e| format!("Cannot resolve the download folder: {e}"))?
         .join("updates");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {e}"))?;
+    Ok(dir)
+}
+
+/// The download itself, into `dir`, reporting through `report`. Separate from the Tauri side so
+/// the flow tests run it against a local server (autoupdate_flow_tests.rs).
+pub(crate) async fn download_installer_into(
+    dir: &std::path::Path,
+    entry: &ManifestFile,
+    report: &mut (dyn FnMut(DownloadProgress) + Send),
+) -> Result<Vec<u8>, String> {
+    use std::io::{Read as _, Seek as _};
+    let mut emit = |phase: &str, received: u64, total: u64, resumed: bool| {
+        report(DownloadProgress { phase: phase.to_string(), received, total, resumed })
+    };
+    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create folder: {e}"))?;
     // `sha256` is 64 lowercase hex (verify_manifest_text), so this is a plain file name.
     let part = dir.join(format!("{}.part", entry.sha256));
 
@@ -376,7 +483,7 @@ async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Res
             let _ = std::fs::remove_file(&part);
             have = 0;
         }
-        let resumed = have > 0;
+        let mut resumed = have > 0;
         let complete_already = entry.size > 0 && have == entry.size;
 
         if !complete_already {
@@ -398,7 +505,10 @@ async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Res
                 _ => return Err(format!("Download failed with status: {}", response.status())),
             };
             if !append {
+                // The server ignored the range and sent the whole file: start over, and do not
+                // call it a resumed download.
                 have = 0;
+                resumed = false;
             }
             let mut cap = crate::fs_utils::DownloadCap::with_limit(INSTALLER_MAX_BYTES);
             cap.add(have)?;
@@ -414,7 +524,7 @@ async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Res
                     .truncate(!append)
                     .open(&part)
                     .map_err(|e| format!("Failed to create file: {e}"))?;
-                emit_download(app, "downloading", have, total, resumed);
+                emit("downloading", have, total, resumed);
                 let mut last_emit = std::time::Instant::now();
                 loop {
                     let chunk = match response.chunk().await {
@@ -430,18 +540,29 @@ async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Res
                         }
                     };
                     cap.add(chunk.len() as u64)?;
+                    // Never more than the signed size: what follows cannot be the installer.
+                    if entry.size > 0 && have + chunk.len() as u64 > entry.size {
+                        drop(file);
+                        let _ = std::fs::remove_file(&part);
+                        return Err(format!(
+                            "Update refused: the server sent more than the {} bytes the signed manifest gives for {}. \
+                             Nothing was run; BMM stays on its current version.",
+                            entry.size, entry.path
+                        ));
+                    }
                     file.write_all(&chunk).map_err(|e| format!("Failed to write to file: {e}"))?;
                     have += chunk.len() as u64;
                     if last_emit.elapsed() >= std::time::Duration::from_millis(120) {
-                        emit_download(app, "downloading", have, total, resumed);
+                        emit("downloading", have, total, resumed);
                         last_emit = std::time::Instant::now();
                     }
                 }
                 file.flush().map_err(|e| format!("Failed to write to file: {e}"))?;
+                emit("downloading", have, total, resumed);
             }
         }
 
-        emit_download(app, "verifying", have, have, resumed);
+        emit("verifying", have, have, resumed);
         let mut bytes = Vec::with_capacity(have as usize);
         let mut f = File::open(&part).map_err(|e| format!("Failed to read the download: {e}"))?;
         f.rewind().ok();
@@ -553,13 +674,121 @@ async fn fetch_release(client: &reqwest::Client, api_base: &str, include_pre: bo
     }
     let parsed: serde_json::Value = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
     if !include_pre {
-        return Ok(parsed);
+        // `/latest` never returns a pre-release on GitHub, but a mirror can (BCWEB's feed, or a
+        // GitHub "latest" set by hand on a pre-release). The stable channel must not follow it:
+        // read the list and take the newest STABLE release instead.
+        let flagged = parsed["prerelease"].as_bool().unwrap_or(false) || parsed["draft"].as_bool().unwrap_or(false);
+        if !flagged {
+            return Ok(parsed);
+        }
+        log_line(format!("[UPDATE] {} answered \"latest\" with a pre-release; reading the list", api_base));
+        return fetch_list(client, api_base, false).await;
     }
-    // The list form: newest first, and a draft is not something anybody can download.
-    let releases = parsed.as_array().cloned().unwrap_or_default();
-    match releases.into_iter().find(|r| !r["draft"].as_bool().unwrap_or(false)) {
-        Some(r) => Ok(r),
-        None => Err("NO_RELEASE".to_string()),
+    select_release(parsed.as_array().map(|a| a.as_slice()).unwrap_or(&[]), true)
+        .ok_or_else(|| "NO_RELEASE".to_string())
+}
+
+/// The release list of one source, reduced to the release the channel offers.
+async fn fetch_list(client: &reqwest::Client, api_base: &str, include_pre: bool) -> Result<serde_json::Value, String> {
+    let url = release_url(api_base, true);
+    let response = client.get(&url).send().await.map_err(|_| "NETWORK_ERROR".to_string())?;
+    if !response.status().is_success() {
+        return Err(match response.status().as_u16() {
+            404 => "NO_RELEASE".to_string(),
+            403 | 429 => "RATE_LIMITED".to_string(),
+            s if s >= 500 => "NETWORK_ERROR".to_string(),
+            _ => format!("Update API returned status {}", response.status()),
+        });
+    }
+    let parsed: serde_json::Value = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
+    select_release(parsed.as_array().map(|a| a.as_slice()).unwrap_or(&[]), include_pre)
+        .ok_or_else(|| "NO_RELEASE".to_string())
+}
+
+/// The release a channel offers, out of a release list: never a draft, a pre-release only when
+/// `include_pre`, and the HIGHEST version rather than the first entry. GitHub orders the list by
+/// creation date, so a hot-fix to an older line published after a newer release (1.0.3 after
+/// 1.1.0-beta.1) used to come first and hide the newer one.
+pub(crate) fn select_release(releases: &[serde_json::Value], include_pre: bool) -> Option<serde_json::Value> {
+    let tag = |r: &serde_json::Value| r["tag_name"].as_str().unwrap_or("").to_string();
+    let mut best: Option<&serde_json::Value> = None;
+    for r in releases {
+        if r["draft"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        if !include_pre && r["prerelease"].as_bool().unwrap_or(false) {
+            continue;
+        }
+        if extract_version(&tag(r)).is_none() {
+            continue;
+        }
+        if best.map(|b| is_newer(&tag(r), &tag(b))).unwrap_or(true) {
+            best = Some(r);
+        }
+    }
+    best.cloned()
+}
+
+/// The channel a check reads: the pre-release channel when the person chose it, or when this
+/// build is itself a pre-release (it would otherwise never hear of the next one).
+pub(crate) fn effective_include_pre(chosen: bool, current_version: &str) -> bool {
+    chosen || is_prerelease_version(current_version)
+}
+
+/// The release object turned into what the UI shows. Pure, so the asset rules are tested
+/// against fixtures (autoupdate_flow_tests.rs).
+pub(crate) fn release_to_info(body: &serde_json::Value, current_version: &str, include_pre: bool) -> UpdateInfo {
+    let is_prerelease = body["prerelease"].as_bool().unwrap_or(false);
+    let tag_name = body["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .trim_start_matches('v')
+        .trim_start_matches('V')
+        .to_string();
+    let release_url = body["html_url"].as_str().unwrap_or("").to_string();
+    let release_notes = body["body"].as_str().unwrap_or("").to_string();
+    let assets = body["assets"].as_array().cloned().unwrap_or_default();
+
+    // The installer asset: BMM-Setup.exe (BetterInstaller's setup, the only installer a release
+    // carries since 1.0.2), else any .exe, else an .msi (releases before 1.0). Only a HINT for
+    // download_and_install_update, which picks among the signed manifest's entries.
+    let named = |pred: &dyn Fn(&str) -> bool| {
+        assets.iter().find(|a| a["name"].as_str().map(|n| pred(&n.to_ascii_lowercase())).unwrap_or(false))
+    };
+    let installer = named(&|n| n == "bmm-setup.exe")
+        .or_else(|| named(&|n| n.ends_with(".exe")))
+        .or_else(|| named(&|n| n.ends_with(".msi")));
+    let download_url = installer
+        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| release_url.clone());
+    let download_size = installer.and_then(|a| a["size"].as_u64()).unwrap_or(0);
+
+    let manifest_url = assets
+        .iter()
+        .find(|a| a["name"].as_str().map(|n| n == "update-manifest.json").unwrap_or(false))
+        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()));
+
+    let has_update = is_newer_version(&tag_name, current_version);
+    // The major component of each version (the digits before the first '.'), 0 if unparseable.
+    let major = |v: &str| v.trim_start_matches('v').split('.').next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let major_bump = major(&tag_name) > major(current_version);
+    let verification = if manifest_url.is_some() { "signed" } else { "unverified" }.to_string();
+
+    UpdateInfo {
+        has_update,
+        current_version: current_version.to_string(),
+        latest_version: tag_name,
+        release_url,
+        release_notes,
+        download_url,
+        manifest_url,
+        is_prerelease,
+        major_bump,
+        download_size,
+        channel: if include_pre { "prerelease" } else { "stable" }.to_string(),
+        release_tag: body["tag_name"].as_str().unwrap_or("").to_string(),
+        verification,
+        verification_note: String::new(),
     }
 }
 
@@ -569,7 +798,7 @@ async fn fetch_release(client: &reqwest::Client, api_base: &str, include_pre: bo
 #[tauri::command]
 pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>, api_base_url: Option<String>, fallback_api_url: Option<String>) -> Result<UpdateInfo, String> {
     let current_version = app_handle.package_info().version.to_string();
-    let include_pre = include_prerelease.unwrap_or(false);
+    let include_pre = effective_include_pre(include_prerelease.unwrap_or(false), &current_version);
     let api_base = api_base_url.as_deref().unwrap_or(DEFAULT_UPDATE_API);
     log_line(format!("[UPDATE] Checking for updates (current: v{}, prerelease: {})", current_version, include_pre));
 
@@ -601,61 +830,14 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
         }
     };
 
-    let is_prerelease = body["prerelease"].as_bool().unwrap_or(false);
-
-    let tag_name = body["tag_name"]
-        .as_str()
-        .unwrap_or("")
-        .trim_start_matches('v')
-        .trim_start_matches('V')
-        .to_string();
-
-    let release_url = body["html_url"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-
-    let release_notes = body["body"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
-
-    let assets = body["assets"].as_array().cloned().unwrap_or_default();
-
-    // The installer asset: BMM-Setup.exe (BetterInstaller's setup, the only installer a release
-    // carries since 1.0.2), else any .exe, else an .msi (releases before 1.0). Only a HINT for
-    // download_and_install_update, which picks among the signed manifest's entries.
-    let named = |pred: &dyn Fn(&str) -> bool| {
-        assets.iter().find(|a| a["name"].as_str().map(|n| pred(&n.to_ascii_lowercase())).unwrap_or(false))
-    };
-    let download_url = named(&|n| n == "bmm-setup.exe")
-        .or_else(|| named(&|n| n.ends_with(".exe")))
-        .or_else(|| named(&|n| n.ends_with(".msi")))
-        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| release_url.clone());
-
-    // Look for incremental update manifest (update-manifest.json)
-    let manifest_url = assets
-        .iter()
-        .find(|a| a["name"].as_str().map(|n| n == "update-manifest.json").unwrap_or(false))
-        .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()));
-
-    let has_update = is_newer_version(&tag_name, &current_version);
-    // The major component of each version (the digits before the first '.'), 0 if unparseable.
-    let major = |v: &str| v.trim_start_matches('v').split('.').next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-    let major_bump = major(&tag_name) > major(&current_version);
-
-    Ok(UpdateInfo {
-        has_update,
-        current_version,
-        latest_version: tag_name,
-        release_url,
-        release_notes,
-        download_url,
-        manifest_url,
-        is_prerelease,
-        major_bump,
-    })
+    let mut info = release_to_info(&body, &current_version, include_pre);
+    if info.manifest_url.is_none() && info.has_update {
+        // Say up front what the install step will be able to check (update.json).
+        let (v, note) = label_from_update_json(&body, &current_version).await;
+        info.verification = v;
+        info.verification_note = note;
+    }
+    Ok(info)
 }
 
 /// Locate the BetterInstaller maintenance binary left next to BMM at install time
@@ -768,30 +950,27 @@ fn is_newer_version(latest: &str, current: &str) -> bool {
 /// Largest installer accepted, whatever the manifest says (BMM's is well under 100 MB).
 const INSTALLER_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
-/// The full-installer fallback, for a copy BetterInstaller did not install.
+/// The full-installer path: download, check, start, quit.
 ///
-/// Runs an installer only when the SIGNED incremental manifest (`manifest_url`, the release's
-/// `update-manifest.json`, verified exactly as for a Quick Update: publisher key, app, expiry,
-/// newer version) lists `url` among its `installers`, and the downloaded bytes have the SHA-256
-/// it gives. Anything else is refused before the file is written, and BMM stays where it is.
-/// `filename` is accepted for older callers and ignored: the name comes from the manifest.
+/// With `manifest_url` (the release's signed `update-manifest.json`, verified exactly as for a
+/// Quick Update: publisher key, app, expiry, newer version): only an installer it lists, with the
+/// SHA-256 it gives. Without one: the release `tag` is re-read from GitHub and its installer
+/// checked against the release's update.json ([`install_from_release`]); `confirm_sha256` is set
+/// only by the dialog's « Install anyway ». `url` and `filename` never choose what is downloaded.
 #[tauri::command]
 pub async fn download_and_install_update(
     app_handle: tauri::AppHandle,
     url: String,
     manifest_url: Option<String>,
     filename: Option<String>,
+    tag: Option<String>,
+    confirm_sha256: Option<String>,
 ) -> Result<(), String> {
     let _ = filename;
     log_line(format!("[UPDATE] Full installer requested: {}", url));
     let Some(manifest_url) = manifest_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
-        // The release has no update-manifest.json asset (published by hand without
-        // `npm run release:assets`, see RELEASE.md). Nothing here can vouch for its installer.
-        let e = "Update refused: this release publishes no signed update manifest, so its installer \
-                 cannot be checked. BMM stays on its current version; download the installer from \
-                 the release page.".to_string();
-        log_line(format!("[UPDATE] {}", e));
-        return Err(e);
+        // No signed manifest: the release's update.json, then the person's choice.
+        return download_and_install_from_release(&app_handle, tag.as_deref(), confirm_sha256.as_deref()).await;
     };
     let document = fetch_manifest_document(manifest_url).await?;
     let current = app_handle.package_info().version.to_string();
@@ -799,28 +978,53 @@ pub async fn download_and_install_update(
         .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
     // `url` only chooses among the SIGNED entries; the entry's own URL is what is downloaded.
     let entry = pick_installer(&manifest, &url).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
-    let file_name = installer_file_name(&entry.path).ok_or_else(|| "Update refused: bad installer name".to_string())?;
 
     log_line(format!("[UPDATE] Downloading v{} installer from: {}", manifest.version, entry.download_url));
     let bytes = download_installer(&app_handle, entry).await.inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
     // download_installer returns only verified bytes; checked again here, next to the write and
     // the launch, so the order "verify, then write, then run" is visible in one place.
     check_installer_bytes(entry, &bytes).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    let file_path = write_installer_to_fresh_dir(entry, &bytes)?;
+    launch_installer_and_exit(&app_handle, &file_path, bytes.len() as u64).await
+}
 
-    // A folder of our own, new for this download: a fixed name in %TEMP% is one another
-    // program can plant or swap between the check and the launch.
+/// The no-manifest half of `download_and_install_update`: [`install_from_release`], then start
+/// the installer and quit.
+async fn download_and_install_from_release(app_handle: &tauri::AppHandle, tag: Option<&str>, confirm_sha256: Option<&str>) -> Result<(), String> {
+    let tag = tag.map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| {
+        "Update refused: this release cannot be checked from here. BMM stays on its current version; \
+         download the installer from the release page."
+            .to_string()
+    })?;
+    let file_path = install_from_release(app_handle, tag, confirm_sha256).await.inspect_err(|e| {
+        if !e.starts_with(UNVERIFIED_PREFIX) {
+            log_line(format!("[UPDATE] {}", e));
+        }
+    })?;
+    let size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+    launch_installer_and_exit(app_handle, &file_path, size).await
+}
+
+/// Write verified installer bytes under the entry's own name, in a folder of our own made new
+/// for this launch: a fixed name in %TEMP% is one another program can plant or swap between the
+/// check and the launch. Never the name the UI derived from the URL.
+pub(crate) fn write_installer_to_fresh_dir(entry: &ManifestFile, bytes: &[u8]) -> Result<std::path::PathBuf, String> {
+    let file_name = installer_file_name(&entry.path).ok_or_else(|| "Update refused: bad installer name".to_string())?;
     let dir = std::env::temp_dir().join(format!("bmm_update_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {}", e))?;
     let file_path = dir.join(&file_name);
     log_line(format!("[UPDATE] Installer verified (SHA-256 {}), saving to: {:?}", entry.sha256, file_path));
     let mut file = File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
-    file.write_all(&bytes).map_err(|e| format!("Failed to write to file: {}", e))?;
+    file.write_all(bytes).map_err(|e| format!("Failed to write to file: {}", e))?;
     drop(file);
+    Ok(file_path)
+}
 
+/// Start the verified installer at `file_path`, then quit so it can replace BMM's files.
+async fn launch_installer_and_exit(app_handle: &tauri::AppHandle, file_path: &std::path::Path, size: u64) -> Result<(), String> {
     log_line("[UPDATE] Launching installer and exiting...");
-    emit_download(&app_handle, "launching", bytes.len() as u64, bytes.len() as u64, false);
+    emit_download(app_handle, "launching", size, size, false);
 
-    // Execute installer depending on the OS
     #[cfg(target_os = "windows")]
     {
         // ShellExecuteExW, not the `open` crate: open 5.x goes through a hidden PowerShell
@@ -828,36 +1032,684 @@ pub async fn download_and_install_update(
         // The file name comes from the signed manifest (installer_file_name: one plain
         // .exe/.msi name) and nothing is put on a command line.
         // Off the async runtime: ShellExecuteExW waits while a permission prompt is open.
-        let target = file_path.clone();
-        tauri::async_runtime::spawn_blocking(move || crate::commands::proc::shell_launch(&target, None))
+        // A BetterInstaller install updates in place with no questions (BMM-Setup.exe --update
+        // --wait-pid <pid> --launch); anything else, or an installer that answers « no existing
+        // install », runs interactively.
+        let name = file_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let args = installer_args(installer_maintenance_exe(app_handle).is_some(), &name, std::process::id());
+        log_line(format!("[UPDATE] Installer arguments: {:?}", args));
+        let target = file_path.to_path_buf();
+        let launch_args = args.clone();
+        let mut result = tauri::async_runtime::spawn_blocking(move || crate::commands::proc::shell_launch(&target, launch_args.as_deref()))
             .await
-            .map_err(|e| format!("Failed to start installer: {e}"))?
-            .map_err(|e| {
-                log_line(format!("[UPDATE] Installer launch failed (code {}, exit {:?}): {}", e.code, e.exit_code, e.message));
-                format!(
-                    "Failed to start installer: {} The verified installer was kept at {}.",
-                    e.message,
-                    file_path.display()
-                )
-            })?;
+            .map_err(|e| format!("Failed to start installer: {e}"))?;
+        if let Err(e) = &result {
+            if retry_interactively(&args, e.exit_code) {
+                log_line("[UPDATE] No existing install to update: starting the installer interactively");
+                let target = file_path.to_path_buf();
+                result = tauri::async_runtime::spawn_blocking(move || crate::commands::proc::shell_launch(&target, None))
+                    .await
+                    .map_err(|e| format!("Failed to start installer: {e}"))?;
+            }
+        }
+        result.map_err(|e| {
+            log_line(format!("[UPDATE] Installer launch failed (code {}, exit {:?}): {}", e.code, e.exit_code, e.message));
+            format!("Failed to start installer: {} The installer was kept at {}.", e.message, file_path.display())
+        })?;
     }
     #[cfg(target_os = "macos")]
     {
         crate::commands::proc::hidden_command("open")
-            .arg(&file_path.to_string_lossy())
+            .arg(&file_path.to_string_lossy().to_string())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "linux")]
     {
         crate::commands::proc::hidden_command("xdg-open")
-            .arg(&file_path.to_string_lossy())
+            .arg(&file_path.to_string_lossy().to_string())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
 
     // Exit BMM
     std::process::exit(0);
+}
+
+// ── Releases without a signed update-manifest.json: the release's update.json ───────────────
+//
+// The published 1.0.1 has no update-manifest.json. For such a release the install step re-reads
+// the release from GitHub by its tag (nothing the UI says is reused), takes its installer
+// (BMM-Setup.exe, else the only .exe, else the only .msi; two of a kind is refused), from BMM's
+// own GitHub releases only, and compares the downloaded bytes with the SHA-256 the release's
+// `update.json` declares for that file. update.json is BetterInstaller's signed manifest, read
+// the way BetterInstaller reads it with a pinned key: publisher signature over its own context
+// string, BMM's app id, at most 7 days valid and not expired, a version newer than this one.
+//
+// When that cannot vouch for the file (no update.json, an invalid one, no entry for the
+// installer, or bytes that differ) the dialog says what failed and the installer runs only if
+// the person chooses « Install anyway »: a second call naming the SHA-256 of exactly the bytes
+// that were shown (`confirm_sha256`). GitHub's own `digest` is shown as extra information, and a
+// file that differs from it is treated as a mismatch.
+
+/// Every installer BMM downloads from a release lives under this prefix.
+pub const REPO_DOWNLOAD_PREFIX: &str = "https://github.com/FreeProject089/BetterModsManager/releases/download/";
+/// The release is re-read from here, by tag, at install time.
+const RELEASE_BY_TAG_API: &str = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases/tags/";
+/// BetterInstaller's context string for `update.json` (bpkg-core/src/update.rs).
+pub const BI_MANIFEST_SIG_CONTEXT: &[u8] = b"BetterInstaller update manifest v1\n";
+const RELEASE_JSON_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+/// One release asset, as the GitHub API describes it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReleaseAsset {
+    pub name: String,
+    pub url: String,
+    pub size: u64,
+    /// The SHA-256 GitHub publishes for the asset (`digest`), when it does. Extra information
+    /// only: it is not what vouches for the file.
+    pub github_sha256: Option<String>,
+}
+
+/// `sha256:<64 hex>` → the lowercase hex.
+pub(crate) fn github_digest(asset: &serde_json::Value) -> Option<String> {
+    let h = asset["digest"].as_str()?.strip_prefix("sha256:")?.to_ascii_lowercase();
+    is_lower_sha256(&h).then_some(h)
+}
+
+/// A tag that can go into the API path as it is.
+pub(crate) fn valid_tag(tag: &str) -> bool {
+    !tag.is_empty() && tag.len() <= 64 && tag.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-+".contains(&b))
+}
+
+/// The installer of a release: `BMM-Setup.exe`, else the only `.exe`, else the only `.msi`.
+/// Two candidates of the same rank is refused (which one would be a guess), as is a URL outside
+/// `prefix`, a name that is not one plain .exe/.msi name, and a size of 0 or over the cap.
+pub(crate) fn pick_release_installer(release: &serde_json::Value, prefix: &str) -> Result<ReleaseAsset, String> {
+    let assets = release["assets"].as_array().cloned().unwrap_or_default();
+    let name = |a: &serde_json::Value| a["name"].as_str().unwrap_or("").to_ascii_lowercase();
+    let rank = |pred: &dyn Fn(&str) -> bool| assets.iter().filter(|a| pred(&name(a))).collect::<Vec<_>>();
+    let mut chosen = None;
+    for (label, list) in [
+        ("BMM-Setup.exe", rank(&|n| n == "bmm-setup.exe")),
+        (".exe", rank(&|n| n.ends_with(".exe"))),
+        (".msi", rank(&|n| n.ends_with(".msi"))),
+    ] {
+        match list.len() {
+            0 => continue,
+            1 => {
+                chosen = Some(list[0]);
+                break;
+            }
+            n => {
+                return Err(format!(
+                    "Update refused: the release has {n} {label} installers, so which one to run would be a guess. Use the release page."
+                ))
+            }
+        }
+    }
+    let a = chosen.ok_or_else(|| "Update refused: the release has no installer (.exe or .msi). Use the release page.".to_string())?;
+    let asset = ReleaseAsset {
+        name: a["name"].as_str().unwrap_or("").to_string(),
+        url: a["browser_download_url"].as_str().unwrap_or("").to_string(),
+        size: a["size"].as_u64().unwrap_or(0),
+        github_sha256: github_digest(a),
+    };
+    installer_file_name(&asset.name).ok_or_else(|| format!("Update refused: {:?} is not a plain installer name", asset.name))?;
+    if !asset.url.starts_with(prefix) || asset.url.contains("/../") || !asset.url.ends_with(&format!("/{}", asset.name)) {
+        return Err(format!("Update refused: {} is not a download from BMM's own GitHub releases", asset.url));
+    }
+    if asset.size == 0 || asset.size > INSTALLER_MAX_BYTES {
+        return Err(format!("Update refused: the release gives {} a size of {} bytes", asset.name, asset.size));
+    }
+    Ok(asset)
+}
+
+/// The release's `update.json` asset, when it has one under `prefix`.
+pub(crate) fn release_update_json_url(release: &serde_json::Value, prefix: &str) -> Option<String> {
+    release["assets"].as_array()?.iter().find(|a| a["name"].as_str() == Some("update.json")).and_then(|a| {
+        a["browser_download_url"].as_str().filter(|u| u.starts_with(prefix)).map(str::to_string)
+    })
+}
+
+#[derive(Deserialize)]
+struct BiInstaller {
+    #[serde(alias = "name")]
+    path: String,
+    sha256: String,
+}
+
+#[derive(Deserialize)]
+struct BiBody {
+    app_id: Option<String>,
+    version: String,
+    #[serde(default)]
+    installers: Vec<BiInstaller>,
+    issued: Option<String>,
+    expires: Option<String>,
+}
+
+/// Why the installer is not vouched for: (kind, plain-words detail). Kinds: "missing" (no
+/// update.json), "invalid" (it cannot be believed), "no-entry" (it lists no checksum for the
+/// installer), "mismatch" (the bytes differ from what the release declares).
+pub(crate) type Unvouched = (&'static str, String);
+
+/// The SHA-256 the release's `update.json` declares for `installer`. The entry is
+/// `installers: [{ "path": "BMM-Setup.exe", "sha256": "<64 hex>" }]` in the signed body
+/// (BetterInstaller's release script does not write it yet: see RELEASE.md).
+pub(crate) fn update_json_checksum(
+    text: &str,
+    key: &ed25519_dalek::VerifyingKey,
+    current: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    installer: &str,
+) -> Result<String, Unvouched> {
+    let bad = |why: String| Err(("invalid", why));
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(text) else {
+        return bad("The release's update.json is not readable.".into());
+    };
+    let Some(signed) = doc.get("signed").and_then(|s| s.as_str()) else {
+        return bad("The release's update.json is not signed by the publisher.".into());
+    };
+    let sig = doc
+        .get("signature")
+        .and_then(|s| s.as_str())
+        .filter(|s| s.len() == 128)
+        .and_then(|s| hex::decode(s).ok())
+        .and_then(|b| <[u8; 64]>::try_from(b).ok());
+    let Some(sig) = sig else {
+        return bad("The release's update.json has no valid signature.".into());
+    };
+    let mut msg = BI_MANIFEST_SIG_CONTEXT.to_vec();
+    msg.extend_from_slice(signed.as_bytes());
+    if key.verify_strict(&msg, &ed25519_dalek::Signature::from_bytes(&sig)).is_err() {
+        return bad("The signature of the release's update.json does not match the publisher's key.".into());
+    }
+    let Ok(body) = serde_json::from_str::<BiBody>(signed) else {
+        return bad("The signed part of the release's update.json is incomplete.".into());
+    };
+    if body.app_id.as_deref() != Some(MANIFEST_APP_ID) {
+        return bad(format!("The release's update.json is for {:?}, not for BMM.", body.app_id.unwrap_or_default()));
+    }
+    let time = |v: &Option<String>| {
+        v.as_deref()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|t| t.with_timezone(&chrono::Utc))
+    };
+    let (Some(issued), Some(expires)) = (time(&body.issued), time(&body.expires)) else {
+        return bad("The release's update.json has no valid dates.".into());
+    };
+    if expires <= issued || expires - issued > chrono::Duration::days(MANIFEST_MAX_VALIDITY_DAYS) {
+        return bad(format!("The release's update.json claims a validity longer than {MANIFEST_MAX_VALIDITY_DAYS} days."));
+    }
+    if now >= expires {
+        return bad(format!(
+            "The release's update.json expired on {} (the publisher renews it every week; or this PC's clock is wrong).",
+            expires.format("%Y-%m-%d")
+        ));
+    }
+    if !is_newer(&body.version, current) {
+        return bad(format!(
+            "The release's update.json describes version {}, which is not newer than this one ({current}).",
+            body.version
+        ));
+    }
+    match body.installers.iter().find(|i| i.path.eq_ignore_ascii_case(installer)) {
+        Some(i) if is_lower_sha256(&i.sha256) => Ok(i.sha256.clone()),
+        Some(_) => bad(format!("The checksum the release's update.json gives for {installer} is malformed.")),
+        None => Err((
+            "no-entry",
+            format!("The release's update.json lists no checksum for {installer} (it only describes the update package)."),
+        )),
+    }
+}
+
+/// What the person sees when the installer is not vouched for.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct UnverifiedInstaller {
+    /// "missing" | "invalid" | "no-entry" | "mismatch" (the most serious).
+    pub kind: String,
+    pub detail: String,
+    pub file: String,
+    pub size: u64,
+    pub version: String,
+    /// SHA-256 of the downloaded bytes: « Install anyway » names exactly these.
+    pub sha256: String,
+    pub github_sha256: Option<String>,
+    pub github_matches: Option<bool>,
+}
+
+/// The verdict on downloaded `bytes`: their SHA-256 when `declared` (update.json's checksum)
+/// vouches for them, otherwise what is wrong. A difference from GitHub's own digest is a
+/// mismatch too.
+pub(crate) fn assess_download(
+    declared: &Result<String, Unvouched>,
+    asset: &ReleaseAsset,
+    bytes: &[u8],
+    version: &str,
+) -> Result<String, UnverifiedInstaller> {
+    use sha2::{Digest, Sha256};
+    let actual = format!("{:x}", Sha256::digest(bytes));
+    let github_matches = asset.github_sha256.as_ref().map(|g| *g == actual);
+    let gh_note = if github_matches == Some(false) {
+        format!(
+            " It also differs from the checksum GitHub publishes for this file ({}).",
+            asset.github_sha256.clone().unwrap_or_default()
+        )
+    } else {
+        String::new()
+    };
+    let (kind, detail) = match declared {
+        Ok(exp) if *exp == actual && github_matches != Some(false) => return Ok(actual),
+        Ok(exp) if *exp != actual => (
+            "mismatch",
+            format!(
+                "The downloaded file does not match what the release declares (update.json gives SHA-256 {exp}, the file has {actual}). It may be corrupted or tampered with.{gh_note}"
+            ),
+        ),
+        Ok(_) => (
+            "mismatch",
+            format!("The downloaded file does not match what the release declares.{gh_note} It may be corrupted or tampered with."),
+        ),
+        Err((_, d)) if github_matches == Some(false) => ("mismatch", format!("{d}{gh_note} It may be corrupted or tampered with.")),
+        Err((k, d)) => (*k, d.clone()),
+    };
+    Err(UnverifiedInstaller {
+        kind: kind.to_string(),
+        detail,
+        file: asset.name.clone(),
+        size: bytes.len() as u64,
+        version: version.to_string(),
+        sha256: actual,
+        github_sha256: asset.github_sha256.clone(),
+        github_matches,
+    })
+}
+
+/// Run the bytes? Vouched-for bytes, yes. Others only when the person chose « Install anyway »
+/// for exactly these bytes (`confirmed_sha256`, sent by the dialog's button and nothing else).
+pub(crate) fn may_launch(assessment: &Result<String, UnverifiedInstaller>, confirmed_sha256: Option<&str>) -> bool {
+    match assessment {
+        Ok(_) => true,
+        Err(u) => confirmed_sha256.map(|c| !u.sha256.is_empty() && c.trim() == u.sha256).unwrap_or(false),
+    }
+}
+
+/// The label the update dialog shows before anything is downloaded.
+pub(crate) fn verification_label(declared: &Result<String, Unvouched>) -> (String, String) {
+    match declared {
+        Ok(_) => ("update-json".to_string(), String::new()),
+        Err((_, d)) => ("unverified".to_string(), d.clone()),
+    }
+}
+
+/// The error string that carries an [`UnverifiedInstaller`] to the dialog.
+pub const UNVERIFIED_PREFIX: &str = "UNVERIFIED:";
+
+/// `url` (https only; the loopback under cfg(test)), at most `cap` bytes, whole.
+async fn fetch_capped(url: &str, cap: usize, what: &str) -> Result<Vec<u8>, String> {
+    if !is_https(url) {
+        return Err(format!("Update refused: the {what} URL is not https"));
+    }
+    let mut response = crate::commands::net::client()
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "BetterModManager")
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Download of the {what} failed with status: {}", response.status()));
+    }
+    let mut out = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Network error: {e}"))? {
+        if out.len() + chunk.len() > cap {
+            return Err(format!("Update refused: the {what} is too large"));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
+/// The installer asset's bytes, never more than its announced `size`, reporting progress. A
+/// short download is an error (try again), not a file.
+pub(crate) async fn download_asset(
+    asset: &ReleaseAsset,
+    report: &mut (dyn FnMut(DownloadProgress) + Send),
+) -> Result<Vec<u8>, String> {
+    if !is_https(&asset.url) {
+        return Err("Update refused: the installer URL is not https".to_string());
+    }
+    let mut response = crate::commands::net::client()
+        .get(&asset.url)
+        .header(reqwest::header::USER_AGENT, "BetterModManager")
+        .send()
+        .await
+        .map_err(|e| format!("Download error: {e}. Check the connection and try again."))?;
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+    let mut out: Vec<u8> = Vec::with_capacity(asset.size as usize);
+    let mut emit = |phase: &str, received: u64, total: u64| report(DownloadProgress { phase: phase.to_string(), received, total, resumed: false });
+    emit("downloading", 0, asset.size);
+    let mut last = std::time::Instant::now();
+    loop {
+        let chunk = match response.chunk().await {
+            Ok(Some(c)) => c,
+            Ok(None) => break,
+            Err(e) => return Err(format!("Download interrupted ({e}). Try again.")),
+        };
+        if out.len() as u64 + chunk.len() as u64 > asset.size {
+            return Err(format!(
+                "Update refused: the server sent more than the {} bytes the release gives for {}. Nothing was run.",
+                asset.size, asset.name
+            ));
+        }
+        out.extend_from_slice(&chunk);
+        if last.elapsed() >= std::time::Duration::from_millis(120) {
+            emit("downloading", out.len() as u64, asset.size);
+            last = std::time::Instant::now();
+        }
+    }
+    emit("downloading", out.len() as u64, asset.size);
+    if out.len() as u64 != asset.size {
+        return Err(format!("Download incomplete: {} of {} bytes arrived. Try again.", out.len(), asset.size));
+    }
+    emit("verifying", out.len() as u64, out.len() as u64);
+    Ok(out)
+}
+
+/// The checksum the release's update.json declares for `installer`, or why there is none.
+async fn declared_checksum(
+    release: &serde_json::Value,
+    prefix: &str,
+    installer: &str,
+    key: &ed25519_dalek::VerifyingKey,
+    current: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<String, Unvouched> {
+    let Some(url) = release_update_json_url(release, prefix) else {
+        return Err(("missing", "This release publishes no update.json, so nothing declares the installer's checksum.".to_string()));
+    };
+    let text = fetch_capped(&url, MANIFEST_MAX_BYTES, "update.json")
+        .await
+        .map_err(|e| ("invalid", format!("The release's update.json could not be downloaded ({e}).")))?;
+    let text = String::from_utf8(text).map_err(|_| ("invalid", "The release's update.json is not readable.".to_string()))?;
+    update_json_checksum(&text, key, current, now, installer)
+}
+
+/// Where the release-by-tag path looks: production values, or a test server.
+pub(crate) struct ReleaseSource<'a> {
+    /// `<api>/releases/tags/` — the tag is appended.
+    pub by_tag_api: &'a str,
+    /// The only place an installer or update.json may be downloaded from.
+    pub download_prefix: &'a str,
+}
+
+pub(crate) const GITHUB_SOURCE: ReleaseSource<'static> =
+    ReleaseSource { by_tag_api: RELEASE_BY_TAG_API, download_prefix: REPO_DOWNLOAD_PREFIX };
+
+/// The release-by-tag path up to the decision: re-read the release, pick its installer, read
+/// update.json, download, assess. Returns the asset, its bytes and the assessment. Nothing runs.
+pub(crate) async fn fetch_and_assess(
+    src: &ReleaseSource<'_>,
+    tag: &str,
+    current: &str,
+    key: &ed25519_dalek::VerifyingKey,
+    now: chrono::DateTime<chrono::Utc>,
+    report: &mut (dyn FnMut(DownloadProgress) + Send),
+) -> Result<(ReleaseAsset, Vec<u8>, Result<String, UnverifiedInstaller>), String> {
+    if !valid_tag(tag) {
+        return Err("Update refused: unusable release tag".to_string());
+    }
+    let release = fetch_capped(&format!("{}{tag}", src.by_tag_api), RELEASE_JSON_MAX_BYTES, "release description").await?;
+    let release: serde_json::Value = serde_json::from_slice(&release)
+        .map_err(|e| format!("Update refused: the release description is not readable ({e})"))?;
+    if release["tag_name"].as_str() != Some(tag) {
+        return Err(format!("Update refused: GitHub answered for another release than {tag}"));
+    }
+    let asset = pick_release_installer(&release, src.download_prefix)?;
+    let version = tag.trim_start_matches(['v', 'V']).to_string();
+    if !is_newer(&version, current) {
+        return Err(format!("Update refused: {tag} is not newer than this version ({current})."));
+    }
+    let declared = declared_checksum(&release, src.download_prefix, &asset.name, key, current, now).await;
+    log_line(format!("[UPDATE] Downloading {} ({} bytes) from: {}", asset.name, asset.size, asset.url));
+    let bytes = download_asset(&asset, report).await?;
+    let assessment = assess_download(&declared, &asset, &bytes, &version);
+    Ok((asset, bytes, assessment))
+}
+
+/// Bytes downloaded and found unvouched for, kept in memory (never on disk, where another
+/// program could swap them) until the person answers. « Install anyway » runs these.
+struct PendingInstaller {
+    tag: String,
+    name: String,
+    bytes: Vec<u8>,
+    sha256: String,
+}
+static PENDING: std::sync::Mutex<Option<PendingInstaller>> = std::sync::Mutex::new(None);
+
+/// The release-by-tag path, whole: the file to launch, or an [`UNVERIFIED_PREFIX`] error that
+/// the dialog turns into « Cancel » / « Install anyway ».
+async fn install_from_release(app_handle: &tauri::AppHandle, tag: &str, confirmed_sha256: Option<&str>) -> Result<std::path::PathBuf, String> {
+    if let Some(c) = confirmed_sha256 {
+        let pending = PENDING.lock().map(|mut p| p.take()).unwrap_or(None);
+        if let Some(p) = pending.filter(|p| p.tag == tag && p.sha256 == c.trim()) {
+            log_line(format!("[UPDATE] Running {} {} UNVERIFIED, as the user chose (SHA-256 {})", p.name, tag, p.sha256));
+            return write_bytes_to_fresh_dir(&p.name, &p.bytes);
+        }
+    }
+    let current = app_handle.package_info().version.to_string();
+    let mut report = |p: DownloadProgress| {
+        let _ = app_handle.emit("update-download-progress", p);
+    };
+    let (asset, bytes, assessment) =
+        fetch_and_assess(&GITHUB_SOURCE, tag, &current, &publisher_key()?, chrono::Utc::now(), &mut report).await?;
+    if may_launch(&assessment, confirmed_sha256) {
+        match &assessment {
+            Ok(sha) => log_line(format!("[UPDATE] {} matches update.json (SHA-256 {sha})", asset.name)),
+            Err(u) => log_line(format!("[UPDATE] Running {} UNVERIFIED ({}), as the user chose (SHA-256 {})", asset.name, u.kind, u.sha256)),
+        }
+        return write_bytes_to_fresh_dir(&asset.name, &bytes);
+    }
+    let Err(u) = assessment else { unreachable!("a vouched-for download is always launched") };
+    log_line(format!("[UPDATE] {} not vouched for ({}): {}", asset.name, u.kind, u.detail));
+    if let Ok(mut p) = PENDING.lock() {
+        *p = Some(PendingInstaller { tag: tag.to_string(), name: asset.name, bytes, sha256: u.sha256.clone() });
+    }
+    Err(format!("{UNVERIFIED_PREFIX}{}", serde_json::to_string(&u).unwrap_or_default()))
+}
+
+/// What the check says about a release with no signed manifest, before anything is downloaded.
+async fn label_from_update_json(body: &serde_json::Value, current: &str) -> (String, String) {
+    let declared = match (pick_release_installer(body, REPO_DOWNLOAD_PREFIX), publisher_key()) {
+        (Ok(asset), Ok(key)) => declared_checksum(body, REPO_DOWNLOAD_PREFIX, &asset.name, &key, current, chrono::Utc::now()).await,
+        (Err(e), _) | (_, Err(e)) => Err(("invalid", e)),
+    };
+    verification_label(&declared)
+}
+
+// ── How the installer is started ────────────────────────────────────────────────────────────
+
+/// The exit code BetterInstaller's `--update` returns at once when there is no existing install
+/// to update. BMM then starts the same installer interactively.
+pub const INSTALLER_EXIT_NO_EXISTING_INSTALL: u32 = 3;
+
+/// The installer's arguments. `BMM-Setup.exe --update --wait-pid <pid> --launch` (update the
+/// existing install with no questions, once BMM has exited, then start BMM again) only when
+/// this copy was installed by BetterInstaller and the file is BMM-Setup.exe; otherwise none, and
+/// the installer runs interactively (a fresh install needs the person's consent screens).
+pub(crate) fn installer_args(betterinstaller_install: bool, file_name: &str, pid: u32) -> Option<String> {
+    (betterinstaller_install && file_name.eq_ignore_ascii_case("BMM-Setup.exe")).then(|| format!("--update --wait-pid {pid} --launch"))
+}
+
+/// Retry interactively? Only when the silent update said « no existing install ».
+pub(crate) fn retry_interactively(args: &Option<String>, exit_code: Option<u32>) -> bool {
+    args.is_some() && exit_code == Some(INSTALLER_EXIT_NO_EXISTING_INSTALL)
+}
+
+/// Write `bytes` as `name` in a folder of our own, new for this launch: a fixed name in %TEMP%
+/// is one another program can plant or swap between the check and the launch.
+pub(crate) fn write_bytes_to_fresh_dir(name: &str, bytes: &[u8]) -> Result<std::path::PathBuf, String> {
+    let file_name = installer_file_name(name).ok_or_else(|| "Update refused: bad installer name".to_string())?;
+    let dir = std::env::temp_dir().join(format!("bmm_update_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {}", e))?;
+    let file_path = dir.join(&file_name);
+    let mut file = File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    file.write_all(bytes).map_err(|e| format!("Failed to write to file: {}", e))?;
+    drop(file);
+    Ok(file_path)
+}
+
+// ── « Install on next launch » ─────────────────────────────────────────────────────────────
+//
+// `stage_update` downloads and verifies the installer now and keeps it, with the signed
+// manifest it was checked against, in `<local app data>/updates/staged/`. On the next start the
+// UI asks `staged_update` whether one is waiting, and `install_staged_update` runs it.
+//
+// The folder is user-writable, so nothing in it is believed: the installer runs only when the
+// kept manifest still verifies against the pinned key, still offers a version newer than this
+// build, still lists the kept file by name, and the file still has the signed SHA-256. Only the
+// 7-day expiry is relaxed, to the moment the update was staged: a signed manifest cannot be
+// forged, and a genuine one can only name a genuine newer installer.
+
+/// What `staged/staged.json` holds.
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct StagedRecord {
+    pub version: String,
+    /// The `update-manifest.json` the installer was verified against, as downloaded.
+    pub document: String,
+    /// The installer's file name inside `staged/` (= the signed entry's `path`).
+    pub file: String,
+    /// RFC 3339, when it was staged.
+    pub staged_at: String,
+}
+
+/// What the UI is told about a staged update.
+#[derive(Serialize)]
+pub struct StagedInfo {
+    pub version: String,
+    pub staged_at: String,
+    pub size: u64,
+}
+
+fn staged_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(updates_dir(app)?.join("staged"))
+}
+
+/// Verify a staged record against the pinned `key`: the signature, app and version rules of
+/// [`verify_manifest_text`], at `now`, or — when only the expiry fails — at the time it was
+/// staged (never later than `now`). Then the kept file must be a listed installer with the
+/// signed hash. Returns the entry the file matched.
+pub(crate) fn verify_staged(
+    rec: &StagedRecord,
+    bytes: &[u8],
+    key: &ed25519_dalek::VerifyingKey,
+    current_version: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<ManifestFile, String> {
+    let manifest = match verify_manifest_text(&rec.document, key, current_version, now) {
+        Ok(m) => m,
+        Err(e) if e.contains("expired on") => {
+            let at = chrono::DateTime::parse_from_rfc3339(&rec.staged_at)
+                .map(|t| t.with_timezone(&chrono::Utc))
+                .map_err(|_| "Staged update refused: unreadable staging time".to_string())?;
+            if at > now {
+                return Err("Staged update refused: it claims to be staged in the future".to_string());
+            }
+            verify_manifest_text(&rec.document, key, current_version, at)?
+        }
+        Err(e) => return Err(e),
+    };
+    let entry = manifest
+        .installers
+        .iter()
+        .find(|f| f.path == rec.file)
+        .ok_or_else(|| format!("Staged update refused: {} is not an installer its signed manifest lists", rec.file))?;
+    check_installer_bytes(entry, bytes)?;
+    Ok(entry.clone())
+}
+
+/// Download and verify the installer now; run it on the next start (`install_staged_update`).
+#[tauri::command]
+pub async fn stage_update(app_handle: tauri::AppHandle, url: String, manifest_url: Option<String>) -> Result<StagedInfo, String> {
+    let Some(manifest_url) = manifest_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
+        return Err("Update refused: this release publishes no signed update manifest, so its installer \
+                    cannot be checked. Download the installer from the release page."
+            .to_string());
+    };
+    let document = fetch_manifest_document(manifest_url).await?;
+    let current = app_handle.package_info().version.to_string();
+    let manifest = verify_manifest_text(&document, &publisher_key()?, &current, chrono::Utc::now())
+        .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    let entry = pick_installer(&manifest, &url)?.clone();
+    let bytes = download_installer(&app_handle, &entry).await.inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    check_installer_bytes(&entry, &bytes)?;
+
+    let file = installer_file_name(&entry.path).ok_or_else(|| "Update refused: bad installer name".to_string())?;
+    let dir = staged_dir(&app_handle)?;
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {e}"))?;
+    std::fs::write(dir.join(&file), &bytes).map_err(|e| format!("Failed to write to file: {e}"))?;
+    let rec = StagedRecord {
+        version: manifest.version.clone(),
+        document,
+        file,
+        staged_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    };
+    let json = serde_json::to_string(&rec).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("staged.json"), json).map_err(|e| format!("Failed to write to file: {e}"))?;
+    log_line(format!("[UPDATE] v{} staged for the next start", rec.version));
+    Ok(StagedInfo { version: rec.version, staged_at: rec.staged_at, size: bytes.len() as u64 })
+}
+
+fn read_staged(app: &tauri::AppHandle) -> Option<(StagedRecord, Vec<u8>)> {
+    let dir = staged_dir(app).ok()?;
+    let rec: StagedRecord = serde_json::from_str(&std::fs::read_to_string(dir.join("staged.json")).ok()?).ok()?;
+    installer_file_name(&rec.file)?;
+    let bytes = std::fs::read(dir.join(&rec.file)).ok()?;
+    Some((rec, bytes))
+}
+
+/// The update staged on an earlier run, if one is waiting and still verifies. Anything that no
+/// longer does (already installed, tampered with, half written) is deleted and reported as none.
+#[tauri::command]
+pub async fn staged_update(app_handle: tauri::AppHandle) -> Result<Option<StagedInfo>, String> {
+    let Some((rec, bytes)) = read_staged(&app_handle) else { return Ok(None) };
+    let current = app_handle.package_info().version.to_string();
+    match verify_staged(&rec, &bytes, &publisher_key()?, &current, chrono::Utc::now()) {
+        Ok(_) => Ok(Some(StagedInfo { version: rec.version, staged_at: rec.staged_at, size: bytes.len() as u64 })),
+        Err(e) => {
+            log_line(format!("[UPDATE] Staged update dropped: {e}"));
+            if let Ok(dir) = staged_dir(&app_handle) {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+            Ok(None)
+        }
+    }
+}
+
+/// Run the staged installer (verified again, then copied to a fresh folder) and quit.
+#[tauri::command]
+pub async fn install_staged_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let (rec, bytes) = read_staged(&app_handle).ok_or_else(|| "No update is waiting to be installed.".to_string())?;
+    let current = app_handle.package_info().version.to_string();
+    let entry = verify_staged(&rec, &bytes, &publisher_key()?, &current, chrono::Utc::now())
+        .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    let file_path = write_installer_to_fresh_dir(&entry, &bytes)?;
+    if let Ok(dir) = staged_dir(&app_handle) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    launch_installer_and_exit(&app_handle, &file_path, bytes.len() as u64).await
+}
+
+/// Forget the staged update.
+#[tauri::command]
+pub async fn discard_staged_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let dir = staged_dir(&app_handle)?;
+    let _ = std::fs::remove_dir_all(dir);
+    Ok(())
 }
 
 /// Largest manifest accepted. It lists a handful of files; anything near this is not one.
@@ -1078,3 +1930,7 @@ pub async fn apply_incremental_update(
 #[cfg(test)]
 #[path = "autoupdate_manifest_tests.rs"]
 mod manifest_tests;
+
+#[cfg(test)]
+#[path = "autoupdate_flow_tests.rs"]
+mod flow_tests;

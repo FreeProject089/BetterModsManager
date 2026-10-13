@@ -18,6 +18,7 @@
 import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { isNewerVersion, normRepoUrl } from './versions.js';
 
 interface AutoSyncRepo {
     url: string;
@@ -40,16 +41,25 @@ async function outdatedCount(repo: AutoSyncRepo): Promise<number> {
     if (!remote.length) return 0;
 
     const local: any[] = await invoke('get_all_mods');
+    // Only the mods installed FROM this repo: another repo's mod with the same id is not this
+    // one (it used to count), and a local id is never a repo id.
+    const me = normRepoUrl(repo.url);
     const byId = new Map<string, any>();
     for (const m of local) {
-        if (m.repo_mod_id) byId.set(String(m.repo_mod_id), m);
-        byId.set(String(m.id), m);
+        if (m.repo_mod_id && normRepoUrl(m.source_repo || '') === me) byId.set(String(m.repo_mod_id), m);
     }
-    // "Outdated" here means absent or a different version — the same comparison the sync
-    // screen makes. A precise per-file diff would mean hashing every mod at startup.
-    return remote.filter((rm) => {
-        const hit = byId.get(String(rm.id));
-        return !hit || String(hit.version || '') !== String(rm.version || '');
+    // Absent mods count only in the repo profiles the user installed something from: the
+    // profiles they never synced are not « to update ».
+    const synced = (info?.profiles || []).filter((p: any) => (p.mods || []).some((rm: any) => byId.has(String(rm.id))));
+    const pool: any[] = synced.length ? synced.flatMap((p: any) => p.mods || []) : remote;
+    // "Outdated" = absent, or a NEWER version (numbers compared as numbers, never a downgrade).
+    const seen = new Set<string>();
+    return pool.filter((rm) => {
+        const id = String(rm.id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        const hit = byId.get(id);
+        return !hit || isNewerVersion(String(rm.version || ''), String(hit.version || ''));
     }).length;
 }
 

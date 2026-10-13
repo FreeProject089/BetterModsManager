@@ -1549,7 +1549,7 @@ pub fn normalize_repo_url(url: &str) -> String {
 }
 
 /// One available mod update found by `check_mod_updates`.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug, Clone)]
 pub struct ModUpdateInfo {
     pub mod_id: String,          // local ModEntry id
     pub name: String,
@@ -1627,7 +1627,7 @@ pub async fn check_mod_updates(
     global_repos: Option<Vec<String>>,
 ) -> Result<ModUpdateCheckResult, String> {
     // 1. Build, per mod, the list of (normalised repo_url, repo_mod_id) to check.
-    struct Candidate { mod_id: String, name: String, cur_ver: String, repo_url: String, rid: String }
+    struct Candidate { mod_id: String, name: String, cur_ver: String, repo_url: String, rid: String, cur_hash: Option<String> }
     struct DirectCand { mod_id: String, name: String, cur_ver: String, url: String, sig: Option<String>, primary: bool }
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut directs: Vec<DirectCand> = Vec::new();
@@ -1651,9 +1651,12 @@ pub async fn check_mod_updates(
                 if repo_n.is_empty() { return; }
                 let rid = match rid.filter(|r| !r.trim().is_empty()) { Some(r) => r, None => return };
                 if seen.insert((repo_n.clone(), rid.clone())) {
+                    // The files' fingerprint speaks only for the repo the mod was synced from.
+                    let cur_hash = m.source_repo.as_deref().map(normalize_repo_url)
+                        .filter(|s| *s == repo_n).and(m.repo_content_hash.clone());
                     list.push(Candidate {
                         mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
-                        repo_url: repo_n, rid,
+                        repo_url: repo_n, rid, cur_hash,
                     });
                 }
             };
@@ -1687,7 +1690,7 @@ pub async fn check_mod_updates(
 
     // 2. Fetch each unique repo once; cache manifest mod maps + record failures.
     let mut result = ModUpdateCheckResult { checked, ..Default::default() };
-    let mut repo_cache: std::collections::HashMap<String, Option<std::collections::HashMap<String, (String, Option<String>)>>> = std::collections::HashMap::new();
+    let mut repo_cache: std::collections::HashMap<String, Option<std::collections::HashMap<String, crate::commands::repo_follow::Offered>>> = std::collections::HashMap::new();
     let mut flagged: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for c in candidates {
@@ -1697,13 +1700,8 @@ pub async fn check_mod_updates(
         if !repo_cache.contains_key(&c.repo_url) {
             match fetch_repo_info(c.repo_url.clone(), creator_id.clone(), None).await {
                 Ok(manifest) => {
-                    let mut map = std::collections::HashMap::new();
-                    for p in &manifest.profiles {
-                        for rm in &p.mods {
-                            map.entry(rm.id.clone()).or_insert((rm.version.clone(), rm.changelog.clone()));
-                        }
-                    }
-                    repo_cache.insert(c.repo_url.clone(), Some(map));
+                    // One id in several repo profiles: the newest copy (it was the first met).
+                    repo_cache.insert(c.repo_url.clone(), Some(crate::commands::repo_follow::manifest_index(&manifest)));
                 }
                 Err(e) => {
                     result.errors.push(RepoCheckError { repo_url: c.repo_url.clone(), error: e });
@@ -1713,19 +1711,21 @@ pub async fn check_mod_updates(
         }
 
         if let Some(Some(map)) = repo_cache.get(&c.repo_url) {
-            if let Some((new_ver, changelog)) = map.get(&c.rid) {
-                if new_ver != &c.cur_ver {
+            if let Some(o) = map.get(&c.rid) {
+                // Newer as numbers (never a downgrade, never "1.0" vs "1.0.0"), or the same
+                // version with other files (repo_follow::update_reason).
+                if let Some(reason) = crate::commands::repo_follow::update_reason(&c.cur_ver, c.cur_hash.as_deref(), &o.version, Some(&o.content_hash)) {
                     flagged.insert(c.mod_id.clone());
                     result.updates.push(ModUpdateInfo {
                         mod_id: c.mod_id,
                         name: c.name,
                         current_version: c.cur_ver,
-                        new_version: new_ver.clone(),
+                        new_version: o.version.clone(),
                         repo_url: c.repo_url,
                         repo_mod_id: c.rid,
-                        changelog: changelog.clone(),
+                        changelog: o.changelog.clone(),
                         direct: false,
-                        detail: None,
+                        detail: (reason == "content").then(|| "content".to_string()),
                     });
                 }
             }
@@ -2751,6 +2751,11 @@ pub struct SyncArgs {
     /// (an archived mod, read on demand). Ignored for classic per-file repos.
     #[serde(default = "default_true")]
     pub unzip_archives: bool,
+    /// Leave the active profile as it is. A sync made from the screen switches to the profile
+    /// it installed into (the user is looking at it); an update applied in the background by a
+    /// followed repo must not change what the user is looking at.
+    #[serde(default)]
+    pub keep_active_profile: bool,
 }
 fn default_true() -> bool {
     true
@@ -3382,6 +3387,9 @@ pub async fn sync_server_repo(
                 new_mod.unverified = unverified_mod_ids.contains(&repo_mod.id);
                 new_mod.source_repo = Some(src_repo.clone());
                 new_mod.repo_mod_id = Some(repo_mod.id.clone());
+                // What the files were at this sync: a later manifest whose files differ under the
+                // same version is still an update (check_mod_updates).
+                new_mod.repo_content_hash = Some(mod_content_hash(&repo_mod));
                 // Inherit the author's configured update sources (a site repo, a
                 // direct-download archive, fallbacks). Signatures are not shared —
                 // the receiver captures its own baseline on the first check.
@@ -3410,9 +3418,20 @@ pub async fn sync_server_repo(
                     tag_ids.push(repo_tag.id);
                 }
                 new_mod.tags = tag_ids;
-                if !data.mods.iter().any(|m| m.mod_folder_path == new_mod.mod_folder_path) {
+                // The record this repo mod already has in THIS mods folder: by origin first
+                // (a mod the repo renamed lives in a new folder but is the same mod), then by
+                // folder. Matching by folder alone pushed a second record with the same id on
+                // every rename (commands/mod_ids.rs).
+                let found = crate::commands::mod_ids::find_synced_record(&data.mods, &src_repo, &repo_mod.id, &mods_path, &new_mod.mod_folder_path);
+                if found.is_none() {
+                    // A new record: the repo's id unless another record (the same repo synced
+                    // into another profile) holds it already.
+                    new_mod.id = crate::commands::mod_ids::local_id_for(&data.mods, &repo_mod.id, &mods_path);
                     data.mods.push(new_mod);
-                } else if let Some(existing) = data.mods.iter_mut().find(|m| m.mod_folder_path == new_mod.mod_folder_path) {
+                } else if let Some(existing) = found.and_then(|i| data.mods.get_mut(i)) {
+                    // Renamed in the repo: the record follows the files to their new folder.
+                    existing.mod_folder_path = new_mod.mod_folder_path;
+                    existing.repo_content_hash = new_mod.repo_content_hash;
                     existing.name = new_mod.name;
                     existing.version = new_mod.version;
                     existing.author = new_mod.author;
@@ -3442,13 +3461,16 @@ pub async fn sync_server_repo(
                     }
                 }
             }
+            // Dependencies arrive as repo ids; in a profile where a record got a derived
+            // local id they must name that record, not the other profile's copy.
+            crate::commands::mod_ids::relink_synced_dependencies(&mut data.mods, &src_repo, &mods_path);
         }
     } // End of for (c_idx, choice)
 
     // Assign active profile to the first synced one
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(first_id) = synced_profile_ids.first() {
+        if let Some(first_id) = synced_profile_ids.first().filter(|_| !args.keep_active_profile) {
             data.active_profile_id = Some(first_id.clone());
         }
     }
@@ -4462,7 +4484,7 @@ pub(crate) fn generate_repo_manifest_sync(
 
 /// Content identity of a mod: every file path and hash, order-independent.
 /// Only used to report what changed between two generations.
-fn mod_content_hash(m: &crate::models::repo::RepoMod) -> String {
+pub(crate) fn mod_content_hash(m: &crate::models::repo::RepoMod) -> String {
     let mut parts: Vec<String> = m.files.iter()
         .map(|f| format!("{}:{}", f.relative_path, f.sha256_hash))
         .collect();
@@ -5283,12 +5305,21 @@ pub fn set_repo_auto_sync(
 ) -> Result<(), String> {
     let target = normalize_repo_url(url.trim());
     let mut data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
-    let repo = data.settings.connected_server_repos.iter_mut()
-        // Matched on the normalised URL: the list stores what the user typed, and a repo
-        // saved with a trailing slash would otherwise be a different repo from the same one
-        // without — leaving the toggle looking like it did nothing.
-        .find(|r| normalize_repo_url(r.url.trim()) == target)
-        .ok_or_else(|| "Repo not found".to_string())?;
+    if target.is_empty() { return Err("Repo not found".to_string()); }
+    // Matched on the normalised URL: the list stores what the user typed, and a repo saved
+    // with a trailing slash would otherwise be a different repo from the same one without —
+    // leaving the toggle looking like it did nothing. Absent = added: only the local API ever
+    // added repos to this list, so the sync screen's checkbox answered "Repo not found" for
+    // every repo joined from the screen itself.
+    let list = &mut data.settings.connected_server_repos;
+    let at = match list.iter().position(|r| normalize_repo_url(r.url.trim()) == target) {
+        Some(i) => i,
+        None => {
+            list.push(crate::state::ConnectedServerRepo { url: url.trim().to_string(), ..Default::default() });
+            list.len() - 1
+        }
+    };
+    let repo = &mut list[at];
     repo.auto_sync = enabled;
     repo.auto_sync_mode = Some(normalize_sync_mode(mode.as_deref()));
     drop(data);
@@ -5307,6 +5338,7 @@ mod auto_sync_tests {
             name: "R".into(),
             auto_sync: auto,
             auto_sync_mode: mode.map(str::to_string),
+            follow: None,
         }
     }
 

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
@@ -16,6 +16,8 @@ import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { learnMore } from '../../core/learn-more.js';
 import { uiIcon } from '../../ui/icons.js';
+import { isNewerVersion } from './app-version.js';
+import { isV2SignedFeed, ensureFeedKeys } from '../../core/catalog-read.js';
 
 // Renders a labelled, fully-visible (wrapping) + copyable hash block for the
 // checksum warning modals. Inline styles so it works inside the generic confirm
@@ -78,8 +80,21 @@ let _favSearch = '';
 let _favFilterCat = 'all';
 let _favFilterSource = 'all';
 let _favCollection = 'all'; // 'all' or collection id
+let _filterState = 'all'; // all | installed | available | updates
+let _sort = 'default';    // default | name | name-desc | size
 let _defaultPath = '';
 let _loading = false;
+// Sources that did not answer on the last load. All failed is the full-page error state; some
+// failed is a notice above the grid, so a partial catalogue does not pass for the whole one.
+let _failedSources: string[] = [];
+
+// ── Per-card work in progress ────────────────────────────────────────────────
+// What the CARD shows while an install, update or removal runs, and what it shows if one
+// failed. Not a job tracker (the activity centre is that): only enough state for the card
+// to say "this is happening" with its buttons disabled, or "this failed" with a retry.
+type CardJobKind = 'install' | 'update' | 'uninstall';
+interface CardJob { kind: CardJobKind; error?: string; path?: string }
+const _jobs: Record<string, CardJob> = {};
 
 // ── Favorite Collections (stored in localStorage, no Rust changes needed) ─────
 interface FavCollection { id: string; name: string; appIds: string[]; }
@@ -253,8 +268,17 @@ function renderShell(view: HTMLElement) {
           <option value="paid"${_filterPrice==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
           <option value="oss"${_filterPrice==='oss'?' selected':''}>${t('apps.price.oss')}</option>
         </select>
+        <select class="apps-filter" id="apps-filter-state" aria-label="${escAttr(t('apps.filter.stateAria'))}">
+          ${[['all', 'apps.filter.allStates'], ['installed', 'apps.filter.installed'], ['available', 'apps.filter.notInstalled'], ['updates', 'apps.filter.updates']]
+            .map(([v, k]) => `<option value="${v}"${_filterState === v ? ' selected' : ''}>${escHtml(t(k))}</option>`).join('')}
+        </select>
+        <select class="apps-filter" id="apps-sort" aria-label="${escAttr(t('apps.sort.aria'))}">
+          ${[['default', 'apps.sort.default'], ['name', 'apps.sort.name'], ['name-desc', 'apps.sort.nameDesc'], ['size', 'apps.sort.size']]
+            .map(([v, k]) => `<option value="${v}"${_sort === v ? ' selected' : ''}>${escHtml(t(k))}</option>`).join('')}
+        </select>
         <span class="pg-results" id="apps-results" aria-live="polite"></span>
         <span class="pg-toolbar-gap"></span>
+        <button type="button" class="btn btn-sm btn-secondary apps-updates-btn" id="apps-updates-btn" hidden>${uiIcon('refresh', 14)} <span id="apps-updates-label"></span></button>
         <button type="button" class="btn btn-sm btn-ghost" id="apps-clear-filters" hidden>${uiIcon('clear', 14)} ${escHtml(t('apps.clearFilters'))}</button>
       </div>
 
@@ -317,10 +341,10 @@ function setupEvents(view: HTMLElement) {
     });
     paintAppsCounts();
     document.getElementById('apps-clear-filters')?.addEventListener('click', () => {
-        _searchQ = ''; _filterCat = 'all'; _filterPrice = 'all'; _filterTag = 'all';
+        _searchQ = ''; _filterCat = 'all'; _filterPrice = 'all'; _filterTag = 'all'; _filterState = 'all';
         const s = document.getElementById('apps-search') as HTMLInputElement | null;
         if (s) s.value = '';
-        (['apps-filter-cat', 'apps-filter-price'] as const).forEach((id) => {
+        (['apps-filter-cat', 'apps-filter-price', 'apps-filter-state'] as const).forEach((id) => {
             const el = document.getElementById(id) as HTMLSelectElement | null;
             if (el) { el.value = 'all'; el.dispatchEvent(new Event('change')); }
         });
@@ -342,11 +366,30 @@ function setupEvents(view: HTMLElement) {
         _filterPrice = (e.target as HTMLSelectElement).value;
         renderBrowse();
     });
+    document.getElementById('apps-filter-state')?.addEventListener('change', (e) => {
+        _filterState = (e.target as HTMLSelectElement).value;
+        renderBrowse();
+    });
+    document.getElementById('apps-sort')?.addEventListener('change', (e) => {
+        _sort = (e.target as HTMLSelectElement).value;
+        renderBrowse();
+    });
+    // "n updates" is a shortcut to the Updates filter, shown only when there is one.
+    document.getElementById('apps-updates-btn')?.addEventListener('click', () => {
+        const sel = document.getElementById('apps-filter-state') as HTMLSelectElement | null;
+        _filterState = 'updates';
+        if (sel) { sel.value = 'updates'; sel.dispatchEvent(new Event('change')); }
+        else renderBrowse();
+    });
 
     document.getElementById('apps-modal-close-btn')?.addEventListener('click', closeDetailModal);
     document.getElementById('apps-install-close-btn')?.addEventListener('click', closeInstallModal);
     document.getElementById('apps-detail-modal')?.addEventListener('click', e => {
-        if ((e.target as HTMLElement).id === 'apps-detail-modal') closeDetailModal();
+        if ((e.target as HTMLElement).id === 'apps-detail-modal') { closeDetailModal(); return; }
+        // B.MD draws a link as a button carrying data-ext (a web href is blocked by the
+        // webview's CSP); this is the click that opens it, in the browser.
+        const ext = (e.target as HTMLElement).closest?.('[data-ext]') as HTMLElement | null;
+        if (ext) { e.preventDefault(); openExternal(ext.getAttribute('data-ext') || ''); }
     });
     document.getElementById('apps-install-modal')?.addEventListener('click', e => {
         if ((e.target as HTMLElement).id === 'apps-install-modal') closeInstallModal();
@@ -367,6 +410,9 @@ async function loadCatalog(force = false) {
     if (content) content.innerHTML = APPS_SKELETON;
 
     try {
+        // The Rust fetcher reads the feed: in v2 mode pin the feed keys first, so a signed v2
+        // feed is checked against them (v1 mode: nothing happens).
+        if (await isV2SignedFeed(getLinks().apps_catalog)) await ensureFeedKeys();
         const result = await invoke('fetch_app_catalogs', {
             catalogUrl: getLinks().apps_catalog,
             // enabledOnly, so a source switched off is kept in the list and not fetched.
@@ -390,8 +436,9 @@ async function loadCatalog(force = false) {
                 result.sources_failed.push(src);
             }
         }
+        _failedSources = [...(result.sources_failed || [])];
         // Only alert if EVERY source failed; partial failures (e.g. a placeholder
-        // partner URL) are just logged, not shown as a noisy toast.
+        // partner URL) get a quiet notice above the grid (renderBrowse), not a toast.
         if (result.sources_failed.length) {
             console.warn('[BMM] App catalog sources failed:', result.sources_failed);
             if (result.sources_loaded.length === 0) {
@@ -400,6 +447,7 @@ async function loadCatalog(force = false) {
         }
     } catch {
         _catalog = [];
+        _failedSources = [];
         if (content) {
             content.innerHTML = appsEmpty('cloud', t('apps.catalogUnavail') || 'Catalog unavailable', t('apps.catalogUnavailSub'),
                 `<button type="button" class="btn btn-sm btn-accent" id="apps-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`);
@@ -446,11 +494,26 @@ function renderCurrentTab() {
 
 // ── Browse ────────────────────────────────────────────────────────────────────
 
+/** Is a newer version of this installed app in the catalogue? */
+function hasUpdate(app: AppEntry): boolean {
+    const inst = _state.installed[app.id];
+    return !!inst && isNewerVersion(app.version, inst.version);
+}
+
+/** The catalogue entries that are installed AND newer in the catalogue. */
+function appsWithUpdates(): AppEntry[] {
+    return _catalog.filter(hasUpdate);
+}
+
 function filteredApps() {
-    return _catalog.filter(a => {
+    const list = _catalog.filter(a => {
         if (_filterCat !== 'all' && a.category !== _filterCat) return false;
         if (_filterPrice !== 'all' && a.price !== _filterPrice) return false;
         if (_filterTag !== 'all' && !a.tags.includes(_filterTag)) return false;
+        const inst = !!_state.installed[a.id];
+        if (_filterState === 'installed' && !inst) return false;
+        if (_filterState === 'available' && inst) return false;
+        if (_filterState === 'updates' && !hasUpdate(a)) return false;
         if (_searchQ) {
             const q = _searchQ.toLowerCase();
             return a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
@@ -458,6 +521,13 @@ function filteredApps() {
         }
         return true;
     });
+    // Catalogue order is the publisher's order and stays the default. A copy is sorted so the
+    // catalogue itself keeps it.
+    if (_sort === 'name') list.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    else if (_sort === 'name-desc') list.sort((a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: 'base' }));
+    // An entry that does not say its size goes last, not first: "smallest" must not mean "unknown".
+    else if (_sort === 'size') list.sort((a, b) => (a.download?.size || Infinity) - (b.download?.size || Infinity));
+    return list;
 }
 
 function renderBrowse() {
@@ -469,6 +539,18 @@ function renderBrowse() {
     const allTags = [...new Set(_catalog.flatMap(a => a.tags))].sort();
 
     let html = '';
+
+    // Some sources did not answer: say so above what did, with the way to try again. A grid
+    // with one catalogue missing otherwise reads as that catalogue having no apps.
+    if (_failedSources.length && _catalog.length) {
+        const names = _failedSources.map(sourceShort).join(', ');
+        html += `<div class="apps-notice" role="status">
+          ${uiIcon('alert', 14)}
+          <span class="apps-notice-text" data-tooltip="${escAttr(names)}">${escHtml(t('apps.someSourcesFailed').replace('{n}', String(_failedSources.length)))}</span>
+          <button type="button" class="btn btn-sm btn-ghost" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>
+        </div>`;
+    }
+
     if (allTags.length) {
         html += `<div class="apps-tags-row">
           <button class="apps-tag-chip${_filterTag === 'all' ? ' active' : ''}" data-tag="all">${t('apps.filter.allTags')||'All tags'}</button>
@@ -477,18 +559,28 @@ function renderBrowse() {
     }
 
     // How many of how many, and a way back to everything when a filter is narrowing it.
-    const filtering = !!_searchQ || _filterTag !== 'all' || _filterCat !== 'all' || _filterPrice !== 'all';
+    const filtering = !!_searchQ || _filterTag !== 'all' || _filterCat !== 'all' || _filterPrice !== 'all' || _filterState !== 'all';
     const results = document.getElementById('apps-results');
     if (results) results.textContent = _catalog.length
         ? t('apps.shownOf').replace('{n}', String(apps.length)).replace('{total}', String(_catalog.length))
         : '';
     const clearBtn = document.getElementById('apps-clear-filters');
     if (clearBtn) clearBtn.hidden = !filtering;
+    const nUpd = appsWithUpdates().length;
+    const updBtn = document.getElementById('apps-updates-btn');
+    if (updBtn) updBtn.hidden = !nUpd || _filterState === 'updates';
+    const updLabel = document.getElementById('apps-updates-label');
+    if (updLabel) updLabel.textContent = t(nUpd === 1 ? 'apps.updatesOne' : 'apps.updatesMany').replace('{n}', String(nUpd));
 
     if (!apps.length) {
         html += filtering
             ? appsEmpty('search', t('apps.noResults') || 'No results', t('apps.noResultsSub'),
                 `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-clear">${uiIcon('clear', 14)} ${escHtml(t('apps.clearFilters'))}</button>`)
+            : _failedSources.length
+            // Every source failed but the call itself answered: this is the offline state, not
+            // an empty catalogue. Same words and the same retry as a load that threw.
+            ? appsEmpty('cloud', t('apps.catalogUnavail') || 'Catalog unavailable', t('apps.catalogUnavailSub'),
+                `<button type="button" class="btn btn-sm btn-accent" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`)
             : appsEmpty('grid', t('apps.emptyBrowse') || 'Catalog is empty', t('apps.emptyBrowseSub'),
                 `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-sources">${uiIcon('globe', 14)} ${escHtml(t('apps.tab.sources'))}</button>`);
     } else {
@@ -498,6 +590,7 @@ function renderBrowse() {
     content.innerHTML = html;
     content.querySelector('#apps-empty-clear')?.addEventListener('click', () => document.getElementById('apps-clear-filters')?.click());
     content.querySelector('#apps-empty-sources')?.addEventListener('click', () => selectAppsTab('sources'));
+    content.querySelector('#apps-notice-retry')?.addEventListener('click', () => loadCatalog(true));
 
     content.querySelectorAll('.apps-tag-chip').forEach(chip => {
         chip.addEventListener('click', () => {
@@ -505,51 +598,83 @@ function renderBrowse() {
             renderBrowse();
         });
     });
-    content.querySelectorAll('[data-app-id]').forEach(card => {
-        card.addEventListener('click', () => openDetailModal((card as HTMLElement).dataset.appId || ''));
+    wireAppCards(content);
+}
+
+/** Card click opens the details; the buttons in its footer act on their own. */
+function wireAppCards(root: HTMLElement, skip = '') {
+    root.querySelectorAll<HTMLElement>('.apps-card[data-app-id]').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-card-action]')) return;
+            if (skip && target.closest(skip)) return;
+            openDetailModal(card.dataset.appId || '');
+        });
     });
+    wireCardActions(root);
+}
+
+/**
+ * The description as one plain line for the card. The detail renders it as B.MD; two clamped
+ * lines on a card would otherwise show the asterisks and the link targets.
+ */
+function plainSummary(md: string): string {
+    return String(md || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
+        // A single `_` stays: it is in file names far more often than it is emphasis.
+        .replace(/(\*\*|__|\*|`|~~)/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/** A short, readable name for where an entry came from: `owner/repo`, a host, or a file. */
+function sourceShort(src: string): string {
+    const s = String(src || '');
+    if (s.startsWith('bundle:')) return s.slice('bundle:'.length).split(/[\\/]/).pop() || s;
+    return labelFromUrl(s);
 }
 
 function renderAppCard(app: AppEntry) {
     const installed = !!_state.installed[app.id];
+    const upd = hasUpdate(app);
     const fav = _state.favorites.includes(app.id);
     const thumb = app.images?.thumb;
+    const job = _jobs[app.id];
+    const busy = !!job && !job.error;
 
+    // The trust badge is translated, like its two siblings, and a community entry says so: an
+    // absent badge is not a warning, and a reader who does not know the badge system reads
+    // blank as neutral, which is exactly the gap an impersonating catalogue lives in. It shows
+    // on an installed card too now; whether the app is installed is the footer's job.
     return `
-    <div class="apps-card${installed?' apps-card-installed':''}" data-app-id="${escAttr(app.id)}">
+    <div class="apps-card${installed?' apps-card-installed':''}${upd?' apps-card-update':''}${busy?' is-busy':''}" data-app-id="${escAttr(app.id)}">
       <div class="apps-card-thumb">
         <div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>
         ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" data-onerror="hide">` : ''}
         <div class="apps-card-badges">
-          ${installed
-            ? `<span class="apps-card-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>`
-            // Translated, like the community badge two lines down. These three sit on the
-            // same card and two of them were written in English — so a French reader was told
-            // "Official" and "Communauté", which reads as two different systems rather than
-            // three rungs of one.
-            : app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>`
+          ${app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>`
             : app.partner ? `<span class="apps-partner-badge">${escHtml(t('apps.badge.partner'))}</span>`
-            // A community entry used to render NOTHING here. An absent badge is not a
-            // warning — a reader who does not know the badge system reads blank as neutral,
-            // which is exactly the gap an impersonating catalogue lives in. Say it plainly.
             : `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>`}
           ${claimChip(app)}
         </div>
         ${fav ? `<div class="apps-card-fav-star">${IC.starFill}</div>` : ''}
       </div>
       <div class="apps-card-body">
-        <span class="apps-card-title" data-tooltip="${escAttr(app.title)}">${escHtml(app.title)}</span>
+        <button type="button" class="apps-card-title apps-card-open" data-tooltip="${escAttr(app.title)}"
+          aria-label="${escAttr(t('apps.card.openAria').replace('{name}', app.title))}">${escHtml(app.title)}</button>
+        ${app.source_label ? `<span class="apps-card-source" data-tooltip="${escAttr(app.source_label)}">${escHtml(t('apps.card.from').replace('{source}', sourceShort(app.source_label)))}</span>` : ''}
         <div class="apps-card-meta">
-          <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
+          <span class="apps-cat-badge apps-cat-${escAttr(app.category)}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
           ${priceText(app.price)}
         </div>
-        <p class="apps-card-desc">${escHtml(app.description)}</p>
+        <p class="apps-card-desc">${escHtml(plainSummary(app.description))}</p>
         <!-- Two rows, because these are two different kinds of thing and they were sharing
              one. A TAG is a word the publisher chose; "unverified" and "http" are facts
-             about the download that BMM worked out. Mixed together, the fact that matters
-             most read as the publisher's fourth hashtag — and it wrapped onto its own line
-             anyway, so the row was two rows already, just not the useful two. -->
+             about the download that BMM worked out. -->
         ${(app.tags || []).length ? `
         <div class="apps-card-tags">
           ${app.tags.slice(0, 3).map(tag => `<span class="apps-tag">${escHtml(tag)}</span>`).join('')}
@@ -565,8 +690,120 @@ function renderAppCard(app: AppEntry) {
           ${app.download?.size ? `<span class="apps-fact">${escHtml(formatBytes(app.download.size))}</span>` : ''}
           ${app.download?.file_type ? `<span class="apps-fact">${escHtml(app.download.file_type.toUpperCase())}</span>` : ''}
         </div>
+        <!--apps-card-extra-->
       </div>
+      ${cardFootHtml(app)}
     </div>`;
+}
+
+/**
+ * The card's footer: where the entry stands on this machine and the one thing to do next.
+ *
+ *   not installed → Install
+ *   installed     → "Installed" + Launch (or Set executable when BMM has no launcher yet)
+ *   newer version → "v1.2 → v1.3" + Update
+ *   running       → a moving bar, what is happening, the button disabled
+ *   failed        → what failed, the message, Retry and Dismiss
+ */
+function cardFootHtml(app: AppEntry): string {
+    const inst = _state.installed[app.id];
+    const job = _jobs[app.id];
+    const jobWord = (k: CardJobKind) => t(k === 'install' ? 'apps.state.installing' : k === 'update' ? 'apps.state.updating' : 'apps.state.removing');
+    const actionWord = (k: CardJobKind) => t(k === 'install' ? 'apps.install' : k === 'update' ? 'apps.update' : 'apps.uninstall');
+
+    if (job && !job.error) {
+        return `<div class="apps-card-foot is-busy" aria-busy="true">
+          <div class="apps-card-progress" aria-hidden="true"><span></span></div>
+          <span class="apps-card-state" role="status"><span class="apps-spinner apps-spinner--xs" aria-hidden="true"></span>${escHtml(jobWord(job.kind))}</span>
+          <button type="button" class="btn btn-sm btn-secondary" disabled>${escHtml(actionWord(job.kind))}</button>
+        </div>`;
+    }
+    if (job?.error) {
+        const failed = t(job.kind === 'install' ? 'apps.state.installFailed' : job.kind === 'update' ? 'apps.state.updateFailed' : 'apps.state.removeFailed');
+        return `<div class="apps-card-foot is-error" role="alert">
+          <div class="apps-card-error">
+            <span class="apps-card-error-title">${uiIcon('error', 12)} ${escHtml(failed)}</span>
+            <span class="apps-card-error-msg" data-tooltip="${escAttr(job.error)}">${escHtml(job.error)}</span>
+          </div>
+          <div class="apps-card-foot-actions">
+            <button type="button" class="btn btn-sm btn-ghost pg-iconbtn" data-card-action="dismiss" data-id="${escAttr(app.id)}"
+              aria-label="${escAttr(t('apps.state.dismiss'))}" data-tooltip="${escAttr(t('apps.state.dismiss'))}">${uiIcon('close', 12)}</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-card-action="retry" data-id="${escAttr(app.id)}">${IC.refresh} ${escHtml(t('apps.retry'))}</button>
+          </div>
+        </div>`;
+    }
+    if (inst && hasUpdate(app)) {
+        return `<div class="apps-card-foot is-update">
+          <span class="apps-card-state" data-tooltip="${escAttr(`v${inst.version || ''} → v${app.version || ''}`)}">${uiIcon('download', 12)} <span class="apps-card-state-ver">v${escHtml(app.version || '')}</span></span>
+          <button type="button" class="btn btn-sm btn-accent" data-card-action="update" data-id="${escAttr(app.id)}">${escHtml(t('apps.update'))}</button>
+        </div>`;
+    }
+    if (inst) {
+        return `<div class="apps-card-foot is-installed">
+          <span class="apps-card-state">${IC.check} ${escHtml(t('apps.state.installed'))}</span>
+          ${inst.exe_path
+            ? `<button type="button" class="btn btn-sm btn-secondary" data-card-action="launch" data-id="${escAttr(app.id)}">${IC.play} ${escHtml(t('apps.launch'))}</button>`
+            : `<button type="button" class="btn btn-sm btn-ghost" data-card-action="details" data-id="${escAttr(app.id)}">${IC.monitor} ${escHtml(t('apps.pickExe'))}</button>`}
+        </div>`;
+    }
+    return `<div class="apps-card-foot">
+      <span class="apps-card-state apps-card-state--muted">${escHtml(t('apps.state.notInstalled'))}</span>
+      <button type="button" class="btn btn-sm btn-accent" data-card-action="install" data-id="${escAttr(app.id)}">${IC.download} ${escHtml(t('apps.install'))}</button>
+    </div>`;
+}
+
+/** Wire the footer buttons under `root`. Each stops the click so the card does not open. */
+function wireCardActions(root: ParentNode) {
+    root.querySelectorAll<HTMLElement>('[data-card-action]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id || '';
+            const app = _catalog.find(a => a.id === id);
+            if (!app) return;
+            switch (btn.dataset.cardAction) {
+                case 'install': openInstallModal(app); break;
+                case 'update':  openInstallModal(app, 'update'); break;
+                case 'details': openDetailModal(id); break;
+                case 'dismiss': setJob(id, null); break;
+                case 'retry': {
+                    const job = _jobs[id];
+                    if (!job || job.kind === 'uninstall') { setJob(id, null); openDetailModal(id); break; }
+                    // Straight again, with the folder chosen last time: the card shows it run.
+                    void startInstall(app, job.path || _defaultPath, job.kind);
+                    break;
+                }
+                case 'launch': {
+                    const exe = _state.installed[id]?.exe_path;
+                    if (!exe) { openDetailModal(id); break; }
+                    try {
+                        await invoke('launch_app', { appId: id, exePath: exe });
+                        toast(`${t('apps.launched')||'Launched'}: ${app.title}`, 'success');
+                        await refreshState();
+                    } catch (err) { toast(String(err), 'error'); }
+                    break;
+                }
+            }
+        });
+    });
+}
+
+/** Record (or clear) what is happening to one entry, and repaint its card footer in place. */
+function setJob(id: string, job: CardJob | null) {
+    if (job) _jobs[id] = job; else delete _jobs[id];
+    const app = _catalog.find(a => a.id === id);
+    if (!app) return;
+    document.querySelectorAll<HTMLElement>('#apps-content .apps-card[data-app-id]').forEach(card => {
+        if (card.dataset.appId !== id) return;
+        card.classList.toggle('is-busy', !!job && !job.error);
+        const foot = card.querySelector('.apps-card-foot');
+        if (!foot) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = cardFootHtml(app);
+        const fresh = tmp.firstElementChild;
+        if (!fresh) return;
+        foot.replaceWith(fresh);
+        wireCardActions(fresh);
+    });
 }
 
 /**
@@ -706,6 +943,8 @@ function renderUninstallChoiceInto(
     const isManaged = (info as any).is_managed !== false; // default true (legacy state)
 
     const run = async (opts: { deleteFiles?: boolean; runUninstaller?: boolean }) => {
+        container.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.disabled = true; });
+        setJob(appId, { kind: 'uninstall' });
         try {
             await invoke('uninstall_app', {
                 appId,
@@ -715,8 +954,13 @@ function renderUninstallChoiceInto(
             toast(opts.runUninstaller ? (t('apps.uninstall.launched')||'Uninstaller launched')
                 : opts.deleteFiles ? (t('apps.uninstalled')||'App uninstalled')
                 : (t('apps.uninstall.keptFiles')||'Removed from BMM (files kept)'), 'success');
+            setJob(appId, null);
             await onDone();
-        } catch (e) { toast(String(e), 'error'); }
+        } catch (e) {
+            setJob(appId, { kind: 'uninstall', error: String(e) });
+            container.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.disabled = false; });
+            toast(String(e), 'error');
+        }
     };
 
     const buttons = isManaged
@@ -742,6 +986,14 @@ function renderUninstallChoiceInto(
 }
 
 // ── Installed ─────────────────────────────────────────────────────────────────
+
+/** The catalogue has a newer version of this installed app: the same Update the card offers. */
+function installedUpdateBtn(info: InstalledAppInfo): string {
+    const entry = _catalog.find(a => a.id === info.id);
+    if (!entry || !hasUpdate(entry)) return '';
+    const tip = `v${info.version} → v${entry.version}`;
+    return `<button class="btn btn-sm btn-secondary" data-action="update" data-id="${escAttr(info.id)}" data-tooltip="${escAttr(tip)}">${IC.download} ${escHtml(t('apps.update'))}</button>`;
+}
 
 function renderInstalled() {
     const content = document.getElementById('apps-content');
@@ -779,6 +1031,7 @@ function renderInstalled() {
           </button>
           ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" data-tooltip="${escAttr(app.exe_path)}">${IC.replace || IC.replace}</button>` : ''}
           <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${escAttr(app.id)}" data-path="${escAttr(app.install_path)}">${IC.folder}</button>
+          ${installedUpdateBtn(app)}
           ${app.exe_path
             ? `<button class="btn btn-sm btn-accent" data-action="launch" data-id="${escAttr(app.id)}" data-exe="${escAttr(app.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
             : `<button class="btn btn-sm btn-ghost" data-action="pick-exe" data-id="${escAttr(app.id)}">${IC.monitor} ${t('apps.pickExe')||'Set exe'}</button>`}
@@ -843,6 +1096,11 @@ function renderInstalled() {
                     return;
                 }
                 showLauncherPicker(id, exes, () => refreshAndRender());
+            }
+            if (action === 'update') {
+                const entry = _catalog.find(a => a.id === id);
+                if (entry) openInstallModal(entry, 'update');
+                return;
             }
             if (action === 'folder') {
                 await invoke('open_app_folder', { installPath: el.dataset.path }).catch(() => {});
@@ -978,11 +1236,14 @@ function renderFavorites() {
         inp.value = '';
         renderFavorites();
     });
-    // Card click + "add to collection" context
-    content.querySelectorAll('[data-app-id]').forEach(card => {
-        card.addEventListener('click', e => {
-            if ((e.target as HTMLElement).closest('[data-add-to-coll]')) return;
-            openDetailModal((card as HTMLElement).dataset.appId || '');
+    // Card click + "add to collection" context; the footer buttons act on their own.
+    wireAppCards(content, '[data-add-to-coll], [data-coll-toggle]');
+    // The collection chip opens its menu (it was never wired, so a click opened the details).
+    content.querySelectorAll<HTMLElement>('[data-coll-toggle]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const menu = document.getElementById(btn.dataset.collToggle || '');
+            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         });
     });
     // Add to collection button
@@ -1011,9 +1272,10 @@ function renderAppCardWithCollMenu(app: AppEntry) {
     // Inject a small "folder+" button at the bottom of the card body
     const menuId = `coll-menu-${app.id}`;
     const inColls = _collections.filter(c => c.appIds.includes(app.id));
-    return base.replace('</div>\n    </div>', `
+    // Into the body, at the marker renderAppCard leaves for it (the footer follows the body).
+    return base.replace('<!--apps-card-extra-->', `
       <div style="margin-top:4px;position:relative">
-        <button class="apps-tag-chip" id="btn-${menuId}" data-tooltip="${t('apps.fav.addToCollection')||'Add to collection'}">
+        <button type="button" class="apps-tag-chip" id="btn-${menuId}" data-coll-toggle="${escAttr(menuId)}" data-tooltip="${t('apps.fav.addToCollection')||'Add to collection'}">
           ${uiIcon('folder', 12)}
           ${inColls.length ? inColls.map(c => escHtml(c.name)).join(', ') : (t('apps.fav.addToCollection')||'Collection')}
         </button>
@@ -1024,8 +1286,7 @@ function renderAppCardWithCollMenu(app: AppEntry) {
             ${escHtml(c.name)}
           </button>`).join('')}
         </div>
-      </div>
-    </div>\n    </div>`);
+      </div>`);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -2056,6 +2317,9 @@ function openDetailModal(appId: string) {
 
     const installed = _state.installed[appId];
     const fav       = _state.favorites.includes(appId);
+    const upd       = hasUpdate(app);
+    const job       = _jobs[appId];
+    const busy      = !!job && !job.error;
     const extra     = app.images?.extra || [];
     const allImages = [app.images?.thumb, ...extra].filter(Boolean) as string[];
     const hasImages = allImages.length > 0;
@@ -2093,6 +2357,15 @@ function openDetailModal(appId: string) {
             <div class="adm-info-icon">${IC.play}</div>
             <div class="adm-info-label">${t('apps.usage')||'Usage time'}</div>
             <div class="adm-info-value">${formatDuration(installed.usage_seconds)}</div>
+          </div>` : '',
+        // Which version is in the catalogue and which is on this disk, side by side when they
+        // differ — the one row that explains an "Update" button.
+        (app.version || installed?.version) ? `<div class="adm-info-row${upd ? ' adm-info-update' : ''}">
+            <div class="adm-info-icon">${uiIcon('tag', 12)}</div>
+            <div class="adm-info-label">${escHtml(t('apps.detail.version'))}</div>
+            <div class="adm-info-value">${installed?.version && installed.version !== app.version
+                ? escHtml(t('apps.detail.versionPair').replace('{installed}', installed.version).replace('{latest}', app.version || '?'))
+                : escHtml(app.version ? `v${app.version}` : `v${installed?.version}`)}</div>
           </div>` : '',
         app.download.size ? `<div class="adm-info-row">
             <div class="adm-info-icon">${IC.download}</div>
@@ -2143,13 +2416,13 @@ function openDetailModal(appId: string) {
           <div class="adm-title-block">
             <div class="adm-title-row">
               <h2 class="adm-title">${escHtml(app.title)}</h2>
-              ${installed ? `<span class="adm-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>` : ''}
+              ${installed ? `<span class="adm-installed-chip">${IC.check} ${escHtml(t('apps.state.installed'))}</span>` : ''}
             </div>
             <div class="adm-badges">
-              <span class="apps-cat-badge apps-cat-${app.category}">${escHtml(app.category)}</span>
+              <span class="apps-cat-badge apps-cat-${escAttr(app.category)}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
               ${priceBadge(app.price)}
-              ${app.official ? `<span class="apps-official-badge">✦ Official</span>` : ''}
-              ${app.partner && !app.official ? `<span class="apps-partner-badge">Partner</span>` : ''}
+              ${app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>` : ''}
+              ${app.partner && !app.official ? `<span class="apps-partner-badge">${escHtml(t('apps.badge.partner'))}</span>` : ''}
               ${!app.official && !app.partner ? `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>` : ''}
               ${claimChip(app)}
               ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
@@ -2159,16 +2432,29 @@ function openDetailModal(appId: string) {
             <button class="adm-fav-btn${fav?' adm-fav-active':''}" id="adm-fav-btn" data-tooltip="${fav?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
               ${fav ? IC.starFill : IC.star}
             </button>
+            ${busy
+              // Running: the same words as the card, the button there but disabled.
+              ? `<button class="adm-action-btn adm-pick-btn" disabled aria-busy="true"><span class="apps-spinner apps-spinner--xs" aria-hidden="true"></span> ${escHtml(t(job!.kind === 'install' ? 'apps.state.installing' : job!.kind === 'update' ? 'apps.state.updating' : 'apps.state.removing'))}</button>`
+              : `${upd ? `<button class="adm-action-btn" id="adm-update-btn" style="background:${accent}">${IC.download} ${escHtml(t('apps.update'))}</button>` : ''}
             ${installed
               ? (installed.exe_path
-                  ? `<button class="adm-action-btn" id="adm-launch-btn" data-exe="${escAttr(installed.exe_path)}" style="background:${accent}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
+                  ? `<button class="adm-action-btn${upd ? ' adm-pick-btn' : ''}" id="adm-launch-btn" data-exe="${escAttr(installed.exe_path)}"${upd ? '' : ` style="background:${accent}"`}>${IC.play} ${t('apps.launch')||'Launch'}</button>`
                   : `<button class="adm-action-btn adm-pick-btn" id="adm-pick-btn">${IC.monitor} ${t('apps.pickExe')||'Set executable'}</button>`)
               : `<button class="adm-action-btn" id="adm-install-btn" style="background:${accent}">${IC.download} ${t('apps.install')||'Install'}</button>`
-            }
+            }`}
           </div>
         </div>
 
-        <p class="adm-desc">${escHtml(app.description)}</p>
+        ${job?.error ? `<div class="adm-job-error" role="alert">
+          ${uiIcon('error', 14)}
+          <div class="adm-job-error-text">
+            <strong>${escHtml(t(job.kind === 'install' ? 'apps.state.installFailed' : job.kind === 'update' ? 'apps.state.updateFailed' : 'apps.state.removeFailed'))}</strong>
+            <span>${escHtml(job.error)}</span>
+          </div>
+          ${job.kind !== 'uninstall' ? `<button type="button" class="btn btn-sm btn-secondary" id="adm-retry-btn">${IC.refresh} ${escHtml(t('apps.retry'))}</button>` : ''}
+        </div>` : ''}
+
+        <div class="adm-desc adm-md-body" id="adm-desc">${escHtml(app.description)}</div>
         <div class="adm-tags">${app.tags.map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}</div>
 
         ${infoRows ? `<div class="adm-info-table">${infoRows}</div>` : ''}
@@ -2183,7 +2469,7 @@ function openDetailModal(appId: string) {
           <div class="adm-readme-content" id="adm-readme-content"></div>
         </div>` : ''}
 
-        ${installed ? `
+        ${installed && !busy ? `
         <div class="adm-uninstall-area" id="adm-uninstall-area">
           <button class="adm-uninstall-link" id="adm-uninstall-btn">${IC.trash} ${t('apps.uninstall')||'Uninstall'}</button>
         </div>` : ''}
@@ -2214,21 +2500,26 @@ function openDetailModal(appId: string) {
             btn.dataset.open = '1';
             btn.classList.add('open');
             content.style.maxHeight = '600px';
-            if (!content.dataset.loaded) {
-                content.innerHTML = `<div class="apps-loading" style="height:60px"><div class="apps-spinner" style="width:18px;height:18px;border-width:2px"></div></div>`;
-                try {
-                    const resp = await fetch(toRawUrl(btn.dataset.md!), { cache: 'no-cache' });
-                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                    const raw = await resp.text();
-                    content.innerHTML = `<div class="adm-md">${renderMarkdown(raw.slice(0, 12000))}</div>`;
-                    content.dataset.loaded = '1';
-                    // A README is mostly install commands; highlighting them is the point.
-                    try { const { highlightIn } = await import('../../ui/code-highlight.js'); highlightIn(content); } catch { /* plain text is fine */ }
-                } catch {
-                    content.innerHTML = `<p class="adm-md-error">${t('apps.mdFailed')||'Could not load README'}</p>`;
-                }
-            }
+            if (!content.dataset.loaded) await loadReadme(btn.dataset.md!, content);
         }
+    });
+
+    // ── Description, in B.MD (escaped text until the renderer has loaded) ──
+    const descHost = document.getElementById('adm-desc');
+    if (descHost && (app.description || '').trim()) {
+        void paintAppMarkdown(descHost, app.description);
+    }
+
+    // ── Update / retry ──
+    document.getElementById('adm-update-btn')?.addEventListener('click', () => {
+        closeDetailModal();
+        openInstallModal(app, 'update');
+    });
+    document.getElementById('adm-retry-btn')?.addEventListener('click', () => {
+        const j = _jobs[appId];
+        if (!j || j.kind === 'uninstall') return;
+        closeDetailModal();
+        void startInstall(app, j.path || _defaultPath, j.kind);
     });
 
     // ── Favorite ──
@@ -2273,6 +2564,9 @@ function openDetailModal(appId: string) {
     const isManaged   = (installed as any)?.is_managed !== false; // default true for legacy state
 
     const runUninstall = async (opts: { deleteFiles?: boolean; runUninstaller?: boolean }) => {
+        // The choice stays on screen with its buttons off while it runs, and the card says so.
+        area?.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.disabled = true; });
+        setJob(appId, { kind: 'uninstall' });
         try {
             await invoke('uninstall_app', {
                 appId,
@@ -2282,10 +2576,15 @@ function openDetailModal(appId: string) {
             const msg = opts.runUninstaller ? (t('apps.uninstall.launched')||'Uninstaller launched')
                 : opts.deleteFiles ? (t('apps.uninstalled')||'App uninstalled')
                 : (t('apps.uninstall.keptFiles')||'Removed from BMM (files kept)');
+            setJob(appId, null);
             toast(msg, 'success');
             closeDetailModal();
             await refreshAndRender();
-        } catch (e) { toast(String(e), 'error'); }
+        } catch (e) {
+            setJob(appId, { kind: 'uninstall', error: String(e) });
+            area?.querySelectorAll<HTMLButtonElement>('button').forEach((b) => { b.disabled = false; });
+            toast(String(e), 'error');
+        }
     };
 
     const resetUninstallArea = () => {
@@ -2339,107 +2638,243 @@ function closeDetailModal() {
     document.getElementById('apps-detail-modal')?.classList.remove('open');
 }
 
-// ── Markdown renderer ─────────────────────────────────────────────────────────
+// ── Markdown (B.MD) ───────────────────────────────────────────────────────────
 
-function inlineMd(raw: string): string {
-    let s = escHtml(raw);
-    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-    s = s.replace(/`([^`]+)`/g, '<code class="adm-code">$1</code>');
-    // Images before links
-    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="adm-md-img" loading="lazy">');
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="adm-link">$1</a>');
-    return s;
+/**
+ * A catalogue's description and README, in B.MD like every other markdown surface in BMM.
+ *
+ * This file had its own line-by-line parser, which knew six constructs and put a catalogue's
+ * link target into an href without checking its scheme. A catalogue is somebody else's text,
+ * so it goes through md-lite's UNTRUSTED render (sanitised, script links refused), the
+ * same path a plugin's README takes, and is hydrated afterwards like every md-lite surface.
+ * Loaded on demand: the catalogue page should not carry the renderer before a detail opens.
+ */
+async function paintAppMarkdown(host: HTMLElement, raw: string): Promise<boolean> {
+    try {
+        const [{ renderDocMarkdown }, { hydrateMdLite }] = await Promise.all([
+            import('../../docs/md-lite.js'),
+            import('../../docs/md-hydrate.js'),
+        ]);
+        host.innerHTML = renderDocMarkdown(String(raw || ''));
+        hydrateMdLite(host);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
-function renderMarkdown(raw: string): string {
-    const lines = raw.split('\n');
-    let html = '';
-    let inCode = false;
-    let codeBuf = '';
-    let inList = false;
-    let listTag = 'ul';
-
-    const flushList = () => {
-        if (inList) { html += `</${listTag}>`;  inList = false; }
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        // Fenced code block
-        if (line.startsWith('```')) {
-            if (inCode) {
-                flushList();
-                html += `<pre class="adm-pre"><code>${escHtml(codeBuf)}</code></pre>`;
-                inCode = false; codeBuf = '';
-            } else {
-                flushList(); inCode = true;
-            }
-            continue;
-        }
-        if (inCode) { codeBuf += line + '\n'; continue; }
-
-        // Headings
-        const h3 = line.match(/^### (.+)/);
-        const h2 = line.match(/^## (.+)/);
-        const h1 = line.match(/^# (.+)/);
-        if (h3) { flushList(); html += `<h3 class="adm-h3">${inlineMd(h3[1])}</h3>`; continue; }
-        if (h2) { flushList(); html += `<h2 class="adm-h2">${inlineMd(h2[1])}</h2>`; continue; }
-        if (h1) { flushList(); html += `<h1 class="adm-h1">${inlineMd(h1[1])}</h1>`; continue; }
-
-        // HR
-        if (/^---+$/.test(line.trim())) { flushList(); html += `<hr class="adm-hr">`; continue; }
-
-        // Blockquote
-        if (line.startsWith('> ')) { flushList(); html += `<blockquote class="adm-blockquote">${inlineMd(line.slice(2))}</blockquote>`; continue; }
-
-        // List — unordered
-        const ul = line.match(/^[\-\*\+] (.+)/);
-        if (ul) {
-            if (!inList || listTag !== 'ul') { flushList(); html += `<ul class="adm-ul">`; inList = true; listTag = 'ul'; }
-            html += `<li>${inlineMd(ul[1])}</li>`;
-            continue;
-        }
-        // List — ordered
-        const ol = line.match(/^\d+\. (.+)/);
-        if (ol) {
-            if (!inList || listTag !== 'ol') { flushList(); html += `<ol class="adm-ol">`; inList = true; listTag = 'ol'; }
-            html += `<li>${inlineMd(ol[1])}</li>`;
-            continue;
-        }
-
-        // Empty line
-        if (!line.trim()) { flushList(); html += '<div class="adm-br"></div>'; continue; }
-
-        // Paragraph
-        flushList();
-        html += `<p class="adm-p">${inlineMd(line)}</p>`;
+/** Fetch an entry's README into `host`: a loading line, the B.MD page, or the error and a retry. */
+async function loadReadme(mdLink: string, host: HTMLElement): Promise<void> {
+    host.innerHTML = `<div class="adm-readme-state" role="status"><span class="apps-spinner apps-spinner--xs" aria-hidden="true"></span> ${escHtml(t('apps.detail.readmeLoading'))}</div>`;
+    try {
+        const resp = await fetch(toRawUrl(mdLink), { cache: 'no-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const raw = await resp.text();
+        const page = document.createElement('div');
+        page.className = 'adm-md adm-md-body';
+        if (!(await paintAppMarkdown(page, raw.slice(0, 12000)))) throw new Error('render');
+        host.replaceChildren(page);
+        host.dataset.loaded = '1';
+        // A README is mostly install commands; highlighting them is the point.
+        try { const { highlightIn } = await import('../../ui/code-highlight.js'); highlightIn(host); } catch { /* plain text is fine */ }
+    } catch {
+        host.innerHTML = `<div class="adm-readme-state adm-md-error" role="alert">
+          <span>${escHtml(t('apps.mdFailed')||'Could not load README')}</span>
+          <button type="button" class="btn btn-sm btn-ghost" data-readme-retry>${IC.refresh} ${escHtml(t('apps.retry'))}</button>
+        </div>`;
+        host.querySelector('[data-readme-retry]')?.addEventListener('click', () => { void loadReadme(mdLink, host); });
     }
-
-    flushList();
-    return html;
 }
 
 // ── Install Modal ─────────────────────────────────────────────────────────────
 
-function openInstallModal(app: AppEntry) {
-    const body = document.getElementById('apps-install-body');
-    if (!body) return;
-
-    const isSetup = app.download.file_type === 'msi'
+function isSetupApp(app: AppEntry): boolean {
+    return app.download.file_type === 'msi'
         || app.download.url.toLowerCase().includes('setup')
         || app.download.url.toLowerCase().includes('install');
+}
+
+/** The folder an UPDATE should go to: where the app already is, when BMM chose that folder. */
+function updateFolderFor(app: AppEntry): string {
+    const inst = _state.installed[app.id];
+    if (!inst || inst.is_managed === false || !inst.install_path) return _defaultPath;
+    // A managed install lives at <folder>/<app id>; install_app adds the id itself.
+    const parts = inst.install_path.split(/[\\/]/);
+    if (parts.length > 1 && parts[parts.length - 1] === app.id) return inst.install_path.slice(0, -(app.id.length + 1));
+    return _defaultPath;
+}
+
+/** Is the install dialog open, and open for this entry? */
+function installModalShows(appId: string): boolean {
+    const modal = document.getElementById('apps-install-modal');
+    const body = document.getElementById('apps-install-body');
+    return !!modal?.classList.contains('open') && body?.dataset.appId === appId;
+}
+
+/** What the install dialog shows while a run goes on — optional: a retry from a card has none. */
+interface InstallUi {
+    busy(text: string): void;
+    idle(): void;
+    failed(msg: string): void;
+    detected(): void;
+}
+
+/**
+ * One install or update, wherever it was started from (the dialog, or Retry on a card).
+ *
+ * The card shows it while it runs and keeps the error if it fails; the dialog, when it is open
+ * for this entry, shows the same run. Closing the dialog does not stop anything: the card goes
+ * on showing the progress, which is the point of putting it there.
+ */
+async function startInstall(app: AppEntry, installPath: string, kind: 'install' | 'update', ui?: InstallUi): Promise<void> {
+    const running = _jobs[app.id];
+    if (running && !running.error) { toast(t('apps.state.alreadyRunning'), 'info'); return; }
+    const isSetup = isSetupApp(app);
+
+    // CWE-494: if the source is plain HTTP, warn the user first and only
+    // proceed (allowInsecure) if they explicitly accept the risk.
+    let allowInsecure = false;
+    if (isPlainHttp(app.download.url)) {
+        const ok = await window.confirmCustom!(
+            t('apps.install.httpWarnTitle') || 'Insecure source (HTTP)',
+            t('apps.install.httpWarn') ||
+             'This app downloads over an insecure HTTP connection (not HTTPS). The file could be tampered with in transit. Install anyway?',
+            'warning',
+            { yesLabel: t('apps.install.httpWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
+        );
+        if (!ok) { ui?.idle(); if (running) setJob(app.id, null); return; }
+        allowInsecure = true;
+    }
+
+    setJob(app.id, { kind, path: installPath });
+    // For setups, install_app blocks until the wizard finishes — explain the wait
+    ui?.busy(isSetup
+        ? (t('apps.install.runningWizard')||'Downloading… then the app installer will open. Just follow it.')
+        : (t('apps.downloading')||'Downloading…'));
+
+    const doInstall = (allowBadChecksum: boolean): Promise<InstallResult> => invoke('install_app', {
+        appId:       app.id,
+        appTitle:    app.title,
+        downloadUrl: app.download.url,
+        fileType:    app.download.file_type,
+        installPath,
+        version:     app.version || null,
+        category:    app.category,
+        thumb:       app.images?.thumb || null,
+        sha256:      app.download.sha256 || null,
+        allowInsecure,
+        allowBadChecksum,
+        // Set only for an entry that came out of a bundle. The backend then reads
+        // the file instead of the network and runs the SAME checksum gate on it —
+        // a bundle somebody sent you is not more trustworthy than a download, it is
+        // just closer.
+        localPath:   (app as any)._local ? app.download.url : null,
+    });
+
+    try {
+        let result: InstallResult;
+        try {
+            result = await doInstall(false);
+        } catch (err) {
+            // CWE-494: a checksum mismatch OR a missing checksum is a strong
+            // reminder, not a hard ban. Warn the user and let them install
+            // anyway if they accept.
+            const msg = String(err);
+            const mm = msg.match(/SHA_MISMATCH:([^:\s]*):([^:\s]*)/);
+            const nc = msg.match(/NO_CHECKSUM:([^:\s]*)/);
+            if (!mm && !nc) throw err;
+
+            let body: string;
+            if (mm) {
+                body = (t('apps.install.shaWarn') ||
+                    'The downloaded file does not match the expected checksum. It may have been modified or corrupted. Install anyway?') +
+                    hashBlock(t('apps.install.shaExpected') || 'Expected', mm[1]) +
+                    hashBlock(t('apps.install.shaActual') || 'Downloaded', mm[2]);
+            } else {
+                body = (t('apps.install.noShaWarn') ||
+                    'This app has no published checksum, so its integrity cannot be verified. Install anyway?') +
+                    hashBlock(t('apps.install.shaActual') || 'Downloaded', nc![1]);
+            }
+
+            // The dialog may be closed by now, so the title names the app this is about.
+            const ok = await window.confirmCustom!(
+                (mm ? (t('apps.install.shaWarnTitle') || 'Checksum mismatch')
+                    : (t('apps.install.noShaWarnTitle') || 'Unverified download')) + ` · ${app.title}`,
+                body,
+                'warning',
+                { yesLabel: t('apps.install.shaWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
+            );
+            if (!ok) {
+                // Declined, not failed: the card goes back to what it was.
+                setJob(app.id, null);
+                ui?.idle();
+                return;
+            }
+            result = await doInstall(true);
+        }
+
+        setJob(app.id, null);
+        await refreshState();
+        const shown = installModalShows(app.id);
+        const done = kind === 'update'
+            ? t('apps.state.updatedToast').replace('{name}', app.title)
+            : `${app.title} ${t('apps.installed')||'installed!'}`;
+
+        if (result.installer_launched && !result.auto_detected) {
+            // Rare: BMM could not auto-find the exe. Offer a one-click optional fallback.
+            if (shown) ui?.detected();
+            else toast(t('apps.install.notDetected')||'Installed, but BMM could not auto-find the app. You can set it manually later.', 'info');
+            toast(done, 'success');
+        } else if (result.executables.length > 1) {
+            // Zip with several executables — let the user pick the launcher,
+            // with BMM's auto-detected (root-priority) choice pre-selected.
+            toast(done, 'success');
+            if (shown) closeInstallModal();
+            showLauncherPicker(app.id, result.executables, () => repaintAfterJob());
+        } else {
+            if (shown) closeInstallModal();
+            toast(done, 'success');
+        }
+        repaintAfterJob();
+    } catch (e) {
+        const msg = String(e);
+        setJob(app.id, { kind, path: installPath, error: msg });
+        ui?.failed(msg);
+        toast(msg, 'error');
+    }
+}
+
+/**
+ * After a job ends, redraw what shows install state, but never a tab the user is typing in:
+ * a background install finishing must not wipe a half-written catalogue on Create.
+ */
+function repaintAfterJob() {
+    paintAppsCounts();
+    if (_activeTab === 'create' || _activeTab === 'sources') return;
+    renderCurrentTab();
+}
+
+function openInstallModal(app: AppEntry, kind: 'install' | 'update' = 'install') {
+    const body = document.getElementById('apps-install-body');
+    if (!body) return;
+    const running = _jobs[app.id];
+    if (running && !running.error) { toast(t('apps.state.alreadyRunning'), 'info'); return; }
+
+    const isSetup = isSetupApp(app);
+    const isUpdate = kind === 'update';
+    const inst = _state.installed[app.id];
+    const startPath = isUpdate ? updateFolderFor(app) : (running?.path || _defaultPath);
+    body.dataset.appId = app.id;
 
     body.innerHTML = `
     <div class="apps-install-form">
-      <h3 class="apps-install-title">${IC.download} ${t('apps.install')||'Install'} — ${escHtml(app.title)}</h3>
+      <h3 class="apps-install-title">${IC.download} ${escHtml(isUpdate ? t('apps.update') : (t('apps.install')||'Install'))} — ${escHtml(app.title)}</h3>
 
       <div class="apps-install-info">
         ${priceBadge(app.price)}
         <span>${escHtml(app.download.file_type.toUpperCase())}</span>
         ${app.download.size ? `<span>${formatBytes(app.download.size)}</span>` : ''}
+        ${isUpdate && inst ? `<span class="apps-install-ver">v${escHtml(inst.version || '')} → v${escHtml(app.version || '')}</span>` : ''}
       </div>
 
       ${app.requirements ? `<div class="apps-install-req">${IC.info} ${escHtml(app.requirements)}</div>` : ''}
@@ -2448,21 +2883,21 @@ function openInstallModal(app: AppEntry) {
           ${uiIcon('alert', 14)}
           ${t('apps.install.setupAuto')||'This app uses its own installer. Just click through its wizard — BMM detects the result automatically.'}
         </div>` : `
-      <label class="apps-install-label">${t('apps.installPath')||'Install folder'}</label>
+      <label class="apps-install-label" for="apps-path-input">${t('apps.installPath')||'Install folder'}</label>
       <div class="apps-path-row">
-        <input class="apps-path-input" id="apps-path-input" type="text" value="${escAttr(_defaultPath)}">
-        <button class="btn btn-sm btn-ghost" id="apps-browse-path">${IC.folder}</button>
+        <input class="apps-path-input" id="apps-path-input" type="text" value="${escAttr(startPath)}">
+        <button class="btn btn-sm btn-ghost" id="apps-browse-path" aria-label="${escAttr(t('apps.install.browseFolder'))}" data-tooltip="${escAttr(t('apps.install.browseFolder'))}">${IC.folder}</button>
       </div>
       <p class="apps-install-path-hint">${t('apps.installPathHint')||'App installed to: folder/app-id/'}</p>`}
 
-      <div id="apps-install-progress" style="display:none">
-        <div class="apps-install-progress-bar"><div class="apps-install-progress-fill" id="apps-progress-fill"></div></div>
-        <p id="apps-install-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></p>
+      <div id="apps-install-progress" class="apps-install-progress" style="display:none">
+        <div class="apps-install-progress-bar is-indeterminate"><div class="apps-install-progress-fill" id="apps-progress-fill"></div></div>
+        <p id="apps-install-status" class="apps-install-status" role="status"></p>
       </div>
 
       <div class="apps-install-footer">
         <button class="btn btn-ghost" id="apps-install-cancel">${t('common.cancel')||'Cancel'}</button>
-        <button class="btn btn-accent" id="apps-install-confirm">${IC.download} ${t('apps.installNow')||'Install'}</button>
+        <button class="btn btn-accent" id="apps-install-confirm">${IC.download} ${escHtml(isUpdate ? t('apps.update') : (t('apps.installNow')||'Install'))}</button>
       </div>
     </div>`;
 
@@ -2473,136 +2908,54 @@ function openInstallModal(app: AppEntry) {
 
     document.getElementById('apps-install-cancel')?.addEventListener('click', closeInstallModal);
 
-    document.getElementById('apps-install-confirm')?.addEventListener('click', async () => {
+    const progress = document.getElementById('apps-install-progress')!;
+    const bar = progress.querySelector('.apps-install-progress-bar') as HTMLElement;
+    const fill = document.getElementById('apps-progress-fill')!;
+    const status = document.getElementById('apps-install-status')!;
+    const confirmBtn = document.getElementById('apps-install-confirm') as HTMLButtonElement;
+    const cancelBtn = document.getElementById('apps-install-cancel') as HTMLButtonElement;
+    const cancelWord = t('common.cancel') || 'Cancel';
+
+    // install_app reports no progress, so the bar is indeterminate while it runs rather than a
+    // number it would have to invent. The dialog can be closed meanwhile ("Continue in the
+    // background"): the card keeps showing the run.
+    const ui: InstallUi = {
+        busy(text) {
+            progress.style.display = 'block';
+            bar.classList.add('is-indeterminate');
+            bar.classList.remove('is-error');
+            fill.style.width = '';
+            status.textContent = text;
+            confirmBtn.disabled = true;
+            cancelBtn.textContent = t('apps.install.background');
+        },
+        idle() {
+            progress.style.display = 'none';
+            confirmBtn.disabled = false;
+            cancelBtn.textContent = cancelWord;
+        },
+        failed(msg) {
+            bar.classList.remove('is-indeterminate');
+            bar.classList.add('is-error');
+            fill.style.width = '100%';
+            status.textContent = msg;
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `${IC.refresh} ${escHtml(t('apps.retry'))}`;
+            cancelBtn.textContent = cancelWord;
+        },
+        detected() {
+            bar.classList.remove('is-indeterminate');
+            fill.style.width = '100%';
+            status.textContent = t('apps.install.notDetected')||'Installed, but BMM could not auto-find the app. You can set it manually later.';
+            confirmBtn.style.display = 'none';
+            cancelBtn.textContent = t('common.close')||'Close';
+        },
+    };
+
+    confirmBtn.addEventListener('click', () => {
         const pathInput = document.getElementById('apps-path-input') as HTMLInputElement | null;
         const installPath = pathInput?.value.trim() || _defaultPath;
-        const progress = document.getElementById('apps-install-progress')!;
-        const fill = document.getElementById('apps-progress-fill')!;
-        const status = document.getElementById('apps-install-status')!;
-        const confirmBtn = document.getElementById('apps-install-confirm') as HTMLButtonElement;
-        const cancelBtn = document.getElementById('apps-install-cancel') as HTMLButtonElement;
-
-        progress.style.display = 'block';
-        confirmBtn.disabled = true;
-        cancelBtn.disabled = true;
-        fill.style.width = '40%';
-        // For setups, install_app blocks until the wizard finishes — explain the wait
-        status.textContent = isSetup
-            ? (t('apps.install.runningWizard')||'Downloading… then the app installer will open. Just follow it.')
-            : (t('apps.downloading')||'Downloading…');
-
-        try {
-            // CWE-494: if the source is plain HTTP, warn the user first and only
-            // proceed (allowInsecure) if they explicitly accept the risk.
-            let allowInsecure = false;
-            if (/^http:\/\//i.test(app.download.url.trim())) {
-                const ok = await window.confirmCustom!(
-                    t('apps.install.httpWarnTitle') || 'Insecure source (HTTP)',
-                    t('apps.install.httpWarn') ||
-                     'This app downloads over an insecure HTTP connection (not HTTPS). The file could be tampered with in transit. Install anyway?',
-                    'warning',
-                    { yesLabel: t('apps.install.httpWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
-                );
-                if (!ok) {
-                    progress.style.display = 'none';
-                    confirmBtn.disabled = false;
-                    cancelBtn.disabled = false;
-                    return;
-                }
-                allowInsecure = true;
-            }
-
-            const doInstall = (allowBadChecksum: boolean): Promise<InstallResult> => invoke('install_app', {
-                appId:       app.id,
-                appTitle:    app.title,
-                downloadUrl: app.download.url,
-                fileType:    app.download.file_type,
-                installPath,
-                version:     app.version || null,
-                category:    app.category,
-                thumb:       app.images?.thumb || null,
-                sha256:      app.download.sha256 || null,
-                allowInsecure,
-                allowBadChecksum,
-                // Set only for an entry that came out of a bundle. The backend then reads
-                // the file instead of the network and runs the SAME checksum gate on it —
-                // a bundle somebody sent you is not more trustworthy than a download, it is
-                // just closer.
-                localPath:   (app as any)._local ? app.download.url : null,
-            });
-
-            let result: InstallResult;
-            try {
-                result = await doInstall(false);
-            } catch (err) {
-                // CWE-494: a checksum mismatch OR a missing checksum is a strong
-                // reminder, not a hard ban. Warn the user and let them install
-                // anyway if they accept.
-                const msg = String(err);
-                const mm = msg.match(/SHA_MISMATCH:([^:\s]*):([^:\s]*)/);
-                const nc = msg.match(/NO_CHECKSUM:([^:\s]*)/);
-                if (!mm && !nc) throw err;
-
-                let body: string;
-                if (mm) {
-                    body = (t('apps.install.shaWarn') ||
-                        'The downloaded file does not match the expected checksum. It may have been modified or corrupted. Install anyway?') +
-                        hashBlock(t('apps.install.shaExpected') || 'Expected', mm[1]) +
-                        hashBlock(t('apps.install.shaActual') || 'Downloaded', mm[2]);
-                } else {
-                    body = (t('apps.install.noShaWarn') ||
-                        'This app has no published checksum, so its integrity cannot be verified. Install anyway?') +
-                        hashBlock(t('apps.install.shaActual') || 'Downloaded', nc![1]);
-                }
-
-                const ok = await window.confirmCustom!(
-                    mm ? (t('apps.install.shaWarnTitle') || 'Checksum mismatch')
-                       : (t('apps.install.noShaWarnTitle') || 'Unverified download'),
-                    body,
-                    'warning',
-                    { yesLabel: t('apps.install.shaWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
-                );
-                if (!ok) {
-                    progress.style.display = 'none';
-                    confirmBtn.disabled = false;
-                    cancelBtn.disabled = false;
-                    return;
-                }
-                result = await doInstall(true);
-            }
-
-            fill.style.width = '100%';
-            await refreshState();
-
-            if (result.installer_launched && !result.auto_detected) {
-                // Rare: BMM could not auto-find the exe. Offer a one-click optional fallback.
-                status.textContent = t('apps.install.notDetected')||'Installed, but BMM could not auto-find the app. You can set it manually later.';
-                confirmBtn.style.display = 'none';
-                cancelBtn.disabled = false;
-                cancelBtn.textContent = t('common.close')||'Close';
-                cancelBtn.addEventListener('click', () => { renderCurrentTab(); }, { once: true });
-                toast(`${app.title} ${t('apps.installed')||'installed!'}`, 'success');
-
-            } else if (result.executables.length > 1) {
-                // Zip with several executables — let the user pick the launcher,
-                // with BMM's auto-detected (root-priority) choice pre-selected.
-                toast(`${app.title} ${t('apps.installed')||'installed!'}`, 'success');
-                closeInstallModal();
-                showLauncherPicker(app.id, result.executables, () => renderCurrentTab());
-
-            } else {
-                closeInstallModal();
-                renderCurrentTab();
-                toast(`${app.title} ${t('apps.installed')||'installed!'}`, 'success');
-            }
-
-        } catch (e) {
-            fill.style.background = 'var(--danger)';
-            status.textContent = String(e);
-            confirmBtn.disabled = false;
-            cancelBtn.disabled = false;
-            toast(String(e), 'error');
-        }
+        void startInstall(app, installPath, kind, ui);
     });
 
     document.getElementById('apps-install-modal')!.classList.add('open');

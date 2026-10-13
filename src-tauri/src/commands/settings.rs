@@ -706,6 +706,19 @@ pub fn is_auto_eula_enabled(app_handle: tauri::AppHandle) -> bool {
 pub struct BcConfig {
     pub test_mode: bool,
     pub base_url: String,
+    /// `BCApiVersion=v2`: the calls that have a BetterCommunity v2 adapter (feedback, consent
+    /// receipts, signed catalogue feeds) go to the v2 API. Anything else, or no line: `v1`,
+    /// today's behaviour. See Update/Documentation/BC-v2-readiness.md.
+    pub api_version: String,
+    /// `BCv2Base=https://host[:port]`: where BetterCommunity v2 lives while it runs beside v1
+    /// (staging). Empty = the same root as v1 (after the cut-over, one domain serves both).
+    pub v2_base: String,
+}
+
+/// `BCApiVersion` as written: `v2` / `2` (any case) is v2, everything else v1.
+pub fn bc_api_version_of(v: &str) -> &'static str {
+    let v = v.trim().to_ascii_lowercase();
+    if v == "v2" || v == "2" { "v2" } else { "v1" }
 }
 
 /// BetterCommunity blog/community test mode + base URL, read from `app.cfg`:
@@ -717,6 +730,8 @@ pub struct BcConfig {
 pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
     let mut test_mode = false;
     let mut base_url = String::new();
+    let mut api_version = "v1";
+    let mut v2_base = String::new();
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             for line in content.lines() {
@@ -724,14 +739,16 @@ pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
                     match k.trim().to_lowercase().as_str() {
                         "bctestmode" => test_mode = v.trim().eq_ignore_ascii_case("true"),
                         "bctestbase" => base_url = v.trim().to_string(),
+                        "bcapiversion" => api_version = bc_api_version_of(v),
+                        "bcv2base" => v2_base = v.trim().to_string(),
                         _ => {}
                     }
                 }
             }
         }
     }
-    info!("[BC] test_mode={}, base_url='{}'", test_mode, base_url);
-    BcConfig { test_mode, base_url }
+    info!("[BC] test_mode={}, base_url='{}', api={}, v2_base='{}'", test_mode, base_url, api_version, v2_base);
+    BcConfig { test_mode, base_url, api_version: api_version.to_string(), v2_base }
 }
 
 /// `DocsReplays=false` (or `off`) in app.cfg: Help & Other shows no session replay

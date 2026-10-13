@@ -782,6 +782,33 @@ impl ServerHandler for BmmMcpServer {
             "required": ["path"]
         })).unwrap()),
     ),
+    Tool::new(
+        "bmm_repo_validate",
+        "Check a repo FOLDER on this machine without changing it: manifest format, whether BMM can read it, the signature (valid / invalid / unsigned / legacy), duplicate mod ids, empty profiles, and every listed file against its size and sha256 (hashed in parallel; unchanged files answered from a cache unless deep is true). Needs the running app. Returns { ok, report: { format, readable, signature, profiles, mods, files, filesMissing, hashesChanged, hashesFilled, problems[], elapsedMs } }. When it reports stale hashes, an old format or a bad signature, bmm_repo_convert (dry_run first) is the fix.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "The repo folder, or its repo.json." },
+                "deep": { "type": "boolean", "description": "Re-read every file even when its size and date say it has not changed. Default false." }
+            },
+            "required": ["path"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_repo_follow",
+        "Followed repos: BMM checks them on a schedule and says when one of the user's installed mods has an update there. op 'list' returns each followed repo with its switch, interval (minutes), action and last check. op 'set' follows a repo or changes how (enabled, interval_min >= 15, action: notify (default) | download | apply). op 'remove' stops following it. op 'check' checks one now and returns the updates found and the install plan; it never installs anything (the app does that per the repo's action, never while a game runs). Needs the running app.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "op": { "type": "string", "enum": ["list", "set", "remove", "check"], "description": "What to do. Default list." },
+                "url": { "type": "string", "description": "The repo's address (required except for list)." },
+                "enabled": { "type": "boolean", "description": "set: check it on its schedule (true) or pause it (false)." },
+                "interval_min": { "type": "integer", "description": "set: minutes between two checks (15 to 43200)." },
+                "action": { "type": "string", "enum": ["notify", "download", "apply"], "description": "set: what BMM does when a mod has an update." },
+                "force": { "type": "boolean", "description": "check: ignore the stored ETag and read the manifest in full." }
+            }
+        })).unwrap()),
+    ),
     // Identity keys.
     Tool::new(
         "bmm_list_keys",
@@ -1539,6 +1566,32 @@ impl ServerHandler for BmmMcpServer {
                 };
             }
             self.tool_api_call("POST", "/api/repo/convert", Some(json!({ "path": path, "dryRun": false, "rehash": rehash, "sign": sign }))).await
+        }
+        "bmm_repo_validate" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let deep = args.get("deep").and_then(|v| v.as_bool()).unwrap_or(false);
+            self.tool_api_call("POST", "/api/repo/validate", Some(json!({ "path": path, "deep": deep }))).await
+        }
+        "bmm_repo_follow" => {
+            let op = args.get("op").and_then(|v| v.as_str()).unwrap_or("list");
+            if op == "list" { return self.tool_api_call("GET", "/api/repo/follow", None).await; }
+            let url = args.get("url").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing url", None))?;
+            match op {
+                "check" => {
+                    let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_api_call("POST", "/api/repo/follow/check", Some(json!({ "url": url, "force": force }))).await
+                }
+                "remove" => self.tool_api_call("POST", "/api/repo/follow", Some(json!({ "url": url, "remove": true }))).await,
+                "set" => {
+                    let mut body = serde_json::Map::new();
+                    body.insert("url".into(), json!(url));
+                    if let Some(v) = args.get("enabled") { body.insert("enabled".into(), v.clone()); }
+                    if let Some(v) = args.get("interval_min") { body.insert("intervalMin".into(), v.clone()); }
+                    if let Some(v) = args.get("action") { body.insert("action".into(), v.clone()); }
+                    self.tool_api_call("POST", "/api/repo/follow", Some(serde_json::Value::Object(body))).await
+                }
+                other => err_result(&format!("unknown op '{}': list, set, remove or check", other)),
+            }
         }
         "bmm_list_keys" => self.tool_api_call("GET", "/api/keys", None).await,
         "bmm_create_key" => {

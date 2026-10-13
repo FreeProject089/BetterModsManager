@@ -252,6 +252,7 @@ export function _resetActivationJobsForTests(): void {
     live.clear();
     announced.clear();
     listeners.clear();
+    endListeners.clear();
     pumping = false;
     notifyQueued = false;
     listening = false;
@@ -276,6 +277,16 @@ function changed(): void {
 export function onActivationChange(fn: () => void): () => void {
     listeners.add(fn);
     return () => { listeners.delete(fn); };
+}
+
+const endListeners = new Set<(s: JobSummary) => void>();
+/**
+ * Called once per job as it leaves the list, with its summary (the activity centre's history,
+ * core/activity-sources.ts). Synchronous: by the next onActivationChange the job is gone.
+ */
+export function onActivationJobEnd(fn: (s: JobSummary) => void): () => void {
+    endListeners.add(fn);
+    return () => { endListeners.delete(fn); };
 }
 
 // ── progress from the backend ───────────────────────────────────────────────────────────
@@ -597,6 +608,7 @@ function finish(job: ActivationJob, o: RunOptions): void {
     endToasts.delete(job.id);
     const res = resolvers.get(job.id);
     resolvers.delete(job.id);
+    for (const fn of Array.from(endListeners)) { try { fn(s); } catch (e) { console.warn('[activation-jobs] end listener failed', e); } }
     changed();
     if (!o.silent) {
         if (own) d().toast(own.message, own.kind, own.ms);

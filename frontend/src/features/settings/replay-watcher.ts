@@ -464,7 +464,7 @@ async function playBundle(bundle: any): Promise<void> {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
   overlay.setAttribute('data-prevent-close', 'true');
-  const meta = `${bundle.masked ? (t('watcher.masked') || 'masqué') : 'full'} · ${Math.round((bundle.durationMs || 0) / 1000)}s`;
+  const meta = `${typeof bundle.title === 'string' && bundle.title ? escapeHtml(bundle.title.slice(0, 120)) + ' · ' : ''}${bundle.masked ? (t('watcher.masked') || 'masqué') : 'full'} · ${Math.round((bundle.durationMs || 0) / 1000)}s`;
   overlay.innerHTML = `
     <div class="modal bms modal--xl modal--tall" role="dialog" aria-modal="true" aria-labelledby="rw-title">
       <div class="modal-header">
@@ -550,6 +550,20 @@ async function playBundle(bundle: any): Promise<void> {
     dot.style.cssText = `position:absolute;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;border:0;cursor:pointer;background:${color};left:${(off / total) * 100}%`;
     dot.onclick = () => { rep.play(off); };
     marks.appendChild(dot);
+  }
+  // Replay Studio markers (optional `markers: [{ t, label }]`, ms from start): labelled
+  // diamonds in the warning colour, so a chapter reads apart from a click.
+  for (const mk of (Array.isArray(bundle.markers) ? bundle.markers : []) as any[]) {
+    const off = Number(mk?.t);
+    if (!Number.isFinite(off) || off < 0 || off > total) continue;
+    const flag = document.createElement('button');
+    flag.type = 'button';
+    const label = `${mmss(off)} · ${String(mk?.label ?? '').slice(0, 80)}`;
+    flag.title = label;
+    flag.setAttribute('aria-label', label);
+    flag.style.cssText = `position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);width:8px;height:8px;border:0;border-radius:1px;cursor:pointer;background:var(--bmm-warning);left:${(off / total) * 100}%`;
+    flag.onclick = () => { rep.play(off); };
+    marks.appendChild(flag);
   }
 
   // Logs panel (JS console + Rust), highlighted live as the replay plays.

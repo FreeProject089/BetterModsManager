@@ -9,12 +9,12 @@
  *     fetched only when somebody opens one. Plain text in a <pre>; a .md licence goes through
  *     B.MD's untrusted path (md-lite + sanitiser), because it is somebody else's text.
  */
-import { t } from '../core/i18n.js';
+import { t, getLang } from '../core/i18n.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { uiIcon, brandIcon } from './icons.js';
 
 export interface LicFile { f: string; id: string }
-export interface CodeContributor { name: string; github: string | null; contributor: string | null; repos: string[]; since: string | null }
+export interface CodeContributor { name: string; github: string | null; contributor: string | null; repos: string[]; commits?: Record<string, number>; total?: number; since: string | null }
 export interface CodeRepo { id: string; label: string; url: string | null }
 export interface CodeContributors { repos: CodeRepo[]; people: CodeContributor[] }
 
@@ -27,36 +27,59 @@ const openExt = (u: string) => (window as any).openExternal?.(u);
  * contributors.json (their picture, display name and card), so a person who has a card is
  * shown with it and opens it; anyone else gets an initial and their GitHub.
  */
+let _last: { grid: HTMLElement; data: CodeContributors; cards: any[] } | null = null;
+let _langHooked = false;
+const fmtN = (n: number) => { try { return n.toLocaleString(getLang() || undefined); } catch { return String(n); } };
+const commitsText = (n: number) => (n === 1 ? tx('credits.codeCommitOne', '1 commit') : tx('credits.codeCommits', '{n} commits').replace('{n}', fmtN(n)));
+
 export function renderCodeContributors(grid: HTMLElement, data: CodeContributors | null | undefined, cards: any[]): void {
     grid.querySelector('.credits-code-section')?.remove();
     if (!data?.people?.length) return;
+    _last = { grid, data, cards };
+    // The card text is built here, not by data-i18n: render again in the new language.
+    if (!_langHooked) {
+        _langHooked = true;
+        document.addEventListener('langChanged', () => { if (_last?.grid.isConnected) renderCodeContributors(_last.grid, _last.data, _last.cards); });
+    }
     const repoLabel = new Map(data.repos.map((r) => [r.id, r] as const));
     const sec = document.createElement('div');
     sec.className = 'credits-category-section credits-code-section';
-    const people = data.people.map((p, i) => {
+    const people = data.people.map((p) => {
         const card = p.contributor ? cards.find((c) => c.id === p.contributor) : null;
         const shown = card?.display_name || card?.username || p.name;
-        const repos = p.repos.map((id) => repoLabel.get(id)?.label || id);
+        const total = typeof p.total === 'number' ? p.total : null;
         const pic = card?.pfp
             ? `<img src="${escAttr(card.pfp)}" class="credits-code-pfp" alt="">`
             : `<span class="credits-code-pfp is-initial" aria-hidden="true">${escHtml(shown.slice(0, 1).toUpperCase())}</span>`;
-        return `<div class="credits-code-card glass-card">
-            ${pic}
-            <div class="credits-code-main">
-                <div class="credits-code-name">${escHtml(shown)}</div>
-                <div class="credits-code-meta">${escHtml(tx('credits.codeRepos', 'Commits in {n} repositories').replace('{n}', String(repos.length)))}${p.since ? ` · ${escHtml(tx('credits.codeSince', 'since {year}').replace('{year}', p.since))}` : ''}</div>
-                <div class="credits-code-repos">${p.repos.map((id) => {
-                    const r = repoLabel.get(id);
-                    return r?.url
-                        ? `<button type="button" class="bms-chip credits-code-repo" data-code-open="${escAttr(r.url)}" title="${escAttr(r.url)}">${uiIcon('git-branch', 12)} ${escHtml(r.label)}</button>`
-                        : `<span class="bms-chip credits-code-repo">${uiIcon('git-branch', 12)} ${escHtml(r?.label || id)}</span>`;
-                }).join('')}</div>
-            </div>
-            <div class="credits-code-actions">
-                ${p.github ? `<button type="button" class="btn btn-secondary btn-sm" data-code-open="${escAttr(p.github)}">${brandIcon('github', 14)} GitHub</button>` : ''}
-                ${card ? `<button type="button" class="btn btn-ghost btn-sm" data-code-card="${escAttr(card.id)}" data-i="${i}">${escHtml(tx('credits.codeProfile', 'Profile'))}</button>` : ''}
-            </div>
-        </div>`;
+        const meta = [
+            total != null ? commitsText(total) : tx('credits.codeRepos', 'Commits in {n} repositories').replace('{n}', String(p.repos.length)),
+            p.since ? tx('credits.codeSince', 'since {year}').replace('{year}', p.since) : '',
+        ].filter(Boolean).map(escHtml).join(' · ');
+        const chips = p.repos.map((id) => {
+            const r = repoLabel.get(id);
+            const label = r?.label || id;
+            const n = p.commits?.[id];
+            const count = typeof n === 'number' ? `<span class="credits-code-repo-n">${escHtml(fmtN(n))}</span>` : '';
+            const tip = typeof n === 'number' ? tx('credits.codeRepoCommits', '{n} commits in {repo}').replace('{n}', fmtN(n)).replace('{repo}', label) : label;
+            return r?.url
+                ? `<li><button type="button" class="credits-code-repo is-link" data-code-open="${escAttr(r.url)}" title="${escAttr(tip)}" aria-label="${escAttr(tx('credits.codeOpenRepo', 'Open the {repo} repository').replace('{repo}', label))}${typeof n === 'number' ? ` (${escAttr(tip)})` : ''}">${uiIcon('git-branch', 12)}<span class="credits-code-repo-l">${escHtml(label)}</span>${count}</button></li>`
+                : `<li><span class="credits-code-repo" title="${escAttr(tip)}">${uiIcon('git-branch', 12)}<span class="credits-code-repo-l">${escHtml(label)}</span>${count}</span></li>`;
+        }).join('');
+        const actions = [
+            p.github ? `<button type="button" class="btn btn-secondary btn-sm" data-code-open="${escAttr(p.github)}">${brandIcon('github', 14)} GitHub</button>` : '',
+            card ? `<button type="button" class="btn btn-secondary btn-sm" data-code-card="${escAttr(card.id)}">${uiIcon('user', 14)} ${escHtml(tx('credits.codeProfile', 'Profile'))}</button>` : '',
+        ].join('');
+        return `<article class="credits-code-card glass-card">
+            <header class="credits-code-head">
+                ${pic}
+                <div class="credits-code-main">
+                    <div class="credits-code-name">${escHtml(shown)}</div>
+                    <div class="credits-code-meta">${meta}</div>
+                </div>
+            </header>
+            <ul class="credits-code-repos">${chips}</ul>
+            ${actions ? `<footer class="credits-code-actions">${actions}</footer>` : ''}
+        </article>`;
     }).join('');
     sec.innerHTML = `
         <div class="credits-category-title" data-i18n="credits.sections.code">${escHtml(tx('credits.sections.code', 'Code'))}</div>

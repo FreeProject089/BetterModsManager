@@ -11,6 +11,8 @@
 import { invoke } from '../../core/api.js';
 import { creatorProofFor } from '../../core/canvas-fingerprint.js';
 import { getLinks, bcApi, bcTestMode } from '../../core/links-config.js';
+import { bcUsesV2, bcFeedbackEndpoint } from '../../core/bc-client.js';
+import { feedbackToV2, feedbackConfigFromV2, feedbackAnswerFromV2 } from '../../core/bc-endpoints.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { recordNotification } from '../../ui/notification-center.js';
@@ -74,6 +76,9 @@ const CONFIG_TTL_MS = 10 * 60 * 1000;
 export function feedbackEndpoint(): string {
     const raw = (getLinks() as unknown as Record<string, unknown>).feedback_endpoint;
     if (raw === '' || raw === null) return '';
+    // BetterCommunity v2 (app.cfg BCApiVersion=v2): the native feedback centre route. Only then;
+    // without the line this function answers exactly as it always has.
+    if (bcUsesV2()) return bcFeedbackEndpoint();
     // Test mode points every BetterCommunity call at the test server, and the link status the
     // dialog shows comes from there. Posting the report to the production URL in links.json
     // meant "linked" on screen and an unknown sender at the receiving end, which answered
@@ -88,6 +93,17 @@ export function feedbackWebUrl(): string {
     if (!bcTestMode() && typeof raw === 'string' && /^https?:\/\//.test(raw)) return raw;
     return `${bcApi().replace(/\/api$/, '')}/dashboard?s=reports`;
 }
+/** True when reports go to the BetterCommunity v2 feedback centre (its own payload and answers). */
+function v2Mode(): boolean { return bcUsesV2() && feedbackEndpoint() !== ''; }
+
+/** v2 identifies an install by the PUBLIC app key it ships (links.json `bc_v2_app_key`, bc_pk_…),
+ *  not by X-Creator-ID / X-Creator-Proof, which v2 does not read — so in v2 mode those are not
+ *  sent at all: an identifier nobody reads is still an identifier. No key: an anonymous report. */
+function v2Headers(): Record<string, string> {
+    const k = String((getLinks() as unknown as Record<string, unknown>).bc_v2_app_key || '').trim();
+    return /^bc_pk_[A-Za-z0-9_]{20,194}$/.test(k) ? { Authorization: `Bearer ${k}` } : {};
+}
+
 /** True when reports can be sent (the default); false = feedback_endpoint emptied, reports off. */
 export function usesBetterCommunity(): boolean { return feedbackEndpoint() !== ''; }
 
@@ -137,7 +153,8 @@ export async function fetchFeedbackConfig(force = false): Promise<FeedbackRemote
     try {
         const r = await fetch(`${ep}/config`, { signal: tm.signal, headers: { Accept: 'application/json' } });
         if (!r.ok) return null;
-        const cfg = await r.json() as FeedbackRemoteConfig;
+        const j = await r.json();
+        const cfg = (v2Mode() ? feedbackConfigFromV2(j) : j) as FeedbackRemoteConfig;
         cfgCache = { at: Date.now(), cfg };
         return cfg;
     } catch { return null; }
@@ -197,7 +214,8 @@ export async function testFeedbackEndpoint(): Promise<EndpointTest> {
     try {
         const r = await fetch(`${ep}/config`, { signal: tm.signal, headers: { Accept: 'application/json' } });
         if (!r.ok) return { state: 'unreachable', url: ep, why: `HTTP ${r.status}` };
-        const cfg = await r.json() as FeedbackRemoteConfig;
+        const j = await r.json();
+        const cfg = (v2Mode() ? feedbackConfigFromV2(j) : j) as FeedbackRemoteConfig;
         cfgCache = { at: Date.now(), cfg };
         return cfg?.enabled ? { state: 'ok', url: ep, cfg } : { state: 'disabled', url: ep, cfg };
     } catch (e) {
@@ -218,7 +236,15 @@ export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOf
     const tm = withTimeout(30_000);
     let r: Response;
     try {
-        r = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(await creatorHeader()) }, body: JSON.stringify(body) });
+        if (v2Mode()) {
+            // v2 contract: snake_case, flat meta, `content_type` attachments, a problem document on
+            // refusal. Re-expressed as the v1 answer it stands for, so the switch below serves both.
+            const v2 = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...v2Headers() }, body: JSON.stringify(feedbackToV2(body)) });
+            const a = feedbackAnswerFromV2(v2.status, await v2.json().catch(() => ({})));
+            r = new Response(JSON.stringify(a.body), { status: a.status, headers: { 'Content-Type': 'application/json' } });
+        } else {
+            r = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(await creatorHeader()) }, body: JSON.stringify(body) });
+        }
     } catch {
         tm.done();
         if (opts.queueOnOffline !== false) enqueue(body);

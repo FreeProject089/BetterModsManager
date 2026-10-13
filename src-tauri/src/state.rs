@@ -25,6 +25,10 @@ pub struct ConnectedServerRepo {
     /// quietly overwrite local edits on the second kind.
     #[serde(default)]
     pub auto_sync_mode: Option<String>,
+    /// Followed: checked on a schedule for updates to the user's mods (commands/repo_follow.rs).
+    /// None = not followed. Absent from older data.json files, and not written when None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follow: Option<crate::commands::repo_follow::RepoFollow>,
 }
 
 /// One key on the keyring: a stable id, a name a person chose, and where the file is.

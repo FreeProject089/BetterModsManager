@@ -56,10 +56,15 @@ pub async fn fetch_plugin_catalog(
         return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
     }
 
-    let catalog: CatalogResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))?;
+    // Through the universal format: a v1 document parses as it always has; a universal
+    // catalogue, a BetterCommunity v2 feed or a signed envelope is read as its plugin view,
+    // and one whose signature does not hold is refused, never served.
+    let text = resp.text().await.map_err(|e| format!("Network error: {}", e))?;
+    let catalog: CatalogResponse = match crate::commands::catalog_convert::legacy_for(&app, &text, "plugin", Some(url))? {
+        Some(v) => serde_json::from_value(v),
+        None => serde_json::from_str(&text),
+    }
+    .map_err(|e| format!("Parse error: {}", e))?;
 
     log_line(format!(
         "[PLUGINS] Fetched catalog: {} plugins",
