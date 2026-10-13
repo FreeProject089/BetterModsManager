@@ -1,6 +1,6 @@
 # Changelog v1.0.2 (depuis 60b5f6d, le build 1.0.1)
 
-La 1.0.2 est la version qui remet les mises à jour en état de marche, la première publiée sur le canal stable depuis la 1.0.0, et celle qui garde une preuve de chaque réponse que vous donnez sur la confidentialité.
+La 1.0.2 est une grosse mise à jour : les mises à jour remarchent en un clic, BMM gagne un centre d'activité, un hub d'outils, une page Server Repo plus simple avec le suivi de repos, des Paramètres et des catalogues plus clairs, de meilleurs studios, et il garde une preuve de chaque réponse que vous donnez sur la confidentialité. C'est la première version du canal stable depuis la 1.0.0.
 
 ## [FIXED] Mettre BMM à jour
 ### L'installateur démarre, ou dit pourquoi il n'a pas démarré
@@ -16,17 +16,43 @@ La 1.0.2 est la version qui remet les mises à jour en état de marche, la premi
 - Les deux manifestes signés expirent 7 jours après la signature : ils sont donc signés au moment de publier, puis renouvelés deux fois par semaine par la tâche de re-signature.
 - BMM choisit lui-même l'installateur parmi les entrées signées : une release dont le premier fichier n'est pas celui qui est signé n'échoue plus pour rien.
 
-### Une fenêtre de mise à jour plus simple
-- Vérification, notes de version, téléchargement, contrôle, installation, redémarrage : un seul bouton (« Télécharger et installer »).
-- Le téléchargement affiche sa progression en Mo et reprend où il s'était arrêté si la connexion tombe ; un fichier repris qui échoue au contrôle est retéléchargé depuis le début.
-- Signature et SHA-256 sont vérifiés avant que quoi que ce soit soit écrit ou lancé.
-- Tout échec reste dans la fenêtre avec son explication, un bouton « Télécharger depuis la page de la version » et « Réessayer ».
+### Un clic : télécharger, vérifier, installer
+- « Télécharger la mise à jour » fait tout depuis BMM, pour les versions stables et les préversions : plus besoin d'aller sur GitHub.
+- L'installateur est vérifié avant de s'exécuter, dans cet ordre : le `update-manifest.json` signé de la release ; sinon le `update.json` signé de la release, qui liste maintenant `BMM-Setup.exe` avec son SHA-256 ; sinon BMM dit clairement ce qui n'a pas pu être vérifié et vous choisissez « Installer quand même » ou « Annuler » (Annuler par défaut). Un fichier qui ne correspond pas à ce que la release annonce est signalé en rouge.
+- La fenêtre indique quelle vérification a réussi, montre le téléchargement (taille, vitesse, temps restant), puis « Vérification du fichier… », puis « Lancement de l'installateur… ».
+- Les installations faites avec BetterInstaller se mettent à jour sans question : BMM lance `BMM-Setup.exe --update`, qui attend la fermeture de BMM, installe par-dessus en gardant dossier, composants, raccourcis et choix, puis relance BMM.
+- Canal stable ou préversions, vérification en arrière-plan au choix (toutes les 6 h ou chaque jour), « Me le rappeler demain » et « Installer au prochain lancement ».
+- Tout échec reste affiché avec son explication, « Réessayer » et « Ouvrir la page de la release ».
 
 ### Release et versions
 - Une seule version partout : `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock` et la configuration de l'installateur disent tous 1.0.2. La « 1.0.1 » publiée s'annonçait comme 1.0.0 : les copies 1.0.0 installées ne se la voyaient jamais proposer.
 - Nouveau contrôle `check-release-versions` : il échoue sur tout écart de version et, en mode release, vérifie que les deux manifestes sont signés pour cette version au moment de publier, que update.json nomme ce paquet, et que la release ne porte qu'un installateur.
 - La release est publiée comme « Latest », pas comme pré-version : le canal stable et BetterInstaller la voient.
 - Les anciennes installations continuent de se mettre à jour : la 0.9.11 lance `BMM-Setup.exe` (le seul installateur de la release), les 1.0.x installées par BetterInstaller lisent `update.json` + `bmm.bpkg`, les autres 1.0.x lisent le `update-manifest.json` signé.
+
+## [NEW] Centre d'activité
+- Un bouton dans la barre de titre montre toutes les tâches en cours de BMM (activation de mods, téléchargements, synchronisation de repos, scans, installations, exports, tâches planifiées, Laya, benchmarks) avec un anneau de progression et un compteur.
+- Son panneau liste les tâches en cours avec leur étape, leur progression, le temps écoulé et Annuler quand c'est possible, et les 30 dernières terminées (réussies, en échec avec le message, ou annulées).
+
+## [NEW] Outils BMM
+- Un hub d'outils (palette de commandes, barre de navigation, DevTools) avec sept outils en lecture seule : doublons, résumé des conflits, espace disque par profil et par mod, comparaison de profils, mods manquants et orphelins, vérificateur d'empreinte, validateur de manifestes et de catalogues. Chaque résultat se copie ou s'exporte en JSON ou CSV.
+
+## [IMPROVED] Server Repo
+- Simple par défaut : les étapes guidées pour synchroniser ou héberger un repo ; tout le reste est dans une zone « Outils avancés » avec recherche, qui se souvient de ce que vous avez ouvert.
+- Nouveaux outils : créer un repo depuis un profil, un modpack ou un dossier ; valider un repo ; fixer sa version ; l'aperçu tel que les clients le voient ; lien de partage ; fichiers d'hébergement statique pour GitHub Pages ou nginx.
+- « Valider » se fait en un passage rapide, avec progression et Annuler, et ne relit que les fichiers qui ont changé. « Convertir » montre toujours d'abord un essai à blanc, puis demande avant d'écrire, avec sauvegarde et nouvelle signature.
+- Suivre un repo : BMM le vérifie selon la fréquence choisie et vous prévient, télécharge ou applique la mise à jour (jamais pendant qu'un jeu tourne). Le serveur de repo de BMM fournit un flux Atom et répond « non modifié » quand rien n'a changé.
+- Un mod garde le même identifiant d'une synchronisation à l'autre, même renommé ou réimporté ; les doublons laissés par les anciennes versions sont réparés une fois au démarrage, après une sauvegarde.
+
+## [IMPROVED] Paramètres, catalogues, crédits
+- Paramètres : un sommaire de toutes les cartes en sept groupes, une recherche qui masque ce qui ne correspond pas (Ctrl+F), des cartes mieux rangées.
+- Catalogue d'applications : chaque carte montre son état et l'action suivante (Installer, Lancer, Mettre à jour, Réessayer), filtre par état d'installation, tri, message clair quand une source est hors ligne, descriptions et README affichés en mode sûr.
+- Catalogues : un format versionné lit toutes les anciennes variantes et les flux signés de BetterCommunity v2 ; les sources sont mises en cache, rafraîchies seulement si elles ont changé, et une source en panne ne masque plus les autres.
+- Crédits : contributeurs du code générés depuis l'historique des quatre dépôts, avec leur nombre de commits, dans des cartes plus propres.
+
+## [IMPROVED] Studios Replay et Animation
+- Replay Studio : une timeline pour rogner, couper n'importe où, poser des repères, annuler et rétablir, avec aperçu en direct et exports plus légers ; corrections sur les durées, l'estimation de taille, les coupes et le sélecteur d'élément.
+- Animation Studio : une animation peut être une suite d'étapes avec leur propre timing, prévisualisée en direct, réordonnée, exportée et importée en JSON.
 
 ## [NEW] Preuve du consentement : « Mes consentements »
 - Chaque réponse sur les Conditions d'utilisation, la Politique de confidentialité et la télémétrie laisse une preuve : le document, sa version, le SHA-256 du texte exact affiché, la langue, votre réponse (et chaque catégorie), l'heure, l'endroit où vous avez répondu (installateur, premier lancement, Paramètres, un lien `bmm://`, l'API locale, la ligne de commande, le serveur MCP, un import) et la version de BMM.

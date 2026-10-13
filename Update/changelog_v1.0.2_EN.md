@@ -1,6 +1,6 @@
 # Changelog v1.0.2 (since 60b5f6d, the 1.0.1 build)
 
-1.0.2 is the release that makes updating work again, the first one published on the stable channel since 1.0.0, and the one that keeps a proof of every privacy answer you give.
+1.0.2 is a big update: updating works again in one click, BMM gets an activity centre, a Tools hub, a simpler Server Repo page with followed repos, cleaner Settings and catalogues, better studios, and it keeps a proof of every privacy answer you give. It is the first release on the stable channel since 1.0.0.
 
 ## [FIXED] Updating BMM
 ### The installer now starts, or says why it did not
@@ -16,17 +16,43 @@
 - Both signed manifests expire 7 days after signing, so they are signed at publish time and renewed twice a week by the re-signing job.
 - BMM picks the installer among the signed entries itself, so a release whose first asset is not the signed one no longer fails for nothing.
 
-### A simpler update window
-- Check, release notes, download, verification, install, restart: one button (« Download and install »).
-- The download shows its progress in MB and resumes where it stopped if the connection drops; a resumed file that fails the check is downloaded again from the start.
-- Signature and SHA-256 are checked before anything is written or started.
-- Any failure stays in the window with its explanation, a « Download from the release page » button and « Try again ».
+### One click: download, check, install
+- « Download update » does everything from BMM, for stable releases and pre-releases: no trip to GitHub.
+- The installer is checked before it runs, in this order: the release's signed `update-manifest.json`; else the release's signed `update.json`, which now lists `BMM-Setup.exe` with its SHA-256; else BMM says plainly what could not be checked and you choose « Install anyway » or « Cancel » (Cancel is the default). A file that does not match what the release declares is shown in red.
+- The window says which check passed, shows the download (size, speed, time left), then « Checking the file… », then « Starting the installer… ».
+- Installs made with BetterInstaller update with no questions: BMM runs `BMM-Setup.exe --update`, which waits for BMM to close, installs over it keeping your folder, components, shortcuts and choices, and starts BMM again.
+- Stable or pre-release channel, an optional background check (every 6 h or daily), « Remind me tomorrow » and « Install on next launch ».
+- Any failure stays in the window with its explanation, « Try again » and « Open the release page ».
 
 ### Release and versions
 - One version everywhere: `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock` and the installer configuration all say 1.0.2. The published « 1.0.1 » announced itself as 1.0.0, so installed 1.0.0 copies were never offered it.
 - New gate `check-release-versions`: fails on any version mismatch, and in release mode checks that both manifests are signed for this version at publish time, that update.json names this package, and that the release carries a single installer.
 - The release is published as Latest, not as a pre-release, so the stable channel and BetterInstaller see it.
 - Older installs keep updating: 0.9.11 runs `BMM-Setup.exe` (the only installer on the release), 1.0.x copies installed by BetterInstaller read `update.json` + `bmm.bpkg`, other 1.0.x copies read the signed `update-manifest.json`.
+
+## [NEW] Activity centre
+- A button in the title bar shows every task BMM is running (mod activation, downloads, repo sync, scans, installs, exports, scheduled tasks, Laya jobs, benchmarks) with a progress ring and a count.
+- Its panel lists running tasks with their step, progress, elapsed time and Cancel where the task can stop, and the last 30 finished ones (done, failed with the message, or cancelled).
+
+## [NEW] BMM Tools
+- A Tools hub (command palette, navigation bar, DevTools) with seven read-only tools: duplicate finder, conflict summary, disk usage per profile and mod, profile comparison, missing and orphaned mods, hash checker, manifest and catalogue validator. Every result can be copied or exported as JSON or CSV.
+
+## [IMPROVED] Server Repo
+- Simple by default: the guided steps to sync or host a repo; everything else sits in a searchable « Advanced tools » area that remembers what you opened.
+- New tools: create a repo from a profile, a modpack or a folder; validate a repo; set its version; preview it as clients see it; share link; static hosting files for GitHub Pages or nginx.
+- « Validate » is one fast pass with progress and Cancel, and only re-reads files that changed. « Convert » always shows a dry run, then asks before writing, with a backup and a new signature.
+- Follow a repo: BMM checks it on a schedule you choose and notifies you, downloads, or applies the update (never while a game is running). BMM's own repo server serves an Atom feed and answers « not modified » when nothing changed.
+- A mod keeps the same id across re-syncs, renames and re-imports; duplicates left by older versions are repaired once at start-up, after a backup.
+
+## [IMPROVED] Settings, catalogues, credits
+- Settings: an index of every card in seven groups, a search that hides what does not match (Ctrl+F), tidier cards.
+- App catalogue: each card shows its state and next action (Install, Launch, Update, Retry), filters by install state, sorting, a clear message when a source is offline, descriptions and READMEs rendered safely.
+- Catalogues: one versioned format reads every older variant and the signed feeds of BetterCommunity v2; sources are cached, refreshed only when they changed, and one failing source no longer hides the others.
+- Credits: code contributors generated from the history of the four repositories, with commit counts, in cleaner cards.
+
+## [IMPROVED] Replay and Animation studios
+- Replay Studio: a timeline to trim, cut anywhere, add markers, undo and redo, with live preview and lighter exports; fixes to times, size estimates, cuts and the element picker.
+- Animation Studio: an animation can be a sequence of steps with their own timing, previewed live, reordered, exported and imported as JSON.
 
 ## [NEW] Proof of consent: « My consents »
 - Every answer about the Terms of Service, the Privacy Policy and telemetry leaves a receipt: the document, its version, the SHA-256 of the exact text you were shown, the language, your answer (and each category), the time, where you answered (installer, first launch, Settings, a `bmm://` link, the local API, the command line, the MCP server, an import) and the BMM version.
