@@ -417,6 +417,7 @@ Two shapes sit outside that rule:
 | `POST` | `/api/repo/host` | `repo.write` | `serveDir`*, `port`, `uploadLimit` → `202`, `409` if already serving | ✓ |
 | `DELETE` | `/api/repo/host` | `repo.write` | — | |
 | `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · writes `repo.json` for a folder that is ALREADY hosted. Needs no profile and copies nothing — it reads the directory, writes one file, and returns the diff. Synchronous, so a publish script can act on the result | |
+| `POST` | `/api/repo/convert` | `repo.write` | `path`* (repo folder or its `repo.json`), `dryRun`, `rehash` (default true), `sign` (default true) · converts the manifest to the current format (1.0): fills the keys older BMMs left out, re-hashes the files, stamps `format_version`, backs up the old manifest as `repo.json.v<old>-<stamp>.bak`, re-signs with this BMM's key. `dryRun` returns the plan and writes nothing. Synchronous; returns `{ok, report}` with every change | |
 | `POST` | `/api/repo/publish-ssh` | `repo.write` | `dir`* · uploads over SSH **using the connection already saved in the app**. The host, the user and the key are deliberately NOT parameters: a caller able to name them could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. Driven through the UI, so the upload is visible and cancellable → `202` | |
 | `POST` | `/api/repo/fetch-ssh` | `repo.write` | `dir`* · the same rule, and it matters more in this direction: publishing writes to a server the owner chose, fetching writes to the owner's own disk. Only the destination is a parameter, and the backend refuses any remote path that would escape it → `202` | |
 | `POST` | `/api/repo/extras` | `repo.write` | `url`*, `kind`*, `id`*, `password` · takes ONE thing a repo carries besides mods. `creatorId` is not accepted here either, for the same reason as `/api/repo/sync`. The entry is looked up in the manifest BMM fetches — a caller cannot describe its own `{kind, url, sha256}`, because that would be using BMM's installer to install arbitrary files and the hash check would be checking the caller's own number. A plugin or automation arrives **disabled**; a catalogue is followed; a mod list is saved and its path returned | |
@@ -540,8 +541,8 @@ through. A note goes stale in silence; a check does not.
 
 ## See also
 
-- [MCP server reference](doc-page:reference/mcp) — the 92 tools an AI client can call, and which ones need BMM open
-- [CLI reference](doc-page:reference/cli) — the same binary’s 78 subcommands, for a terminal or a `.bat`
+- [MCP server reference](doc-page:reference/mcp) — the 93 tools an AI client can call, and which ones need BMM open
+- [CLI reference](doc-page:reference/cli) — the same binary’s 79 subcommands, for a terminal or a `.bat`
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

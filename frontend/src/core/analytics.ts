@@ -717,6 +717,15 @@ export function setInstallerTelemetryPreselect(on: boolean, cats: { usage?: unkn
     const pick = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
     if (on) storeCats({ usage: pick(cats.usage, cur.usage), perf: pick(cats.perf, cur.perf), laya: pick(cats.laya, cur.laya) });
 }
+/** The installer's privacy step answered "telemetry on" (consent recorded Rust-side by
+ *  consume_installer_handoff): store the categories it picked. A category the installer did
+ *  not send keeps its current value. No pre-selection flag: there is nothing left to ask. */
+export function applyInstallerTelemetryDecision(cats: { usage?: unknown; perf?: unknown; laya?: unknown } = {}): void {
+    const cur = storedCats();
+    const pick = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
+    storeCats({ usage: pick(cats.usage, cur.usage), perf: pick(cats.perf, cur.perf), laya: pick(cats.laya, cur.laya) });
+    try { localStorage.removeItem(PRESELECT_KEY); } catch { }
+}
 function installerPreselect(): boolean {
     try { return localStorage.getItem(PRESELECT_KEY) === '1'; } catch { return false; }
 }

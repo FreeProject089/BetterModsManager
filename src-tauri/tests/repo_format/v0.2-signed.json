@@ -1,0 +1,31 @@
+{
+  "name": "Signed Repo",
+  "description": "Mods for the squadron",
+  "author": "Someone",
+  "author_id": "abababababababababababababababababababababababababababababababab",
+  "signature": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+  "version": "1.0.0",
+  "game_name": "DCS World",
+  "created_at": "2026-03-22T10:00:00+00:00",
+  "seed": "squadron-seed",
+  "upload_limit": null,
+  "profiles": [
+    {
+      "id": "prof-1",
+      "name": "Main",
+      "game_name": "DCS World",
+      "mods": [
+        {
+          "id": "cool-mod",
+          "name": "Cool Mod",
+          "version": "1.0",
+          "author": null,
+          "description": null,
+          "tags": [],
+          "files": [{ "relative_path": "Data/a.dds", "size": 2048, "sha256_hash": "aa11", "chunks": null }],
+          "download_links": []
+        }
+      ]
+    }
+  ]
+}

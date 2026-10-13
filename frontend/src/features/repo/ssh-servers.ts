@@ -244,7 +244,7 @@ export function openSshServers(focus?: string): void {
             out.textContent = t('repo.ssh.testing');
             try {
                 const r = (await invoke('ssh_test_connection', { target: draft, secret })) as TestResult;
-                out.innerHTML = `<span style="color:var(--success);">${escHtml(t('repo.ssh.testOk'))}</span> `
+                out.innerHTML = `<span style="color:var(--success);">${escHtml(t('repo.ssh.testOk', { fp: r.fingerprint || '?' }))}</span> `
                     + escHtml(`${r.user || draft.user}@${draft.host} · ${r.entries} · ${r.writable ? t('sshsrv.writable') : t('sshsrv.notWritable')}`);
             } catch (e) {
                 out.innerHTML = `<span style="color:var(--danger);">${escHtml(explainSsh(String(e)))}</span>`;

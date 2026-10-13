@@ -63,7 +63,7 @@ BetterCommunity hosting.
 | `author` | string \| null | Display name. |
 | `author_id` | string \| null | The author's BetterCommunity id, when they have one. |
 | `signature` | string \| null | Optional integrity signature over the manifest. |
-| `version` | string | Manifest version. BMM writes `"1.0"`. |
+| `version` | string | The **repo's** version — the author's own number. Not the format: that is `format_version`. |
 | `game_name` | string | Free text; groups profiles by game. |
 | `created_at` | string | Timestamp, RFC 3339. |
 | `seed` | string \| null | |
@@ -78,6 +78,7 @@ BetterCommunity hosting.
 | `require_login` (`requireLogin`) | bool | `false` | Every file download must present a BetterCommunity identity. |
 | `files_base_url` (`filesBaseUrl`) | string | the repo's own URL | Serve files from a different host than the manifest. |
 | `files_layout` (`filesLayout`) | string | `mods/{id}/{path}` | Where a file sits, relative to the base. See §5. |
+| `format_version` (`formatVersion`) | string | none (legacy) | The **format** the manifest is written in. BMM writes `"1.0"`, signed with the rest. See §9. |
 
 > A field marked required but typed `… | null` still needs its key. Omitting it is a parse
 > error, and a parse error means the whole repo reads as empty — not as "partly broken".
@@ -252,3 +253,80 @@ that cannot be recovered from a file listing.
 | Every sync re-downloads everything | Sizes are rounded, or `mtime` is missing, or the hash is empty. |
 | Individual files 404 | `files_base_url` / `files_layout` do not match where the files really are. Build one URL by hand from §5 and open it. |
 | A modpack is missing for some users | `share_mode`, and only when served by the mini-server (§6). |
+| BMM says « format 2.0 (newer than this BMM) » and refuses the repo | The manifest declares a format major this BMM does not read. Update BMM; nothing is wrong with the repo. |
+| The repo shows « legacy 0.x » | Written by a BMM from before format versions. It still syncs; §9 says how to convert it. |
+
+---
+
+## 9. Format versions, and converting an old manifest
+
+Until format 1.0 a manifest said nothing about its own shape — `version` is the repo's
+version, not the format's. A manifest now declares it at the top level:
+
+```json
+{ "name": "My Repo", "…": "…", "format_version": "1.0" }
+```
+
+Every writer in BMM (export, update, manifest-only, extras, modpacks, refresh from server)
+stamps it **before** signing, so the signature covers it.
+
+### 9.1 The registry
+
+| Format | Name | BMM wrote it from | What it added |
+|---|---|---|---|
+| `0.1` | first export | 2026-03 | name, description, author, version, game, profiles; mods with tags and files (path, size, sha256) |
+| `0.2` | signed | 2026-03 | `author_id` + `signature` (ed25519), `seed`, `upload_limit`; mod `download_links`; file chunks |
+| `0.3` | modpacks | 2026-04 | `modpacks`, `require_login`; zipped mods (`archive`), dependencies, changelog, update sources; profile icon and colour |
+| `0.4` | hosting | 2026-08 | `files_base_url`, `files_layout`, file `mtime`, `extras`, sealed credentials |
+| `1.0` | versioned | 2026-10 | `format_version`; every required key written; the signature covers the format |
+
+The `0.x` numbers are given after the fact: those manifests never carried them. BMM
+recognises them by **shape** — the newest marker present wins (a `files_layout` makes it
+0.4 even if nothing else from 0.4 is there).
+
+### 9.2 What BMM does with each
+
+| What the manifest says | Label on the Server Repo page | What happens |
+|---|---|---|
+| `format_version: "1.0"` | **format 1.0** | Read as-is. |
+| nothing, shape 0.2 to 0.4 | **legacy 0.x — convert** | Read as-is. Converting is recommended, not required. |
+| nothing, shape 0.1 (no `download_links`) | **legacy 0.1 — convert** | Today's reader refuses this shape whole — it used to show as an empty repo. BMM now reads it through an in-memory upgrade, **unless it is signed**: filling keys changes the signed bytes, so a signed 0.1 stays unreadable until its owner converts it. |
+| `format_version: "1.x"`, x above 0 | format 1.x | Read; fields this BMM does not know are ignored. Never converted "down". |
+| `format_version: "2.0"` or higher | format 2.0 (newer than this BMM) | **Refused**, with that reason. Update BMM. |
+| `format_version` that is not a number | — | Refused as invalid. |
+
+A manifest that claims `1.0` but lacks a required key is treated like a legacy one: read
+through the upgrade, offered for conversion.
+
+### 9.3 Converting
+
+The converter is one piece of code reached four ways — the **Convert…** button next to the
+format badge on the Server Repo page, `POST /api/repo/convert`, `bmm repo-convert`, and the
+MCP tool `bmm_repo_convert`. It always:
+
+1. **Plans first** (dry run): every key it would add, every value it would normalise
+   (`""` → `null` for description and author, camelCase spellings → snake_case, bare-string
+   tags → tag objects), every hash it would fill or correct, every file it cannot find.
+2. **Re-hashes** every listed file from the folder, with the exporter's own rule (whole-file
+   sha256, plus a chunk table above 4 MiB), following `files_layout` and zipped-mod archives.
+   Paths that would leave the folder are never read. Files hosted elsewhere
+   (`files_base_url`) are left as they are. A missing file keeps its entry and is reported.
+3. Checks the result **loads in BMM's real reader** before writing anything.
+4. **Backs up** the old manifest beside it as `repo.json.v<old>-<yyyymmdd-hhmmss>.bak`
+   (never served: the servers only serve `repo.json` and `info.json` at the root).
+5. Stamps `format_version`, **re-signs** with this BMM's key, and writes through a temporary
+   file renamed over the old one, so a crash leaves the old manifest, never half a new one.
+
+Re-signing with your key means a repo first signed by **someone else** changes author id —
+the plan says so before you confirm. Subscribers that pinned the old id see the change.
+Converting an up-to-date manifest is a no-op: nothing is written and the signature is kept.
+
+```text
+bmm repo-convert "D:/Repos/MyRepo" --dry-run   # the plan; works with BMM closed
+bmm repo-convert "D:/Repos/MyRepo"             # convert + re-sign (BMM running)
+bmm repo-convert "D:/Repos/MyRepo" --no-sign   # convert without the app, UNSIGNED
+```
+
+The mini-servers (`server.js`, the multi-repo hub) report the format of what they serve in
+their startup log and in `/monitoring.json` (`repoFormat`), and keep `format_version` when the
+admin dashboard rewrites the manifest.

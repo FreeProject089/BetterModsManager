@@ -791,6 +791,12 @@ const MASCOT_SELECTORS = [
     // which do not exist reads as if it themes them.
     '#settings-tasky-icon', '#tasky-mascot-img',
     '.tut-avatar img', '.tut-min-mascot', '.tut-finish-mascot',
+    // Every other Tasky picture, by its file: the empty states, the update and Ko-fi dialogs,
+    // onboarding, the crash help line. Listing them one id at a time is how this table kept
+    // missing the ones added later; a theme that replaces the mascot (« BMM Logo ») replaces
+    // all of them. Once swapped, the src no longer matches — restoring goes through
+    // [data-bmm-orig] (applyAssets below).
+    'img[src$="Tasky.png"]', 'img[src$="Tasky_Happy.png"]',
 ];
 function applyAssets(theme: BmmTheme): void {
     const a = theme.assets || {};
@@ -802,9 +808,19 @@ function applyAssets(theme: BmmTheme): void {
             else if (el.dataset.bmmOrig) { el.src = el.dataset.bmmOrig; }   // restore default
         });
     };
+    // The boot splash (#ld-logo; #loader-img was its old id) takes the loader image first.
+    const LOADERS = new Set(['#loader-img', '#ld-logo']);
     const applyMascot = () => {
-        setImg('#loader-img', mascot || a.loader);
-        for (const sel of MASCOT_SELECTORS) if (sel !== '#loader-img') setImg(sel, mascot);
+        for (const sel of LOADERS) setImg(sel, mascot || a.loader);
+        for (const sel of MASCOT_SELECTORS) if (!LOADERS.has(sel)) setImg(sel, mascot);
+        // A picture a previous theme swapped no longer matches its file-name selector (its src
+        // is that theme's now): [data-bmm-orig] finds it, to take this theme's mascot or to go
+        // back to its own picture.
+        document.querySelectorAll<HTMLImageElement>('img[data-bmm-orig]').forEach((el) => {
+            if (el.id === 'loader-img' || el.id === 'ld-logo') { if (!mascot && !a.loader) el.src = el.dataset.bmmOrig || el.src; return; }
+            const want = mascot || el.dataset.bmmOrig;
+            if (want && el.getAttribute('src') !== want) el.src = want;
+        });
     };
     applyMascot();
     // Re-apply to mascots created later (e.g. the tutorial hub opens on demand).

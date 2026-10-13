@@ -867,6 +867,8 @@ fn export_server_repo_blocking(
         }
     }
 
+    // The format goes in BEFORE signing: it is part of what is signed (repo_format).
+    repo.format_version = Some(super::repo_format::CURRENT.to_string());
     // Sign the repo (using compact JSON for the signature payload to be stable)
     let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
     let (author_id, signature) = super::security::sign_message(&handle, json_to_sign.as_bytes())?;
@@ -1252,6 +1254,7 @@ pub async fn update_server_repo(
             step: "repo.stepFinalizing".to_string(), progress: 92.0, current_file: "repo.json".to_string(),
         });
         repo.author_id = None; repo.signature = None;
+        repo.format_version = Some(super::repo_format::CURRENT.to_string());
         let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
         let (author_id, signature) = super::security::sign_message(&handle2, json_to_sign.as_bytes())?;
         repo.author_id = Some(author_id); repo.signature = Some(signature);
@@ -2524,9 +2527,20 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: 
     // "install it, and mark the mod unverified".
     let body = res.text().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
     let base = target_url.trim_end_matches("repo.json").trim_end_matches('/').to_string();
+    // The format gate (repo_format): a manifest declaring a format this BMM does not know
+    // is refused with a reason, rather than half-read with every field it adds ignored.
+    if let Ok(doc) = serde_json::from_str::<serde_json::Value>(body.trim_start_matches('\u{feff}')) {
+        crate::commands::repo_format::read_gate(&crate::commands::repo_format::detect(&doc))
+            .map_err(str::to_string)?;
+    }
     let mut repo: ServerRepo = match serde_json::from_str(&body) {
         Ok(r) => r,
-        Err(_) => return discovered_repo(&base, &client).await,
+        // The first-export shape (format 0.1) has no `download_links`, and the strict reader
+        // refused it whole — the repo looked EMPTY. Read through the in-memory upgrade.
+        Err(_) => match crate::commands::repo_convert::read_legacy(&body) {
+            Some(r) => r,
+            None => return discovered_repo(&base, &client).await,
+        },
     };
 
     // A manifest that exists but does not list everything the server holds. The extra mods
@@ -2602,6 +2616,8 @@ async fn discovered_repo(base: &str, client: &reqwest::Client) -> Result<ServerR
         // Nothing to seal: this manifest is SYNTHESISED from a directory listing, so there
         // is no export screen behind it and nobody asked for anything to be carried.
         credentials: None,
+        // Synthesised here from a listing, not read from a manifest: it claims no format.
+        format_version: None,
         profiles: vec![crate::models::repo::RepoProfile {
             id: "discovered".to_string(),
             name: "Server".to_string(),
@@ -3666,6 +3682,39 @@ mod tests {
     use std::io::Write;
     use tempfile::NamedTempFile;
 
+    // repo_format restates two rules of this file so the CLI can mount it alone. These pin
+    // the copies to the originals: a converter that hashed with another chunk size, or looked
+    // for files under another layout, would "fix" every hash of a correct manifest.
+    #[test]
+    fn chunk_size_matches_the_sync() {
+        assert_eq!(super::super::repo_format::CHUNK_SIZE, CHUNK_SIZE as u64);
+    }
+
+    #[test]
+    fn layout_matches_the_sync() {
+        for layout in [None, Some(""), Some("  "), Some("addons/{id}/{path}"), Some("/flat/{path}")] {
+            for (id, rel) in [("m", "a.txt"), ("cool-mod", "Data\\sub\\b.esp")] {
+                assert_eq!(
+                    super::super::repo_format::file_tail(layout, id, rel),
+                    mod_file_tail(layout, id, rel),
+                    "{layout:?} {id} {rel}"
+                );
+            }
+        }
+    }
+
+    /// The converter's chunk table is the exporter's, entry for entry.
+    #[test]
+    fn converter_hashes_like_the_exporter() {
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(&vec![3u8; CHUNK_SIZE + 77]).unwrap();
+        let (hash, chunks) = compute_file_hash_and_chunks(file.path(), true).unwrap();
+        let (_, hash2, chunks2) = super::super::repo_format::hash_file(file.path()).unwrap();
+        assert_eq!(hash, hash2);
+        let a = serde_json::to_value(chunks).unwrap();
+        assert_eq!(a, serde_json::Value::Array(chunks2.unwrap()));
+    }
+
     #[test]
     fn test_compute_local_chunk_hashes() {
         let mut file = NamedTempFile::new().unwrap();
@@ -4375,6 +4424,7 @@ pub(crate) fn generate_repo_manifest_sync(
     // hashing, so a payload that still contained them would never verify.
     repo.author_id = None;
     repo.signature = None;
+    repo.format_version = Some(super::repo_format::CURRENT.to_string());
     let signed = match sign(serde_json::to_string(&repo).map_err(|e| e.to_string())?.as_bytes()) {
         Ok((author_id, signature)) => {
             repo.author_id = Some(author_id);

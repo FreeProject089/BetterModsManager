@@ -287,9 +287,9 @@ async function renderPlan(m: ModalHandle, pack: any, opts: ActivateOptions): Pro
             m.footer.innerHTML = `
                 <div class="modal-footer-start">
                     ${opts.fromPicker ? `<button type="button" class="btn btn-ghost" data-mpa="back">${uiIcon('arrow-left', 14)}${escHtml(t('common.back'))}</button>` : ''}
+                    ${plan.alreadyOn.length ? `<button type="button" class="btn btn-outline-danger" data-mpa="off">${escHtml(t('modpack.deactivate'))}</button>` : ''}
                     <span class="modal-footer-note mpa-foot-note">${uiIcon('activity', 14)}${escHtml(t('modpack.act.bgNote'))}</span>
                 </div>
-                ${plan.alreadyOn.length ? `<button type="button" class="btn btn-outline-danger" data-mpa="off">${escHtml(t('modpack.deactivate'))}</button>` : ''}
                 <button type="button" class="btn btn-primary" data-mpa="go"${plan.packOrder.length ? '' : ' disabled'}>${uiIcon('run', 14)}${escHtml(primary)}</button>`;
         }
 

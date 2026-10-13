@@ -25,16 +25,6 @@
     transition: opacity .18s ease, transform .18s ease;
 }
 
-/* When a highlighted step target sits UNDER the panel, the tracker adds this so the panel
-   fades back automatically and the control shows through — pointer-events off, so a click even
-   reaches the control behind it. Automatic: it no longer waits on the "Show me" button, and
-   the tracker removes the class the moment the target is no longer covered. */
-.tut-engine-panel.tut-dodge {
-    opacity: 0.26;
-    transform: scale(0.985);
-    pointer-events: none;
-}
-
 /* ── Topbar: the chips can no longer reach the buttons ───────────────────── */
 .tut-card-topbar {
     display: grid;
@@ -521,7 +511,9 @@ body .tut-engine-panel.minimized.pill-float {
     border-radius: 999px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     cursor: grab;
-    z-index: 2000100;
+    /* Same layer as the guide window: above every dialog, so a lesson that opens one is
+       never hidden by it. */
+    z-index: 2000450;
 }
 .tut-engine-panel.minimized.pill-float.dragging { cursor: grabbing; }
 
@@ -758,3 +750,281 @@ body.tut-docked:not(.tut-dock-side) .tut-dock-resize-v { display: block; }
 .tut-ico-warn  { color: var(--warning); }
 .tut-ico-ok    { color: var(--success); }
 .tut-ico-heart { color: var(--danger); }
+
+/* ═══ The guide window ═════════════════════════════════════════════════════════
+   The lesson is a window of its own (tutorial-engine.ts « The guide window »): floating by
+   default, dockable left / right / bottom, moved by its title bar, resized by its grip. It
+   sits above every dialog — a lesson that opens one must stay readable — and steps aside
+   when its target ends up under it, so it never needs to fade or hide.
+
+   Every rule is scoped `:not(.minimized)`: the pill keeps its own rules above, and the same
+   specificity here would otherwise win on file order. The dock-era rules keyed on
+   body.tut-dock-* no longer apply: the engine stopped setting those classes. */
+.tut-engine-panel.tgw:not(.minimized) {
+    position: absolute;
+    z-index: 2000450;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-elevated);
+    animation: tgwIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tut-engine-panel.tgw.tgw-float:not(.minimized) {
+    right: auto;
+    bottom: auto;
+    width: 400px;
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    border-radius: 14px;
+    box-shadow:
+        0 18px 48px -12px rgba(0, 0, 0, 0.6),
+        0 0 0 1px color-mix(in srgb, var(--tut-panel-color, var(--bmm-accent)) 22%, transparent);
+}
+.tut-engine-panel.tgw.tgw-left:not(.minimized),
+.tut-engine-panel.tgw.tgw-right:not(.minimized) {
+    top: 0;
+    bottom: 0;
+    width: var(--tut-dock-w, 380px);
+    height: auto;
+    border-radius: 0;
+    box-shadow: 0 0 32px -10px rgba(0, 0, 0, 0.55);
+}
+.tut-engine-panel.tgw.tgw-left:not(.minimized)  { left: 0; right: auto; border-width: 0 1px 0 0; }
+.tut-engine-panel.tgw.tgw-right:not(.minimized) { right: 0; left: auto; border-width: 0 0 0 1px; }
+.tut-engine-panel.tgw.tgw-bottom:not(.minimized) {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    height: var(--tut-dock-h, 230px);
+    border-radius: 14px 14px 0 0;
+    border-width: 1px 0 0;
+    box-shadow: 0 -12px 32px -14px rgba(0, 0, 0, 0.55);
+}
+/* Stepping aside from a target: a short glide, so the reader sees where it went. */
+.tut-engine-panel.tgw.tgw-moving:not(.minimized) { transition: left 0.24s ease, top 0.24s ease; }
+.tut-engine-panel.tgw.dragging:not(.minimized) { transition: none; user-select: none; }
+.tut-engine-panel.tgw.closing { animation: tgwOut 0.2s ease forwards; }
+@keyframes tgwIn  { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes tgwOut { to   { opacity: 0; transform: translateY(8px) scale(0.985); } }
+.bmm-no-anim .tut-engine-panel.tgw:not(.minimized),
+.bmm-no-anim .tut-engine-panel.tgw.closing { animation-duration: 0.01s; }
+@media (prefers-reduced-motion: reduce) {
+    .tut-engine-panel.tgw:not(.minimized), .tut-engine-panel.tgw.closing { animation-duration: 0.01s; }
+    .tut-engine-panel.tgw.tgw-moving:not(.minimized) { transition: none; }
+}
+
+/* ── Title bar: grip · back · (chips) · placement / minimise / close ───────────── */
+.tgw .tgw-titlebar {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+    position: relative;
+    cursor: grab;
+}
+.tgw.dragging .tgw-titlebar { cursor: grabbing; }
+.tgw-grip-ico { display: grid; place-items: center; color: var(--bmm-text-muted); }
+.tgw .tut-topbar-right { grid-column: 4; grid-row: 1; }
+/* A window is narrow: the chips get their own row. A bottom strip is wide: they stay up. */
+.tgw .tut-chips-scroller { grid-column: 1 / -1; grid-row: 2; min-width: 0; max-width: 100%; overflow-x: auto; }
+.tgw.tgw-bottom .tut-chips-scroller { grid-column: 3; grid-row: 1; }
+
+/* Placement icons: one glyph, turned to point at its edge. */
+.tgw-ico-left   { transform: scaleX(-1); }
+.tgw-ico-bottom { transform: rotate(90deg); }
+
+.tgw-menu {
+    position: absolute;
+    top: calc(100% - 2px);
+    right: 10px;
+    z-index: 10;
+    min-width: 200px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-elevated);
+    box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.55);
+    cursor: default;
+}
+.tgw-menu[hidden] { display: none; }
+.tgw-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+.tgw-menu-item:hover, .tgw-menu-item:focus-visible { background: var(--bmm-bg-hover); }
+.tgw-menu-item[aria-checked="true"] { font-weight: 650; }
+.tgw-menu-check { margin-left: auto; display: grid; color: var(--bmm-accent); }
+
+/* ── Body: the text scrolls, the chrome does not ──────────────────────────────── */
+.tgw .tut-card-body { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.tgw .tut-step-scroll-area { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* The step counter opens the step list. */
+.tgw-steps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: none;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+.tgw-steps-btn:hover { color: var(--bmm-text-primary); border-color: var(--bmm-border-hover); }
+.tgw-steps {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 190px;
+    overflow-y: auto;
+    flex: none;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+.tgw-steps[hidden] { display: none; }
+.tgw-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+.tgw-step:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+.tgw-step.is-current {
+    background: var(--bmm-s05);
+    color: var(--bmm-text-primary);
+    font-weight: 650;
+    box-shadow: inset 2px 0 0 var(--tut-panel-color, var(--bmm-accent));
+}
+.tgw-step-dot {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border: 1.5px solid var(--bmm-border);
+}
+.tgw-step.is-complete .tgw-step-dot { border-color: var(--bmm-success); color: var(--bmm-success); }
+.tgw-step.is-partial .tgw-step-dot  { border-color: var(--bmm-warning); }
+.tgw-step.is-current .tgw-step-dot  { border-color: var(--tut-panel-color, var(--bmm-accent)); }
+.tgw-step-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Where the target is, when it can't simply be pointed at ────────────────────
+   One line and one button, in the window — the reader's eyes are already here. */
+.tgw-where {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    padding: 9px 11px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border));
+    background: var(--bmm-warning-dim);
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+.tgw-where[hidden] { display: none; }
+.tgw-where-ico { display: grid; flex: none; color: var(--bmm-warning); }
+.tgw-where-text { flex: 1 1 auto; min-width: 0; }
+.tgw-where-btn {
+    flex: none;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.tgw-where-btn:hover { border-color: var(--bmm-border-accent, var(--bmm-accent)); }
+
+/* ── Footer: buttons wrap as whole buttons, never mid-label ───────────────────── */
+.tgw .tut-footer-btns { flex-wrap: wrap; row-gap: 8px; }
+.tgw-foot-left, .tgw-foot-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tgw-foot-right { margin-left: auto; }
+.tgw .tut-next-btn, .tgw .tut-prev-btn, .tgw .tut-showme-btn, .tgw .tut-skip-all-btn { white-space: nowrap; flex: none; }
+.tgw .tut-finish-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex: 1 1 auto;
+    gap: 14px;
+    padding: 24px;
+}
+
+/* ── Grips: a dock's inner edge, a window's corner ────────────────────────────── */
+.tgw-grip { position: absolute; z-index: 6; }
+.tgw-grip-left, .tgw-grip-right { top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+.tgw-grip-left  { right: 0; }
+.tgw-grip-right { left: 0; }
+.tgw-grip-bottom { left: 0; right: 0; top: 0; height: 8px; cursor: ns-resize; }
+.tgw-grip-left:hover, .tgw-grip-right:hover, .tgw-grip-bottom:hover, .tgw-grip.dragging { background: var(--bmm-s08); }
+.tgw-grip-float {
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg,
+        transparent 0 50%, var(--bmm-border-hover) 50% 58%,
+        transparent 58% 68%, var(--bmm-border-hover) 68% 76%, transparent 76%);
+}
+
+/* Drop preview while dragging the window near an edge. */
+.tgw-snap {
+    position: absolute;
+    z-index: 2000440;
+    pointer-events: none;
+    border: 2px dashed var(--bmm-accent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bmm-accent) 12%, transparent);
+}
+.tgw-snap[data-edge="left"]   { top: 8px; bottom: 8px; left: 8px; width: var(--tut-dock-w, 380px); }
+.tgw-snap[data-edge="right"]  { top: 8px; bottom: 8px; right: 8px; width: var(--tut-dock-w, 380px); }
+.tgw-snap[data-edge="bottom"] { left: 8px; right: 8px; bottom: 8px; height: var(--tut-dock-h, 230px); }

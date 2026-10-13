@@ -53,6 +53,12 @@ struct HandoffFile {
     install_dir: String,
     #[serde(default)]
     settings: serde_json::Map<String, serde_json::Value>,
+    /// Consent receipts the installer wrote for what it asked (the legal documents it showed,
+    /// with the SHA-256 of the exact text, the language and the time). Recorded in the consent
+    /// ledger (consent_ledger.rs) with source `installer`. Absent from older installers: then
+    /// there is no proof, and BMM asks the documents again itself.
+    #[serde(default)]
+    consents: Vec<crate::commands::consent_ledger::InstallerConsent>,
 }
 
 /// Name of the optional preset bundled into the install dir (a normal BMM
@@ -82,11 +88,23 @@ pub struct HandoffResult {
     /// localStorage flag (that setting lives on the JS side, not in AppSettings).
     /// `None`/`Some(true)` → leave BMM's default (on).
     pub session_recorder: Option<bool>,
-    /// The installer's telemetry checkbox was TICKED. Not consent — the frontend uses it
-    /// to pre-select the answer in BMM's own consent dialog, which still has to be
+    /// The installer's telemetry checkbox was TICKED, from an installer that did not ask the
+    /// cookie-banner privacy question (no `privacy_choice`). Not consent — the frontend uses
+    /// it to pre-select the answer in BMM's own consent dialog, which still has to be
     /// accepted before anything is collected. An unticked box records a refusal in
     /// `analytics_consent` instead and never sets this.
     pub telemetry_preselect: Option<bool>,
+    /// The installer asked the privacy question as a choice of its own (« Essential only » /
+    /// « Accept all » / « Customize », every category described on screen and in the Privacy
+    /// Policy the user had just accepted) and the answer turned telemetry ON. That is
+    /// consent, recorded here in `analytics_consent`: the frontend stores the categories and
+    /// BMM does not ask again (Settings → Privacy still changes everything).
+    pub telemetry_consent: Option<bool>,
+    /// "essential" | "all" | "custom" — which card the privacy step was answered with.
+    pub privacy_choice: Option<String>,
+    /// Automatic update checks (localStorage `bmm_auto_update_enabled`, absent = on).
+    /// `Some(false)` = the user turned them off in the installer. Surfaced, not applied.
+    pub auto_update: Option<bool>,
     /// Weekly benchmark + extra hardware report (serials, machine UUID, MACs). Like the
     /// session recorder it lives in localStorage (`bmm_telemetry_bench`), so it is
     /// surfaced for the frontend to mirror. `None` = not asked → BMM's default (off).
@@ -123,11 +141,12 @@ pub struct HandoffResult {
     /// already ships and ignores anything else, so the worst a tampered handoff can do is
     /// name a preset that does not exist.
     pub csp_preset: Option<String>,
-    /// The installer's « Laya hors ligne (IA locale, aucune donnée envoyée) » box (key kept as
+    /// The installer's « Laya hors ligne (IA locale, aucune donnée envoyée) » choice (key kept as
     /// `ai_features` so older installers still map). Unlike the JS-side preferences above it is
-    /// APPLIED here (ai-settings.json, read by Rust): ticked = master switch on with the embedded,
-    /// offline engine as the provider; unticked = off. Surfaced only so the frontend can mention
-    /// it. `None` = not asked → AI stays at its default (off).
+    /// APPLIED here (ai-settings.json, read by Rust): on (the installer's default, which also
+    /// downloads the model pack) = master switch on with the embedded, offline engine as the
+    /// provider; off = AI off. Surfaced only so the frontend can mention it. `None` = not asked
+    /// → AI stays at its default (off).
     pub ai_features: Option<bool>,
 }
 
@@ -168,8 +187,22 @@ pub fn consume_installer_handoff(
     }
     let _ = state.save();
 
-    // Optional AI (off unless the box was ticked). Ticked turns the master switch on with no
-    // provider chosen, so still nothing is sent until the user picks one in Settings.
+    // Proof of what the installer asked (consent_ledger.rs). Its legal receipts count only if the
+    // text it hashed is one BMM ships; the telemetry answer is recorded from the decision itself
+    // when the installer did not write a receipt for it.
+    let mut consents = parsed.consents.clone();
+    if !consents.iter().any(|c| c.doc == "telemetry") {
+        if let Some(c) = installer_telemetry_receipt(&parsed.settings, &res) {
+            consents.push(c);
+        }
+    }
+    let n = crate::commands::consent_ledger::record_installer(&state, &app_handle, &consents);
+    if n > 0 {
+        crate::commands::crash::log_line(format!("[HANDOFF] {n} consent receipt(s) recorded"));
+    }
+
+    // Optional AI. On turns the master switch on with the EMBEDDED engine (offline, nothing
+    // sent: ai_core::apply_installer_choice); off leaves AI off.
     if let Some(on) = res.ai_features {
         let _ = crate::commands::ai_core::apply_installer_choice(&dir, on);
     }
@@ -250,6 +283,36 @@ fn valid_language(lang: &str) -> bool {
         && parts.all(|p| (2..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()))
 }
 
+/// The telemetry answer the installer's privacy step gave, as a receipt — only when it was a
+/// decision: consent from a « privacy_choice », or a refusal (an unticked box is one too).
+fn installer_telemetry_receipt(
+    s: &serde_json::Map<String, serde_json::Value>,
+    res: &HandoffResult,
+) -> Option<crate::commands::consent_ledger::InstallerConsent> {
+    let refused = s.get("telemetry").and_then(|v| v.as_bool()) == Some(false);
+    if res.telemetry_consent != Some(true) && !refused {
+        return None;
+    }
+    let mut categories = std::collections::BTreeMap::new();
+    for (k, key) in [("usage", "telemetry_usage"), ("perf", "telemetry_perf"), ("laya", "telemetry_laya"), ("errors", "telemetry_live_errors"), ("bench", "telemetry_bench")] {
+        if let Some(v) = s.get(key).and_then(|v| v.as_bool()) {
+            categories.insert(k.to_string(), v);
+        }
+    }
+    // The weekly hardware report is not part of « Accept all » (nor of BMM's « Turn all on »):
+    // it is opt-in on its own, so leaving it off does not make an « accept all » a custom one.
+    let partial = categories.iter().any(|(k, v)| !v && k != "bench");
+    let choice = if refused { "declined" } else if partial { "custom" } else { "accepted" };
+    Some(crate::commands::consent_ledger::InstallerConsent {
+        doc: "telemetry".into(),
+        choice: choice.into(),
+        categories,
+        lang: s.get("language").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        file: format!("privacy_choice={}", res.privacy_choice.as_deref().unwrap_or("none")),
+        ..Default::default()
+    })
+}
+
 fn mark_consumed(file: &Path) {
     let consumed = file.with_file_name("installer-handoff.consumed.json");
     let _ = std::fs::rename(file, consumed);
@@ -275,19 +338,35 @@ fn apply_settings(
     if s.get("skip_tutorial").and_then(|v| v.as_bool()) == Some(true) {
         settings.onboarding_shown = true;
     }
-    // Telemetry. A ticked installer box is NOT consent: it used to write
-    // analytics_consent = Some(true), which started collection on first launch and made
-    // BMM's own consent dialog — the only screen that lists what is collected — never
-    // appear. It is now surfaced as a pre-selection the dialog starts from.
+    // Telemetry. Two installers, two meanings:
     //
-    // A REFUSAL is still recorded, because it needs no further screen: nothing is
-    // collected and no dialog has to ask again. (The consent dialog is what turns
-    // `None` into a decision; `Some(false)` means the user already said no.)
-    match s.get("telemetry").and_then(|v| v.as_bool()) {
-        Some(true) => res.telemetry_preselect = Some(true),
-        Some(false) => settings.analytics_consent = Some(false),
-        None => {}
+    // - With `privacy_choice` (« Essential only » / « Accept all » / « Customize »), the
+    //   installer asked the question itself, cookie-banner style: no pre-selected answer,
+    //   every category named with what it sends and to whom, after the Privacy Policy was
+    //   read and accepted. `telemetry = true` is then CONSENT and is recorded as such, so
+    //   BMM's own dialog does not ask a second time.
+    // - Without it (an older installer with a single box), a ticked box is NOT consent: it
+    //   used to write analytics_consent = Some(true) while the only screen listing what is
+    //   collected never appeared. It stays a pre-selection the dialog starts from.
+    //
+    // A REFUSAL is recorded either way: nothing is collected and nothing has to ask again.
+    let privacy_choice = s
+        .get("privacy_choice")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|c| matches!(*c, "essential" | "all" | "custom"))
+        .map(str::to_string);
+    res.privacy_choice = privacy_choice.clone();
+    match (s.get("telemetry").and_then(|v| v.as_bool()), privacy_choice.is_some()) {
+        (Some(true), true) => {
+            settings.analytics_consent = Some(true);
+            res.telemetry_consent = Some(true);
+        }
+        (Some(true), false) => res.telemetry_preselect = Some(true),
+        (Some(false), _) => settings.analytics_consent = Some(false),
+        (None, _) => {}
     }
+    res.auto_update = s.get("auto_update").and_then(|v| v.as_bool());
     // Weekly benchmark + extra hardware report (serials, machine UUID, MAC addresses).
     // A JS-side setting (localStorage bmm_telemetry_bench), so it is surfaced, not applied.
     // It only ever matters once telemetry consent has actually been given.
@@ -297,7 +376,8 @@ fn apply_settings(
     res.telemetry_perf = s.get("telemetry_perf").and_then(|v| v.as_bool());
     res.telemetry_laya = s.get("telemetry_laya").and_then(|v| v.as_bool());
     // "Send errors live" (live_issues.rs). An explicit answer, stored as is: it sends nothing
-    // on its own, only once telemetry consent is given in BMM's own dialog.
+    // on its own, only once telemetry consent is given (in the installer's privacy step, or
+    // in BMM's own dialog).
     if let Some(v) = s.get("telemetry_live_errors").and_then(|v| v.as_bool()) {
         settings.live_errors = Some(v);
     }
@@ -489,6 +569,43 @@ mod tests {
         }
     }
 
+    /// The installer's privacy step (privacy_choice present) is a decision: « Accept all » or
+    /// a customized "telemetry on" is consent, recorded, and the categories are surfaced;
+    /// « Essential only » is a recorded refusal. Neither leaves anything for the dialog.
+    #[test]
+    fn a_privacy_choice_from_the_installer_is_the_decision() {
+        let run = |json: &str| {
+            let file: HandoffFile = serde_json::from_str(json).unwrap();
+            let mut settings = crate::state::AppSettings::default();
+            let res = apply_settings(&file.settings, &mut settings);
+            (settings, res)
+        };
+        let (st, res) = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"all", "telemetry": true, "telemetry_usage": true, "telemetry_perf": true, "telemetry_laya": true, "telemetry_live_errors": true, "telemetry_bench": true, "auto_update": true } }"#);
+        assert_eq!(st.analytics_consent, Some(true));
+        assert_eq!(st.live_errors, Some(true));
+        assert_eq!(res.telemetry_consent, Some(true));
+        assert_eq!(res.telemetry_preselect, None);
+        assert_eq!(res.privacy_choice.as_deref(), Some("all"));
+        assert_eq!((res.telemetry_usage, res.telemetry_bench), (Some(true), Some(true)));
+
+        let (st, res) = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"essential", "telemetry": false, "telemetry_live_errors": false, "auto_update": true } }"#);
+        assert_eq!(st.analytics_consent, Some(false));
+        assert_eq!(st.live_errors, Some(false));
+        assert_eq!(res.telemetry_consent, None);
+        assert_eq!(res.auto_update, Some(true));
+
+        let (st, res) = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"custom", "telemetry": true, "telemetry_usage": false, "auto_update": false } }"#);
+        assert_eq!(st.analytics_consent, Some(true));
+        assert_eq!(res.telemetry_usage, Some(false));
+        assert_eq!(res.auto_update, Some(false));
+
+        // An unknown choice is not a decision: the old pre-selection rule applies.
+        let (st, res) = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"yes-please", "telemetry": true } }"#);
+        assert_eq!(st.analytics_consent, None);
+        assert_eq!(res.telemetry_preselect, Some(true));
+        assert_eq!(res.privacy_choice, None);
+    }
+
     #[test]
     fn a_language_is_a_language_code_or_nothing() {
         for ok in ["en", "fr", "pt-BR", "zh_Hans", "deu"] {
@@ -538,6 +655,36 @@ mod tests {
         let s = crate::commands::ai_core::load_settings(dir.path());
         // The box is « Laya hors ligne »: on, with the in-process engine and nothing that sends.
         assert!(s.enabled && s.classifier == "embedded" && s.generative == "off");
+    }
+
+    /// The installer's telemetry decision becomes a receipt; a mere pre-selection does not.
+    #[test]
+    fn installer_telemetry_decision_becomes_a_receipt() {
+        let run = |json: &str| {
+            let file: HandoffFile = serde_json::from_str(json).unwrap();
+            let mut settings = crate::state::AppSettings::default();
+            let res = apply_settings(&file.settings, &mut settings);
+            installer_telemetry_receipt(&file.settings, &res)
+        };
+        let c = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"custom", "telemetry": true, "telemetry_usage": true, "telemetry_perf": false } }"#).unwrap();
+        assert_eq!((c.doc.as_str(), c.choice.as_str()), ("telemetry", "custom"));
+        assert_eq!(c.categories.get("perf"), Some(&false));
+        let c = run(r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"essential", "telemetry": false } }"#).unwrap();
+        assert_eq!(c.choice, "declined");
+        assert!(run(r#"{ "source":"betterinstaller", "settings": { "telemetry": true } }"#).is_none(), "a pre-selection is not an answer");
+        // « Accept all » leaves the weekly hardware report off: still an acceptance, and the
+        // receipt records the report as off; the handoff does not turn it on.
+        let all = r#"{ "source":"betterinstaller", "settings": { "privacy_choice":"all", "telemetry": true, "telemetry_usage": true, "telemetry_perf": true, "telemetry_laya": true, "telemetry_live_errors": true, "telemetry_bench": false } }"#;
+        let c = run(all).unwrap();
+        assert_eq!(c.choice, "accepted");
+        assert_eq!(c.categories.get("bench"), Some(&false));
+        let file: HandoffFile = serde_json::from_str(all).unwrap();
+        let res = apply_settings(&file.settings, &mut crate::state::AppSettings::default());
+        assert_eq!(res.telemetry_bench, Some(false));
+        // Receipts written by the installer are read from the top-level `consents`.
+        let f: HandoffFile = serde_json::from_str(r#"{ "source":"betterinstaller", "settings": {}, "consents": [ { "doc":"tos", "text_sha256":"ab", "lang":"fr", "file":"TOS_FR.md", "choice":"accepted", "at":"2026-10-13T10:00:00Z" } ] }"#).unwrap();
+        assert_eq!(f.consents.len(), 1);
+        assert_eq!(f.consents[0].file, "TOS_FR.md");
     }
 
     #[test]

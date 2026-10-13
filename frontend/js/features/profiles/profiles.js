@@ -8,6 +8,7 @@ import { actAttrs } from '../../core/inline-actions.js';
 import { isPackIcon, renderPackIcon, ensurePackFor, openIconPicker } from '../../ui/icon-pack.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
+import { refreshMods } from '../mods/mods.js';
 import { t, applyTranslations } from '../../core/i18n.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
@@ -55,31 +56,8 @@ export async function initProfiles() {
             try {
                 const count = await invoke('import_ovgme_profiles');
                 if (count > 0) {
-                    toast(t('prof.importSuccess').replace('{count}', count), 'success');
-                    await renderProfiles();
-                    updateProfileChip();
-                    updateLibraryProfileSelector();
-                    // Show the imported profile's mods in Library immediately — activate the
-                    // newest profile and refresh, so no manual profile switch/reload is needed.
-                    try {
-                        const _profs = await getProfiles();
-                        if (_profs.length) {
-                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
-                            updateProfileChip();
-                            updateLibraryProfileSelector();
-                        }
-                        const { refreshMods } = await import('../mods/mods.js');
-                        await refreshMods(true);
-                    }
-                    catch (_) { }
-                    // Kick-off background SHA hashing for newly imported mods
-                    invoke('trigger_sha_background_population').catch(() => { });
-                    // Refresh repo export profiles list
-                    const profilesListEl = document.getElementById('repo-export-profiles-list');
-                    if (profilesListEl) {
-                        const { loadProfilesForExport } = await import('../repo/repo.js');
-                        await loadProfilesForExport(profilesListEl);
-                    }
+                    toast(t('prof.importSuccess', { type: 'OvGME', count: String(count) }), 'success');
+                    await refreshAfterProfileImport();
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -105,24 +83,7 @@ export async function initProfiles() {
                 const count = await invoke('auto_import_omm');
                 if (count > 0) {
                     toast(t('prof.importSuccess', { type: 'OMM', count }), 'success');
-                    await renderProfiles();
-                    updateProfileChip();
-                    updateLibraryProfileSelector();
-                    // Show the imported profile's mods in Library immediately — activate the
-                    // newest profile and refresh, so no manual profile switch/reload is needed.
-                    try {
-                        const _profs = await getProfiles();
-                        if (_profs.length) {
-                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
-                            updateProfileChip();
-                            updateLibraryProfileSelector();
-                        }
-                        const { refreshMods } = await import('../mods/mods.js');
-                        await refreshMods(true);
-                    }
-                    catch (_) { }
-                    // Kick-off background SHA hashing for newly imported mods
-                    invoke('trigger_sha_background_population').catch(() => { });
+                    await refreshAfterProfileImport();
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -152,30 +113,7 @@ export async function initProfiles() {
                 const count = await invoke('import_omm_profile', { path });
                 if (count > 0) {
                     toast(t('prof.importSuccess', { type: 'OMM', count }), 'success');
-                    await renderProfiles();
-                    updateProfileChip();
-                    updateLibraryProfileSelector();
-                    // Show the imported profile's mods in Library immediately — activate the
-                    // newest profile and refresh, so no manual profile switch/reload is needed.
-                    try {
-                        const _profs = await getProfiles();
-                        if (_profs.length) {
-                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
-                            updateProfileChip();
-                            updateLibraryProfileSelector();
-                        }
-                        const { refreshMods } = await import('../mods/mods.js');
-                        await refreshMods(true);
-                    }
-                    catch (_) { }
-                    // Kick-off background SHA hashing for newly imported mods
-                    invoke('trigger_sha_background_population').catch(() => { });
-                    // Refresh repo export profiles list
-                    const profilesListEl = document.getElementById('repo-export-profiles-list');
-                    if (profilesListEl) {
-                        const { loadProfilesForExport } = await import('../repo/repo.js');
-                        await loadProfilesForExport(profilesListEl);
-                    }
+                    await refreshAfterProfileImport();
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -1020,13 +958,6 @@ export async function renderProfiles() {
         <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${escAttr(p.id)}">
           ${isActive ? (uiIcon('check', 12, { style: 'vertical-align:middle;margin-right:4px' })) + t('prof.active') : t('mod.activate')}
         </button>
-        <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
-            data-tasky="prof.copyIdTip" data-tasky-icon="hash">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
-            <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
-          </svg>
-        </button>
         <button class="btn btn-secondary btn-sm btn-load-order" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}" data-tasky="order.openTip" data-tasky-icon="list" aria-label="${escAttr(t('order.title'))}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="m3 8 3-3 3 3"/><path d="M6 5v14"/><path d="m3 16 3 3 3-3"/>
@@ -1035,6 +966,14 @@ export async function renderProfiles() {
         <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" data-tasky="prof.editTip" data-tasky-icon="edit">
           ${uiIcon('edit', 12)}
         </button>
+        <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
+            data-tasky="prof.copyIdTip" data-tasky-icon="hash">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
+            <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+          </svg>
+        </button>
+        <span class="view-actions-sep" aria-hidden="true"></span>
         <button class="btn btn-danger btn-sm btn-del-profile" data-id="${escAttr(p.id)}" data-tasky="prof.deleteTip" data-tasky-icon="trash">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -1619,12 +1558,51 @@ function openDeleteProfileModal(id, profile) {
             toast(t('prof.deleted'), 'info');
         }
         catch (err) {
-            toast(t('prof.deleteError') + err, 'error');
+            toast(t('prof.deleteError', { err: String(err) }), 'error');
             newBtnFinal.disabled = false;
             newBtnFinal.innerHTML = `<span>${t('lib.delete')}</span>`;
         }
     });
     modal.classList.add('open');
+}
+/**
+ * Everything that shows profiles, brought up to date after an import created some: the
+ * Profiles page, the top-bar chip, the Library selector, the Server Repo export list. The
+ * newest profile becomes the active one and its mods are listed at once, so nothing needs a
+ * reload. ONE function for every import path: the first-run offer (ui/legacy-import.ts) used
+ * to do none of this, and its profiles only appeared after a restart.
+ */
+export async function refreshAfterProfileImport() {
+    // Activate first, render second: rendering before the switch drew the "Active" badge on
+    // the previously active card.
+    try {
+        const profs = await getProfiles();
+        if (profs.length)
+            await invoke('set_active_profile', { profileId: profs[profs.length - 1].id });
+    }
+    catch (_) { /* activation is a convenience; the list below is still redrawn */ }
+    try {
+        await renderProfiles();
+    }
+    catch (e) {
+        console.warn('[profiles] render after import failed', e);
+    }
+    await updateProfileChip().catch(() => { });
+    await updateLibraryProfileSelector();
+    try {
+        await refreshMods(true);
+    }
+    catch (_) { }
+    // Background SHA hashing for the newly imported mods.
+    invoke('trigger_sha_background_population').catch(() => { });
+    const profilesListEl = document.getElementById('repo-export-profiles-list');
+    if (profilesListEl) {
+        try {
+            const { loadProfilesForExport } = await import('../repo/repo.js');
+            await loadProfilesForExport(profilesListEl);
+        }
+        catch (_) { }
+    }
 }
 export async function updateProfileChip() {
     const [profiles, activeId] = await Promise.all([

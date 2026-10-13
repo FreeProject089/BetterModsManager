@@ -238,6 +238,7 @@ pub fn repo_extras_apply(
     // produce one that can never be checked.
     repo.author_id = None;
     repo.signature = None;
+    repo.format_version = Some(crate::commands::repo_format::CURRENT.to_string());
     let payload = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
     let (author_id, signature) = crate::commands::security::sign_message(&handle, payload.as_bytes())?;
     repo.author_id = Some(author_id);
@@ -705,6 +706,7 @@ pub fn repo_modpacks_apply(
 
     repo.author_id = None;
     repo.signature = None;
+    repo.format_version = Some(crate::commands::repo_format::CURRENT.to_string());
     let payload = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
     let (author_id, signature) = crate::commands::security::sign_message(&handle, payload.as_bytes())?;
     repo.author_id = Some(author_id);

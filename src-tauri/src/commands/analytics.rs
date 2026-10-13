@@ -58,21 +58,40 @@ pub fn get_analytics_consent(state: State<AppState>) -> Option<bool> {
 /// asked) to on turns them on, as the owner asked. They can still be turned off on their own
 /// afterwards (live_issues_set_enabled), and re-accepting while already on changes nothing.
 #[tauri::command]
-pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enabled: bool, live_errors: Option<bool>) -> Result<(), String> {
-    let live = {
+pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enabled: bool, live_errors: Option<bool>, receipt: Option<crate::commands::consent_ledger::RecordInput>) -> Result<(), String> {
+    let (was, live) = {
         let mut data = state.data.lock().map_err(|_| "lock".to_string())?;
         let was = data.settings.analytics_consent;
         data.settings.analytics_consent = Some(enabled);
         data.settings.live_errors = live_after_consent(was, enabled, data.settings.live_errors, live_errors);
-        data.settings.live_errors
+        (was, data.settings.live_errors)
     };
     let _ = state.save();
+    // Proof of the answer (consent_ledger.rs): what was answered, where, on which text.
+    let mut r = receipt.unwrap_or_default();
+    let mut cats = r.categories.take().unwrap_or_default();
+    if enabled { if let Some(l) = live { cats.insert("errors".into(), l); } }
+    r.doc = "telemetry".into();
+    r.choice = consent_choice(was, enabled, &cats).into();
+    r.categories = Some(cats);
+    if r.source.is_none() { r.source = Some("settings".into()); }
+    crate::commands::consent_ledger::record_quiet(&state, &app_handle, r);
     // Declining wipes anything we'd buffered (right to erasure).
     if !enabled { let _ = std::fs::remove_file(queue_path(&app_handle)); }
     // Live errors ride on the same consent: off stops them and wipes their queue too.
     crate::commands::live_issues::on_consent_changed(Some(enabled), live);
     log_line(format!("[ANALYTICS] consent set to {}", enabled));
     Ok(())
+}
+
+/// The receipt's choice for a telemetry answer. Pure (tested below).
+pub fn consent_choice(was: Option<bool>, enabled: bool, cats: &std::collections::BTreeMap<String, bool>) -> &'static str {
+    match (enabled, was) {
+        (false, Some(true)) => "withdrawn",
+        (false, _) => "declined",
+        (true, _) if cats.values().any(|v| !v) => "custom",
+        (true, _) => "accepted",
+    }
 }
 
 /// The live-errors switch after a consent answer. Pure (tested below).
@@ -1091,5 +1110,18 @@ mod consent_tests {
         assert_eq!(live_after_consent(None, true, None, Some(false)), Some(false), "the dialog's answer wins");
         assert_eq!(live_after_consent(Some(true), false, Some(true), None), Some(true), "declining keeps the switch (inert without consent)");
         assert!(!crate::commands::live_issues::effective(Some(false), live_after_consent(Some(true), false, Some(true), None)));
+    }
+
+    /// The consent receipt names the answer: a refusal, a withdrawal, all on, or a choice.
+    #[test]
+    fn the_receipt_names_the_answer() {
+        use super::consent_choice;
+        let mut c = std::collections::BTreeMap::new();
+        assert_eq!(consent_choice(None, false, &c), "declined");
+        assert_eq!(consent_choice(Some(true), false, &c), "withdrawn");
+        c.insert("usage".to_string(), true);
+        assert_eq!(consent_choice(None, true, &c), "accepted");
+        c.insert("perf".to_string(), false);
+        assert_eq!(consent_choice(Some(false), true, &c), "custom");
     }
 }

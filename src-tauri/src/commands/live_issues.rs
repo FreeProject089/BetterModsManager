@@ -529,13 +529,21 @@ pub fn live_issues_init(state: State<AppState>, app_handle: AppHandle, endpoint:
 }
 
 #[tauri::command]
-pub fn live_issues_set_enabled(state: State<AppState>, enabled: bool) -> Result<Value, String> {
-    let consent = {
+pub fn live_issues_set_enabled(state: State<AppState>, app_handle: AppHandle, enabled: bool) -> Result<Value, String> {
+    let (consent, was) = {
         let mut d = state.data.lock().map_err(|_| "lock".to_string())?;
+        let was = d.settings.live_errors;
         d.settings.live_errors = Some(enabled);
-        d.settings.analytics_consent
+        (d.settings.analytics_consent, was)
     };
     let _ = state.save();
+    // Proof of the answer (consent_ledger.rs).
+    crate::commands::consent_ledger::record_quiet(&state, &app_handle, crate::commands::consent_ledger::RecordInput {
+        doc: "crash_reports".into(),
+        choice: (if enabled { "accepted" } else if was == Some(true) { "withdrawn" } else { "declined" }).into(),
+        source: Some("settings".into()),
+        ..Default::default()
+    });
     if effective(consent, Some(enabled)) {
         ENABLED.store(true, Ordering::Relaxed);
         start_loop();

@@ -313,6 +313,154 @@ pub(crate) fn installer_for<'a>(manifest: &'a VerifiedManifest, url: &str) -> Re
     })
 }
 
+/// The installer to run: the one at `hint` (the release asset the UI picked) when the signed
+/// manifest lists it, otherwise the manifest's own choice: `BMM-Setup.exe` (BetterInstaller's
+/// setup, what BMM ships since 1.0), then the first `.exe`, then the first entry.
+///
+/// The hint is only ever used to CHOOSE among signed entries; what is downloaded is always the
+/// entry's own `download_url`. Falling back used to be an error ("not an installer the signed
+/// manifest vouches for") whenever the UI's pick, the first `.msi` of the release, was not the
+/// file the manifest listed, which made the update fail for a purely cosmetic reason.
+pub(crate) fn pick_installer<'a>(manifest: &'a VerifiedManifest, hint: &str) -> Result<&'a ManifestFile, String> {
+    if let Ok(e) = installer_for(manifest, hint) {
+        return Ok(e);
+    }
+    if manifest.installers.is_empty() {
+        return installer_for(manifest, hint);
+    }
+    let lower = |f: &&ManifestFile| f.path.to_ascii_lowercase();
+    Ok(manifest
+        .installers
+        .iter()
+        .find(|f| lower(f) == "bmm-setup.exe")
+        .or_else(|| manifest.installers.iter().find(|f| lower(f).ends_with(".exe")))
+        .unwrap_or(&manifest.installers[0]))
+}
+
+/// Progress of the full-installer download, emitted as `update-download-progress`.
+#[derive(Clone, Serialize)]
+pub struct DownloadProgress {
+    /// "downloading" | "verifying" | "launching"
+    pub phase: String,
+    pub received: u64,
+    pub total: u64,
+    /// True when this download continued a partial file left by an interrupted one.
+    pub resumed: bool,
+}
+
+fn emit_download(app: &tauri::AppHandle, phase: &str, received: u64, total: u64, resumed: bool) {
+    let _ = app.emit("update-download-progress", DownloadProgress { phase: phase.to_string(), received, total, resumed });
+}
+
+/// Download the installer `entry` names, resuming a partial download left by an interrupted
+/// one, and return its bytes ONLY once they have the SHA-256 the signed manifest gives.
+///
+/// The partial file lives in BMM's own local app-data folder (`updates/<sha256>.part`), named by
+/// the signed hash, so a different release never resumes into it. Whatever it holds is checked
+/// with the rest: a wrong byte anywhere fails the hash, the partial file is deleted, and a
+/// resumed download is retried once from zero before giving up.
+async fn download_installer(app: &tauri::AppHandle, entry: &ManifestFile) -> Result<Vec<u8>, String> {
+    use std::io::{Read as _, Seek as _};
+    let dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Cannot resolve the download folder: {e}"))?
+        .join("updates");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create folder: {e}"))?;
+    // `sha256` is 64 lowercase hex (verify_manifest_text), so this is a plain file name.
+    let part = dir.join(format!("{}.part", entry.sha256));
+
+    for attempt in 0..2 {
+        let mut have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+        if entry.size > 0 && have > entry.size {
+            let _ = std::fs::remove_file(&part);
+            have = 0;
+        }
+        let resumed = have > 0;
+        let complete_already = entry.size > 0 && have == entry.size;
+
+        if !complete_already {
+            let mut req = crate::commands::net::client()
+                .get(&entry.download_url)
+                .header(reqwest::header::USER_AGENT, "BetterModManager");
+            if have > 0 {
+                req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
+            }
+            let mut response = req.send().await.map_err(|e| {
+                format!("Download error: {e}. Check the connection and try again; the download resumes where it stopped.")
+            })?;
+            let status = response.status().as_u16();
+            let append = match status {
+                206 if have > 0 => true,
+                200 => false,
+                // The server says the partial file already holds everything: verify it.
+                416 if have > 0 => true,
+                _ => return Err(format!("Download failed with status: {}", response.status())),
+            };
+            if !append {
+                have = 0;
+            }
+            let mut cap = crate::fs_utils::DownloadCap::with_limit(INSTALLER_MAX_BYTES);
+            cap.add(have)?;
+            let announced = response.content_length();
+            cap.check_announced(announced.map(|n| n + have))?;
+            let total = if entry.size > 0 { entry.size } else { have + announced.unwrap_or(0) };
+
+            if status != 416 {
+                let mut file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .append(append)
+                    .truncate(!append)
+                    .open(&part)
+                    .map_err(|e| format!("Failed to create file: {e}"))?;
+                emit_download(app, "downloading", have, total, resumed);
+                let mut last_emit = std::time::Instant::now();
+                loop {
+                    let chunk = match response.chunk().await {
+                        Ok(Some(c)) => c,
+                        Ok(None) => break,
+                        Err(e) => {
+                            // Keep what arrived: the next try continues from here.
+                            return Err(format!(
+                                "Download interrupted at {} of {} MB ({e}). Try again: it resumes where it stopped.",
+                                have / 1_048_576,
+                                total.max(have) / 1_048_576
+                            ));
+                        }
+                    };
+                    cap.add(chunk.len() as u64)?;
+                    file.write_all(&chunk).map_err(|e| format!("Failed to write to file: {e}"))?;
+                    have += chunk.len() as u64;
+                    if last_emit.elapsed() >= std::time::Duration::from_millis(120) {
+                        emit_download(app, "downloading", have, total, resumed);
+                        last_emit = std::time::Instant::now();
+                    }
+                }
+                file.flush().map_err(|e| format!("Failed to write to file: {e}"))?;
+            }
+        }
+
+        emit_download(app, "verifying", have, have, resumed);
+        let mut bytes = Vec::with_capacity(have as usize);
+        let mut f = File::open(&part).map_err(|e| format!("Failed to read the download: {e}"))?;
+        f.rewind().ok();
+        f.read_to_end(&mut bytes).map_err(|e| format!("Failed to read the download: {e}"))?;
+        drop(f);
+        let _ = std::fs::remove_file(&part);
+        match check_installer_bytes(entry, &bytes) {
+            Ok(()) => return Ok(bytes),
+            // A resumed file can carry a bad stretch from an earlier, different attempt.
+            Err(_) if resumed && attempt == 0 => {
+                log_line("[UPDATE] Resumed download failed the hash; downloading again from the start");
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err("Update refused: the download did not match the signed manifest twice. BMM stays on its current version.".to_string())
+}
+
 /// The downloaded installer is the one the manifest names, byte for byte.
 pub(crate) fn check_installer_bytes(entry: &ManifestFile, bytes: &[u8]) -> Result<(), String> {
     use sha2::{Digest, Sha256};
@@ -474,13 +622,15 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
 
     let assets = body["assets"].as_array().cloned().unwrap_or_default();
 
-    // Try to find the .msi or .exe installer in the release assets
-    let download_url = assets
-        .iter()
-        .find(|a| a["name"].as_str().map(|n| n.ends_with(".msi")).unwrap_or(false))
-        .or_else(|| assets.iter().find(|a| {
-            a["name"].as_str().map(|n| n.ends_with(".exe") || n.ends_with(".zip")).unwrap_or(false)
-        }))
+    // The installer asset: BMM-Setup.exe (BetterInstaller's setup, the only installer a release
+    // carries since 1.0.2), else any .exe, else an .msi (releases before 1.0). Only a HINT for
+    // download_and_install_update, which picks among the signed manifest's entries.
+    let named = |pred: &dyn Fn(&str) -> bool| {
+        assets.iter().find(|a| a["name"].as_str().map(|n| pred(&n.to_ascii_lowercase())).unwrap_or(false))
+    };
+    let download_url = named(&|n| n == "bmm-setup.exe")
+        .or_else(|| named(&|n| n.ends_with(".exe")))
+        .or_else(|| named(&|n| n.ends_with(".msi")))
         .and_then(|a| a["browser_download_url"].as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| release_url.clone());
 
@@ -540,20 +690,31 @@ fn installer_maintenance_exe(_app_handle: &tauri::AppHandle) -> Option<std::path
 /// --check-update` and returns its JSON report (`update_available`, `current_version`,
 /// `latest_version`, `notes`, `url`, …). Returns `Ok(None)` when BMM wasn't installed by
 /// BetterInstaller, so the caller can fall back to the direct GitHub check.
+///
+/// Async and time-boxed: it used to be a plain `fn` (Tauri runs those on the main thread) that
+/// waited on `uninstall.exe` with no limit, so a slow or unreachable manifest host froze the
+/// whole window during the startup check.
 #[tauri::command]
-pub fn check_update_via_installer(
+pub async fn check_update_via_installer(
     app_handle: tauri::AppHandle,
 ) -> Result<Option<serde_json::Value>, String> {
     let exe = match installer_maintenance_exe(&app_handle) {
         Some(e) => e,
         None => return Ok(None),
     };
-    let out = crate::commands::proc::hidden_command(&exe)
-        .arg("--check-update")
-        .output()
-        .map_err(|e| format!("Failed to run updater: {e}"))?;
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = crate::commands::proc::hidden_command(&exe);
+        cmd.arg("--check-update");
+        crate::commands::proc::run_with_timeout(cmd, 45)
+    })
+    .await
+    .map_err(|e| format!("Failed to run updater: {e}"))?
+    .map_err(|e| format!("Failed to run updater: {e}"))?;
+    if out.timed_out {
+        return Err("The BetterInstaller update check did not answer in time".to_string());
+    }
     let json: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("Bad updater output: {e}"))?;
+        serde_json::from_str(out.stdout.trim()).map_err(|e| format!("Bad updater output: {e}"))?;
     log_line(format!("[UPDATE] BetterInstaller check: {json}"));
     Ok(Some(json))
 }
@@ -562,11 +723,29 @@ pub fn check_update_via_installer(
 /// (downloads + verifies the signed `.bpkg`, delta when offered, rollback on failure)
 /// then exit BMM so its files can be replaced. Errs when not installed by BetterInstaller
 /// (the caller falls back to the direct download).
+///
+/// Async: ShellExecuteExW waits while a Windows permission prompt is open, and a plain `fn`
+/// command would hold the main thread (and freeze the window) for that long.
 #[tauri::command]
-pub fn update_via_installer(app_handle: tauri::AppHandle) -> Result<(), String> {
+pub async fn update_via_installer(app_handle: tauri::AppHandle) -> Result<(), String> {
     let exe = installer_maintenance_exe(&app_handle)
         .ok_or_else(|| "not installed via BetterInstaller".to_string())?;
     log_line(format!("[UPDATE] Launching BetterInstaller updater: {exe:?}"));
+    // ShellExecuteExW: an install under Program Files needs the UAC prompt, which a plain
+    // CreateProcess refuses with ERROR_ELEVATION_REQUIRED (the UI then silently fell back to the
+    // full-installer download). The argument is a constant.
+    #[cfg(windows)]
+    {
+        let target = exe.clone();
+        tauri::async_runtime::spawn_blocking(move || crate::commands::proc::shell_launch(&target, Some("--update")))
+            .await
+            .map_err(|e| format!("Failed to launch updater: {e}"))?
+            .map_err(|e| {
+                log_line(format!("[UPDATE] Updater launch failed (code {}): {}", e.code, e.message));
+                format!("Failed to launch updater: {}", e.message)
+            })?;
+    }
+    #[cfg(not(windows))]
     crate::commands::proc::hidden_command(&exe)
         .arg("--update")
         .spawn()
@@ -606,33 +785,26 @@ pub async fn download_and_install_update(
     let _ = filename;
     log_line(format!("[UPDATE] Full installer requested: {}", url));
     let Some(manifest_url) = manifest_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
+        // The release has no update-manifest.json asset (published by hand without
+        // `npm run release:assets`, see RELEASE.md). Nothing here can vouch for its installer.
         let e = "Update refused: this release publishes no signed update manifest, so its installer \
                  cannot be checked. BMM stays on its current version; download the installer from \
                  the release page.".to_string();
         log_line(format!("[UPDATE] {}", e));
         return Err(e);
     };
-    if !is_https(&url) {
-        return Err("Update refused: the installer URL is not https. BMM stays on its current version.".to_string());
-    }
     let document = fetch_manifest_document(manifest_url).await?;
     let current = app_handle.package_info().version.to_string();
     let manifest = verify_manifest_text(&document, &publisher_key()?, &current, chrono::Utc::now())
         .inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
-    let entry = installer_for(&manifest, &url).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    // `url` only chooses among the SIGNED entries; the entry's own URL is what is downloaded.
+    let entry = pick_installer(&manifest, &url).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
     let file_name = installer_file_name(&entry.path).ok_or_else(|| "Update refused: bad installer name".to_string())?;
 
     log_line(format!("[UPDATE] Downloading v{} installer from: {}", manifest.version, entry.download_url));
-    let response = crate::commands::net::client().get(&entry.download_url)
-        .header(reqwest::header::USER_AGENT, "BetterModManager")
-        .send().await.map_err(|e| format!("Download error: {}", e))?;
-    if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
-    }
-    let mut cap = crate::fs_utils::DownloadCap::with_limit(INSTALLER_MAX_BYTES);
-    cap.check_announced(response.content_length())?;
-    let bytes = response.bytes().await.map_err(|e| format!("Error reading response bytes: {}", e))?;
-    cap.add(bytes.len() as u64)?;
+    let bytes = download_installer(&app_handle, entry).await.inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
+    // download_installer returns only verified bytes; checked again here, next to the write and
+    // the launch, so the order "verify, then write, then run" is visible in one place.
     check_installer_bytes(entry, &bytes).inspect_err(|e| log_line(format!("[UPDATE] {}", e)))?;
 
     // A folder of our own, new for this download: a fixed name in %TEMP% is one another
@@ -646,14 +818,28 @@ pub async fn download_and_install_update(
     drop(file);
 
     log_line("[UPDATE] Launching installer and exiting...");
+    emit_download(&app_handle, "launching", bytes.len() as u64, bytes.len() as u64, false);
 
     // Execute installer depending on the OS
     #[cfg(target_os = "windows")]
     {
-        // The installer's filename comes from the signed manifest (installer_file_name: one
-        // plain .exe/.msi name). open::that never puts it on a command line anyway.
-        open::that(file_path.as_os_str())
-            .map_err(|e| format!("Failed to start installer: {}", e))?;
+        // ShellExecuteExW, not the `open` crate: open 5.x goes through a hidden PowerShell
+        // Start-Process and reports only "ExitStatus(1)" when it fails (see proc::shell_launch).
+        // The file name comes from the signed manifest (installer_file_name: one plain
+        // .exe/.msi name) and nothing is put on a command line.
+        // Off the async runtime: ShellExecuteExW waits while a permission prompt is open.
+        let target = file_path.clone();
+        tauri::async_runtime::spawn_blocking(move || crate::commands::proc::shell_launch(&target, None))
+            .await
+            .map_err(|e| format!("Failed to start installer: {e}"))?
+            .map_err(|e| {
+                log_line(format!("[UPDATE] Installer launch failed (code {}, exit {:?}): {}", e.code, e.exit_code, e.message));
+                format!(
+                    "Failed to start installer: {} The verified installer was kept at {}.",
+                    e.message,
+                    file_path.display()
+                )
+            })?;
     }
     #[cfg(target_os = "macos")]
     {

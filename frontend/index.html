@@ -81,138 +81,72 @@
     </div>
 
     <div id="app-window-outer">
-        <!-- App Loader — Convergence -->
-        <div id="app-loader"
-            style="position:fixed;top:0;left:0;width:100%;height:100%;background:#08080f;z-index:9999;overflow:hidden;display:flex;align-items:center;justify-content:center;transition:opacity 0.65s ease,visibility 0.65s ease;">
-
-            <!-- Mouse-reactive background glow (abs, tracks mouse) -->
-            <div id="ld-bg-glow"
-                style="position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(0,194,255,0.06) 0%,rgba(59,130,246,0.03) 45%,transparent 68%);filter:blur(32px);pointer-events:none;opacity:0;">
-            </div>
-
-            <!-- Impact flash (full-screen) -->
-            <div id="ld-flash"
-                style="position:absolute;inset:0;background:rgba(0,194,255,0.15);opacity:0;pointer-events:none;"></div>
-
-            <!-- Center stage (parallax target) -->
-            <div id="ld-stage"
-                style="position:relative;display:flex;flex-direction:column;align-items:center;z-index:2;">
-
-                <!-- ══ Logo wrap — ALL orbs/wave/halo live here so they track the logo ══ -->
-                <div id="ld-logo-wrap"
-                    style="position:relative;display:flex;align-items:center;justify-content:center;width:100px;height:100px;cursor:default;overflow:visible;">
-
-                    <!-- Diffuse ambient glow (large, blurred) -->
-                    <div id="ld-logo-glow"
-                        style="position:absolute;inset:-28px;border-radius:50%;background:radial-gradient(circle,rgba(0,194,255,0.28) 0%,rgba(59,130,246,0.12) 45%,transparent 70%);filter:blur(18px);opacity:0;pointer-events:none;">
-                    </div>
-
-                    <!-- Sharp halo ring (tight, crisp) -->
-                    <div id="ld-halo"
-                        style="position:absolute;inset:-10px;border-radius:50%;border:1.5px solid rgba(0,194,255,0.55);box-shadow:0 0 22px rgba(0,194,255,0.4),0 0 6px rgba(0,194,255,0.2) inset;opacity:0;pointer-events:none;">
-                    </div>
-
-                    <!-- Outer accent ring (gold tint, slightly larger) -->
-                    <div id="ld-halo2"
-                        style="position:absolute;inset:-22px;border-radius:50%;border:1px solid rgba(59,130,246,0.2);box-shadow:0 0 14px rgba(59,130,246,0.15);opacity:0;pointer-events:none;">
-                    </div>
-
-                    <!-- Periodic pulse ring (expands outward, repeating) -->
-                    <div id="ld-pulse"
-                        style="position:absolute;inset:-10px;border-radius:50%;border:1px solid rgba(0,194,255,0.6);opacity:0;pointer-events:none;">
-                    </div>
-
-                    <!-- Shockwave (inside logo-wrap → always centered on logo) -->
-                    <div id="ld-wave"
-                        style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin-left:-3px;margin-top:-3px;border-radius:50%;border:1.5px solid rgba(0,194,255,0.95);box-shadow:0 0 18px rgba(0,194,255,0.6);opacity:0;pointer-events:none;">
-                    </div>
-
-                    <!-- 3 orbiting particles (abs inside logo-wrap, JS sets start coords) -->
-                    <div id="ld-orb-0"
-                        style="position:absolute;left:50%;top:50%;width:9px;height:9px;margin-left:-4.5px;margin-top:-4.5px;border-radius:50%;background:#00c2ff;box-shadow:0 0 14px 3px rgba(0,194,255,0.8);opacity:0;pointer-events:none;z-index:4;">
-                    </div>
-                    <div id="ld-orb-1"
-                        style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin-left:-3.5px;margin-top:-3.5px;border-radius:50%;background:#3b82f6;box-shadow:0 0 12px 3px rgba(59,130,246,0.8);opacity:0;pointer-events:none;z-index:4;">
-                    </div>
-                    <div id="ld-orb-2"
-                        style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin-left:-3px;margin-top:-3px;border-radius:50%;background:#fbbf24;box-shadow:0 0 11px 3px rgba(251,191,36,0.8);opacity:0;pointer-events:none;z-index:4;">
-                    </div>
-
-                    <!-- Logo (on top) -->
-                    <img id="ld-logo" src="assets/Tasky.png" alt=""
-                        style="width:80px;height:auto;position:relative;z-index:3;opacity:0;will-change:transform,filter;">
+        <!-- App Loader: the BMM logo, its name, the version, one thin progress line.
+             Animated by boot-loader.js (short; nothing moves under reduced motion); app.ts fades it
+             out and removes it once the app is up. Everything is visible without JS, so a
+             missing GSAP leaves a calm splash instead of an empty one. The logo is on its
+             own pale tile because the mark is half black and this screen usually is not; a
+             theme with a mascot (assets.mascot) replaces it, like every Tasky picture. -->
+        <div id="app-loader" role="status" aria-label="Better Mod Manager">
+            <div id="ld-stage">
+                <div id="ld-logo-wrap">
+                    <div id="ld-logo-glow" aria-hidden="true"></div>
+                    <img id="ld-logo" src="assets/brand/bmm-logo-tile.svg" alt="" width="96" height="96">
                 </div>
-
-                <!-- Brand name — chars injected by JS, hidden until revealed -->
-                <div id="ld-brand" style="margin-top:16px;display:flex;align-items:baseline;gap:6px;perspective:400px;">
-                </div>
-
-                <!-- Version + FTB -->
-                <div id="ld-ver"
-                    style="margin-top:9px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--bmm-text-muted);letter-spacing:0.12em;opacity:0;">
-                </div>
-
-                <!-- By BetterCommunity. Last in, quietest, and on a white chip because the
-                     mark is half black and this screen is not. Not translated: it is a
-                     name and a preposition, and "By" reads in every language this ships in
-                     far better than a translated credit line would read as a slogan. -->
-                <div id="ld-by" style="margin-top:14px;opacity:0;">
-                    <span style="display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.08em;color:var(--bmm-text-muted);">
-                        By
-                        <img src="assets/BC_white.webp" alt=""
-                            style="width:14px;height:14px;border-radius:4px;background:#fff;padding:1px;display:block;">
-                        <b style="font-weight:600;color:var(--bmm-text-secondary);">BetterCommunity</b>
-                    </span>
+                <div id="ld-brand" aria-hidden="true"><span class="ld-w1">Better</span><span class="ld-w2">Mod.Manager</span></div>
+                <div id="ld-ver" aria-hidden="true"></div>
+                <!-- By BetterCommunity. Not translated: a name and a preposition. -->
+                <div id="ld-by">
+                    By
+                    <img src="assets/BC_white.webp" alt="" class="ld-by-mark">
+                    <b>BetterCommunity</b>
                 </div>
             </div>
-
-            <!-- Bottom progress (full-width) -->
-            <div style="position:fixed;bottom:0;left:0;width:100%;height:2px;background:var(--bmm-s05);">
-                <div id="ld-prog"
-                    style="height:100%;width:0%;background:linear-gradient(90deg,#00c2ff 0%,#3b82f6 55%,#fbbf24 100%);opacity:0;border-radius:0 1px 1px 0;">
-                </div>
-            </div>
+            <div id="ld-prog-track" aria-hidden="true"><div id="ld-prog"></div></div>
         </div>
 
         <style>
-            /* chars hidden by default — revealed by GSAP at t=1.0s */
-            .ld-char {
-                display: inline-block;
-                opacity: 0;
-                will-change: transform, opacity;
+            #app-loader {
+                position: fixed; inset: 0; z-index: 9999; overflow: hidden;
+                display: flex; align-items: center; justify-content: center;
+                background: var(--bmm-loader-bg);
+                transition: opacity 0.45s ease, visibility 0.45s ease;
             }
-
-            .ld-w1 {
-                font-family: 'Helvetica Now Text', Helvetica, Arial, system-ui, sans-serif;
-                font-size: 15px;
-                font-weight: 300;
-                letter-spacing: 0.17em;
-                color: var(--bmm-text-primary);
+            #ld-stage { display: flex; flex-direction: column; align-items: center; }
+            #ld-logo-wrap { position: relative; width: 96px; height: 96px; }
+            #ld-logo-glow {
+                position: absolute; inset: -44px; border-radius: 50%; pointer-events: none;
+                background: radial-gradient(circle, rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.22) 0%, transparent 66%);
             }
-
-            .ld-w2 {
-                font-family: 'Helvetica Now Text', Helvetica, Arial, system-ui, sans-serif;
-                font-size: 15px;
-                font-weight: 700;
-                letter-spacing: 0.09em;
-                color: var(--bmm-warning);
-                background: linear-gradient(110deg, #fbbf24 0%, var(--bmm-warning) 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
+            #ld-logo {
+                position: relative; display: block; width: 96px; height: 96px; border-radius: 24px;
+                object-fit: contain; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
             }
-            /* Gradient TEXT is painted by clipping a background to the glyphs, which means
-               the glyphs themselves are transparent. When the background does not paint —
-               Windows high contrast, forced-colors, a printer — the word disappears
-               entirely. This is the splash screen's own name, so it disappearing is the
-               whole screen looking broken. The colour above is the fallback; this restores
-               it wherever the clip cannot apply. */
-            @media (forced-colors: active), print {
-                .ld-w2 {
-                    -webkit-text-fill-color: currentColor;
-                    background: none;
-                }
+            #ld-brand {
+                margin-top: 22px; display: flex; align-items: baseline; gap: 7px;
+                font-family: var(--font-sans, system-ui, sans-serif); font-style: italic; line-height: 1;
             }
+            .ld-w1 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: var(--bmm-brand-better); }
+            .ld-w2 { font-size: 21px; font-weight: 900; letter-spacing: -0.01em; color: var(--bmm-brand-mm); }
+            #ld-ver {
+                min-height: 1.2em; margin-top: 10px; font-family: var(--bmm-font-mono, monospace);
+                font-size: 10.5px; letter-spacing: 0.12em; color: var(--bmm-text-muted);
+            }
+            #ld-by {
+                margin-top: 16px; display: inline-flex; align-items: center; gap: 6px;
+                font-size: 10px; letter-spacing: 0.08em; color: var(--bmm-text-muted);
+            }
+            #ld-by b { font-weight: 600; color: var(--bmm-text-secondary); }
+            .ld-by-mark { display: block; width: 14px; height: 14px; padding: 1px; border-radius: 4px; background: #fff; }
+            #ld-prog-track {
+                position: absolute; left: 50%; bottom: 52px; width: 168px; height: 3px; margin-left: -84px;
+                border-radius: 999px; overflow: hidden; background: var(--bmm-s10);
+            }
+            #ld-prog { width: 0; height: 100%; border-radius: inherit; background: var(--bmm-accent); }
+            /* Reduced motion (the OS, or Settings → Graphics « fewer animations »): no tweens at
+               all (boot-loader.js), and the progress line, which only exists to move, goes. */
+            @media (prefers-reduced-motion: reduce) { #ld-prog-track { display: none; } }
+            .ld-still #ld-prog-track { display: none; }
         </style>
 
         <script src="boot-loader.js"></script>
@@ -769,9 +703,16 @@
                             <h1 class="view-title" data-i18n="prof.title">Profils</h1>
                             <p class="view-subtitle" data-i18n="prof.subtitle">Gérez vos configurations par jeu</p>
                         </div>
-                        <div class="view-actions">
+                        <div class="view-actions prof-head-actions">
+                            <!-- Help first, apart; then Import (secondary) and New profile
+                                 (primary) last, at the right edge. -->
+                            <button class="prof-how-btn" data-act="openDocsPageById" data-act-args='["activation"]'>
+                                <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                                <span data-i18n="prof.howItWorks">Comment ça fonctionne ?</span>
+                            </button>
+                            <span class="view-actions-sep" aria-hidden="true"></span>
                             <div class="dropdown" id="import-dropdown-container">
-                                <button class="btn btn-ghost" id="btn-import-menu" style="color: var(--cyan)">
+                                <button class="btn btn-secondary" id="btn-import-menu">
                                     <svg class="ic ic-import" data-icon="import" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>
                                     <span data-i18n="prof.import">Importer</span>
                                     <svg class="ic ic-chevron-down" data-icon="chevron-down" width="12" height="12" viewBox="0 0 24 24" style="margin-left:4px; opacity:0.7" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -803,10 +744,6 @@
                                     </a>
                                 </div>
                             </div>
-                            <button class="prof-how-btn" data-act="openDocsPageById" data-act-args='["activation"]' style="margin-right:8px;">
-                                <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-                                <span data-i18n="prof.howItWorks">Comment ça fonctionne ?</span>
-                            </button>
                             <button class="btn btn-primary" id="btn-new-profile">
                                 <svg class="ic ic-add" data-icon="add" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                                 <span data-i18n="prof.new">Nouveau profil</span>
@@ -843,10 +780,10 @@
                                 <h3 class="card-title" data-i18n="prof.allActiveMods"
                                     style="margin: 0; font-size: 14px; font-weight: 600;">Mods Activés (Global)</h3>
                                 <button id="btn-disable-all-global" class="btn btn-danger btn-xs"
-                                    style="font-size: 10px; padding: 4px 8px; border-radius: 6px; display: none;"
+                                    style="display: none;"
                                     data-tasky="prof.disableAllTip" data-tasky-icon="trash"
                                    >
-                                    <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" style="margin-right:4px" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                    <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                     <span data-i18n="prof.disableAll">Tout Désactiver</span>
                                 </button>
                             </div>
@@ -1674,214 +1611,240 @@
                                     <p class="rp-lede"
                                         data-i18n="repo.stepTwoDesc">...</p>
 
-                                    <div class="form-group" style="margin-bottom:12px;">
-                                        <label class="form-label" style="margin-bottom:4px;"
-                                            data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
-                                        <div class="path-picker">
-                                            <input type="text" class="form-input" id="repo-host-path"
-                                                placeholder="C:\..." readonly />
-                                            <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host"
-                                                data-i18n="prof.browse">...</button>
-                                        </div>
-                                    </div>
+                                    <!-- The four things hosting is, in order, with where you are. Painted by
+                                         repo-host-flow.ts from the real state (folder, manifest format, server, address);
+                                         it was a form of eleven fields with the start button in the middle of them. -->
+                                    <ol class="rp-flow" id="repo-host-flow" aria-label="Hosting steps">
+                                        <li class="rp-flow-step" data-flow-step="folder"><span class="rp-flow-n">1</span><span class="rp-flow-t" data-i18n="repo.flow.folder">Pick the folder</span></li>
+                                        <li class="rp-flow-step" data-flow-step="manifest"><span class="rp-flow-n">2</span><span class="rp-flow-t" data-i18n="repo.flow.manifest">Check the repo.json</span></li>
+                                        <li class="rp-flow-step" data-flow-step="start"><span class="rp-flow-n">3</span><span class="rp-flow-t" data-i18n="repo.flow.start">Start the server</span></li>
+                                        <li class="rp-flow-step" data-flow-step="share"><span class="rp-flow-n">4</span><span class="rp-flow-t" data-i18n="repo.flow.share">Share the address</span></li>
+                                    </ol>
 
-                                    <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
-                                        <label class="form-label"
-                                            style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
-                                            data-i18n="repo.hostHistoryLabel">Historique</label>
-                                        <select class="form-input" id="repo-host-history-select"
-                                            style="font-size:12px; padding:6px; background:var(--bmm-s05);">
-                                            <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien
-                                                dépôt
-                                                --
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div id="repo-host-metadata-preview"
-                                        style="display:none; margin-bottom:12px; padding:10px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s05); border-radius:8px; font-size:12px;">
-                                    </div>
-
-                                    <div style="display:flex; gap:12px; margin-bottom:12px;">
-                                        <div style="flex:1;">
-                                            <label class="form-label"
-                                                data-i18n="repo.portLabel">Port du serveur</label>
-                                            <input type="number" id="repo-server-port" class="form-input" value="8000"
-                                                min="1" max="65535" />
-                                        </div>
-                                        <div style="flex:1;">
-                                            <label class="form-label"
-                                                data-i18n="repo.uploadLimit">Limite Upload (Ko/s)</label>
-                                            <input type="number" id="repo-server-upload-limit" class="form-input"
-                                                value="0" min="0" step="50" data-i18n-placeholder="repo.limitNone" />
-                                        </div>
-                                    </div>
-
-                                    <div style="margin-bottom:12px;">
-                                        <label class="form-label"
-                                            style="font-size:11px; margin-bottom:4px; display:block;"
-                                            data-i18n="repo.hostDownloadPassword">Download password (optional)</label>
-                                        <div style="display:flex; gap:6px;">
-                                            <!-- autocomplete off + a wrapping form: without it the browser
-                                                 offers to save this as a site login. -->
-                                            <form style="display:contents" autocomplete="off" data-no-submit="1"><input
-                                                type="password" id="repo-server-download-password" class="form-input"
-                                                autocomplete="new-password"
-                                                data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
-                                                placeholder="Leave empty for an open repo" /></form>
-                                            <button type="button" class="btn btn-sm"
-                                                data-toggle-password="#repo-server-download-password"
-                                                data-i18n="repo.showHide">Show</button>
-                                        </div>
-                                        <div class="rp-hint-t"
-                                             data-i18n="repo.hostDownloadPasswordHelp">Subscribers are asked for it before anything is served — the manifest included.</div>
-                                    </div>
-
-                                    <!-- The other half of the same question. A password is a shared secret that
-                                         can be passed on; a key has to be signed for on every request. One line
-                                         per key, the `.pub` file's contents, ed25519 only — the only kind that can
-                                         be verified, so anything else is refused when the server starts rather
-                                         than silently locking every subscriber out. -->
-                                    <div style="margin-bottom:12px;">
-                                        <label class="form-label"
-                                            style="font-size:11px; margin-bottom:4px; display:block;"
-                                            data-i18n="repo.hostAuthorizedKeys">Authorised public keys (optional)</label>
-                                        <textarea id="repo-server-authorized-keys" class="form-input rp-mono" rows="3"
-                                            spellcheck="false"
-                                            data-i18n-placeholder="repo.hostAuthorizedKeysPlaceholder"
-                                            placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5… you@machine"></textarea>
-                                        <div class="rp-hint-t"
-                                             data-i18n="repo.hostAuthorizedKeysHelp">One key per line. Adding any makes a key REQUIRED for everyone — add your own first.</div>
-                                    </div>
-
-                                    <label class="checkbox-container rp-check-row">
-                                        <input type="checkbox" id="repo-host-require-login" />
-                                        <span data-i18n="repo.requireLogin">Require a BetterCommunity account to download</span>
-                                    </label>
-
-                                    <div class="repo-status-bar rp-srv-status" role="status">
-                                        <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
-                                        <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
-                                        <span id="upnp-status-badge" class="rp-upnp" style="display:none;"></span>
-                                    </div>
-
-                                    <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
-                                        <div class="rp-stat">
-                                            <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
-                                            <span id="repo-server-stat-dls" class="rp-stat-v">0</span>
-                                        </div>
-                                        <div class="rp-stat">
-                                            <span class="rp-stat-l" data-i18n="repo.stat.sent">Data sent</span>
-                                            <span id="repo-server-stat-bytes" class="rp-stat-v">0 B</span>
-                                        </div>
-                                    </div>
-
-                                    <div id="public-ip-hint-box" class="rp-note rp-tone--warn" style="display:none;">
-                                        <svg class="ic ic-alert" data-icon="alert" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                                        <span class="rp-note-txt"><b data-i18n="repo.hostPublicHintTitle">Accès Public</b>
-                                        <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre routeur pour un accès externe sans tunnel.</span></span>
-                                    </div>
-
-                                    <button class="btn btn-secondary rp-srv-toggle" id="btn-toggle-repo-server">
-                                        <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
-                                    </button>
-
-                                    <!-- One row, one weight.
-                                         These were three ghost buttons in three different
-                                         colours at 10px uppercase — green-ish, accent, red —
-                                         each shouting a different thing next to a start
-                                         button that is the only one that matters. They are
-                                         three views of the same server, so they read as one
-                                         control: same size, same ink, and the icon carries
-                                         the difference. -->
-                                    <div id="repo-server-tools" class="bmm-seg rp-srv-tools" style="display:none;">
-                                        <button class="bmm-seg-item" id="btn-open-monitoring">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-                                                <path d="m7 14 3-4 3 3 4-6" />
-                                            </svg>
-                                            <span data-i18n="repo.monitoring">Surveillance</span>
-                                        </button>
-                                        <button class="bmm-seg-item" id="btn-open-whitelist">
-                                            <svg class="ic ic-shield-check" data-icon="shield-check" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
-                                            <span data-i18n="repo.whitelist">Whitelist</span>
-                                        </button>
-                                        <button class="bmm-seg-item" id="btn-open-bans">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                <circle cx="12" cy="12" r="9" />
-                                                <line x1="6" y1="6" x2="18" y2="18" />
-                                            </svg>
-                                            <span data-i18n="repo.bans">Bannissements</span>
-                                        </button>
-                                    </div>
-
-                                    <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
-
-                                    <!-- Creator ID: hardware-locked, immutable. Shown while the server runs. -->
-                                    <div id="repo-creator-id-container" class="rp-idbox">
-                                        <div class="rp-idbox-h">
-                                            <span class="rp-idbox-ic"><svg class="ic ic-fingerprint" data-icon="fingerprint" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg></span>
-                                            <span class="rp-idbox-txt">
-                                                <span class="rp-idbox-t" data-i18n="repo.creatorId">Creator ID</span>
-                                                <span class="rp-idbox-sub" data-i18n="repo.creatorIdHint">L'identité de ce BMM auprès des dépôts</span>
-                                            </span>
-                                        </div>
-                                        <div class="rp-addr-row">
-                                            <div class="rp-addr" id="repo-creator-id-value"
-                                                data-i18n-tooltip="repo.creatorIdTooltip" data-tooltip="Creator ID — cliquez pour sélectionner tout">
-                                                <span class="rp-wait">…</span>
+                                    <div class="rp-hstep" data-flow-block="folder">
+                                        <div class="form-group" style="margin-bottom:12px;">
+                                            <label class="form-label" style="margin-bottom:4px;"
+                                                data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-host-path"
+                                                    placeholder="C:\..." readonly />
+                                                <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host"
+                                                    data-i18n="prof.browse">...</button>
                                             </div>
-                                            <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-my-creator-id"
-                                                data-tasky="repo.creatorIdCopyTip" data-tasky-icon="icon-copy">
-                                                <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                        </div>
+                                        <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
+                                            <label class="form-label"
+                                                style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
+                                                data-i18n="repo.hostHistoryLabel">Historique</label>
+                                            <select class="form-input" id="repo-host-history-select"
+                                                style="font-size:12px; padding:6px; background:var(--bmm-s05);">
+                                                <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien
+                                                    dépôt
+                                                    --
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div id="repo-host-metadata-preview" class="rp-meta" style="display:none;">
+                                        </div>
+                                        <!-- The manifest's FORMAT (repo_format.rs): « format 1.0 », or « legacy 0.x » with a
+                                             Convert button. Filled by repo-format.ts when the folder changes. -->
+                                        <div class="rp-fmt-row" id="repo-host-format" hidden></div>
+                                    </div>
+
+                                    <div class="rp-hstep" data-flow-block="start">
+                                        <div class="repo-status-bar rp-srv-status" role="status">
+                                            <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
+                                            <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
+                                            <span id="upnp-status-badge" class="rp-upnp" style="display:none;"></span>
+                                        </div>
+                                        <div id="public-ip-hint-box" class="rp-note rp-tone--warn" style="display:none;">
+                                            <svg class="ic ic-alert" data-icon="alert" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                                            <span class="rp-note-txt"><b data-i18n="repo.hostPublicHintTitle">Accès Public</b>
+                                            <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre routeur pour un accès externe sans tunnel.</span></span>
+                                        </div>
+                                        <button class="btn btn-secondary rp-srv-toggle" id="btn-toggle-repo-server">
+                                            <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
+                                        </button>
+                                        <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
+                                    </div>
+
+                                    <!-- The running server, in one place: the counters, the addresses to share (each
+                                         with a copy button), who may connect, and the session's activity, folded. Shown
+                                         only while it runs (repo-server.ts sets .is-on). Stop is the start button above,
+                                         red while it runs. -->
+                                    <section class="rp-run" id="repo-run-panel" aria-labelledby="repo-run-h">
+                                        <h4 class="rp-sub-h" id="repo-run-h" data-i18n="repo.run.title">Your server</h4>
+                                        <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
+                                            <div class="rp-stat">
+                                                <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
+                                                <span id="repo-server-stat-dls" class="rp-stat-v">0</span>
+                                            </div>
+                                            <div class="rp-stat">
+                                                <span class="rp-stat-l" data-i18n="repo.stat.sent">Data sent</span>
+                                                <span id="repo-server-stat-bytes" class="rp-stat-v">0 B</span>
+                                            </div>
+                                        </div>
+                                        <div id="repo-server-url-container" class="rp-urls" style="display:none;">
+                                                                                    <div id="repo-server-lan-section">
+                                                <label class="form-label rp-url-l" for="repo-server-url" data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-url" readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div id="repo-server-public-section" style="display:none;">
+                                                <label class="form-label rp-url-l" for="repo-server-public-url">
+                                                    <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                                    <span data-i18n="repo.hostPublicUrl">Public IP URL</span>
+                                                </label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-public-url"
+                                                        readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-public-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div id="repo-server-tunnel-section" style="display:none;">
+                                                <label class="form-label rp-url-l" for="repo-server-tunnel-url">
+                                                    <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                                                    <span data-i18n="repo.hostTunnelUrl">Cloudflare Tunnel URL</span>
+                                                </label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-tunnel-url"
+                                                        readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-tunnel-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div><!-- /repo-server-url-container -->
+                                        <!-- One row, one weight.
+                                             These were three ghost buttons in three different
+                                             colours at 10px uppercase — green-ish, accent, red —
+                                             each shouting a different thing next to a start
+                                             button that is the only one that matters. They are
+                                             three views of the same server, so they read as one
+                                             control: same size, same ink, and the icon carries
+                                             the difference. -->
+                                        <div id="repo-server-tools" class="bmm-seg rp-srv-tools" style="display:none;">
+                                            <button class="bmm-seg-item" id="btn-open-monitoring">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                                                    <path d="m7 14 3-4 3 3 4-6" />
+                                                </svg>
+                                                <span data-i18n="repo.monitoring">Surveillance</span>
+                                            </button>
+                                            <button class="bmm-seg-item" id="btn-open-whitelist">
+                                                <svg class="ic ic-shield-check" data-icon="shield-check" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                                                <span data-i18n="repo.whitelist">Whitelist</span>
+                                            </button>
+                                            <button class="bmm-seg-item" id="btn-open-bans">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <circle cx="12" cy="12" r="9" />
+                                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                                </svg>
+                                                <span data-i18n="repo.bans">Bannissements</span>
                                             </button>
                                         </div>
-                                        <div class="rp-idbox-foot" data-i18n="repo.creatorIdFinal">Un identifiant qui identifie ce BMM</div>
-                                    </div>
+                                        <!-- Who connected and what they took, this session. Folded: it is the answer to
+                                             "is anyone using it", not something to watch. -->
+                                        <details class="rp-fold" id="repo-server-activity">
+                                            <summary class="rp-fold-h"><span data-i18n="repo.run.activity">Activity this session</span> <span class="rp-count" id="repo-server-activity-n">0</span></summary>
+                                            <ol class="rp-log rp-actlog" id="repo-server-activity-list"></ol>
+                                            <p class="rp-hint-t" id="repo-server-activity-empty" data-i18n="repo.run.activityEmpty">Nothing yet. Connections and downloads appear here as they happen.</p>
+                                        </details>
+                                    </section>
 
-                                    <div id="repo-server-url-container" class="rp-urls" style="display:none;">
-                                                                                <div id="repo-server-lan-section">
-                                            <label class="form-label rp-url-l" for="repo-server-url" data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input rp-addr-input" id="repo-server-url" readonly />
-                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                    <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                </button>
+                                    <!-- Everything a first host can leave as it is. Applied on the next start. -->
+                                    <details class="rp-fold rp-adv" id="repo-host-advanced">
+                                        <summary class="rp-fold-h"><span data-i18n="repo.hostAdvanced">Port, speed and access</span> <span class="rp-fold-sub" data-i18n="repo.hostAdvancedSub">optional, applied on the next start</span></summary>
+                                        <div class="rp-adv-body">
+                                            <div style="display:flex; gap:12px; margin-bottom:12px;">
+                                                <div style="flex:1;">
+                                                    <label class="form-label"
+                                                        data-i18n="repo.portLabel">Port du serveur</label>
+                                                    <input type="number" id="repo-server-port" class="form-input" value="8000"
+                                                        min="1" max="65535" />
+                                                </div>
+                                                <div style="flex:1;">
+                                                    <label class="form-label"
+                                                        data-i18n="repo.uploadLimit">Limite Upload (Ko/s)</label>
+                                                    <input type="number" id="repo-server-upload-limit" class="form-input"
+                                                        value="0" min="0" step="50" data-i18n-placeholder="repo.limitNone" />
+                                                </div>
                                             </div>
-                                        </div>
-
-                                        <div id="repo-server-public-section" style="display:none;">
-                                            <label class="form-label rp-url-l" for="repo-server-public-url">
-                                                <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                                                <span data-i18n="repo.hostPublicUrl">Public IP URL</span>
+                                            <div style="margin-bottom:12px;">
+                                                <label class="form-label"
+                                                    style="font-size:11px; margin-bottom:4px; display:block;"
+                                                    data-i18n="repo.hostDownloadPassword">Download password (optional)</label>
+                                                <div style="display:flex; gap:6px;">
+                                                    <!-- autocomplete off + a wrapping form: without it the browser
+                                                         offers to save this as a site login. -->
+                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input
+                                                        type="password" id="repo-server-download-password" class="form-input"
+                                                        autocomplete="new-password"
+                                                        data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
+                                                        placeholder="Leave empty for an open repo" /></form>
+                                                    <button type="button" class="btn btn-sm"
+                                                        data-toggle-password="#repo-server-download-password"
+                                                        data-i18n="repo.showHide">Show</button>
+                                                </div>
+                                                <div class="rp-hint-t"
+                                                     data-i18n="repo.hostDownloadPasswordHelp">Subscribers are asked for it before anything is served — the manifest included.</div>
+                                            </div>
+                                            <!-- The other half of the same question. A password is a shared secret that
+                                                 can be passed on; a key has to be signed for on every request. One line
+                                                 per key, the `.pub` file's contents, ed25519 only — the only kind that can
+                                                 be verified, so anything else is refused when the server starts rather
+                                                 than silently locking every subscriber out. -->
+                                            <div style="margin-bottom:12px;">
+                                                <label class="form-label"
+                                                    style="font-size:11px; margin-bottom:4px; display:block;"
+                                                    data-i18n="repo.hostAuthorizedKeys">Authorised public keys (optional)</label>
+                                                <textarea id="repo-server-authorized-keys" class="form-input rp-mono" rows="3"
+                                                    spellcheck="false"
+                                                    data-i18n-placeholder="repo.hostAuthorizedKeysPlaceholder"
+                                                    placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5… you@machine"></textarea>
+                                                <div class="rp-hint-t"
+                                                     data-i18n="repo.hostAuthorizedKeysHelp">One key per line. Adding any makes a key REQUIRED for everyone — add your own first.</div>
+                                            </div>
+                                            <label class="checkbox-container rp-check-row">
+                                                <input type="checkbox" id="repo-host-require-login" />
+                                                <span data-i18n="repo.requireLogin">Require a BetterCommunity account to download</span>
                                             </label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input rp-addr-input" id="repo-server-public-url"
-                                                    readonly />
-                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-public-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                    <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                </button>
+                                            <!-- Creator ID: hardware-locked, immutable. Shown while the server runs. -->
+                                            <div id="repo-creator-id-container" class="rp-idbox">
+                                                <div class="rp-idbox-h">
+                                                    <span class="rp-idbox-ic"><svg class="ic ic-fingerprint" data-icon="fingerprint" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg></span>
+                                                    <span class="rp-idbox-txt">
+                                                        <span class="rp-idbox-t" data-i18n="repo.creatorId">Creator ID</span>
+                                                        <span class="rp-idbox-sub" data-i18n="repo.creatorIdHint">L'identité de ce BMM auprès des dépôts</span>
+                                                    </span>
+                                                </div>
+                                                <div class="rp-addr-row">
+                                                    <div class="rp-addr" id="repo-creator-id-value"
+                                                        data-i18n-tooltip="repo.creatorIdTooltip" data-tooltip="Creator ID — cliquez pour sélectionner tout">
+                                                        <span class="rp-wait">…</span>
+                                                    </div>
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-my-creator-id"
+                                                        data-tasky="repo.creatorIdCopyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                                <div class="rp-idbox-foot" data-i18n="repo.creatorIdFinal">Un identifiant qui identifie ce BMM</div>
                                             </div>
                                         </div>
-
-                                        <div id="repo-server-tunnel-section" style="display:none;">
-                                            <label class="form-label rp-url-l" for="repo-server-tunnel-url">
-                                                <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
-                                                <span data-i18n="repo.hostTunnelUrl">Cloudflare Tunnel URL</span>
-                                            </label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input rp-addr-input" id="repo-server-tunnel-url"
-                                                    readonly />
-                                                <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-tunnel-url"
-                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                    <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div><!-- /repo-server-url-container -->
+                                    </details>
 
                                 </div><!-- /repo-card-body (http server) -->
                             </div><!-- /repo-card--green -->
@@ -4355,12 +4318,12 @@
                             <!-- Community modpack catalogues. Beside Import, because from the
                                  reader's side they are the same action from two places: a pack
                                  off your disk, or a pack somebody published. -->
-                            <button class="btn btn-secondary" id="btn-modpack-catalog" style="gap:6px;"
+                            <button class="btn btn-secondary" id="btn-modpack-catalog"
                                 data-tasky="modpack.cat.tip" data-tasky-icon="package">
                                 <svg class="ic ic-align-justify" data-icon="align-justify" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/></svg>
                                 <span data-i18n="modpack.cat.open">Catalogues</span>
                             </button>
-                            <button class="btn btn-secondary" id="btn-import-modpack" style="gap:6px;">
+                            <button class="btn btn-secondary" id="btn-import-modpack">
                                 <svg class="ic ic-import" data-icon="import" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>
                                 <span data-i18n="modpack.import">Importer (.bmp)</span>
                             </button>

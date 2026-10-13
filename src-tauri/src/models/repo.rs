@@ -85,6 +85,15 @@ pub struct ServerRepo {
     /// from every manifest written before this existed, which is why it is `default`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<serde_json::Value>,
+    /// The FORMAT this manifest is written in — `"1.0"` — as opposed to `version`, which is
+    /// the repo's own version. See `commands::repo_format` for the registry and the rules.
+    ///
+    /// Absent from every manifest written before format 1.0, and skipped when `None`, so a
+    /// legacy manifest re-serialises to exactly the bytes it was signed over: adding this
+    /// field did not invalidate a single existing signature. Written last, and signed with
+    /// the rest by every writer (they stamp it before signing).
+    #[serde(default, alias = "formatVersion", skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<String>,
 }
 
 /// One non-mod thing a repo carries.
@@ -249,6 +258,7 @@ impl ServerRepo {
             modpacks: None,
             extras: Vec::new(),
             credentials: None,
+            format_version: Some(crate::commands::repo_format::CURRENT.to_string()),
         }
     }
 }

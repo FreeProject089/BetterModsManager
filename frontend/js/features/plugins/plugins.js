@@ -674,13 +674,15 @@ function buildPluginCard(plugin, source) {
                      Split, each row wraps within its own kind and the card reads the same
                      at every width. -->
                 <div class="plug-card-actions-main">
-                ${hasModlist ? `
-                    <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
-                        ${IC.search} ${t('plugins.compare')}
-                    </button>` : ''}
+                <!-- Apply (secondary) first, Compare (the card's accent action) last, at the
+                     right edge like every primary action. -->
                 ${(hasModlist || hasScripts) ? `
                     <button class="btn btn-sm btn-secondary plug-btn-apply" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.applyTip')}">
                         ${IC.play} ${t('plugins.apply')}
+                    </button>` : ''}
+                ${hasModlist ? `
+                    <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
+                        ${IC.search} ${t('plugins.compare')}
                     </button>` : ''}
                 </div>
                 <!-- The look-at-it buttons and the ⋮ are siblings in a NOWRAP row.
@@ -5134,8 +5136,9 @@ function renderScripts(container) {
                 </div>
                 <div class="plug-token-row">
                     <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}"></form>
-                    <button class="btn btn-xs btn-ghost" id="plug-token-eye" data-tooltip="${t('plugins.showToken')}">${IC.eye}</button>
+                    <button class="btn btn-sm btn-ghost" id="plug-token-eye" data-tooltip="${t('plugins.showToken')}">${IC.eye}</button>
                     <button class="btn btn-sm btn-ghost" id="plug-copy-token">${IC.copy} ${t('common.copy')}</button>
+                    <span class="view-actions-sep" aria-hidden="true"></span>
                     <button class="btn btn-sm btn-danger" id="plug-reset-token">${IC.refresh} ${t('plugins.resetToken')}</button>
                 </div>
             </div>
@@ -11588,10 +11591,12 @@ function handlePluginChecksumModal(manifest, installDir, hash) {
             <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">${date}</p>
         </div>
         <div class="modal-footer plug-ov-footer">
+            <div class="modal-footer-start">
+                <button class="btn btn-sm btn-danger" id="plug-sha-delete">${IC.trash} ${t('common.delete')}</button>
+            </div>
             <button class="btn btn-sm btn-ghost" id="plug-sha-copy">${IC.copy} ${t('common.copy')}</button>
             <button class="btn btn-sm btn-ghost" id="plug-sha-recalc">${IC.refresh} ${t('plugins.checksumRecalc')}</button>
-            <button class="btn btn-sm btn-danger" id="plug-sha-delete">${IC.trash} ${t('common.delete')}</button>
-            <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
+            <button class="btn btn-sm btn-secondary plug-ov-close-btn">${t('common.close')}</button>
         </div>`);
     ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
     ov.querySelector('#plug-sha-copy')?.addEventListener('click', async () => {

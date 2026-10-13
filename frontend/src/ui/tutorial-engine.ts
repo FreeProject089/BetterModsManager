@@ -14,7 +14,8 @@
 import { resolveTargets, isBareName } from './tutorial-target.js';
 import { t } from '../core/i18n.js';
 import { escAttr } from '../core/utils.js';
-import { claimDockSpace, releaseDockSpace, makeDock } from './dock-space.js';
+import { claimDockSpace, releaseDockSpace } from './dock-space.js';
+import { reveal, coverAt, closeDialog, isShown, type Where } from './tutorial-reveal.js';
 import { invoke } from '../core/api.js';
 import { onBmmAction } from './tutorial-events.js';
 import {
@@ -70,6 +71,32 @@ let _panelTop:  number | null = null;
 
 // Minimize state
 let _isMinimized = false;
+
+// ── The guide window ─────────────────────────────────────────────────────────
+//
+// The coach used to be a dock that overlaid the app: a third of the window that a step's
+// target could sit under, with a pill saying « hidden behind a panel » and no way out. It
+// is now a window of its own inside the app — floating by default, dockable to the left,
+// the right or the bottom edge, draggable by its title bar (drop it on an edge to dock it),
+// minimisable — and it stays out of its target's way: when a step's control ends up under
+// it, the window moves, not the reader. Where it was put is remembered; where it was moved
+// to dodge a target is not, so the next lesson opens where the reader left it.
+//
+// Not a second OS window, on purpose: the guide drives this window's DOM (rings, tabs,
+// dialogs) and reads it ten times a second, which a separate webview could only do through
+// IPC round-trips for every measurement.
+type GuideMode = 'float' | 'left' | 'right' | 'bottom';
+const MODE_KEY = 'bmm.tutorial.guideMode';
+const POS_KEY = 'bmm.tutorial.guidePos';
+const FLOAT_SIZE_KEY = 'bmm.tutorial.guideSize';
+const STEPS_OPEN_KEY = 'bmm.tutorial.stepsOpen';
+/** Where the window went to stay off a target. Cleared when the reader moves it themselves. */
+let _dodge: { mode: GuideMode; x?: number; y?: number } | null = null;
+let _lastDodgeAt = 0;
+/** What the target-finding at step start could not fix; shown in the window until the step changes. */
+let _revealWhere: Where | null = null;
+/** Key of the status line currently drawn, so the 150ms tracker only repaints on change. */
+let _whereKey = '';
 
 // ── Tutorial demo data (ephemeral example profile + mods) ──────────────────
 let _demoCreated = false;
@@ -203,18 +230,23 @@ export function closeTutorialEngine(reopenHub: boolean = false): void {
     _isMinimized = false;
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
+        // The closing window gives up the id at once: a lesson started during its fade-out
+        // (hub → another tutorial) gets a window of its own instead of reusing this one and
+        // losing it when the fade ends. The release below only runs if no new window opened.
+        panel.id = 'tut-engine-panel-closing';
+        const release = () => { if (!document.getElementById('tut-engine-panel')) _setDockReserved(false); };
         if (_panelLeft !== null) {
             panel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
             panel.style.opacity    = '0';
             panel.style.transform  = 'scale(0.96)';
-            setTimeout(() => { _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; }, 220);
+            setTimeout(() => { panel.remove(); release(); _panelLeft = null; _panelTop = null; }, 220);
         } else {
             panel.classList.add('closing');
             // Was missing: this is the NORMAL docked close, and it never released the
             // reservation — the app stayed squeezed against a dock that no longer
             // existed. (The other branch always released; it is the rarer one.)
-            panel.addEventListener('animationend', () => { _setDockReserved(false); panel.remove(); }, { once: true });
-            setTimeout(() => _setDockReserved(false), 400);
+            panel.addEventListener('animationend', () => { panel.remove(); release(); }, { once: true });
+            setTimeout(() => { panel.remove(); release(); }, 400);
         }
     }
     if (reopenHub && _onClose) _onClose();
@@ -296,7 +328,6 @@ function _cleanup(): void {
     // ghost never took it. Only the normal-completion path removed both, which is why
     // it survived minimise-then-close and sat over the app with no tutorial behind it.
     document.getElementById('tut-ghost-caption')?.remove();
-    document.getElementById('tut-scroll-hint')?.remove();
     document.getElementById('tut-unsaved-overlay')?.remove();
     // Don't leave the step's modal open when moving on.
     try { _closeStepModal(_currentStep()); } catch { /* tutorial torn down */ }
@@ -321,80 +352,180 @@ function _ensurePanel(): void {
     if (!document.getElementById('tut-engine-panel')) {
         const panel = document.createElement('div');
         panel.id        = 'tut-engine-panel';
-        panel.className = 'tut-engine-panel';
+        panel.className = 'tut-engine-panel tgw';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'false');
+        panel.setAttribute('aria-label', t('tut.win.title'));
         document.getElementById('app-window-outer')?.appendChild(panel);
-        _plantResizeHandle(panel);
+        // A floating window grows after it is placed (the typewriter, the step list, the
+        // status line): keep its bottom edge inside the app instead of letting it run off.
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(() => _keepFloatInside(panel)).observe(panel);
+        }
     }
 }
 
-/** The dock's inner edge resizes it. Field ask: "pouvoir l'agrandir en largeur".
- *  Pure width change: every mousemove updates the CSS var AND the shell's inline
- *  padding (the same two writers _setDockReserved uses, so they cannot disagree),
- *  and the result persists — how wide you want the guidance is a property of your
- *  screen, not of the lesson. */
-// The fourth copy of the dock mechanism — it outlived the round that collapsed the
-// other three, because it looked different enough to skip: it can dock LEFT, and it
-// wears its own grip skin. Neither is a reason to own a second drag loop. makeDock
-// now takes a `side` and a `gripClass`, so the tutorial keeps both and gives up the
-// duplicate — including the per-mousemove writes that made the drag judder.
-//
-// Also gone with it: the `shell.style.paddingLeft` write on the left-dock path, a
-// survivor of the era when a dock reserved layout space. Docks are overlays now;
-// that line was the last one still moving the app out of the way.
-const _tutDock = makeDock({
-    id: 'tutorial',
-    storageKey: 'bmm.tutorial.dockW',
-    cssVar: '--tut-dock-w',
-    min: 320,
-    def: 380,
-    gripClass: 'tut-dock-resize',
-    side: () => _dockSide() === 'left' ? 'left' : 'right',
-});
-
-function _plantResizeHandle(panel: HTMLElement): void {
-    _tutDock.plantGrip(panel, () => !panel.classList.contains('minimized'));
-    _plantHeightHandle(panel);
+/** Pull a floating window back inside the app after it changed size. Not while dragging. */
+function _keepFloatInside(panel: HTMLElement): void {
+    if (_isDragging || panel.classList.contains('minimized') || !panel.classList.contains('tgw-float')) return;
+    const x = parseFloat(panel.style.left);
+    const y = parseFloat(panel.style.top);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const p = _clampFloat(panel, x, y);
+    if (p.x !== Math.round(x)) panel.style.left = `${p.x}px`;
+    if (p.y !== Math.round(y)) panel.style.top = `${p.y}px`;
 }
 
-/** The bottom dock had no handle at all. The side grip is `ew-resize` and is only
- *  positioned under .tut-dock-right/.tut-dock-left, so in the default bottom strip
- *  there was nothing to drag — even though that mode has its own --tut-dock-h and
- *  the strip is exactly where height matters, since it is what the lesson text has
- *  to fit into. This is the vertical twin: same rAF coalescing, same reasoning. */
-function _plantHeightHandle(panel: HTMLElement): void {
-    if (panel.querySelector('.tut-dock-resize-v')) return;
+/** The reader's choice of placement. The old dock-side key is read once so a reader who had
+ *  docked the coach left keeps it there. */
+function _chosenMode(): GuideMode {
+    let v: string | null = null;
+    try { v = localStorage.getItem(MODE_KEY) || localStorage.getItem('bmm.tutorial.dockSide'); } catch { /* storage off */ }
+    return v === 'left' || v === 'right' || v === 'bottom' || v === 'float' ? v : 'float';
+}
+
+/** Where the window is right now: the dodge, when one is in force, else the choice. */
+function _mode(): GuideMode {
+    return _dodge?.mode ?? _chosenMode();
+}
+
+function _setMode(mode: GuideMode): void {
+    try { localStorage.setItem(MODE_KEY, mode); } catch { /* pref only */ }
+    _dodge = null;
+    _setDockReserved(true);
+}
+
+const _readJson = <T,>(key: string): T | null => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : null; } catch { return null; }
+};
+const _writeJson = (key: string, v: unknown): void => {
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* pref only */ }
+};
+
+const _hostRect = (panel: HTMLElement): DOMRect =>
+    (panel.parentElement || document.body).getBoundingClientRect();
+
+/** Keep a floating window inside the app window, with a margin, whatever was stored. */
+function _clampFloat(panel: HTMLElement, x: number, y: number): { x: number; y: number } {
+    const host = _hostRect(panel);
+    const w = panel.offsetWidth || 380;
+    const h = panel.offsetHeight || 260;
+    return {
+        x: Math.round(Math.max(8, Math.min(x, host.width - w - 8))),
+        y: Math.round(Math.max(8, Math.min(y, host.height - h - 8))),
+    };
+}
+
+/** The grips for the current placement: the inner edge of a dock, the corner of a window. */
+function _plantGrips(panel: HTMLElement): void {
+    panel.querySelectorAll('.tgw-grip').forEach((g) => g.remove());
+    if (panel.classList.contains('minimized')) return;
+    const mode = _mode();
     const grip = document.createElement('div');
-    grip.className = 'tut-dock-resize-v';
+    grip.className = `tgw-grip tgw-grip-${mode}`;
+    grip.setAttribute('aria-hidden', 'true');
     grip.addEventListener('mousedown', (e: MouseEvent) => {
-        if (panel.classList.contains('minimized')) return;
-        if (document.body.classList.contains('tut-dock-side')) return;   // side mode owns width
         e.preventDefault();
+        e.stopPropagation();
+        const start = { x: e.clientX, y: e.clientY, w: panel.offsetWidth, h: panel.offsetHeight };
+        const host = _hostRect(panel);
         grip.classList.add('dragging');
-        let pendingY: number | null = null;
         let frame = 0;
-        let last = 0;
-        const flush = () => {
+        let last = { x: e.clientX, y: e.clientY };
+        const paint = () => {
             frame = 0;
-            if (pendingY === null) return;
-            // Grows upward from the bottom edge, and never taller than 70% of the
-            // window — past that the strip stops being a strip and the app it is
-            // meant to be teaching is no longer visible behind it.
-            last = Math.max(180, Math.min(window.innerHeight - pendingY, Math.round(window.innerHeight * 0.7)));
-            pendingY = null;
-            document.body.style.setProperty('--tut-dock-h', `${last}px`);
+            const dx = last.x - start.x;
+            const dy = last.y - start.y;
+            if (mode === 'left' || mode === 'right') {
+                const w = Math.max(300, Math.min(start.w + (mode === 'right' ? -dx : dx), host.width * 0.6));
+                document.body.style.setProperty('--tut-dock-w', `${Math.round(w)}px`);
+            } else if (mode === 'bottom') {
+                const h = Math.max(160, Math.min(start.h - dy, host.height * 0.7));
+                document.body.style.setProperty('--tut-dock-h', `${Math.round(h)}px`);
+            } else {
+                panel.style.width = `${Math.round(Math.max(300, Math.min(start.w + dx, host.width - 16)))}px`;
+                panel.style.height = `${Math.round(Math.max(200, Math.min(start.h + dy, host.height - 16)))}px`;
+            }
         };
-        const move = (me: MouseEvent) => { pendingY = me.clientY; if (!frame) frame = requestAnimationFrame(flush); };
+        const move = (me: MouseEvent) => { last = { x: me.clientX, y: me.clientY }; if (!frame) frame = requestAnimationFrame(paint); };
         const up = () => {
             grip.classList.remove('dragging');
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', up);
-            if (frame) { cancelAnimationFrame(frame); flush(); }
-            if (last) { try { localStorage.setItem('bmm.tutorial.dockH', String(last)); } catch { /* pref only */ } }
+            if (frame) { cancelAnimationFrame(frame); paint(); }
+            try {
+                if (mode === 'left' || mode === 'right') localStorage.setItem('bmm.tutorial.dockW', String(panel.offsetWidth));
+                else if (mode === 'bottom') localStorage.setItem('bmm.tutorial.dockH', String(panel.offsetHeight));
+                else _writeJson(FLOAT_SIZE_KEY, { w: panel.offsetWidth, h: panel.offsetHeight });
+            } catch { /* pref only */ }
+            if (mode === 'right') claimDockSpace('tutorial', panel.offsetWidth);
         };
         document.addEventListener('mousemove', move);
         document.addEventListener('mouseup', up);
     });
     panel.appendChild(grip);
+}
+
+/** Drag the window by its title bar. A docked window comes off its edge as soon as it moves;
+ *  dropping it near an edge docks it there (a preview shows which), anywhere else it floats. */
+function _makeWindowDraggable(handle: HTMLElement, panel: HTMLElement): void {
+    handle.addEventListener('mousedown', (e: MouseEvent) => {
+        if (e.button !== 0 || panel.classList.contains('minimized')) return;
+        if ((e.target as HTMLElement).closest('button, select, input, a, .tut-chips-scroller, .tgw-menu')) return;
+        const host = _hostRect(panel);
+        const r0 = panel.getBoundingClientRect();
+        const startX = e.clientX, startY = e.clientY;
+        let moved = false;
+        let snap: GuideMode = 'float';
+        let preview: HTMLElement | null = null;
+        let pos = { x: r0.left - host.left, y: r0.top - host.top };
+        const grabDX = startX - r0.left;
+        const grabDY = startY - r0.top;
+        const edge = 28;
+        const onMove = (me: MouseEvent) => {
+            if (!moved) {
+                if (Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY) < 6) return;
+                moved = true;
+                _isDragging = true;
+                // Off the edge: a docked column becomes a window of a sensible width, under
+                // the pointer where it was grabbed.
+                if (_mode() !== 'float') {
+                    _dodge = { mode: 'float' };
+                    _setDockReserved(true);
+                }
+                panel.classList.add('dragging');
+            }
+            const w = panel.offsetWidth;
+            pos = _clampFloat(panel, me.clientX - host.left - Math.min(grabDX, w - 40), me.clientY - host.top - Math.min(grabDY, 30));
+            panel.style.left = `${pos.x}px`;
+            panel.style.top = `${pos.y}px`;
+            snap = me.clientX - host.left < edge ? 'left'
+                : host.right - me.clientX < edge ? 'right'
+                : host.bottom - me.clientY < edge ? 'bottom'
+                : 'float';
+            if (snap !== 'float') {
+                if (!preview) {
+                    preview = document.createElement('div');
+                    preview.className = 'tgw-snap';
+                    panel.parentElement?.appendChild(preview);
+                }
+                preview.dataset.edge = snap;
+            } else if (preview) { preview.remove(); preview = null; }
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            preview?.remove();
+            if (!moved) return;
+            _isDragging = false;
+            panel.classList.remove('dragging');
+            if (snap !== 'float') { _setMode(snap); return; }
+            _writeJson(POS_KEY, pos);
+            _setMode('float');
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
 }
 
 function _applyDragPosition(panel: HTMLElement): void {
@@ -550,8 +681,11 @@ function _renderMinimizedPill(): void {
     // The pill reserves nothing — the app takes its space back while you work, and the
     // pill floats above it, draggable anywhere.
     _setDockReserved(false);
+    panel.querySelectorAll('.tgw-grip').forEach((g) => g.remove());
     panel.style.width = '';
     panel.style.height = '';
+    // The window's float position is not the pill's: the pill starts in its corner.
+    panel.style.left = ''; panel.style.top = ''; panel.style.right = ''; panel.style.bottom = '';
     _applyDragPosition(panel); // back where you last dragged it, if you did
 
     const tut  = _tutorial!;
@@ -589,10 +723,9 @@ function _renderStep(): void {
     const step  = _currentStep();
     const panel = document.getElementById('tut-engine-panel')!;
 
-    panel.classList.remove('minimized', 'pill-float'); _setDockReserved(true);
-    // The dock's CSS owns the expanded position; left/top the pill drag left behind would
-    // pin the full card to wherever the pill was dropped.
-    panel.style.left = ''; panel.style.top = ''; panel.style.bottom = ''; panel.style.transform = '';
+    // Back from the pill: the window's own placement (applied after the markup below, by
+    // _setDockReserved) replaces wherever the pill was dropped.
+    panel.classList.remove('minimized', 'pill-float');
 
     /* ── Apply tutorial color CSS vars for avatar glow + top border ── */
     const colorMatch = tut.color.match(/#([0-9a-fA-F]{6})/);
@@ -690,10 +823,32 @@ function _renderStep(): void {
     const isVeryLast = _stepIndex === _totalSteps() - 1 && _partIndex === tut.parts.length - 1;
     const nextLabel  = isVeryLast ? t('hub.finish') : `${t('hub.next')} →`;
 
+    /* ── Step list: every step of this part, where you are, what is done ── */
+    let stepsOpen = false;
+    try { stepsOpen = localStorage.getItem(STEPS_OPEN_KEY) === '1'; } catch { /* pref only */ }
+    const stepRows = part.steps.map((s, i) => {
+        const st = getStepStatus(tut.id, part.id, s.id).state;
+        const cur = i === _stepIndex;
+        return `<li><button type="button" class="tgw-step${cur ? ' is-current' : ''} is-${st}" data-si="${i}"${cur ? ' aria-current="step"' : ''}>
+            <span class="tgw-step-dot">${st === 'complete' ? uiIcon('check', 12) : String(i + 1)}</span>
+            <span class="tgw-step-name">${t(s.title_key)}</span>
+        </button></li>`;
+    }).join('');
+
+    /* ── Placement menu: the four places the window can live ── */
+    const mode = _chosenMode();
+    const modeIcon = (m: GuideMode) => m === 'float' ? uiIcon('layers', 14)
+        : uiIcon('panel-right', 14, { cls: `tgw-ico-${m}` });
+    const modeItems = (['float', 'left', 'right', 'bottom'] as GuideMode[]).map((m) => `
+        <button type="button" class="tgw-menu-item" role="menuitemradio" aria-checked="${m === mode}" data-mode="${m}">
+            ${modeIcon(m)}<span>${t(`tut.win.${m}`)}</span>${m === mode ? `<span class="tgw-menu-check">${uiIcon('check', 12)}</span>` : ''}
+        </button>`).join('');
+
     panel.innerHTML = `
-        <div class="tut-card-topbar">
+        <div class="tut-card-topbar tgw-titlebar">
+            <span class="tgw-grip-ico" data-tooltip="${escAttr(t('tut.win.drag'))}">${uiIcon('grip', 14)}</span>
             <button class="tut-back-hub-btn" id="btn-tut-back-hub">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                ${uiIcon('chevron-left', 12)}
                 ${t('hub.back')}
             </button>
 
@@ -702,16 +857,17 @@ function _renderStep(): void {
             </div>
 
             <div class="tut-topbar-right">
-                <button class="tut-min-btn" id="btn-tut-side" data-tooltip="${t('tut.dockSide') || 'Dock left / right / bottom'}">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                <button class="tut-min-btn" id="btn-tut-mode" aria-haspopup="menu" aria-expanded="false" data-tooltip="${escAttr(t('tut.win.mode'))}" aria-label="${escAttr(t('tut.win.mode'))}">
+                    ${modeIcon(mode)}
                 </button>
-                <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${t('common.minimize')}">
+                <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${escAttr(t('common.minimize'))}" aria-label="${escAttr(t('common.minimize'))}">
                     ${uiIcon('remove', 12)}
                 </button>
-                <button class="tut-x-btn" id="btn-tut-close" data-tooltip="${t('hub.close')}">
+                <button class="tut-x-btn" id="btn-tut-close" data-tooltip="${escAttr(t('hub.close'))}" aria-label="${escAttr(t('hub.close'))}">
                     ${uiIcon('close', 12)}
                 </button>
             </div>
+            <div class="tgw-menu" id="tut-mode-menu" role="menu" hidden>${modeItems}</div>
         </div>
 
         <div class="tut-card-body tut-body-enter">
@@ -722,7 +878,9 @@ function _renderStep(): void {
                 <div class="tut-header-text">
                     <div class="tut-header-meta">
                         <span class="tut-tutorial-label" style="color:${tut.color}">${t(tut.title_key)}</span>
-                        <span class="tut-step-ctr">${_stepIndex + 1}/${_totalSteps()}</span>
+                        <button type="button" class="tut-step-ctr tgw-steps-btn" id="btn-tut-steps" aria-expanded="${stepsOpen}" aria-controls="tut-steps" data-tooltip="${escAttr(t('tut.steps.toggle'))}">
+                            ${uiIcon('list', 12)}<span>${_stepIndex + 1}/${_totalSteps()}</span>${uiIcon(stepsOpen ? 'chevron-up' : 'chevron-down', 12)}
+                        </button>
                     </div>
                     <h3 class="tut-step-title">
                         ${step.icon ? `<span class="tut-step-icon">${step.icon}</span>` : ''}
@@ -731,7 +889,11 @@ function _renderStep(): void {
                 </div>
             </div>
 
+            <ol class="tgw-steps" id="tut-steps" aria-label="${escAttr(t('tut.steps.title'))}"${stepsOpen ? '' : ' hidden'}>${stepRows}</ol>
+
             ${navHintHtml ? `<div class="tut-nav-hint-row">${navHintHtml}</div>` : ''}
+
+            <div class="tgw-where" id="tut-where" role="status" aria-live="polite" hidden></div>
 
             <div class="tut-step-scroll-area">
                 <p class="tut-step-text" id="tut-typewriter"></p>
@@ -748,44 +910,104 @@ function _renderStep(): void {
                         <div class="tut-footer-progress-fill" style="width:${globalPct}%;background:${tut.color}"></div>
                     </div>
                     <span class="tut-footer-progress-label">${globalPct}%</span>
-                    <span class="tut-kbd-hint" data-tooltip="${t('tut.kbdHint') || 'Keyboard: ← → navigate · M minimize'}"><kbd>←</kbd><kbd>→</kbd><kbd>M</kbd></span>
+                    <span class="tut-kbd-hint" data-tooltip="${escAttr(t('tut.kbdHint'))}"><kbd>←</kbd><kbd>→</kbd><kbd>M</kbd></span>
                 </div>
             </div>
             <div class="tut-footer-btns">
-                <div style="display:flex;align-items:center;gap:8px">
+                <div class="tgw-foot-left">
                     ${!isFirst ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>` : ''}
-                    ${hasTarget ? `<button class="tut-showme-btn" id="btn-tut-showme" data-tooltip="${t('tut.showMe.tip') || 'Show me where to interact'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></svg>${t('tut.showMe') || 'Show me'}</button>` : ''}
+                    ${hasTarget ? `<button class="tut-showme-btn" id="btn-tut-showme" data-tooltip="${escAttr(t('tut.showMe.tip'))}">${uiIcon('eye', 14)}${t('tut.showMe')}</button>` : ''}
                 </div>
-                <div style="display:flex;align-items:center;gap:8px">
-                    <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${t('tut.skip.title')}">${t('tut.skip')}</button>
+                <div class="tgw-foot-right">
+                    <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${escAttr(t('tut.skip.title'))}">${t('tut.skip')}</button>
                     <button class="tut-next-btn" id="btn-tut-next" ${(step.action && step.advance !== 'next') ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
                 </div>
             </div>
         </div>
     `;
+    _setDockReserved(true);
+    _whereKey = '';
+    _revealWhere = null;
 
-    /* ── Highlights (delayed — wait for nav/view to settle) ── */
+    /* ── Find the target, make it visible if that is safe, then light it (delayed — wait
+       for nav/view to settle) ── */
     const _snapPart = _partIndex;
     const _snapStep = _stepIndex;
     setTimeout(() => {
         if (!document.getElementById('tut-engine-panel')) return;
         if (_partIndex !== _snapPart || _stepIndex !== _snapStep) return;
-        _highlightElements(step);
+        void _revealAndHighlight(false);
         if (step.modal_selector) _startModalPoll(step.modal_selector, step.modal_fields);
     }, 300);
 
     /* ── Typewriter ── */
     _startTypewriter(t(step.text_key));
 
-    /* ── Drag (topbar only, exclude chip scroller) ── */
+    /* ── The title bar moves the window ── */
     const topbar = panel.querySelector('.tut-card-topbar') as HTMLElement | null;
-    if (topbar) _makeDraggable(topbar, panel);
+    if (topbar) _makeWindowDraggable(topbar, panel);
+
+    /* ── Placement menu ── */
+    const modeBtn = document.getElementById('btn-tut-mode');
+    const menu = document.getElementById('tut-mode-menu');
+    const closeMenu = () => {
+        if (menu) menu.hidden = true;
+        modeBtn?.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('mousedown', outside, true);
+    };
+    const outside = (e: MouseEvent) => {
+        if (!(e.target as HTMLElement).closest('#tut-mode-menu, #btn-tut-mode')) closeMenu();
+    };
+    modeBtn?.addEventListener('click', () => {
+        if (!menu) return;
+        const open = menu.hidden;
+        menu.hidden = !open;
+        modeBtn.setAttribute('aria-expanded', String(open));
+        if (open) {
+            document.addEventListener('mousedown', outside, true);
+            (menu.querySelector('[aria-checked="true"]') as HTMLElement | null)?.focus();
+        } else closeMenu();
+    });
+    menu?.querySelectorAll<HTMLElement>('.tgw-menu-item').forEach((item) => {
+        item.addEventListener('click', () => {
+            closeMenu();
+            _setMode(item.dataset.mode as GuideMode);
+            _renderStep();
+        });
+    });
+    menu?.addEventListener('keydown', (e: KeyboardEvent) => {
+        const items = Array.from(menu.querySelectorAll<HTMLElement>('.tgw-menu-item'));
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(); modeBtn?.focus(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+    });
+
+    /* ── Step list ── */
+    document.getElementById('btn-tut-steps')?.addEventListener('click', () => {
+        const list = document.getElementById('tut-steps');
+        if (!list) return;
+        list.hidden = !list.hidden;
+        try { localStorage.setItem(STEPS_OPEN_KEY, list.hidden ? '0' : '1'); } catch { /* pref only */ }
+        const b = document.getElementById('btn-tut-steps');
+        b?.setAttribute('aria-expanded', String(!list.hidden));
+        const chev = b?.querySelector('svg:last-child');
+        if (chev) chev.outerHTML = uiIcon(list.hidden ? 'chevron-down' : 'chevron-up', 12);
+    });
+    panel.querySelectorAll<HTMLElement>('.tgw-step').forEach((row) => {
+        row.addEventListener('click', () => {
+            const si = parseInt(row.dataset.si || '', 10);
+            if (!Number.isFinite(si) || si === _stepIndex) return;
+            _cleanup();
+            _stepIndex = si;
+            _renderStep();
+        });
+    });
 
     /* ── Button listeners ── */
     document.getElementById('btn-tut-back-hub')?.addEventListener('click', () => { _cleanup(); closeTutorialEngine(true); });
     document.getElementById('btn-tut-close')?.addEventListener('click', () => closeTutorialEngine());
     document.getElementById('btn-tut-minimize')?.addEventListener('click', () => _minimize());
-    document.getElementById('btn-tut-side')?.addEventListener('click', () => _cycleDockSide());
     document.getElementById('btn-tut-prev')?.addEventListener('click', _prevStep);
     document.getElementById('btn-tut-next')?.addEventListener('click', _nextStep);
 
@@ -1099,10 +1321,7 @@ function _finishTutorial(): void {
     _cleanup();
     const panel = document.getElementById('tut-engine-panel')!;
     const tut   = _tutorial!;
-    panel.classList.remove('minimized', 'pill-float'); _setDockReserved(true);
-    // The dock's CSS owns the expanded position; left/top the pill drag left behind would
-    // pin the full card to wherever the pill was dropped.
-    panel.style.left = ''; panel.style.top = ''; panel.style.bottom = ''; panel.style.transform = '';
+    panel.classList.remove('minimized', 'pill-float');
 
     panel.innerHTML = `
         <div class="tut-finish-screen">
@@ -1118,6 +1337,7 @@ function _finishTutorial(): void {
         </div>
     `;
 
+    _setDockReserved(true);
     document.getElementById('btn-tut-finish-hub')?.addEventListener('click', () => {
         _cleanupDemo();
         panel.classList.add('closing');
@@ -1410,6 +1630,56 @@ function _startFieldFlow(fields: { sel: string; key: string }[]): void {
     _fieldFlowRender();
 }
 
+const _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Find the step's control and get it in front of the reader before lighting it: open the
+ * tab or section it is in, close a leftover dialog over it when that loses nothing, scroll
+ * it into view (tutorial-reveal.ts). What cannot be fixed safely is said in the guide's
+ * status line, with a « Show me » that comes back here.
+ *
+ * `userAsked` — the reader pressed Show me: go to the step's page first (they may have
+ * wandered off), and once the control is lit, play the ghost-cursor demonstration.
+ */
+async function _revealAndHighlight(userAsked: boolean): Promise<void> {
+    const step = _currentStepRef();
+    if (!step || !_tutorial) return;
+    const snap = `${_tutorial.id}:${_partIndex}:${_stepIndex}`;
+    const same = () => !!_tutorial && `${_tutorial.id}:${_partIndex}:${_stepIndex}` === snap;
+    if (userAsked && step.nav) {
+        _navigate(step.nav);
+        _refreshNavHint();
+        await _sleep(250);
+        if (!same()) return;
+    }
+    _revealWhere = null;
+    _whereKey = '';
+    const sels = step.fields?.length
+        ? step.fields.map((f) => f.sel)
+        : [...(step.selector ? [step.selector] : []), ...(step.selectors ?? [])];
+    // The step's own dialog is already up (the reader came back to this step): the modal
+    // poll takes it from there, and its opener being covered by it is expected.
+    const ownTarget = step.modal_selector ? (resolveTargets(step.modal_selector)[0] ?? null) : null;
+    if (sels.length && !isShown(ownTarget)) {
+        const guide = document.getElementById('tut-engine-panel');
+        const primary = _resolveFieldEl(sels[0]);
+        let w: Where = primary ? reveal(primary, guide, ownTarget) : { kind: 'missing' };
+        if (primary && w.kind !== 'ok') {
+            // A tab click or a closing dialog re-renders on the next frames: look again.
+            await _sleep(120);
+            if (!same()) return;
+            w = reveal(primary, guide, ownTarget);
+        }
+        if (w.kind !== 'ok' && w.kind !== 'covered-guide' && w.kind !== 'offscreen') _revealWhere = w;
+    }
+    document.querySelectorAll('.tut-highlight').forEach((el) => el.remove());
+    _highlightElements(step);
+    _renderWhere(null);
+    if (userAsked && !_revealWhere && document.querySelector('.tut-highlight')) {
+        setTimeout(() => { if (same()) _showMe(true); }, 350);
+    }
+}
+
 function _highlightElements(step: TutorialStep): void {
     // Field guide for fields already on the page (numbered rings, no dim).
     if (step.fields && step.fields.length) {
@@ -1598,112 +1868,133 @@ function _autoPlacePanel(_targetRect: DOMRect): void {
     // dock reserves its own space, so there is nothing left to avoid.
 }
 
-/** Reserve the dock's height on <body> so the app reflows above it instead of being
- *  covered — and give it back on teardown, otherwise every later view keeps a phantom
- *  band of padding it cannot explain. */
-/** Which edge the dock occupies. Persisted: where you want the guidance is a preference
- *  about your screen, not about the lesson, so it should survive one ending. */
-type DockSide = 'right' | 'left';
-const DOCK_KEY = 'bmm.tutorial.dockSide';
-
-/** Right by default, and there is no bottom any more.
- *
- * A full-width strip along the bottom edge cost the app a band of height on every screen
- * and left the guidance far from whatever it was pointing at — it read as a broken layout
- * rather than as a panel. A column beside the app is the shape that works: it takes width
- * the window has to spare, and it sits next to the thing being explained. */
-function _dockSide(): DockSide {
-    return localStorage.getItem(DOCK_KEY) === 'left' ? 'left' : 'right';
-}
-
-function _applyDockSide(): void {
-    const side = _dockSide();
-    document.body.classList.toggle('tut-dock-right', side === 'right');
-    document.body.classList.toggle('tut-dock-left', side === 'left');
-    // Always one or the other now, so the bottom-dock rules never apply.
-    document.body.classList.add('tut-dock-side');
-}
-
-/** Right ⇄ left. One button, two states: which side of the window you want the guidance
- *  on is a preference about your screen, and it is cheap to undo by clicking again. */
-function _cycleDockSide(): void {
-    const next: DockSide = _dockSide() === 'right' ? 'left' : 'right';
-    localStorage.setItem(DOCK_KEY, next);
-    _applyDockSide();
-    // The reservation is a height on the bottom edge and a width on a side, so the
-    // measurement has to be retaken, not just re-labelled.
-    _setDockReserved(true);
-}
-
+/** Put the guide window where its placement says, or (`on` false) give everything back:
+ *  the body classes, the dock width the right edge claimed, the size variables. The name is
+ *  the dock era's; every render and teardown path already calls it, so it stays the ONE
+ *  writer of the window's geometry. */
 function _setDockReserved(on: boolean): void {
-    document.body.classList.toggle('tut-docked', on);
-    if (!on) {
-        document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
-        document.body.style.removeProperty('--tut-dock-h');
-        document.body.style.removeProperty('--tut-dock-w');
-        releaseDockSpace('tutorial');            // give the width back to the shared owner
-        const shell = document.querySelector('.app-shell') as HTMLElement | null;
-        if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
-        return;
-    }
-    // Restore the remembered strip height. Until the vertical grip existed nothing
-    // ever wrote --tut-dock-h, so the CSS lived on its 200px fallback forever; now
-    // that it can be dragged, it has to survive being closed and reopened — a panel
-    // that forgets its size every time is a panel you resize every time.
-    if (!document.body.classList.contains('tut-dock-side')) {
-        const h = parseInt(localStorage.getItem('bmm.tutorial.dockH') || '', 10);
-        if (Number.isFinite(h) && h > 0) {
-            document.body.style.setProperty('--tut-dock-h', `${Math.min(h, Math.round(window.innerHeight * 0.7))}px`);
-        }
-    }
-    _applyDockSide();
-    // A column, so what is reserved is a WIDTH — and a width is a layout choice, not a
-    // consequence of the step's text, which simply wraps. Clamped to a third of the window
-    // so it cannot eat a narrow one. The old height path is gone with the bottom dock.
-    // A stored width (the drag handle below) wins; otherwise the formula. Clamped both
-    // ways: a column under 320px cuts button labels, one past 60% of the window stops
-    // being a companion and becomes the app.
-    const stored = parseInt(localStorage.getItem('bmm.tutorial.dockW') || '', 10);
-    const w = Math.max(320, Math.min(
-        Number.isFinite(stored) && stored > 0 ? stored : Math.min(420, Math.round(window.innerWidth * 0.34)),
-        Math.round(window.innerWidth * 0.6),
-    ));
-    document.body.style.setProperty('--tut-dock-w', `${w}px`);
-    document.body.style.removeProperty('--tut-dock-h');
-    // The reservation itself is written INLINE on .app-shell, not left to a stylesheet.
-    // Field screenshot: the dock overlaid the library's action bar while the CSS rule
-    // for this exact padding looked correct — #app-window-outer carries `contain: paint`,
-    // which quietly reparents fixed descendants and has already fooled one layer of this
-    // system. An inline style depends on nothing: no specificity, no class propagation,
-    // no custom-property inheritance. The stylesheet rules remain as a second layer.
-    // The dock no longer reserves layout space — see ui/dock-space.ts. Any padding
-    // a previous build left on the shell is cleared, or it would survive as a
-    // phantom band nobody can explain.
+    const panel = document.getElementById('tut-engine-panel');
+    // The dock era's body classes are never set any more; clear them in case a build that
+    // set them left them behind.
+    document.body.classList.remove('tut-docked', 'tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
     if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
-    // The shared owner has the last word on the width: it clamps against the band
-    // the app needs and returns what it can actually spare (0 when the window is
-    // too narrow). Honour it, or the coach ends up painting over the lesson.
-    if (_dockSide() === 'right') {
-        const granted = claimDockSpace('tutorial', w);
-        if (granted && granted !== w) {
-            document.body.style.setProperty('--tut-dock-w', `${granted}px`);
-            if (shell) shell.style.paddingRight = `${granted}px`;
-        } else if (!granted) {
-            // No room at all: the guidance becomes an overlay card rather than a
-            // column, so it never covers what it is pointing at.
-            document.body.style.removeProperty('--tut-dock-w');
-            if (shell) shell.style.paddingRight = '';
-        }
+    if (!on || !panel) {
+        document.body.classList.remove('tgw-open', 'tgw-left', 'tgw-right', 'tgw-bottom', 'tgw-float');
+        document.body.style.removeProperty('--tut-dock-h');
+        document.body.style.removeProperty('--tut-dock-w');
+        releaseDockSpace('tutorial');
+        return;
+    }
+    const mode = _mode();
+    panel.classList.add('tgw');
+    for (const m of ['float', 'left', 'right', 'bottom']) {
+        panel.classList.toggle(`tgw-${m}`, m === mode);
+        document.body.classList.toggle(`tgw-${m}`, m === mode);
+    }
+    document.body.classList.add('tgw-open');
+    const host = _hostRect(panel);
+
+    const storedW = parseInt(localStorage.getItem('bmm.tutorial.dockW') || '', 10);
+    const dockW = Math.max(300, Math.min(Number.isFinite(storedW) && storedW > 0 ? storedW : 380, Math.round(host.width * 0.6)));
+    const storedH = parseInt(localStorage.getItem('bmm.tutorial.dockH') || '', 10);
+    const dockH = Math.max(160, Math.min(Number.isFinite(storedH) && storedH > 0 ? storedH : 230, Math.round(host.height * 0.7)));
+    document.body.style.setProperty('--tut-dock-w', `${dockW}px`);
+    document.body.style.setProperty('--tut-dock-h', `${dockH}px`);
+
+    if (mode === 'float') {
+        const size = _readJson<{ w: number; h: number }>(FLOAT_SIZE_KEY);
+        panel.style.width = `${Math.round(Math.max(300, Math.min(size?.w || 400, host.width - 16)))}px`;
+        panel.style.height = size?.h ? `${Math.round(Math.max(200, Math.min(size.h, host.height - 16)))}px` : '';
+        const want = _dodge?.mode === 'float' && _dodge.x !== undefined
+            ? { x: _dodge.x, y: _dodge.y ?? 0 }
+            : _readJson<{ x: number; y: number }>(POS_KEY)
+              // First time: bottom-right corner, where a guide window is expected.
+              ?? { x: host.width - (panel.offsetWidth || 400) - 20, y: host.height - (panel.offsetHeight || 320) - 20 };
+        const p = _clampFloat(panel, want.x, want.y);
+        panel.style.left = `${p.x}px`;
+        panel.style.top = `${p.y}px`;
+        panel.style.right = '';
+        panel.style.bottom = '';
+    } else {
+        // The placement's CSS owns the geometry of a docked window.
+        panel.style.left = ''; panel.style.top = ''; panel.style.right = ''; panel.style.bottom = '';
+        panel.style.width = ''; panel.style.height = '';
+    }
+    panel.style.transform = '';
+
+    // Only the right edge is shared with other docks (theme editor, sandbox): dock-space.ts
+    // decides how much of it there is, and surfaces that opt in lay themselves out against it.
+    if (mode === 'right') {
+        const granted = claimDockSpace('tutorial', dockW);
+        if (granted && granted !== dockW) document.body.style.setProperty('--tut-dock-w', `${granted}px`);
     } else {
         releaseDockSpace('tutorial');
     }
+    // innerHTML re-renders delete the grips; one call here re-plants them for every path.
+    _plantGrips(panel);
+}
+
+/** Overlap area of two rects, after growing `b` by `pad` on every side. */
+function _overlap(a: { left: number; top: number; right: number; bottom: number }, b: DOMRect, pad = 10): number {
+    const w = Math.min(a.right, b.right + pad) - Math.max(a.left, b.left - pad);
+    const h = Math.min(a.bottom, b.bottom + pad) - Math.max(a.top, b.top - pad);
+    return w > 0 && h > 0 ? w * h : 0;
+}
+
+/**
+ * The step's target is under the window: move the WINDOW. A dock goes to the other side
+ * (the bottom one to the top edge, as a floating strip there); a floating window goes to the
+ * free spot nearest to where it was. Only when it helps: a target as wide as the app overlaps
+ * every placement, and a window hopping between two equally bad spots helps nobody.
+ */
+function _dodgeTarget(target: DOMRect): void {
     const panel = document.getElementById('tut-engine-panel');
-    document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
-    // Re-plant after every render: _renderStep and the pill both rebuild via innerHTML,
-    // which silently deletes the grip. This runs on every step, so one call here beats
-    // remembering it at three render sites (the function no-ops when the grip exists).
-    if (panel) _plantResizeHandle(panel);
+    if (!panel || panel.classList.contains('minimized') || _isDragging) return;
+    const now = Date.now();
+    if (now - _lastDodgeAt < 700) return;
+    const host = _hostRect(panel);
+    const pr = panel.getBoundingClientRect();
+    const here = _overlap(pr, target);
+    if (!here) return;
+    const w = pr.width, h = pr.height, m = 12;
+    type Cand = { mode: GuideMode; x?: number; y?: number; rect: { left: number; top: number; right: number; bottom: number } };
+    const at = (mode: GuideMode, x: number, y: number, cw = w, ch = h): Cand => ({
+        mode, x: x - host.left, y: y - host.top, rect: { left: x, top: y, right: x + cw, bottom: y + ch },
+    });
+    const mode = _mode();
+    const cands: Cand[] = [];
+    if (mode === 'left' || mode === 'right') {
+        const other: GuideMode = mode === 'left' ? 'right' : 'left';
+        const x = other === 'left' ? host.left : host.right - w;
+        cands.push({ mode: other, rect: { left: x, top: host.top, right: x + w, bottom: host.bottom } });
+    } else {
+        // A bottom strip has nowhere to go but up: it floats as a narrower window instead.
+        const fw = mode === 'bottom' ? Math.min(420, host.width - 2 * m) : w;
+        const fh = mode === 'bottom' ? Math.min(h, 300) : h;
+        const xs = [host.right - fw - m, host.left + m, target.right + m, target.left - fw - m];
+        const ys = [host.bottom - fh - m, host.top + m, target.bottom + m, target.top - fh - m];
+        for (const x of xs) for (const y of ys) {
+            if (x < host.left || y < host.top || x + fw > host.right || y + fh > host.bottom) continue;
+            cands.push(at('float', x, y, fw, fh));
+        }
+    }
+    let best: Cand | null = null;
+    let bestScore = Infinity;
+    for (const c of cands) {
+        const o = _overlap(c.rect, target);
+        // Overlap first; then the shortest move, so the window does not cross the screen to
+        // avoid a target it could clear by sliding over.
+        const dist = Math.hypot(c.rect.left - pr.left, c.rect.top - pr.top);
+        const score = o * 1000 + dist;
+        if (o < here && score < bestScore) { best = c; bestScore = score; }
+    }
+    if (!best) return;
+    _lastDodgeAt = now;
+    _dodge = { mode: best.mode, x: best.x, y: best.y };
+    panel.classList.add('tgw-moving');
+    _setDockReserved(true);
+    setTimeout(() => panel.classList.remove('tgw-moving'), 260);
 }
 
 /** "Phantom" demo: float a ghost cursor from the coach card to the current
@@ -1719,11 +2010,9 @@ function _showMe(navigated: boolean = false): void {
         // is what made it read as broken: it worked, but only if you were already where
         // it assumed. Go to the step's page first, give the view a beat to render, then
         // demonstrate. `navigated` stops a second hop if the page really has no targets.
-        const step = _currentStep();
-        if (!navigated && step?.nav) {
-            _navigate(step.nav);
-            setTimeout(() => { _refreshNavHint(); _renderStep(); setTimeout(() => _showMe(true), 350); }, 250);
-        }
+        // The page is not the only thing in the way any more: the reveal also opens the
+        // control's tab and clears a leftover dialog, and says where it is when it can't.
+        if (!navigated) void _revealAndHighlight(true);
         return;
     }
     const color = _tutorial?.color ?? 'var(--accent)';
@@ -1877,33 +2166,21 @@ function _startHighlightTracker(): void {
         if (highlights.length === 0) {
             clearInterval(_highlightTrackerInterval!);
             _highlightTrackerInterval = null;
-            _renderScrollHint(null, null);
-            document.getElementById('tut-engine-panel')?.classList.remove('tut-dodge');
+            _renderWhere(null);
             return;
         }
+        const guide = document.getElementById('tut-engine-panel');
         let anyInView = false;
-        let anyBehindPanel = false;
-        let offTarget: { el: HTMLElement; dir: 'up' | 'down' | 'left' | 'right' | 'behind' } | null = null;
-        // The sidebar can COVER a target horizontally — a step pointing at something behind it
-        // used to draw a highlight nobody could see, with no cue. Detect that as its own case.
-        const sidebar = document.querySelector('.sidebar') as HTMLElement | null;
-        const sbRect = (sidebar && window.getComputedStyle(sidebar).display !== 'none' && sidebar.offsetWidth > 0)
-            ? sidebar.getBoundingClientRect() : null;
-        // …and so can the tutorial panel itself: docked to a side or across the bottom, it sits
-        // OVER the app, so a step can point at a control the panel is covering. Detect that the
-        // same way, automatically — no longer only findable by pressing "Show me".
-        const tutPanel = document.getElementById('tut-engine-panel');
-        const tpRect = (tutPanel && !tutPanel.classList.contains('tut-min') && tutPanel.offsetWidth > 0
-            && window.getComputedStyle(tutPanel).display !== 'none')
-            ? tutPanel.getBoundingClientRect() : null;
-        const underRect = (rect: DOMRect | null, x: number, y: number) =>
-            !!rect && x <= rect.right && x >= rect.left && y >= rect.top && y <= rect.bottom;
+        let status: Where | null = null;
+        let offEl: HTMLElement | null = null;
         highlights.forEach(hlEl => {
             const hl     = hlEl as HTMLElement;
             const target = (hl as any)._tutTarget as HTMLElement | null;
             if (!target || !target.isConnected) { hl.remove(); return; }
             const r = target.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) { hl.remove(); return; }
+            // No box, or a box nobody can see (a closed generic dialog keeps its layout under
+            // visibility:hidden): a ring there would point at nothing.
+            if (r.width === 0 || r.height === 0 || !isShown(target)) { hl.remove(); return; }
             // View bounds = the nearest scroll container, else the window.
             const clip = _scrollClipRect(target);
             const vTop = clip ? clip.top : 0;
@@ -1913,22 +2190,30 @@ function _startHighlightTracker(): void {
             const cy = r.top + r.height / 2;
             const cx = r.left + r.width / 2;
             const inViewV = cy >= vTop - 2 && cy <= vBottom + 2;
-            // Behind the sidebar OR the tutorial panel: the target's centre sits inside either
-            // overlay's rectangle, so a highlight there would be drawn under something opaque.
-            const behindPanel = underRect(tpRect, cx, cy);
-            const behindSidebar = underRect(sbRect, cx, cy) || behindPanel;
-            if (behindPanel) anyBehindPanel = true;
-            const inViewH = cx >= vLeft - 2 && cx <= vRight + 2 && !behindSidebar;
-            const inView = inViewV && inViewH;
+            const inViewH = cx >= vLeft - 2 && cx <= vRight + 2;
+            let inView = inViewV && inViewH;
+            if (inView) {
+                // In the scroll box — but is something painted over it? The guide steps aside;
+                // anything else is named in the guide, with what to do about it.
+                const cover = coverAt(target, guide);
+                if (cover.kind === 'covered-guide') {
+                    _dodgeTarget(r);
+                } else if (cover.kind !== 'ok') {
+                    // The step's own dialog opening over its opener is progress, not a problem.
+                    const step = _currentStepRef();
+                    const ownOpen = cover.kind === 'covered-dialog' && !!step?.modal_selector
+                        && !!resolveTargets(step.modal_selector)[0]?.closest('.modal-overlay, .modal-generic-overlay')?.isSameNode(cover.overlay);
+                    if (!ownOpen && !status) status = cover;
+                    // A ring drawn on top of the dialog that hides its target points at the
+                    // dialog's own fields instead; the status line says where it is.
+                    if (cover.kind === 'sidebar' || cover.kind === 'covered-dialog') inView = false;
+                }
+            } else if (!offEl) {
+                offEl = target;
+                status = status ?? { kind: 'offscreen', dir: !inViewV ? (cy < vTop ? 'up' : 'down') : (cx < vLeft ? 'left' : 'right') };
+            }
             hl.style.visibility = inView ? 'visible' : 'hidden';
             if (inView) anyInView = true;
-            else if (!offTarget) {
-                const dir: 'up' | 'down' | 'left' | 'right' | 'behind' =
-                    behindSidebar ? 'behind'
-                    : !inViewV ? (cy < vTop ? 'up' : 'down')
-                    : (cx < vLeft ? 'left' : 'right');
-                offTarget = { el: target, dir };
-            }
             const pad        = 4;
             const cs         = window.getComputedStyle(target);
             const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -1941,48 +2226,84 @@ function _startHighlightTracker(): void {
             hl.style.height      = `${r.height + pad * 2}px`;
             hl.style.borderRadius= `${baseRadius + pad}px`;
         });
-        // When the tutorial panel itself is covering the target, fade it back automatically so
-        // the highlighted control shows through — the cue no longer waits on "Show me".
-        if (tutPanel) tutPanel.classList.toggle('tut-dodge', anyBehindPanel && !anyInView);
-        // Show a "scroll up/down" cue when the highlighted target is off-screen and
-        // nothing else for this step is currently visible.
-        if (!anyInView && offTarget) _renderScrollHint((offTarget as { dir: 'up' | 'down' | 'left' | 'right' | 'behind' }).dir, (offTarget as { el: HTMLElement }).el);
-        else _renderScrollHint(null, null);
+        // One status line, in the guide: an off-screen target only matters when nothing of
+        // this step is visible; something covering the target always does.
+        if (status && (status as Where).kind === 'offscreen' && anyInView) status = null;
+        // The control is visible and nothing covers it: whatever the start of the step found
+        // (a dialog on top, a closed tab) has been dealt with, so stop saying it.
+        if (!status && anyInView) _revealWhere = null;
+        _renderWhere(status, offEl);
     }, 150);
 }
 
-/** Floating "scroll up/down" cue shown when the highlighted target is out of view.
- *  Clicking it scrolls the target into view. Pass (null, null) to remove it. */
-function _renderScrollHint(dir: 'up' | 'down' | 'left' | 'right' | 'behind' | null, target: HTMLElement | null): void {
-    const existing = document.getElementById('tut-scroll-hint');
-    if (!dir || !target) { existing?.remove(); return; }
-    const color = _tutorial?.color ?? 'var(--accent)';
-    let hint = existing;
-    if (!hint) {
-        hint = document.createElement('button');
-        hint.id = 'tut-scroll-hint';
-        hint.className = 'tut-scroll-hint';
-        document.body.appendChild(hint);
+/**
+ * The guide's status line: where the step's control is when it cannot simply be pointed
+ * at, and the one button that fixes it. Replaces the floating « hidden behind a panel » pill,
+ * which said something was wrong without saying what or offering a way out. `null` hides
+ * it (the start-of-step finding, if any, stays until the step changes).
+ */
+function _renderWhere(status: Where | null, target: HTMLElement | null = null): void {
+    const box = document.getElementById('tut-where');
+    if (!box) return;
+    const w = status ?? _revealWhere;
+    const key = w ? `${w.kind}:${'dir' in w ? w.dir : ''}:${'title' in w ? w.title : ''}:${'label' in w ? w.label : ''}:${'dirty' in w ? w.dirty : ''}` : '';
+    // An empty key means "nothing to say": it only matches when the line is already hidden
+    // (callers reset _whereKey to '' to force a repaint, which must still hide a stale line).
+    if (key === _whereKey && (key || box.hidden)) return;
+    _whereKey = key;
+    if (!w || w.kind === 'ok' || w.kind === 'covered-guide') { box.hidden = true; box.innerHTML = ''; return; }
+    const step = _currentStepRef();
+    const page = step?.nav && NAV_LABELS[step.nav] ? t(NAV_LABELS[step.nav]) : '';
+    let text = '';
+    let btn = '';
+    let act: (() => void) | null = null;
+    switch (w.kind) {
+        case 'offscreen':
+            text = t(`tut.where.${w.dir === 'up' ? 'above' : w.dir === 'down' ? 'below' : 'side'}`);
+            btn = t('tut.where.scroll');
+            act = () => target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            break;
+        case 'sidebar':
+            text = t('tut.where.sidebar');
+            btn = t('tut.where.scroll');
+            act = () => target?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            break;
+        case 'covered-dialog':
+            text = w.title ? t('tut.where.coveredBy', { title: w.title }) : t('tut.where.covered');
+            btn = w.dirty ? t('tut.where.closeDirty') : t('tut.where.close');
+            act = () => { closeDialog(w.overlay); _whereKey = ''; };
+            break;
+        case 'covered-other':
+            text = t('tut.where.covered');
+            btn = t('tut.where.show');
+            act = () => { void _revealAndHighlight(true); };
+            break;
+        case 'closed-dialog':
+            text = w.title ? t('tut.where.inDialog', { title: w.title }) : t('tut.where.inClosedDialog');
+            btn = t('tut.where.show');
+            act = () => { void _revealAndHighlight(true); };
+            break;
+        case 'tab':
+            text = w.label ? t('tut.where.onTab', { tab: w.label }) : t('tut.where.otherTab');
+            btn = t('tut.where.show');
+            act = () => { void _revealAndHighlight(true); };
+            break;
+        case 'missing':
+        default:
+            text = page ? t('tut.where.missingOn', { page }) : t('tut.where.missing');
+            btn = t('tut.where.show');
+            act = () => { void _revealAndHighlight(true); };
+            break;
     }
-    // 'behind' (covered by the sidebar) points left, toward the sidebar, and carries its own text.
-    const arrowDir = dir === 'behind' ? 'left' : dir;
-    for (const d of ['up', 'down', 'left', 'right', 'behind'] as const) hint.classList.toggle(`is-${d}`, dir === d);
-    hint.style.background = color;
-    const arrows: Record<string, string> = {
-        up:    '<polyline points="18 15 12 9 6 15"/>',
-        down:  '<polyline points="6 9 12 15 18 9"/>',
-        left:  '<polyline points="15 18 9 12 15 6"/>',
-        right: '<polyline points="9 18 15 12 9 6"/>',
-    };
-    const label = dir === 'behind' ? t('tut.scroll.behind')
-        : dir === 'up' ? t('tut.scroll.up')
-        : dir === 'down' ? t('tut.scroll.down')
-        : dir === 'left' ? t('tut.scroll.left')
-        : t('tut.scroll.right');
-    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${arrows[arrowDir]}</svg><span>${label}</span>`;
-    // Scrolling into view fixes an off-screen target; for one behind the sidebar it nudges any
-    // horizontal scroll container, and the label already tells the reader what is in the way.
-    (hint as any).onclick = () => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    box.hidden = false;
+    box.innerHTML = `
+        <span class="tgw-where-ico">${uiIcon(w.kind === 'offscreen' ? (w.dir === 'up' ? 'move-up' : w.dir === 'down' ? 'move-down' : 'arrow-right') : 'eye-off', 16)}</span>
+        <span class="tgw-where-text"></span>
+        <button type="button" class="tgw-where-btn"></button>`;
+    (box.querySelector('.tgw-where-text') as HTMLElement).textContent = text;
+    const b = box.querySelector('.tgw-where-btn') as HTMLButtonElement;
+    b.textContent = btn;
+    b.addEventListener('click', () => act?.());
 }
 
 /** Rect of the nearest scrollable ancestor (to clip highlights to the scroll area). */

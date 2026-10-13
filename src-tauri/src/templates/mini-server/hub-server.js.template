@@ -197,6 +197,25 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(ROOT, 'public', 'hub-dashboard.html'));
 });
 
+// The FORMAT of the manifest this server hands out (BMM's repo_format): « format 1.0 » when it
+// says so, « legacy 0.x » when it was written by a BMM from before manifests declared one.
+// The same shape rules as BMM's own detection, reduced to what a log line needs. Converting
+// is BMM's job (Server Repo page, or `bmm repo-convert <folder>`): it needs the owner's key.
+function repoFormatOf(rj) {
+    if (!rj || typeof rj !== 'object' || Array.isArray(rj)) return 'not a repo manifest';
+    const declared = rj.format_version !== undefined ? rj.format_version : rj.formatVersion;
+    if (declared !== undefined && declared !== null) return 'format ' + String(declared);
+    const has = (o, ks) => !!o && ks.some(k => Object.prototype.hasOwnProperty.call(o, k));
+    const profiles = Array.isArray(rj.profiles) ? rj.profiles : [];
+    const mods = [].concat(...profiles.map(p => (p && Array.isArray(p.mods)) ? p.mods : []));
+    const files = [].concat(...mods.map(m => (m && Array.isArray(m.files)) ? m.files : []));
+    if (has(rj, ['files_base_url', 'filesBaseUrl', 'files_layout', 'filesLayout', 'extras', 'credentials']) || files.some(f => has(f, ['mtime']))) return 'legacy 0.4';
+    if (has(rj, ['modpacks', 'require_login', 'requireLogin']) || profiles.some(p => has(p, ['icon', 'color', 'icon_image']))
+        || mods.some(m => has(m, ['archive', 'dependencies', 'changelog', 'update_url', 'direct_url', 'update_sources']))) return 'legacy 0.3';
+    if (has(rj, ['author_id', 'signature', 'seed', 'upload_limit']) && mods.every(m => has(m, ['download_links']))) return 'legacy 0.2';
+    return 'legacy 0.1';
+}
+
 // ── Per-repo security middleware ───────────────────────────────────────────────
 function repoSecurityCheck(folder, ip, key, res) {
     const bans = readJson(bansPath(folder), { banned_ips: [], banned_keys: [] });
@@ -238,6 +257,7 @@ function publicMonitoring(r) {
             version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
             totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
             totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            repoFormat: typeof s.repoFormat === 'string' ? s.repoFormat : undefined,
             activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
         },
         active, sessions: [], history: []
@@ -257,7 +277,7 @@ function repoMonitoring(folder) {
         speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1),
     }));
     return {
-        server: { uptime: now - startTime, totalDownloads: st.totalDownloads, totalBytes: st.totalBytesSent, totalRepoSize: repoSize },
+        server: { uptime: now - startTime, totalDownloads: st.totalDownloads, totalBytes: st.totalBytesSent, totalRepoSize: repoSize, repoFormat: repoFormatOf(rj) },
         active,
         sessions: Array.from(repoSessions[folder].entries()).map(([ip, s]) => ({
             ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files,
@@ -417,7 +437,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`   |            BMM MULTI-REPO HUB  (Admin Edition)      |`);
     console.log(`   +------------------------------------------------------+${r}\n`);
     console.log(`  ${b}${g}[STATUS]${r}  ONLINE  |  ${b}${c}[PORT]${r}  ${PORT}  |  ${b}${g}[REPOS]${r}  ${repos.length}`);
-    repos.forEach(rp => console.log(`            • ${rp.name}  →  /${rp.folder}/repo.json`));
+    repos.forEach(rp => {
+        const fmt = repoFormatOf(readJson(repoFile(rp.folder, 'repo.json'), null));
+        console.log(`            • ${rp.name}  →  /${rp.folder}/repo.json  (${fmt}${fmt.startsWith('legacy') ? ' — convert it in BMM' : ''})`);
+    });
     console.log(`\n  ${b}${c}[DASH]${r}    http://127.0.0.1:${PORT}/\n`);
     // Which repos are closed, named at startup. A gate nobody can see is a gate people
     // forget they set, and then debug as "my repo is broken".

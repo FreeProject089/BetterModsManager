@@ -767,6 +767,21 @@ impl ServerHandler for BmmMcpServer {
             "required": ["url", "kind", "id"]
         })).unwrap()),
     ),
+    // Repo manifest format: detect, plan, convert.
+    Tool::new(
+        "bmm_repo_convert",
+        "Convert a repo FOLDER's repo.json (on this machine) to the current manifest format, 1.0. Detects the format first: 'format 1.0' (current, nothing to do), 'legacy 0.1'…'legacy 0.4' (written by an older BMM, before manifests declared a format). Converting fills the keys older BMMs left out, re-hashes every listed file from the folder, stamps format_version, keeps the old manifest as repo.json.v<old>-<stamp>.bak and re-signs with this BMM's key — so a repo that was signed by someone else changes author id. Call with dry_run: true FIRST and show the person the plan (works with BMM closed); the real conversion needs the running app. Returns { from, changes[], counts, warnings, written, backupPath, signature }.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "The repo folder, or its repo.json." },
+                "dry_run": { "type": "boolean", "description": "Plan only: report the detected format and every change, write nothing. Default false." },
+                "rehash": { "type": "boolean", "description": "Re-hash the files from the folder. Default true." },
+                "sign": { "type": "boolean", "description": "Sign with this BMM's key. Default true; false writes an unsigned manifest." }
+            },
+            "required": ["path"]
+        })).unwrap()),
+    ),
     // Identity keys.
     Tool::new(
         "bmm_list_keys",
@@ -1505,6 +1520,25 @@ impl ServerHandler for BmmMcpServer {
                 if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
             }
             self.tool_api_call("POST", "/api/repo/extras", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_repo_convert" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let dry_run = args.get("dry_run").and_then(|v| v.as_bool()).unwrap_or(false);
+            let rehash = args.get("rehash").and_then(|v| v.as_bool()).unwrap_or(true);
+            let sign = args.get("sign").and_then(|v| v.as_bool()).unwrap_or(true);
+            if dry_run {
+                // Offline, with the app's own converter: a plan needs no key.
+                let p = std::path::PathBuf::from(path);
+                let file = if p.is_dir() { p.join("repo.json") } else { p };
+                let text = match std::fs::read_to_string(&file) { Ok(t) => t, Err(e) => return err_result(&format!("cannot read {}: {}", file.display(), e)) };
+                let v: serde_json::Value = match serde_json::from_str(text.trim_start_matches('\u{feff}')) { Ok(v) => v, Err(e) => return err_result(&format!("not JSON: {}", e)) };
+                let dir = file.parent().map(|d| d.to_path_buf());
+                return match crate::commands::repo_format::convert(v, if rehash { dir.as_deref() } else { None }) {
+                    Ok(plan) => ok_json(&json!({ "dryRun": true, "fromLabel": plan.from.label(), "plan": plan })),
+                    Err(e) => err_result(&e),
+                };
+            }
+            self.tool_api_call("POST", "/api/repo/convert", Some(json!({ "path": path, "dryRun": false, "rehash": rehash, "sign": sign }))).await
         }
         "bmm_list_keys" => self.tool_api_call("GET", "/api/keys", None).await,
         "bmm_create_key" => {

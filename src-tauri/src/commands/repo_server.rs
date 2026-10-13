@@ -134,6 +134,14 @@ pub fn set_repo_require_login(repo_dir: String, require: bool) -> Result<(), Str
     let manifest = std::path::PathBuf::from(&repo_dir).join("repo.json");
     let content = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
     let mut val: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    // Called on EVERY start of the built-in server. Rewriting an unchanged answer turned a
+    // `null` into `false` — a different serialisation of the same meaning — and that alone
+    // made a signed manifest fail its own signature check (and lose its format key order).
+    let current = val.get("require_login").or_else(|| val.get("requireLogin"))
+        .and_then(serde_json::Value::as_bool).unwrap_or(false);
+    if current == require {
+        return Ok(());
+    }
     if let Some(obj) = val.as_object_mut() {
         obj.insert("require_login".into(), serde_json::Value::Bool(require));
         obj.remove("requireLogin");

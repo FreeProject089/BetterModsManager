@@ -14,6 +14,8 @@
  * Usage:
  *   node scripts/gen-update-manifest.mjs
  *   node scripts/gen-update-manifest.mjs --version 1.2.3   (override version)
+ *   node scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe --require-installer
+ *                                         (the release: also list the signed full installer)
  *
  * Output:
  *   dist/release-assets-v{version}/
@@ -143,28 +145,64 @@ for (const entry of TRACKED_FILES) {
     ok++;
 }
 
-// ── The full installers (NSIS .exe, MSI), when the bundle exists ─────────────
-// Copied next to the manifest AND listed in its `installers`, with their SHA-256: BMM's
-// full-installer fallback (autoupdate.rs, download_and_install_update) runs an installer only
-// when the SIGNED manifest lists its URL and the downloaded bytes have that hash. Every one is
-// listed, because the release check picks the .msi first and the .exe otherwise.
-const nsisDir   = join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
-const msiDir    = join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'msi');
+// ── The full installer: BetterInstaller's BMM-Setup.exe, and nothing else ─────
+// Listed in the manifest's `installers` with its SHA-256: BMM's full-installer fallback
+// (autoupdate.rs, download_and_install_update) runs an installer only when the SIGNED manifest
+// lists it and the downloaded bytes have that hash. Without an entry every copy that was not
+// installed by BetterInstaller is told « this release publishes no signed update manifest ».
+//
+// It is named explicitly (`--installer Release/BMM-Setup.exe`, see `npm run release:assets`),
+// never found by scanning. This used to scan target/release/bundle/{nsis,msi}: `npm run build`
+// stopped bundling (--no-bundle), so those folders only held a STALE setup from an older build,
+// and the v1.0.1 manifest listed « Better Mod Manager_1.0.0_x64-setup.exe ». A release must
+// also carry ONE installer asset: BMM 0.9.11 has no version guard and runs the first .msi/.exe
+// it finds on the release, so a second one is a second program it may launch.
+//
+// `--require-installer` fails when no installer was given (the release path); a plain
+// `npm run build` writes the incremental part only.
+const installerArgs = [];
+argv.forEach((a, i) => {
+    if (a === '--installer' && argv[i + 1]) installerArgs.push(argv[i + 1]);
+    else if (a.startsWith('--installer=')) installerArgs.push(a.slice('--installer='.length));
+});
+const requireInstaller = argv.includes('--require-installer');
 const installers = [];
 
-for (const dir of [nsisDir, msiDir]) {
-    if (!existsSync(dir)) continue;
-    for (const name of readdirSync(dir).filter(f => f.endsWith('.exe') || f.endsWith('.msi'))) {
-        const src  = join(dir, name);
-        const buffer = readFileSync(src);
-        copyFileSync(src, join(OUT_DIR, name));
-        installers.push({
-            path:         name,
-            sha256:       sha256(buffer),
-            download_url: `https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${name}`,
-            size:         buffer.length,
-        });
-        console.log(`   📦 Installer copied and listed: ${name} (${humanSize(buffer.length)})`);
+if (installerArgs.length > 1) {
+    console.error('[gen-update-manifest] One installer per release (BMM-Setup.exe): got ' + installerArgs.join(', '));
+    process.exit(1);
+}
+for (const rel of installerArgs) {
+    const src = join(ROOT, rel);
+    const name = basename(src);
+    if (name !== 'BMM-Setup.exe') {
+        console.error(`[gen-update-manifest] The release installer must be BMM-Setup.exe, not ${name}`);
+        process.exit(1);
+    }
+    if (!existsSync(src)) {
+        console.error(`[gen-update-manifest] ${rel} does not exist: run npm run build:installer first`);
+        process.exit(1);
+    }
+    const buffer = readFileSync(src);
+    copyFileSync(src, join(OUT_DIR, name));
+    installers.push({
+        path:         name,
+        sha256:       sha256(buffer),
+        download_url: `https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${name}`,
+        size:         buffer.length,
+    });
+    console.log(`   📦 Installer copied and listed: ${name} (${humanSize(buffer.length)})`);
+}
+if (requireInstaller && !installers.length) {
+    console.error('[gen-update-manifest] --require-installer: pass --installer Release/BMM-Setup.exe');
+    process.exit(1);
+}
+// A setup left in the output folder by an earlier run would be uploaded with the rest.
+for (const f of readdirSync(OUT_DIR)) {
+    const lower = f.toLowerCase();
+    if ((lower.endsWith('.exe') || lower.endsWith('.msi')) && !installers.some(i => i.path === f)) {
+        console.error(`[gen-update-manifest] dist/release-assets-v${VERSION}/${f} is not this release's installer: delete it`);
+        process.exit(1);
     }
 }
 

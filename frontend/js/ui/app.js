@@ -99,7 +99,7 @@ import { recordNotification, initNotificationCenter } from './notification-cente
 // installed at boot to be worth anything, and pulling the whole DevTools surface
 // onto the boot path to get it would trade one diagnostic for a slower start.
 import { initWebviewErrorTrap } from '../features/debug/webview-env.js';
-import { uiIcon } from './icons.js';
+import { uiIcon, brandIcon } from './icons.js';
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 /**
  * "Exported" is only half an answer. The other half — WHERE — was missing from every
@@ -958,6 +958,16 @@ async function main() {
                 const { setInstallerTelemetryPreselect } = await import('../core/analytics.js');
                 setInstallerTelemetryPreselect(true, { usage: ho.telemetry_usage, perf: ho.telemetry_perf, laya: ho.telemetry_laya });
             }
+            // The installer's privacy step (« Essential only » / « Accept all » / « Customize »)
+            // is the decision itself: Rust already recorded the consent, so only the categories
+            // it picked are stored here, and the consent dialog never asks again.
+            if (ho.telemetry_consent === true) {
+                const { applyInstallerTelemetryDecision } = await import('../core/analytics.js');
+                applyInstallerTelemetryDecision({ usage: ho.telemetry_usage, perf: ho.telemetry_perf, laya: ho.telemetry_laya });
+            }
+            // Automatic update checks: read as `!== 'false'`, so only an explicit "off" is written.
+            if (ho.auto_update === false)
+                localStorage.setItem('bmm_auto_update_enabled', 'false');
             // Weekly benchmark + extra hardware report — a JS-side setting, default OFF.
             if (typeof ho.telemetry_bench === 'boolean') {
                 localStorage.setItem('bmm_telemetry_bench', ho.telemetry_bench ? '1' : '0');
@@ -1170,14 +1180,10 @@ async function main() {
     initCredits();
     // Force an explicit initial scan at startup so we don't rely on the debounced focus event
     setTimeout(() => { refreshMods(true); }, 500);
-    // Show happy tasky when everything is ready
-    const loaderImg = document.getElementById('loader-img');
+    // The splash is the logo now (boot-loader.js): no « happy mascot » frame to wait for.
     const loaderText = document.getElementById('loader-text');
-    if (loaderImg)
-        loaderImg.src = 'assets/Tasky_Happy.png';
     if (loaderText)
         loaderText.textContent = t('common.loaded');
-    // Hide loader smoothly after a small delay to see the happy face
     const loader = document.getElementById('app-loader');
     if (loader) {
         setTimeout(() => {
@@ -1195,7 +1201,7 @@ async function main() {
                 }
                 loader.remove();
             }, 600);
-        }, 800);
+        }, 150);
     }
     await initSettings();
     // ── Apply sound settings from config ──
@@ -1842,6 +1848,12 @@ function initCredits() {
             `;
         }).join('');
     }
+    // Who wrote the code, from the git history (generated beside the stack).
+    if (contributorsGrid) {
+        void Promise.all([loadStackJson(), import('./credits-extras.js')])
+            .then(([j, m]) => m.renderCodeContributors(contributorsGrid, j?.contributors, CONTRIBUTORS))
+            .catch(() => { });
+    }
     // Language change support
     document.addEventListener('langChanged', () => {
         if (contributorsGrid) {
@@ -1870,15 +1882,18 @@ const STACK_GROUP_TEXT = {
     site: ['credits.group.site', 'BetterCommunity site', 'credits.groupBlurb.site', 'The website, its API and its Discord bot.'],
     tooling: ['credits.group.tooling', 'Build & tooling', 'credits.groupBlurb.tooling', 'Compiler, build and test tools. They do not ship inside BMM.'],
 };
-let _stackData = null;
-function loadStackData() {
-    if (!_stackData) {
-        _stackData = fetch('assets/credits-stack.gen.json')
-            .then((r) => (r.ok ? r.json() : { groups: [] }))
-            .then((j) => (Array.isArray(j?.groups) ? j.groups : []))
-            .catch(() => { _stackData = null; return []; });
+let _stackJson = null;
+/** The whole generated file: `groups` (the stack) and `contributors` (the git history). */
+function loadStackJson() {
+    if (!_stackJson) {
+        _stackJson = fetch('assets/credits-stack.gen.json')
+            .then((r) => (r.ok ? r.json() : {}))
+            .catch(() => { _stackJson = null; return {}; });
     }
-    return _stackData;
+    return _stackJson;
+}
+function loadStackData() {
+    return loadStackJson().then((j) => (Array.isArray(j?.groups) ? j.groups : []));
 }
 /** The card's description: ours when we wrote one, else the line from its own manifest. */
 function stackDesc(it) {
@@ -2090,7 +2105,11 @@ window.openStackModal = async (onlyGroup) => {
                 ${it.licenseFrom && it.licenseFrom !== it.source ? fact(t('credits.stackLicenseFrom'), it.licenseFrom) : ''}
             </dl>
             <div class="stk-d-actions">
-                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open>${escHtml(t('credits.stackOpenPage'))} ${uiIcon('external', 14)}</button>` : ''}
+                ${it.lic?.length ? `<button type="button" class="btn btn-primary btn-sm" data-stk-lic>${uiIcon('scale', 14)} ${escHtml(t('credits.stackReadLicence'))}</button>` : ''}
+                ${it.repo ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="repo" title="${escAttr(it.repo)}">${/github\.com\//.test(it.repo) ? brandIcon('github', 14) : uiIcon('code', 14)} ${escHtml(t('credits.stackRepo'))}</button>` : ''}
+                ${it.home ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="home" title="${escAttr(it.home)}">${uiIcon('globe', 14)} ${escHtml(t('credits.stackHome'))}</button>` : ''}
+                ${!it.lic?.length && /^https:\/\//.test(it.licenseFrom || '') ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="licfrom" title="${escAttr(it.licenseFrom)}">${uiIcon('scale', 14)} ${escHtml(t('credits.stackLicenceSource'))}</button>` : ''}
+                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open title="${escAttr(it.url)}">${escHtml(t('credits.stackOpenPage'))} ${uiIcon('external', 14)}</button>` : ''}
                 <button type="button" class="btn btn-ghost btn-sm" data-stk-back>${escHtml(t('credits.stackOverview'))}</button>
             </div>`;
     };
@@ -2177,6 +2196,26 @@ window.openStackModal = async (onlyGroup) => {
             const u = rows[sel]?.it.url;
             if (u)
                 window.openExternal?.(u);
+            return;
+        }
+        const linkBtn = tgt.closest('[data-stk-link]');
+        if (linkBtn) {
+            const it = rows[sel]?.it;
+            const u = linkBtn.dataset.stkLink === 'repo' ? it?.repo : linkBtn.dataset.stkLink === 'home' ? it?.home : it?.licenseFrom;
+            if (u && /^https:\/\//.test(u))
+                window.openExternal?.(u);
+            return;
+        }
+        if (tgt.closest('[data-stk-lic]')) {
+            const it = rows[sel]?.it;
+            if (!it?.lic?.length)
+                return;
+            const keep = detail.onclick;
+            void import('./credits-extras.js').then(({ openLicenceReader }) => openLicenceReader(detail, {
+                name: it.name, version: it.version, license: it.license, files: it.lic,
+                notify: (m) => toast(m, 'success'),
+                onBack: () => { detail.onclick = keep; renderDetail(); detail.querySelector('[data-stk-lic]')?.focus({ preventScroll: true }); },
+            }));
             return;
         }
         if (tgt.closest('[data-stk-back]')) {

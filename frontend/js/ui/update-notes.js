@@ -6,7 +6,7 @@
 import { invoke } from '../core/api.js';
 import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
-import { toast } from './app.js';
+import { toast, openExternal } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { raiseAboveAll } from './layer.js';
 import { getLinks } from '../core/links-config.js';
@@ -876,6 +876,19 @@ function showUpdateAvailableModal(info) {
                     <div id="incremental-progress-file" style="font-size:10px;color:var(--text-secondary);margin-top:5px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
                 </div>
 
+                <!-- Why the update did not go through, and the way out that always works -->
+                <div id="upd-error" class="upd-error" role="alert" hidden>
+                    ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
+                    <div class="upd-error-body">
+                        <div class="upd-error-title">${t('update.failedTitle') || 'The update did not go through'}</div>
+                        <div class="upd-error-msg" id="upd-error-msg"></div>
+                        <div class="upd-error-actions">
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-upd-release-page">${uiIcon('download', 12)} ${t('update.openReleasePage') || 'Download from the release page'}</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-upd-retry">${t('update.retry') || 'Try again'}</button>
+                        </div>
+                    </div>
+                </div>
+
                 ${info.major_bump ? `
                 <div class="upd-major">
                     ${uiIcon('warning', 16, { style: 'flex-shrink:0;margin-top:1px' })}
@@ -967,7 +980,7 @@ function showUpdateAvailableModal(info) {
                 progressSection.classList.add('is-done');
             }
             catch (err) {
-                toast(t('common.error') + ': ' + String(err), 'error');
+                showUpdateError(err);
                 progressLabel.textContent = t('update.errTryFullInstaller');
                 incrementalBtn.disabled = false;
                 if (modal.querySelector('#btn-download-install-update')) {
@@ -976,36 +989,101 @@ function showUpdateAvailableModal(info) {
             }
         });
     }
+    // Failures land in the modal, in words, next to the one way out that always works: the
+    // release page, where the installer can be downloaded and run by hand.
+    const errorBox = modal.querySelector('#upd-error');
+    const showUpdateError = (err) => {
+        const msg = String(err).replace(/^Error:\s*/, '');
+        modal.querySelector('#upd-error-msg').textContent = msg;
+        errorBox.hidden = false;
+    };
+    modal.querySelector('#btn-upd-release-page')?.addEventListener('click', () => {
+        openExternal(info.release_url || 'https://github.com/FreeProject089/BetterModsManager/releases/latest');
+    });
     const downloadBtn = modal.querySelector('#btn-download-install-update');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', async () => {
-            const originalContent = downloadBtn.innerHTML;
-            downloadBtn.disabled = true;
-            downloadBtn.innerHTML = (uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite' }) + ' ') + (t('update.downloading') || 'Downloading...');
+    const runFullInstall = async () => {
+        if (!downloadBtn)
+            return;
+        const originalContent = downloadBtn.innerHTML;
+        const incBtn = modal.querySelector('#btn-incremental-update');
+        const progressSection = modal.querySelector('#incremental-progress-section');
+        const progressBar = modal.querySelector('#incremental-progress-bar');
+        const progressLabel = modal.querySelector('#incremental-progress-label');
+        const progressCount = modal.querySelector('#incremental-progress-count');
+        const progressFile = modal.querySelector('#incremental-progress-file');
+        errorBox.hidden = true;
+        downloadBtn.disabled = true;
+        if (incBtn)
+            incBtn.disabled = true;
+        downloadBtn.innerHTML = (uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite' }) + ' ') + (t('update.downloading') || 'Downloading...');
+        progressSection.classList.remove('is-done');
+        progressSection.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressCount.textContent = '';
+        progressFile.textContent = '';
+        // check -> notes (this modal) -> download (resumable, with progress) -> verify (signature +
+        // SHA-256) -> install (the verified installer) -> restart (BMM closes; reopened from the
+        // installer). The events come from autoupdate.rs (download_installer / emit_download).
+        const listen = window.__TAURI__?.event?.listen;
+        let unlisten = null;
+        const mb = (n) => ((n || 0) / 1048576).toFixed(1);
+        try {
+            if (listen) {
+                unlisten = await listen('update-download-progress', (evt) => {
+                    const d = evt.payload || {};
+                    if (d.phase === 'downloading') {
+                        const pct = d.total > 0 ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0;
+                        progressBar.style.width = pct + '%';
+                        progressLabel.textContent = t('update.dlProgress', { done: mb(d.received), total: mb(d.total) }) || `Downloading ${mb(d.received)} / ${mb(d.total)} MB`;
+                        progressCount.textContent = pct + '%';
+                        progressFile.textContent = d.resumed ? (t('update.dlResumed') || 'resumed where it stopped') : '';
+                    }
+                    else if (d.phase === 'verifying') {
+                        progressBar.style.width = '100%';
+                        progressLabel.textContent = t('update.verifying') || 'Checking the signature and the SHA-256...';
+                        progressCount.textContent = '';
+                    }
+                    else if (d.phase === 'launching') {
+                        progressSection.classList.add('is-done');
+                        progressLabel.textContent = t('update.launching') || 'Starting the installer. BMM closes now.';
+                    }
+                });
+            }
+            // Prefer BetterInstaller's updater (delta + signature + rollback via the bundled
+            // <install>/uninstall.exe). On success it starts the updater and quits BMM, so this
+            // invoke never returns. "not installed via BetterInstaller" leads to the direct
+            // download below; any other failure (the updater did not start) is shown, not swallowed.
             try {
-                // Prefer BetterInstaller's updater (delta + signature + rollback via the
-                // bundled <install>/uninstall.exe). On success it spawns the updater and
-                // quits BMM, so this invoke never returns. If BMM wasn't installed by
-                // BetterInstaller it throws → fall back to the direct download below.
-                try {
-                    await invoke('update_via_installer');
-                    return; // BMM is exiting; updater window takes over
-                }
-                catch (_) { /* not installed via BetterInstaller → direct download */ }
-                // The backend runs the installer only if the release's SIGNED manifest lists
-                // this URL with its SHA-256 (download_and_install_update); otherwise it refuses
-                // with a message and BMM stays on this version. The file name comes from that
-                // manifest, not from the URL.
-                await invoke('download_and_install_update', { url: info.download_url, manifestUrl: info.manifest_url || null });
-                downloadBtn.innerHTML = t('common.installing');
+                progressLabel.textContent = t('update.viaInstaller') || "Starting BetterInstaller's updater...";
+                await invoke('update_via_installer');
+                return; // BMM is exiting; updater window takes over
             }
-            catch (err) {
-                toast(t('common.error') + ' : ' + String(err), 'error');
-                downloadBtn.disabled = false;
-                downloadBtn.innerHTML = originalContent;
+            catch (e) {
+                if (!String(e).includes('not installed via BetterInstaller'))
+                    throw e;
             }
-        });
-    }
+            progressLabel.textContent = t('update.downloading') || 'Downloading...';
+            // The backend runs the installer only if the release's SIGNED manifest lists it with
+            // its SHA-256 (download_and_install_update); `url` only chooses among those entries.
+            // An interrupted download resumes on the next try.
+            await invoke('download_and_install_update', { url: info.download_url, manifestUrl: info.manifest_url || null });
+            downloadBtn.innerHTML = t('common.installing');
+        }
+        catch (err) {
+            showUpdateError(err);
+            progressSection.style.display = 'none';
+            downloadBtn.disabled = false;
+            if (incBtn)
+                incBtn.disabled = false;
+            downloadBtn.innerHTML = originalContent;
+        }
+        finally {
+            if (unlisten)
+                unlisten();
+        }
+    };
+    downloadBtn?.addEventListener('click', () => { void runFullInstall(); });
+    modal.querySelector('#btn-upd-retry')?.addEventListener('click', () => { void runFullInstall(); });
     modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
     modal.querySelector('#btn-update-later').addEventListener('click', () => modal.remove());
     modal.addEventListener('click', (e) => { if (e.target === modal)

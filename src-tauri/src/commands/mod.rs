@@ -66,6 +66,9 @@ pub mod plugin_assets_core;
 pub mod plugin_assets;
 pub mod hooks;
 pub mod repo_remote;
+// Repo manifest format versions + the converter (core, mountable by the CLI) and its app side.
+pub mod repo_format;
+pub mod repo_convert;
 pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;
@@ -80,6 +83,8 @@ pub mod bmms;
 pub mod scheduler;
 pub mod analytics;
 pub mod live_issues;
+// Proof of consent: the append-only, hash-chained "My consents" ledger (Settings → Privacy).
+pub mod consent_ledger;
 pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;

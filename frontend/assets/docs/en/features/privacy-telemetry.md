@@ -16,6 +16,22 @@ The dialog has four buttons and nothing else counts as an answer (a click beside
 | **No thanks** | Off, remembered |
 | **Later** (or Escape) | Nothing saved, nothing sent; asked again at the next launch |
 
+### If you installed with BetterInstaller
+
+The installer asks the same question first, on its **Privacy & data** step, the way a cookie
+banner does. Nothing is pre-selected, and Install stays greyed out until you pick one:
+
+| Card | What BMM starts with |
+|---|---|
+| **Essential only** | No telemetry, no session replay, no hardware report, no Discord status. Update checks stay on |
+| **Accept all** | Every telemetry category, masked session replay, the weekly hardware report and Discord Rich Presence |
+| **Customize** | A switch per category, each saying what it sends and to whom, starting from the card you had picked |
+
+The installer writes your answer into `installer-handoff.json`, and BMM reads it once on its
+first launch: an answer that turns telemetry on is your consent, so the dialog above does not
+appear; *Essential only* is recorded as a refusal. Either way, Settings → Privacy changes any of it
+later.
+
 ```mermaid
 flowchart TD
     CONSENT{"Telemetry<br/>accepted?"} -- "no or not asked" --> NOTHING(["Nothing collected"])

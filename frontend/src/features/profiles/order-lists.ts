@@ -924,7 +924,7 @@ function run(
             // while queued.
             const why = sum.error || sum.failed[0]?.error;
             say(why ? fill('orderList.activateFailed', { e: t(why) })
-                : t('actjob.summaryCancelled', { label: fill('orderList.jobLabel', { m: list.name }), n: String(sum.done), m: String(sum.total), f: String(sum.failed.length) }));
+                : t('actjob.summaryCancelled', { label: fill('orderList.jobLabel', { m: list.name }), n: String(sum.done), m: String(sum.total) }));
         }
         void reloadProfiles();
         if (mode === 'activate' && saved) {

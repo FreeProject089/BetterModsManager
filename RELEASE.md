@@ -10,7 +10,9 @@ BMM ships through **BetterInstaller**. NSIS and MSI are no longer built.
 npm run ci                # the eleven gates — run this before anything else
 npm run build             # the app itself (no installer)
 npm run build:installer   # the installer, from whatever npm run build produced
-npm run release           # both, in order
+npm run release           # version gate, build, installer, then release:assets
+npm run release:assets    # update-manifest.json listing Release/BMM-Setup.exe with its SHA-256
+npm run check:release     # one version everywhere (add --artifacts to check Release/ too)
 ```
 
 `npm run build` ends with `tauri build --no-bundle`. That switch is the change: BMM used to build
@@ -89,9 +91,21 @@ steps:
 4. **Sign it** with `BetterInstaller/examples/bmm/keys/private.key` (Ed25519).
 5. Stamp the self-extracting `Release/BMM-Setup.exe`, and emit `Release/update.json`.
 
-Upload **all three** to the GitHub release: `BMM-Setup.exe`, `bmm.bpkg` and `update.json`. The
-`.bpkg` and `update.json` are what installed copies read to auto-update; without them the setup
-works but nobody gets an update.
+Then `npm run release:assets` writes `dist/release-assets-v<version>/`: `update-manifest.json`
+(listing the language files **and** `BMM-Setup.exe` with its SHA-256) plus the files it names.
+Sign it (`node scripts/sign-update-manifest.mjs sign … --key …`) before uploading.
+
+A release carries **all** of these, and nothing else that ends in `.exe` or `.msi`:
+
+| Asset | Read by |
+|---|---|
+| `BMM-Setup.exe` | people; BMM 0.9.x (runs the first `.msi`/`.exe` of the release); the 1.0.x fallback |
+| `bmm.bpkg` + `update.json` | copies installed by BetterInstaller (`uninstall.exe --update`) |
+| `update-manifest.json` + `lang-*.json`, `links.json` | copies BetterInstaller did not install (Quick Update and the full-installer fallback) |
+
+Without `update-manifest.json` every copy that takes the fallback says « Update refused: this
+release publishes no signed update manifest » — that is what happened with v1.0.1, uploaded by
+hand with the first three only.
 
 What you get, in `Release/`:
 
@@ -119,7 +133,7 @@ wrong `app.id` before it ships, since that mismatch fails silently rather than l
 |---|---|
 | Installer identity, components, setup options, updater URL | `BetterInstaller/examples/bmm/installer.toml` |
 | App identity, resources, window, plugins | `src-tauri/tauri.conf.json` |
-| Version | `package.json` — and it must equal `installer.toml`'s `[app].version` |
+| Version | `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (+ `Cargo.lock`), `installer.toml` `[app].version` — `scripts/check-release-versions.mjs` fails on any mismatch |
 
 The full field-by-field reference for `installer.toml` is
 [BetterInstaller/GUIDE.md](BetterInstaller/GUIDE.md).
@@ -193,6 +207,37 @@ there is nothing to configure per install.
 
 ---
 
+## Bridging older installs
+
+Three generations of BMM are out there, and each reads something different from the newest
+release. **Decision (1.0.2): keep publishing every one of them alongside the signed manifest**,
+rather than a one-off bridge release. They cost a few kilobytes per release, and dropping one
+strands every copy that reads only it.
+
+| Installed | What it does on « update » | What it needs on the release |
+|---|---|---|
+| **0.9.11** and older | GitHub `/releases/latest`; no major-version guard; downloads the first `.msi`, else the first `.exe`, and runs it through `cmd /C start` (no signature, no hash) | `BMM-Setup.exe` as the **only** `.exe`/`.msi` asset, on a release marked **Latest** |
+| **1.0.0 / 1.0.1**, installed by BetterInstaller | `uninstall.exe --check-update` / `--update` reads `releases/latest/download/update.json` and fetches `bmm.bpkg` | `update.json` signed for the new version **at publish time** (it expires 7 days after signing) and the matching `bmm.bpkg` |
+| **1.0.0 / 1.0.1**, other installs | `download_and_install_update`: needs `update-manifest.json` whose signed `installers` lists the **exact** URL of the asset it picked (`…/v<version>/BMM-Setup.exe`), then runs it with `open::that` | the signed `update-manifest.json` with `installers = [BMM-Setup.exe]` |
+| **1.0.2+** | the same two paths; resumable verified download with progress; ShellExecuteExW launch with the real Windows error; « Download from the release page » on any failure | the same |
+
+Two facts about the « 1.0.1 » release that this fixes:
+
+- It announced itself as **1.0.0** everywhere (Cargo.toml and installer.toml were never bumped, so
+  the setup, `bmm.bpkg` and `update.json` said 1.0.0). Installed 1.0.0 copies were never offered
+  it. `check-release-versions.mjs` now fails the build on any disagreement, and CI refuses a tag
+  that is not the version in `package.json`.
+- It was published as a **pre-release**, which `/releases/latest` (the stable channel, and
+  BetterInstaller's `manifest_url`) never returns. CI publishes with `--latest`; by hand, untick
+  « Set as a pre-release » and tick « Set as the latest release ».
+
+1.0.x copies that are not BetterInstaller installs still launch through `open::that` (a hidden
+PowerShell `Start-Process`); where that fails on a machine, the person has to run
+`BMM-Setup.exe` from the release page once. From 1.0.2 on, the launch goes through
+`proc::shell_launch` and reports the Windows reason.
+
+---
+
 ## The `bmm://` protocol
 
 BetterInstaller registers `bmm://` at install time and **unregisters it on uninstall** — that is
@@ -207,10 +252,18 @@ uninstalled or deleted build left the scheme pointing at nothing.
 
 ## Checklist
 
-- [ ] `npm run ci` green
-- [ ] Version bumped in `package.json` **and** `installer.toml`
-- [ ] `npm run release`
+- [ ] `npm run ci` green (includes `check-release-versions`)
+- [ ] Version bumped in `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` (+ `Cargo.lock`) **and** `installer.toml`
+- [ ] Changelog `Update/changelog_v<version>_EN.md` + `_FR.md` (CI uses the EN one as the release body)
+- [ ] Push the tag `v<version>`: `release.yml` builds, signs both manifests, runs `check-release-versions --artifacts` and publishes everything in one `gh release create --latest`
+- [ ] By hand instead: `npm run release`, sign `update-manifest.json`, re-sign `update.json` **the day you publish** (`bpkg resign-manifest`), `node scripts/check-release-versions.mjs --artifacts`, then upload every asset listed in « What `build:installer` does », **not** as a pre-release, **as Latest**
 - [ ] `bpkg verify` passes on `Release/bmm.bpkg`
 - [ ] Install it on a clean machine and check the setup choices actually applied
-- [ ] Upload `BMM-Setup.exe`, `bmm.bpkg` **and** `update.json` to the release
-- [ ] Check that an older installed copy sees the update
+- [ ] Check that an older installed copy sees the update (0.9.11, 1.0.x via BetterInstaller, 1.0.x other)
+
+### 1.0.2
+
+- Versions: 1.0.2 in all six sources (the gate is green).
+- Publish as **Latest**, not a pre-release, with only `BMM-Setup.exe` as installer asset.
+- Re-sign `update.json` and `update-manifest.json` at publish time; `resign-manifests.yml` keeps them fresh afterwards.
+- Changelog: `Update/changelog_v1.0.2_EN.md` / `_FR.md`. Release comms drafts: `Release/1.0.2/`.

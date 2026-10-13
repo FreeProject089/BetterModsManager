@@ -60,7 +60,8 @@
     "reference/tips",
     "reference/troubleshooting",
     "reference/github-pat",
-    "reference/credits"
+    "reference/credits",
+    "reference/translation-variables"
   ],
   "sections": {
     "root": "Getting started",
@@ -411,7 +412,7 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 1117,
+      "words": 1201,
       "diagrams": 3,
       "fr": true
     },
@@ -456,7 +457,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 797,
+      "words": 811,
       "diagrams": 0,
       "fr": true
     },
@@ -771,7 +772,7 @@
         "en": "A Server Repo is a folder you can put behind any web server. It holds the mod files plus one manifest, repo.json, that describes them precisely enough for…",
         "fr": "Un Dépôt Serveur est un dossier que vous pouvez placer derrière n'importe quel serveur web."
       },
-      "words": 878,
+      "words": 1304,
       "diagrams": 0,
       "fr": true
     },
@@ -967,6 +968,21 @@
         "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
       },
       "words": 671,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/translation-variables",
+      "section": "reference",
+      "title": {
+        "en": "Translation variables",
+        "fr": "Variables des traductions"
+      },
+      "summary": {
+        "en": "Some texts in BMM contain a word between braces, such as {n} or {name}. BMM replaces it with a value when it shows the text: \"{n} new mods added\" becomes « 3…",
+        "fr": "Certains textes de BMM contiennent un mot entre accolades, comme {n} ou {name}."
+      },
+      "words": 331,
       "diagrams": 0,
       "fr": true
     }

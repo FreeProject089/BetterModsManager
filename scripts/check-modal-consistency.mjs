@@ -102,7 +102,8 @@ export const OVERLAY_FAMILIES = {
 /** Modules (and index.html elements, as index.html#id) that still build a full-window overlay
  *  from inline styles, and why. */
 export const INLINE_OVERLAYS = {
-    'index.html#app-loader': 'the boot splash: covers the frame while the app starts, not a dialog',
+    // index.html#app-loader was here: the boot splash is styled by its own <style> block now
+    // (boot-loader.js / the #app-loader rules), not by inline position:fixed.
 };
 
 /** Feature stylesheet rules that still repaint the shell, and why. Selector text as written. */

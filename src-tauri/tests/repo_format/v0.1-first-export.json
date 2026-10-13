@@ -1,0 +1,26 @@
+{
+  "name": "Old Repo",
+  "description": "",
+  "author": "Someone",
+  "version": "1.0.0",
+  "game_name": "DCS World",
+  "created_at": "2026-03-11T18:02:00+00:00",
+  "profiles": [
+    {
+      "id": "prof-1",
+      "name": "Main",
+      "game_name": "DCS World",
+      "mods": [
+        {
+          "id": "cool-mod",
+          "name": "Cool Mod",
+          "version": "1.0",
+          "author": "",
+          "description": "",
+          "tags": [{ "id": "t1", "name": "HD", "color_bg": "#444", "color_text": "#fff" }],
+          "files": [{ "relative_path": "Data/a.dds", "size": 2048, "sha256_hash": "aa11" }]
+        }
+      ]
+    }
+  ]
+}

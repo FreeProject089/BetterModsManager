@@ -347,3 +347,10 @@
 #view-modpacks > .view-header { flex-wrap: wrap; gap: 12px 16px; }
 #view-modpacks > .view-header > div:first-child { flex: 1 1 260px; min-width: 0; }
 #view-modpacks > .view-header > .view-actions { flex-wrap: wrap; }
+
+/* Button placement: the header row spaces like every other page head (the .view-actions
+   default of 4px reads as one fused control), and a card's Delete stands behind a divider
+   instead of touching Edit. */
+#modpack-header-actions { gap: 8px; }
+.modpack-card-actions { align-items: center; }
+.modpack-card-actions .view-actions-sep { height: 16px; margin: 0 3px; }

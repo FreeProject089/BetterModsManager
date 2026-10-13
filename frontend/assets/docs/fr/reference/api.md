@@ -434,6 +434,7 @@ Deux formes échappent à la règle :
 | `POST` | `/api/repo/host` | `repo.write` | `serveDir`*, `port`, `uploadLimit` → `202`, `409` si déjà en service | ✓ |
 | `DELETE` | `/api/repo/host` | `repo.write` | — | |
 | `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · écrit `repo.json` pour un dossier DÉJÀ hébergé. N'a besoin d'aucun profil et ne copie rien — il lit le dossier, écrit un fichier et renvoie le diff. Synchrone, pour qu'un script de publication puisse agir sur le résultat | |
+| `POST` | `/api/repo/convert` | `repo.write` | `path`* (dossier du dépôt ou son `repo.json`), `dryRun`, `rehash` (vrai par défaut), `sign` (vrai par défaut) · convertit le manifeste au format actuel (1.0) : complète les clés que les anciens BMM omettaient, recalcule les empreintes des fichiers, inscrit `format_version`, garde l'ancien manifeste sous `repo.json.v<ancien>-<date>.bak` et re-signe avec la clé de ce BMM. `dryRun` renvoie le plan sans rien écrire. Synchrone ; renvoie `{ok, report}` avec chaque changement | |
 | `POST` | `/api/repo/publish-ssh` | `repo.write` | `dir`* · envoie par SSH **en utilisant la connexion déjà enregistrée dans l'app**. L'hôte, l'utilisateur et la clé ne sont volontairement PAS des paramètres : un appelant capable de les nommer pourrait faire lire à BMM une clé privée de son choix et expédier un dépôt vers une machine de son choix. Piloté par l'UI, donc l'envoi est visible et annulable → `202` | |
 | `POST` | `/api/repo/fetch-ssh` | `repo.write` | `dir`* · même règle, et elle compte davantage dans ce sens : publier écrit sur un serveur choisi par le propriétaire, récupérer écrit sur son propre disque. Seule la destination est un paramètre, et le backend refuse tout chemin distant qui en sortirait → `202` | |
 | `POST` | `/api/repo/extras` | `repo.write` | `url`*, `kind`*, `id`*, `password` · prend UNE chose que le dépôt transporte en plus des mods. `creatorId` n'est pas accepté ici non plus, pour la même raison que `/api/repo/sync`. L'entrée est cherchée dans le manifeste que BMM récupère — un appelant ne peut pas fournir ses propres `{kind, url, sha256}` : ce serait se servir de l'installeur de BMM pour installer des fichiers arbitraires, et la vérification de hash vérifierait son propre chiffre. Un plugin ou une automatisation arrive **désactivé** ; un catalogue est suivi ; une liste de mods est enregistrée et son chemin renvoyé | |
@@ -557,8 +558,8 @@ périme en silence ; un check, non.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 92 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
-- [Référence CLI](doc-page:reference/cli.fr) — les 78 sous-commandes du même binaire, pour un terminal ou un `.bat`
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 93 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
+- [Référence CLI](doc-page:reference/cli.fr) — les 79 sous-commandes du même binaire, pour un terminal ou un `.bat`
 - [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
 - [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
 - [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

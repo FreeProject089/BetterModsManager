@@ -1320,7 +1320,7 @@ async function runTask(task: Task): Promise<void> {
                 if (e instanceof _StopTask || e instanceof _CancelledTask || attempt >= times) throw e;
                 const log = _runLogs.get(task.id);
                 if (log) endStep(startStep(log, `${t('sched.retry.attempt') || 'Attempt'} ${attempt + 1} / ${times + 1}`, 0), 'error', e);
-                toast(`${task.name}: ${t('sched.retry.again') || 'failed, trying again in'} ${Math.round(backoffMs / 1000)}s`, 'warning');
+                toast(`${task.name}: ${t('sched.retry.againIn', { s: String(Math.round(backoffMs / 1000)) })}`, 'warning');
                 await interruptibleSleep(backoffMs, _running.get(task.id));
             }
         }
@@ -6079,6 +6079,15 @@ function draftSummary(): string {
     }
     return bits.join(' · ');
 }
+/** « 2 of 9 granted » / « none granted »: the folded permission row of the task editor. */
+const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'] as const;
+function permSummaryText(pm: TaskPerms): string {
+    const granted = PERM_KEYS.filter((k) => (pm as any)[k] === true).length;
+    return granted
+        ? (t('sched.permsN') || '{n} of {total} granted').replace('{n}', String(granted)).replace('{total}', String(PERM_KEYS.length))
+        : (t('sched.permsNone') || 'none granted (BMM only)');
+}
+
 function refreshSummary(modal: HTMLElement): void {
     const el = modal.querySelector('#sched-summary');
     if (el) el.textContent = draftSummary();
@@ -6404,6 +6413,10 @@ function renderModal(modal: HTMLElement): void {
         </div>
         <div class="sched-layout">
             <aside class="sched-side">
+                <!-- Five sections, each under its own header: Template · Name · Trigger ·
+                     Permissions (one summary row, opened on demand) · Options. They were
+                     one column of labels, boxes and a nine-row permission list in a row. -->
+                <section class="sched-side-sec">
                 ${(() => {
                     // A picker plus a catalogue button, and the two are gated differently.
                     //
@@ -6436,7 +6449,7 @@ function renderModal(modal: HTMLElement): void {
                     // blind. The modal shows every template as a card with what it does, lets
                     // you search, and explains the trigger, the steps and the permissions
                     // BEFORE anything replaces the draft.
-                    return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
+                    return `<h3 class="sched-side-h">${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}<span>${t('sched.presetsTitle') || 'Start from a preset'}</span> <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></h3>
                     <div class="sched-preset-row">
                         <button type="button" class="sched-preset-tile sched-preset-open" id="sched-preset-open"
                             data-tooltip="${escAttr(t('sched.pg.tip') || 'Ready-made automations, with what each one does explained before it replaces the draft.')}">
@@ -6448,14 +6461,19 @@ function renderModal(modal: HTMLElement): void {
                     </div>
                     <div class="sched-preset-desc" id="sched-preset-desc"></div>`;
                 })()}
-                <label class="sched-label">${t('sched.fName') || 'Name'}</label>
+                </section>
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h"><label for="sched-name">${t('sched.fName') || 'Name'}</label></h3>
                 <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
-                <textarea class="input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}" style="resize:vertical;margin-top:8px">${escHtml(_draft.description || '')}</textarea>
+                <textarea class="input sched-desc-input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}">${escHtml(_draft.description || '')}</textarea>
+                </section>
 
-                <label class="sched-label" style="margin-top:16px">${t('sched.fTrigger') || 'Trigger'} <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></label>
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}<span>${t('sched.fTrigger') || 'Trigger'}</span> <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></h3>
                 <div id="sched-trigger"></div>
+                </section>
 
-                <label class="sched-label" style="margin-top:16px">${t('sched.secOptions') || 'Options'}</label>
+                <section class="sched-side-sec">
                 ${(() => {
                     // One box called "allow custom commands" answered the wrong
                     // question: it told you a permission was being granted but not
@@ -6474,15 +6492,18 @@ function renderModal(modal: HTMLElement): void {
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
-                    const keys = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'];
-                    const granted = keys.filter((k) => (pm as any)[k] === true).length;
-                    return `<div class="sched-perm-group">
-                        <div class="sched-perm-head">
-                            ${t('sched.permsTitle') || 'Permissions'}
-                            <span>${escHtml(granted
-                                ? (t('sched.permsN') || '{n} of {total} granted').replace('{n}', String(granted)).replace('{total}', String(keys.length))
-                                : (t('sched.permsNone') || 'none granted \u2014 it can only do things inside BMM'))}</span>
-                        </div>
+                    // Folded to one row (« 2 of 9 granted · Edit »): the list is read when it is
+                    // changed, and nine descriptive rows open all the time pushed Options out of
+                    // the column. The count follows every tick (permSummaryText below).
+                    return `<details class="sched-perm-group" id="sched-perms">
+                        <summary class="sched-perm-sum">
+                            <span class="sched-perm-sum-ic">${SVG16('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>')}</span>
+                            <span class="sched-perm-sum-main">
+                                <b>${t('sched.permsTitle') || 'Permissions'}</b>
+                                <span class="sched-perm-count" id="sched-perm-count">${escHtml(permSummaryText(pm))}</span>
+                            </span>
+                            <span class="sched-perm-edit"><span class="sched-perm-edit-closed">${escHtml(t('sched.permsEdit'))}</span><span class="sched-perm-edit-open">${escHtml(t('sched.permsDone'))}</span></span>
+                        </summary>
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOutside') || 'Reaches outside BMM')}</div>
                         ${row('command', pm.command === true, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
@@ -6500,8 +6521,12 @@ function renderModal(modal: HTMLElement): void {
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
                         ${row('tasks', pm.tasks === true, t('sched.allowTasksTitle') || 'Other tasks', t('sched.allowTasks') || 'This task may run, start or switch on your other tasks, which then do whatever THEY are permitted to do.')}
-                    </div>`;
+                    </details>`;
                 })()}
+                </section>
+
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>')}<span>${t('sched.secOptions') || 'Options'}</span></h3>
                 <label class="sched-opt">
                     <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
                     <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
@@ -6521,8 +6546,9 @@ function renderModal(modal: HTMLElement): void {
                         </div>
                     </div>
                 </label>
+                </section>
                 ${_editing && _draft.history?.length ? `
-                <label class="sched-label" style="margin-top:16px">${t('sched.history') || 'Recent runs'}</label>
+                <h3 class="sched-side-h sched-side-h--plain">${t('sched.history') || 'Recent runs'}</h3>
                 <div class="sched-history">
                     ${[..._draft.history].reverse().slice(0, 8).map(h => `
                         <div class="sched-hist-row ${h.ok ? 'ok' : 'err'}"${h.err ? ` data-tooltip="${escAttr(h.err)}"` : ''}>
@@ -6650,6 +6676,8 @@ function renderModal(modal: HTMLElement): void {
             (pm as any)[cb.dataset.perm!] = cb.checked;
             _draft.perms = pm;
             _draft.allowCustomCommands = !!pm.command;   // keep the legacy field truthful
+            const count = modal.querySelector('#sched-perm-count');
+            if (count) count.textContent = permSummaryText(pm);
             refreshSummary(modal);
             // The flow's "!" marks read the grants: redraw them now, not at the next edit.
             if (_mode === 'flow') flowRefresh();
@@ -7389,6 +7417,8 @@ function flowHost(): FlowHost {
         actionGroups: () => actionPickGroups(),
         focusSidebar: (sel: string) => {
             const el = document.querySelector(`#modal-scheduler ${sel}`) as HTMLElement | null;
+            const fold = el?.closest('details') as HTMLDetailsElement | null;
+            if (fold && !fold.open) fold.open = true;
             const target = (el?.closest('.sched-perm, .sched-opt') as HTMLElement | null) || el;
             if (!target) return;
             target.scrollIntoView({ block: 'center' });
@@ -12443,7 +12473,7 @@ function explainFetchError(raw: string): { short: string; raw: string } {
     if (status) {
         const code = Number(status[1]);
         if (code === 404) return { short: t('sched.pc.e404') || 'Nothing at that address (404).', raw: r };
-        if (code === 401 || code === 403) return { short: t('sched.pc.e403') || 'That catalogue is private ({c}).'.replace('{c}', String(code)), raw: r };
+        if (code === 401 || code === 403) return { short: t('sched.pc.e403', { c: String(code) }), raw: r };
         if (code >= 500) return { short: (t('sched.pc.e5xx') || 'The server is having trouble ({c}) — not your address.').replace('{c}', String(code)), raw: r };
         return { short: `HTTP ${code}`, raw: r };
     }

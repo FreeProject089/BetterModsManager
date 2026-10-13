@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-92 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+93 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -117,6 +117,7 @@ values.
 | `bmm_list_catalogs` | — | app | The catalogues this BMM follows, by type, plus `written_at` — absent means the app has not pushed its list yet, which is not the same as following nothing |
 | `bmm_follow_catalog` | `type`\*, `url`\*, `follow` | app | Follow one, or stop. Goes through the app's own screens, so it appears in the following list with an origin |
 | `bmm_repo_extras` | `url`\*, `password` | app | List what a repo carries besides mods — plugins, automations, themes, mod lists, catalogues to follow. Reads the manifest; downloads nothing. `locked: true` on a list means its contents are encrypted |
+| `bmm_repo_convert` | `path`\*, `dry_run`, `rehash`, `sign` | app | Convert a repo folder's `repo.json` (on this machine) to the current format, 1.0: detects « format 1.0 » or « legacy 0.x », fills the missing keys, re-hashes the files, stamps `format_version`, backs the old manifest up and re-signs with this BMM's key. `dry_run: true` returns the plan and works with BMM closed; call it first |
 | `bmm_repo_extra_take` | `url`\*, `kind`\*, `id`\*, `password` | app | Install ONE of them. A plugin or automation arrives **disabled** and a plugin with no permissions — taking one is not a decision to run it. A catalogue is followed, not downloaded; a mod list is saved and its path returned, because opening one asks questions that belong to a person |
 | `bmm_list_keys` | — | app | The identity keys BMM can prove with: `{name, path}` plus which is active. **Names and paths only** — no tool reads a private key |
 | `bmm_create_key` | `name`\*, `kind` | app | Make an identity keypair. Returns the **public** line — the one you hand to whoever runs a protected source — and where the private half was written. The private half is never returned. `ed25519` unless a server says otherwise |
@@ -281,19 +282,19 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 92 tools with their parameters is exactly the list that rots the
+written by hand, because 93 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 92 and identical, and `scripts/check-mcp-tools.mjs` fails the
+writing both sets are 93 and identical, and `scripts/check-mcp-tools.mjs` fails the
 build if they ever stop being.
 
 ---
 
 ## See also
 
-- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 78 CLI subcommands for a terminal or a `.bat`
+- [CLI reference](doc-page:reference/cli) — the same executable’s other half: 79 CLI subcommands for a terminal or a `.bat`
 - [Local API &amp; deeplinks](doc-page:reference/api) — the REST surface, its tokens and permissions
 - [Action reference](doc-page:reference/actions) — what plugins and the scheduler can trigger
 - [Extending BMM](doc-page:how-it-works/extending) — where the MCP server sits in the design

@@ -296,11 +296,45 @@ fn the_fallback_verifies_before_it_writes_or_launches() {
     let body = &src[start..end];
     let no_manifest = body.find("let Some(manifest_url)").expect("refuses without a manifest URL");
     let verify = body.find("verify_manifest_text(&document").expect("verifies the manifest");
-    let listed = body.find("installer_for(&manifest").expect("checks the URL is listed");
-    let get = body.find(".get(&entry.download_url)").expect("downloads the LISTED url");
+    let listed = body.find("pick_installer(&manifest").expect("picks among the signed entries");
+    let get = body.find("download_installer(&app_handle, entry)").expect("downloads the LISTED entry");
     let hash = body.find("check_installer_bytes(entry").expect("checks the hash");
     let write = body.find("File::create").expect("writes");
-    let launch = body.find("open::that").expect("launches");
+    let launch = body.find("shell_launch(&target, None)").expect("launches");
     assert!(no_manifest < verify && verify < listed && listed < get && get < hash && hash < write && write < launch, "{body}");
     assert!(!body.contains("temp_dir.join(&filename)") && !body.contains(".join(&filename)"), "never the UI's file name");
+    assert!(!body.contains("open::that"), "installers never go through open::that's PowerShell launcher");
+
+    // The download helper only hands back bytes that passed the hash, and fetches the entry's
+    // own URL, never the UI's.
+    let start = src.find("async fn download_installer(").expect("the helper");
+    let end = start + src[start..].find("\n}\n").expect("its end");
+    let helper = &src[start..end];
+    assert!(helper.contains(".get(&entry.download_url)"), "{helper}");
+    let checked = helper.find("check_installer_bytes(entry, &bytes)").expect("hash check");
+    let returned = helper.find("Ok(()) => return Ok(bytes)").expect("returns after the check");
+    assert!(checked < returned, "{helper}");
+}
+
+#[test]
+fn the_ui_hint_only_chooses_among_signed_installers() {
+    const SETUP: &str = "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.2.0/BMM-Setup.exe";
+    let sha = sha_hex(SETUP_BYTES);
+    let m = check(&with_installers(serde_json::json!([
+        installer(SETUP_URL, "BetterModsManager_1.2.0_x64-setup.exe", &sha),
+        installer(SETUP, "BMM-Setup.exe", &sha),
+    ])))
+    .unwrap();
+    // Listed hint: that entry.
+    assert_eq!(pick_installer(&m, SETUP_URL).unwrap().path, "BetterModsManager_1.2.0_x64-setup.exe");
+    // Unlisted hint (an .msi the release check preferred, or a hostile URL): the manifest's own
+    // choice, BMM-Setup.exe, and never the hint's URL.
+    for hint in ["https://github.com/x/y/releases/download/v1.2.0/BMM.msi", "https://evil.example/setup.exe", ""] {
+        let e = pick_installer(&m, hint).unwrap();
+        assert_eq!(e.path, "BMM-Setup.exe", "{hint}");
+        assert_eq!(e.download_url, SETUP);
+    }
+    // No installer signed at all: still refused, with the release-page advice.
+    let none = check(&good_doc()).unwrap();
+    assert!(pick_installer(&none, SETUP).unwrap_err().contains("download the installer from the release page"));
 }

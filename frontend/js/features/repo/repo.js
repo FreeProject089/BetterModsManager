@@ -8,6 +8,8 @@ import { t } from '../../core/i18n.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
+import { initRepoFormat } from './repo-format.js';
+import { initRepoHostFlow } from './repo-host-flow.js';
 import { mountSshAction } from './ssh-action.js';
 import { credsFoldHtml, wireCredsFold, readCredsFold, exportOrigins } from '../../core/creds-fold.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
@@ -792,7 +794,9 @@ export function initRepo() {
         hostMetadataPreview: document.getElementById('repo-host-metadata-preview')
     };
     // Initialize Sub-Modules
+    initRepoHostFlow();
     initRepoServer(elements);
+    initRepoFormat();
     // Publier l'export. Le formulaire du serveur vivait dans cette carte ; il est
     // maintenant dans ssh-servers.ts, atteignable depuis n'importe quel écran, et ce qui
     // reste ici est la seule question que cette carte a le droit de poser : où va CE
@@ -977,6 +981,8 @@ export function initRepo() {
                 const hostPathInput = document.getElementById('repo-host-path');
                 if (prefill.serveDir && hostPathInput) {
                     hostPathInput.value = prefill.serveDir;
+                    // `.value =` fires nothing: the steps and the format badge listen for input.
+                    hostPathInput.dispatchEvent(new Event('input', { bubbles: true }));
                     // Reflect the repo's saved "require BetterCommunity login" flag.
                     const reqCb = document.getElementById('repo-host-require-login');
                     if (reqCb) {
@@ -2618,8 +2624,10 @@ export function initRepo() {
             return;
         }
         const hostInput = document.getElementById('repo-host-path');
-        if (hostInput)
+        if (hostInput) {
             hostInput.value = path;
+            hostInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         try {
             if (window.__TAURI__) {
                 const content = await invoke('read_file_text', { path: path + '/repo.json' });
@@ -2638,11 +2646,13 @@ export function initRepo() {
                 }
                 if (elements.hostMetadataPreview) {
                     elements.hostMetadataPreview.style.display = 'block';
+                    elements.hostMetadataPreview.classList.add('rp-meta');
+                    const modCount = (repo.profiles || []).reduce((n, p) => n + ((p.mods || []).length), 0);
                     elements.hostMetadataPreview.innerHTML = `
-                        <div style="color:var(--accent);font-weight:700;margin-bottom:4px;font-size:14px;">${escHtml(repo.name)}</div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.authorShort')} <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.profilesCount').replace('{count}', pCount)} <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
-                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">${t('repo.totalSizeLabel')} ${formatBytes(totalSize)}</div>
+                        <div class="rp-meta-name">${escHtml(repo.name || '-')}</div>
+                        <div class="rp-meta-line">${escHtml(t('repo.authorShort'))} <b>${escHtml(repo.author || '-')}</b></div>
+                        <div class="rp-meta-line">${escHtml(t('repo.profilesCount').replace('{count}', String(pCount)))} <b>${escHtml(pNames)}</b></div>
+                        <div class="rp-meta-line rp-meta-size">${escHtml(t('repo.hostMetaMods', { n: String(modCount) }))} · ${escHtml(t('repo.totalSizeLabel'))} ${formatBytes(totalSize)}</div>
                     `;
                 }
             }
@@ -2650,7 +2660,7 @@ export function initRepo() {
         catch (err) {
             if (elements.hostMetadataPreview) {
                 elements.hostMetadataPreview.style.display = 'block';
-                elements.hostMetadataPreview.innerHTML = `<div style="color:var(--danger);">${t('repo.readError')} (${err})</div>`;
+                elements.hostMetadataPreview.innerHTML = `<div class="rp-meta-err">${escHtml(t('repo.readError'))} (${escHtml(String(err))})</div>`;
             }
         }
     };

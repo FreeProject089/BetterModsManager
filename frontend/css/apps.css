@@ -1358,3 +1358,7 @@
 .apps-create-section--fields > .apps-cr-step-h { grid-column: 1 / -1; }
 .apps-create-section--fields > .apps-install-label { margin: 0; }
 .apps-create-section--fields > .apps-path-input { width: 100%; min-width: 0; }
+
+/* Create › reopen: "Start again" throws the draft away, so it stands apart at the end of the
+   row instead of touching "From a URL". */
+.apps-create-open .apps-create-clear { margin-left: auto; }

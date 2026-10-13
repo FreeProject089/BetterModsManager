@@ -149,6 +149,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mod/update` | oui | `{ repoUrl? }` — récupère les mises à jour des mods liés à ce dépôt ; sans `repoUrl`, couvre toutes les sources liées |
 | `/api/mod/config` | `mods.write` | `{ modId, repoModId?, updateUrl?, updateSources?, directUrl? }` — définit où un mod vérifie ses propres mises à jour |
 | `/api/repo/manifest` | `repo.write` | `{ modsDir, outputPath?, name?, author?, gameName?, filesBaseUrl?, filesLayout?, reuseExisting?, only? }` — écrit un `repo.json` pour un dossier déjà hébergé. Ne copie rien et n'exige aucun profil ; synchrone, donc un script de publication peut agir sur le diff renvoyé. `reuseExisting` vaut **true** par défaut : réexécuter produit une nouvelle révision du MÊME dépôt, pas un dépôt différent |
+| `/api/repo/convert` | `repo.write` | `{ path, dryRun?, rehash?, sign? }` — convertit le manifeste d'un dossier de dépôt au format 1.0 : clés manquantes complétées, fichiers re-hachés, `format_version` inscrit, ancien manifeste sauvegardé (`repo.json.v<ancien>-<date>.bak`), re-signé avec la clé de ce BMM. `dryRun` renvoie seulement le plan |
 | `/api/discord/rpc` | oui | `{ enabled: bool }` — active/désactive Discord Rich Presence |
 | `/api/data/export-auto` | oui | `{ dir, name? (modèle : `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — sauvegarde automatique, renvoie le chemin écrit |
 | `/api/launchpack/run` | oui | `{ id }` — lance un launch pack enregistré |

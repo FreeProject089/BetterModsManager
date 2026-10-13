@@ -916,6 +916,7 @@ pub async fn refresh_repo_from_server(
     // so a payload that still carried them would never verify.
     repo.author_id = None;
     repo.signature = None;
+    repo.format_version = Some(crate::commands::repo_format::CURRENT.to_string());
     let payload = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
     let signed = match crate::commands::security::sign_message(&handle, payload.as_bytes()) {
         Ok((a, s)) => {

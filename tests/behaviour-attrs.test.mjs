@@ -152,6 +152,11 @@ const HARMLESS = {
     // with ov.querySelector (not document-wide); the probe reaches it through the 3000-char window
     // after the named `onKey` handler.
     'data-import': 'bmms review dialog footer button, own dialog',
+    // Tutorial guide window (tutorial-engine.ts): the step-list rows it renders itself (bound per
+    // row with panel.querySelectorAll) and the snap preview it creates while its own title bar is
+    // dragged (written, never read for an action). The probe reaches both through the drag's
+    // document-level mousemove/mousedown listeners.
+    'data-si': 'tutorial guide step list, own rows', 'data-edge': 'tutorial guide snap preview, own element; written only',
 };
 
 function documentListenerAttrs() {

@@ -5,6 +5,7 @@ import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
+import { setHostRunning, pushHostActivity } from './repo-host-flow.js';
 export function initRepoServer(elements) {
     const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, cbDocker, dockerOptions, dockerHostSelect, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
     let isServerRunning = false;
@@ -30,18 +31,21 @@ export function initRepoServer(elements) {
         _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
             const { ip, creator_id, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
+            pushHostActivity('connect', `${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ${id}`);
             toast(`${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`, 'info', 5000, ICON_PLUG);
         });
         _unlistenDlStarted = await listen('bmm://server-download-started', (event) => {
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('start', `${t('repo.notifDownloadStarted')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
             toast(`${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'info', 4000, ICON_DOWN);
         });
         _unlistenDlFinished = await listen('bmm://server-download-finished', (event) => {
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('done', `${t('repo.notifDownloadFinished')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
             toast(`${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'success', 5000, ICON_DONE);
         });
     }
@@ -90,6 +94,8 @@ export function initRepoServer(elements) {
     // theme tokens), not through inline hex colours that ignored every theme. The inline
     // style the markup ships with is cleared once, here, so the class is the only source.
     const paintServerState = (running) => {
+        // The guided steps and the running panel follow the same state as the button.
+        setHostRunning(running, running && !!(urlInputServer && urlInputServer.value));
         if (btnToggleServer) {
             btnToggleServer.style.removeProperty('background');
             btnToggleServer.style.removeProperty('color');
@@ -210,7 +216,7 @@ export function initRepoServer(elements) {
                     runningPort = String(port);
                     if (serverStatusLabel)
                         serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
-                    urlInputServer.value = result.lan_url;
+                    urlInputServer.value = result.lan_url || '';
                     if (result.seed && repoCreatorIdValue && repoCreatorIdContainer) {
                         try {
                             const saltedId = await invoke('get_salted_creator_id', { salt: result.seed });
@@ -251,6 +257,7 @@ export function initRepoServer(elements) {
                     urlContainerServer.style.display = "flex";
                     if (serverTools)
                         serverTools.style.display = 'flex';
+                    setHostRunning(true, !!urlInputServer.value);
                     startStatsPolling(port);
                     toast(t('repo.hostServerStarted'), "success");
                 }
@@ -312,7 +319,7 @@ export function initRepoServer(elements) {
                 runningPort = String(status.port || 8000);
                 if (serverStatusLabel)
                     serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
-                urlInputServer.value = status.lan_url;
+                urlInputServer.value = status.lan_url || '';
                 if (status.public_url) {
                     publicUrlInput.value = status.public_url;
                     publicSection.style.display = 'block';
@@ -331,6 +338,7 @@ export function initRepoServer(elements) {
                 urlContainerServer.style.display = "flex";
                 if (serverTools)
                     serverTools.style.display = 'flex';
+                setHostRunning(true, !!urlInputServer.value);
                 const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
                 startStatsPolling(port);
             }

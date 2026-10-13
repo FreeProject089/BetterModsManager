@@ -120,6 +120,14 @@ export async function offerLegacyImport(next: () => void): Promise<void> {
             const n = await invoke(cmd) as number;
             result.textContent = n > 0 ? t(okKey, { n: String(n) }) : t('legacy.nothingNew');
             result.className = n > 0 ? 'legacy-result ok' : 'legacy-result';
+            // The same refresh as the Profiles page's own import buttons: without it the new
+            // profiles existed on disk and nowhere on screen until BMM was restarted. Loaded
+            // on demand, like the rest of this module's neighbours (see the note above).
+            if (n > 0) {
+                await import('../features/profiles/profiles.js')
+                    .then((m) => m.refreshAfterProfileImport())
+                    .catch((e) => console.warn('[legacy] refresh after import failed', e));
+            }
         } catch (e) {
             result.textContent = t('legacy.failed', { error: String(e) });
             result.className = 'legacy-result bad';

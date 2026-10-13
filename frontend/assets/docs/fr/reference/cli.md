@@ -2,7 +2,7 @@
 
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
-`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 78
+`BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 79
 commandes utilisables depuis un terminal, un `.bat`, une tâche planifiée ou une étape de CI.
 
 ```bash
@@ -40,7 +40,7 @@ bmm-mcp-server api --reveal
 
 ## Les commandes
 
-78 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
+79 au total. `*` marque un argument obligatoire ; une valeur entre parenthèses est la valeur
 par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options `--comme-ceci`.
 
 ### Pour se repérer
@@ -122,6 +122,7 @@ par défaut. Les arguments positionnels s'écrivent `<comme-ceci>`, les options 
 | `follow` | `--type`\*, `<url>`\*, `--off` (`false`) | Suit un catalogue ; `--off` arrête de le suivre |
 | `repo-extras` | `<url>`\*, `--password` | Ce qu'un dépôt porte en plus des mods — plugins, automatisations, thèmes, listes de mods, catalogues à suivre. Lit le manifeste et ne télécharge rien |
 | `repo-take` | `<url>`\*, `<kind>`\*, `<id>`\*, `--password` | En prend UN, nommé par type et id d'après `repo-extras`. Un plugin ou une automatisation arrive **désactivé** ; un catalogue est suivi plutôt que téléchargé ; une liste de mods est enregistrée et son chemin affiché |
+| `repo-convert` | `<path>`\*, `--dry-run`, `--no-sign`, `--no-rehash` | Convertit le `repo.json` d'un dossier de dépôt au format actuel (1.0) : clés manquantes ajoutées, fichiers re-hachés, `format_version` inscrit, ancien manifeste gardé sous `repo.json.v<ancien>-<date>.bak`, nouvelle signature par l'application ouverte. `--dry-run` affiche le format détecté et chaque changement sans rien écrire ; lui et `--no-sign` (résultat NON SIGNÉ) fonctionnent BMM fermé. Voir [le format des dépôts](doc-page:reference/repo-format.fr#9-versions-de-format-et-convertir-un-ancien-manifeste) |
 
 ### Clés d'identité
 
@@ -236,7 +237,7 @@ compiler.
 
 ## Voir aussi
 
-- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 92 outils MCP
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — l'autre moitié du même binaire, et ses 93 outils MCP
 - [API locale &amp; deeplinks](doc-page:reference/api.fr) — ce que `call` appelle
 - [Référence BMMScript](doc-page:features/bmmscript-reference.fr) — le langage que lit `bmms-compile`
 - [Référence des actions](doc-page:reference/actions.fr) — ce que liste `actions`

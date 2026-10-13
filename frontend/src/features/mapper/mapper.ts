@@ -270,7 +270,7 @@ export async function initMapper(): Promise<void> {
                     }
                     const diff = count - _lastKnownModCount;
                     if (diff > 0) {
-                        toast(`${diff} ${t('mapper.newModsDetected') || 'new mod(s) detected and added automatically'}`, 'success', 3000);
+                        toast(diff === 1 ? t('mapper.newModsDetected.one') : t('mapper.newModsDetected.many', { n: String(diff) }), 'success', 3000);
                     }
                 }
                 _lastKnownModCount = count;

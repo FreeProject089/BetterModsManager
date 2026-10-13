@@ -5,6 +5,7 @@ import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
+import { setHostRunning, pushHostActivity } from './repo-host-flow.js';
 
 export function initRepoServer(elements) {
     const {
@@ -67,6 +68,7 @@ const ICON_DONE = (uiIcon('check', 14));
         _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
             const { ip, creator_id, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
+            pushHostActivity('connect', `${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ${id}`);
             toast(
                 `${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`,
                 'info',
@@ -79,6 +81,7 @@ const ICON_DONE = (uiIcon('check', 14));
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('start', `${t('repo.notifDownloadStarted')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
             toast(
                 `${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`,
                 'info',
@@ -91,6 +94,7 @@ const ICON_DONE = (uiIcon('check', 14));
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('done', `${t('repo.notifDownloadFinished')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
             toast(
                 `${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`,
                 'success',
@@ -133,6 +137,8 @@ const ICON_DONE = (uiIcon('check', 14));
     // theme tokens), not through inline hex colours that ignored every theme. The inline
     // style the markup ships with is cleared once, here, so the class is the only source.
     const paintServerState = (running: boolean) => {
+        // The guided steps and the running panel follow the same state as the button.
+        setHostRunning(running, running && !!(urlInputServer && urlInputServer.value));
         if (btnToggleServer) {
             btnToggleServer.style.removeProperty('background');
             btnToggleServer.style.removeProperty('color');
@@ -243,7 +249,7 @@ const ICON_DONE = (uiIcon('check', 14));
                     runningPort = String(port);
                     if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
                     
-                    urlInputServer.value = result.lan_url;
+                    urlInputServer.value = result.lan_url || '';
                     
                     if (result.seed && repoCreatorIdValue && repoCreatorIdContainer) {
                         try {
@@ -279,6 +285,7 @@ const ICON_DONE = (uiIcon('check', 14));
 
                     urlContainerServer.style.display = "flex";
                     if (serverTools) serverTools.style.display = 'flex';
+                    setHostRunning(true, !!urlInputServer.value);
                     startStatsPolling(port);
                     toast(t('repo.hostServerStarted'), "success");
                 } catch (err) {
@@ -337,7 +344,7 @@ const ICON_DONE = (uiIcon('check', 14));
                 paintServerState(true);
                 runningPort = String(status.port || 8000);
                 if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
-                urlInputServer.value = status.lan_url;
+                urlInputServer.value = status.lan_url || '';
                 if (status.public_url) {
                     publicUrlInput.value = status.public_url;
                     publicSection.style.display = 'block';
@@ -353,7 +360,8 @@ const ICON_DONE = (uiIcon('check', 14));
                 }
                 urlContainerServer.style.display = "flex";
                 if (serverTools) serverTools.style.display = 'flex';
-                
+                setHostRunning(true, !!urlInputServer.value);
+
                 const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
                 startStatsPolling(port);
             }

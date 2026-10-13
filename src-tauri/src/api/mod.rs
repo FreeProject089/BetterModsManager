@@ -3593,6 +3593,39 @@ pub async fn start_api_server(
             }
         });
 
+    // POST /api/repo/convert  (auth) — convert a repo folder's manifest to the current format
+    // (repo_format): fill the keys older BMMs left out, re-hash the files, stamp
+    // `format_version`, back up the old manifest, re-sign with this BMM's key. `dryRun`
+    // returns the plan and writes nothing. The same code as the Server Repo page's button;
+    // `bmm repo-convert` and `bmm_repo_convert` call this.
+    let tok_repo_convert = token.clone();
+    let handle_repo_convert = app_handle.clone();
+    let repo_convert = warp::path!("api" / "repo" / "convert")
+        .and(warp::post())
+        .and(require_token(tok_repo_convert))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<crate::commands::repo_convert::ConvertArgs>())
+        .and(with_app_handle(handle_repo_convert))
+        .then(|args: crate::commands::repo_convert::ConvertArgs, handle: tauri::AppHandle| async move {
+            let res = tauri::async_runtime::spawn_blocking(move || {
+                crate::commands::repo_convert::convert(&handle, &args)
+            }).await;
+            match res {
+                Ok(Ok(report)) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "report": report })),
+                    StatusCode::OK,
+                ),
+                Ok(Err(e)) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "error": e })),
+                    StatusCode::BAD_REQUEST,
+                ),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "error": e.to_string() })),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ),
+            }
+        });
+
     // POST /api/repo/gen  (auth, max 1 concurrent) — generate repo structure (formerly "host")
     let data_repo_gen   = data.clone();
     let tok_repo_gen    = token.clone();
@@ -5358,6 +5391,7 @@ pub async fn start_api_server(
         .or(repo_sync)
         .or(repo_gen_cancel)
         .or(repo_manifest)
+        .or(repo_convert)
         .or(repo_gen)
         .or(repo_update)        // POST /api/repo/update
         .or(repo_host_stop)     // DELETE /api/repo/host

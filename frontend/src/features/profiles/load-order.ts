@@ -182,9 +182,9 @@ export async function openLoadOrder(profileId?: string | null, profileName?: str
         </div>
         <div class="lo-live" id="lo-live" aria-live="polite"></div>
         <div class="modal-footer lo-foot">
+          <button type="button" class="btn btn-secondary btn-sm lo-tool" id="lo-reset" title="${escAttr(t('order.resetTip'))}">${I.reset}<span>${escHtml(t('order.reset'))}</span></button>
           <button type="button" class="btn btn-ghost btn-sm lo-tool" id="lo-reapply" title="${escAttr(t('order.reapplyTip'))}">${I.reapply}<span>${escHtml(t('order.reapply'))}</span></button>
           <span class="lo-status" id="lo-status" aria-live="polite"></span>
-          <button type="button" class="btn btn-secondary btn-sm lo-tool" id="lo-reset" title="${escAttr(t('order.resetTip'))}">${I.reset}<span>${escHtml(t('order.reset'))}</span></button>
           <button type="button" class="btn btn-primary btn-sm lo-tool lo-apply" id="lo-apply" title="${escAttr(t('order.applyTip'))}">${I.apply}<span>${escHtml(t('order.apply'))}</span></button>
         </div>
       </div>`;

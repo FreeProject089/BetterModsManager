@@ -16,6 +16,22 @@ La fenêtre a quatre boutons, et rien d'autre ne compte comme réponse (un clic 
 | **Non merci** | Désactivée, mémorisé |
 | **Plus tard** (ou Échap) | Rien d'enregistré, rien d'envoyé ; la question revient au prochain lancement |
 
+### Si tu as installé avec BetterInstaller
+
+L'installeur pose la même question avant, à son étape **Confidentialité et données**, comme un
+bandeau de cookies. Rien n'est présélectionné, et Installer reste grisé tant que tu n'as pas choisi :
+
+| Carte | Ce avec quoi BMM démarre |
+|---|---|
+| **L'essentiel uniquement** | Pas de télémétrie, pas de replay de session, pas de rapport matériel, pas de statut Discord. Les vérifications de mise à jour restent actives |
+| **Tout accepter** | Toutes les catégories de télémétrie, le replay de session masqué, le rapport matériel hebdomadaire et Discord Rich Presence |
+| **Personnaliser** | Un interrupteur par catégorie, chacun disant ce qu'il envoie et à qui, en partant de la carte choisie avant |
+
+L'installeur écrit ta réponse dans `installer-handoff.json`, et BMM la lit une fois à son premier
+lancement : une réponse qui active la télémétrie est ton consentement, donc la fenêtre ci-dessus ne
+s'affiche pas ; *L'essentiel uniquement* est enregistré comme un refus. Dans les deux cas,
+Paramètres → Confidentialité change tout ça plus tard.
+
 ```mermaid
 flowchart TD
     CONSENT{"Télémétrie<br/>acceptée ?"} -- "non ou pas demandé" --> NOTHING(["Rien de collecté"])

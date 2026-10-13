@@ -5,8 +5,8 @@
 > Tu construis le tien ? La référence token par token est
 > **[Créer son propre thème](doc-page:features/making-themes)**.
 
-Ce n'est pas un interrupteur clair/sombre. BMM livre **treize** thèmes intégrés — des sombres dont
-*VS Code* (Dark Modern) et *macOS* (Sonoma), et quatre clairs — et un éditeur capable de refaire toute l'allure de l'app — puis de l'exporter en un
+Ce n'est pas un interrupteur clair/sombre. BMM livre **quatorze** thèmes intégrés — des sombres dont
+*VS Code* (Dark Modern) et *macOS* (Sonoma), et cinq clairs, dont *BMM Logo* (les couleurs du logo, et le logo à la place de Tasky) — et un éditeur capable de refaire toute l'allure de l'app — puis de l'exporter en un
 fichier que quelqu'un
 importe en un clic.
 

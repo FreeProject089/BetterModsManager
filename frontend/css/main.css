@@ -1968,12 +1968,15 @@ body.is-maximized .titlebar-spacer {
     .mapper-help-banner .mhb-icon { display: none; }
 }
 
-/* Vertical separator between util group and primary actions */
+/* Vertical separator between util group and primary actions. Also used inside card action
+   rows (profile, modpack, app) to set a destructive button apart, so it centres itself
+   rather than relying on the row's align-items. */
 .view-actions-sep {
     width: 1px;
     height: 18px;
     background: var(--bmm-s08);
     flex-shrink: 0;
+    align-self: center;
     margin: 0 4px;
 }
 
@@ -8427,6 +8430,8 @@ select:focus {
 }
 .prof-how-btn:hover { color: var(--text-primary); border-color: var(--border-accent); background: var(--bmm-s03); }
 .prof-how-btn svg { width: 13px; height: 13px; opacity: .85; }
+/* Profiles head: help · | · Import · New profile, spaced like the other page heads. */
+.prof-head-actions { gap: 8px; }
 
 .dropdown-content a svg {
     color: var(--text-muted);
@@ -16308,6 +16313,45 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 }
 .sched-opt.sched-perm { margin-bottom: 4px; }
 
+/* The task editor's left column, in sections (scheduler.ts): Template · Name · Trigger ·
+   Permissions · Options, each under one header, one rule between them. Permissions fold to
+   a single row (« 2 of 9 granted · Edit ») that opens the list in place. */
+.sched-side-sec { padding: 14px 0; border-bottom: 1px solid var(--bmm-border); }
+.sched-side-sec:first-child { padding-top: 0; }
+.sched-side-h {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px;
+    font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.sched-side-h > svg { flex: none; width: 14px; height: 14px; color: var(--bmm-text-muted); }
+.sched-side-h label { cursor: pointer; }
+.sched-side-h--plain { margin-top: 14px; }
+.sched-side-h + .sched-opt { margin-top: 0; }
+.sched-side .sched-preset-row { margin-bottom: 0; }
+.sched-desc-input { margin-top: 8px; resize: vertical; }
+.sched-side-sec > .sched-perm-group { padding: 0; margin: 0; border-radius: 11px; background: var(--bmm-s02); }
+.sched-perm-sum {
+    display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 11px;
+    list-style: none; cursor: pointer;
+}
+.sched-perm-sum::-webkit-details-marker { display: none; }
+.sched-perm-sum:hover { background: var(--bmm-s04); }
+.sched-perm-sum:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+.sched-perm-sum-ic {
+    flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--bmm-s05); color: var(--bmm-text-secondary);
+}
+.sched-perm-sum-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sched-perm-sum-main b { font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.sched-perm-count { font-size: 11px; color: var(--bmm-text-muted); }
+.sched-perm-edit { flex: none; font-size: 11.5px; font-weight: 700; color: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary)); }
+.sched-perm-edit-open { display: none; }
+.sched-perm-group[open] .sched-perm-edit-open { display: inline; }
+.sched-perm-group[open] .sched-perm-edit-closed { display: none; }
+.sched-perm-group[open] { padding-bottom: 8px; }
+.sched-perm-group[open] > .sched-perm-sum { border-bottom: 1px solid var(--bmm-border); border-radius: 11px 11px 0 0; margin-bottom: 4px; }
+.sched-perm-group > .sched-perm-sub, .sched-perm-group > .sched-perm { margin-left: 10px; margin-right: 10px; }
+
 /* The script body. Monospace because it is code, and `tab-size` because a pasted
    script indented with tabs is otherwise unreadable at the browser default of 8. */
 /* ── Blocks ⇄ Code, in the task editor ──────────────────────────────────────
@@ -20521,6 +20565,42 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 }
 .sub-contributors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
 
+/* Code contributors: from the git history (credits-extras.ts, gen-credits.mjs). One wide card
+   per person: picture, name, the repositories they committed to, GitHub. */
+.credits-code-blurb { margin: -4px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.credits-code-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; margin-bottom: 20px; }
+.credits-code-card { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 16px; }
+.credits-code-pfp { flex: none; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--bmm-border-hover); }
+.credits-code-pfp.is-initial { display: grid; place-items: center; background: var(--bmm-accent-dim); color: var(--credits-accent-ink); font-size: 18px; font-weight: 800; }
+.credits-code-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.credits-code-name { font-size: 14.5px; font-weight: 800; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.credits-code-meta { font-size: 12px; color: var(--bmm-text-secondary); }
+.credits-code-repos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.credits-code-repo { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11px; }
+button.credits-code-repo { cursor: pointer; }
+button.credits-code-repo:hover { border-color: var(--bmm-accent); }
+button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.credits-code-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+
+/* The licence reader inside the stack dialog's detail pane (credits-extras.ts). */
+.stk-lic-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.stk-lic-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+.stk-lic-title .stk-lic { max-width: 180px; }
+.stk-lic-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.stk-lic-tab { padding: 3px 9px; border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s03); color: var(--bmm-text-secondary); font-family: var(--bmm-font-mono); font-size: 11px; cursor: pointer; }
+.stk-lic-tab[aria-selected="true"] { border-color: var(--bmm-accent); background: var(--bmm-accent-dim); color: var(--bmm-text-primary); }
+.stk-lic-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.stk-lic-file { display: inline-flex; align-items: center; gap: 5px; font-family: var(--bmm-font-mono); font-size: 11px; color: var(--bmm-text-secondary); }
+.stk-lic-text, .stk-lic-md {
+    flex: 1 1 auto; min-height: 120px; margin: 0; padding: 12px 14px; overflow: auto;
+    border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    color: var(--bmm-text-primary); font-size: 12px; line-height: 1.55;
+}
+.stk-lic-text { font-family: var(--bmm-font-mono); font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.stk-lic-text:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+.stk-lic-md :is(h1, h2, h3) { margin: 0.6em 0 0.4em; font-size: 13px; }
+.stk-lic-md p { margin: 0 0 0.7em; }
+
 /* ── Technical Architecture: groups | dense list | the selected component ──────────────────
    The shell is the house one (modal--xl modal--tall, the search in .modal-toolbar, a flush
    body). Each pane scrolls on its own, so nothing floats over the list: the old sticky
@@ -20675,6 +20755,12 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .upd-progress-bar { height: 100%; background: var(--bmm-success); transition: width 0.3s ease; border-radius: 3px; }
 .upd-major { display: flex; gap: 9px; align-items: flex-start; border-radius: 10px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border)); background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 70%, var(--bmm-text-primary)); }
 .upd-major > div { font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.upd-error { display: flex; gap: 9px; align-items: flex-start; border-radius: 10px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--bmm-danger) 35%, var(--bmm-border)); background: var(--bmm-danger-dim); color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.upd-error[hidden] { display: none; }
+.upd-error-body { flex: 1; min-width: 0; }
+.upd-error-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.upd-error-msg { font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.upd-error-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .upd-gh { font-size: 12px; color: var(--bms-accent-ink); text-decoration: none; }
 .upd-gh:hover { text-decoration: underline; }
 .langsel-body { overflow: visible; }

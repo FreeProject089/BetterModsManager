@@ -95,6 +95,10 @@ mod commands {
     // it; `bmm ai-api start|stop` edits the file the app's watcher follows.
     #[path = "../../commands/ai_api_core.rs"]
     pub mod ai_api_core;
+    // The repo manifest format registry and converter. Crate-free on purpose, so a dry run
+    // and an unsigned conversion work with BMM closed; signing goes through the app.
+    #[path = "../../commands/repo_format.rs"]
+    pub mod repo_format;
 }
 
 // What hardware BMM runs on. The file has no `crate::` dependency on purpose, so the CLI
@@ -485,6 +489,23 @@ enum Commands {
         id: String,
         #[arg(long)]
         password: Option<String>,
+    },
+
+    /// Convert a repo folder's repo.json to the current format (1.0): keys filled,
+    /// files re-hashed, format stamped, old manifest backed up, re-signed (running app)
+    #[command(name = "repo-convert")]
+    RepoConvert {
+        /// The repo folder, or its repo.json
+        path: String,
+        /// Print the detected format and every change; write nothing (works with BMM closed)
+        #[arg(long)]
+        dry_run: bool,
+        /// Write an UNSIGNED manifest, without the app (signing needs the running BMM)
+        #[arg(long)]
+        no_sign: bool,
+        /// Keep the recorded hashes instead of re-hashing the files from the folder
+        #[arg(long)]
+        no_rehash: bool,
     },
 
     // ── Identity keys ────────────────────────────────────
@@ -1354,6 +1375,54 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             }
             let res = state_bridge::api_call("POST", "/api/repo/extras", Some(body)).await?;
             println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+
+        // ── Repo format ─────────────────────────────────────
+        Commands::RepoConvert { path, dry_run, no_sign, no_rehash } => {
+            use commands::repo_format as rf;
+            let p = std::path::PathBuf::from(&path);
+            let file = if p.is_dir() { p.join("repo.json") } else { p.clone() };
+            if dry_run || no_sign {
+                // Offline: the same converter the app runs, minus the key.
+                let text = std::fs::read_to_string(&file)
+                    .map_err(|e| anyhow::anyhow!("cannot read {}: {}", file.display(), e))?;
+                let v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+                    .map_err(|e| anyhow::anyhow!("{} is not JSON: {}", file.display(), e))?;
+                let dir = file.parent().map(|d| d.to_path_buf());
+                let plan = rf::convert(v, if no_rehash { None } else { dir.as_deref() })
+                    .map_err(|k| anyhow::anyhow!("{}", k))?;
+                println!("  {} {}  ->  format {}", "Format:".dimmed(), plan.from.label().cyan().bold(), rf::CURRENT.green().bold());
+                for c in &plan.changes {
+                    let arrow = match (&c.before, &c.after) {
+                        (Some(b), Some(a)) => format!("{} -> {}", b, a),
+                        (None, Some(a)) => format!("+ {}", a),
+                        (Some(b), None) => format!("- {}", b),
+                        (None, None) => String::new(),
+                    };
+                    println!("  {:<18} {} {}", c.kind.yellow(), c.path, arrow.dimmed());
+                }
+                for w in &plan.warnings { println!("  {} {}", "!".yellow().bold(), w); }
+                if plan.up_to_date {
+                    println!("  {} {}", "✓".green().bold(), "Already the current format; nothing to change.".dimmed());
+                    return Ok(());
+                }
+                if dry_run {
+                    println!("  {} {} change(s). Nothing was written (--dry-run).", "·".dimmed(), plan.changes.len());
+                    return Ok(());
+                }
+                let backup = file.with_file_name(rf::backup_name(&plan.from.version, chrono::Utc::now()));
+                std::fs::copy(&file, &backup)?;
+                std::fs::write(&file, serde_json::to_string_pretty(&plan.manifest)?)?;
+                println!("  {} Converted, UNSIGNED. Old manifest kept as {}", "✓".green().bold(), backup.display());
+                if plan.was_signed {
+                    println!("  {} It was signed before: re-sign it from BMM (Server Repo, or this command without --no-sign).", "!".yellow().bold());
+                }
+            } else {
+                let body = serde_json::json!({ "path": path, "dryRun": false, "rehash": !no_rehash, "sign": true });
+                let res = state_bridge::api_call("POST", "/api/repo/convert", Some(body)).await?;
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+                http_ok(&res)?;
+            }
         }
 
         // ── Identity keys ───────────────────────────────────

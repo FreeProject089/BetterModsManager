@@ -1823,7 +1823,7 @@ function benchCompareHtml() {
     }).join('');
     return `<div class="bms-card">
         <div class="bms-card-h">
-            <h4 class="bms-card-title">${escB((t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length)))}<small>${runs.length} ${escB(t('bench.cmpRuns') || 'runs')}</small></h4>
+            <h4 class="bms-card-title">${escB(t('bench.cmpTitle') || 'Comparison')}<small>${runs.length} ${escB(t('bench.cmpRuns') || 'runs')}</small></h4>
             <button type="button" class="btn btn-ghost btn-sm" id="bench-clear-compare">${escB(t('bench.cmpClear') || 'Clear comparison')}</button>
         </div>
         <div class="pf-table-wrap"><table class="pf-table"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>

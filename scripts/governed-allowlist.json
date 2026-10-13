@@ -37,6 +37,10 @@
     "fs::copy": {
       "count": 1,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 3,
+      "why": "not heavy work: waiting on uninstall.exe --check-update (time-boxed) and on ShellExecuteExW while a Windows permission prompt is open; kept off the async runtime and the main thread"
     }
   },
   "src/commands/benchmark.rs": {

@@ -1,5 +1,43 @@
 {
  "_generated": "by scripts/gen-credits.mjs from the manifests; do not edit (node scripts/gen-credits.mjs)",
+ "contributors": {
+  "repos": [
+   {
+    "id": "bmm",
+    "label": "Better Mod Manager",
+    "url": "https://github.com/FreeProject089/BetterModsManager"
+   },
+   {
+    "id": "bcw",
+    "label": "BetterCommunity",
+    "url": null
+   },
+   {
+    "id": "docs",
+    "label": "BMM Docs",
+    "url": "https://github.com/FreeProject089/BMM-Docs"
+   },
+   {
+    "id": "installer",
+    "label": "BetterInstaller",
+    "url": "https://github.com/FreeProject089/BetterInstaller"
+   }
+  ],
+  "people": [
+   {
+    "name": "FreeProject089",
+    "github": "https://github.com/FreeProject089",
+    "contributor": "freeproject",
+    "repos": [
+     "bmm",
+     "bcw",
+     "docs",
+     "installer"
+    ],
+    "since": "2026"
+   }
+  ]
+ },
  "groups": [
   {
    "id": "shell",
@@ -12,7 +50,14 @@
      "key": "embed-resource",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "A Cargo library to handle compilation and inclusion of Windows resources in the most resilient fashion imaginable"
+     "desc": "A Cargo library to handle compilation and inclusion of Windows resources in the most resilient fashion imaginable",
+     "repo": "https://github.com/nabijaczleweli/rust-embed-resource",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "c4be15bd543a"
+      }
+     ]
     },
     {
      "name": "keyring",
@@ -22,7 +67,18 @@
      "key": "keyring",
      "source": "src-tauri/Cargo.lock",
      "req": "3.6",
-     "desc": "Cross-platform library for managing passwords/credentials"
+     "desc": "Cross-platform library for managing passwords/credentials",
+     "repo": "https://github.com/hwchen/keyring-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "6205fe4502da"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "b5e6923cd7c0"
+      }
+     ]
     },
     {
      "name": "mimalloc",
@@ -32,7 +88,14 @@
      "key": "mimalloc",
      "source": "src-tauri/Cargo.lock",
      "req": "0.1",
-     "desc": "Performance and security oriented drop-in allocator"
+     "desc": "Performance and security oriented drop-in allocator",
+     "repo": "https://github.com/purpleprotocol/mimalloc_rust",
+     "lic": [
+      {
+       "f": "LICENSE.txt",
+       "id": "a08554fab028"
+      }
+     ]
     },
     {
      "name": "open",
@@ -42,7 +105,14 @@
      "key": "open",
      "source": "src-tauri/Cargo.lock",
      "req": "5",
-     "desc": "Open a path or URL using the program configured on the system"
+     "desc": "Open a path or URL using the program configured on the system",
+     "repo": "https://github.com/Byron/open-rs",
+     "lic": [
+      {
+       "f": "LICENSE.md",
+       "id": "c3ca23514163"
+      }
+     ]
     },
     {
      "name": "tauri",
@@ -52,7 +122,19 @@
      "key": "tauri",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Make tiny, secure apps for all desktop platforms with Tauri"
+     "desc": "Make tiny, secure apps for all desktop platforms with Tauri",
+     "repo": "https://github.com/tauri-apps/tauri",
+     "home": "https://tauri.app",
+     "lic": [
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-build",
@@ -62,7 +144,19 @@
      "key": "tauri-build",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "build time code to pair with https://crates.io/crates/tauri"
+     "desc": "build time code to pair with https://crates.io/crates/tauri",
+     "repo": "https://github.com/tauri-apps/tauri",
+     "home": "https://tauri.app",
+     "lic": [
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-cli",
@@ -72,7 +166,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Parse arguments from your Tauri application's command line interface."
+     "desc": "Parse arguments from your Tauri application's command line interface.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-dialog",
@@ -82,7 +191,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Native system dialogs for opening and saving files along with message dialogs on your Tauri application."
+     "desc": "Native system dialogs for opening and saving files along with message dialogs on your Tauri application.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-fs",
@@ -92,7 +216,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Access the file system."
+     "desc": "Access the file system.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-notification",
@@ -102,7 +241,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Send desktop and mobile notifications on your Tauri application."
+     "desc": "Send desktop and mobile notifications on your Tauri application.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-process",
@@ -112,7 +266,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Access the current process of your Tauri application."
+     "desc": "Access the current process of your Tauri application.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-shell",
@@ -122,7 +291,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Access the system shell. Allows you to spawn child processes and manage files and URLs using their default application."
+     "desc": "Access the system shell. Allows you to spawn child processes and manage files and URLs using their default application.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "tauri-plugin-single-instance",
@@ -132,7 +316,22 @@
      "key": "tauri-plugins",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Ensure a single instance of your tauri app is running."
+     "desc": "Ensure a single instance of your tauri app is running.",
+     "repo": "https://github.com/tauri-apps/plugins-workspace",
+     "lic": [
+      {
+       "f": "LICENSE.spdx",
+       "id": "eb8a6c846304"
+      },
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "b7f455413bfe"
+      }
+     ]
     },
     {
      "name": "windows",
@@ -142,7 +341,18 @@
      "key": "windows",
      "source": "src-tauri/Cargo.lock",
      "req": "0.52",
-     "desc": "Rust for Windows"
+     "desc": "Rust for Windows",
+     "repo": "https://github.com/microsoft/windows-rs",
+     "lic": [
+      {
+       "f": "license-apache-2.0",
+       "id": "783829b43aac"
+      },
+      {
+       "f": "license-mit",
+       "id": "ff82c90f8494"
+      }
+     ]
     },
     {
      "name": "windows-sys",
@@ -152,7 +362,18 @@
      "key": "windows-sys",
      "source": "src-tauri/Cargo.lock",
      "req": "0.45",
-     "desc": "Rust for Windows"
+     "desc": "Rust for Windows",
+     "repo": "https://github.com/microsoft/windows-rs",
+     "lic": [
+      {
+       "f": "license-apache-2.0",
+       "id": "783829b43aac"
+      },
+      {
+       "f": "license-mit",
+       "id": "ff82c90f8494"
+      }
+     ]
     },
     {
      "name": "winreg",
@@ -162,7 +383,14 @@
      "key": "winreg",
      "source": "src-tauri/Cargo.lock",
      "req": "0.52",
-     "desc": "Rust bindings to MS Windows Registry API"
+     "desc": "Rust bindings to MS Windows Registry API",
+     "repo": "https://github.com/gentoo90/winreg-rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d9ba37d9bbdf"
+      }
+     ]
     },
     {
      "name": "@tauri-apps/api",
@@ -172,7 +400,18 @@
      "key": "tauri-api",
      "source": "package-lock.json",
      "req": "^2",
-     "desc": "Tauri API definitions"
+     "desc": "Tauri API definitions",
+     "repo": "https://github.com/tauri-apps/tauri",
+     "lic": [
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     }
    ]
   },
@@ -195,7 +434,8 @@
      "url": "https://marked.js.org/",
      "key": "marked",
      "source": "frontend/js/lib/marked.min.js",
-     "licenseFrom": "frontend/js/lib/marked.min.js (licence banner)"
+     "licenseFrom": "frontend/js/lib/marked.min.js (licence banner)",
+     "repo": "https://github.com/markedjs/marked"
     },
     {
      "name": "Prism",
@@ -204,7 +444,14 @@
      "url": "https://prismjs.com/",
      "key": "prism",
      "source": "frontend/assets/vendor/prism.min.js",
-     "licenseFrom": "a package-lock.json with the same version"
+     "licenseFrom": "a package-lock.json with the same version",
+     "repo": "https://github.com/PrismJS/prism",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "06c72c0dd56a"
+      }
+     ]
     },
     {
      "name": "KaTeX",
@@ -213,7 +460,15 @@
      "url": "https://katex.org/",
      "key": "katex",
      "source": "frontend/assets/vendor/katex/katex.min.js",
-     "licenseFrom": "a package-lock.json with the same version"
+     "licenseFrom": "a package-lock.json with the same version",
+     "repo": "https://github.com/KaTeX/KaTeX",
+     "home": "https://katex.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d3c8c167dfa0"
+      }
+     ]
     },
     {
      "name": "Mermaid",
@@ -222,7 +477,8 @@
      "url": "https://mermaid.js.org/",
      "key": "mermaid",
      "source": "frontend/assets/vendor/mermaid.min.js",
-     "licenseFrom": "https://github.com/mermaid-js/mermaid/blob/develop/LICENSE"
+     "licenseFrom": "https://github.com/mermaid-js/mermaid/blob/develop/LICENSE",
+     "repo": "https://github.com/mermaid-js/mermaid"
     },
     {
      "name": "rrweb",
@@ -231,7 +487,8 @@
      "url": "https://www.rrweb.io/",
      "key": "rrweb",
      "source": "frontend/assets/vendor/rrweb.min.js = node_modules/rrweb/dist/rrweb.umd.min.cjs",
-     "licenseFrom": "package-lock.json"
+     "licenseFrom": "package-lock.json",
+     "repo": "https://github.com/rrweb-io/rrweb"
     },
     {
      "name": "GSAP",
@@ -240,7 +497,8 @@
      "url": "https://gsap.com/",
      "key": "gsap",
      "source": "frontend/assets/vendor/gsap.min.js",
-     "licenseFrom": "frontend/assets/vendor/gsap.min.js (licence banner)"
+     "licenseFrom": "frontend/assets/vendor/gsap.min.js (licence banner)",
+     "repo": "https://github.com/greensock/GSAP"
     },
     {
      "name": "svg-pan-zoom",
@@ -258,7 +516,8 @@
      "url": "https://fengyuanchen.github.io/cropperjs/",
      "key": "cropperjs",
      "source": "frontend/assets/cropper/cropper.min.js",
-     "licenseFrom": "frontend/assets/cropper/cropper.min.js (licence banner)"
+     "licenseFrom": "frontend/assets/cropper/cropper.min.js (licence banner)",
+     "repo": "https://github.com/fengyuanchen/cropperjs"
     }
    ]
   },
@@ -272,7 +531,18 @@
      "url": "https://crates.io/crates/aes-gcm",
      "key": "aes-gcm",
      "source": "src-tauri/Cargo.lock",
-     "desc": "Pure Rust implementation of the AES-GCM (Galois/Counter Mode) Authenticated Encryption with Associated Data (AEAD) Cipher with optional architecture-specific hardware acceleration"
+     "desc": "Pure Rust implementation of the AES-GCM (Galois/Counter Mode) Authenticated Encryption with Associated Data (AEAD) Cipher with optional architecture-specific hardware acceleration",
+     "repo": "https://github.com/RustCrypto/AEADs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "e8541ea93f02"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "1038b7737a0a"
+      }
+     ]
     },
     {
      "name": "anyhow",
@@ -282,7 +552,18 @@
      "key": "anyhow",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "Flexible concrete Error type built on std::error::Error"
+     "desc": "Flexible concrete Error type built on std::error::Error",
+     "repo": "https://github.com/dtolnay/anyhow",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "argon2",
@@ -291,7 +572,19 @@
      "url": "https://crates.io/crates/argon2",
      "key": "argon2",
      "source": "src-tauri/Cargo.lock",
-     "desc": "Pure Rust implementation of the Argon2 password hashing function with support for the Argon2d, Argon2i, and Argon2id algorithmic variants"
+     "desc": "Pure Rust implementation of the Argon2 password hashing function with support for the Argon2d, Argon2i, and Argon2id algorithmic variants",
+     "repo": "https://github.com/RustCrypto/password-hashes",
+     "home": "https://github.com/RustCrypto/password-hashes/tree/master/argon2",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "e8541ea93f02"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "a14b16aef08f"
+      }
+     ]
     },
     {
      "name": "backtrace",
@@ -301,7 +594,18 @@
      "key": "backtrace",
      "source": "src-tauri/Cargo.lock",
      "req": "0.3",
-     "desc": "A library to acquire a stack trace (backtrace) at runtime in a Rust program."
+     "desc": "A library to acquire a stack trace (backtrace) at runtime in a Rust program.",
+     "repo": "https://github.com/rust-lang/backtrace-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "84e1bbfebd74"
+      }
+     ]
     },
     {
      "name": "base64",
@@ -311,7 +615,18 @@
      "key": "base64",
      "source": "src-tauri/Cargo.lock",
      "req": "0.21",
-     "desc": "encodes and decodes base64 as bytes or utf8"
+     "desc": "encodes and decodes base64 as bytes or utf8",
+     "repo": "https://github.com/marshallpierce/rust-base64",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "6a8da4c78c72"
+      }
+     ]
     },
     {
      "name": "blake3",
@@ -321,7 +636,22 @@
      "key": "blake3",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "the BLAKE3 hash function"
+     "desc": "the BLAKE3 hash function",
+     "repo": "https://github.com/BLAKE3-team/BLAKE3",
+     "lic": [
+      {
+       "f": "LICENSE_A2",
+       "id": "fb348df332f3"
+      },
+      {
+       "f": "LICENSE_A2LLVM",
+       "id": "75b396e36891"
+      },
+      {
+       "f": "LICENSE_CC0",
+       "id": "6d489af62926"
+      }
+     ]
     },
     {
      "name": "bytes",
@@ -331,7 +661,14 @@
      "key": "bytes",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "Types and traits for working with bytes"
+     "desc": "Types and traits for working with bytes",
+     "repo": "https://github.com/tokio-rs/bytes",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "51f778ffff2c"
+      }
+     ]
     },
     {
      "name": "chrono",
@@ -341,7 +678,14 @@
      "key": "chrono",
      "source": "src-tauri/Cargo.lock",
      "req": "0.4",
-     "desc": "Date and time library for Rust"
+     "desc": "Date and time library for Rust",
+     "repo": "https://github.com/chronotope/chrono",
+     "lic": [
+      {
+       "f": "LICENSE.txt",
+       "id": "ce4a94c006fa"
+      }
+     ]
     },
     {
      "name": "clap",
@@ -351,7 +695,18 @@
      "key": "clap",
      "source": "src-tauri/Cargo.lock",
      "req": "4",
-     "desc": "A simple to use, efficient, and full-featured Command Line Argument Parser"
+     "desc": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+     "repo": "https://github.com/clap-rs/clap",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "6dc0e068dcf3"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "4498464c2864"
+      }
+     ]
     },
     {
      "name": "colored",
@@ -361,7 +716,14 @@
      "key": "colored",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "The most simple way to add colors in your terminal"
+     "desc": "The most simple way to add colors in your terminal",
+     "repo": "https://github.com/mackwic/colored",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "4b89d4518bd1"
+      }
+     ]
     },
     {
      "name": "comfy-table",
@@ -371,7 +733,14 @@
      "key": "comfy-table",
      "source": "src-tauri/Cargo.lock",
      "req": "7",
-     "desc": "An easy to use library for building beautiful tables with automatic content wrapping"
+     "desc": "An easy to use library for building beautiful tables with automatic content wrapping",
+     "repo": "https://github.com/nukesor/comfy-table",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "0bb833f81dfe"
+      }
+     ]
     },
     {
      "name": "discord-rich-presence",
@@ -381,7 +750,14 @@
      "key": "discord-rich-presence",
      "source": "src-tauri/Cargo.lock",
      "req": "0.2.4",
-     "desc": "A simple, cross-platform crate for interfacing with Discord's IPC"
+     "desc": "A simple, cross-platform crate for interfacing with Discord's IPC",
+     "repo": "https://github.com/vionya/discord-rich-presence",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "29736df80cac"
+      }
+     ]
     },
     {
      "name": "ed25519-dalek",
@@ -391,7 +767,15 @@
      "key": "ed25519-dalek",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Fast and efficient ed25519 EdDSA key generations, signing, and verification in pure Rust."
+     "desc": "Fast and efficient ed25519 EdDSA key generations, signing, and verification in pure Rust.",
+     "repo": "https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek",
+     "home": "https://github.com/dalek-cryptography/curve25519-dalek",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d2778eb7f5d0"
+      }
+     ]
     },
     {
      "name": "flate2",
@@ -401,7 +785,18 @@
      "key": "flate2",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams. Supports miniz_oxide and multiple zlib implementations. Supports zlib, gzip, and raw deflate streams."
+     "desc": "DEFLATE compression and decompression exposed as Read/BufRead/Write streams. Supports miniz_oxide and multiple zlib implementations. Supports zlib, gzip, and raw deflate streams.",
+     "repo": "https://github.com/rust-lang/flate2-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "1b7402ea003f"
+      }
+     ]
     },
     {
      "name": "fs_extra",
@@ -411,7 +806,14 @@
      "key": "fs-extra",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "Expanding std::fs and std::io. Recursively copy folders with information about process and much more."
+     "desc": "Expanding std::fs and std::io. Recursively copy folders with information about process and much more.",
+     "repo": "https://github.com/webdesus/fs_extra",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "30158cc81738"
+      }
+     ]
     },
     {
      "name": "futures",
@@ -421,7 +823,19 @@
      "key": "futures",
      "source": "src-tauri/Cargo.lock",
      "req": "0.3",
-     "desc": "An implementation of futures and streams featuring zero allocations, composability, and iterator-like interfaces."
+     "desc": "An implementation of futures and streams featuring zero allocations, composability, and iterator-like interfaces.",
+     "repo": "https://github.com/rust-lang/futures-rs",
+     "home": "https://rust-lang.github.io/futures-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "27480f391bd9"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "b420d8add23b"
+      }
+     ]
     },
     {
      "name": "hex",
@@ -431,7 +845,18 @@
      "key": "hex",
      "source": "src-tauri/Cargo.lock",
      "req": "0.4",
-     "desc": "Encoding and decoding data into/from hexadecimal representation."
+     "desc": "Encoding and decoding data into/from hexadecimal representation.",
+     "repo": "https://github.com/KokaKiwi/rust-hex",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "6dc0e068dcf3"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "9dde4a6ad496"
+      }
+     ]
     },
     {
      "name": "igd",
@@ -441,7 +866,14 @@
      "key": "igd",
      "source": "src-tauri/Cargo.lock",
      "req": "0.12",
-     "desc": "Internet Gateway Protocol client"
+     "desc": "Internet Gateway Protocol client",
+     "repo": "https://github.com/sbstp/rust-igd",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "ebc0dd25a19e"
+      }
+     ]
     },
     {
      "name": "image",
@@ -451,7 +883,18 @@
      "key": "image",
      "source": "src-tauri/Cargo.lock",
      "req": "0.25",
-     "desc": "Imaging library. Provides basic image processing and encoders/decoders for common image formats."
+     "desc": "Imaging library. Provides basic image processing and encoders/decoders for common image formats.",
+     "repo": "https://github.com/image-rs/image",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "77949ead506e"
+      }
+     ]
     },
     {
      "name": "jwalk",
@@ -461,7 +904,14 @@
      "key": "jwalk",
      "source": "src-tauri/Cargo.lock",
      "req": "0.8",
-     "desc": "Filesystem walk performed in parallel with streamed and sorted results."
+     "desc": "Filesystem walk performed in parallel with streamed and sorted results.",
+     "repo": "https://github.com/byron/jwalk",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "7a2e85c8d8ad"
+      }
+     ]
     },
     {
      "name": "lazy_static",
@@ -471,7 +921,18 @@
      "key": "lazy-static",
      "source": "src-tauri/Cargo.lock",
      "req": "1.4",
-     "desc": "A macro for declaring lazily evaluated statics in Rust."
+     "desc": "A macro for declaring lazily evaluated statics in Rust.",
+     "repo": "https://github.com/rust-lang-nursery/lazy-static.rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "9e0027807b0c"
+      }
+     ]
     },
     {
      "name": "local-ip-address",
@@ -481,7 +942,18 @@
      "key": "local-ip-address",
      "source": "src-tauri/Cargo.lock",
      "req": "0.6",
-     "desc": "Retrieve system's local IP address and Network Interfaces/Adapters on Linux, macOS and Windows."
+     "desc": "Retrieve system's local IP address and Network Interfaces/Adapters on Linux, macOS and Windows.",
+     "repo": "https://github.com/LeoBorai/local-ip-address",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "715467026730"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "b6ef30b67d87"
+      }
+     ]
     },
     {
      "name": "percent-encoding",
@@ -491,7 +963,18 @@
      "key": "percent-encoding",
      "source": "src-tauri/Cargo.lock",
      "req": "2.3",
-     "desc": "Percent encoding and decoding"
+     "desc": "Percent encoding and decoding",
+     "repo": "https://github.com/servo/rust-url",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "7a8093fb4a93"
+      }
+     ]
     },
     {
      "name": "rand",
@@ -501,7 +984,19 @@
      "key": "rand",
      "source": "src-tauri/Cargo.lock",
      "req": "0.8",
-     "desc": "Random number generators and other randomness functionality."
+     "desc": "Random number generators and other randomness functionality.",
+     "repo": "https://github.com/rust-random/rand",
+     "home": "https://rust-random.github.io/book",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "fee4d7ce394c"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "cc367a7134c2"
+      }
+     ]
     },
     {
      "name": "rayon",
@@ -511,7 +1006,18 @@
      "key": "rayon",
      "source": "src-tauri/Cargo.lock",
      "req": "1.8",
-     "desc": "Simple work-stealing parallelism for Rust"
+     "desc": "Simple work-stealing parallelism for Rust",
+     "repo": "https://github.com/rayon-rs/rayon",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "9e0027807b0c"
+      }
+     ]
     },
     {
      "name": "regex",
@@ -521,7 +1027,18 @@
      "key": "regex",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "An implementation of regular expressions for Rust. This implementation uses finite automata and guarantees linear time matching on all inputs."
+     "desc": "An implementation of regular expressions for Rust. This implementation uses finite automata and guarantees linear time matching on all inputs.",
+     "repo": "https://github.com/rust-lang/regex",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "14435fbcd271"
+      }
+     ]
     },
     {
      "name": "reqwest",
@@ -531,7 +1048,18 @@
      "key": "reqwest",
      "source": "src-tauri/Cargo.lock",
      "req": "0.12",
-     "desc": "higher level HTTP client library"
+     "desc": "higher level HTTP client library",
+     "repo": "https://github.com/seanmonstar/reqwest",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "5c3866f31ed2"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "54987d63f266"
+      }
+     ]
     },
     {
      "name": "rmcp",
@@ -541,7 +1069,8 @@
      "key": "rmcp",
      "source": "src-tauri/Cargo.lock",
      "req": "1.4",
-     "desc": "Rust SDK for Model Context Protocol"
+     "desc": "Rust SDK for Model Context Protocol",
+     "repo": "https://github.com/modelcontextprotocol/rust-sdk"
     },
     {
      "name": "russh",
@@ -550,7 +1079,8 @@
      "url": "https://crates.io/crates/russh",
      "key": "russh",
      "source": "src-tauri/Cargo.lock",
-     "desc": "A client and server SSH library."
+     "desc": "A client and server SSH library.",
+     "repo": "https://github.com/warp-tech/russh"
     },
     {
      "name": "russh-sftp",
@@ -559,7 +1089,14 @@
      "url": "https://crates.io/crates/russh-sftp",
      "key": "russh-sftp",
      "source": "src-tauri/Cargo.lock",
-     "desc": "SFTP subsystem supported server and client for Russh"
+     "desc": "SFTP subsystem supported server and client for Russh",
+     "repo": "https://github.com/AspectUnk/russh-sftp",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ]
     },
     {
      "name": "schemars",
@@ -569,7 +1106,15 @@
      "key": "schemars",
      "source": "src-tauri/Cargo.lock",
      "req": "0.8",
-     "desc": "Generate JSON Schemas from Rust code"
+     "desc": "Generate JSON Schemas from Rust code",
+     "repo": "https://github.com/GREsau/schemars",
+     "home": "https://graham.cool/schemars",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "1ddb39b2b497"
+      }
+     ]
     },
     {
      "name": "serde",
@@ -579,7 +1124,19 @@
      "key": "serde",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "A generic serialization/deserialization framework"
+     "desc": "A generic serialization/deserialization framework",
+     "repo": "https://github.com/serde-rs/serde",
+     "home": "https://serde.rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "serde_json",
@@ -589,7 +1146,18 @@
      "key": "serde-json",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "A JSON serialization file format"
+     "desc": "A JSON serialization file format",
+     "repo": "https://github.com/serde-rs/json",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "sevenz-rust2",
@@ -599,7 +1167,15 @@
      "key": "sevenz-rust2",
      "source": "src-tauri/Cargo.lock",
      "req": "0.23",
-     "desc": "A 7z decompressor/compressor written in pure Rust"
+     "desc": "A 7z decompressor/compressor written in pure Rust",
+     "repo": "https://github.com/hasenbanck/sevenz-rust",
+     "home": "https://github.com/hasenbanck/sevenz-rust2",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ]
     },
     {
      "name": "sha2",
@@ -608,7 +1184,18 @@
      "url": "https://crates.io/crates/sha2",
      "key": "sha2",
      "source": "src-tauri/Cargo.lock",
-     "desc": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512."
+     "desc": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512.",
+     "repo": "https://github.com/RustCrypto/hashes",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "e8541ea93f02"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "4031faf6212e"
+      }
+     ]
     },
     {
      "name": "sysinfo",
@@ -618,7 +1205,14 @@
      "key": "sysinfo",
      "source": "src-tauri/Cargo.lock",
      "req": "0.30",
-     "desc": "Library to get system information such as processes, CPUs, disks, components and networks"
+     "desc": "Library to get system information such as processes, CPUs, disks, components and networks",
+     "repo": "https://github.com/GuillaumeGomez/sysinfo",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "0c19d7104c50"
+      }
+     ]
     },
     {
      "name": "tar",
@@ -628,7 +1222,18 @@
      "key": "tar",
      "source": "src-tauri/Cargo.lock",
      "req": "0.4",
-     "desc": "A Rust implementation of a TAR file reader and writer. This library does not currently handle compression, but it is abstract over all I/O readers and writers. Additionally, great lengths are taken to ensure that the entire contents are never required to be entirely resident in memory all at once."
+     "desc": "A Rust implementation of a TAR file reader and writer. This library does not currently handle compression, but it is abstract over all I/O readers and writers. Additionally, great lengths are taken to ensure that the entire contents are never required to be entirely resident in memory all at once.",
+     "repo": "https://github.com/composefs/tar-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "e6e853531994"
+      }
+     ]
     },
     {
      "name": "tempfile",
@@ -638,7 +1243,19 @@
      "key": "tempfile",
      "source": "src-tauri/Cargo.lock",
      "req": "3",
-     "desc": "A library for managing temporary files and directories."
+     "desc": "A library for managing temporary files and directories.",
+     "repo": "https://github.com/Stebalien/tempfile",
+     "home": "https://stebalien.com/projects/tempfile-rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "7bdd5c5e8ad0"
+      }
+     ]
     },
     {
      "name": "thiserror",
@@ -648,7 +1265,18 @@
      "key": "thiserror",
      "source": "src-tauri/Cargo.lock",
      "req": "1.0",
-     "desc": "derive(Error)"
+     "desc": "derive(Error)",
+     "repo": "https://github.com/dtolnay/thiserror",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "tokio",
@@ -658,7 +1286,15 @@
      "key": "tokio",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications."
+     "desc": "An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications.",
+     "repo": "https://github.com/tokio-rs/tokio",
+     "home": "https://tokio.rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "3e1bef82aa0d"
+      }
+     ]
     },
     {
      "name": "tokio-util",
@@ -668,7 +1304,15 @@
      "key": "tokio-util",
      "source": "src-tauri/Cargo.lock",
      "req": "0.7",
-     "desc": "Additional utilities for working with Tokio."
+     "desc": "Additional utilities for working with Tokio.",
+     "repo": "https://github.com/tokio-rs/tokio",
+     "home": "https://tokio.rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "3e1bef82aa0d"
+      }
+     ]
     },
     {
      "name": "tracing",
@@ -678,7 +1322,15 @@
      "key": "tracing",
      "source": "src-tauri/Cargo.lock",
      "req": "0.1",
-     "desc": "Application-level tracing for Rust."
+     "desc": "Application-level tracing for Rust.",
+     "repo": "https://github.com/tokio-rs/tracing",
+     "home": "https://tokio.rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "c1e08ee9a728"
+      }
+     ]
     },
     {
      "name": "tracing-subscriber",
@@ -688,7 +1340,15 @@
      "key": "tracing-subscriber",
      "source": "src-tauri/Cargo.lock",
      "req": "0.3",
-     "desc": "Utilities for implementing and composing `tracing` subscribers."
+     "desc": "Utilities for implementing and composing `tracing` subscribers.",
+     "repo": "https://github.com/tokio-rs/tracing",
+     "home": "https://tokio.rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "c1e08ee9a728"
+      }
+     ]
     },
     {
      "name": "unrar",
@@ -698,7 +1358,18 @@
      "key": "unrar",
      "source": "src-tauri/Cargo.lock",
      "req": "0.5",
-     "desc": "list and extract RAR archives"
+     "desc": "list and extract RAR archives",
+     "repo": "https://github.com/muja/unrar.rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "uuid",
@@ -708,7 +1379,18 @@
      "key": "uuid",
      "source": "src-tauri/Cargo.lock",
      "req": "1",
-     "desc": "A library to generate and parse UUIDs."
+     "desc": "A library to generate and parse UUIDs.",
+     "repo": "https://github.com/uuid-rs/uuid",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "954f335b8baf"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "11cd7e6caed4"
+      }
+     ]
     },
     {
      "name": "walkdir",
@@ -718,7 +1400,22 @@
      "key": "walkdir",
      "source": "src-tauri/Cargo.lock",
      "req": "2",
-     "desc": "Recursively walk a directory."
+     "desc": "Recursively walk a directory.",
+     "repo": "https://github.com/BurntSushi/walkdir",
+     "lic": [
+      {
+       "f": "COPYING",
+       "id": "65314a6c9668"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "154c1af2b38e"
+      },
+      {
+       "f": "UNLICENSE",
+       "id": "ca2abdf69588"
+      }
+     ]
     },
     {
      "name": "warp",
@@ -728,7 +1425,14 @@
      "key": "warp",
      "source": "src-tauri/Cargo.lock",
      "req": "0.4",
-     "desc": "serve the web at warp speeds"
+     "desc": "serve the web at warp speeds",
+     "repo": "https://github.com/seanmonstar/warp",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "5c204954cae6"
+      }
+     ]
     },
     {
      "name": "zeroize",
@@ -738,7 +1442,18 @@
      "key": "zeroize",
      "source": "src-tauri/Cargo.lock",
      "req": "1.8",
-     "desc": "Securely clear secrets from memory with a simple trait built on stable Rust primitives which guarantee memory is zeroed using an operation will not be 'optimized away' by the compiler. Uses a portable pure Rust implementation that works everywhere, even WASM!"
+     "desc": "Securely clear secrets from memory with a simple trait built on stable Rust primitives which guarantee memory is zeroed using an operation will not be 'optimized away' by the compiler. Uses a portable pure Rust implementation that works everywhere, even WASM!",
+     "repo": "https://github.com/RustCrypto/utils",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "283ea6cc2997"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "836ed921bbad"
+      }
+     ]
     },
     {
      "name": "zip",
@@ -748,7 +1463,14 @@
      "key": "zip",
      "source": "src-tauri/Cargo.lock",
      "req": "0.6",
-     "desc": "Library to support the reading and writing of zip files."
+     "desc": "Library to support the reading and writing of zip files.",
+     "repo": "https://github.com/zip-rs/zip",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "6ac8711fb340"
+      }
+     ]
     }
    ]
   },
@@ -763,7 +1485,8 @@
      "key": "laya-model",
      "source": "laya-model.lock.json",
      "desc": "Laya classifier, revision e4e9ddf21a7b1903b7acffd8814ad4307bf63a67, shipped as int8-weight-only-matmul-b32+int8-embedding-rows ONNX in laya-offline-1.zip.",
-     "licenseFrom": "laya-model.lock.json"
+     "licenseFrom": "laya-model.lock.json",
+     "repo": "https://huggingface.co/convaiinnovations/laya-multilingual"
     },
     {
      "name": "ONNX Runtime",
@@ -773,7 +1496,9 @@
      "key": "onnxruntime",
      "source": "laya-model.lock.json",
      "desc": "The official Microsoft runtime inside the model pack, loaded by absolute path after its SHA-256 is checked.",
-     "licenseFrom": "laya-model.lock.json"
+     "licenseFrom": "laya-model.lock.json",
+     "repo": "https://github.com/microsoft/onnxruntime",
+     "home": "https://onnxruntime.ai/"
     },
     {
      "name": "ort",
@@ -783,7 +1508,19 @@
      "key": "ort",
      "source": "src-tauri/Cargo.lock",
      "req": "=2.0.0-rc.13",
-     "desc": "A safe Rust wrapper for ONNX Runtime 1.28 - Optimize and accelerate machine learning inference & training"
+     "desc": "A safe Rust wrapper for ONNX Runtime 1.28 - Optimize and accelerate machine learning inference & training",
+     "repo": "https://github.com/pykeio/ort",
+     "home": "https://ort.pyke.io",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "283ea6cc2997"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "b2653abd3fa1"
+      }
+     ]
     },
     {
      "name": "tokenizers",
@@ -793,7 +1530,14 @@
      "key": "tokenizers",
      "source": "src-tauri/Cargo.lock",
      "req": "=0.23.2",
-     "desc": "Provides an implementation of today's most used tokenizers, with a focus on performances and versatility."
+     "desc": "Provides an implementation of today's most used tokenizers, with a focus on performances and versatility.",
+     "repo": "https://github.com/huggingface/tokenizers",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ]
     }
    ]
   },
@@ -807,7 +1551,8 @@
      "url": "https://rsms.me/inter/",
      "key": "inter",
      "source": "frontend/index.html (Google Fonts)",
-     "licenseFrom": "https://github.com/rsms/inter/blob/master/LICENSE.txt"
+     "licenseFrom": "https://github.com/rsms/inter/blob/master/LICENSE.txt",
+     "repo": "https://github.com/rsms/inter"
     },
     {
      "name": "JetBrains Mono",
@@ -816,7 +1561,8 @@
      "url": "https://www.jetbrains.com/lp/mono/",
      "key": "jetbrains-mono",
      "source": "frontend/index.html (Google Fonts)",
-     "licenseFrom": "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt"
+     "licenseFrom": "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt",
+     "repo": "https://github.com/JetBrains/JetBrainsMono"
     },
     {
      "name": "lucide",
@@ -825,7 +1571,8 @@
      "url": "https://lucide.dev/",
      "key": "lucide",
      "source": "frontend/assets/icons/lucide.json (2017 icons)",
-     "licenseFrom": "https://github.com/lucide-icons/lucide/blob/main/LICENSE"
+     "licenseFrom": "https://github.com/lucide-icons/lucide/blob/main/LICENSE",
+     "repo": "https://github.com/lucide-icons/lucide"
     },
     {
      "name": "simple-icons",
@@ -834,7 +1581,8 @@
      "url": "https://simpleicons.org/",
      "key": "simple-icons",
      "source": "frontend/assets/icons/simple-icons.json (3453 icons)",
-     "licenseFrom": "https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md"
+     "licenseFrom": "https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md",
+     "repo": "https://github.com/simple-icons/simple-icons"
     },
     {
      "name": "Isoflow isopack",
@@ -875,7 +1623,8 @@
      "url": "https://pypi.org/project/mkdocs/",
      "key": "mkdocs",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/mkdocs/mkdocs/blob/master/LICENSE"
+     "licenseFrom": "https://github.com/mkdocs/mkdocs/blob/master/LICENSE",
+     "repo": "https://github.com/mkdocs/mkdocs"
     },
     {
      "name": "mkdocs-material",
@@ -884,7 +1633,8 @@
      "url": "https://pypi.org/project/mkdocs-material/",
      "key": "mkdocs-material",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/squidfunk/mkdocs-material/blob/master/LICENSE"
+     "licenseFrom": "https://github.com/squidfunk/mkdocs-material/blob/master/LICENSE",
+     "repo": "https://github.com/squidfunk/mkdocs-material"
     },
     {
      "name": "pymdown-extensions",
@@ -893,7 +1643,8 @@
      "url": "https://pypi.org/project/pymdown-extensions/",
      "key": "pymdown-extensions",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/facelessuser/pymdown-extensions/blob/main/LICENSE.md"
+     "licenseFrom": "https://github.com/facelessuser/pymdown-extensions/blob/main/LICENSE.md",
+     "repo": "https://github.com/facelessuser/pymdown-extensions"
     },
     {
      "name": "mkdocs-static-i18n",
@@ -902,7 +1653,8 @@
      "url": "https://pypi.org/project/mkdocs-static-i18n/",
      "key": "mkdocs-static-i18n",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/ultrabug/mkdocs-static-i18n/blob/main/LICENSE"
+     "licenseFrom": "https://github.com/ultrabug/mkdocs-static-i18n/blob/main/LICENSE",
+     "repo": "https://github.com/ultrabug/mkdocs-static-i18n"
     },
     {
      "name": "mkdocs-with-pdf",
@@ -911,7 +1663,8 @@
      "url": "https://pypi.org/project/mkdocs-with-pdf/",
      "key": "mkdocs-with-pdf",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/orzih/mkdocs-with-pdf/blob/master/LICENSE"
+     "licenseFrom": "https://github.com/orzih/mkdocs-with-pdf/blob/master/LICENSE",
+     "repo": "https://github.com/orzih/mkdocs-with-pdf"
     },
     {
      "name": "Pillow",
@@ -920,7 +1673,8 @@
      "url": "https://pypi.org/project/Pillow/",
      "key": "pillow",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/python-pillow/Pillow/blob/main/LICENSE"
+     "licenseFrom": "https://github.com/python-pillow/Pillow/blob/main/LICENSE",
+     "repo": "https://github.com/python-pillow/Pillow"
     },
     {
      "name": "weasyprint",
@@ -929,7 +1683,8 @@
      "url": "https://pypi.org/project/weasyprint/",
      "key": "weasyprint",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/Kozea/WeasyPrint/blob/main/LICENSE"
+     "licenseFrom": "https://github.com/Kozea/WeasyPrint/blob/main/LICENSE",
+     "repo": "https://github.com/Kozea/WeasyPrint"
     },
     {
      "name": "pypdf",
@@ -938,7 +1693,8 @@
      "url": "https://pypi.org/project/pypdf/",
      "key": "pypdf",
      "source": "BMM Docs/requirements.in",
-     "licenseFrom": "https://github.com/py-pdf/pypdf/blob/main/LICENSE"
+     "licenseFrom": "https://github.com/py-pdf/pypdf/blob/main/LICENSE",
+     "repo": "https://github.com/py-pdf/pypdf"
     }
    ]
   },
@@ -953,7 +1709,18 @@
      "key": "anyhow",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "Flexible concrete Error type built on std::error::Error"
+     "desc": "Flexible concrete Error type built on std::error::Error",
+     "repo": "https://github.com/dtolnay/anyhow",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "chrono",
@@ -963,7 +1730,14 @@
      "key": "chrono",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.4",
-     "desc": "Date and time library for Rust"
+     "desc": "Date and time library for Rust",
+     "repo": "https://github.com/chronotope/chrono",
+     "lic": [
+      {
+       "f": "LICENSE.txt",
+       "id": "ce4a94c006fa"
+      }
+     ]
     },
     {
      "name": "clap",
@@ -973,7 +1747,18 @@
      "key": "clap",
      "source": "BetterInstaller/Cargo.lock",
      "req": "4",
-     "desc": "A simple to use, efficient, and full-featured Command Line Argument Parser"
+     "desc": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+     "repo": "https://github.com/clap-rs/clap",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "6dc0e068dcf3"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "4498464c2864"
+      }
+     ]
     },
     {
      "name": "ed25519-dalek",
@@ -983,7 +1768,15 @@
      "key": "ed25519-dalek",
      "source": "BetterInstaller/Cargo.lock",
      "req": "2",
-     "desc": "Fast and efficient ed25519 EdDSA key generations, signing, and verification in pure Rust."
+     "desc": "Fast and efficient ed25519 EdDSA key generations, signing, and verification in pure Rust.",
+     "repo": "https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek",
+     "home": "https://github.com/dalek-cryptography/curve25519-dalek",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d2778eb7f5d0"
+      }
+     ]
     },
     {
      "name": "embed-manifest",
@@ -993,7 +1786,14 @@
      "key": "embed-manifest",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "Build script library to easily embed a Windows manifest."
+     "desc": "Build script library to easily embed a Windows manifest.",
+     "repo": "https://codeberg.org/carey/embed-manifest",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "8595f265b039"
+      }
+     ]
     },
     {
      "name": "i-slint-backend-winit",
@@ -1003,7 +1803,9 @@
      "key": "i-slint-backend-winit",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1.16",
-     "desc": "Winit backend for Slint"
+     "desc": "Winit backend for Slint",
+     "repo": "https://github.com/slint-ui/slint",
+     "home": "https://slint.dev"
     },
     {
      "name": "qbsdiff",
@@ -1013,7 +1815,14 @@
      "key": "qbsdiff",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "Fast and memory saving bsdiff 4.x compatible delta compressor and patcher."
+     "desc": "Fast and memory saving bsdiff 4.x compatible delta compressor and patcher.",
+     "repo": "https://github.com/hucsmn/qbsdiff",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d880e3bbd8a5"
+      }
+     ]
     },
     {
      "name": "rand",
@@ -1023,7 +1832,19 @@
      "key": "rand",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.8",
-     "desc": "Random number generators and other randomness functionality."
+     "desc": "Random number generators and other randomness functionality.",
+     "repo": "https://github.com/rust-random/rand",
+     "home": "https://rust-random.github.io/book",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "fee4d7ce394c"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "cc367a7134c2"
+      }
+     ]
     },
     {
      "name": "reqwest",
@@ -1033,7 +1854,18 @@
      "key": "reqwest",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.12",
-     "desc": "higher level HTTP client library"
+     "desc": "higher level HTTP client library",
+     "repo": "https://github.com/seanmonstar/reqwest",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "5c3866f31ed2"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "54987d63f266"
+      }
+     ]
     },
     {
      "name": "serde",
@@ -1043,7 +1875,19 @@
      "key": "serde",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "A generic serialization/deserialization framework"
+     "desc": "A generic serialization/deserialization framework",
+     "repo": "https://github.com/serde-rs/serde",
+     "home": "https://serde.rs",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "serde_json",
@@ -1053,7 +1897,18 @@
      "key": "serde-json",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "A JSON serialization file format"
+     "desc": "A JSON serialization file format",
+     "repo": "https://github.com/serde-rs/json",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "sha2",
@@ -1063,7 +1918,18 @@
      "key": "sha2",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.10",
-     "desc": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512."
+     "desc": "Pure Rust implementation of the SHA-2 hash function family including SHA-224, SHA-256, SHA-384, and SHA-512.",
+     "repo": "https://github.com/RustCrypto/hashes",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "e8541ea93f02"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "4031faf6212e"
+      }
+     ]
     },
     {
      "name": "slint",
@@ -1073,7 +1939,9 @@
      "key": "slint",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "GUI toolkit to efficiently develop fluid graphical user interfaces for embedded devices and desktop applications"
+     "desc": "GUI toolkit to efficiently develop fluid graphical user interfaces for embedded devices and desktop applications",
+     "repo": "https://github.com/slint-ui/slint",
+     "home": "https://slint.rs"
     },
     {
      "name": "slint-build",
@@ -1083,7 +1951,9 @@
      "key": "slint-build",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "Helper for Slint build script"
+     "desc": "Helper for Slint build script",
+     "repo": "https://github.com/slint-ui/slint",
+     "home": "https://slint.rs"
     },
     {
      "name": "thiserror",
@@ -1093,7 +1963,18 @@
      "key": "thiserror",
      "source": "BetterInstaller/Cargo.lock",
      "req": "1",
-     "desc": "derive(Error)"
+     "desc": "derive(Error)",
+     "repo": "https://github.com/dtolnay/thiserror",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "85ad950cce87"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "30fefc3a7d6a"
+      }
+     ]
     },
     {
      "name": "toml",
@@ -1103,7 +1984,18 @@
      "key": "toml",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.8",
-     "desc": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures."
+     "desc": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures.",
+     "repo": "https://github.com/toml-rs/toml",
+     "lic": [
+      {
+       "f": "LICENSE-APACHE",
+       "id": "6dc0e068dcf3"
+      },
+      {
+       "f": "LICENSE-MIT",
+       "id": "4498464c2864"
+      }
+     ]
     },
     {
      "name": "zip",
@@ -1113,7 +2005,14 @@
      "key": "zip",
      "source": "BetterInstaller/Cargo.lock",
      "req": "2",
-     "desc": "Library to support the reading and writing of zip files."
+     "desc": "Library to support the reading and writing of zip files.",
+     "repo": "https://github.com/zip-rs/zip2",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "04dc52136d82"
+      }
+     ]
     },
     {
      "name": "zstd",
@@ -1123,7 +2022,14 @@
      "key": "zstd",
      "source": "BetterInstaller/Cargo.lock",
      "req": "0.13",
-     "desc": "Binding for the zstd compression library."
+     "desc": "Binding for the zstd compression library.",
+     "repo": "https://github.com/gyscos/zstd-rs",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "84b7e1b767be"
+      }
+     ]
     }
    ]
   },
@@ -1139,6 +2045,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^3.637.0",
      "desc": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
+     "repo": "https://github.com/aws/aws-sdk-js-v3",
+     "home": "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-s3",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d82ceb8cbd00"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1151,6 +2065,14 @@
      "key": "aws-sdk-s3-request-presigner",
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^3.637.0",
+     "repo": "https://github.com/aws/aws-sdk-js-v3",
+     "home": "https://github.com/aws/aws-sdk-js-v3/tree/main/packages/s3-request-presigner",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "2ef1e48ea743"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1164,6 +2086,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^11.1.1",
      "desc": "Plugin for fastify to add support for cookies",
+     "repo": "https://github.com/fastify/fastify-cookie",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "4e64c716ef91"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1177,6 +2106,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^11.3.0",
      "desc": "Fastify CORS",
+     "repo": "https://github.com/fastify/fastify-cors",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "abb1c0f43133"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1190,6 +2126,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^11.1.0",
      "desc": "A low overhead rate limiter for your routes",
+     "repo": "https://github.com/fastify/fastify-rate-limit",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "abb1c0f43133"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1203,6 +2146,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^0.1.58",
      "desc": "Canvas for Node.js with skia backend",
+     "repo": "https://github.com/Brooooooklyn/canvas",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "da8423778f50"
+      }
+     ],
      "apps": [
       "api",
       "bot"
@@ -1217,6 +2167,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^2.1.1",
      "desc": "Icon catalog and assets for Phosphor",
+     "repo": "https://github.com/phosphor-icons/phosphor-core",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "c0b6c9215983"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1230,6 +2187,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^5.18.0",
      "desc": "Prisma Client is an auto-generated, type-safe and modern JavaScript/TypeScript ORM for Node.js that's tailored to your data. Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, SQLite & MongoDB databases.",
+     "repo": "https://github.com/prisma/prisma",
+     "home": "https://www.prisma.io",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1243,6 +2208,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^0.6.1",
      "desc": "Javascript implementation of zip for nodejs with support for electron original-fs. Allows user to create or extract zip files both in memory or to/from disk",
+     "repo": "https://github.com/cthackers/adm-zip",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "b0200c8728ea"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1256,6 +2228,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^7.0.1",
      "desc": "a streaming interface for archive generation",
+     "repo": "https://github.com/archiverjs/node-archiver",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "9e23899170d9"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1269,6 +2248,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^0.40.3",
      "desc": "An Argon2 library for Node",
+     "repo": "https://github.com/ranisalt/node-argon2",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "093bf4c484bb"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1282,6 +2268,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^1.11.2",
      "desc": "Boring avatars is a tiny JavaScript React library that generates custom, SVG-based, round avatars from any username and color palette.",
+     "repo": "https://github.com/boringdesigners/boring-avatars",
+     "home": "https://boringavatars.com",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "f241ebd081f2"
+      }
+     ],
      "apps": [
       "web",
       "api"
@@ -1296,6 +2290,14 @@
      "source": "BCW/BCWEB/apps/bot/package-lock.json",
      "req": "^14.16.3",
      "desc": "A powerful library for interacting with the Discord API",
+     "repo": "https://github.com/discordjs/discord.js",
+     "home": "https://discord.js.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "ba18962b9453"
+      }
+     ],
      "apps": [
       "bot"
      ]
@@ -1309,6 +2311,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^5.10.0",
      "desc": "Fast and low overhead web framework, for Node.js",
+     "repo": "https://github.com/fastify/fastify",
+     "home": "https://fastify.dev",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "aa5961ad135f"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1322,6 +2332,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^2.0.3",
      "desc": "A light weight native JavaScript implementation of GeoIP API from MaxMind",
+     "repo": "https://github.com/geoip-lite/node-geoip",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "bd404c6e94ed"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1335,6 +2352,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^1.0.3",
      "desc": "very fast JS GIF encoder",
+     "repo": "https://github.com/mattdesl/gifenc",
+     "lic": [
+      {
+       "f": "LICENSE.md",
+       "id": "94fd91bcb044"
+      }
+     ],
      "apps": [
       "api",
       "bot"
@@ -1349,6 +2373,8 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^3.12.5",
      "desc": "GSAP is a framework-agnostic JavaScript animation library that turns developers into animation superheroes. Build high-performance animations that work in **every** major browser. Animate CSS, SVG, canvas, React, Vue, WebGL, colors, strings, motion paths, generic objects...anything JavaScript can touch! The ScrollTrigger plugin lets you create jaw-dropping scroll-based animations with minimal code. No other library delivers such advanced sequencing, reliability, and tight control while solving real-world problems on millions of sites. GSAP works around countless browser inconsistencies; your animations **just work**. At its core, GSAP is a high-speed property manipulator, updating values over time with extreme accuracy.",
+     "repo": "https://github.com/greensock/GSAP",
+     "home": "https://gsap.com",
      "apps": [
       "web"
      ]
@@ -1362,6 +2388,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^5.4.1",
      "desc": "A robust, performance-focused and full-featured Redis client for Node.js.",
+     "repo": "https://github.com/luin/ioredis",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "45742847e677"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1375,6 +2408,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^9.0.2",
      "desc": "JSON Web Token implementation (symmetric and asymmetric)",
+     "repo": "https://github.com/auth0/node-jsonwebtoken",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "4905fab563dc"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1388,6 +2428,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^1.4.0",
      "desc": "A pure javascript QR code reading library that takes in raw images and will locate, extract and parse any QR code found within.",
+     "repo": "https://github.com/cozmo/jsQR",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "6dc0e068dcf3"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1401,6 +2448,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^3.10.1",
      "desc": "Create, read and edit .zip files with JavaScript http://stuartk.com/jszip",
+     "repo": "https://github.com/Stuk/jszip",
+     "lic": [
+      {
+       "f": "LICENSE.markdown",
+       "id": "602ef1d5d3db"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1414,6 +2468,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^0.16.47",
      "desc": "Fast math typesetting for the web.",
+     "repo": "https://github.com/KaTeX/KaTeX",
+     "home": "https://katex.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "d3c8c167dfa0"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1427,6 +2489,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^0.439.0",
      "desc": "A Lucide icon library package for React applications",
+     "repo": "https://github.com/lucide-icons/lucide",
+     "home": "https://lucide.dev",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "092a9de2ea14"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1440,6 +2510,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^1.41.0",
      "desc": "Lucide is a community-run fork of Feather Icons, open for anyone to contribute icons.",
+     "repo": "https://github.com/lucide-icons/lucide",
+     "home": "https://lucide.dev",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "ee35498e6684"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1453,6 +2531,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^5.24.0",
      "desc": "BSD licensed community fork of mapbox-gl, a WebGL interactive maps library",
+     "repo": "https://github.com/maplibre/maplibre-gl-js",
+     "home": "https://maplibre.org",
+     "lic": [
+      {
+       "f": "LICENSE.txt",
+       "id": "0e1659ba540e"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1466,6 +2552,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^11.17.2",
      "desc": "Markdown-ish syntax for generating flowcharts, mindmaps, sequence diagrams, class diagrams, gantt charts, git graphs and more.",
+     "repo": "https://github.com/mermaid-js/mermaid",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "94228ab8fc0b"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1479,6 +2572,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^10.0.15",
      "desc": "Easy as cake e-mail sending from your Node.js applications",
+     "repo": "https://github.com/nodemailer/nodemailer",
+     "home": "https://nodemailer.com",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "4b42e0447d1f"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1492,6 +2593,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^8.22.0",
      "desc": "PostgreSQL client - pure javascript & libpq with the same API",
+     "repo": "https://github.com/brianc/node-postgres",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "a66a0335a42b"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1505,6 +2613,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^1.30.0",
      "desc": "Lightweight, robust, elegant syntax highlighting. A spin-off project from Dabblet.",
+     "repo": "https://github.com/PrismJS/prism",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "06c72c0dd56a"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1518,6 +2633,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^1.5.4",
      "desc": "QRCode / 2d Barcode api with both server side and client side support using canvas",
+     "repo": "https://github.com/soldair/node-qrcode",
+     "lic": [
+      {
+       "f": "license",
+       "id": "e5a8da5b43b0"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1531,6 +2653,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^18.3.1",
      "desc": "React is a JavaScript library for building user interfaces.",
+     "repo": "https://github.com/facebook/react",
+     "home": "https://reactjs.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "a80c79b8f80e"
+      }
+     ],
      "apps": [
       "web",
       "api"
@@ -1545,6 +2675,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^18.3.1",
      "desc": "React package for working with the DOM.",
+     "repo": "https://github.com/facebook/react",
+     "home": "https://reactjs.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "a80c79b8f80e"
+      }
+     ],
      "apps": [
       "web",
       "api"
@@ -1559,6 +2697,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^9.0.1",
      "desc": "React component to render markdown",
+     "repo": "https://github.com/remarkjs/react-markdown",
+     "lic": [
+      {
+       "f": "license",
+       "id": "b7972f57b949"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1572,6 +2717,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^7.18.2",
      "desc": "Declarative routing for React web applications",
+     "repo": "https://github.com/remix-run/react-router",
+     "lic": [
+      {
+       "f": "LICENSE.md",
+       "id": "9bd42e9ab2f8"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1585,6 +2737,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^7.0.2",
      "desc": "rehype plugin to highlight code blocks with lowlight (highlight.js)",
+     "repo": "https://github.com/rehypejs/rehype-highlight",
+     "lic": [
+      {
+       "f": "license",
+       "id": "ea559213e0e9"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1598,6 +2757,7 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^7.0.1",
      "desc": "rehype plugin to transform inline and block math with KaTeX",
+     "repo": "https://github.com/remarkjs/remark-math/tree/main/packages/rehype-katex",
      "apps": [
       "web"
      ]
@@ -1611,6 +2771,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^7.0.0",
      "desc": "rehype plugin to reparse the tree (and raw nodes)",
+     "repo": "https://github.com/rehypejs/rehype-raw",
+     "lic": [
+      {
+       "f": "license",
+       "id": "d9c32f07344c"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1624,6 +2791,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^6.0.0",
      "desc": "rehype plugin to sanitize HTML",
+     "repo": "https://github.com/rehypejs/rehype-sanitize",
+     "lic": [
+      {
+       "f": "license",
+       "id": "d9c32f07344c"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1637,6 +2811,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^3.0.1",
      "desc": "remark plugin to support directives",
+     "repo": "https://github.com/remarkjs/remark-directive",
+     "lic": [
+      {
+       "f": "license",
+       "id": "ea559213e0e9"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1650,6 +2831,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^4.0.0",
      "desc": "remark plugin to support GFM (autolink literals, footnotes, strikethrough, tables, tasklists)",
+     "repo": "https://github.com/remarkjs/remark-gfm",
+     "lic": [
+      {
+       "f": "license",
+       "id": "ea559213e0e9"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1663,6 +2851,7 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^6.0.0",
      "desc": "remark plugin to parse and stringify math",
+     "repo": "https://github.com/remarkjs/remark-math/tree/main/packages/remark-math",
      "apps": [
       "web"
      ]
@@ -1676,6 +2865,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^11.0.0",
      "desc": "remark plugin to add support for parsing markdown input",
+     "repo": "https://github.com/remarkjs/remark/tree/main/packages/remark-parse",
+     "home": "https://remark.js.org",
+     "lic": [
+      {
+       "f": "license",
+       "id": "f78777570e32"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1689,6 +2886,7 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^2.0.0-alpha.18",
      "desc": "record and replay the web",
+     "repo": "https://github.com/rrweb-io/rrweb",
      "apps": [
       "web"
      ]
@@ -1702,6 +2900,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^1.8.0",
      "desc": "A small, fast, and correct TOML parser/serializer",
+     "repo": "https://github.com/squirrelchat/smol-toml",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "036546fdfb34"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1715,6 +2920,13 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^16.8.0",
      "desc": "Stripe API wrapper",
+     "repo": "https://github.com/stripe/stripe-node",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "b36d54d51ac6"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1728,6 +2940,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^0.168.0",
      "desc": "JavaScript 3D library",
+     "repo": "https://github.com/mrdoob/three.js",
+     "home": "https://threejs.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "a5f165630001"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1741,6 +2961,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^7.29.0",
      "desc": "An HTTP/1.1 client, written from scratch for Node.js",
+     "repo": "https://github.com/nodejs/undici",
+     "home": "https://undici.nodejs.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "fe64958bfaef"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1754,6 +2982,14 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^11.0.5",
      "desc": "parse, inspect, transform, and serialize content through syntax trees",
+     "repo": "https://github.com/unifiedjs/unified",
+     "home": "https://unifiedjs.com",
+     "lic": [
+      {
+       "f": "license",
+       "id": "e453dafb35c9"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1767,6 +3003,13 @@
      "source": "BCW/BCWEB/apps/web/package-lock.json",
      "req": "^5.1.0",
      "desc": "unist utility to visit nodes",
+     "repo": "https://github.com/syntax-tree/unist-util-visit",
+     "lic": [
+      {
+       "f": "license",
+       "id": "c37a32dd1cd4"
+      }
+     ],
      "apps": [
       "web"
      ]
@@ -1780,6 +3023,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^2.9.0",
      "desc": "JavaScript parser and stringifier for YAML",
+     "repo": "https://github.com/eemeli/yaml",
+     "home": "https://eemeli.org/yaml",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "cf12d35c36ba"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1793,6 +3044,14 @@
      "source": "BCW/BCWEB/apps/api/package-lock.json",
      "req": "^3.23.8",
      "desc": "TypeScript-first schema declaration and validation library with static type inference",
+     "repo": "https://github.com/colinhacks/zod",
+     "home": "https://zod.dev",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "f61cacc2acb8"
+      }
+     ],
      "apps": [
       "api"
      ]
@@ -1810,7 +3069,15 @@
      "key": "prisma",
      "source": "package-lock.json",
      "req": "^5.22.0",
-     "desc": "Prisma Client is an auto-generated, type-safe and modern JavaScript/TypeScript ORM for Node.js that's tailored to your data. Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, SQLite & MongoDB databases."
+     "desc": "Prisma Client is an auto-generated, type-safe and modern JavaScript/TypeScript ORM for Node.js that's tailored to your data. Supports PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, SQLite & MongoDB databases.",
+     "repo": "https://github.com/prisma/prisma",
+     "home": "https://www.prisma.io",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ]
     },
     {
      "name": "@tanstack/query-core",
@@ -1820,7 +3087,15 @@
      "key": "tanstack-query",
      "source": "package-lock.json",
      "req": "^5.91.2",
-     "desc": "The framework agnostic core that powers TanStack Query"
+     "desc": "The framework agnostic core that powers TanStack Query",
+     "repo": "https://github.com/TanStack/query",
+     "home": "https://tanstack.com/query",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "277d2a8e4597"
+      }
+     ]
     },
     {
      "name": "@tauri-apps/cli",
@@ -1830,7 +3105,18 @@
      "key": "tauri-cli",
      "source": "package-lock.json",
      "req": "^2",
-     "desc": "Command line interface for building Tauri apps"
+     "desc": "Command line interface for building Tauri apps",
+     "repo": "https://github.com/tauri-apps/tauri",
+     "lic": [
+      {
+       "f": "LICENSE_APACHE-2.0",
+       "id": "4bf96504d6e8"
+      },
+      {
+       "f": "LICENSE_MIT",
+       "id": "89ff9689dcf9"
+      }
+     ]
     },
     {
      "name": "cheerio",
@@ -1840,7 +3126,15 @@
      "key": "cheerio",
      "source": "package-lock.json",
      "req": "^1.2.0",
-     "desc": "The fast, flexible & elegant library for parsing and manipulating HTML and XML."
+     "desc": "The fast, flexible & elegant library for parsing and manipulating HTML and XML.",
+     "repo": "https://github.com/cheeriojs/cheerio",
+     "home": "https://cheerio.js.org",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "dd3227aff228"
+      }
+     ]
     },
     {
      "name": "concurrently",
@@ -1850,7 +3144,14 @@
      "key": "concurrently",
      "source": "package-lock.json",
      "req": "^9.2.1",
-     "desc": "Run commands concurrently"
+     "desc": "Run commands concurrently",
+     "repo": "https://github.com/open-cli-tools/concurrently",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "3ca3b281e0dc"
+      }
+     ]
     },
     {
      "name": "dompurify",
@@ -1860,7 +3161,18 @@
      "key": "dompurify",
      "source": "package-lock.json",
      "req": "^3.4.11",
-     "desc": "DOMPurify is a DOM-only, super-fast, uber-tolerant XSS sanitizer for HTML, MathML and SVG. It runs as JavaScript and works in all modern browsers, as well as in Node.js (via jsdom). DOMPurify is written by security people who have vast background in web attacks and XSS. Fear not."
+     "desc": "DOMPurify is a DOM-only, super-fast, uber-tolerant XSS sanitizer for HTML, MathML and SVG. It runs as JavaScript and works in all modern browsers, as well as in Node.js (via jsdom). DOMPurify is written by security people who have vast background in web attacks and XSS. Fear not.",
+     "repo": "https://github.com/cure53/DOMPurify",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      },
+      {
+       "f": "LICENSE-MPL",
+       "id": "4b89d4518bd1"
+      }
+     ]
     },
     {
      "name": "prisma",
@@ -1870,7 +3182,15 @@
      "key": "prisma",
      "source": "package-lock.json",
      "req": "^5.22.0",
-     "desc": "Prisma is an open-source database toolkit. It includes a JavaScript/TypeScript ORM for Node.js, migrations and a modern GUI to view and edit the data in your database. You can use Prisma in new projects or add it to an existing one."
+     "desc": "Prisma is an open-source database toolkit. It includes a JavaScript/TypeScript ORM for Node.js, migrations and a modern GUI to view and edit the data in your database. You can use Prisma in new projects or add it to an existing one.",
+     "repo": "https://github.com/prisma/prisma",
+     "home": "https://www.prisma.io",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      }
+     ]
     },
     {
      "name": "puppeteer-core",
@@ -1880,7 +3200,8 @@
      "key": "puppeteer-core",
      "source": "package-lock.json",
      "req": "^25.0.4",
-     "desc": "A high-level API to control headless Chrome over the DevTools Protocol"
+     "desc": "A high-level API to control headless Chrome over the DevTools Protocol",
+     "repo": "https://github.com/puppeteer/puppeteer/tree/main/packages/puppeteer-core"
     },
     {
      "name": "rrweb",
@@ -1890,7 +3211,8 @@
      "key": "rrweb",
      "source": "package-lock.json",
      "req": "^2.0.1",
-     "desc": "record and replay the web"
+     "desc": "record and replay the web",
+     "repo": "https://github.com/rrweb-io/rrweb"
     },
     {
      "name": "typescript",
@@ -1900,7 +3222,15 @@
      "key": "typescript",
      "source": "package-lock.json",
      "req": "^5.7",
-     "desc": "TypeScript is a language for application scale JavaScript development"
+     "desc": "TypeScript is a language for application scale JavaScript development",
+     "repo": "https://github.com/microsoft/TypeScript",
+     "home": "https://www.typescriptlang.org",
+     "lic": [
+      {
+       "f": "LICENSE.txt",
+       "id": "d446a8c73d7b"
+      }
+     ]
     }
    ]
   }

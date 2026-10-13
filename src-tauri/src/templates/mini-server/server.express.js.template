@@ -85,10 +85,30 @@ function publicMonitoring(r) {
             version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
             totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
             totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            repoFormat: typeof s.repoFormat === 'string' ? s.repoFormat : undefined,
             activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
         },
         active, sessions: [], history: []
     };
+}
+
+// The FORMAT of the manifest this server hands out (BMM's repo_format): « format 1.0 » when it
+// says so, « legacy 0.x » when it was written by a BMM from before manifests declared one.
+// The same shape rules as BMM's own detection, reduced to what a log line needs. Converting
+// is BMM's job (Server Repo page, or `bmm repo-convert <folder>`): it needs the owner's key.
+function repoFormatOf(rj) {
+    if (!rj || typeof rj !== 'object' || Array.isArray(rj)) return 'not a repo manifest';
+    const declared = rj.format_version !== undefined ? rj.format_version : rj.formatVersion;
+    if (declared !== undefined && declared !== null) return 'format ' + String(declared);
+    const has = (o, ks) => !!o && ks.some(k => Object.prototype.hasOwnProperty.call(o, k));
+    const profiles = Array.isArray(rj.profiles) ? rj.profiles : [];
+    const mods = [].concat(...profiles.map(p => (p && Array.isArray(p.mods)) ? p.mods : []));
+    const files = [].concat(...mods.map(m => (m && Array.isArray(m.files)) ? m.files : []));
+    if (has(rj, ['files_base_url', 'filesBaseUrl', 'files_layout', 'filesLayout', 'extras', 'credentials']) || files.some(f => has(f, ['mtime']))) return 'legacy 0.4';
+    if (has(rj, ['modpacks', 'require_login', 'requireLogin']) || profiles.some(p => has(p, ['icon', 'color', 'icon_image']))
+        || mods.some(m => has(m, ['archive', 'dependencies', 'changelog', 'update_url', 'direct_url', 'update_sources']))) return 'legacy 0.3';
+    if (has(rj, ['author_id', 'signature', 'seed', 'upload_limit']) && mods.every(m => has(m, ['download_links']))) return 'legacy 0.2';
+    return 'legacy 0.1';
 }
 
 function getSecurityData() {
@@ -108,13 +128,15 @@ function getMonitoringReport() {
         speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1), protocol: d.protocol
     }));
     let totalRepoSize = 0;
+    let repoFormat = 'not a repo manifest';
     try {
-        const r = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+        const r = JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''));
         totalRepoSize = r.total_size || 0;
+        repoFormat = repoFormatOf(r);
     } catch(e){}
 
     return {
-        server: { uptime: now - startTime, totalDownloads: stats.totalDownloads, totalBytes: stats.totalBytesSent, totalRepoSize },
+        server: { uptime: now - startTime, totalDownloads: stats.totalDownloads, totalBytes: stats.totalBytesSent, totalRepoSize, repoFormat },
         active,
         sessions: Array.from(sessions.entries()).map(([ip, s]) => ({ ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files })),
         history: history.slice(-100).reverse()
@@ -229,7 +251,13 @@ app.post('/admin/update', authAdmin, (req, res) => {
         const data = req.body;
         fs.writeFileSync(bansFile, JSON.stringify(data.bans, null, 2));
         fs.writeFileSync(whitelistFile, JSON.stringify(data.whitelist, null, 2));
-        fs.writeFileSync(repoFile, JSON.stringify(data.repo, null, 2));
+        // The dashboard edits modpacks; it must not drop the format the manifest declares.
+        const nextRepo = data.repo || {};
+        try {
+            const prev = JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''));
+            if (prev && prev.format_version !== undefined && nextRepo.format_version === undefined) nextRepo.format_version = prev.format_version;
+        } catch (_) {}
+        fs.writeFileSync(repoFile, JSON.stringify(nextRepo, null, 2));
         log(`Server config updated`, 'ADMIN');
         res.json({ ok: true });
     } catch(e) { 
@@ -340,6 +368,11 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`   +------------------------------------------------------+${reset}\n`);
     console.log(`  ${bold}${green}[STATUS]${reset}  SERVER ONLINE`);
     console.log(`  ${bold}${cyan}[PORT]${reset}    ${PORT}`);
+    {
+        let fmt = 'not a repo manifest';
+        try { fmt = repoFormatOf(JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''))); } catch (_) {}
+        console.log(`  ${bold}${cyan}[REPO]${reset}    repo.json: ${fmt}${fmt.startsWith('legacy') ? '  (convert it in BMM: Server Repo, or bmm repo-convert <folder>)' : ''}`);
+    }
     console.log(`  ${bold}${magenta}[ADMIN]${reset}   Password: ${underline}${ADMIN_PASSWORD}${reset}`);
     console.log(`  ${bold}${blue}[DASH]${reset}    http://127.0.0.1:${PORT}/dashboard\n`);
 });

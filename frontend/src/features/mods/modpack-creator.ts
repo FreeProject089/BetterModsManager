@@ -395,8 +395,9 @@ function _renderModpackList(container) {
             <div class="modpack-card-foot">
                 <span class="modpack-card-date">${lastUpdate ? escHtml(t('modpack.updatedAt', { date: lastUpdate })) : ''}</span>
                 <div class="modpack-card-actions">
-                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-export" title="${escAttr(t('modpack.exportBtn'))}" aria-label="${escAttr(t('modpack.exportBtn'))}">${uiIcon('export', 16)}</button>
                     <button type="button" class="btn btn-icon btn-ghost btn-sm btn-edit" title="${escAttr(t('modpack.edit'))}" aria-label="${escAttr(t('modpack.edit'))}">${uiIcon('edit', 16)}</button>
+                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-export" title="${escAttr(t('modpack.exportBtn'))}" aria-label="${escAttr(t('modpack.exportBtn'))}">${uiIcon('export', 16)}</button>
+                    <span class="view-actions-sep" aria-hidden="true"></span>
                     <button type="button" class="btn btn-icon btn-ghost btn-sm btn-delete mp-danger" title="${escAttr(t('modpack.delete'))}" aria-label="${escAttr(t('modpack.delete'))}">${uiIcon('delete', 16)}</button>
                 </div>
             </div>
@@ -953,7 +954,7 @@ function _openMultiSelectModal(listEl) {
                 <span>${t('modpack.autoUpdateSrc') || 'Auto-add update repo as fallback'}</span>
             </label>
         </div>
-            <button class="btn btn-ghost" id="ms-cancel">${t('common.cancel')}</button>
+            <button class="btn btn-secondary" id="ms-cancel">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="ms-confirm" style="opacity:0.5; transition:opacity 0.2s;">
                 ${uiIcon('check', 14, { style: 'margin-right:6px;' })}
                 ${t('modpack.addMod')}
@@ -1218,7 +1219,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
         </div>
         <div class="modal-footer" id="repair-actions">
-            <button id="repair-cancel" class="btn btn-ghost">${t('modpack.repair.cancel') || 'Cancel'}</button>
+            <button id="repair-cancel" class="btn btn-secondary">${t('modpack.repair.cancel') || 'Cancel'}</button>
             <button id="repair-start" class="btn btn-warning" ${!canRepairAny ? 'disabled' : ''}>
                 ${canRepairAny ? (t('modpack.repair.startBtn') || 'Réparer et Appliquer') : (t('modpack.repair.impossible') || 'Réparation Impossible')}
             </button>

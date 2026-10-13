@@ -425,6 +425,9 @@ pub fn import_app_data(state: State<AppState>, app_handle: tauri::AppHandle, src
         *data = new_data;
         drop(data);
         state.save()?;
+        // An imported telemetry "yes" is kept only if THIS install holds a receipt for it;
+        // otherwise it is reset and asked again (consent_ledger.rs `after_import`).
+        crate::commands::consent_ledger::after_import(&state, &app_handle);
     }
     Ok(extras)
 }

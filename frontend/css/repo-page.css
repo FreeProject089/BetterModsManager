@@ -525,3 +525,159 @@
 .rp-sum-tile b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-primary)) 55%, var(--bmm-text-primary)); }
 .rp-sum-tile span { font-size: 11.5px; color: var(--bmm-text-secondary); }
 #view-repo .rp-form-grid { align-items: end; }
+
+/* ══ Host: the guided flow (repo-host-flow.ts) ════════════════════════════════════════════
+   Folder → manifest → start → share, painted from the real state. One design for the card:
+   the steps on top, then the folder (with its manifest's format), then ONE start/stop button,
+   then the running server, then everything optional folded. Tokens only. */
+#view-repo .rp-flow {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 18px;
+    padding: 0;
+}
+#view-repo .rp-flow-step {
+    display: flex; align-items: center; gap: 8px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    color: var(--bmm-text-secondary);
+    font-size: 12px; font-weight: 600;
+}
+#view-repo .rp-flow-n {
+    flex: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s04);
+    font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+#view-repo .rp-flow-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-repo .rp-flow-step.is-current {
+    border-color: color-mix(in srgb, var(--bmm-accent) 55%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: var(--bmm-text-primary);
+}
+#view-repo .rp-flow-step.is-current .rp-flow-n { background: var(--bmm-accent); border-color: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+#view-repo .rp-flow-step.is-done { color: var(--bmm-text-primary); }
+#view-repo .rp-flow-step.is-done .rp-flow-n {
+    background: color-mix(in srgb, var(--bmm-success) 18%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-success) 50%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-success) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-flow-step.is-blocked .rp-flow-n {
+    background: var(--bmm-danger-dim);
+    border-color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary));
+}
+@media (max-width: 760px) {
+    #view-repo .rp-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+#view-repo .rp-hstep + .rp-hstep { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bmm-border); }
+
+/* The folder's repo.json, summarised. */
+#view-repo .rp-meta {
+    margin-bottom: 12px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 12px; line-height: 1.55; color: var(--bmm-text-secondary);
+    overflow-wrap: anywhere;
+}
+#view-repo .rp-meta-name { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); margin-bottom: 2px; }
+#view-repo .rp-meta-line b { font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-meta-size { margin-top: 4px; font-family: var(--font-mono); }
+#view-repo .rp-meta-err { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+
+/* The manifest's format: a badge, one sentence, and Convert when it applies. */
+#view-repo .rp-fmt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 4px; }
+#view-repo .rp-fmt-row[hidden] { display: none; }
+#view-repo .rp-fmt {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 3px 10px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 12%, transparent);
+    color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 62%, var(--bmm-text-primary));
+    font-size: 11.5px; font-weight: 700;
+}
+#view-repo .rp-fmt-why { flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+#view-repo .rp-fmt-go { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* The running server: one panel, shown only while it runs. */
+#view-repo .rp-run {
+    display: none;
+    margin-top: 14px; padding: 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 35%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 5%, transparent);
+}
+#view-repo .rp-run.is-on { display: block; }
+#view-repo .rp-run > .rp-urls { margin-top: 0; }
+#view-repo .rp-run .rp-srv-tools { margin-top: 14px; }
+
+/* Folds: the session's activity, and the optional settings. */
+#view-repo .rp-fold { margin-top: 14px; }
+#view-repo .rp-fold-h {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary);
+    padding: 6px 0;
+}
+#view-repo .rp-fold-h:hover { color: var(--bmm-accent); }
+#view-repo .rp-fold-sub { font-size: 11.5px; font-weight: 500; color: var(--bmm-text-secondary); }
+#view-repo .rp-adv { padding-top: 10px; border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-adv-body { padding-top: 10px; }
+#view-repo .rp-actlog { list-style: none; max-height: 160px; margin: 6px 0 0; }
+#view-repo .rp-actlog:empty { display: none; }
+#view-repo .rp-act-time { color: var(--bmm-text-secondary); }
+#view-repo .rp-act--done .rp-act-txt { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-secondary)); }
+
+/* The convert dialog (repo-format.ts): content only, the shell is the house one. */
+.rp-cv .rp-cv-lead { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--bmm-text-primary); }
+.rp-cv .rp-sum-grid { margin-bottom: 12px; }
+.rp-cv .rp-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone) 8%, transparent);
+    font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary);
+}
+.rp-cv .rp-note > svg { flex: none; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-note-txt b { display: block; color: var(--bmm-text-primary); margin-bottom: 2px; }
+.rp-cv .rp-cv-notes { margin: 0 0 10px; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--bmm-text-secondary); }
+.rp-cv .rp-check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; color: var(--bmm-text-primary); }
+.rp-cv .rp-fold-h { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); padding: 6px 0; }
+.rp-cv .rp-count {
+    display: inline-flex; padding: 1px 8px; border-radius: 999px;
+    background: var(--bmm-s05); border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary); font-size: 11px; font-weight: 700;
+}
+.rp-cv .rp-cv-list {
+    list-style: none; margin: 6px 0 0; padding: 6px 8px;
+    max-height: 260px; overflow-y: auto;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 11.5px; line-height: 1.7;
+}
+.rp-cv .rp-cv-row { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.rp-cv .rp-cv-kind { flex: none; min-width: 120px; font-weight: 700; color: var(--bmm-text-secondary); }
+.rp-cv .rp-cv-path { min-width: 0; font-family: var(--font-mono); color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.rp-cv .rp-cv-val { min-width: 0; font-family: var(--font-mono); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.rp-cv .rp-cv-hash_changed .rp-cv-kind, .rp-cv .rp-cv-signature_removed .rp-cv-kind { color: color-mix(in srgb, var(--bmm-warning) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-cv-file_missing .rp-cv-kind { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-cv-more { color: var(--bmm-text-secondary); font-style: italic; }
+/* A flex summary loses the browser's disclosure marker: draw one, turned when open. */
+#view-repo .rp-fold-h::-webkit-details-marker, .rp-cv .rp-fold-h::-webkit-details-marker { display: none; }
+#view-repo .rp-fold-h::before, .rp-cv .rp-fold-h::before {
+    content: "";
+    flex: none;
+    width: 6px; height: 6px;
+    margin: 0 2px 0 1px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    opacity: 0.7;
+}
+#view-repo details[open] > .rp-fold-h::before, .rp-cv details[open] > .rp-fold-h::before { transform: rotate(45deg); }

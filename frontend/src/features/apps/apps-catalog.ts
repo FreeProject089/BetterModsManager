@@ -771,15 +771,17 @@ function renderInstalled() {
           </div>
         </div>
         <div class="apps-installed-actions">
+          <!-- Uninstall first and behind a divider; Launch (or Set exe) last, at the edge. -->
+          <button class="btn btn-sm btn-ghost btn-danger-ghost" data-action="uninstall" data-id="${escAttr(app.id)}">${IC.trash}</button>
+          <span class="view-actions-sep" aria-hidden="true"></span>
           <button class="apps-inst-fav-btn${_state.favorites.includes(app.id)?' active':''}" data-action="fav" data-id="${escAttr(app.id)}" data-tooltip="${_state.favorites.includes(app.id)?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
             ${_state.favorites.includes(app.id) ? IC.starFill : IC.star}
           </button>
+          ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" data-tooltip="${escAttr(app.exe_path)}">${IC.replace || IC.replace}</button>` : ''}
+          <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${escAttr(app.id)}" data-path="${escAttr(app.install_path)}">${IC.folder}</button>
           ${app.exe_path
             ? `<button class="btn btn-sm btn-accent" data-action="launch" data-id="${escAttr(app.id)}" data-exe="${escAttr(app.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
             : `<button class="btn btn-sm btn-ghost" data-action="pick-exe" data-id="${escAttr(app.id)}">${IC.monitor} ${t('apps.pickExe')||'Set exe'}</button>`}
-          ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" data-tooltip="${escAttr(app.exe_path)}">${IC.replace || IC.replace}</button>` : ''}
-          <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${escAttr(app.id)}" data-path="${escAttr(app.install_path)}">${IC.folder}</button>
-          <button class="btn btn-sm btn-ghost btn-danger-ghost" data-action="uninstall" data-id="${escAttr(app.id)}">${IC.trash}</button>
         </div>
       </div>`).join('')}
     </div>`;
@@ -1099,7 +1101,7 @@ function renderHistory() {
         ${chip('launch',    t('apps.history.launched')   || 'Launched')}
         ${chip('uninstall', t('apps.history.uninstalled')|| 'Uninstalled')}
       </div>
-      <button class="btn btn-sm btn-ghost" id="apps-clear-history">
+      <button class="btn btn-sm btn-ghost btn-danger-ghost" id="apps-clear-history">
         ${IC.trash} ${t('apps.clearHistory') || 'Clear'}
       </button>
     </div>
@@ -1371,7 +1373,7 @@ function renderCreate() {
                  placeholder="${escAttr(t('apps.create.openUrlPh') || 'https://…/catalog.json')}">
           <button class="btn btn-xs btn-ghost" id="cr-open-url">${escHtml(t('apps.create.openUrl') || 'From a URL')}</button>
           ${_draft.apps.length || _draft.name
-            ? `<button class="btn btn-xs btn-ghost btn-danger-ghost" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
+            ? `<button class="btn btn-xs btn-ghost btn-danger-ghost apps-create-clear" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
             : ''}
         </div>
         <!-- The same panel the Sources tab has. fetchSourceText already asks for a password

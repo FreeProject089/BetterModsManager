@@ -429,7 +429,7 @@ async function refresh() {
         ? sources.map((u) => `
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;min-width:0">
               <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${escHtml(u)}</span>
-              <button class="btn btn-ghost btn-sm mpc-del" data-url="${escHtml(u)}">${escHtml(t('common.remove'))}</button>
+              <button class="btn btn-outline-danger btn-sm mpc-del" data-url="${escHtml(u)}">${escHtml(t('common.remove'))}</button>
             </div>`).join('')
         : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('modpack.cat.none'))}</span>`;
     srcEl.querySelectorAll('.mpc-del').forEach((b) => b.addEventListener('click', async () => {

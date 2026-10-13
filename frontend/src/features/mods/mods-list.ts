@@ -79,7 +79,6 @@ export function updateSubtitle() {
     el.textContent = t('lib.subtitle', {
       enabled,
       total,
-      s1: enabled !== 1 ? 's' : '',
       s2: total !== 1 ? 's' : ''
     });
   }

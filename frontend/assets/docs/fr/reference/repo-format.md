@@ -64,7 +64,7 @@ votre propre nginx, Caddy, ou l'hébergement BetterCommunity.
 | `author` | chaîne \| null | Nom affiché. |
 | `author_id` | chaîne \| null | Identifiant BetterCommunity de l'auteur, s'il en a un. |
 | `signature` | chaîne \| null | Signature d'intégrité optionnelle sur le manifeste. |
-| `version` | chaîne | Version du manifeste. BMM écrit `"1.0"`. |
+| `version` | chaîne | La version **du dépôt** — le numéro de l'auteur. Pas le format : c'est `format_version`. |
 | `game_name` | chaîne | Texte libre ; regroupe les profils par jeu. |
 | `created_at` | chaîne | Horodatage, RFC 3339. |
 | `seed` | chaîne \| null | |
@@ -79,6 +79,7 @@ votre propre nginx, Caddy, ou l'hébergement BetterCommunity.
 | `require_login` (`requireLogin`) | booléen | `false` | Chaque téléchargement doit présenter une identité BetterCommunity. |
 | `files_base_url` (`filesBaseUrl`) | chaîne | l'URL du dépôt | Servir les fichiers depuis un autre hôte que le manifeste. |
 | `files_layout` (`filesLayout`) | chaîne | `mods/{id}/{path}` | Où se trouve un fichier, relativement à la base. Voir §5. |
+| `format_version` (`formatVersion`) | chaîne | aucun (ancien) | Le **format** dans lequel le manifeste est écrit. BMM écrit `"1.0"`, signé avec le reste. Voir §9. |
 
 > Un champ obligatoire de type `… | null` exige quand même sa clé. L'omettre est une erreur
 > d'analyse, et une erreur d'analyse fait lire le dépôt entier comme **vide** — pas comme
@@ -260,3 +261,85 @@ des tags et des tables de blocs qu'aucune liste de fichiers ne peut reconstituer
 | Chaque synchronisation retélécharge tout | Tailles arrondies, `mtime` absent, ou hachage vide. |
 | Des fichiers isolés en 404 | `files_base_url` / `files_layout` ne correspondent pas à l'emplacement réel. Construisez une URL à la main depuis le §5 et ouvrez-la. |
 | Un modpack manque pour certains utilisateurs | `share_mode`, et seulement quand le dépôt est servi par le mini-serveur (§6). |
+| BMM affiche « format 2.0 (plus récent que ce BMM) » et refuse le dépôt | Le manifeste déclare une version majeure de format que ce BMM ne lit pas. Mettez BMM à jour ; le dépôt n'a rien. |
+| Le dépôt affiche « ancien 0.x » | Écrit par un BMM d'avant les versions de format. Il se synchronise toujours ; le §9 explique comment le convertir. |
+
+---
+
+## 9. Versions de format, et convertir un ancien manifeste
+
+Jusqu'au format 1.0, un manifeste ne disait rien de sa propre forme — `version` est la
+version du dépôt, pas celle du format. Un manifeste la déclare désormais à la racine :
+
+```json
+{ "name": "Mon dépôt", "…": "…", "format_version": "1.0" }
+```
+
+Chaque écrivain de BMM (export, mise à jour, manifeste seul, extras, modpacks, rafraîchir
+depuis le serveur) l'inscrit **avant** de signer : la signature le couvre.
+
+### 9.1 Le registre
+
+| Format | Nom | BMM l'écrit depuis | Ce qu'il a ajouté |
+|---|---|---|---|
+| `0.1` | premier export | 2026-03 | nom, description, auteur, version, jeu, profils ; mods avec tags et fichiers (chemin, taille, sha256) |
+| `0.2` | signé | 2026-03 | `author_id` + `signature` (ed25519), `seed`, `upload_limit` ; `download_links` des mods ; morceaux de fichiers |
+| `0.3` | modpacks | 2026-04 | `modpacks`, `require_login` ; mods zippés (`archive`), dépendances, changelog, sources de mise à jour ; icône et couleur de profil |
+| `0.4` | hébergement | 2026-08 | `files_base_url`, `files_layout`, `mtime` des fichiers, `extras`, identifiants scellés |
+| `1.0` | versionné | 2026-10 | `format_version` ; toutes les clés obligatoires écrites ; la signature couvre le format |
+
+Les numéros `0.x` sont attribués après coup : ces manifestes ne les portaient pas. BMM les
+reconnaît à leur **forme** — le marqueur le plus récent l'emporte (un `files_layout` en fait
+un 0.4 même si rien d'autre de 0.4 n'est présent).
+
+### 9.2 Ce que BMM fait de chacun
+
+| Ce que dit le manifeste | Étiquette sur la page Server Repo | Ce qui se passe |
+|---|---|---|
+| `format_version: "1.0"` | **format 1.0** | Lu tel quel. |
+| rien, forme 0.2 à 0.4 | **ancien 0.x — convertir** | Lu tel quel. Convertir est conseillé, pas obligatoire. |
+| rien, forme 0.1 (pas de `download_links`) | **ancien 0.1 — convertir** | Le lecteur actuel refuse cette forme en bloc — elle s'affichait comme un dépôt vide. BMM la lit maintenant via une mise à niveau en mémoire, **sauf si elle est signée** : compléter des clés change les octets signés, donc un 0.1 signé reste illisible jusqu'à ce que son propriétaire le convertisse. |
+| `format_version: "1.x"`, x supérieur à 0 | format 1.x | Lu ; les champs inconnus de ce BMM sont ignorés. Jamais converti « vers le bas ». |
+| `format_version: "2.0"` ou plus | format 2.0 (plus récent que ce BMM) | **Refusé**, avec cette raison. Mettez BMM à jour. |
+| `format_version` qui n'est pas un nombre | — | Refusé comme invalide. |
+
+Un manifeste qui annonce `1.0` mais à qui il manque une clé obligatoire est traité comme un
+ancien : lu via la mise à niveau, proposé à la conversion.
+
+### 9.3 Convertir
+
+Le convertisseur est un seul code, atteint de quatre façons — le bouton **Convertir…** à côté
+du badge de format sur la page Server Repo, `POST /api/repo/convert`, `bmm repo-convert`, et
+l'outil MCP `bmm_repo_convert`. Il fait toujours :
+
+1. **Un plan d'abord** (essai à blanc) : chaque clé qu'il ajouterait, chaque valeur qu'il
+   normaliserait (`""` → `null` pour la description et l'auteur, graphies camelCase →
+   snake_case, tags en simple chaîne → objets tag), chaque hachage qu'il remplirait ou
+   corrigerait, chaque fichier introuvable.
+2. **Un nouveau hachage** de chaque fichier listé depuis le dossier, avec la règle de
+   l'exporteur (sha256 du fichier entier, plus une table de morceaux au-delà de 4 Mio), en
+   suivant `files_layout` et les archives de mods zippés. Un chemin qui sortirait du dossier
+   n'est jamais lu. Les fichiers hébergés ailleurs (`files_base_url`) sont laissés tels
+   quels. Un fichier manquant garde son entrée et est signalé.
+3. Une vérification que le résultat **se charge dans le vrai lecteur de BMM** avant toute
+   écriture.
+4. **Une sauvegarde** de l'ancien manifeste à côté, sous `repo.json.v<ancien>-<aaaammjj-hhmmss>.bak`
+   (jamais servie : les serveurs ne servent que `repo.json` et `info.json` à la racine).
+5. L'inscription de `format_version`, **une nouvelle signature** avec la clé de ce BMM, et
+   l'écriture via un fichier temporaire renommé par-dessus l'ancien : une panne laisse
+   l'ancien manifeste, jamais la moitié d'un nouveau.
+
+Signer avec votre clé signifie qu'un dépôt signé à l'origine par **quelqu'un d'autre** change
+d'identifiant d'auteur — le plan le dit avant que vous confirmiez. Les abonnés qui avaient
+épinglé l'ancien identifiant voient le changement. Convertir un manifeste déjà à jour ne fait
+rien : aucune écriture, la signature est conservée.
+
+```text
+bmm repo-convert "D:/Repos/MonDepot" --dry-run   # le plan ; fonctionne BMM fermé
+bmm repo-convert "D:/Repos/MonDepot"             # convertir + signer (BMM ouvert)
+bmm repo-convert "D:/Repos/MonDepot" --no-sign   # convertir sans l'application, NON SIGNÉ
+```
+
+Les mini-serveurs (`server.js`, le hub multi-dépôts) indiquent le format de ce qu'ils servent
+dans leur journal de démarrage et dans `/monitoring.json` (`repoFormat`), et conservent
+`format_version` quand le tableau de bord d'administration réécrit le manifeste.

@@ -477,14 +477,14 @@ export async function scanModsFolder() {
             toast(t('mod.scanNone'), 'info');
         }
         else {
-            let msg = '';
+            // One sentence per count, singular or plural chosen here: a number glued in front of a
+            // translation can't agree with it, which is how « nouveau(x) mod(s) » reached a toast.
+            const parts = [];
             if (result.added > 0)
-                msg += `${result.added} ${t('mod.scanAdded')}`;
-            if (result.added > 0 && result.removed > 0)
-                msg += ' & ';
+                parts.push(result.added === 1 ? t('mod.scanAdded.one') : t('mod.scanAdded.many', { n: String(result.added) }));
             if (result.removed > 0)
-                msg += `${result.removed} ${t('mod.scanRemoved')}`;
-            toast(msg, 'success');
+                parts.push(result.removed === 1 ? t('mod.scanRemoved.one') : t('mod.scanRemoved.many', { n: String(result.removed) }));
+            toast(parts.join(' · '), 'success');
             await refreshMods();
             // Kick-off background SHA hashing for newly discovered mods
             if (result.added > 0)

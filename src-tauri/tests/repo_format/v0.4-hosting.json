@@ -1,0 +1,39 @@
+{
+  "name": "Hosted Repo",
+  "description": null,
+  "author": "Someone",
+  "author_id": null,
+  "signature": null,
+  "version": "1.0",
+  "game_name": "DCS World",
+  "created_at": "2026-08-13T04:51:49Z",
+  "seed": null,
+  "upload_limit": null,
+  "files_base_url": "https://cdn.example.com/repo/",
+  "files_layout": "{id}/{path}",
+  "profiles": [
+    {
+      "id": "prof-1",
+      "name": "Main",
+      "game_name": "DCS World",
+      "icon": null,
+      "color": null,
+      "icon_image": null,
+      "mods": [
+        {
+          "id": "cool-mod",
+          "name": "Cool Mod",
+          "version": "1.0",
+          "author": null,
+          "description": null,
+          "tags": [],
+          "files": [{ "relative_path": "Data/a.dds", "size": 2048, "sha256_hash": "", "chunks": null, "mtime": 1786593318 }],
+          "archive": null,
+          "download_links": [],
+          "dependencies": []
+        }
+      ]
+    }
+  ],
+  "modpacks": null
+}
