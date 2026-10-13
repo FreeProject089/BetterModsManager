@@ -3820,6 +3820,7 @@
   "plugins.ep.repoConnect": "Connecter repo",
   "plugins.ep.repoSync": "Synchroniser repo",
   "plugins.ep.repoGen": "Générer repo",
+  "plugins.ep.repoConvert": "Convertir repo",
   "plugins.ep.repoUpdate": "Mettre à jour repo",
   "plugins.ep.modConfig": "Configurer les sources de MAJ d'un mod",
   "plugins.ep.modCheckUpdates": "Vérifier les MAJ des mods",

@@ -7323,6 +7323,22 @@ function getEndpointDefs() {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/convert', auth: true,
+            desc: t('plugins.ep.repoConvert') || 'Convert Repo',
+            about: 'Brings an older repo.json up to the current repo format (1.0): re-hashes the listed files, keeps a backup, writes atomically and signs with this BMM\'s key. <code>dryRun</code> returns the plan without writing. <code>setVersion</code> also sets the repo version subscribers see.',
+            fields: [
+                { name: 'path', type: 'string', required: true, desc: 'The repo folder, or its repo.json.' },
+                { name: 'dryRun', type: 'boolean', required: false, desc: 'Plan only: nothing is written.' },
+                { name: 'rehash', type: 'boolean', required: false, desc: 'Re-hash every listed file (default true).' },
+                { name: 'sign', type: 'boolean', required: false, desc: 'Sign with this BMM\'s key (default true).' },
+                { name: 'setVersion', type: 'string', required: false, desc: 'Set the repo version in the same pass, e.g. "1.2.0".' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "from": "0.9", "to": "1.0", "written": true }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
             method: 'POST', path: '/api/repo/update', auth: true,
             desc: t('plugins.ep.repoUpdate') || 'Update an existing repo',
             about: 'Incrementally updates an existing server repo: add/remove mods & whole profiles without regenerating everything. Opens the BMM "Update repo" modal pre-filled with the chosen folder so you confirm the changes. Pass <code>repoDir</code> to point at the repo folder (must contain repo.json).',
