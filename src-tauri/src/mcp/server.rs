@@ -1689,7 +1689,7 @@ impl ServerHandler for BmmMcpServer {
                 }
                 "bmm_telemetry_consent" => {
                     let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
-                    self.tool_api_call("POST", "/api/telemetry/consent", Some(json!({ "enabled": enabled }))).await
+                    self.tool_api_call("POST", "/api/telemetry/consent", Some(json!({ "enabled": enabled, "via": "mcp" }))).await
                 }
                 "bmm_telemetry_settings" => {
                     let mut body = serde_json::Map::new();

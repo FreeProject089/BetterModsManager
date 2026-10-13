@@ -1399,6 +1399,7 @@ export async function openPrivacyModal() {
         btn.textContent = t('privacy.accept') || 'I have read the policy';
         btn.addEventListener('click', () => {
             try { localStorage.setItem(PRIVACY_SEEN_KEY, 'true'); } catch { /* best effort */ }
+            markPrivacyAccepted();
             row.remove();
             modal.classList.remove('open');
         });
@@ -1471,10 +1472,10 @@ export async function checkAutoEula(): Promise<boolean> {
 // Show the Privacy Policy once, right after the TOS on first start — and again whenever
 // its text changes, which is the whole point of the fingerprint.
 const PRIVACY_SEEN_KEY = 'bmm_privacy_seen';
-export async function checkAutoPrivacy(): Promise<void> {
+export async function checkAutoPrivacy(force = false): Promise<void> {
     try {
         const { privacy } = await legalHashes();
-        if (acceptedCurrent(PRIVACY_SEEN_KEY, PRIVACY_HASH_KEY, privacy)) return;
+        if (!force && acceptedCurrent(PRIVACY_SEEN_KEY, PRIVACY_HASH_KEY, privacy)) return;
         await openPrivacyModal();
         localStorage.setItem(PRIVACY_SEEN_KEY, 'true');
         if (privacy) localStorage.setItem(PRIVACY_HASH_KEY, privacy);
@@ -1500,8 +1501,17 @@ export async function checkShowReleaseNotes() {
     }
 }
 
+/** The Privacy Policy was accepted: its hash locally (what the start-up window reads) and a
+ *  consent receipt (core/consent.ts): which version, which text, which language, when. */
+export function markPrivacyAccepted(source: 'app' | 'settings' = 'app'): void {
+    legalHashes().then(({ privacy }) => { if (privacy) { try { localStorage.setItem(PRIVACY_HASH_KEY, privacy); } catch { /* private mode */ } } });
+    void import('../core/consent.js').then((m) => m.recordConsent({ doc: 'privacy', choice: 'accepted', source })).catch(() => {});
+}
+
 export function markEulaAccepted() {
     localStorage.setItem(EULA_ACCEPTED_KEY, 'true');
+    // Proof of WHICH terms were accepted, kept in the consent ledger (core/consent.ts).
+    void import('../core/consent.js').then((m) => m.recordConsent({ doc: 'tos', choice: 'accepted', source: 'app' })).catch(() => {});
     // Record WHAT was accepted. Fire-and-forget: the bool above is already written, so a
     // failure here costs one extra prompt on the next launch, never a lost acceptance.
     legalHashes().then(({ tos }) => { if (tos) localStorage.setItem(EULA_HASH_KEY, tos); });

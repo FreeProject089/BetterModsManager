@@ -11,7 +11,7 @@ npm run ci                # the eleven gates — run this before anything else
 npm run build             # the app itself (no installer)
 npm run build:installer   # the installer, from whatever npm run build produced
 npm run release           # version gate, build, installer, then release:assets
-npm run release:assets    # update-manifest.json listing Release/BMM-Setup.exe with its SHA-256
+npm run release:assets    # signed update-manifest.json listing Release/BMM-Setup.exe + SHA-256, then the artefact gate
 npm run check:release     # one version everywhere (add --artifacts to check Release/ too)
 ```
 
@@ -92,8 +92,11 @@ steps:
 5. Stamp the self-extracting `Release/BMM-Setup.exe`, and emit `Release/update.json`.
 
 Then `npm run release:assets` writes `dist/release-assets-v<version>/`: `update-manifest.json`
-(listing the language files **and** `BMM-Setup.exe` with its SHA-256) plus the files it names.
-Sign it (`node scripts/sign-update-manifest.mjs sign … --key …`) before uploading.
+(listing the language files **and** `BMM-Setup.exe` with its SHA-256) plus the files it names,
+**signs it** with `BetterInstaller/examples/bmm/keys/private.key` (`--sign-key`), verifies it
+against the key BMM pins, and runs `check-release-versions --artifacts`. An unsigned manifest
+never leaves this step. `BetterInstaller/examples/bmm/release.ps1` does the same after building,
+so both local paths and CI publish the signed manifest.
 
 A release carries **all** of these, and nothing else that ends in `.exe` or `.msi`:
 
@@ -256,7 +259,7 @@ uninstalled or deleted build left the scheme pointing at nothing.
 - [ ] Version bumped in `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` (+ `Cargo.lock`) **and** `installer.toml`
 - [ ] Changelog `Update/changelog_v<version>_EN.md` + `_FR.md` (CI uses the EN one as the release body)
 - [ ] Push the tag `v<version>`: `release.yml` builds, signs both manifests, runs `check-release-versions --artifacts` and publishes everything in one `gh release create --latest`
-- [ ] By hand instead: `npm run release`, sign `update-manifest.json`, re-sign `update.json` **the day you publish** (`bpkg resign-manifest`), `node scripts/check-release-versions.mjs --artifacts`, then upload every asset listed in « What `build:installer` does », **not** as a pre-release, **as Latest**
+- [ ] By hand instead: `npm run release` (signs `update-manifest.json`), or `BetterInstaller/examples/bmm/release.ps1 -Version <v> -Publish` (does everything, one `gh release create --latest`). Publishing another day: re-sign both **the day you publish** (`node scripts/sign-update-manifest.mjs sign <update-manifest.json> --key <private.key>`, `bpkg resign-manifest`), `node scripts/check-release-versions.mjs --artifacts`, then upload every asset listed in « What `build:installer` does », **not** as a pre-release, **as Latest**
 - [ ] `bpkg verify` passes on `Release/bmm.bpkg`
 - [ ] Install it on a clean machine and check the setup choices actually applied
 - [ ] Check that an older installed copy sees the update (0.9.11, 1.0.x via BetterInstaller, 1.0.x other)

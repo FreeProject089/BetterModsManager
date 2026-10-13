@@ -24,13 +24,17 @@ bandeau de cookies. Rien n'est présélectionné, et Installer reste grisé tant
 | Carte | Ce avec quoi BMM démarre |
 |---|---|
 | **L'essentiel uniquement** | Pas de télémétrie, pas de replay de session, pas de rapport matériel, pas de statut Discord. Les vérifications de mise à jour restent actives |
-| **Tout accepter** | Toutes les catégories de télémétrie, le replay de session masqué, le rapport matériel hebdomadaire et Discord Rich Presence |
+| **Tout accepter** | Toutes les catégories de télémétrie, le replay de session masqué et Discord Rich Presence. **Pas** le rapport matériel hebdomadaire : seul *Personnaliser* peut l'activer |
 | **Personnaliser** | Un interrupteur par catégorie, chacun disant ce qu'il envoie et à qui, en partant de la carte choisie avant |
 
 L'installeur écrit ta réponse dans `installer-handoff.json`, et BMM la lit une fois à son premier
 lancement : une réponse qui active la télémétrie est ton consentement, donc la fenêtre ci-dessus ne
 s'affiche pas ; *L'essentiel uniquement* est enregistré comme un refus. Dans les deux cas,
 Paramètres → Confidentialité change tout ça plus tard.
+
+L'installeur télécharge aussi le modèle **Laya hors ligne** pendant l'installation (327 Mo depuis la
+release GitHub du projet, vérifiés contre un SHA-256 épinglé). Cette option est cochée par défaut et
+n'envoie rien sur toi ; *Pas maintenant* l'évite.
 
 ```mermaid
 flowchart TD
@@ -171,6 +175,21 @@ Jamais ta question, la valeur d'une suggestion, un nom de mod, de fichier ou de 
 identifiant ni un message d'erreur. L'équipe les lit sur la page **Laya** du tableau de bord de
 télémétrie (adoption, acceptation par champ, latence, fournisseurs, erreurs).
 
+## Preuve du consentement : Mes consentements
+
+Chaque réponse sur les Conditions, la Politique de confidentialité et la télémétrie laisse une
+**preuve** : le document, sa version, le SHA-256 du texte exact affiché, la langue, la réponse (et
+chaque catégorie), l'heure, l'endroit où tu as répondu (installeur, premier lancement, Paramètres, un
+lien `bmm://`, l'API locale, la CLI, le serveur MCP, un import) et la version de BMM. Elle est
+rattachée à un identifiant d'installation aléatoire, pas à ton Creator ID ni à ton matériel.
+
+| | |
+|---|---|
+| Où | `consent-ledger.jsonl` dans le dossier de données de BMM : en ajout seul, chaque preuve chaînée à la précédente et scellée par une clé locale, donc une ligne modifiée, retirée ou insérée est détectée |
+| La voir | Paramètres → Confidentialité → **Mes consentements** : chaque preuve, si la chaîne est intacte, **Exporter (JSON)** |
+| Redemandé | Quand un document change, ou quand BMM trouve une réponse sans preuve pour la version en vigueur (mise à jour depuis 1.0.x, réglages importés) : la télémétrie repasse à « pas demandé » et les documents sont réaffichés |
+| Copie serveur | Envoyée au serveur de télémétrie **seulement si la télémétrie est activée**, ou quand tu appuies sur **Envoyer au serveur**. Stockée en ajout seul, sans adresse IP ni texte ; effacement par identifiant d'installation |
+
 ## Tes contrôles (Paramètres → Confidentialité)
 
 - Interrupteur principal, puis un interrupteur par catégorie (avec **Tout activer** quand l'une est
@@ -178,6 +197,8 @@ télémétrie (adoption, acceptation par champ, latence, fournisseurs, erreurs).
 - **Exporte** le tampon brut en JSON à tout moment.
 - Consulte chaque **paquet envoyé** (noms et comptes d'événements seulement) et demande sa
   **suppression** — honorée sous 72 heures.
+- **Mes consentements** : tes preuves de consentement, leur vérification, l'export et *Envoyer au
+  serveur*.
 
 Les rapports de plantage et les replays enregistrés restent **locaux**, sous des limites de
 rétention que tu contrôles (défaut : 30 sessions / 2 Go) — un rapport de plantage n'est partagé

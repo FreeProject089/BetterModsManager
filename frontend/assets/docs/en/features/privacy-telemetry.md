@@ -24,13 +24,17 @@ banner does. Nothing is pre-selected, and Install stays greyed out until you pic
 | Card | What BMM starts with |
 |---|---|
 | **Essential only** | No telemetry, no session replay, no hardware report, no Discord status. Update checks stay on |
-| **Accept all** | Every telemetry category, masked session replay, the weekly hardware report and Discord Rich Presence |
+| **Accept all** | Every telemetry category, masked session replay and Discord Rich Presence. **Not** the weekly hardware report: only *Customize* can turn that one on |
 | **Customize** | A switch per category, each saying what it sends and to whom, starting from the card you had picked |
 
 The installer writes your answer into `installer-handoff.json`, and BMM reads it once on its
 first launch: an answer that turns telemetry on is your consent, so the dialog above does not
 appear; *Essential only* is recorded as a refusal. Either way, Settings → Privacy changes any of it
 later.
+
+The installer also downloads the **Laya offline** model during setup (327 MB from the project's
+GitHub release, checked against a pinned SHA-256). That option is ticked by default and sends
+nothing about you; *Not now* skips it.
 
 ```mermaid
 flowchart TD
@@ -163,6 +167,21 @@ Never your question, a suggestion's value, a mod, file or profile name, an id or
 The team reads it on the telemetry dashboard's **Laya** page (adoption, acceptance per field,
 latency, providers, errors).
 
+## Proof of consent: My consents
+
+Every answer about the Terms, the Privacy Policy and telemetry leaves a **receipt**: the document,
+its version, the SHA-256 of the exact text you were shown, the language, the answer (and each
+category), the time, where you answered (installer, first launch, Settings, a `bmm://` link, the
+local API, the CLI, the MCP server, an import) and the BMM version. It is keyed by a random install
+id, not by your Creator ID or your hardware.
+
+| | |
+|---|---|
+| Where | `consent-ledger.jsonl` in BMM's data folder: append-only, each receipt chained to the one before it and sealed with a local key, so an edited, removed or inserted line is detected |
+| See it | Settings → Privacy → **My consents**: every receipt, whether the chain is intact, **Export (JSON)** |
+| Asked again | When a document changes, or when BMM finds an answer with no receipt for the version in force (an update from 1.0.x, imported settings): telemetry goes back to "not asked" and the documents are shown again |
+| Server copy | Sent to the telemetry server **only while telemetry is on**, or when you press **Send to the server**. Stored append-only, without IP address or text; erasure by install id |
+
 ## Your controls (Settings → Privacy)
 
 - Master toggle, then one switch per category (with **Turn all on** while one is off), plus the
@@ -170,6 +189,7 @@ latency, providers, errors).
 - **Export** the raw buffer as JSON any time.
 - See every **sent packet** (event names and counts only) and request its **deletion** —
   honoured within 72 hours.
+- **My consents**: your consent receipts, their check, export and *Send to the server*.
 
 Crash reports and saved session replays stay **local** under retention limits you control
 (default: 30 sessions / 2 GB) — a crash report is only ever shared when *you* export or send it.

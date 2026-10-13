@@ -715,6 +715,7 @@ fn main() {
             commands::consent_ledger::consent_verify,
             commands::consent_ledger::consent_export,
             commands::consent_ledger::consent_sync,
+            commands::consent_ledger::consent_prepare_launch,
             commands::analytics::analytics_request_deletion,
             commands::analytics::analytics_request_data,
             commands::analytics::analytics_clear_sent_log,

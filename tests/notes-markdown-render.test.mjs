@@ -110,7 +110,7 @@ describe('Release Notes modal renders every shipped .md cleanly', { skip: SKIP }
     server = http.createServer((req, res) => {
       const url = decodeURIComponent(req.url.split('?')[0]);
       if (url === '/') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(HARNESS); return; }
-      if (url === '/__stub/app.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end('export function toast() {}'); return; }
+      if (url === '/__stub/app.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end('export function toast() {} export function openExternal() {}'); return; }
       if (url.startsWith('/__invoke/')) {
         let body = '';
         req.on('data', (c) => { body += c; });

@@ -519,6 +519,8 @@ export async function initApiActivity(): Promise<void> {
                         replay: b(params.replay),
                         replayFull: b(params.full ?? params.replayFull),
                         bench: b(params.bench),
+                        // For the consent receipt: who asked (the API sets cli / mcp / api).
+                        source: params.source === 'cli' || params.source === 'mcp' ? params.source : 'api',
                     });
                 } catch (e) { console.warn('[api-exec] telemetry', e); }
                 break;

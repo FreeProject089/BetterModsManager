@@ -700,7 +700,12 @@ struct ModUpdateApiBody {
 }
 
 #[derive(serde::Deserialize)]
-struct TelemetryConsentBody { #[serde(default)] enabled: bool }
+struct TelemetryConsentBody {
+    #[serde(default)] enabled: bool,
+    /// Who asked, for the consent receipt (consent_ledger.rs): `cli` (bmm-cli) or `mcp` (the MCP
+    /// server); anything else, or nothing, is recorded as `api`. Self-declared by the caller.
+    #[serde(default)] via: Option<String>,
+}
 #[derive(serde::Deserialize)]
 struct TelemetrySettingsBody {
     #[serde(default)] replay: Option<bool>,
@@ -2608,7 +2613,10 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_tc))
         .map(|body: TelemetryConsentBody, handle: tauri::AppHandle| {
             let _ = handle.emit("bmm://api-exec", serde_json::json!({
-                "action": "telemetry/consent", "params": { "enabled": body.enabled }
+                "action": "telemetry/consent", "params": {
+                    "enabled": body.enabled,
+                    "source": match body.via.as_deref() { Some("cli") => "cli", Some("mcp") => "mcp", _ => "api" }
+                }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
                 "ok": true, "driven_by": "bmm-ui", "action": "telemetry/consent", "enabled": body.enabled

@@ -534,7 +534,10 @@ export function initRepoSync(elements) {
                     ? (t('repo.discoveredDesc') || 'No repo.json on this server — this list was read from its folder index. Nothing vouches for these files: they will install as unverified.')
                     : (repo.description || "");
                 syncDescDisplay.style.color = discovered ? 'var(--warning)' : '';
-                syncGameBadge.textContent = repo.game_name ? (t(repo.game_name) || repo.game_name) : '';
+                // The repo's own version beside its game: the number the host sets in « Set the
+                // repo version », so a subscriber can tell which release they are looking at.
+                syncGameBadge.textContent = [repo.game_name ? (t(repo.game_name) || repo.game_name) : '', repo.version && !discovered ? `v${repo.version}` : '']
+                    .filter(Boolean).join(' · ');
                 // The chip, the panel under the description and the Sync button all say the
                 // one state; the detail dialog opens from the chip or the panel's button.
                 syncBadge._repoRef = repo;

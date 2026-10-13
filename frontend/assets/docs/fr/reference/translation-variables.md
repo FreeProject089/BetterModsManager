@@ -22,15 +22,15 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{n}` | un nombre (un total, un rang, une position) |
 | `{name}` | un nom (mod, profil, tâche, fichier…) |
 | `{m}` | un second nombre, ou un nom, à côté de {n} |
+| `{v}` | une version ou une valeur |
 | `{count}` | un nombre d’éléments |
 | `{total}` | le total sur lequel porte le compte |
-| `{v}` | une version ou une valeur |
 | `{err}` | un message d’erreur |
 | `{id}` | un identifiant |
 | `{s}` | des secondes, ou un mot court choisi par le code |
 | `{e}` | un message d’erreur |
-| `{label}` | un titre court |
 | `{size}` | une taille déjà formatée (Ko, Mo…) |
+| `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{profile}` | un nom de profil |
 | `{mod}` | un nom de mod |
@@ -40,9 +40,9 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{x}` | une liste ou un détail inséré par le code |
 | `{date}` | une date |
 | `{type}` | un genre (un importateur, un format…) |
+| `{url}` | une adresse web |
 | `{version}` | un numéro de version |
 | `{time}` | une heure |
-| `{url}` | une adresse web |
 
 ## Accolades qui sont du texte
 
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-862 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+890 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### actjob
 
@@ -275,6 +275,12 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `conflict.hiddenNote` | `{n}` | {n} autre(s) mod(s) ont des conflits, masqués par les filtres ci-dessus. |
 | `conflict.makeWin` | `{m}` | Faire gagner {m} sur ces fichiers |
 | `conflict.treeTruncated` | `{n}` `{total}` | Affichage des {n} premiers fichiers partagés sur {total}. |
+
+### consent
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `consent.sent` | `{n}` | Preuves envoyées : {n} |
 
 ### crashmgr
 
@@ -811,6 +817,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `repo.adv.count` | `{n}` | Outils : {n} |
 | `repo.browse.downdetail` | `{s}` | BetterCommunity a répondu HTTP {s}. Problème serveur, pas votre connexion. Réessayez sous peu. |
 | `repo.cat.b.count` | `{m}` `{n}` | {n} sur {m} sélectionné(s) |
 | `repo.cat.b.pulled` | `{m}` `{n}` | {n} ajouté(s) sur {m}. Les autres étaient déjà là. |
@@ -851,9 +858,18 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.notifClientConnectedDetail` | `{creator_id}` `{protocol}` | {protocol} · ID : {creator\_id} |
 | `repo.notifDownloadFinishedDetail` | `{creator_id}` `{file}` | {creator\_id} a fini de télécharger {file} |
 | `repo.notifDownloadStartedDetail` | `{creator_id}` `{file}` | {creator\_id} télécharge {file} |
+| `repo.preview.extras` | `{n}` | Extras (plugins, thèmes, listes…) : {n} |
+| `repo.preview.modpacks` | `{n}` | Modpacks partagés : {n} |
+| `repo.preview.total` | `{files}` `{size}` | {files} fichiers, {size} au total |
 | `repo.profilesCount` | `{count}` | Profils ({count}) : |
+| `repo.quick.doneFolder` | `{dir}` `{n}` | repo.json écrit dans {dir}. Mods décrits : {n}. |
+| `repo.quick.doneModpack` | `{dir}` `{n}` | Dépôt créé dans {dir}. Mods ajoutés : {n}. |
+| `repo.quick.doneProfile` | `{dir}` | Dépôt créé dans {dir}. |
+| `repo.quick.modsN` | `{n}` | {n} mods |
+| `repo.quick.overwrite` | `{dir}` | {dir} contient déjà un dépôt. Le reconstruire depuis ce profil ? |
 | `repo.remote.errEmptyDir` | `{0}` | Rien trouvé sous {0}. Est-ce bien le dossier des mods ? |
 | `repo.serverOnline` | `{port}` | Serveur en ligne : port {port} |
+| `repo.share.message` | `{link}` `{name}` `{url}` | Rejoins mon dépôt BMM « {name} » : {link} Ou dans BMM : Server Repo, onglet Synchroniser, colle {url} puis Ré… |
 | `repo.ssh.browserPicked` | `{dir}` | Dossier distant : {dir} |
 | `repo.ssh.downloading` | `{done}` `{file}` `{total}` | Réception {done}/{total} : {file} |
 | `repo.ssh.errAuth` | `{detail}` | Échec de l’authentification : {detail} |
@@ -883,6 +899,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.ssh.testWhyOwner` | `{dir}` `{mode}` `{owner}` `{user}` | {dir} appartient à l'uid {owner} (mode {mode}) et BMM s'est connecté en tant que « {user} », qui ne peut pas… |
 | `repo.ssh.uploaded` | `{n}` `{size}` | Publié : {n} fichiers, {size}. |
 | `repo.ssh.uploading` | `{done}` `{file}` `{total}` | Envoi {done}/{total} : {file} |
+| `repo.static.done` | `{n}` | Fichiers écrits dans le dossier du dépôt : {n} |
+| `repo.static.md.share` | `{url}` | Dans BMM : Server Repo, onglet Synchroniser, collez {url} puis Récupérer. L'outil Lien de partage fait aussi… |
 | `repo.stepChecking` | `{current}` `{mod}` `{profile}` `{total}` | Vérification : {profile} - {mod} ({current}/{total}) |
 | `repo.stepDownloading` | `{current}` `{mod}` `{profile}` `{total}` | Téléchargement : {profile} - {mod} ({current}/{total}) |
 | `repo.stepExporting` | `{current}` `{mod}` `{profile}` `{total}` | Export : {profile} - {mod} ({current}/{total}) |
@@ -899,6 +917,21 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.updatesBaselined` | `{count}` | Suivi de {count} téléchargement(s) direct(s) activé. Revérifiez plus tard pour détecter les changements. |
 | `repo.updatesFound` | `{count}` | {count} mise(s) à jour disponible(s) |
 | `repo.updatesRepoErrors` | `{count}` | {count} repo(s) injoignable(s) |
+| `repo.validate.changed` | `{n}` | Fichiers différents du repo.json : {n}. |
+| `repo.validate.emptyProfiles` | `{n}` | Profils sans aucun mod : {n}. |
+| `repo.validate.filled` | `{n}` | Fichiers sans empreinte : {n}. |
+| `repo.validate.formatNewer` | `{v}` | Format {v} : plus récent que ce BMM. Lisible, certains champs peuvent être ignorés. |
+| `repo.validate.formatOk` | `{v}` | Format {v} : à jour. |
+| `repo.validate.formatOld` | `{cur}` `{v}` | Format {v} : plus ancien que {cur}. |
+| `repo.validate.formatTooNew` | `{v}` | Format {v} : trop récent pour ce BMM. Mettez BMM à jour pour le vérifier. |
+| `repo.validate.missing` | `{n}` | Fichiers listés absents : {n}. |
+| `repo.validate.summary` | `{files}` `{mods}` `{profiles}` `{size}` | {profiles} profils, {mods} mods, {files} fichiers, {size}. |
+| `repo.validate.verdictBad` | `{n}` | Problèmes à corriger avant de partager : {n}. |
+| `repo.validate.verdictWarn` | `{n}` | Utilisable. Points à regarder : {n}. |
+| `repo.version.alsoConverts` | `{v}` | Le manifeste est converti au format {v} en même temps. |
+| `repo.version.confirm` | `{from}` `{to}` | Passer la version de {from} à {to} et re-signer le repo.json ? |
+| `repo.version.done` | `{backup}` `{v}` | Version {v} appliquée et signée. Ancien manifeste gardé sous {backup}. |
+| `repo.version.same` | `{v}` | Le dépôt est déjà en {v}. |
 
 ### res
 

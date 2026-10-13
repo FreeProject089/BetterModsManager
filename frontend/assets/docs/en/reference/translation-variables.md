@@ -22,15 +22,15 @@ when a translation and the code disagree. It cannot go out of date.
 | `{n}` | a number (a count, an index, a position) |
 | `{name}` | a name (mod, profile, task, file…) |
 | `{m}` | a second number, or a name, next to {n} |
+| `{v}` | a version or a value |
 | `{count}` | a number of items |
 | `{total}` | the total the count is out of |
-| `{v}` | a version or a value |
 | `{err}` | an error message |
 | `{id}` | an identifier |
 | `{s}` | seconds, or a short word the code picks |
 | `{e}` | an error message |
-| `{label}` | a short title |
 | `{size}` | a size, already formatted (KB, MB…) |
+| `{label}` | a short title |
 | `{path}` | a file or folder path |
 | `{profile}` | a profile name |
 | `{mod}` | a mod name |
@@ -40,9 +40,9 @@ when a translation and the code disagree. It cannot go out of date.
 | `{x}` | a list or a detail the code inserts |
 | `{date}` | a date |
 | `{type}` | a kind of thing (an importer, a format…) |
+| `{url}` | a web address |
 | `{version}` | a version number |
 | `{time}` | a time |
-| `{url}` | a web address |
 
 ## Braces that are text
 
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-862 keys, grouped by their first segment. The text is the English one, shortened.
+890 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### actjob
 
@@ -275,6 +275,12 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `conflict.hiddenNote` | `{n}` | {n} more mod(s) have conflicts, hidden by the filters above. |
 | `conflict.makeWin` | `{m}` | Make {m} win these files |
 | `conflict.treeTruncated` | `{n}` `{total}` | Showing the first {n} of {total} shared files. |
+
+### consent
+
+| Key | Variables | Text |
+|---|---|---|
+| `consent.sent` | `{n}` | Receipts sent: {n} |
 
 ### crashmgr
 
@@ -811,6 +817,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `repo.adv.count` | `{n}` | Tools: {n} |
 | `repo.browse.downdetail` | `{s}` | BetterCommunity answered HTTP {s}. Server issue, not your connection. Try again shortly. |
 | `repo.cat.b.count` | `{m}` `{n}` | {n} of {m} selected |
 | `repo.cat.b.pulled` | `{m}` `{n}` | Added {n} of {m}. The rest were already here. |
@@ -851,9 +858,18 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.notifClientConnectedDetail` | `{creator_id}` `{protocol}` | {protocol} · ID: {creator\_id} |
 | `repo.notifDownloadFinishedDetail` | `{creator_id}` `{file}` | {creator\_id} finished downloading {file} |
 | `repo.notifDownloadStartedDetail` | `{creator_id}` `{file}` | {creator\_id} is downloading {file} |
+| `repo.preview.extras` | `{n}` | Extras (plugins, themes, lists…): {n} |
+| `repo.preview.modpacks` | `{n}` | Modpacks shared: {n} |
+| `repo.preview.total` | `{files}` `{size}` | {files} files, {size} in all |
 | `repo.profilesCount` | `{count}` | Profiles ({count}): |
+| `repo.quick.doneFolder` | `{dir}` `{n}` | repo.json written in {dir}. Mods described: {n}. |
+| `repo.quick.doneModpack` | `{dir}` `{n}` | Repo created in {dir}. Mods added: {n}. |
+| `repo.quick.doneProfile` | `{dir}` | Repo created in {dir}. |
+| `repo.quick.modsN` | `{n}` | {n} mods |
+| `repo.quick.overwrite` | `{dir}` | {dir} already holds a repo. Rebuild it from this profile? |
 | `repo.remote.errEmptyDir` | `{0}` | Nothing found under {0}. Is that the mods folder? |
 | `repo.serverOnline` | `{port}` | Server online: port {port} |
+| `repo.share.message` | `{link}` `{name}` `{url}` | Join my BMM repo « {name} »: {link} Or in BMM: Server Repo, Sync tab, paste {url} and press Fetch. |
 | `repo.ssh.browserPicked` | `{dir}` | Remote folder: {dir} |
 | `repo.ssh.downloading` | `{done}` `{file}` `{total}` | Fetching {done}/{total}: {file} |
 | `repo.ssh.errAuth` | `{detail}` | Authentication failed: {detail} |
@@ -883,6 +899,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.ssh.testWhyOwner` | `{dir}` `{mode}` `{owner}` `{user}` | {dir} belongs to uid {owner} (mode {mode}) and BMM connected as “{user}”, who cannot write there. Your accoun… |
 | `repo.ssh.uploaded` | `{n}` `{size}` | Published: {n} files, {size}. |
 | `repo.ssh.uploading` | `{done}` `{file}` `{total}` | Uploading {done}/{total}: {file} |
+| `repo.static.done` | `{n}` | Files written in the repo folder: {n} |
+| `repo.static.md.share` | `{url}` | In BMM: Server Repo, Sync tab, paste {url} and press Fetch. The Share link tool also makes a one-click link. |
 | `repo.stepChecking` | `{current}` `{mod}` `{profile}` `{total}` | Checking: {profile} - {mod} ({current}/{total}) |
 | `repo.stepDownloading` | `{current}` `{mod}` `{profile}` `{total}` | Downloading: {profile} - {mod} ({current}/{total}) |
 | `repo.stepExporting` | `{current}` `{mod}` `{profile}` `{total}` | Exporting: {profile} - {mod} ({current}/{total}) |
@@ -899,6 +917,21 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.updatesBaselined` | `{count}` | Now tracking {count} direct download(s). Re-check later to detect changes. |
 | `repo.updatesFound` | `{count}` | {count} update(s) available |
 | `repo.updatesRepoErrors` | `{count}` | {count} repo(s) could not be reached |
+| `repo.validate.changed` | `{n}` | Files that differ from repo.json: {n}. |
+| `repo.validate.emptyProfiles` | `{n}` | Profiles with no mods: {n}. |
+| `repo.validate.filled` | `{n}` | Files with no hash yet: {n}. |
+| `repo.validate.formatNewer` | `{v}` | Format {v}: newer than this BMM. Readable, some fields may be ignored. |
+| `repo.validate.formatOk` | `{v}` | Format {v}: current. |
+| `repo.validate.formatOld` | `{cur}` `{v}` | Format {v}: older than {cur}. |
+| `repo.validate.formatTooNew` | `{v}` | Format {v}: too new for this BMM. Update BMM to check it. |
+| `repo.validate.missing` | `{n}` | Listed files that are missing: {n}. |
+| `repo.validate.summary` | `{files}` `{mods}` `{profiles}` `{size}` | {profiles} profiles, {mods} mods, {files} files, {size}. |
+| `repo.validate.verdictBad` | `{n}` | Problems to fix before sharing: {n}. |
+| `repo.validate.verdictWarn` | `{n}` | Usable. Points to look at: {n}. |
+| `repo.version.alsoConverts` | `{v}` | The manifest is converted to format {v} at the same time. |
+| `repo.version.confirm` | `{from}` `{to}` | Set the version from {from} to {to} and re-sign repo.json? |
+| `repo.version.done` | `{backup}` `{v}` | Version {v} set and signed. Old manifest kept as {backup}. |
+| `repo.version.same` | `{v}` | The repo is already at {v}. |
 
 ### res
 

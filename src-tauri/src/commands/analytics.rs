@@ -89,7 +89,9 @@ pub fn consent_choice(was: Option<bool>, enabled: bool, cats: &std::collections:
     match (enabled, was) {
         (false, Some(true)) => "withdrawn",
         (false, _) => "declined",
-        (true, _) if cats.values().any(|v| !v) => "custom",
+        // The weekly hardware report and unmasked replay are extras, never part of « all »:
+        // leaving them off does not make an « accept all » a custom choice.
+        (true, _) if cats.iter().any(|(k, v)| !v && k != "bench" && k != "replayFull") => "custom",
         (true, _) => "accepted",
     }
 }
@@ -1121,6 +1123,9 @@ mod consent_tests {
         assert_eq!(consent_choice(Some(true), false, &c), "withdrawn");
         c.insert("usage".to_string(), true);
         assert_eq!(consent_choice(None, true, &c), "accepted");
+        c.insert("bench".to_string(), false);
+        c.insert("replayFull".to_string(), false);
+        assert_eq!(consent_choice(None, true, &c), "accepted", "the extras are not part of « all »");
         c.insert("perf".to_string(), false);
         assert_eq!(consent_choice(Some(false), true, &c), "custom");
     }

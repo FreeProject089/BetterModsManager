@@ -16,6 +16,7 @@
  *   node scripts/gen-update-manifest.mjs --version 1.2.3   (override version)
  *   node scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe --require-installer
  *                                         (the release: also list the signed full installer)
+ *       [--sign-key BetterInstaller/examples/bmm/keys/private.key]   (sign and verify it too)
  *
  * Output:
  *   dist/release-assets-v{version}/
@@ -28,7 +29,7 @@
 import { createHash }                                         from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync,
          copyFileSync, statSync, existsSync, readdirSync }    from 'fs';
-import { join, dirname, basename }                            from 'path';
+import { join, dirname, basename, resolve }                   from 'path';
 import { fileURLToPath }                                      from 'url';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
@@ -210,6 +211,35 @@ for (const f of readdirSync(OUT_DIR)) {
 const manifest = { version: VERSION, files: manifestFiles, ...(installers.length ? { installers } : {}) };
 const manifestPath = join(OUT_DIR, 'update-manifest.json');
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+// ── Sign it (--sign-key <private.key>) ───────────────────────────────────────
+// BMM refuses an unsigned manifest, so an unsigned one must never reach a release. With
+// `--sign-key` (what `npm run release:assets` passes) it is signed here and verified against
+// the key BMM pins. A signature expires after 7 days: sign on the day you publish, or re-sign
+// with `node scripts/sign-update-manifest.mjs sign <file> --key <private.key>`.
+const signKeyArg = (() => {
+    const i = argv.indexOf('--sign-key');
+    return i >= 0 ? argv[i + 1] : argv.find(a => a.startsWith('--sign-key='))?.slice('--sign-key='.length);
+})();
+if (signKeyArg) {
+    const { signManifest, verifyManifest } = await import('./sign-update-manifest.mjs');
+    const keyPath = resolve(ROOT, signKeyArg);
+    if (!existsSync(keyPath)) {
+        console.error(`[gen-update-manifest] --sign-key ${signKeyArg} does not exist`);
+        process.exit(1);
+    }
+    try {
+        const signedText = signManifest(readFileSync(manifestPath, 'utf8'), readFileSync(keyPath, 'utf8'));
+        verifyManifest(signedText);
+        writeFileSync(manifestPath, signedText, 'utf8');
+        console.log('   🔏 Signed and verified against the key BMM pins (valid 7 days from now)');
+    } catch (e) {
+        console.error(`[gen-update-manifest] signing failed: ${e.message}`);
+        process.exit(1);
+    }
+} else if (requireInstaller) {
+    console.log('   ⚠  NOT signed: pass --sign-key <private.key> (BMM refuses an unsigned manifest)');
+}
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(60)}`);

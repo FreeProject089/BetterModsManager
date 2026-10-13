@@ -28,7 +28,7 @@
     "check:markup": "node scripts/check-markup.mjs",
     "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location BetterInstaller; ./examples/bmm/build-installer.ps1\"",
     "release": "node scripts/check-release-versions.mjs && npm run build && npm run build:installer && npm run release:assets",
-    "release:assets": "node scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe --require-installer",
+    "release:assets": "node scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe --require-installer --sign-key BetterInstaller/examples/bmm/keys/private.key && node scripts/check-release-versions.mjs --artifacts",
     "check:release": "node scripts/check-release-versions.mjs",
     "check:installer": "node scripts/check-installer-config.mjs",
     "check:links": "node scripts/check-links.mjs",

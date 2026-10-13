@@ -8,7 +8,11 @@
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
-import { toast } from '../../ui/app.js';
+// window.toast, not ui/app.js: repo.ts imports this module and ui/app.ts imports repo.ts
+// (through profiles.ts), so a static import here closed one more import cycle.
+const toast = (msg: string, type = 'info', duration?: number): void => {
+    try { (window as any).toast?.(msg, type, duration); } catch { /* the shell is not up */ }
+};
 import { uiIcon } from '../../ui/icons.js';
 import { openModal } from '../../ui/modal-shell.js';
 

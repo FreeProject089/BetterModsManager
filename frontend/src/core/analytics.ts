@@ -179,14 +179,41 @@ export function trackView(view: string): void {
 
 export function getConsent(): boolean | null { return _consent; }
 
+/** Where a telemetry answer was given and on which text, for its consent receipt. */
+export interface ConsentContext {
+    source?: 'app' | 'settings' | 'link' | 'api' | 'cli' | 'mcp';
+    /** The dialog's text as shown (hashed in Rust, never stored). */
+    shownText?: string;
+    categories?: Record<string, boolean>;
+}
+function receiptInput(c?: ConsentContext): Record<string, unknown> {
+    if (!c) return {};
+    const out: Record<string, unknown> = {};
+    if (c.source) out.source = c.source;
+    if (c.shownText) out.shownText = c.shownText;
+    if (c.categories) out.categories = c.categories;
+    return out;
+}
+/** The five categories + the two extras, as the receipt's per-category answers. */
+function receiptCategories(c: Partial<CategoryChoice> & { bench?: boolean; replayFull?: boolean }): Record<string, boolean> {
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(c)) if (typeof v === 'boolean') out[k] = v;
+    return out;
+}
+
 /** `liveErrors`: the errors category, when the caller knows it (the consent dialog). Left out,
  *  Rust turns live errors ON whenever telemetry goes from off to on (owner's rule: live errors
  *  follow telemetry by default, and can still be turned off on their own). */
-export async function setConsent(enabled: boolean, opts: { liveErrors?: boolean } = {}): Promise<void> {
+export async function setConsent(enabled: boolean, opts: { liveErrors?: boolean; receipt?: ConsentContext } = {}): Promise<void> {
     const wasOff = _consent !== true;
     _consent = enabled;
-    try { await invoke('set_analytics_consent', { enabled, liveErrors: opts.liveErrors ?? null }); } catch {}
+    // The receipt (consent_ledger.rs): Rust fills the version, the answer and the time; this says
+    // where it was given, on which text, with which categories. Default: the Settings switch.
+    const receipt = { doc: 'telemetry', choice: enabled ? 'accepted' : 'declined', source: 'settings', ...receiptInput(opts.receipt) };
+    try { await invoke('set_analytics_consent', { enabled, liveErrors: opts.liveErrors ?? null, receipt }); } catch {}
     await refreshLiveIssues();
+    // The receipt just written goes up now when telemetry is on (Rust refuses otherwise).
+    void import('./consent.js').then((m) => m.syncConsents()).catch(() => {});
     if (enabled) {
         await startCollection();
         // First opt-in: run one benchmark now so the team gets a baseline.
@@ -277,7 +304,7 @@ function startSessionReplay(): void {
 /** Enable/disable telemetry consent + its sub-options programmatically (API / deep
  *  links). Reflects into the Privacy & telemetry card toggles and re-arms the
  *  replay recorder so changes take effect immediately. */
-export async function applyTelemetrySettings(opts: { consent?: boolean; replay?: boolean; replayFull?: boolean; bench?: boolean }): Promise<void> {
+export async function applyTelemetrySettings(opts: { consent?: boolean; replay?: boolean; replayFull?: boolean; bench?: boolean; source?: ConsentContext['source'] }): Promise<void> {
     const reflect = (id: string, v?: boolean) => { if (v === undefined) return; const el = document.getElementById(id) as HTMLInputElement | null; if (el) el.checked = v; };
     // Sub-options FIRST: turning consent on starts collection at once, and startCollection
     // reads the bench flag to decide whether to send the extra hardware report. Applied the
@@ -289,7 +316,7 @@ export async function applyTelemetrySettings(opts: { consent?: boolean; replay?:
     if (opts.bench !== undefined) { setTelemetryBenchAllowed(opts.bench); reflect('analytics-bench-toggle', opts.bench); }
     // Only on a real change: setConsent(true) while already on would start a second
     // collection (listeners, timers, replay) on top of the first.
-    if (opts.consent !== undefined && opts.consent !== _consent) await setConsent(opts.consent);
+    if (opts.consent !== undefined && opts.consent !== _consent) await setConsent(opts.consent, { receipt: { source: opts.source ?? 'api' } });
     if (restartReplay && wasOn && _consent === true) {
         try { _telemetryReplay?.stop?.(); } catch {}
         _telemetryReplay = null;
@@ -880,7 +907,11 @@ export function initPrivacySettings(): void {
         }
     });
 
-    document.getElementById('analytics-view-what')?.addEventListener('click', () => showConsentModal());
+    document.getElementById('analytics-view-what')?.addEventListener('click', () => showConsentModal({ source: 'settings' }));
+    // « My consents »: every receipt, the chain check, export, send (core/consent.ts).
+    document.getElementById('analytics-consents')?.addEventListener('click', () => {
+        void import('./consent.js').then((m) => m.openMyConsents());
+    });
     document.getElementById('analytics-export')?.addEventListener('click', async () => {
         const { saveFile } = await import('./api.js');
         const path = await saveFile({ defaultPath: 'bmm-telemetry.json', filters: [{ name: 'JSON', extensions: ['json'] }] }).catch(() => null);
@@ -1174,7 +1205,7 @@ export async function confirmTelemetryFromLink(plan: TelemetryLinkPlan): Promise
         { yesLabel: t('common.yes'), noLabel: t('common.no') },
     );
     if (!ok) return false;
-    await applyTelemetrySettings(plan.apply);
+    await applyTelemetrySettings({ ...plan.apply, source: 'link' });
     return true;
 }
 
@@ -1230,7 +1261,7 @@ function switchRow(id: string, name: string, desc: string, checked: boolean, cls
 }
 
 /** Everything a decision writes, in one place (the dialog and nothing else calls it). */
-async function applyConsentChoice(c: CategoryChoice & { bench?: boolean; replayFull?: boolean }): Promise<boolean> {
+async function applyConsentChoice(c: CategoryChoice & { bench?: boolean; replayFull?: boolean }, ctx: ConsentContext = {}): Promise<boolean> {
     storeCats({ usage: c.usage, perf: c.perf, laya: c.laya });
     try { localStorage.setItem(REPLAY_KEY, c.replay ? '1' : '0'); } catch { }
     if (c.replayFull !== undefined) { try { localStorage.setItem(REPLAY_FULL_KEY, c.replayFull ? '1' : '0'); } catch { } }
@@ -1240,8 +1271,17 @@ async function applyConsentChoice(c: CategoryChoice & { bench?: boolean; replayF
         // Same answer as before (the dialog opened from Settings): setConsent would start a
         // second collection on top of the running one. Apply the switches that changed.
         if (on) { await setLiveErrors(c.errors); rearmReplay(); }
+        // The consent itself did not change, its categories may have: that answer is recorded too.
+        const { recordConsent } = await import('./consent.js');
+        await recordConsent({
+            doc: 'telemetry',
+            choice: on ? (TELEMETRY_CATEGORIES.every((k) => c[k] !== false) ? 'accepted' : 'custom') : 'declined',
+            source: ctx.source ?? 'settings',
+            shownText: ctx.shownText,
+            categories: receiptCategories(c),
+        });
     } else {
-        await setConsent(on, { liveErrors: on ? c.errors : undefined });
+        await setConsent(on, { liveErrors: on ? c.errors : undefined, receipt: { ...ctx, categories: receiptCategories(c) } });
     }
     refreshPrivacyUI();
     return on;
@@ -1252,7 +1292,7 @@ async function applyConsentChoice(c: CategoryChoice & { bench?: boolean; replayF
  *  every setting as it was (it does not record a refusal the user never made). Resolves true
  *  when telemetry ends up on, false on « Non merci » (or a choice with every category off),
  *  null on « Plus tard » / Escape, or when another consent dialog was already open. */
-export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: boolean } } = {}): Promise<boolean | null> {
+export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: boolean }; source?: 'app' | 'settings' } = {}): Promise<boolean | null> {
     if (document.getElementById('analytics-consent-overlay')) return Promise.resolve(null);
     ensureConsentCss();
     const link = opts.fromLink;
@@ -1374,15 +1414,19 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
             if (work) void work().catch(() => { });
         };
 
+        // What the receipt says about this answer: where, and the exact text on screen.
+        const ctx = (): ConsentContext => ({ source: link ? 'link' : (opts.source ?? 'app'), shownText: (overlay.textContent || '').replace(/\s+/g, ' ').trim() });
         overlay.querySelector('#analytics-later')?.addEventListener('click', () => finish(null));
         overlay.querySelector('#analytics-decline')?.addEventListener('click', () => {
-            finish(false, () => setConsent(false).then(() => refreshPrivacyUI()));
+            const c = ctx();
+            finish(false, () => setConsent(false, { receipt: c }).then(() => refreshPrivacyUI()));
         });
         overlay.querySelector('#analytics-accept')?.addEventListener('click', () => {
             // « Tout activer »: the five categories. The two extras keep what they were (off
             // unless the user turned them on), since neither is part of "all".
             const extra = link ? { bench: box('bench')?.checked } : {};
-            finish(true, () => applyConsentChoice({ ...allOn(), ...extra }));
+            const c = ctx();
+            finish(true, () => applyConsentChoice({ ...allOn(), ...extra }, c));
         });
         const chooseBtn = overlay.querySelector('#analytics-choose') as HTMLButtonElement;
         chooseBtn.addEventListener('click', () => {
@@ -1397,7 +1441,8 @@ export function showConsentModal(opts: { fromLink?: { replay?: boolean; bench?: 
             const full = box('replayFull');
             const on = anyOn(c);
             if (link && !on) { finish(null); return; }   // a link can't be used to record a refusal
-            finish(on, () => applyConsentChoice({ ...c, bench, replayFull: full ? full.checked : undefined }));
+            const cx = ctx();
+            finish(on, () => applyConsentChoice({ ...c, bench, replayFull: full ? full.checked : undefined }, cx));
         });
         // Pre-selected = the recommended button is the focused, ready-to-confirm choice.
         setTimeout(() => (overlay.querySelector(chooseFirst ? '#analytics-choose' : '#analytics-accept') as HTMLElement | null)?.focus(), 40);

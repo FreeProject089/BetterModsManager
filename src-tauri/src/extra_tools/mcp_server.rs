@@ -1490,7 +1490,7 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             }
         }
         Commands::TelemetryConsent { enabled } => {
-            let res = state_bridge::api_call("POST", "/api/telemetry/consent", Some(serde_json::json!({ "enabled": enabled }))).await?;
+            let res = state_bridge::api_call("POST", "/api/telemetry/consent", Some(serde_json::json!({ "enabled": enabled, "via": "cli" }))).await?;
             println!("  {} telemetry consent → {} {}", "✓".green().bold(), enabled.to_string().cyan(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
         }
         Commands::TelemetrySettings { replay, full, bench } => {

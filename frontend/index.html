@@ -1039,49 +1039,188 @@
 
                         <!-- ══ HOST ══ -->
                         <div class="repo-column repo-tab-panel" data-repo-panel="host">
-                            <!-- What this screen IS, before the first card.
-                                 It opens on five cards of equal weight for a two-step job,
-                                 and three of them are alternatives to the other two. Without
-                                 a sentence saying so, the honest reading is "there are five
-                                 things to do here". -->
                             <div class="repo-host-lede" id="repo-host-lede">
                                 <button type="button" class="repo-host-lede-x" id="repo-host-lede-x"
                                     data-i18n-tooltip="repo.hostLedeClose" aria-label="Close">&times;</button>
-                                <div class="repo-host-lede-h" data-i18n="repo.hostLede">H&#233;berger un d&#233;p&#244;t, c'est deux choses</div>
-                                <p class="repo-host-lede-p" data-i18n="repo.hostLedeP">D'abord produire le fichier <b>repo.json</b> qui d&#233;crit vos mods, puis permettre aux autres de le t&#233;l&#233;charger. Les deux &#233;tapes sont ci-dessous, dans cet ordre.</p>
-                                <p class="repo-host-lede-p" data-i18n="repo.hostLedeQ">Vous pouvez vous arr&#234;ter apr&#232;s l'&#233;tape&#160;1 si vous avez d&#233;j&#224; o&#249; d&#233;poser le dossier &#8212; un h&#233;bergement statique, un partage r&#233;seau, n'importe quoi qui serve des fichiers. L'&#233;tape&#160;2 est l&#224; pour ceux qui n'en ont pas.</p>
-                                <p class="repo-host-lede-p repo-host-lede-alt" data-i18n="repo.hostLedeAlt">Les cartes marqu&#233;es <b>ALTERNATIVE</b> ne sont pas des &#233;tapes de plus&#160;: ce sont d'autres fa&#231;ons de faire celle au-dessus d'elles.</p>
+                                <div class="repo-host-lede-h" data-i18n="repo.simple.hostLede">Hosting a repo is four steps</div>
+                                <p class="repo-host-lede-p" data-i18n="repo.simple.hostLedeP">Pick a folder that holds a repo.json, check it, start the server, share the address. No repo yet? Create one in a click from step 1. Everything else waits under Advanced tools.</p>
                             </div>
-                            <!-- Card: Generate Repo -->
-                            <div class="repo-host-group" data-host-group="publish" data-active-method="generate">
-<div class="repo-group-h">
-                                    <span class="repo-group-n">1</span>
-                                    <span class="repo-group-t" data-i18n="repo.groupPublish">Produire le repo.json</span>
-                                    <span class="repo-group-sub" data-i18n="repo.groupPublishSub">Une seule des trois voies ci-dessous suffit.</span>
+                            <div class="repo-host-group rp-simple" data-host-group="serve">
+                                <div class="repo-group-h">
+                                    <span class="repo-group-t" data-i18n="repo.simple.hostTitle">Host a repo</span>
+                                    <span class="repo-group-sub" data-i18n="repo.simple.hostSub">Others sync from the address you share.</span>
                                 </div>
-                                <!-- Method picker: pick ONE of the three ways; only its form shows,
-                                     so the two alternatives no longer sit in the way as scroll. -->
-                                <div class="repo-method-tabs" role="tablist" aria-label="Méthode">
-                                    <button type="button" class="repo-method-pill active" data-method-pill="generate" role="tab" data-i18n="repo.method.generate">Générer</button>
-                                    <button type="button" class="repo-method-pill" data-method-pill="manifest" role="tab" data-i18n="repo.method.manifest">Manifeste seul</button>
-                                    <button type="button" class="repo-method-pill" data-method-pill="remote" role="tab" data-i18n="repo.method.remote">Dépôt distant</button>
-                                </div>
-                            <div class="repo-card repo-card--cyan" data-method="generate">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <div class="repo-card-step">01</div>
-                                    <h3>
-                                        <svg class="ic ic-upload" data-icon="upload" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
-                                        <span data-i18n="repo.stepOneTitle">1. Générer le Dépôt</span>
-                                    </h3>
-                                    <button class="btn btn-ghost btn-xs" data-act="openDocsPageById" data-act-args='["server-sync"]'
-                                        data-tasky="repo.howItWorksTip" data-tasky-icon="icon-info"
-                                       
-                                        style="opacity:0.6; font-size:10px; border:1px solid rgba(0,194,255,0.2); padding:2px 8px; height:auto; flex-shrink:0;">
-                                        <svg class="ic ic-help" data-icon="help" width="12" height="12" viewBox="0 0 24 24" style="margin-right:4px" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-                                        <span data-i18n="repo.howItWorks">Comment ça marche ?</span>
-                                    </button>
-                                </div>
+                            <div class="repo-card repo-card--green rp-plain">
                                 <div class="repo-card-body">
+                                    <ol class="rp-flow" id="repo-host-flow" aria-label="Hosting steps">
+                                        <li class="rp-flow-step" data-flow-step="folder"><span class="rp-flow-n">1</span><span class="rp-flow-t" data-i18n="repo.flow.folder">Pick the folder</span></li>
+                                        <li class="rp-flow-step" data-flow-step="manifest"><span class="rp-flow-n">2</span><span class="rp-flow-t" data-i18n="repo.flow.manifest">Check the repo.json</span></li>
+                                        <li class="rp-flow-step" data-flow-step="start"><span class="rp-flow-n">3</span><span class="rp-flow-t" data-i18n="repo.flow.start">Start the server</span></li>
+                                        <li class="rp-flow-step" data-flow-step="share"><span class="rp-flow-n">4</span><span class="rp-flow-t" data-i18n="repo.flow.share">Share the address</span></li>
+                                    </ol>
+
+                                    <div class="rp-hstep" data-flow-block="folder">
+                                        <div class="form-group" style="margin-bottom:12px;">
+                                            <label class="form-label" style="margin-bottom:4px;"
+                                                data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-host-path"
+                                                    placeholder="C:\..." readonly />
+                                                <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host"
+                                                    data-i18n="prof.browse">...</button>
+                                            </div>
+                                        </div>
+                                        <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
+                                            <label class="form-label"
+                                                style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
+                                                data-i18n="repo.hostHistoryLabel">Historique</label>
+                                            <select class="form-input" id="repo-host-history-select"
+                                                style="font-size:12px; padding:6px; background:var(--bmm-s05);">
+                                                <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien
+                                                    dépôt
+                                                    --
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div id="repo-host-metadata-preview" class="rp-meta" style="display:none;">
+                                        </div>
+                                        <!-- The manifest's FORMAT (repo_format.rs): « format 1.0 », or « legacy 0.x » with a
+                                             Convert button. Filled by repo-format.ts when the folder changes. -->
+                                        <div class="rp-fmt-row" id="repo-host-format" hidden></div>
+                                        <!-- No repo yet: the shortest way to one, in the step that needs it. -->
+                                        <p class="rp-qc" id="repo-quick-create-row"><span data-i18n="repo.quick.noRepo">No repo yet?</span>
+                                            <button type="button" class="btn btn-ghost btn-sm rp-qc-btn" data-rp-tool-open="quick"><span data-i18n="repo.quick.open">Create one from a profile, a modpack or a folder</span></button></p>
+                                    </div>
+
+                                    <div class="rp-hstep" data-flow-block="start">
+                                        <div class="repo-status-bar rp-srv-status" role="status">
+                                            <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
+                                            <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
+                                            <span id="upnp-status-badge" class="rp-upnp" style="display:none;"></span>
+                                        </div>
+                                        <div id="public-ip-hint-box" class="rp-note rp-tone--warn" style="display:none;">
+                                            <svg class="ic ic-alert" data-icon="alert" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                                            <span class="rp-note-txt"><b data-i18n="repo.hostPublicHintTitle">Accès Public</b>
+                                            <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre routeur pour un accès externe sans tunnel.</span></span>
+                                        </div>
+                                        <button class="btn btn-secondary rp-srv-toggle" id="btn-toggle-repo-server">
+                                            <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
+                                        </button>
+                                        <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
+                                    </div>
+
+                                    <section class="rp-run" id="repo-run-panel" aria-labelledby="repo-run-h">
+                                        <h4 class="rp-sub-h" id="repo-run-h" data-i18n="repo.run.title">Your server</h4>
+                                        <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
+                                            <div class="rp-stat">
+                                                <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
+                                                <span id="repo-server-stat-dls" class="rp-stat-v">0</span>
+                                            </div>
+                                            <div class="rp-stat">
+                                                <span class="rp-stat-l" data-i18n="repo.stat.sent">Data sent</span>
+                                                <span id="repo-server-stat-bytes" class="rp-stat-v">0 B</span>
+                                            </div>
+                                        </div>
+                                        <div id="repo-server-url-container" class="rp-urls" style="display:none;">
+                                                                                    <div id="repo-server-lan-section">
+                                                <label class="form-label rp-url-l" for="repo-server-url" data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-url" readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div id="repo-server-public-section" style="display:none;">
+                                                <label class="form-label rp-url-l" for="repo-server-public-url">
+                                                    <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                                    <span data-i18n="repo.hostPublicUrl">Public IP URL</span>
+                                                </label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-public-url"
+                                                        readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-public-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div id="repo-server-tunnel-section" style="display:none;">
+                                                <label class="form-label rp-url-l" for="repo-server-tunnel-url">
+                                                    <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                                                    <span data-i18n="repo.hostTunnelUrl">Cloudflare Tunnel URL</span>
+                                                </label>
+                                                <div class="path-picker">
+                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-tunnel-url"
+                                                        readonly />
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-tunnel-url"
+                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
+                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div><!-- /repo-server-url-container -->
+                                    </section>
+                                </div><!-- /repo-card-body (host) -->
+                            </div><!-- /repo-card--green -->
+                            </div><!-- /repo-host-group serve -->
+
+                            <!-- Advanced tools: everything the four steps above do not need. Collapsed by default, one
+                                 click to open, remembered (repo-advanced.ts). Every id inside is the one repo.ts, the
+                                 tutorials and the API prefill already use; only the place changed. -->
+                            <details class="rp-advanced" id="repo-host-tools" data-adv-scope="host">
+                                <summary class="rp-advanced-h">
+                                    <span class="rp-advanced-ic" data-tool-icon="sliders" aria-hidden="true"></span>
+                                    <span class="rp-advanced-txt"><span class="rp-advanced-t" data-i18n="repo.adv.title">Advanced tools</span><span class="rp-advanced-sub" data-i18n="repo.adv.hostSub">Build a repo with every option, check and version it, publish it elsewhere, run other kinds of server, decide who may connect.</span></span>
+                                    <span class="pg-count rp-advanced-n" data-adv-count></span>
+                                </summary>
+                                <div class="rp-advanced-body">
+                                    <label class="pg-search rp-advanced-find"><svg class="ic ic-search" data-icon="search" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input type="search" class="pg-search-input" data-adv-search autocomplete="off" spellcheck="false" data-i18n-placeholder="repo.adv.search" placeholder="Find a tool" data-i18n-title="repo.adv.search" /></label>
+                                    <p class="rp-hint-t rp-advanced-none" data-adv-none hidden data-i18n="repo.adv.none">No tool matches. Try another word.</p>
+                            <section class="rp-tool-group">
+                                <h4 class="rp-tool-group-h" data-i18n="repo.adv.groupBuild">Create and update a repo</h4>
+                            <details class="rp-tool" data-tool="quick" data-tool-icon="add" data-keywords="new create one click profile modpack folder nouveau créer profil dossier">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.quick.t">Create a repo in one click</span><span class="rp-tool-d" data-i18n="repo.tool.quick.d">From a profile, a modpack or a folder of mods.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.quick.lede">Choose what to publish and where: BMM writes a signed repo there, ready to host. Every option is in « Build a repo from profiles ».</p>
+                                    <div class="rp-form-grid">
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.quick.from">Start from</span>
+                                            <select id="repo-quick-kind" class="form-input">
+                                                <option value="profile" data-i18n="repo.quick.kindProfile">A profile (its mods are copied)</option>
+                                                <option value="modpack" data-i18n="repo.quick.kindModpack">A modpack (its mods are copied)</option>
+                                                <option value="folder" data-i18n="repo.quick.kindFolder">A folder of mods (described where they are)</option>
+                                            </select></label>
+                                        <label class="rp-field" id="repo-quick-src-field"><span class="form-label" data-i18n="repo.quick.which">Which one</span>
+                                            <select id="repo-quick-src" class="form-input"></select></label>
+                                        <label class="rp-field"><span class="form-label" data-i18n="repo.authorName">Author</span>
+                                            <input type="text" id="repo-quick-author" class="form-input" maxlength="25" data-i18n-placeholder="repo.authorPlaceholder" /></label>
+                                    </div>
+                                    <div class="rp-quick-path" id="repo-quick-folder-field" hidden>
+                                        <span class="rp-lbl" data-i18n="repo.quick.folder">Folder of mods</span>
+                                        <div class="rp-inline-pick"><input type="text" id="repo-quick-folder" class="form-input" readonly data-i18n-title="repo.quick.folder" /><button type="button" class="btn btn-sm btn-secondary" id="btn-repo-quick-folder" data-i18n="common.browse">Browse</button></div>
+                                        <span class="rp-hint-t" data-i18n="repo.quick.folderHint">repo.json is written beside the folder; nothing is copied or moved.</span>
+                                    </div>
+                                    <div class="rp-quick-path" id="repo-quick-out-field">
+                                        <span class="rp-lbl" data-i18n="repo.quick.out">New repo folder</span>
+                                        <div class="rp-inline-pick"><input type="text" id="repo-quick-out" class="form-input" readonly data-i18n-title="repo.quick.out" /><button type="button" class="btn btn-sm btn-secondary" id="btn-repo-quick-out" data-i18n="common.browse">Browse</button></div>
+                                        <span class="rp-hint-t" data-i18n="repo.quick.outHint">Pick an empty folder: the mods are copied into it.</span>
+                                    </div>
+                                    <label class="checkbox-container rp-check-row"><input type="checkbox" id="repo-quick-host" checked /><span data-i18n="repo.quick.thenHost">Then make it the folder to host</span></label>
+                                    <div id="repo-quick-progress" class="rp-indeterminate" hidden><span></span></div>
+                                    <div id="repo-quick-result" class="rp-result" hidden></div>
+                                    <div class="rp-tool-actions"><button type="button" class="btn btn-primary" id="btn-repo-quick-go"><span data-i18n="repo.quick.go">Create the repo</span></button></div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="generate" data-tool-icon="upload" data-keywords="export generate zip archive compression standalone seed author credentials exporter générer graine auteur">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.generate.t">Build a repo from profiles</span><span class="rp-tool-d" data-i18n="repo.tool.generate.d">Every option: several profiles, identity, seed, archive, bundled standalone server.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <button type="button" class="btn btn-ghost btn-sm rp-howto" data-act="openDocsPageById" data-act-args='["server-sync"]' data-tasky="repo.howItWorksTip" data-tasky-icon="icon-info">
+                                        <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                                        <span data-i18n="repo.howItWorks">How does it work?</span>
+                                    </button>
                                     <p class="rp-lede"
                                         data-i18n="repo.stepOneDesc">...</p>
 
@@ -1101,14 +1240,6 @@
                                                 data-i18n="repo.loadingProfiles">...</div>
                                         </div>
                                     </div>
-
-                                    <!-- "Partager des Modpacks" used to live here, as a list on
-                                         the export form. It moved into "Include in the repo…",
-                                         beside the plugins, themes, automations, mod lists and
-                                         catalogues — which is the same question and was already
-                                         a screen. Keeping it here meant a modpack could only be
-                                         added while re-exporting every mod. -->
-
                                     <details class="repo-sec" open>
                                     <summary class="repo-sec-h"><span class="repo-sec-n">2</span><span data-i18n="repo.sec.output">Output &amp; identity</span></summary>
                                     <div class="form-group" style="margin-bottom:6px;">
@@ -1336,35 +1467,6 @@
                                     </div>
                                     </details>
 
-                                    <details class="repo-sec">
-                                    <summary class="repo-sec-h"><span class="repo-sec-n">4</span><span data-i18n="repo.sec.publish">Include more &amp; publish over SSH</span></summary>
-                                    <!-- ── Everything that is not a mod ──
-                                         Its own button, and NOT part of the export run, because the
-                                         three moments it serves are the same act: finishing an
-                                         export, updating a repo, and adding something to one
-                                         published months ago. Folding it into the export would have
-                                         made the third mean re-exporting every mod. -->
-                                    <button class="btn btn-secondary btn-sm" id="btn-repo-extras"
-                                        style="width:100%;justify-content:center;margin-top:8px;"
-                                        data-tasky="repo.extras.lede" data-tasky-icon="list">
-                                        <svg class="ic ic-sliders" data-icon="sliders" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-                                        <span data-i18n="repo.extras.pick">Include in the repo…</span>
-                                    </button>
-
-                                    <!-- ── Publish over SSH ──
-                                         Exporting writes a folder; this is what puts it on the machine
-                                         that serves it. Separate from the export button on purpose: you
-                                         can re-publish an existing folder without regenerating it. -->
-                                    <!-- Publier l'export sur un serveur SSH.
-                                         Le formulaire du serveur vivait ICI, à l'intérieur de la carte
-                                         d'export : « où je publie » au milieu de « comment je fabrique un
-                                         dépôt ». Un serveur est une machine qu'on possède et qu'on utilise
-                                         depuis trois écrans ; il n'appartenait à aucun des trois et n'était
-                                         joignable que depuis celui-ci. Le panneau est monté par
-                                         features/repo/ssh-action.ts, le même partout. -->
-                                    <div id="repo-ssh-mount"></div>
-                                    </details>
-
                                     <!-- The one action, after every section. -->
                                     <div style="display:flex; gap:10px; margin-top:6px;">
                                         <button class="btn btn-primary" id="btn-start-repo-export"
@@ -1386,34 +1488,32 @@
                                         </div>
                                         <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-export-progress-fill"></div></div>
                                     </div>
-
-                                    <!-- Update existing repo (incremental) -->
-                                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bmm-s06);">
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="update" data-tool-icon="refresh" data-keywords="update add remove incremental changelog mettre à jour ajouter retirer">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.update.t">Update an existing repo</span><span class="rp-tool-d" data-i18n="repo.tool.update.d">Add or remove mods and profiles without rebuilding everything.</span></span></summary>
+                                <div class="rp-tool-body">
                                         <button class="btn btn-secondary btn-sm" id="btn-open-repo-update" style="width:100%;justify-content:center;gap:7px;">
                                             <svg class="ic ic-refresh" data-icon="refresh" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                                             <span data-i18n="repo.update.openBtn">Update an existing repo</span>
                                         </button>
                                         <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.update.openHint">Add/remove mods &amp; profiles in an existing repo without regenerating everything.</p>
-                                    </div>
-                                    </div><!-- /repo-card-body (generate) -->
-                            </div><!-- /repo-card--cyan -->
-
-                            <!-- Card: Serveur HTTP -->
-                            <!-- Manifest-only generation: describe mods that are ALREADY
-                                 hosted, instead of exporting a copy of them. -->
-                            <div class="repo-card repo-card--optional" data-method="manifest">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <h3>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <path d="M14 2v6h6" />
-                                        </svg>
-                                        <span data-i18n="repo.manifestOnlyTitle">Manifeste seul (repo.json)</span>
-                                    </h3>
-                                    <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
                                 </div>
-                                <div class="repo-card-body">
+                            </details>
+                            <details class="rp-tool" data-tool="extras" data-tool-icon="sliders" data-keywords="extras plugins themes modpacks automations catalogues include inclure">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.extras.t">Include more in a repo</span><span class="rp-tool-d" data-i18n="repo.tool.extras.d">Plugins, themes, modpacks, automations, mod lists, catalogues.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <button class="btn btn-secondary btn-sm" id="btn-repo-extras"
+                                        style="width:100%;justify-content:center;margin-top:8px;"
+                                        data-tasky="repo.extras.lede" data-tasky-icon="list">
+                                        <svg class="ic ic-sliders" data-icon="sliders" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 17H5"/><path d="M19 7h-9"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+                                        <span data-i18n="repo.extras.pick">Include in the repo…</span>
+                                    </button>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="manifest" data-tool-icon="file-text" data-keywords="manifest only repo.json hosted already base url layout manifeste">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.manifest.t">Manifest only (repo.json)</span><span class="rp-tool-d" data-i18n="repo.tool.manifest.d">Describe mods that are already hosted somewhere; nothing is copied.</span></span></summary>
+                                <div class="rp-tool-body">
                                     <p class="rp-lede"
                                         data-i18n="repo.manifestOnlyIntro">Genere uniquement repo.json pour des mods que tu heberges deja. Rien n&apos;est copie, rien n&apos;est uploade, le dossier n&apos;est pas modifie.</p>
 
@@ -1511,20 +1611,11 @@
                                             <span data-i18n="repo.manifestGenerate">GENERER repo.json</span>
                                         </button>
                                     </div>
-                                </div><!-- /repo-card-body (manifest-only) -->
-                            </div><!-- /repo-card--optional (manifest-only) -->
-
-                            <!-- Mods live only on the server: BMM reads its listing and
-                                 updates repo.json without pulling the repo back. -->
-                            <div class="repo-card repo-card--optional" data-method="remote">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <h3>
-                                        <svg class="ic ic-reapply" data-icon="reapply" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                                        <span data-i18n="repo.remoteTitle">Mettre a jour depuis le serveur</span>
-                                    </h3>
-                                    <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
                                 </div>
-                                <div class="repo-card-body">
+                            </details>
+                            <details class="rp-tool" data-tool="remote" data-tool-icon="reapply" data-keywords="remote server listing autoindex refresh distant">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.remote.t">Update from the server listing</span><span class="rp-tool-d" data-i18n="repo.tool.remote.d">Your mods live only on the server: refresh repo.json from its folder index.</span></span></summary>
+                                <div class="rp-tool-body">
                                     <p class="rp-lede"
                                         data-i18n="repo.remoteIntro">Tes mods sont uniquement sur le serveur ? BMM lit son listing et met a jour repo.json sans rapatrier le repo. Necessite l&apos;index de repertoire (autoindex) active.</p>
 
@@ -1589,186 +1680,98 @@
                                             <span data-i18n="repo.remoteRefresh">METTRE A JOUR</span>
                                         </button>
                                     </div>
-                                </div><!-- /repo-card-body (remote) -->
-                            </div><!-- /repo-card--optional (remote) -->
-
-                            </div>
-<div class="repo-host-group" data-host-group="serve">
-<div class="repo-group-h">
-                                    <span class="repo-group-n">2</span>
-                                    <span class="repo-group-t" data-i18n="repo.groupServe">Servir les fichiers</span>
-                                    <span class="repo-group-sub" data-i18n="repo.groupServeSub">Le repo.json ne sert à rien tant que personne ne peut le télécharger.</span>
                                 </div>
-                            <div class="repo-card repo-card--green">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <div class="repo-card-step">02</div>
-                                    <h3>
-                                        <svg class="ic ic-monitor" data-icon="monitor" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
-                                        <span data-i18n="repo.stepTwoTitle">...</span>
-                                    </h3>
+                            </details>
+                            </section>
+                            <section class="rp-tool-group">
+                                <h4 class="rp-tool-group-h" data-i18n="repo.adv.groupCheck">Check, version and share</h4>
+                                <div class="rp-tools-dir">
+                                    <label class="rp-lbl" for="repo-tools-dir" data-i18n="repo.adv.dir">Repo folder these tools work on</label>
+                                    <div class="rp-inline-pick"><input type="text" id="repo-tools-dir" class="form-input" readonly data-i18n-placeholder="repo.adv.dirPlaceholder" placeholder="The folder you host" /><button type="button" class="btn btn-sm btn-secondary" id="btn-repo-tools-dir" data-i18n="common.browse">Browse</button></div>
+                                    <span class="rp-hint-t" data-i18n="repo.adv.dirHint">Starts as the folder picked in step 1.</span>
                                 </div>
-                                <div class="repo-card-body">
-                                    <p class="rp-lede"
-                                        data-i18n="repo.stepTwoDesc">...</p>
-
-                                    <!-- The four things hosting is, in order, with where you are. Painted by
-                                         repo-host-flow.ts from the real state (folder, manifest format, server, address);
-                                         it was a form of eleven fields with the start button in the middle of them. -->
-                                    <ol class="rp-flow" id="repo-host-flow" aria-label="Hosting steps">
-                                        <li class="rp-flow-step" data-flow-step="folder"><span class="rp-flow-n">1</span><span class="rp-flow-t" data-i18n="repo.flow.folder">Pick the folder</span></li>
-                                        <li class="rp-flow-step" data-flow-step="manifest"><span class="rp-flow-n">2</span><span class="rp-flow-t" data-i18n="repo.flow.manifest">Check the repo.json</span></li>
-                                        <li class="rp-flow-step" data-flow-step="start"><span class="rp-flow-n">3</span><span class="rp-flow-t" data-i18n="repo.flow.start">Start the server</span></li>
-                                        <li class="rp-flow-step" data-flow-step="share"><span class="rp-flow-n">4</span><span class="rp-flow-t" data-i18n="repo.flow.share">Share the address</span></li>
-                                    </ol>
-
-                                    <div class="rp-hstep" data-flow-block="folder">
-                                        <div class="form-group" style="margin-bottom:12px;">
-                                            <label class="form-label" style="margin-bottom:4px;"
-                                                data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-host-path"
-                                                    placeholder="C:\..." readonly />
-                                                <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host"
-                                                    data-i18n="prof.browse">...</button>
-                                            </div>
-                                        </div>
-                                        <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
-                                            <label class="form-label"
-                                                style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
-                                                data-i18n="repo.hostHistoryLabel">Historique</label>
-                                            <select class="form-input" id="repo-host-history-select"
-                                                style="font-size:12px; padding:6px; background:var(--bmm-s05);">
-                                                <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien
-                                                    dépôt
-                                                    --
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div id="repo-host-metadata-preview" class="rp-meta" style="display:none;">
-                                        </div>
-                                        <!-- The manifest's FORMAT (repo_format.rs): « format 1.0 », or « legacy 0.x » with a
-                                             Convert button. Filled by repo-format.ts when the folder changes. -->
-                                        <div class="rp-fmt-row" id="repo-host-format" hidden></div>
+                            <details class="rp-tool" data-tool="validate" data-tool-icon="shield-check" data-keywords="validate check verify hash signature format convert converter legacy vérifier valider empreinte convertir">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.validate.t">Validate a repo</span><span class="rp-tool-d" data-i18n="repo.tool.validate.d">Manifest, files, hashes, signature and format version, in one readable report.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.validate.lede">Reads repo.json, re-hashes every file it lists, checks the signature and the format version. Nothing is written.</p>
+                                    <div class="rp-tool-actions"><button type="button" class="btn btn-secondary" id="btn-repo-validate"><span data-i18n="repo.validate.go">Check this repo</span></button></div>
+                                    <div id="repo-validate-progress" class="rp-indeterminate" hidden><span></span></div>
+                                    <div id="repo-validate-report" class="rp-report" hidden></div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="version" data-tool-icon="tag" data-keywords="version bump release number numéro">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.version.t">Set the repo version</span><span class="rp-tool-d" data-i18n="repo.tool.version.d">Bump the number subscribers see, and re-sign.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.version.lede">Subscribers see this number beside the repo's name. Setting it re-signs repo.json with your key; no file is touched.</p>
+                                    <p class="rp-version-now"><span data-i18n="repo.version.current">Current version</span> <b id="repo-version-current" class="rp-mono">-</b></p>
+                                    <div class="rp-inline-pick rp-version-pick">
+                                        <input type="text" id="repo-version-new" class="form-input rp-mono" maxlength="40" data-i18n-placeholder="repo.version.newPlaceholder" placeholder="New version, e.g. 1.2.0" data-i18n-title="repo.version.newPlaceholder" />
+                                        <button type="button" class="btn btn-sm btn-secondary" data-bump="patch" data-i18n="repo.version.patch">Patch</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" data-bump="minor" data-i18n="repo.version.minor">Minor</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" data-bump="major" data-i18n="repo.version.major">Major</button>
                                     </div>
-
-                                    <div class="rp-hstep" data-flow-block="start">
-                                        <div class="repo-status-bar rp-srv-status" role="status">
-                                            <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
-                                            <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
-                                            <span id="upnp-status-badge" class="rp-upnp" style="display:none;"></span>
-                                        </div>
-                                        <div id="public-ip-hint-box" class="rp-note rp-tone--warn" style="display:none;">
-                                            <svg class="ic ic-alert" data-icon="alert" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                                            <span class="rp-note-txt"><b data-i18n="repo.hostPublicHintTitle">Accès Public</b>
-                                            <span data-i18n="repo.hostPublicHint">Redirigez le port 8000 (TCP) sur votre routeur pour un accès externe sans tunnel.</span></span>
-                                        </div>
-                                        <button class="btn btn-secondary rp-srv-toggle" id="btn-toggle-repo-server">
-                                            <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
-                                        </button>
-                                        <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
+                                    <div id="repo-version-result" class="rp-result" hidden></div>
+                                    <div class="rp-tool-actions"><button type="button" class="btn btn-primary" id="btn-repo-version-apply"><span data-i18n="repo.version.apply">Set the version</span></button></div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="preview" data-tool-icon="eye" data-keywords="preview client subscriber aperçu abonné">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.preview.t">Preview as subscribers see it</span><span class="rp-tool-d" data-i18n="repo.tool.preview.d">The card BMM shows after Fetch, from the folder or the running server.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.preview.lede">What a subscriber sees after Fetch: name, author, version, signature, profiles and sizes.</p>
+                                    <div class="rp-inline-pick">
+                                        <select id="repo-preview-src" class="form-input" data-i18n-title="repo.preview.src">
+                                            <option value="folder" data-i18n="repo.preview.fromFolder">Read the folder</option>
+                                            <option value="server" data-i18n="repo.preview.fromServer">Ask the running server (exactly what clients get)</option>
+                                        </select>
+                                        <button type="button" class="btn btn-sm btn-secondary" id="btn-repo-preview" data-i18n="repo.preview.go">Show</button>
                                     </div>
-
-                                    <!-- The running server, in one place: the counters, the addresses to share (each
-                                         with a copy button), who may connect, and the session's activity, folded. Shown
-                                         only while it runs (repo-server.ts sets .is-on). Stop is the start button above,
-                                         red while it runs. -->
-                                    <section class="rp-run" id="repo-run-panel" aria-labelledby="repo-run-h">
-                                        <h4 class="rp-sub-h" id="repo-run-h" data-i18n="repo.run.title">Your server</h4>
-                                        <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
-                                            <div class="rp-stat">
-                                                <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
-                                                <span id="repo-server-stat-dls" class="rp-stat-v">0</span>
-                                            </div>
-                                            <div class="rp-stat">
-                                                <span class="rp-stat-l" data-i18n="repo.stat.sent">Data sent</span>
-                                                <span id="repo-server-stat-bytes" class="rp-stat-v">0 B</span>
-                                            </div>
-                                        </div>
-                                        <div id="repo-server-url-container" class="rp-urls" style="display:none;">
-                                                                                    <div id="repo-server-lan-section">
-                                                <label class="form-label rp-url-l" for="repo-server-url" data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
-                                                <div class="path-picker">
-                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-url" readonly />
-                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-url"
-                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div id="repo-server-public-section" style="display:none;">
-                                                <label class="form-label rp-url-l" for="repo-server-public-url">
-                                                    <svg class="ic ic-globe" data-icon="globe" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                                                    <span data-i18n="repo.hostPublicUrl">Public IP URL</span>
-                                                </label>
-                                                <div class="path-picker">
-                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-public-url"
-                                                        readonly />
-                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-public-url"
-                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div id="repo-server-tunnel-section" style="display:none;">
-                                                <label class="form-label rp-url-l" for="repo-server-tunnel-url">
-                                                    <svg class="ic ic-shield" data-icon="shield" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
-                                                    <span data-i18n="repo.hostTunnelUrl">Cloudflare Tunnel URL</span>
-                                                </label>
-                                                <div class="path-picker">
-                                                    <input type="text" class="form-input rp-addr-input" id="repo-server-tunnel-url"
-                                                        readonly />
-                                                    <button type="button" class="btn btn-secondary btn-sm btn-icon rp-copy" id="btn-copy-repo-tunnel-url"
-                                                        data-tasky="common.copyTip" data-tasky-icon="icon-copy">
-                                                        <svg class="ic ic-copy" data-icon="copy" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div><!-- /repo-server-url-container -->
-                                        <!-- One row, one weight.
-                                             These were three ghost buttons in three different
-                                             colours at 10px uppercase — green-ish, accent, red —
-                                             each shouting a different thing next to a start
-                                             button that is the only one that matters. They are
-                                             three views of the same server, so they read as one
-                                             control: same size, same ink, and the icon carries
-                                             the difference. -->
-                                        <div id="repo-server-tools" class="bmm-seg rp-srv-tools" style="display:none;">
-                                            <button class="bmm-seg-item" id="btn-open-monitoring">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-                                                    <path d="m7 14 3-4 3 3 4-6" />
-                                                </svg>
-                                                <span data-i18n="repo.monitoring">Surveillance</span>
-                                            </button>
-                                            <button class="bmm-seg-item" id="btn-open-whitelist">
-                                                <svg class="ic ic-shield-check" data-icon="shield-check" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
-                                                <span data-i18n="repo.whitelist">Whitelist</span>
-                                            </button>
-                                            <button class="bmm-seg-item" id="btn-open-bans">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                    <circle cx="12" cy="12" r="9" />
-                                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                                <span data-i18n="repo.bans">Bannissements</span>
-                                            </button>
-                                        </div>
-                                        <!-- Who connected and what they took, this session. Folded: it is the answer to
-                                             "is anyone using it", not something to watch. -->
-                                        <details class="rp-fold" id="repo-server-activity">
-                                            <summary class="rp-fold-h"><span data-i18n="repo.run.activity">Activity this session</span> <span class="rp-count" id="repo-server-activity-n">0</span></summary>
-                                            <ol class="rp-log rp-actlog" id="repo-server-activity-list"></ol>
-                                            <p class="rp-hint-t" id="repo-server-activity-empty" data-i18n="repo.run.activityEmpty">Nothing yet. Connections and downloads appear here as they happen.</p>
-                                        </details>
-                                    </section>
-
-                                    <!-- Everything a first host can leave as it is. Applied on the next start. -->
-                                    <details class="rp-fold rp-adv" id="repo-host-advanced">
-                                        <summary class="rp-fold-h"><span data-i18n="repo.hostAdvanced">Port, speed and access</span> <span class="rp-fold-sub" data-i18n="repo.hostAdvancedSub">optional, applied on the next start</span></summary>
-                                        <div class="rp-adv-body">
+                                    <div id="repo-preview-out" class="rp-preview" hidden></div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="share" data-tool-icon="share" data-keywords="share link invite deeplink password key partager lien inviter mot de passe clé">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.share.t">Share link</span><span class="rp-tool-d" data-i18n="repo.tool.share.d">A one-click link and a message to send, with the password or key notes if any.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.share.lede">A link that opens BMM on the Sync tab with your repo filled in, and a message to paste anywhere.</p>
+                                    <label class="rp-lbl" for="repo-share-addr" data-i18n="repo.share.addr">Address</label>
+                                    <select id="repo-share-addr" class="form-input"></select>
+                                    <input type="text" id="repo-share-custom" class="form-input rp-share-custom" hidden data-i18n-placeholder="repo.share.customPlaceholder" placeholder="https://… where repo.json is served" data-i18n-title="repo.share.customPlaceholder" />
+                                    <label class="checkbox-container rp-check-row" id="repo-share-pass-row" hidden><input type="checkbox" id="repo-share-pass" /><span data-i18n="repo.share.withPass">Put the download password in the link</span></label>
+                                    <ul id="repo-share-notes" class="rp-notes"></ul>
+                                    <textarea id="repo-share-text" class="form-input rp-mono" rows="5" readonly spellcheck="false" data-i18n-title="repo.share.messageLabel"></textarea>
+                                    <div class="rp-tool-actions">
+                                        <button type="button" class="btn btn-sm btn-secondary" id="btn-repo-share-link"><span data-i18n="repo.share.copyLink">Copy the link</span></button>
+                                        <button type="button" class="btn btn-sm btn-primary" id="btn-repo-share-msg"><span data-i18n="repo.share.copyMsg">Copy the message</span></button>
+                                    </div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="static" data-tool-icon="globe" data-keywords="static github pages nginx web host bundle statique hébergement">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.static.t">Host on a static web host</span><span class="rp-tool-d" data-i18n="repo.tool.static.d">GitHub Pages, Nginx or any host that serves files: instructions and configuration.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-lede" data-i18n="repo.static.lede">A repo folder is already a static site: repo.json and mods/ can go on GitHub Pages, Nginx or any web host. This writes the instructions and the configuration beside repo.json.</p>
+                                    <label class="rp-lbl" for="repo-static-url" data-i18n="repo.static.url">Address it will have (optional)</label>
+                                    <input type="text" id="repo-static-url" class="form-input" data-i18n-placeholder="repo.static.urlPlaceholder" placeholder="https://you.github.io/my-repo" />
+                                    <div class="rp-checks">
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-static-gh" checked /><span data-i18n="repo.static.gh">GitHub Pages workflow</span></label>
+                                        <label class="checkbox-container"><input type="checkbox" id="repo-static-nginx" checked /><span data-i18n="repo.static.nginx">Nginx configuration example</span></label>
+                                    </div>
+                                    <p class="rp-hint-t" data-i18n="repo.static.warn">A static host checks no password and no key: anyone with the address can download.</p>
+                                    <div id="repo-static-result" class="rp-result" hidden></div>
+                                    <div class="rp-tool-actions"><button type="button" class="btn btn-primary" id="btn-repo-static-go"><span data-i18n="repo.static.go">Write the hosting files</span></button></div>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="ssh" data-tool-icon="terminal" data-keywords="ssh sftp remote server upload publish publier distant">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.ssh.t">Publish over SSH</span><span class="rp-tool-d" data-i18n="repo.tool.ssh.d">Upload the repo folder to your own server.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-hint-t" data-i18n="repo.adv.sshHint">Uploads the repo folder (the one built above, otherwise the one you host) to a server you reach over SSH.</p>
+                                    <div id="repo-ssh-mount"></div>
+                                </div>
+                            </details>
+                            </section>
+                            <section class="rp-tool-group">
+                                <h4 class="rp-tool-group-h" data-i18n="repo.adv.groupServer">Server and access</h4>
+                            <details class="rp-tool" data-tool="options" data-tool-icon="settings" data-keywords="port speed limit password download key keys authorised login account creator id vitesse mot de passe clés connexion" id="repo-host-advanced">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.options.t">Server options</span><span class="rp-tool-d" data-i18n="repo.tool.options.d">Port, upload speed, download password, authorised keys, account required. Applied on the next start.</span></span></summary>
+                                <div class="rp-tool-body">
                                             <div style="display:flex; gap:12px; margin-bottom:12px;">
                                                 <div style="flex:1;">
                                                     <label class="form-label"
@@ -1843,24 +1846,44 @@
                                                 </div>
                                                 <div class="rp-idbox-foot" data-i18n="repo.creatorIdFinal">Un identifiant qui identifie ce BMM</div>
                                             </div>
-                                        </div>
-                                    </details>
-
-                                </div><!-- /repo-card-body (http server) -->
-                            </div><!-- /repo-card--green -->
-
-                            <!-- Card: Multi-repo hub — serve EVERY repo from one Node server + web dashboard.
-                                 A serving concern, so it sits in the serve step as its own card (it used to be a
-                                 button that opened a modal). All ids are the ones repo.ts's initRepoHub binds. -->
-                            <div class="repo-card repo-card--optional" id="repo-hub-card" data-method="hub">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <h3>
-                                        <svg class="ic ic-grid" data-icon="grid" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-                                        <span data-i18n="repo.hub.title">Multi-Repo Hub Server</span>
-                                    </h3>
-                                    <div class="badge-server-tag" data-i18n="repo.badgeAlt">ALTERNATIVE</div>
                                 </div>
-                                <div class="repo-card-body" style="display:flex;flex-direction:column;gap:14px;">
+                            </details>
+                            <details class="rp-tool" data-tool="admin" data-tool-icon="shield" data-keywords="monitoring whitelist ban bans activity connections surveillance bannissement activité">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.admin.t">Who connects</span><span class="rp-tool-d" data-i18n="repo.tool.admin.d">Monitoring, whitelist, bans and this session's activity.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <p class="rp-hint-t" data-i18n="repo.adv.adminHint">The three buttons appear while your server runs: who is connected, who may connect, who is banned. This session's activity is below.</p>
+                                        <div id="repo-server-tools" class="bmm-seg rp-srv-tools" style="display:none;">
+                                            <button class="bmm-seg-item" id="btn-open-monitoring">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+                                                    <path d="m7 14 3-4 3 3 4-6" />
+                                                </svg>
+                                                <span data-i18n="repo.monitoring">Surveillance</span>
+                                            </button>
+                                            <button class="bmm-seg-item" id="btn-open-whitelist">
+                                                <svg class="ic ic-shield-check" data-icon="shield-check" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                                                <span data-i18n="repo.whitelist">Whitelist</span>
+                                            </button>
+                                            <button class="bmm-seg-item" id="btn-open-bans">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <circle cx="12" cy="12" r="9" />
+                                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                                </svg>
+                                                <span data-i18n="repo.bans">Bannissements</span>
+                                            </button>
+                                        </div>
+                                        <details class="rp-fold" id="repo-server-activity">
+                                            <summary class="rp-fold-h"><span data-i18n="repo.run.activity">Activity this session</span> <span class="rp-count" id="repo-server-activity-n">0</span></summary>
+                                            <ol class="rp-log rp-actlog" id="repo-server-activity-list"></ol>
+                                            <p class="rp-hint-t" id="repo-server-activity-empty" data-i18n="repo.run.activityEmpty">Nothing yet. Connections and downloads appear here as they happen.</p>
+                                        </details>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="hub" data-tool-icon="grid" data-keywords="hub multi repo node dashboard several plusieurs" id="repo-hub-card">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.hub.t">Multi-repo hub server</span><span class="rp-tool-d" data-i18n="repo.tool.hub.d">Serve several repos on one port with a web dashboard.</span></span></summary>
+                                <div class="rp-tool-body">
                                     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0;" data-i18n="repo.hub.intro">Pick a folder that contains one sub-folder per repo (each with its own repo.json + mods/). The hub serves them all on one port with a web dashboard.</p>
 
                                     <section class="repo-hub-sec">
@@ -1906,19 +1929,11 @@
                                     <div id="repo-hub-result" style="display:none;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;font-size:12px;color:var(--green);line-height:1.6;"></div>
 
                                     <button class="btn btn-primary" id="btn-generate-repo-hub" disabled data-i18n="repo.hub.generate" style="align-self:flex-end;">Generate hub server</button>
-                                </div><!-- /repo-card-body (hub) -->
-                            </div><!-- /repo-card--optional (hub) -->
-
-                            <!-- Card: Mini-Server Standalone -->
-                            <div class="repo-card repo-card--optional">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <h3>
-                                        <svg class="ic ic-activity" data-icon="activity" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
-                                        <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
-                                    </h3>
-                                    <div class="badge-server-tag" data-i18n="repo.badgeOptional">OPTIONAL</div>
                                 </div>
-                                <div class="repo-card-body">
+                            </details>
+                            <details class="rp-tool" data-tool="mini" data-tool-icon="activity" data-keywords="mini standalone server bat docker cloudflare upnp autonome">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.mini.t">Standalone mini-server</span><span class="rp-tool-d" data-i18n="repo.tool.mini.d">A light server that runs without BMM (.bat, Docker, tunnel, UPnP).</span></span></summary>
+                                <div class="rp-tool-body">
 
                                     <div class="form-group" style="margin-bottom:12px;">
                                         <label class="form-label"
@@ -2003,11 +2018,12 @@
                                             <svg class="ic ic-layers" data-icon="layers" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg>
                                         </button>
                                     </div>
-                                </div><!-- /repo-card-body (mini-server) -->
-                            </div><!-- /repo-card--optional -->
-
-                        </div>
-</div><!-- /repo-column host -->
+                                </div>
+                            </details>
+                            </section>
+                                </div>
+                            </details>
+                        </div><!-- /repo-column host -->
 
 
                         <!-- ══ SYNC / REJOINDRE ══ -->
@@ -2017,13 +2033,7 @@
                                 <span class="repo-group-t" data-i18n="repo.groupJoin">Rejoindre un repo</span>
                                 <span class="repo-group-sub" data-i18n="repo.groupJoinSub">Coller l'adresse qu'on vous a donn&#233;e. Rien n'est &#233;crit avant l'aper&#231;u.</span>
                             </div>
-                            <div class="repo-card repo-card--accent">
-                                <div class="repo-card-header"><button type="button" class="repo-card-fold" data-i18n-tooltip="repo.card.fold" aria-label="toggle"><svg class="ic ic-chevron-down" data-icon="chevron-down" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-                                    <h3>
-                                        <svg class="ic ic-reset" data-icon="reset" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                                        <span data-i18n="repo.syncTitle">...</span>
-                                    </h3>
-                                </div>
+                            <div class="repo-card repo-card--accent rp-plain">
                                 <div class="repo-card-body">
                                     <p class="rp-lede"
                                         data-i18n="repo.syncDesc">...</p>
@@ -2042,12 +2052,7 @@
                                             <button type="button" class="btn btn-secondary btn-sm rp-icon-btn" id="btn-repo-history" data-i18n-tooltip="repo.historyTitle">
                                                 <svg class="ic ic-history" data-icon="history" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
                                             </button>
-                                            <button type="button" class="btn btn-secondary btn-sm rp-icon-btn" id="btn-check-mod-updates"
-                                                data-i18n-tooltip="repo.checkUpdatesBtn" data-tooltip="Check for mod updates" aria-label="Check for mod updates">
-                                                <svg class="ic ic-refresh" data-icon="refresh" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                                            </button>
                                         </div>
-                                        <span id="mod-updates-hint" class="rp-hint-t"></span>
 
                                         <!-- Download password, offered UP FRONT rather than only via the 401 prompt.
                                              The prompt still exists for the surprise case; this is for the user who
@@ -2126,8 +2131,127 @@
                                         </div>
                                         <div id="repo-sync-total-size" class="rp-joined-total"></div>
 
+                                    </div>
+
+                                    <!-- Fallback when FETCH finds no repo.json: read the
+                                         server's listing and show what it offers anyway. -->
+                                    <div style="margin:0 0 10px;">
+                                        <!-- btn-secondary, not ghost: a ghost button at 11px beside
+                                             two folds reads as a third caption. This one starts a
+                                             network request and is the way out of "the address is
+                                             right and there is no repo.json". -->
+                                        <button class="btn btn-secondary btn-sm" id="btn-discover-server"
+                                            style="font-size:11.5px; height:28px; padding:0 12px;"
+                                            data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
+                                        <div id="discover-result" class="rp-result" style="display:none;"></div>
+                                    </div>
+
+                                    <div id="repo-sync-paths-existing-hint" class="kit-callout kit-callout-info bmm-tip" data-tip-id="reposyncpaths" style="display:none;margin-top:10px;">
+                                        <svg class="ic ic-info" data-icon="info" width="14" height="14" viewBox="0 0 24 24" style="flex-shrink:0;" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                        <span data-i18n="repo.syncUsesProfilePaths">Mods will be downloaded to the selected profile's own game / mods / backup folders.</span>
+                                    </div>
+
+                                    <div id="repo-sync-paths-section">
+                                        <div class="rp-sub-h rp-sub-h--rule" data-i18n="repo.syncFolders">...</div>
+
+                                        <div class="form-group" style="margin-bottom:10px;">
+                                            <label class="form-label" style="margin-bottom:4px;"
+                                                data-i18n="repo.syncGameDir">...</label>
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-sync-game-path"
+                                                    data-i18n-placeholder="prof.gameDirPlaceholder"
+                                                    placeholder="C:\Jeux\DCS..." readonly />
+                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-game"
+                                                    data-i18n="prof.browse">Parcourir</button>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:10px;">
+                                            <label class="form-label" style="margin-bottom:4px;"
+                                                data-i18n="repo.syncModsDir">...</label>
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-sync-mods-path"
+                                                    data-i18n-placeholder="prof.modsDirPlaceholder"
+                                                    placeholder="C:\Mods\..." readonly />
+                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
+                                                    data-i18n="prof.browse">Parcourir</button>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:4px;">
+                                            <label class="form-label" style="margin-bottom:4px;"
+                                                data-i18n="repo.syncBackupDir">...</label>
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-sync-backup-path"
+                                                    data-i18n-placeholder="prof.backupDirPlaceholder"
+                                                    placeholder="C:\Backups\..." readonly />
+                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-backup"
+                                                    data-i18n="prof.browse">Parcourir</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button class="btn btn-primary" id="btn-start-repo-sync"
+                                        style="width:100%;justify-content:center;margin-top:16px;">
+                                        <svg class="ic ic-refresh" data-icon="refresh" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                                        <span data-i18n="repo.syncBtn">...</span>
+                                    </button>
+
+                                    <button type="button" class="btn btn-ghost btn-sm rp-howto" id="btn-docs-resumable">
+                                        <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                                        <span data-i18n="repo.howItWorks">How does it work?</span>
+                                    </button>
+
+                                    <div id="repo-sync-progress-container" class="bmm-progress" style="display:none;">
+                                        <div class="bmm-progress-head">
+                                            <div style="display:flex;align-items:center;gap:8px">
+                                                <span id="repo-sync-status" data-i18n="common.loading">...</span>
+                                                <span id="repo-sync-paused-badge" class="rp-paused" style="display:none" data-i18n="repo.pausedBadge">PAUSED</span>
+                                            </div>
+                                            <span class="bmm-progress-pct" id="repo-sync-percent">0%</span>
+                                        </div>
+                                        <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-sync-progress-fill"></div></div>
+                                        <div id="repo-sync-details" class="rp-log">
+                                        </div>
+                                        <div style="display:flex;gap:8px;margin-top:10px">
+                                            <button class="btn btn-secondary btn-sm" id="btn-pause-sync"
+                                                style="display:none;flex:1;justify-content:center;gap:6px">
+                                                <svg class="ic ic-pause" data-icon="pause" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>
+                                                <span id="repo-sync-pause-text" data-i18n="common.pause">Pause</span>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync"
+                                                style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
+                                                <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                <span data-i18n="common.cancel">Annuler</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div><!-- /repo-card-body (sync) -->
+                            </div><!-- /repo-card--accent -->
+
+                            <!-- Advanced tools: everything the four steps above do not need. Collapsed by default, one
+                                 click to open, remembered (repo-advanced.ts). Every id inside is the one repo.ts, the
+                                 tutorials and the API prefill already use; only the place changed. -->
+                            <details class="rp-advanced" id="repo-sync-tools" data-adv-scope="sync">
+                                <summary class="rp-advanced-h">
+                                    <span class="rp-advanced-ic" data-tool-icon="sliders" aria-hidden="true"></span>
+                                    <span class="rp-advanced-txt"><span class="rp-advanced-t" data-i18n="repo.adv.title">Advanced tools</span><span class="rp-advanced-sub" data-i18n="repo.adv.syncSub">Update checks for installed mods and how the next sync behaves.</span></span>
+                                    <span class="pg-count rp-advanced-n" data-adv-count></span>
+                                </summary>
+                                <div class="rp-advanced-body">
+                                    <label class="pg-search rp-advanced-find"><svg class="ic ic-search" data-icon="search" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input type="search" class="pg-search-input" data-adv-search autocomplete="off" spellcheck="false" data-i18n-placeholder="repo.adv.search" placeholder="Find a tool" data-i18n-title="repo.adv.search" /></label>
+                                    <p class="rp-hint-t rp-advanced-none" data-adv-none hidden data-i18n="repo.adv.none">No tool matches. Try another word.</p>
+                            <section class="rp-tool-group">
+                                <h4 class="rp-tool-group-h" data-i18n="repo.adv.groupSync">Syncing</h4>
+                            <details class="rp-tool" data-tool="updates" data-tool-icon="download" data-keywords="update updates check mods new version mise à jour vérifier">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.updates.t">Check for mod updates</span><span class="rp-tool-d" data-i18n="repo.tool.updates.d">Look for newer versions of installed mods in the repos they came from.</span></span></summary>
+                                <div class="rp-tool-body">
+                                    <div class="rp-tool-actions"><button type="button" class="btn btn-secondary btn-sm" id="btn-check-mod-updates" data-tooltip="Check for mod updates" data-i18n-tooltip="repo.checkUpdatesBtn"><svg class="ic ic-refresh" data-icon="refresh" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span data-i18n="repo.adv.checkNow">Check now</span></button></div>
+                                        <span id="mod-updates-hint" class="rp-hint-t"></span>
+                                </div>
+                            </details>
+                            <details class="rp-tool" data-tool="sync-options" data-tool-icon="sliders" data-keywords="options mode limit speed cleanup auto check follow zip keep vitesse nettoyage suivre">
+                                <summary class="rp-tool-h"><span class="rp-tool-txt"><span class="rp-tool-t" data-i18n="repo.tool.syncOptions.t">Sync options</span><span class="rp-tool-d" data-i18n="repo.tool.syncOptions.d">Reinstall everything or only what is missing, speed limit, cleanup, check at start-up.</span></span></summary>
+                                <div class="rp-tool-body">
                                         <div id="repo-sync-options" class="rp-joined-opts">
-                                            <div class="rp-sub-h" data-i18n="repo.syncOptions">Options de Synchronisation</div>
 
                                             <div style="display:flex; gap:12px; margin-bottom:10px;">
                                                 <div style="flex:1;">
@@ -2198,104 +2322,11 @@
                                                 </span>
                                             </label>
                                         </div>
-                                    </div>
-
-                                    <!-- Fallback when FETCH finds no repo.json: read the
-                                         server's listing and show what it offers anyway. -->
-                                    <div style="margin:0 0 10px;">
-                                        <!-- btn-secondary, not ghost: a ghost button at 11px beside
-                                             two folds reads as a third caption. This one starts a
-                                             network request and is the way out of "the address is
-                                             right and there is no repo.json". -->
-                                        <button class="btn btn-secondary btn-sm" id="btn-discover-server"
-                                            style="font-size:11.5px; height:28px; padding:0 12px;"
-                                            data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
-                                        <div id="discover-result" class="rp-result" style="display:none;"></div>
-                                    </div>
-
-                                    <div id="repo-sync-paths-existing-hint" class="kit-callout kit-callout-info bmm-tip" data-tip-id="reposyncpaths" style="display:none;margin-top:10px;">
-                                        <svg class="ic ic-info" data-icon="info" width="14" height="14" viewBox="0 0 24 24" style="flex-shrink:0;" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                                        <span data-i18n="repo.syncUsesProfilePaths">Mods will be downloaded to the selected profile's own game / mods / backup folders.</span>
-                                    </div>
-
-                                    <div id="repo-sync-paths-section">
-                                        <div class="rp-sub-h rp-sub-h--rule" data-i18n="repo.syncFolders">...</div>
-
-                                        <div class="form-group" style="margin-bottom:10px;">
-                                            <label class="form-label" style="margin-bottom:4px;"
-                                                data-i18n="repo.syncGameDir">...</label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-sync-game-path"
-                                                    data-i18n-placeholder="prof.gameDirPlaceholder"
-                                                    placeholder="C:\Jeux\DCS..." readonly />
-                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-game"
-                                                    data-i18n="prof.browse">Parcourir</button>
-                                            </div>
-                                        </div>
-                                        <div class="form-group" style="margin-bottom:10px;">
-                                            <label class="form-label" style="margin-bottom:4px;"
-                                                data-i18n="repo.syncModsDir">...</label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-sync-mods-path"
-                                                    data-i18n-placeholder="prof.modsDirPlaceholder"
-                                                    placeholder="C:\Mods\..." readonly />
-                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
-                                                    data-i18n="prof.browse">Parcourir</button>
-                                            </div>
-                                        </div>
-                                        <div class="form-group" style="margin-bottom:4px;">
-                                            <label class="form-label" style="margin-bottom:4px;"
-                                                data-i18n="repo.syncBackupDir">...</label>
-                                            <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-sync-backup-path"
-                                                    data-i18n-placeholder="prof.backupDirPlaceholder"
-                                                    placeholder="C:\Backups\..." readonly />
-                                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-backup"
-                                                    data-i18n="prof.browse">Parcourir</button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <button class="btn btn-primary" id="btn-start-repo-sync"
-                                        style="width:100%;justify-content:center;margin-top:16px;">
-                                        <svg class="ic ic-refresh" data-icon="refresh" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                                        <span data-i18n="repo.syncBtn">...</span>
-                                    </button>
-
-                                    <button class="btn btn-ghost btn-sm" id="btn-docs-resumable"
-                                        style="width:100%; margin-top:10px; color:var(--cyan); border:1px dashed var(--cyan-dim); gap:8px;">
-                                        <svg class="ic ic-help" data-icon="help" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-                                        <span style="font-size:11px; font-weight:700; letter-spacing:0.05em;"
-                                            data-i18n="repo.howDoesItWork">COMMENT ÇA MARCHE ?</span>
-                                    </button>
-
-                                    <div id="repo-sync-progress-container" class="bmm-progress" style="display:none;">
-                                        <div class="bmm-progress-head">
-                                            <div style="display:flex;align-items:center;gap:8px">
-                                                <span id="repo-sync-status" data-i18n="common.loading">...</span>
-                                                <span id="repo-sync-paused-badge" class="rp-paused" style="display:none" data-i18n="repo.pausedBadge">PAUSED</span>
-                                            </div>
-                                            <span class="bmm-progress-pct" id="repo-sync-percent">0%</span>
-                                        </div>
-                                        <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-sync-progress-fill"></div></div>
-                                        <div id="repo-sync-details" class="rp-log">
-                                        </div>
-                                        <div style="display:flex;gap:8px;margin-top:10px">
-                                            <button class="btn btn-secondary btn-sm" id="btn-pause-sync"
-                                                style="display:none;flex:1;justify-content:center;gap:6px">
-                                                <svg class="ic ic-pause" data-icon="pause" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>
-                                                <span id="repo-sync-pause-text" data-i18n="common.pause">Pause</span>
-                                            </button>
-                                            <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync"
-                                                style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
-                                                <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                <span data-i18n="common.cancel">Annuler</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div><!-- /repo-card-body (sync) -->
-                            </div><!-- /repo-card--accent -->
-
+                                </div>
+                            </details>
+                            </section>
+                                </div>
+                            </details>
                         </div><!-- /repo-column join (sync panel) -->
 
                     </div><!-- /repo-tab-body -->
@@ -3783,6 +3814,9 @@
                             <div class="apv-actions">
                                 <button class="btn btn-ghost btn-sm" id="analytics-view-what">
                                     <span data-i18n="analytics.whatBtn">Ce qui est collecté</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="analytics-consents">
+                                    <span data-i18n="consent.title">Mes consentements</span>
                                 </button>
                                 <button class="btn btn-ghost btn-sm" id="analytics-export">
                                     <span data-i18n="analytics.exportBtn">Exporter mes données</span>

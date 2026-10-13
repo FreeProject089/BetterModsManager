@@ -20,6 +20,8 @@ import { credsFoldHtml, wireCredsFold, readCredsFold, exportOrigins } from '../.
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
 import { initRepoPage, onRepoTabChanged } from './repo-page.js';
+import { initRepoAdvanced, revealRepoTool } from './repo-advanced.js';
+import { initRepoTools } from './repo-tools.js';
 import { learnMore } from '../../core/learn-more.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
@@ -818,8 +820,11 @@ export function initRepo() {
         mode: 'both',
         confirm: true,
         label: t('sshact.labelExport'),
+        // The folder just built in « Build a repo », otherwise the one being hosted: the panel
+        // is its own tool now, reachable without passing through the export form.
         source: {
-            dir: () => (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value?.trim() || '',
+            dir: () => (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value?.trim()
+                || (document.getElementById('repo-host-path') as HTMLInputElement | null)?.value?.trim() || '',
         },
     });
     // The shell first: the three features below bind their own open buttons and listen for
@@ -852,6 +857,9 @@ export function initRepo() {
     });
     // The page frame: sticky header (status + main actions), keyboard tabs, Learn more.
     initRepoPage();
+    // « Advanced tools » (open state, search, icons) and the repo tools that live in it.
+    initRepoAdvanced();
+    initRepoTools();
 
     // ── Method picker (the "produce repo.json" step) ─────────────────────
     // Pick ONE of the three ways; the group carries data-active-method and the CSS shows only
@@ -1064,6 +1072,8 @@ export function initRepo() {
                 }
             }
 
+            // The export form is a tool under « Advanced tools » now: open it first.
+            revealRepoTool('generate', { scroll: false });
             // Scroll the export path input or start button into view
             const target = elements.btnStartExport ?? elements.inputExportPath;
             if (target) (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1076,6 +1086,7 @@ export function initRepo() {
             // ── If standalone server (generateServer without zipOutput), pre-fill the mini server section ──
             // The mini server section is always visible — pre-fill it so after gen the user just clicks "Generate Server"
             if (prefill?.generateServer && !prefill?.zipOutput && prefill?.outputDir) {
+                revealRepoTool('mini', { scroll: false });
                 const miniRepoPath = elements.inputMiniRepoPath as HTMLInputElement | null;
                 if (miniRepoPath) miniRepoPath.value = prefill.outputDir;
 
@@ -2894,7 +2905,8 @@ export function initRepo() {
     if (btnExtras) {
         // initRepo is not async, so the import is a promise rather than an await.
         void import('./repo-extras.js').then((m) => {
-            m.wireExtrasButton(btnExtras, () => (elements.inputExportPath as HTMLInputElement | null)?.value?.trim() || '');
+            m.wireExtrasButton(btnExtras, () => (elements.inputExportPath as HTMLInputElement | null)?.value?.trim()
+                || (document.getElementById('repo-host-path') as HTMLInputElement | null)?.value?.trim() || '');
         });
     }
 

@@ -1256,6 +1256,17 @@ async function main() {
     // wait for the deck waits here: the update check (its dialog would otherwise land on the
     // deck) and the first-run tour.
     void (async () => {
+        // Proof of consent (core/consent.ts): what has no receipt for the text in force (an
+        // update from 1.0.x, an import, a changed text) is asked again by the deck below, and an
+        // answer the deck records only locally (the policy step) gets its receipt here.
+        const consent = await import('../core/consent.js').catch(() => null);
+        const reask = consent ? await consent.prepareLaunchConsents() : [];
+        const privacyHashBefore = (() => { try {
+            return localStorage.getItem('bmm_privacy_seen_hash');
+        }
+        catch {
+            return null;
+        } })();
         try {
             const { runStartupDeck } = await import('./launch-steps.js');
             await runStartupDeck({ firstRun: isFirstRun }, {
@@ -1290,6 +1301,24 @@ async function main() {
             catch (err) {
                 console.warn('[BMM] start-up fallback failed', err);
             }
+        }
+        if (consent) {
+            try {
+                const after = localStorage.getItem('bmm_privacy_seen_hash');
+                const proven = await consent.hasProof('privacy');
+                if (proven) { /* recorded already (the policy's own Accept button) */ }
+                else if (after && after !== privacyHashBefore) {
+                    await consent.recordConsent({ doc: 'privacy', choice: 'accepted', source: 'app' });
+                }
+                else if (reask.includes('privacy') && !after) {
+                    // The deck asks the policy only together with the terms; a policy without
+                    // proof whose terms are proven is asked on its own.
+                    await checkAutoPrivacy(true);
+                    await waitForModalClosed('modal-privacy');
+                }
+            }
+            catch { /* never blocks start-up */ }
+            void consent.syncConsents();
         }
         initAutoUpdate();
         // Show onboarding on first launch, once the screen is clear (see startOnboardingWhenClear).

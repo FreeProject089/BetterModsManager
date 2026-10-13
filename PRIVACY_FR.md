@@ -1,598 +1,575 @@
 # Politique de confidentialité — Better Mods Manager (BMM)
 
-_Dernière mise à jour : 2026-10-06_
+**Version 2026-10-13** (BMM 1.0.2 et les installeurs BetterInstaller qui le livrent) · remplace la
+version du 2026-10-06 (ce qui change : §12)
 
-Better Mods Manager est une application de bureau open‑source (GPL‑3.0) qui fonctionne sur votre
+Better Mods Manager est une application de bureau open source (GPL‑3.0) qui tourne sur votre
 ordinateur. Vos profils, mods, modpacks, plugins et réglages sont stockés **localement**, dans le
-dossier de données de BMM, et vous pouvez les exporter ou les supprimer à tout moment. BMM
-n'affiche aucune publicité et ne demande aucun compte.
+dossier de données de BMM, et vous pouvez les exporter ou les supprimer à tout moment. BMM n'affiche
+aucune publicité, ne demande aucun compte, et nous ne vendons jamais vos données.
 
-Certaines données quittent toutefois votre ordinateur. Cette politique liste chaque cas que nous
-connaissons : **ce qui** est envoyé, **à qui**, et si cela se fait **par défaut** ou seulement si vous
-l'activez. Les Conditions d'utilisation ne reprennent rien de tout cela : pour toute question
-relative aux données, c'est ce document qui fait référence.
+Certaines données quittent toutefois votre ordinateur. Cette politique liste **toutes les connexions
+réseau que BMM et son installeur établissent**, vérifiées dans le code source de cette version :
+**ce qui** est envoyé, **quand**, **à qui**, **pourquoi**, sur quelle **base légale**, combien de
+temps c'est **conservé**, comment le **désactiver**, et le **réglage par défaut**. Les Conditions
+d'utilisation ne reprennent rien de tout cela : pour toute question sur les données, ce document fait
+référence.
 
----
-
-## 1. En bref : ce qui est actif par défaut
-
-| Quoi | Par défaut si vous installez avec BetterInstaller | Par défaut si BMM tourne sans l'installateur |
-|---|---|---|
-| Requêtes de démarrage vers BetterCommunity (§2.1) | Actif, toujours — **sans votre Creator ID** | Actif, toujours — **sans votre Creator ID** |
-| Vérification des mises à jour (§2.2) | Actif | Actif |
-| Tests de connectivité et polices web (§2.3) | Actif, toujours | Actif, toujours |
-| **Télémétrie** (§3) | Désactivée. La case de l'installateur est **décochée** ; la cocher ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM, qui doit encore être accepté | Désactivée jusqu'à votre réponse à l'écran de consentement du premier lancement |
-| Catégories de télémétrie : utilisation, performance, erreurs en direct, statistiques Laya, replay de session (§3.0) | Désactivées avec la télémétrie. Cocher la télémétrie les coche toutes ; son lien *Choisir* permet d'en décocher | Comprises dans *Tout activer* sur l'écran de consentement ; *Choisir* affiche un interrupteur pour chacune |
-| Benchmark hebdomadaire + rapport matériel détaillé (§3.3) | **Désactivé**, même quand la télémétrie est cochée (sa propre case sous *Choisir*) | **Désactivé** : hors de *Tout activer*, un interrupteur à part sous *Choisir* |
-| **Discord Rich Presence** (§4) | **Désactivé** : la case de l'installateur est décochée | Désactivé |
-| Rapports de bug, de plantage et retours (§5) | Seulement quand vous cliquez sur Envoyer | Seulement quand vous cliquez sur Envoyer |
-| **IA optionnelle** (§6.10) | **Désactivée** : la case de l'installateur est décochée ; la cocher allume l'interrupteur **sans fournisseur**, donc rien n'est envoyé pour autant | Désactivée |
-
-Chacun de ces éléments peut être désactivé dans les paramètres de BMM (Paramètres → Confidentialité
-pour la télémétrie et ses options, les interrupteurs Discord et mises à jour dans les Paramètres).
-Tout ce qui envoie des données hors de ce PC est **opt‑in** : la page Configuration de
-BetterInstaller affiche chaque case décochée, avec une description et une marque « Envoie des
-données », avant toute installation, et cocher la case de télémétrie y est une pré‑sélection — BMM
-pose quand même la question sur son propre écran de consentement, et la collecte ne démarre que si
-vous acceptez là.
+Cette politique existe en anglais et en français. **En cas de divergence, la version anglaise
+prévaut.**
 
 ---
 
-## 2. Ce qui se produit quel que soit votre choix de télémétrie
+## 1. Qui est responsable
 
-### 2.1 Configuration au démarrage, avec votre Creator ID
+Le responsable du traitement des données que reçoit l'équipe BMM (télémétrie, rapports, preuves de
+consentement, services BetterCommunity) est :
+
+> **[RAISON SOCIALE DE L'EXPLOITANT]** — **[forme juridique, numéro d'enregistrement le cas échéant]**
+> **[adresse postale]**
+> Contact confidentialité : **[adresse e-mail]**
+> Représentant dans l'UE / au Royaume-Uni (art. 27 RGPD), si nécessaire : **[nom et adresse, ou « aucun »]**
+
+_Les champs entre crochets doivent être complétés par l'exploitant avant publication ; aucun ne
+contient les données d'une société existante._
+
+Les tiers auxquels vous choisissez de vous connecter (le propriétaire d'un Server Repo, Discord, un
+fournisseur d'IA que vous configurez, GitHub, Google, Cloudflare) sont responsables de ce qu'ils font
+de ce qu'ils reçoivent, selon leurs propres politiques.
+
+---
+
+## 2. En bref : ce qui est activé par défaut
+
+L'installeur pose une seule question de confidentialité, à la manière d'un bandeau cookies, et **rien
+n'est présélectionné** : le bouton Installer reste désactivé tant que vous n'avez pas choisi l'une des
+trois réponses.
+
+| Quoi | Installeur : *L'essentiel uniquement* | Installeur : *Tout accepter* | Installeur : *Personnaliser* | Sans l'installeur |
+|---|---|---|---|---|
+| Requêtes au démarrage, vérification des mises à jour, tests de connexion, polices (§4.1–4.4) | Activé | Activé | Activé (la vérification des mises à jour peut être décochée) | Activé |
+| **Téléchargement du modèle Laya hors ligne** pendant l'installation (§4.5) | Question distincte, **cochée par défaut** | idem | idem | — (Paramètres → IA le télécharge à la demande) |
+| **Télémétrie** et ses catégories : utilisation, performances, erreurs en direct, statistiques Laya, relecture de session masquée (§5) | **Désactivée** | **Activée** (c'est votre consentement ; BMM ne redemande pas) | Chacune comme vous la réglez | Désactivée jusqu'à votre réponse à l'écran de consentement de BMM |
+| **Benchmark hebdomadaire + rapport matériel** (§5.4) | Désactivé | **Désactivé** (jamais compris dans *Tout accepter*) | Désactivé sauf si vous le cochez | Désactivé (jamais compris dans *Tout activer*) |
+| **Discord Rich Presence** (§6) | Désactivé | **Activé** | Comme vous le réglez | Désactivé |
+| Rapports de bug, de plantage et suggestions (§7) | Seulement quand vous appuyez sur Envoyer | idem | idem | idem |
+| Fournisseurs d'IA qui envoient des données (§8.10) | Désactivés | Désactivés | Désactivés | Désactivés |
+| Preuves de consentement envoyées au serveur (§9) | Non (télémétrie désactivée) | Oui, avec la télémétrie | Avec la télémétrie | Avec la télémétrie |
+
+Tout cela se modifie ensuite dans BMM : Paramètres → Confidentialité pour la télémétrie, ses
+catégories et vos preuves de consentement ; les interrupteurs Discord et mises à jour dans
+Paramètres ; Paramètres → IA pour Laya.
+
+---
+
+## 3. Inventaire des flux de données
+
+Toutes les connexions, dans un seul tableau. « Base légale » renvoie au RGPD (art. 6(1)) et, pour la
+Suisse, à la loi fédérale révisée sur la protection des données (nLPD, art. 31). La conservation est
+celle de l'équipe BMM ; les tiers conservent ce que prévoient leurs propres politiques.
+
+| # | Ce qui est envoyé | Quand | À qui | Pourquoi | Base légale | Conservé | Désactivation | Par défaut |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Adresse IP, en-têtes de requête (sans Creator ID) | À chaque démarrage | bettercommunity.ch, puis GitHub en secours (§4.1) | Télécharger la liste des liens et des contributeurs | Intérêt légitime : l'application fonctionne avec des liens à jour (f) | Journaux d'accès du serveur, court terme | Rester hors ligne | Activé |
+| 2 | Adresse IP, user-agent nommant BMM | ~3 s après le démarrage, et quand vous vérifiez | API GitHub, bettercommunity.ch en secours ; manifestes de mise à jour de l'installeur (§4.2) | Proposer les mises à jour de sécurité et correctifs | Intérêt légitime (f) | Journaux d'accès | Paramètres → vérification automatique des mises à jour | Activé |
+| 3 | Adresse IP | Quand vous installez une mise à jour | Releases GitHub (l'installeur et son manifeste signé) | Télécharger la mise à jour demandée | Votre demande (b) | Journaux d'accès | Ne pas mettre à jour | Quand vous cliquez |
+| 4 | Adresse IP | Toutes les 2 minutes | Google (`gstatic.com`), Cloudflare (§4.3) | Savoir si BMM est en ligne | Intérêt légitime (f) | Leurs politiques | Rester hors ligne | Activé |
+| 5 | Adresse IP | Quand une page en a besoin | Google Fonts, jsDelivr, Simple Icons, flagcdn.com, YouTube (nocookie) (§4.4) | Polices, icônes, drapeaux des langues, vidéos intégrées | Intérêt légitime (f) | Leurs politiques | Rester hors ligne | Activé |
+| 6 | Adresse IP | Pendant l'installation si *Laya hors ligne* est coché ; ensuite seulement à votre demande | Releases GitHub, miroir BetterCommunity (§4.5) | Télécharger le modèle d'IA local (327 Mo), vérifié contre un SHA-256 épinglé | Votre choix (b) | Journaux d'accès | Décocher *Laya hors ligne* ; Paramètres → IA | **Coché** dans l'installeur |
+| 7 | Creator ID, identifiant d'installation, profil système, utilisation, interactions, journaux, performances (§5.1) | Toutes les 90 s quand la télémétrie est activée | Serveur de télémétrie BetterCommunity | Trouver les bugs, mesurer ce qui est utilisé | **Consentement** (a) | 180 jours (réglable par l'exploitant) | Paramètres → Confidentialité | **Désactivé** (*Tout accepter* : activé) |
+| 8 | Enregistrement masqué de la fenêtre de BMM (§5.2) | Avec la télémétrie | Serveur de télémétrie | Reproduire les bugs | Consentement (a) | 180 jours | Paramètres → Confidentialité | Avec la télémétrie |
+| 9 | Erreurs et plantages, nettoyés des secrets, chemins, e-mails, IP ; un hachage du Creator ID (§5.5) | Quelques secondes après une erreur, avec la télémétrie | Serveur de télémétrie (classé par Laya sur les mêmes serveurs) | Corriger vite les erreurs | Consentement (a) | 180 jours | Paramètres → Confidentialité | Avec la télémétrie |
+| 10 | Statistiques d'utilisation de Laya, jamais de texte (§5.6) | Avec la télémétrie | Serveur de télémétrie | Savoir si Laya est utile | Consentement (a) | 180 jours | Paramètres → Confidentialité | Avec la télémétrie |
+| 11 | Temps du benchmark et identifiants matériels : numéros de série, UUID de la machine, adresses MAC (§5.4) | Chaque semaine, seulement si vous l'avez coché | Serveur de télémétrie | Compatibilité matérielle | Consentement (a), demandé à part | 180 jours | Paramètres → Confidentialité | **Désactivé** partout |
+| 12 | Preuves de consentement : document, version, empreinte du texte, langue, réponse, heure, source, version de l'app, identifiant d'installation aléatoire (§9) | Après une réponse, si la télémétrie est activée ou si vous appuyez sur *Envoyer au serveur* | Serveur de télémétrie | Prouver quel texte vous avez accepté ou refusé | Obligation légale de démontrer le consentement (c), intérêt légitime (f) | 3 ans après qu'une preuve est remplacée ou que l'installation se tait (réglable) | Ne pas envoyer ; effacement par identifiant d'installation | Avec la télémétrie |
+| 13 | Nom du profil, nombre de mods actifs, version de BMM, Creator ID (§6) | Tant que Discord RPC est activé | L'application Discord de votre PC, affiché sur votre profil Discord | Montrer à quoi vous jouez | Consentement (a) | Politique de Discord | Paramètres | Désactivé (*Tout accepter* : activé) |
+| 14 | Ce que vous écrivez, les pièces jointes choisies, Creator ID avec preuve signée et empreintes d'appareil hachées, détails de l'app et de l'OS (§7) | Quand vous appuyez sur Envoyer | Centre de retours BetterCommunity | Traiter votre rapport | Votre demande (b) ; pièces jointes cochées | Selon les conditions de la plateforme BetterCommunity | Ne pas envoyer | Seulement sur Envoyer |
+| 15 | Creator ID, preuve signée, empreintes d'appareil hachées (§4.6) | Rapports, liaison de compte, une fois par clé tant que lié | bettercommunity.ch | Empêcher le contournement des bannissements et l'abus des offres gratuites | Intérêt légitime (f) | Empreintes : 180 jours après la dernière vue | Ne pas lier, ne pas envoyer de rapport | Seulement alors |
+| 16 | Adresse IP, Creator ID, mot de passe de téléchargement s'il y en a un (§8.1) | Quand vous vous connectez à un Server Repo ou le synchronisez | Le propriétaire de ce dépôt | Contrôle d'accès par son propriétaire | Votre demande (b) | Au choix du propriétaire | Ne pas se connecter | Seulement alors |
+| 17 | Creator ID, vérification d'un code à usage unique (§8.6) | Quand vous liez un compte | bettercommunity.ch | Lier votre compte | Votre demande (b) | Tant que lié | Délier | Seulement alors |
+| 18 | Votre clé d'API BetterCommunity (§8.7) | Toutes les 10 min, seulement si vous avez enregistré une clé | bettercommunity.ch | Vos notifications | Votre demande (b) | — | Supprimer la clé | Pas de clé, pas de requête |
+| 19 | Nom, auteur, description d'un mod, noms de fichiers, noms de vos tags, ou le texte d'un rapport, masqués d'abord (§8.10) | Seulement quand vous cliquez *Suggérer*, *brouillon* ou *indice IA* avec un fournisseur réseau | Le fournisseur choisi | Suggestions par IA | Consentement (a) | Politique de ce fournisseur | Paramètres → IA | **Désactivé** |
+| 20 | Ce qu'envoient vos propres intégrations (§8.9) | Comme vous l'avez configuré | Le service configuré | Votre automatisation | Votre demande (b) | Politique de ce service | Les supprimer | Désactivé |
+
+Rien d'autre ne quitte votre PC. Parcourir et gérer mods, profils et modpacks n'envoie rien.
+
+---
+
+## 4. Ce qui se passe quel que soit votre choix de télémétrie
+
+### 4.1 Configuration au démarrage
 À chaque démarrage, BMM télécharge sa liste de liens (`links.json`) et la liste des contributeurs
-depuis `bettercommunity.ch`, avec les copies sur GitHub en secours. **Ces deux téléchargements de
-démarrage ne portent plus votre Creator ID.** Ils sont récupérés anonymement — pas d'en‑tête
-`X-Creator-ID`, pas de preuve de clé — donc ce que BetterCommunity reçoit au lancement est une
-requête web ordinaire pour deux fichiers publics : son serveur voit votre adresse IP, comme tout
-serveur web, et rien qui identifie cette installation.
+depuis `bettercommunity.ch`, avec les copies GitHub en secours. **Ces téléchargements ne portent pas
+votre Creator ID** : pas d'en-tête `X-Creator-ID`, pas de preuve de clé. Le serveur de BetterCommunity
+voit votre adresse IP, comme tout serveur web, et rien qui identifie cette installation.
 
-Les autres requêtes que la partie native de BMM envoie à une adresse bettercommunity.ch portent
-**bien** votre Creator ID dans un en‑tête `X-Creator-ID` — récupérer un catalogue ou un dépôt, où
-l'identifiant est ce qui donne accès au contenu privé, ainsi que les fonctions de retour, de rapport
-et de compte que vous déclenchez vous‑même. Elles ont lieu quand vous utilisez la fonction, pas à
-chaque lancement.
+D'autres requêtes de BMM vers une adresse bettercommunity.ch **portent** votre Creator ID dans un
+en-tête `X-Creator-ID` : récupérer un catalogue ou un dépôt (l'identifiant contrôle l'accès au contenu
+privé), et les fonctions de retour, de rapport et de compte que vous lancez vous-même.
 
 **Ce qu'est le Creator ID.** C'est la moitié publique d'une paire de clés Ed25519 que BMM crée au
-premier lancement. La clé est **dérivée d'identifiants de ce PC** (MachineGuid, identifiant de
-produit et date d'installation de Windows ; numéros de série de la carte mère, du BIOS, du processeur
-et du disque ; numéro de série du volume C:) par une dérivation à sens unique. Depuis la **clé créateur v5**, elle est conservée, avec le reste du
+premier lancement. La clé est **dérivée d'identifiants de ce PC** (MachineGuid, ID de produit et date
+d'installation de Windows ; numéros de série de la carte mère, du BIOS, du processeur et des disques ;
+numéro de série du volume C:) par une dérivation à sens unique. Elle est conservée, avec le reste du
 matériel de clé, dans un magasin chiffré par Windows (DPAPI, lié à votre compte Windows) dans le
-dossier de données de BMM et dans votre registre utilisateur ; les anciennes copies non chiffrées sont
-supprimées une fois la copie chiffrée vérifiée. Sous macOS et Linux, le magasin est chiffré avec une
-clé conservée dans le trousseau du système (Trousseau, Secret Service) ; sans trousseau disponible,
-c'est un fichier lisible par votre seul compte, et les Réglages indiquent lequel s'applique. Depuis la
-**v5.1**, le Creator ID est aussi **épinglé** (un petit fichier `creator_v5.pin` et une entrée du
-registre / du trousseau, qui ne contiennent que des valeurs publiques) : un magasin copié depuis une
-autre machine, une sauvegarde plus ancienne ou un magasin modifié est refusé au lieu de remplacer
-votre identité en silence. Une réinitialisation, que vous lancez vous‑même dans les Réglages, met
-l'ancien magasin de côté et est notée dans un fichier local `creator_v5.log` (date et Creator ID
-seulement ; il ne quitte jamais votre ordinateur). Conséquences :
+dossier de données de BMM et votre registre utilisateur ; sous macOS et Linux sous une clé gardée dans
+le trousseau du système (Keychain, Secret Service), ou, sans trousseau, dans un fichier lisible par
+votre seul compte. Le Creator ID est **épinglé** (un fichier `creator_v5.pin` et une entrée de registre
+/ trousseau ne contenant que des valeurs publiques) : un magasin copié d'une autre machine ou modifié
+est refusé. Une réinitialisation, que vous lancez vous-même dans Paramètres, est notée dans un
+`creator_v5.log` local qui ne quitte jamais votre ordinateur. Conséquences :
 
-- il ne contient ni nom ni e‑mail, et les identifiants dont il est dérivé ne peuvent pas en être
-  extraits ;
-- il est **stable** : le même PC obtient le même Creator ID, même après une réinstallation de BMM ;
-  tout ce qui est envoyé sous cet identifiant est donc **rattachable à cette machine dans le temps** ;
-- il signe ce que vous publiez (dépôts, modpacks, tutoriels) : il est donc aussi visible par toute
-  personne qui les reçoit (§6.3).
+- il ne contient ni nom ni e-mail, et les identifiants dont il est dérivé ne peuvent pas en être extraits ;
+- il est **stable** : le même PC obtient le même Creator ID, même après réinstallation, donc tout ce qui
+  est envoyé sous cet identifiant est **reliable à cette machine dans le temps** ;
+- il signe ce que vous publiez (dépôts, modpacks, tutoriels), donc quiconque les reçoit le voit (§8.3).
 
-Le passage à la v5 **ne change pas** votre Creator ID. Il ajoute une seconde clé, aléatoire, qui signe
-les preuves que BMM donne à BetterCommunity, et ces preuves peuvent porter une empreinte hachée de
-l'appareil (§2.4). Les requêtes de démarrage ci‑dessus ne portent toujours que le Creator ID : ni
-preuve ni empreinte.
-
-### 2.2 Vérification des mises à jour
-Environ trois secondes après le lancement, BMM interroge l'API des versions de GitHub
+### 4.2 Vérification et installation des mises à jour
+Environ trois secondes après le démarrage, BMM interroge l'API des releases de GitHub
 (`api.github.com/repos/FreeProject089/BetterModsManager/releases`), avec
-`bettercommunity.ch/api/updates/bmm` en secours. Si BMM a été installé avec BetterInstaller, il
-interroge aussi l'installateur, qui lit les manifestes de mise à jour sur GitHub et
-`bettercommunity.ch`. Ces hôtes voient votre adresse IP et un user‑agent qui nomme le programme.
-Désactivez la vérification automatique dans les Paramètres.
+`bettercommunity.ch/api/updates/bmm` en secours. Si BMM a été installé avec BetterInstaller, la
+vérification passe par le programme de maintenance de l'installeur, qui lit les manifestes de mise à
+jour signés sur GitHub et `bettercommunity.ch`. Ces hôtes voient votre adresse IP et un user-agent
+nommant le programme. Désactivez la vérification automatique dans Paramètres (ou décochez-la dans
+*Personnaliser* de l'installeur).
 
-BetterInstaller lui‑même ne contacte rien pendant l'installation, sauf pour télécharger un
-composant optionnel que vous cochez (comme Python, depuis `python.org`). Quand vous le rouvrez pour
-réparer, mettre à jour ou désinstaller, il consulte les mêmes manifestes de mise à jour.
+Quand **vous** choisissez d'installer une mise à jour, BMM télécharge le manifeste signé et
+l'installeur (`BMM-Setup.exe`) depuis la release GitHub, vérifie la signature de l'éditeur et le
+SHA‑256 avant de lancer quoi que ce soit, et garde un téléchargement interrompu dans son propre dossier
+pour le reprendre. Rien vous concernant n'est envoyé avec ces téléchargements.
 
-### 2.3 Tests de connectivité, polices et catalogues
-- Toutes les deux minutes, BMM vérifie s'il est en ligne en interrogeant
-  `www.gstatic.com/generate_204` (Google) et `cloudflare.com/cdn-cgi/trace` (Cloudflare).
-- L'interface charge ses polices depuis Google Fonts.
-- Au démarrage, il lit le catalogue d'applications sur GitHub (`raw.githubusercontent.com`), et
-  consulte le catalogue de plugins si vous en avez installé depuis celui‑ci.
+### 4.3 Tests de connexion
+Toutes les deux minutes, BMM vérifie s'il est en ligne en interrogeant `www.gstatic.com/generate_204`
+(Google) et `cloudflare.com/cdn-cgi/trace` (Cloudflare). Ils voient votre adresse IP et les en-têtes
+ordinaires de la requête.
 
-Ces services voient votre adresse IP et les en‑têtes ordinaires d'une requête, selon leurs propres
-politiques de confidentialité.
+### 4.4 Polices, icônes, drapeaux, vidéos et catalogues
+- L'interface charge ses polices depuis **Google Fonts**.
+- Les icônes non intégrées viennent de **jsDelivr** et **Simple Icons** ; le sélecteur de langue
+  affiche des drapeaux de **flagcdn.com**.
+- Au démarrage, BMM lit le catalogue d'applications sur GitHub (`raw.githubusercontent.com`), et
+  vérifie le catalogue de plugins si vous en avez installé depuis celui-ci.
+- Des pages de la documentation intégrée peuvent contenir des vidéos **YouTube** via
+  `youtube‑nocookie.com` ; Google/YouTube voit alors votre adresse IP et peut conserver des données
+  selon la politique de Google.
 
-### 2.4 Clé créateur v5 : la preuve et l'empreinte de l'appareil
-Quand BMM doit **prouver** son Creator ID à BetterCommunity, il signe une preuve courte et à usage
-unique (valable deux minutes, liée à ce site, avec un nombre aléatoire pour qu'elle ne puisse pas
-être rejouée). Cela n'arrive que quand vous **envoyez un rapport de bug, de plantage ou un retour**
-(§5.1), quand vous **liez un compte BetterCommunity** (§6.6), et **une fois par clé tant que cette
-installation est liée à un compte**. Rien n'est envoyé pour une installation non liée qui n'envoie
-aucun rapport.
+Ces services voient votre adresse IP et les en-têtes ordinaires, selon leurs propres politiques.
+
+### 4.5 BetterInstaller
+Pendant l'installation, l'installeur ne contacte rien, **sauf** pour télécharger :
+
+- le **pack du modèle Laya hors ligne** (327 Mo, depuis la release GitHub du projet, avec le miroir
+  BetterCommunity en secours) quand *Laya hors ligne* est coché, **ce qui est le cas par défaut**. Le
+  pack est refusé s'il ne correspond pas à un SHA‑256 épinglé. Le téléchargement ne porte rien vous
+  concernant ; GitHub voit votre adresse IP, comme pour tout téléchargement. Décochez *Laya hors
+  ligne* (« Pas maintenant ») pour l'éviter ;
+- un composant optionnel que vous cochez vous-même (comme Python, depuis `python.org`).
+
+Quand vous le rouvrez pour réparer, mettre à jour ou désinstaller, il vérifie les mêmes manifestes
+qu'au §4.2.
+
+Vos choix dans l'installeur sont transmis à BMM par un fichier local (`installer-handoff.json`) que
+BMM lit une fois puis renomme ; il n'est envoyé nulle part. Il contient désormais aussi une **preuve**
+pour chaque document légal accepté (§9).
+
+### 4.6 Preuve de votre Creator ID et empreinte de l'appareil
+Quand BMM doit **prouver** son Creator ID à BetterCommunity, il signe une preuve courte à usage unique
+(valable deux minutes, liée à ce site, avec un nombre aléatoire pour qu'elle ne puisse pas être
+rejouée). Cela n'arrive que quand vous **envoyez un rapport de bug, de plantage ou une suggestion**
+(§7), quand vous **liez un compte BetterCommunity** (§8.6), et **une fois par clé tant que cette
+installation est liée à un compte**.
 
 Cette preuve porte une **empreinte de l'appareil** : quatre hachages à sens unique calculés sur votre
-PC, à partir
+PC, (1) des identifiants de la carte mère, du BIOS et du processeur, (2) des identifiants de
+l'installation de Windows, (3) des identifiants des disques, (4) un **hachage canvas** (la façon dont
+votre carte graphique et ses pilotes dessinent une image de test fixe).
 
-1. des identifiants de la carte mère, du BIOS et du processeur,
-2. des identifiants de l'installation Windows (MachineGuid, identifiant de produit, date d'installation),
-3. des identifiants du disque,
-4. d'un **hachage canvas** : la façon dont votre carte graphique et ses pilotes dessinent une image de
-   test fixe dans la fenêtre de BMM.
-
-- **Seuls les hachages sont envoyés.** Aucun numéro de série, GUID ni image ne quitte votre PC.
-  Chaque hachage est salé avec l'adresse du site qui le reçoit : les valeurs de BetterCommunity ne
-  peuvent pas être recoupées avec celles d'un autre serveur, et chacun est itéré pour rendre coûteuse
-  toute tentative de retrouver les valeurs d'origine.
-- **L'empreinte canvas est une technique de pistage**, et nous le disons clairement. Elle ne sert
-  qu'à la finalité ci‑dessous et change quand vous mettez à jour votre pilote graphique.
-- **Finalité :** permettre aux modérateurs de BetterCommunity de voir si un nouveau Creator ID vient
-  du même ordinateur qu'un identifiant banni ou ayant déjà utilisé une offre gratuite. Une personne
-  examine la correspondance et décide ; aucune règle n'agit automatiquement. Elle ne sert ni aux
-  statistiques, ni à la publicité, ni au profilage, et n'est pas partagée.
-- **Base légale :** intérêt légitime à empêcher l'abus des offres gratuites et le contournement des
-  bannissements (art. 6, par. 1, let. f RGPD ; art. 31 nLPD). Ces hachages identifient un appareil :
-  ce sont des données personnelles, et vos droits (accès, effacement, opposition ; §8) s'y appliquent.
-- **Conservation :** BetterCommunity supprime chaque hachage **180 jours après sa dernière
-  apparition**. L'association entre une clé et un Creator ID est conservée tant que l'identifiant est
-  utilisé.
+- **Seuls les hachages sont envoyés.** Chacun est salé avec l'adresse du site qui le reçoit et itéré,
+  il ne peut donc pas être rapproché des valeurs d'un autre serveur.
+- **L'empreinte canvas est une technique de pistage**, et nous le disons clairement. Elle sert au seul
+  but ci-dessous et change quand vous mettez à jour votre pilote graphique.
+- **But :** permettre aux modérateurs de BetterCommunity de voir si un nouveau Creator ID vient d'un
+  ordinateur banni ou ayant déjà utilisé une offre gratuite. Une personne examine la correspondance et
+  décide ; aucune règle n'agit automatiquement. Ni analyse, ni publicité, ni profilage, ni partage.
+- **Base légale :** intérêt légitime à prévenir les abus et le contournement des bannissements (RGPD
+  art. 6(1)(f) ; nLPD art. 31). Les hachages identifient un appareil, vos droits (§11) s'y appliquent.
+- **Conservation :** chaque hachage est supprimé **180 jours après sa dernière apparition**.
 
 ---
 
-## 3. Télémétrie
+## 5. Télémétrie
 
 La télémétrie envoie des données d'utilisation et de diagnostic au **serveur de télémétrie de
-BetterCommunity** (`telemetry.bettercommunity.ch`, exploité par l'équipe BMM). Elles sont mises en
-tampon sur votre disque (10 Mo au plus), compressées et envoyées en **HTTPS** toutes les 90 secondes
-tant que la fenêtre est visible, quand elle est masquée et à la fermeture de BMM. Chaque lot porte
-un **identifiant de paquet** aléatoire pour que vous puissiez le faire effacer (§3.5).
+BetterCommunity** (`telemetry.bettercommunity.ch`, exploité par le responsable du §1). Elle est mise en
+tampon sur votre disque (10 Mo au plus), compressée et envoyée en **HTTPS** toutes les 90 secondes
+quand la fenêtre est visible, quand elle est masquée et à la fermeture de BMM. Chaque lot porte un
+**identifiant de paquet** aléatoire pour que vous puissiez le faire effacer.
 
-**Par défaut : désactivée.** La télémétrie est **opt‑in**, et elle se demande dans BMM, pas dans
-l'installateur :
+**Par défaut : désactivée.** La télémétrie est **sur consentement**, demandé une seule fois :
 
-- **Si vous installez avec BetterInstaller**, sa case de télémétrie est **décochée**. La laisser
-  telle quelle signifie que rien n'est jamais collecté et que BMM ne repose pas la question.
-  **La cocher n'est pas un consentement** — cela ne fait que **pré‑sélectionner la réponse** sur
-  l'écran de consentement du premier lancement de BMM, qui énumère ce qui est collecté ; rien n'est
-  collecté si vous n'acceptez pas là. (La *décocher* explicitement est enregistré comme un refus,
-  et l'écran de consentement ne vous repose alors pas la question.)
-- **Si vous installez sans l'installateur**, la télémétrie est désactivée jusqu'à votre réponse à ce
-  même écran.
+- **Dans l'étape de confidentialité de l'installeur.** *Tout accepter* (ou *Personnaliser* avec la
+  télémétrie activée) **vaut consentement**, donné après l'affichage et l'acceptation de la Politique
+  de confidentialité, chaque catégorie étant décrite à l'écran : BMM l'enregistre avec une preuve (§9)
+  et ne redemande pas. *L'essentiel uniquement*, ou la télémétrie désactivée dans *Personnaliser*, est un
+  refus enregistré.
+- **Les installeurs antérieurs à cette étape** avaient une seule case ; la cocher n'était **pas** un
+  consentement : elle présélectionne seulement la réponse dans l'écran de consentement de BMM, qu'il
+  faut encore accepter.
+- **Sans l'installeur**, la télémétrie reste désactivée jusqu'à votre réponse à l'écran de
+  consentement de BMM. Il propose quatre réponses, toutes des boutons : **Tout activer** (les cinq
+  catégories du §5.0), **Choisir** (un interrupteur par catégorie), **Non merci** (désactivé,
+  enregistré) et **Plus tard** (aussi Échap : n'enregistre rien, redemande au lancement suivant). Un
+  clic à côté de l'écran n'est pas une réponse.
 
-L'écran de consentement a quatre réponses, toutes des boutons : **Tout activer** (recommandé : les
-cinq catégories du §3.0), **Choisir** (un interrupteur par catégorie, puis *Valider*), **Non merci**
-(désactivée, enregistré) et **Plus tard** (aussi la touche Échap) : *Plus tard* n'enregistre rien,
-ne démarre rien, et l'écran revient au prochain lancement. Un clic à côté de l'écran n'est pas une
-réponse et ne change rien.
+Paramètres → Confidentialité la désactive à tout moment ; désactivée, rien du §5 n'est collecté ni
+envoyé, et le tampon local est supprimé. Un lien `bmm://telemetry/…` (qu'une page web peut ouvrir) ne
+peut pas modifier ces réglages seul : il ouvre l'écran de consentement de BMM, ou une confirmation s'il
+ne fait que désactiver quelque chose. Une réponse donnée par l'API locale, la ligne de commande ou le
+serveur MCP est enregistrée comme telle dans vos preuves.
 
-Paramètres → Confidentialité la désactive à tout moment ; désactivée, rien du §3 n'est collecté ni
-envoyé.
+Si le texte du consentement change de façon significative, ou si BMM trouve la télémétrie activée sans
+preuve de votre consentement (par exemple après une mise à jour depuis 1.0.x ou l'import d'anciens
+réglages), la télémétrie repasse à « pas encore demandé » et la question vous est reposée.
 
-Un lien `bmm://telemetry/…` (que n'importe quelle page web peut ouvrir) ne peut pas modifier ces
-réglages à lui seul : il ouvre l'écran de consentement de BMM, ou une confirmation s'il ne fait que
-désactiver quelque chose, et rien ne change si vous n'acceptez pas à cet endroit.
-
-### 3.0 Catégories
-La télémétrie, c'est un consentement et cinq catégories en dessous. Chacune se désactive seule, sur
-l'écran de consentement (*Choisir*) et dans Paramètres → Confidentialité ; *Tout activer* active les
-cinq.
+### 5.0 Catégories
+Un consentement, cinq catégories. Chacune se désactive séparément, dans l'écran de consentement
+(*Choisir*), dans l'installeur (*Personnaliser*) et dans Paramètres → Confidentialité.
 
 | Catégorie | Ce qu'elle couvre |
 |---|---|
-| Statistiques d'utilisation | Pages, fenêtres, clics, parcours, début et fin de session (§3.1 *Utilisation*, *Interactions*) |
-| Performance | Images par seconde, temps d'image, mémoire de l'interface, temps de chargement (§3.1 *Performances*) |
-| Erreurs en direct | Erreurs et plantages au moment où ils arrivent (§3.6), et les journaux d'avertissements et d'erreurs du §3.1 |
-| Statistiques Laya | L'usage de Laya, sans aucun contenu (§3.7) |
-| Replay de session | L'enregistrement masqué de la fenêtre de BMM (§3.2) |
+| Statistiques d'utilisation | Pages, dialogues, clics, parcours, début et fin de session (§5.1) |
+| Performances | Images par seconde, temps d'image, mémoire de l'interface, temps de chargement (§5.1) |
+| Erreurs envoyées en direct | Erreurs et plantages au moment où ils arrivent (§5.5), et les journaux d'avertissements et d'erreurs du §5.1 |
+| Statistiques d'utilisation de Laya | Comment Laya est utilisée, sans aucun contenu (§5.6) |
+| Relecture de session | L'enregistrement masqué de la fenêtre de BMM (§5.2) |
 
-L'identité et le profil système du §3.1 accompagnent toute catégorie active : ce sont eux qui
-rendent les autres lisibles. Deux options ne font jamais partie de *Tout activer* : le rapport
-matériel hebdomadaire (§3.3) et le replay non masqué (§3.2).
+L'identité et le profil système du §5.1 accompagnent la catégorie activée. Deux options ne font
+**jamais** partie de *Tout activer* ni de *Tout accepter* : le rapport matériel hebdomadaire (§5.4) et
+la relecture non masquée (§5.2).
 
-### 3.1 Ce qui est envoyé
-- **Identité :** votre Creator ID (§2.1) et un identifiant aléatoire propre à l'installation.
-- **Profil système :** système d'exploitation et version, processeur et nombre de cœurs, mémoire,
-  chaque carte graphique, carte mère, modèle et fabricant de la machine, exécution ou non dans une
-  machine virtuelle, vos disques (taille, et emplacement de montage), vos écrans (fabricant, modèle,
-  année) et leurs résolutions, la version et la langue d'interface de BMM, et pour chacun de vos
-  profils le **nom du jeu**, son nombre de mods et la répartition de ses dossiers sur les disques.
-  **Aucune adresse IP ne fait partie du profil :** BMM ne signale plus son adresse sur le réseau
-  local ni son adresse publique, et il ne demande jamais à un service tiers (comme `api.ipify.org`
-  ou `ipwho.is`) quelle est votre adresse ou votre localisation.
-- **Préférences et décomptes :** thème actif (identifiant, nom, intégré ou personnalisé), langue,
-  réglages de Tasky, mode de sécurité du système de fichiers, et combien de mods, profils, plugins,
-  modpacks, tags, packs de lancement et applications vous avez (des nombres, pas leurs noms).
-- **Utilisation :** les pages que vous ouvrez et le temps passé, votre parcours de navigation, les
-  fenêtres de dialogue que vous ouvrez (avec leur titre), le début et la fin de session.
-- **Interactions :** le texte des boutons sur lesquels vous cliquez, **l'adresse complète des liens
-  externes** que vous ouvrez, le nom des champs de formulaire que vous modifiez (jamais leur valeur),
-  et les messages d'erreur.
-- **Journaux :** les avertissements et erreurs de la console de l'interface, et toutes les
-  15 secondes les lignes d'avertissement et d'erreur du journal de BMM. **Ces lignes peuvent
-  contenir des chemins de fichiers et de dossiers**, par exemple un dossier de mods, qui peut
-  comporter votre nom d'utilisateur Windows.
-- **Performances :** images par seconde, temps d'image, pire image, mémoire utilisée par
-  l'interface, et temps de chargement des pages.
+### 5.1 Ce qui est envoyé
+- **Identité :** votre Creator ID (§4.1) et un identifiant d'installation aléatoire.
+- **Profil système :** système d'exploitation et version, processeur et nombre de cœurs, RAM, chaque
+  GPU, carte mère, modèle et fabricant de la machine, si BMM tourne dans une machine virtuelle, vos
+  disques (taille, point de montage), vos écrans (fabricant, modèle, année) et résolutions, la version
+  et la langue de BMM, et pour chaque profil le **nom du jeu**, son nombre de mods et la répartition de
+  ses dossiers sur les disques. **Aucune adresse IP ne fait partie du profil**, et BMM ne demande jamais
+  à un service tiers votre adresse ou votre position.
+- **Préférences et comptes :** thème actif, langue, réglages de Tasky, mode de sécurité du système de
+  fichiers, et combien de mods, profils, plugins, modpacks, tags, packs de lancement et applications
+  vous avez (des nombres, pas des noms).
+- **Utilisation :** pages ouvertes et durée, parcours de navigation, dialogues ouverts (avec leurs
+  titres), début et fin de session.
+- **Interactions :** le texte des boutons cliqués, l'**adresse complète des liens externes** ouverts,
+  le nom des champs modifiés (jamais leur valeur), les messages d'erreur.
+- **Journaux :** avertissements et erreurs de la console de l'interface et, toutes les 15 secondes,
+  les lignes d'avertissement et d'erreur du journal de BMM. **Ces lignes peuvent contenir des chemins
+  de fichiers et de dossiers**, qui peuvent inclure votre nom d'utilisateur Windows.
+- **Performances :** images par seconde, temps d'image, pire image, mémoire de l'interface, temps de
+  chargement des pages.
 - **Dépôts :** quand vous vous connectez à un Server Repo, son adresse, son hôte et son nom ; quand
-  vous en hébergez un, le nom d'auteur que vous saisissez.
+  vous en hébergez un, le nom d'auteur saisi.
 
-### 3.2 Replay de session
-Tant que la télémétrie est activée, BMM envoie aussi un **enregistrement de la fenêtre de BMM** : sa
-mise en page, les clics, le défilement et la navigation. **Le texte saisi dans les champs est
-masqué**, de même que les éléments marqués comme noms ou chemins. Les autres fenêtres et le reste de
-votre écran ne sont jamais enregistrés.
+### 5.2 Relecture de session
+Tant que la télémétrie et cette catégorie sont activées, BMM envoie un **enregistrement de la fenêtre
+de BMM** : disposition, clics, défilement, navigation. **Le texte saisi dans les champs est masqué**,
+ainsi que les éléments marqués comme noms ou chemins. Les autres fenêtres et le reste de votre écran ne
+sont jamais enregistrés. Un mode **« complet (non masqué) »** distinct existe pour votre propre
+débogage : désactivé sauf si vous l'activez à la main dans Paramètres → Confidentialité, jamais par un
+lien `bmm://`, jamais par *Tout accepter*.
 
-- **Par défaut :** actif **tant que la télémétrie l'est**, comme l'une de ses catégories (§3.0) ;
-  la télémétrie est désactivée si vous ne l'avez pas acceptée (§3), donc seul il n'envoie rien. Dans
-  BetterInstaller, c'est la case « Replay de session (masqué) » sous le lien *Choisir* de la case
-  télémétrie ; dans BMM, un interrupteur de Paramètres → Confidentialité et du *Choisir* de l'écran
-  de consentement.
-- Un mode distinct **« complet (non masqué) »** existe pour votre propre débogage. Il reste
-  désactivé sauf si vous l'activez ; activé, le texte saisi n'est pas masqué et les images locales
-  affichées dans la fenêtre sont intégrées à l'enregistrement. Il ne s'active qu'à la main, dans
-  Paramètres → Confidentialité (ou l'écran de consentement que vous ouvrez vous‑même), jamais par un
-  lien `bmm://`.
+### 5.3 Ce que la télémétrie n'envoie jamais
+Le contenu de vos mods, fichiers de jeu ou autres fichiers ; les valeurs saisies dans les champs (sauf
+si vous activez la relecture non masquée) ; votre nom ou e-mail.
 
-### 3.3 Benchmark hebdomadaire et rapport matériel détaillé
-**Désactivé par défaut, et posé comme une question distincte.** Quand vous l'activez *et* que la
-télémétrie est activée, BMM lance un court benchmark interne une fois par semaine (et
-lors de la première activation de la télémétrie) et en envoie les temps. Avec lui, BMM envoie un **rapport matériel
-détaillé** composé d'**identifiants matériels stables** : modèle et numéro de série de la carte mère,
-version, date et fabricant du BIOS, UUID de la machine, détails du cache et des threads du
-processeur, modèle, numéro de série, taille et interface de chaque disque, **adresse MAC de chaque
-carte réseau physique**, build du système, démarrage UEFI ou legacy, état de Secure Boot et du TPM.
+### 5.4 Benchmark hebdomadaire et rapport matériel détaillé
+**Désactivé par défaut, partout, et demandé à part.** Quand vous l'activez *et* que la télémétrie est
+activée, BMM lance un court benchmark une fois par semaine et envoie ses temps avec un **rapport
+matériel détaillé** d'**identifiants matériels stables** : modèle et numéro de série de la carte mère,
+version, date et éditeur du BIOS, UUID de la machine, détails du cache et des threads du processeur,
+modèle, numéro de série, taille et interface de chaque disque, **adresse MAC de chaque carte réseau
+physique**, build de l'OS, démarrage UEFI ou legacy, état de Secure Boot et du TPM. **Ni *Tout
+accepter* dans l'installeur ni *Tout activer* dans BMM ne l'activent** : seul son propre interrupteur,
+dans *Personnaliser* de l'installeur ou dans Paramètres → Confidentialité de BMM, le fait.
 
-- **Par défaut : désactivé**, partout et à part. BetterInstaller pose la question avec une case
-  distincte « Rapport matériel hebdomadaire » sous le lien *Choisir* de la case télémétrie, décochée
-  même quand la télémétrie est cochée ; dans BMM, c'est l'interrupteur « Rapport matériel
-  hebdomadaire » de Paramètres → Confidentialité et du *Choisir* de l'écran de consentement,
-  désactivé lui aussi. **Accepter la télémétrie, même avec *Tout activer*, ne l'active pas** : les
-  identifiants matériels ci‑dessus ne sont collectés que si vous le cochez vous‑même.
+### 5.5 Erreurs envoyées en direct
+Quelques secondes après une erreur, tant que la télémétrie est activée : erreurs JavaScript, plantages
+du côté Rust, commandes en échec réel, et déploiements, installations, sauvegardes et tâches planifiées
+en échec. Pour chacune : le message, l'endroit du code de BMM (noms de fonction et de fichier), une
+gravité, combien de fois et quand, la version de BMM, le nom et l'architecture de l'OS, l'identifiant
+de session de télémétrie et, pour un plantage, le **nom du fichier** du rapport local (jamais son
+contenu). Jamais les arguments d'une commande, le contenu d'un fichier ni ce que vous avez saisi.
 
-### 3.4 Ce que la télémétrie n'envoie jamais
-Le contenu de vos mods, de vos fichiers de jeu ou d'autres fichiers ; les valeurs que vous saisissez
-dans les champs (sauf si vous activez le mode non masqué du §3.2) ; votre nom ou votre e‑mail.
+- **Retiré sur votre PC avant l'envoi :** tout secret que BMM conserve (jetons, mots de passe, clés,
+  identifiants dans des adresses), le nom de votre dossier utilisateur Windows, les adresses e-mail et
+  IP, les noms de votre PC et de votre compte. Le serveur retire ces formes une seconde fois.
+- **Identité :** un **hachage à sens unique** de votre Creator ID, pas le Creator ID ; une demande de
+  copie ou d'effacement pour votre Creator ID atteint quand même ces rapports.
+- **Volume :** la même erreur dans les 10 minutes n'incrémente qu'un compteur ; 60 nouvelles erreurs
+  par heure au plus ; une file d'attente de 200 lignes au plus, gardée sur le disque.
+- **Qui les lit :** l'équipe BMM, dans le tableau de bord de télémétrie. Chaque nouveau groupe
+  d'erreurs est classé par **Laya**, le classifieur de BetterCommunity qui tourne sur les mêmes
+  serveurs ; le texte n'est jamais envoyé à un fournisseur d'IA extérieur.
 
-### 3.5 Stockage, localisation, effacement
-- **Où :** un serveur exploité par l'équipe BMM. La lecture des données stockées exige une clé
+### 5.6 Statistiques d'utilisation de Laya
+Pour chaque utilisation d'une fonction de Laya : **quelle fonction** et **où elle a tourné** (intégrée
+à BMM, serveur BetterCommunity, votre propre serveur Laya, une API externe, des règles simples) ;
+**combien de temps** (arrondi) et si elle a répondu ou s'est abstenue ; pour les suggestions, **le nom
+des champs** suggérés et ceux que vous avez **gardés ou refusés** ; pour Demander à Laya, **le nombre
+de résultats** et le **type** de résultat ouvert ; l'installation, la suppression ou l'annulation du
+modèle intégré ; une erreur sous forme de **code court**. **Jamais envoyé :** votre question, un texte
+lu ou écrit par Laya, la valeur d'une suggestion, un nom de mod, de fichier ou de profil, un chemin ou
+un message d'erreur.
+
+### 5.7 Stockage, localisation, conservation, effacement
+- **Où :** un serveur exploité par le responsable du §1. Lire les données stockées exige une clé
   d'administration ; la clé intégrée à BMM permet seulement d'envoyer des données et de déposer des
   demandes d'effacement ou d'accès.
-- **Une copie de vos données :** le panneau Confidentialité peut déposer une demande portant sur tout
-  ce qui est lié à votre Creator ID. Vous indiquez une adresse e‑mail, envoyée avec la demande ; un
-  administrateur l'examine et vous renvoie l'export par e‑mail.
-- **Votre adresse IP et votre localisation — tronquées, jamais stockées entières :** le serveur voit
-  l'adresse d'où vient un lot, comme tout serveur web ; BMM lui‑même n'envoie aucune adresse (§3.1).
-  **Elle n'est pas écrite en entier.** Avant tout stockage, une adresse est réduite au réseau auquel elle
-  appartient : les trois premiers nombres pour IPv4 (`203.0.113.45` → `203.0.113.0`) et les trois
-  premiers groupes pour IPv6. C'est cela qui entre dans la base de données, dans la recherche de
-  localisation, dans la liste des instances en ligne et dans le journal d'activité des
-  administrateurs. L'adresse exacte n'existe que dans la mémoire du serveur, le temps d'une requête,
-  comme clé du compteur anti‑inondation ; elle n'est jamais stockée, journalisée ni exportée.
-- **Localisation :** BMM ne cherche pas votre localisation. Sur le serveur, l'adresse tronquée est
-  localisée au moyen du service tiers **ipwho.is**, et le pays, la région et la ville sont stockés. Les coordonnées sont **arrondies à un dixième de degré
-  (environ 11 km)** avant d'être stockées : ce qui est conservé est une ville, pas un lieu. La
-  géolocalisation par IP situe le réseau par lequel vous vous connectez, pas votre domicile.
-- **Conservation :** tout est supprimé automatiquement après la durée de conservation, **180 jours**
-  sauf autre valeur choisie par l'administrateur : les événements d'utilisation, les benchmarks et
-  les replays de session, **ainsi que les réseaux stockés, leurs localisations et la liste des
-  « instances en ligne »** — ces trois‑là étaient auparavant conservés indéfiniment et sont
-  désormais purgés dans la même passe.
-- **Effacement par paquet :** le panneau Confidentialité liste chaque paquet envoyé par BMM
-  (identifiant, heure, types d'événements et leur nombre). « Demander la suppression » efface les
-  événements, benchmarks et replays de ce paquet après un délai d'examen de 72 heures au plus, ou
-  immédiatement si un administrateur l'approuve ; une demande refusée peut être refaite. Si ce
-  paquet était la dernière donnée détenue sur votre installation, l'effacement **retire aussi le
-  réseau stocké, sa localisation et l'entrée « en ligne »** correspondante.
-- **Effacement par personne :** une demande de suppression liée à votre Creator ID retire vos
-  événements, benchmarks et replays et, dans la même passe, le réseau, l'entrée « en ligne » et la
-  localisation en cache (cette dernière seulement quand plus aucune autre installation n'est vue sur
-  ce même réseau).
-- Vous pouvez exporter ou vider le tampon local de BMM à tout moment dans le panneau
-  Confidentialité.
-- Le serveur limite le nombre de lots qu'une même adresse peut envoyer par minute.
-
-### 3.6 Erreurs envoyées en direct
-La catégorie **« Erreurs en direct »** (Paramètres → Confidentialité, le *Choisir* de l'écran de
-consentement, et une case sous la case télémétrie de l'installateur) envoie un court rapport en
-quelques secondes quand BMM rencontre une erreur. Elle ne fonctionne **que si la télémétrie est
-activée** ; couper la télémétrie l'arrête et efface les rapports qui attendaient encore sur votre
-PC. Le même interrupteur couvre aussi les journaux d'avertissements et d'erreurs du §3.1.
-
-- **Par défaut :** **activée avec la télémétrie**. Accepter la télémétrie (avec *Tout activer*, ou
-  en activant la télémétrie dans Paramètres → Confidentialité) l'active ; *Choisir* permet de la
-  laisser désactivée, et Paramètres → Confidentialité la coupe seule à tout moment. Réactiver la
-  télémétrie après l'avoir coupée la réactive.
-- **Ce qui est envoyé :** les erreurs JavaScript, les plantages côté Rust, les commandes en échec sur
-  une vraie erreur (pas une annulation, pas une absence de réseau, pas un message déjà affiché), et
-  les déploiements, installations, sauvegardes et tâches planifiées en échec. Pour chacun : le
-  message d'erreur, l'endroit du code de BMM concerné (noms de fonction et de fichier, sans numéro de
-  ligne), une gravité, combien de fois et quand (première et dernière fois), la version de BMM, le
-  nom et l'architecture du système, l'identifiant de session de télémétrie et, pour un plantage, le
-  **nom de fichier** du rapport de plantage local (jamais son contenu). Jamais les arguments d'une
-  commande, le contenu d'un fichier ni ce que vous avez saisi.
-- **Retiré sur votre PC avant l'envoi :** tous les secrets que BMM stocke (la même passe que pour les
-  rapports de plantage : jetons, mots de passe, clés, votre clé d'API BetterCommunity, identifiants
-  dans les adresses), le nom de votre dossier utilisateur Windows, les adresses e‑mail, les adresses
-  IP et les noms de votre PC et de votre compte. Le serveur retire ces formes une seconde fois à
-  l'arrivée.
-- **Identité :** chaque rapport porte une **empreinte à sens unique** de votre Creator ID, pas le
-  Creator ID. Le tableau de bord ne peut pas la rapprocher de votre autre télémétrie, mais une
-  demande de copie ou d'effacement pour votre Creator ID atteint quand même ces rapports (le serveur
-  calcule la même empreinte).
-- **Combien :** la même erreur dans les 10 minutes n'augmente qu'un compteur ; au plus 60 nouvelles
-  erreurs par heure ; une file d'au plus 200 lignes, gardée sur disque pour qu'un PC hors ligne
-  l'envoie plus tard.
-- **Qui le lit :** l'équipe BMM, dans l'écran « Issues » du tableau de bord de télémétrie. Chaque
-  nouveau groupe d'erreurs est classé par **Laya**, le classifieur de BetterCommunity qui tourne sur
-  les mêmes serveurs (catégorie, gravité, « votre configuration ou un bug de BMM ») ; le texte n'est
-  jamais envoyé à un fournisseur d'IA extérieur. Même durée de conservation que le reste de la
-  télémétrie (§3.5).
-
-### 3.7 Statistiques d'usage de Laya
-Une catégorie à part entière (§3.0), activée par *Tout activer*. Elle dit à l'équipe si Laya (§6.10)
-est utile, sans rien envoyer de ce que Laya a lu ou écrit. Pour chaque utilisation d'une fonction
-de Laya, BMM envoie :
-
-- **quelle fonction** (suggestions pour un mod, brouillon de description, Demander à Laya, recherche
-  intelligente, tri d'un rapport, test de connexion) et **où elle a tourné** : intégrée à BMM, le
-  serveur BetterCommunity, votre propre serveur Laya, une API externe, ou de simples règles ;
-- **combien de temps** (arrondi à 10 ms, et une tranche comme « 1 à 3 s »), si elle a répondu, et
-  si elle **s'est abstenue** (rien d'assez sûr) ;
-- pour les suggestions, **le nom des champs** suggérés (tags, catégorie, auteur…) et, quand vous
-  appliquez, les champs **gardés ou refusés** ;
-- pour Demander à Laya, **combien de résultats**, s'ils étaient peu sûrs, et quand vous en ouvrez
-  un, **son type** (un mod, une page, un réglage…) ;
-- l'**installation, la suppression ou l'annulation** du modèle intégré, et si elle a réussi ;
-- une erreur sous forme de **code court** (`timeout`, `no_model`…), jamais son message.
-
-**Jamais envoyé :** votre question, le texte que Laya a lu ou écrit, la valeur d'une suggestion, un
-nom de mod, de fichier ou de profil, un identifiant, un chemin ou un message d'erreur. Ces
-statistiques vont au serveur de télémétrie avec le reste, avec la même conservation et le même
-effacement (§3.5).
+- **Votre adresse IP est tronquée, jamais stockée entière :** avant tout stockage, une adresse est
+  réduite à son réseau (`203.0.113.45` → `203.0.113.0` ; les trois premiers groupes en IPv6). L'adresse
+  exacte n'existe que dans la mémoire du serveur le temps d'une requête, comme clé du compteur
+  anti‑flood.
+- **Localisation :** l'adresse tronquée est recherchée auprès du service tiers **ipwho.is** ; pays,
+  région et ville sont stockés, coordonnées arrondies au dixième de degré (environ 11 km).
+- **Conservation :** tout est supprimé automatiquement après **180 jours** sauf autre valeur fixée par
+  l'administrateur, y compris les réseaux stockés, leur localisation et la liste des instances en direct.
+- **Effacement par paquet :** Paramètres → Confidentialité liste chaque paquet envoyé ; « Demander la
+  suppression » l'efface sous 72 heures (immédiatement si un administrateur l'approuve).
+- **Effacement par personne / copie de vos données :** une demande liée à votre Creator ID supprime, ou
+  exporte, tout ce qui est conservé sous cet identifiant. La copie est renvoyée par e-mail à l'adresse
+  que vous indiquez.
+- Exportez ou videz le tampon local de BMM à tout moment dans Paramètres → Confidentialité.
 
 ---
 
-## 4. Discord Rich Presence
-Activé, BMM indique à **l'application Discord installée sur votre PC** quoi afficher sur votre
-profil : le nom de votre profil BMM actif, le nombre de mods activés, la version de BMM avec votre
-**Creator ID**, et un bouton « Website » dont le lien contient votre Creator ID. Discord affiche ces
-informations à **toute personne qui peut voir votre profil**, selon sa propre politique de
-confidentialité. Chaque mise à jour relit aussi la liste de liens de BMM sur GitHub.
+## 6. Discord Rich Presence
+Activé, BMM indique à l'**application Discord de votre PC** quoi afficher sur votre profil : le nom de
+votre profil BMM actif, le nombre de mods actifs, la version de BMM avec votre **Creator ID**, et un
+bouton « Site web » dont le lien contient votre Creator ID. Discord l'affiche à **quiconque peut voir
+votre profil**, selon sa politique. Chaque mise à jour relit aussi la liste de liens de BMM sur GitHub.
 
-**Par défaut : désactivé**, dans BMM comme dans BetterInstaller, dont la case est désormais
-**décochée** — installer avec lui ne change rien ici si vous ne la cochez pas vous‑même.
-Activez‑le ou désactivez‑le dans les Paramètres. Un lien `bmm://discord/rpc` (que n'importe
-quelle page web peut ouvrir) ne fait que demander : BMM indique ce qui deviendra visible, et rien ne
-change sans votre confirmation dans BMM.
+**Par défaut : désactivé** dans BMM ; dans l'installeur, *Tout accepter* l'active (la carte le dit),
+*L'essentiel uniquement* le laisse désactivé, *Personnaliser* vous laisse choisir. Désactivez-le à tout
+moment dans Paramètres. Un lien `bmm://discord/rpc` ne fait que demander : rien ne change sans votre
+confirmation dans BMM.
 
 ---
 
-## 5. Rapports de bug, de plantage et retours
+## 7. Rapports de bug, de plantage et suggestions
 
-### 5.1 Envoyer un rapport
-Une suggestion, un rapport de bug ou un rapport de plantage est envoyé au **centre de retours
-BetterCommunity** (`bettercommunity.ch/api/feedback/bmm`), et nulle part ailleurs : les formulaires
-BetaHub qui servaient de secours ont été retirés le 25 septembre 2026, donc une application
-configurée avec une adresse de retours vide n'envoie aucun rapport. **Rien n'est envoyé
-avant que vous cliquiez sur Envoyer.** BMM transmet alors :
+### 7.1 Envoyer un rapport
+Une suggestion, un rapport de bug ou de plantage va au **centre de retours BetterCommunity**
+(`bettercommunity.ch/api/feedback/bmm`) et nulle part ailleurs. **Rien n'est envoyé avant que vous
+appuyiez sur Envoyer.** BMM envoie alors :
 
-- le titre, la description et les étapes de reproduction que vous saisissez, et les captures
-  d'écran que vous joignez ;
-- le `.zip` de rapport de plantage que vous sélectionnez (contenu au §5.2) ;
-- en option le journal de l'application (`bmm_frontend.log`), pré‑coché pour les bugs et
-  plantages ;
-- en option un **rapport DxDiag**, pré‑coché pour les plantages : un inventaire complet du matériel
-  et des pilotes qui contient aussi des identifiants de la machine et du système et votre **nom de
-  compte Windows** ;
-- votre **Creator ID** (avec une preuve signée, qui porte l'empreinte hachée de l'appareil du §2.4),
-  la version de l'application, le système, la langue et le user‑agent ;
-- l'e‑mail ou le pseudo Discord que vous saisissez, le cas échéant, pour qu'on puisse vous
-  répondre. Avec un compte BetterCommunity lié, le rapport ouvre plutôt un fil dans votre tableau
-  de bord.
+- le titre, la description et les étapes que vous saisissez, et les captures jointes ;
+- un `.zip` de rapport de plantage que vous choisissez (§7.2) ;
+- en option le journal de l'application (`bmm_frontend.log`), précoché pour les bugs et plantages ;
+- en option un **rapport DxDiag**, précoché pour les plantages : un inventaire du matériel et des
+  pilotes qui contient aussi des identifiants de la machine et de l'OS et votre **nom de compte
+  Windows** ;
+- votre **Creator ID** (avec une preuve signée portant l'empreinte d'appareil hachée du §4.6), la
+  version de l'application, l'OS, la langue et le user-agent ;
+- l'e-mail ou le pseudo Discord que vous saisissez, le cas échéant, pour qu'on puisse vous répondre.
 
-Une petite preuve de travail anti‑spam s'exécute avant l'envoi ; elle n'envoie aucune donnée
-supplémentaire. Si le site est injoignable, le rapport est gardé localement et renvoyé 15 secondes
-après le lancement suivant, et nulle part ailleurs. BMM garde une liste locale de vos 50 derniers
-envois (avec la liste des mots significatifs de chaque rapport, utilisée seulement pour vous
-signaler, sur ce PC, que vous en avez déjà envoyé un semblable). Une fois reçu, un rapport est
-conservé selon les conditions de la plateforme BetterCommunity.
+Une petite preuve de travail anti‑spam s'exécute d'abord ; elle n'envoie rien de plus. Si le site est
+injoignable, le rapport est gardé localement et renvoyé après le lancement suivant. Avant l'envoi, BMM
+analyse le texte **sur votre PC** à la recherche de secrets, chemins contenant votre nom d'utilisateur,
+adresses e-mail et IP et noms de compte, et propose de les masquer (coché par défaut). Une fois reçu,
+un rapport est conservé selon les conditions de la plateforme BetterCommunity.
 
-Avant l'envoi d'un rapport, BMM vérifie son texte **sur votre PC** : il repère les secrets, les
-chemins de dossier contenant votre nom d'utilisateur, les adresses e‑mail et IP et les noms de votre
-compte Windows et de votre PC, vous indique combien il en a trouvé et propose de les masquer (case
-cochée par défaut), et signale un rapport semblable envoyé ces 30 derniers jours. Rien de cela
-n'envoie quoi que ce soit. Seulement si vous avez activé l'IA optionnelle (§6.10) et cliquez sur
-*Obtenir un indice IA*, le texte **déjà masqué** est envoyé au fournisseur choisi, pour un indice de
-catégorie / gravité ; le rapport lui‑même ne part toujours que quand vous cliquez sur Envoyer.
+### 7.2 Contenu d'un zip de rapport de plantage
+Quand BMM plante, il écrit un `.zip` **sur votre disque** : les journaux de BMM, un instantané des
+informations système, l'enregistrement de session masqué du §7.3 avec la sortie console et journal,
+et, pour un rapport écrit à une fermeture normale, un **instantané du fichier de données de BMM**
+(profils et réglages, y compris adresses et chemins de dossiers). **Les secrets sont masqués avant
+l'écriture du zip** (`[REDACTED: N chars]`). Un zip de plantage ne contient pas DxDiag. Ces fichiers
+restent sur votre ordinateur sauf si vous en envoyez ou partagez un vous-même.
 
-### 5.2 Contenu d'un zip de rapport de plantage
-Quand BMM plante, il écrit un `.zip` de rapport **sur votre disque**. Il contient les journaux de
-BMM, un instantané des informations système, et l'enregistrement de session masqué du §5.3 avec la
-sortie de la console et du journal ; un rapport écrit à la fermeture normale de BMM contient aussi un
-**instantané du fichier de données de BMM** (vos profils et réglages, y compris les adresses de vos
-mods et dépôts et vos chemins de dossiers, qui peuvent contenir votre nom d'utilisateur Windows).
-**Les secrets sont masqués avant l'écriture du zip** : le jeton d'accès GitHub, le jeton de l'API
-locale, les jetons des plugins, la clé du planificateur, et toute autre valeur rangée sous un champ
-token, password, key, secret, auth, cookie ou webhook, ainsi que les mots de passe contenus dans des
-adresses, apparaissent sous la forme `[REDACTED: N chars]` (la longueur seulement, aucune partie de
-la valeur). Les rapports écrits par des versions antérieures sont nettoyés de la même façon au
-prochain démarrage de BMM. Un zip de plantage **ne contient pas de DxDiag** : celui‑ci n'est joint à
-un rapport que si vous cochez sa case (§5.1). Ces fichiers restent sur votre ordinateur tant que vous
-n'en envoyez ou n'en partagez pas un vous‑même ; ouvrez le zip au préalable pour voir exactement ce
-qu'il contient.
-
-### 5.3 Enregistrement local de la session
-BMM garde toujours un enregistrement de la session en cours (masqué comme au §3.2) **sur votre
-disque** : des segments de travail dans son dossier de données, et la dernière session enregistrée
-sous `last_crash_session.bmmreplay` environ toutes les 45 secondes, pour qu'un rapport de plantage
-montre ce qui s'est passé juste avant. Le journal de BMM et la sortie de la console enregistrés avec
-lui ne sont pas masqués. Activer l'**Enregistreur de session** (Paramètres → Débogage & dépannage)
-conserve en plus chaque session dans une liste de replays locale. **Rien de tout cela n'est envoyé**,
-sauf si vous envoyez un rapport de plantage qui le contient (§5.1), ou si le replay de la télémétrie
-(§3.2) est actif, qui est un enregistrement distinct. Un lien `bmm://recorder/set` demande dans BMM
-avant de modifier l'enregistreur, et ne peut jamais le passer en mode non masqué.
+### 7.3 Enregistrement local de la session
+BMM garde un enregistrement masqué de la session en cours **sur votre disque** (segments de travail
+dans son dossier de données, la dernière session dans `last_crash_session.bmmreplay`), pour qu'un
+rapport de plantage montre ce qui s'est passé. Le journal et la sortie console enregistrés avec ne sont
+pas masqués. L'**Enregistreur de session** (Paramètres → Débogage & dépannage) garde en plus chaque
+session dans une liste locale. **Rien de tout cela n'est envoyé**, sauf si vous envoyez un rapport qui
+le contient, ou si la relecture de session de la télémétrie (§5.2) est activée.
 
 ---
 
-## 6. Autres fonctions qui contactent un serveur quand vous les utilisez
+## 8. Autres fonctions qui contactent un serveur quand vous les utilisez
 
-### 6.1 Server Repos
-Se connecter à un Server Repo ou se synchroniser avec lui envoie des requêtes à son serveur, qui
-voit votre **adresse IP** et votre **Creator ID**, afin que son propriétaire puisse appliquer listes
-blanches et bannissements et voir des statistiques de connexion. C'est le propriétaire du dépôt, et
-non l'équipe BMM, qui contrôle ce serveur. Les dépôts qui exigent un **mot de passe de
-téléchargement** le reçoivent avec vos requêtes pendant la session ; BMM ne l'écrit jamais sur le
-disque. Les dépôts et catalogues qui exigent une **clé d'identité** reçoivent une déclaration signée
-de courte durée, jamais la clé ; BMM ne stocke que le chemin de votre fichier de clé, et quelle clé
-répond à quel serveur.
+### 8.1 Server Repos
+Se connecter à un Server Repo ou le synchroniser envoie des requêtes à son serveur, qui voit votre
+**adresse IP** et votre **Creator ID**, pour que son propriétaire applique listes blanches et
+bannissements. C'est le propriétaire du dépôt, pas l'équipe BMM, qui contrôle ce serveur. Un **mot de
+passe de téléchargement** est envoyé avec vos requêtes pendant la session et jamais écrit sur le
+disque. Les dépôts qui exigent une **clé d'identité** reçoivent une attestation signée de courte durée,
+jamais la clé.
 
-### 6.2 Héberger un Server Repo, publier par SSH
+### 8.2 Héberger un Server Repo, publier en SSH
 Si **vous** hébergez un dépôt, les personnes qui s'y connectent exposent **leur** adresse IP et leur
-Creator ID à **votre** machine, et vous devenez responsable de ces journaux. Le flux d'état public du
-dépôt (`monitoring.json`, lisible sans mot de passe) ne montre que des **totaux** : le nombre de
-téléchargements en cours, les octets envoyés et la progression de chaque fichier en cours, jamais une
-adresse IP ni un Creator ID. Qui télécharge n'est montré qu'à vous, dans l'écran de BMM (ou, pour un
-serveur autonome, sur son tableau de bord protégé par le mot de passe admin). Publier par SSH se
-connecte au serveur que **vous** avez configuré ; hôte, port, utilisateur, dossier distant et
-**chemin** de votre clé privée sont enregistrés localement, tandis que la phrase de passe de la clé et
-tout mot de passe sont lus au moment de l'utilisation et jamais stockés. L'empreinte du serveur est
-enregistrée à la première connexion pour qu'un serveur modifié soit refusé.
+Creator ID à **votre** machine, et vous devenez responsable de ces journaux. Le flux d'état public
+(`monitoring.json`) ne montre que des agrégats. Publier en SSH se connecte au serveur que **vous** avez
+configuré ; la phrase de passe de la clé et les mots de passe sont lus au moment de l'usage et jamais
+stockés.
 
-### 6.3 Les documents que vous partagez portent votre identifiant d'auteur
-Les modpacks (`.bmp`), catalogues de modpacks (`.cbmp`) et tutoriels (`.bmmtut`) que vous exportez
-sont **signés avec votre clé de créateur**. Toute personne avec qui vous partagez le fichier peut voir
-votre identifiant d'auteur (votre Creator ID) et vérifier que le fichier n'a pas été modifié.
+### 8.3 Les documents que vous partagez portent votre identifiant d'auteur
+Les modpacks (`.bmp`), catalogues de modpacks (`.cbmp`), tutoriels (`.bmmtut`) et automatisations que
+vous exportez sont **signés avec votre clé de créateur** : quiconque les reçoit voit votre Creator ID.
 
-### 6.4 Téléchargements et catalogues que vous ouvrez
-Télécharger des plugins, des applications de catalogue ou des thèmes, ouvrir le blog communautaire,
-et les icônes affichées depuis les services jsDelivr et Simple Icons sont des requêtes HTTPS
-ordinaires : l'hôte voit votre adresse IP.
+### 8.4 Téléchargements et catalogues que vous ouvrez
+Télécharger des plugins, des applications du catalogue ou des thèmes et ouvrir le blog communautaire
+sont des requêtes HTTPS ordinaires : l'hôte voit votre adresse IP.
 
-### 6.5 Vidéos YouTube dans la documentation
-Des pages de la documentation intégrée peuvent inclure des vidéos YouTube, chargées via l'intégration
-`youtube‑nocookie.com` quand vous ouvrez une telle page en ligne. Google/YouTube peut voir votre
-adresse IP et stocker des données selon la politique de confidentialité de **Google**.
+### 8.5 L'API locale de plugins
+L'API de plugins n'écoute que sur `127.0.0.1`. Ses requêtes et votre jeton d'API restent sur votre
+ordinateur.
 
-### 6.6 Lier un compte BetterCommunity
+### 8.6 Lier un compte BetterCommunity
 Lier un compte envoie votre **Creator ID** à `bettercommunity.ch`, avec une preuve signée et
-l'empreinte hachée de l'appareil (§2.4), pour demander un code à usage unique, puis vérifie si le code
-a été saisi. Tant que l'installation reste liée, BMM envoie une preuve de plus à chaque changement de
-clé, pour que le site sache quelle clé parle pour votre Creator ID. BMM n'envoie ni mot de passe ni
-e‑mail dans cet échange.
+l'empreinte d'appareil hachée (§4.6), pour demander un code à usage unique, puis vérifie si le code a
+été saisi. Aucun mot de passe ni e-mail n'est envoyé dans cet échange.
 
-### 6.7 Notifications BetterCommunity (seulement avec une clé d'API)
-Si, et seulement si, vous enregistrez une **clé d'API** BetterCommunity dans Paramètres → Identité &
-API, BMM demande les notifications de ce compte à `bettercommunity.ch/v1/notifications` **toutes les
-dix minutes** tant qu'il est ouvert.
+### 8.7 Notifications BetterCommunity (seulement avec une clé d'API)
+Si, et seulement si, vous enregistrez une **clé d'API** BetterCommunity (limitée à
+`notifications:read`), le processus natif de BMM interroge `bettercommunity.ch/v1/notifications`
+**toutes les dix minutes**. La clé n'entre jamais dans la vue web ; elle est **stockée en clair** dans
+le dossier de données de BMM. Supprimez-la depuis le même écran et révoquez-la depuis la page de votre
+compte.
 
-- **La clé n'entre jamais dans la vue web.** Elle est stockée dans le dossier de données de BMM et
-  lue uniquement par le processus natif de BMM, qui fait la requête. L'interface peut en enregistrer
-  une, demander s'il en existe une et la supprimer ; elle ne peut pas la relire.
-- **Sa portée est limitée** à `notifications:read` : elle permet de lire vos notifications et rien
-  d'autre.
-- **Elle est stockée en clair sur le disque.** Toute personne qui peut lire votre dossier de données
-  peut la lire. Retirez‑la depuis le même écran, et révoquez‑la depuis la page de votre compte sur le
-  site.
+### 8.8 Démarrage automatique et fichiers locaux
+Démarrer BMM avec Windows (proposé décoché par l'installeur) et tout ce que BMM écrit sur votre disque
+n'envoie rien.
 
-Pas de clé enregistrée, pas de requête.
+### 8.9 Intégrations que vous configurez
+Tout ce que vous configurez vous-même (un webhook Discord, un tunnel Cloudflare, une tâche planifiée
+qui appelle une adresse web) envoie des données à ce service, selon ses propres conditions.
 
-### 6.8 L'API Plugin locale
-L'API Plugin (voir les Conditions d'utilisation) n'écoute que sur `127.0.0.1`. Ses requêtes et votre
-jeton d'API restent sur votre ordinateur ; ils ne sont pas envoyés à l'équipe BMM.
+### 8.10 Laya et IA optionnelle
+**Laya hors ligne** exécute le classifieur Laya **sur votre PC** : le texte d'un mod ou d'un rapport
+est lu dans la mémoire de BMM et **rien n'est envoyé nulle part**. Le pack du modèle est téléchargé une
+fois (§4.5). BMM désactive les événements de télémétrie de la bibliothèque ONNX Runtime qu'il utilise
+(selon Microsoft, un événement minimal de démarrage peut encore être écrit dans le traçage
+d'événements local de Windows, que Windows ne transmet que selon vos propres réglages de données de
+diagnostic). **Demander à Laya** répond à partir de ce qui est déjà sur votre PC ; la question n'est
+jamais envoyée ni conservée.
 
-### 6.9 Intégrations que vous configurez
-Tout ce que vous configurez vous‑même (webhook Discord, tunnel Cloudflare, …) envoie des données à ce
-service, selon ses propres conditions.
+Les **fournisseurs réseau sont désactivés par défaut**. Rien ne quitte votre PC sauf si vous activez
+Paramètres → IA **et** choisissez un fournisseur réseau, et alors seulement quand vous cliquez
+*Suggérer*, *brouillon* ou *indice IA* :
 
-### 6.10 IA optionnelle (Laya)
-**Laya intégré (hors ligne)** — l'option *Laya hors ligne (IA locale, aucune donnée envoyée)* de
-l'installateur, cochée par défaut — fait tourner le classifieur Laya **sur votre PC** : le texte d'un
-mod ou d'un rapport est lu dans la mémoire de BMM et **rien n'est envoyé nulle part**, ni à
-BetterCommunity ni à personne. L'installer télécharge une fois un paquet de modèle (depuis la release
-GitHub de BMM, ou le miroir BetterCommunity), vérifié contre un SHA‑256 épinglé ; ce téléchargement
-ne transporte rien vous concernant. BMM coupe les événements de télémétrie de la bibliothèque ONNX
-Runtime qu'il utilise (les versions de Microsoft émettent par défaut des événements de traçage
-Windows ; selon Microsoft, un événement minimal de démarrage peut encore être écrit dans le traçage
-local de Windows, que Windows ne transmet que selon vos propres réglages de données de diagnostic).
-
-**Demander à Laya** (*Demander à Laya* dans la palette, le centre d'aide, la *recherche
-intelligente* de la bibliothèque) répond à partir de ce qui est déjà sur votre PC : la
-documentation embarquée de BMM, l'écran Réglages, les noms, descriptions, tags et listes de
-fichiers scannées de vos mods, et vos profils. La question n'est **jamais envoyée** nulle part et
-**n'est pas conservée** (aucun historique). La recherche elle-même fonctionne même avec l'IA
-désactivée ; le modèle intégré ne classe les résultats que si l'interrupteur principal est activé et
-le modèle installé.
-
-Les autres fournisseurs sont **désactivés par défaut**. L'action *Suggérer des infos* du panneau
-d'un mod lit toujours d'abord les fichiers du mod sur votre PC ; rien n'en sort tant que vous
-n'activez pas Réglages → IA **et** ne choisissez pas un fournisseur réseau, et alors seulement quand
-vous cliquez sur *Suggérer*, *demander un brouillon de description* ou *Obtenir un indice IA* :
-
-- **Ce qui est envoyé** pour un mod : son nom, son auteur, sa description, des extraits de son
-  readme ou manifeste, jusqu'à 40 noms de fichiers et les noms de vos tags, après que BMM a masqué
-  les noms d'utilisateur dans les chemins, les adresses e‑mail et IP ; 4 000 caractères au plus.
-  Pour un indice de rapport : le texte du rapport, après masquage. La fenêtre montre le texte exact
-  envoyé.
-- **À qui** : *BetterCommunity* — `bettercommunity.ch`, avec votre Creator ID, sa preuve signée
-  (§2.4) et, si vous en avez enregistré une, votre clé d'API BetterCommunity, seulement après avoir
-  coché la case de consentement ; traité là‑bas par le classifieur Laya. *Votre propre serveur Laya*
-  — l'adresse que vous indiquez, sur ce PC par défaut (une autre machine demande une case explicite).
-  *Une API externe* que vous configurez (pour les brouillons de description seulement) — ce service,
-  avec votre clé, selon ses propres conditions.
-- **Les clés** saisies pour votre serveur Laya ou votre API externe sont stockées par le système
-  (DPAPI sous Windows, le trousseau macOS/Linux) et ne sont envoyées nulle part ailleurs ; sans l'un
-  ni l'autre, elles ne sont gardées que pour la session.
-- **Rien n'est écrit** dans un mod tant que vous ne cochez pas une suggestion puis cliquez sur
-  Appliquer.
-- Désactivez‑la dans Réglages → IA, avec la case *Laya hors ligne* de l'installateur
-  (ou `--set=ai_features=false`), ou pour une session avec `--no-ai` / `BMM_NO_AI=1`. Interrupteur
-  éteint, BMM ne fait aucune requête d'IA et ne fait tourner aucun modèle. Réglages → IA →
-  *Supprimer le modèle* efface un paquet de modèle téléchargé.
+- **Ce qui est envoyé** pour un mod : nom, auteur, description, extraits du readme ou du manifeste,
+  jusqu'à 40 noms de fichiers et les noms de vos tags, masqués d'abord, 4 000 caractères au plus ; pour
+  un indice de rapport, le texte masqué du rapport. Le dialogue montre le texte exact envoyé.
+- **À qui :** *BetterCommunity* (avec votre Creator ID, sa preuve signée et, si elle est enregistrée,
+  votre clé d'API, après que vous avez coché la case de consentement) ; *votre propre serveur Laya*
+  (sur ce PC par défaut) ; ou *une API externe* que vous configurez, selon ses propres conditions.
+- Les clés saisies pour ces fournisseurs sont stockées par le système d'exploitation (DPAPI,
+  trousseau).
+- Désactivez l'IA dans Paramètres → IA, dans l'installeur (« Pas maintenant »), avec
+  `--set=ai_features=false`, ou pour une session avec `--no-ai` / `BMM_NO_AI=1`. *Supprimer le modèle*
+  efface le pack téléchargé.
 
 ---
 
-## 7. Récapitulatif
+## 9. Preuve du consentement : vos preuves de consentement
 
-| Action | Quitte votre PC ? | Ce qui est envoyé | À qui |
-|---|---|---|---|
-| Parcourir et gérer mods, profils, modpacks | Non | — | — |
-| Chaque lancement (liens, contributeurs) | Oui, toujours | Adresse IP seulement — **pas de Creator ID** (§2.1) | bettercommunity.ch (GitHub en secours) |
-| Vérification des mises à jour | Oui, par défaut | Adresse IP, user‑agent du programme | GitHub, bettercommunity.ch |
-| Tests de connectivité, polices, catalogue d'applications | Oui, toujours | Adresse IP | Google, Cloudflare, GitHub |
-| **Télémétrie** (**désactivée** sauf si vous l'acceptez dans BMM) | Oui | Creator ID, profil système (sans adresse IP), utilisation, texte des boutons cliqués, adresses des liens externes, journaux, performances, noms de jeux, adresses de dépôts. Le serveur voit l'adresse de la connexion et ne la conserve que tronquée à son réseau | Serveur de télémétrie BetterCommunity ; le serveur localise votre réseau tronqué avec ipwho.is. BMM lui‑même ne contacte aucun service d'IP ou de localisation |
-| Replay de session (catégorie de télémétrie, actif avec elle sauf si désactivé) | Oui | Enregistrement masqué de la fenêtre de BMM | Serveur de télémétrie BetterCommunity |
-| Statistiques Laya (catégorie de télémétrie, actives avec elle sauf si désactivées) | Oui | Fonction, où elle a tourné, durée, champs suggérés puis gardés ou refusés, nombre de résultats, codes d'erreur ; jamais de texte (§3.7) | Serveur de télémétrie BetterCommunity |
-| Benchmark hebdomadaire + rapport matériel (**désactivé**, question à part, hors de *Tout activer*) | Oui | Temps du benchmark, numéros de série du matériel, UUID de la machine, adresses MAC | Serveur de télémétrie BetterCommunity |
-| Erreurs envoyées en direct (catégorie de télémétrie, **active avec elle** sauf si désactivée) | Oui, en quelques secondes | Message d'erreur et emplacement dans le code, sans secrets, noms de dossiers, e‑mails ni IP, version de BMM, système, empreinte à sens unique du Creator ID | Serveur de télémétrie BetterCommunity (classé par Laya sur les mêmes serveurs) |
-| **Discord Rich Presence** (**désactivé** par défaut, dans BMM comme dans l'installateur) | Oui | Nom du profil, nombre de mods activés, Creator ID | Discord, affiché sur votre profil |
-| Se connecter à un Server Repo ou le synchroniser | Oui | Adresse IP, Creator ID | Le propriétaire de ce dépôt |
-| Héberger un Server Repo | Oui (entrant) | IP et Creator ID des visiteurs, stockés sur votre PC | Vous |
-| Envoyer une suggestion, un bug ou un plantage | Oui, quand vous cliquez sur Envoyer | Ce que vous saisissez, vos pièces jointes (le zip de plantage contient les journaux et, pour un rapport de fermeture normale, un instantané de vos réglages, jetons et mots de passe masqués ; le DxDiag, avec votre nom de compte Windows, seulement si vous le cochez), Creator ID avec preuve signée et empreinte hachée de l'appareil (§2.4), détails de l'application et du système | Centre de retours BetterCommunity |
-| Lier un compte BetterCommunity (et une fois par clé tant qu'il est lié) | Oui | Creator ID, preuve signée, empreinte hachée de l'appareil (§2.4) | bettercommunity.ch |
-| Notifications BetterCommunity (seulement avec une clé d'API enregistrée) | Oui, toutes les 10 min | La clé d'API, limitée à `notifications:read` | bettercommunity.ch |
-| IA optionnelle — *Suggérer* / *brouillon* / *indice IA* (**désactivée** par défaut ; seulement à votre clic) | Oui | Nom, auteur, description, extraits du readme, noms de fichiers d'un mod et noms de vos tags, ou le texte d'un rapport — masqués d'abord (§6.10) | Le fournisseur choisi : bettercommunity.ch (avec Creator ID et preuve), votre propre serveur Laya, ou votre API externe |
+Chaque réponse que vous donnez au sujet de ces documents laisse une **preuve** : accepter les
+Conditions d'utilisation ou cette Politique de confidentialité, et accepter, choisir, refuser ou
+retirer la télémétrie (et les rapports d'erreurs en direct). Une preuve enregistre :
+
+- le **document** (`tos`, `privacy`, `telemetry`, `crash_reports`) et sa **version** (pour les textes
+  légaux, une empreinte du texte anglais en vigueur ; pour la télémétrie, la version du texte de
+  consentement) ;
+- le **SHA‑256 du texte exact affiché**, dans la langue où vous l'avez lu ;
+- la **langue**, la **réponse** (accepté, accepté en partie, refusé, retiré, redemandé) et les choix
+  par catégorie ;
+- l'**heure**, la **source** (installeur, premier lancement, redemandé, Paramètres, un lien `bmm://`,
+  l'API locale, la ligne de commande, le serveur MCP, un import de données), la **version de BMM** ;
+- un **identifiant d'installation anonyme** : un nombre aléatoire créé pour les preuves, **pas**
+  dérivé de votre matériel et **pas** votre Creator ID.
+
+**Sur votre PC**, les preuves sont conservées dans le dossier de données de BMM
+(`consent-ledger.jsonl`) sous forme de chaîne en ajout seul **qui révèle toute modification** : chaque
+preuve porte l'empreinte de la précédente et un sceau à clé, de sorte qu'une preuve modifiée, retirée
+ou insérée est détectée. Paramètres → Confidentialité → **Mes consentements** les liste, indique si la
+chaîne est intacte, et les exporte en JSON. Elles restent jusqu'à ce que vous supprimiez le dossier de
+données de BMM.
+
+**Ce que BMM en fait.** Un réglage qui dit « accepté » ne suffit pas : BMM redemande chaque fois qu'il
+n'existe pas de preuve pour la version en vigueur, par exemple après une mise à jour depuis une version
+qui ne gardait pas de preuves, après l'import d'anciens réglages, ou quand le texte d'un document
+change.
+
+**Sur le serveur.** Les preuves sont envoyées au serveur de télémétrie (`…/consents`) **seulement si
+la télémétrie est activée**, ou quand vous appuyez sur *Envoyer au serveur* dans Mes consentements. Ce
+qui est envoyé : les preuves ci-dessus, rattachées à l'identifiant d'installation anonyme ; **aucune
+adresse IP n'est stockée avec elles, et aucun texte**, seulement des empreintes, versions, réponses et
+heures. Un refus ou un retrait fait alors que la télémétrie est désactivée reste donc sur votre PC
+sauf si vous l'envoyez vous-même. Le serveur recalcule l'empreinte de chaque preuve, refuse celle qui
+ne correspond pas, et les stocke **en ajout seul** (les lignes ne peuvent pas être modifiées).
+
+- **Pourquoi :** pouvoir démontrer quel texte vous avez accepté ou refusé, et quand (RGPD art. 7(1) ;
+  base légale art. 6(1)(c) et (f) ; nLPD art. 31).
+- **Conservation :** 3 ans après qu'une preuve est remplacée par une réponse plus récente, ou après que
+  l'installation n'a rien envoyé pendant cette durée (l'exploitant peut fixer une autre durée) ; la
+  preuve d'un consentement toujours en vigueur est conservée tant que l'installation est active.
+- **Effacement et accès :** indiquez l'identifiant d'installation affiché dans Mes consentements (§11).
 
 ---
 
-## 8. Vos choix et contact
+## 10. Données stockées sur votre PC
 
-- La télémétrie, le rapport matériel hebdomadaire et Discord Rich Presence sont **désactivés sauf si
-  vous les activez** : les cases de l'installateur sont décochées, et cocher celle de la télémétrie
-  ne fait que pré‑sélectionner la réponse sur l'écran de consentement de BMM. Chaque catégorie de
-  télémétrie (§3.0) se désactive seule, dans l'installateur (*Choisir*), sur l'écran de consentement
-  (*Choisir*) ou dans Paramètres → Confidentialité ; activez ou désactivez chacun plus tard dans les
-  Paramètres ; désactivez la vérification automatique des mises à jour dans les
-  Paramètres.
-- Exportez ou videz le tampon local de télémétrie, demandez l'effacement par paquet, ou demandez une
-  copie de vos données (§3.5).
-- Les requêtes de démarrage des §2.1 et §2.3 ne peuvent pas être désactivées dans BMM à ce jour ;
-  rester hors ligne les empêche.
-- Nous ne vendons jamais vos données, et elles ne servent pas à la publicité.
+Rien dans cette liste ne quitte votre PC, sauf si une section ci-dessus le dit.
 
-Pour toute autre demande concernant vos données (accès, effacement, question), ouvrez une issue sur
-le dépôt GitHub :
-[BetterModsManager](https://github.com/FreeProject089/BetterModsManager)
+| Quoi | Où | Supprimé par |
+|---|---|---|
+| Profils, mods, réglages, catalogues (`data.json` et fichiers associés) | Dossier de données de BMM | Supprimer le dossier de données de BMM |
+| Magasin de la clé de créateur, épingle et journal de réinitialisation | Dossier de données de BMM, registre utilisateur / trousseau | Paramètres (réinitialiser), ou les supprimer |
+| Preuves de consentement (`consent-ledger.*`, `consent-install-id`) | Dossier de données de BMM | Supprimer le dossier |
+| Tampon de télémétrie (10 Mo au plus) | Dossier de données de BMM | Paramètres → Confidentialité (vider), ou désactiver la télémétrie |
+| Journaux, rapports de plantage, enregistrements de session | Dossier de données de BMM | Paramètres → Débogage & dépannage, ou les supprimer |
+| Téléchargements de mise à jour interrompus (`updates/*.part`) | Dossier local d'application de BMM | Supprimés après usage ou après une vérification échouée |
+| Pack du modèle Laya | Dossier d'installation de BMM (`models/laya`) ou dossier de données | Paramètres → IA → *Supprimer le modèle* |
+| Préférences de l'interface | Stockage local de la WebView | Désinstaller, ou effacer les données de BMM |
+| Clés d'API et de fournisseurs enregistrées | Dossier de données de BMM (clé BetterCommunity : en clair) / magasin de clés du système | L'écran où vous les avez saisies |
 
-> Cette politique évolue avec l'application. Les changements importants sont signalés dans les notes
-> de version.
+---
+
+## 11. Vos droits
+
+Selon votre lieu de résidence (RGPD dans l'UE/EEE, RGPD britannique, nLPD suisse), vous avez le droit :
+
+- d'**accéder** aux données vous concernant et d'en obtenir une **copie** (portabilité) ;
+- de les faire **rectifier** ou **effacer** ;
+- de **limiter** un traitement fondé sur l'intérêt légitime ou de vous y **opposer** ;
+- de **retirer votre consentement** à tout moment, aussi facilement que vous l'avez donné (Paramètres →
+  Confidentialité), sans effet sur ce qui a été fait avant ;
+- d'**introduire une réclamation** auprès d'une autorité de contrôle : en Suisse le Préposé fédéral à
+  la protection des données et à la transparence (PFPDT), dans l'UE l'autorité de votre pays de
+  résidence.
+
+**Comment :** Paramètres → Confidentialité fait l'essentiel directement (exporter ou vider le tampon,
+demander l'effacement par paquet, demander une copie liée à votre Creator ID, voir et exporter vos
+preuves de consentement). Pour le reste, écrivez au contact confidentialité du §1 en indiquant votre
+Creator ID (télémétrie, rapports) ou votre identifiant d'installation anonyme (preuves de
+consentement), ou ouvrez une issue sur [GitHub](https://github.com/FreeProject089/BetterModsManager)
+**sans** y publier de données personnelles. Nous répondons sous un mois.
+
+Les requêtes au démarrage du §4.1 et les tests de connexion du §4.3 ne peuvent pas encore être
+désactivés dans BMM ; rester hors ligne les empêche.
+
+---
+
+## 12. Modifications de cette politique
+
+Cette politique change avec l'application ; les changements importants sont signalés dans les notes de
+version. Quand son texte change, BMM vous demande de l'accepter à nouveau et garde une preuve (§9). Les
+versions précédentes restent dans l'historique du dépôt.
+
+**Version 2026-10-13 (BMM 1.0.2) :** inventaire des flux de données (§3) ; bloc du responsable (§1) ;
+l'étape de confidentialité de l'installeur et l'effet de chaque réponse (§2, §5) ; le téléchargement du
+modèle Laya pendant l'installation, coché par défaut (§4.5) ; Discord Rich Presence dans *Tout
+accepter* (§6) ; les téléchargements de mise à jour (§4.2) ; les drapeaux de flagcdn.com (§4.4) ; les
+preuves de consentement et leur copie sur le serveur (§9) ; les données locales (§10) ; les droits
+(§11) ; « la version anglaise prévaut ».

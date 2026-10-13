@@ -681,3 +681,112 @@
     opacity: 0.7;
 }
 #view-repo details[open] > .rp-fold-h::before, .rp-cv details[open] > .rp-fold-h::before { transform: rotate(45deg); }
+
+/* ══ Simple by default, the rest one click away (repo-advanced.ts, repo-tools.ts) ══════════
+   Each tab: its everyday path as plain content (no card chrome), then one « Advanced tools »
+   fold holding every other tool as a row: icon, title, one line, opened in place. Rows and
+   rules rather than boxes in boxes; the house search field (page-head.css .pg-search). */
+#view-repo .rp-plain { border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+#view-repo .rp-plain::before { display: none; }
+#view-repo .rp-plain > .repo-card-body { padding: 4px 0 0; }
+#view-repo .rp-simple + .rp-advanced,
+#view-repo .repo-card + .rp-advanced { margin-top: 28px; }
+
+#view-repo .rp-advanced { border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-advanced [hidden] { display: none !important; }
+#view-repo .rp-advanced-h {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 6px; cursor: pointer; list-style: none;
+    border-radius: 10px;
+}
+#view-repo .rp-advanced-h::-webkit-details-marker { display: none; }
+#view-repo .rp-advanced-h:hover { background: var(--bmm-s03); }
+#view-repo .rp-advanced-h:focus-visible,
+#view-repo .rp-tool-h:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
+#view-repo .rp-advanced-ic {
+    flex: none; display: inline-grid; place-items: center;
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--bmm-s04); color: var(--bmm-text-secondary);
+}
+#view-repo .rp-advanced-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#view-repo .rp-advanced-t { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-advanced-sub { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-advanced-h::after,
+#view-repo .rp-tool-h::after {
+    content: ""; flex: none;
+    width: 7px; height: 7px; margin: 0 6px 0 4px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    color: var(--bmm-text-secondary);
+    transform: rotate(45deg); transition: transform 0.15s ease;
+}
+#view-repo .rp-advanced[open] > .rp-advanced-h::after,
+#view-repo .rp-tool[open] > .rp-tool-h::after { transform: rotate(-135deg); }
+#view-repo .rp-advanced-body { padding: 4px 0 8px; }
+#view-repo .rp-advanced-find { max-width: 360px; margin: 4px 0 14px; }
+#view-repo .rp-advanced-none { margin: 0 0 12px; }
+
+#view-repo .rp-tool-group + .rp-tool-group { margin-top: 22px; }
+#view-repo .rp-tool-group-h {
+    margin: 0 0 4px; padding: 0 6px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--bmm-text-secondary);
+}
+#view-repo .rp-tool { border-bottom: 1px solid var(--bmm-border); }
+#view-repo .rp-tool-h {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 6px; cursor: pointer; list-style: none; border-radius: 8px;
+}
+#view-repo .rp-tool-h::-webkit-details-marker { display: none; }
+#view-repo .rp-tool-h:hover { background: var(--bmm-s03); }
+#view-repo .rp-tool-ic { flex: none; display: inline-flex; color: var(--bmm-text-secondary); }
+#view-repo .rp-tool[open] > .rp-tool-h .rp-tool-ic { color: var(--bmm-text-primary); }
+#view-repo .rp-tool-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#view-repo .rp-tool-t { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-tool-d { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-tool-body { padding: 6px 6px 20px 34px; min-width: 0; }
+#view-repo .rp-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#view-repo .rp-tool-body > .rp-hint-t:first-child { margin: 0 0 10px; }
+@media (max-width: 700px) { #view-repo .rp-tool-body { padding-left: 6px; } }
+
+/* The shared folder of the « check » tools. */
+#view-repo .rp-tools-dir { padding: 6px 6px 12px; }
+
+/* Step 1's « No repo yet? » line. */
+#view-repo .rp-qc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-qc-btn { color: var(--bmm-text-primary); text-decoration: underline; text-underline-offset: 3px; padding-inline: 6px; }
+#view-repo .rp-howto { margin-top: 10px; color: var(--bmm-text-secondary); gap: 6px; }
+#view-repo .rp-tool-body > .rp-howto:first-child { margin: 0 0 10px; }
+
+/* Tool forms. */
+#view-repo .rp-quick-path { margin-bottom: 12px; }
+#view-repo .rp-version-now { margin: 0 0 10px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-version-now b { color: var(--bmm-text-primary); margin-left: 6px; }
+#view-repo .rp-version-pick { flex-wrap: wrap; }
+#view-repo .rp-version-pick > .form-input { flex: 1 1 180px; }
+#view-repo .rp-share-custom { margin-top: 8px; }
+#view-repo #repo-share-text { margin-top: 10px; width: 100%; resize: vertical; }
+#view-repo .rp-notes { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-notes:empty { display: none; }
+#view-repo .rp-notes li { display: flex; gap: 8px; align-items: flex-start; }
+#view-repo .rp-notes li svg { flex: none; margin-top: 2px; }
+#view-repo .rp-result[class*="rp-tone--"] { border-color: color-mix(in srgb, var(--rp-tone) 35%, var(--bmm-border)); }
+#view-repo .rp-result > svg { vertical-align: -2px; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 70%, var(--bmm-text-primary)); }
+
+/* The validation report: one line per check, the verdict first. */
+#view-repo .rp-report { margin-top: 12px; }
+#view-repo .rp-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+#view-repo .rp-ck { display: flex; align-items: flex-start; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--bmm-border); min-width: 0; }
+#view-repo .rp-ck:first-child { padding-top: 2px; font-size: 13.5px; }
+#view-repo .rp-ck:last-child { border-bottom: 0; }
+#view-repo .rp-ck-ic { flex: none; display: inline-flex; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 70%, var(--bmm-text-primary)); }
+#view-repo .rp-ck-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-ck-txt b { font-weight: 600; }
+#view-repo .rp-ck-txt span { font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.45; }
+#view-repo .rp-ck > .btn { flex: none; align-self: center; }
+
+/* The preview reuses the joined-repo card of the Sync tab: the same thing a subscriber sees. */
+#view-repo .rp-preview { margin-top: 12px; }
+#view-repo .rp-preview-card .rp-chip { border-color: color-mix(in srgb, var(--rp-tone) 35%, var(--bmm-border)); }
+/* Brought into view under the sticky title and tab strip, not behind them. */
+#view-repo .rp-advanced, #view-repo .rp-tool { scroll-margin-top: 170px; }
+#view-repo .rp-tool-body > .rp-joined-opts { margin-top: 0; padding-top: 0; border-top: 0; }

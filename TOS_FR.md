@@ -1,6 +1,12 @@
 # Better Mods Manager (BMM) - Conditions d'Utilisation (TOS)
 
+**Version 2026-10-13** (BMM 1.0.2) · remplace la version du 13 août 2026
+
 Les présentes Conditions d'Utilisation (« Conditions ») constituent une entente légale entre vous et l'équipe de développement de Better Mods Manager pour l'utilisation de Better Mods Manager (« Logiciel »). Better Mods Manager est un **logiciel libre et open-source** distribué sous licence GPL‑3.0 — ces Conditions décrivent simplement un usage acceptable et l'absence de garantie ; elles ne restreignent pas les libertés accordées par la GPL‑3.0.
+
+**Qui « nous » sommes.** Le Logiciel et les services BetterCommunity sont fournis par
+**[RAISON SOCIALE DE L'EXPLOITANT]**, **[adresse postale]**, **[e-mail de contact]** (à compléter
+par l'exploitant ; voir aussi la section 1 de la Politique de confidentialité).
 
 ## 1. CONCESSION DE LICENCE
 Better Mods Manager est un logiciel libre sous licence **GNU General Public License v3.0 (GPL-3.0)**. Vous êtes encouragé à étudier, modifier et redistribuer le Logiciel conformément aux termes de la licence GPL-3.0. Une copie du texte complet de la licence est disponible dans le fichier LICENSE fourni avec ce Logiciel.
@@ -48,6 +54,14 @@ sortir (télémétrie, rapports de bug et de plantage, vérification des mises �
 dépôts, liaison de compte), le réglage par défaut de chacun, et vos droits (accès, effacement). Les
 présentes Conditions ne la répètent pas ; pour toute question relative aux données, c'est la
 Politique de confidentialité qui fait référence.
+
+**Comment vous acceptez, et la trace qui en reste.** Vous acceptez les présentes Conditions et la
+Politique de confidentialité dans l'installeur ou au premier lancement de BMM. BMM garde une
+**preuve de consentement** pour chaque réponse : quel document, sa version, le SHA‑256 du texte exact
+affiché, la langue, quand et où vous avez répondu, et la version de l'application (Politique de
+confidentialité, section 9). Vous pouvez voir et exporter vos preuves dans Paramètres →
+Confidentialité → Mes consentements. Quand un document change, ou que BMM ne détient pas de preuve
+pour la version en vigueur, il vous redemande avant de continuer.
 
 ## 9. COMMUNAUTÉ ET SUPPORT
 BMM est un projet communautaire. Le support est fourni au mieux de nos capacités via nos canaux communautaires (Discord, Forums).
@@ -110,9 +124,11 @@ Le Logiciel lui-même reste gratuit.
 
 ## 14. MODIFICATION DES PRÉSENTES CONDITIONS
 Ces Conditions peuvent évoluer avec le Logiciel. Les changements substantiels seront annoncés dans
-l'application et sur le site BetterCommunity avant leur entrée en vigueur. Continuer à utiliser le
-Logiciel après cela vaut acceptation. Chaque version porte la date d'effet ci-dessous, et les
-versions précédentes restent consultables dans l'historique du dépôt.
+l'application et sur le site BetterCommunity avant leur entrée en vigueur. Quand le texte change,
+BMM affiche la nouvelle version et vous demande de l'accepter avant de continuer ; votre réponse est
+enregistrée comme preuve de consentement. Si vous ne l'acceptez pas, vous pouvez cesser d'utiliser
+le Logiciel (section 15). Chaque version porte la version et la date d'effet indiquées en haut et en
+bas de ce document, et les versions précédentes restent consultables dans l'historique du dépôt.
 
 ## 15. RÉSILIATION
 Vous pouvez cesser d'utiliser le Logiciel à tout moment ; le désinstaller met fin aux présentes
@@ -134,13 +150,17 @@ tribunaux de votre propre pays.
 Le for est à **Lausanne, canton de Vaud, Suisse**.
 
 ## 17. CONTACT
-Questions sur ces Conditions : le formulaire de contact du site BetterCommunity, ou le Discord du
-projet. Les demandes relatives aux données personnelles, y compris l'accès et l'effacement, sont
-traitées comme décrit dans **PRIVACY_FR.md**.
+Questions sur ces Conditions : **[e-mail de contact]**, le formulaire de contact du site
+BetterCommunity, ou le Discord du projet. Les demandes relatives aux données personnelles, y compris
+l'accès et l'effacement, sont traitées comme décrit dans **PRIVACY_FR.md**.
+
+## 18. LANGUE
+Les présentes Conditions existent en anglais et en français. **En cas de divergence entre les deux
+versions, la version anglaise prévaut.**
 
 ---
 
-**Date d'effet :** 13 août 2026 · **S'applique à :** BMM 1.0.0 et versions ultérieures
+**Version :** 2026-10-13 · **Date d'effet :** 13 octobre 2026 · **S'applique à :** BMM 1.0.2 et versions ultérieures
 
 En utilisant Better Mods Manager, vous reconnaissez avoir lu, compris et accepté d'être lié par
 les présentes conditions.

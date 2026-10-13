@@ -26,6 +26,21 @@ pub struct ConvertArgs {
     /// Sign with this BMM's key. On by default; off writes an unsigned manifest.
     #[serde(default = "yes")]
     pub sign: bool,
+    /// Set the repo's `version` (the number subscribers see beside its name) in the same
+    /// pass: same dry run, backup, atomic write and signature as a conversion. A current
+    /// manifest whose only change is this is written too. `None` = leave it as it is.
+    #[serde(default, alias = "setVersion")]
+    pub set_version: Option<String>,
+}
+
+/// What a version may look like: short, printable, no spaces — it is shown in a badge and
+/// compared as text, so anything else is a typo rather than a version.
+pub(crate) fn valid_version(v: &str) -> bool {
+    let v = v.trim();
+    !v.is_empty()
+        && v.len() <= 40
+        && v.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
+        && v.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_'))
 }
 fn yes() -> bool { true }
 
@@ -102,15 +117,31 @@ pub fn convert_with(
     own_author_id: Option<&str>,
     sign: impl Fn(&[u8]) -> Result<(String, String), String>,
 ) -> Result<ConvertReport, String> {
+    let new_version = match args.set_version.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(v) if valid_version(v) => Some(v.to_string()),
+        Some(_) => return Err("repo.version.errInvalid".into()),
+    };
     let file = manifest_path(&args.path)?;
     let original = read_value(&file)?;
     let dir = file.parent().map(Path::to_path_buf);
-    let plan = repo_format::convert(original, if args.rehash { dir.as_deref() } else { None })?;
+    let mut plan = repo_format::convert(original, if args.rehash { dir.as_deref() } else { None })?;
 
     // The real reader must accept the result, or the conversion produced a file BMM cannot
     // open — the one outcome worse than not converting.
     let mut repo: ServerRepo = serde_json::from_value(plan.manifest.clone())
         .map_err(|e| format!("repo.convert.errResult:{e}"))?;
+
+    // The version, when asked and different: one more change, and a reason to write and sign
+    // even when the format itself was already current.
+    if let Some(v) = new_version.filter(|v| *v != repo.version) {
+        plan.changes.push(Change { kind: "version_set", path: "version".into(), before: Some(repo.version.clone()), after: Some(v.clone()) });
+        if plan.was_signed && plan.up_to_date {
+            plan.changes.push(Change { kind: "signature_removed", path: "signature".into(), before: Some("ed25519".into()), after: None });
+        }
+        repo.version = v;
+        plan.up_to_date = false;
+    }
 
     let from_label = plan.from.label();
     let signer_changes = plan.was_signed
@@ -235,7 +266,42 @@ mod tests {
     }
 
     fn args(dir: &Path, dry_run: bool) -> ConvertArgs {
-        ConvertArgs { path: dir.to_string_lossy().to_string(), dry_run, rehash: true, sign: true }
+        ConvertArgs { path: dir.to_string_lossy().to_string(), dry_run, rehash: true, sign: true, set_version: None }
+    }
+
+    /// The Server Repo page's « Set the repo version »: on a manifest that is already current,
+    /// the version alone is a reason to write — backed up, re-signed, still verifying.
+    #[test]
+    fn setting_the_version_writes_and_re_signs_a_current_manifest() {
+        let dir = folder_with(FIXTURES[3]);
+        convert_with(&args(dir.path(), false), None, signer).unwrap();
+        let mut a = args(dir.path(), true);
+        a.rehash = false;
+        a.set_version = Some(" 2.4.0 ".into());
+        let plan = convert_with(&a, None, signer).unwrap();
+        assert!(!plan.up_to_date && !plan.written);
+        assert!(plan.changes.iter().any(|c| c.kind == "version_set" && c.after.as_deref() == Some("2.4.0")), "{:?}", plan.changes);
+        a.dry_run = false;
+        let done = convert_with(&a, None, signer).unwrap();
+        assert!(done.written && done.backup_path.is_some());
+        assert_eq!(done.signature, "signed");
+        let back: ServerRepo = serde_json::from_str(&std::fs::read_to_string(dir.path().join("repo.json")).unwrap()).unwrap();
+        assert_eq!(back.version, "2.4.0");
+        assert!(crate::commands::security::verify_repo_signature(back), "the new version is covered by the signature");
+        // Same version again: nothing to do.
+        let again = convert_with(&a, None, signer).unwrap();
+        assert!(again.up_to_date && !again.written, "{:?}", again.changes);
+    }
+
+    #[test]
+    fn a_version_that_is_not_one_is_refused() {
+        let dir = folder_with(FIXTURES[3]);
+        for bad in ["1 0", "../x", "1/2", "-1", "é1", &"9".repeat(41)] {
+            let mut a = args(dir.path(), true);
+            a.set_version = Some(bad.to_string());
+            assert_eq!(convert_with(&a, None, signer).unwrap_err(), "repo.version.errInvalid", "{bad}");
+        }
+        assert!(valid_version("1.2.0-beta+3") && valid_version("2026_10"));
     }
 
     /// The round trip the feature exists for: every legacy shape, converted, re-signed,

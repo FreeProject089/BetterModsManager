@@ -339,7 +339,7 @@ impl Ledger {
         let mut rep = VerifyReport { ok: true, count: lines.len(), mac_checked: key.is_some(), first_break: None };
         let mut prev = GENESIS.to_string();
         let mut last_seq = 0u64;
-        let mut fail = |rep: &mut VerifyReport, seq: u64, line: usize, reason: &str| {
+        let fail = |rep: &mut VerifyReport, seq: u64, line: usize, reason: &str| {
             if rep.first_break.is_none() {
                 rep.first_break = Some(Break { seq, line, reason: reason.into() });
             }
@@ -557,7 +557,11 @@ fn known_legal_hashes(app: &AppHandle, doc: &str) -> Vec<(String, String)> {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordInput {
+    /// Defaulted so a partial receipt (set_analytics_consent fills doc and choice itself) still
+    /// deserializes; `record` refuses an empty or unknown one.
+    #[serde(default)]
     pub doc: String,
+    #[serde(default)]
     pub choice: String,
     #[serde(default)]
     pub source: Option<String>,
@@ -733,6 +737,50 @@ pub fn consent_status(state: State<AppState>, app_handle: AppHandle) -> Value {
         docs.insert(doc.to_string(), serde_json::to_value(st).unwrap_or(Value::Null));
     }
     json!({ "install_id": ledger.install_id(), "docs": docs, "verify": ledger.verify(), "count": rs.len() })
+}
+
+/// What start-up must ask again, decided from the ledger alone (owner rule: no receipt, no
+/// consent). Called once before the start-up window, after the installer handoff was applied.
+///
+/// - Telemetry ON with no receipt for the version in force (a 1.0.x install, a settings file
+///   copied in by hand, a legacy import, a changed consent text): switched back to « not
+///   asked », the reset recorded, so the consent dialog asks again. Nothing is sent meanwhile.
+/// - Terms / Privacy Policy with no accepting receipt for the version in force: returned in
+///   `reask`, and the frontend forgets its local « accepted » flags so the start-up window
+///   shows them again. The ledger, not localStorage, is what says a text was accepted.
+#[tauri::command]
+pub fn consent_prepare_launch(state: State<AppState>, app_handle: AppHandle) -> Value {
+    let ledger = ledger_for(&state);
+    let rs = ledger.receipts();
+    let consent = state.data.lock().ok().and_then(|d| d.settings.analytics_consent);
+    let mut reask: Vec<&str> = Vec::new();
+    let tel = doc_status(&rs, "telemetry", Some(TELEMETRY_VERSION), consent == Some(true));
+    let telemetry_reset = tel.needs_reconsent;
+    if telemetry_reset {
+        if let Ok(mut d) = state.data.lock() {
+            d.settings.analytics_consent = None;
+        }
+        let _ = state.save();
+        crate::commands::live_issues::on_consent_changed(None, None);
+        let why = match &tel.latest {
+            Some(r) if accepts(&r.choice) => format!("telemetry text changed ({} → {TELEMETRY_VERSION}): asked again", r.version),
+            _ => "telemetry was on with no receipt on this install: asked again".to_string(),
+        };
+        record_quiet(&state, &app_handle, RecordInput {
+            doc: "telemetry".into(),
+            choice: "reset".into(),
+            source: Some("reconsent".into()),
+            note: Some(why),
+            ..Default::default()
+        });
+        reask.push("telemetry");
+    }
+    for doc in ["tos", "privacy"] {
+        if doc_status(&rs, doc, current_version(&app_handle, doc).as_deref(), true).needs_reconsent {
+            reask.push(doc);
+        }
+    }
+    json!({ "reask": reask, "telemetry_reset": telemetry_reset })
 }
 
 /// The whole ledger for « My consents » (newest first), with the chain check and the sync state.

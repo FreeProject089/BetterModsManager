@@ -1,6 +1,12 @@
 # Better Mods Manager (BMM) - Terms of Service (TOS)
 
+**Version 2026-10-13** (BMM 1.0.2) · replaces the version of 13 August 2026
+
 These Terms of Service ("Terms") form a legal agreement between you and the Better Mods Manager development team for the use of Better Mods Manager ("Software"). Better Mods Manager is **free and open-source software** distributed under the GPL‑3.0 license — these Terms simply describe acceptable use and the absence of warranty; they do not restrict the freedoms granted by the GPL‑3.0.
+
+**Who "we" are.** The Software and the BetterCommunity services are provided by
+**[OPERATOR LEGAL NAME]**, **[postal address]**, **[contact e-mail]** (to be completed by the
+operator; see also section 1 of the Privacy Policy).
 
 ## 1. LICENSE GRANT
 Better Mods Manager is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)**. You are encouraged to study, modify, and redistribute the Software in accordance with the terms of the GPL-3.0. A copy of the full license text is available in the LICENSE file provided with this Software.
@@ -47,6 +53,13 @@ How the Software handles your data is described in one place only: the Privacy P
 reports, update checks, repository connections, account linking), the default setting of each, and
 your rights (access, erasure). These Terms do not repeat it; on any question about data, the
 Privacy Policy is the reference.
+
+**How you accept, and the record of it.** You accept these Terms and the Privacy Policy in the
+installer or on BMM's first launch. BMM keeps a **consent receipt** for each answer: which document,
+its version, the SHA‑256 of the exact text shown, the language, when and where you answered, and the
+app version (Privacy Policy, section 9). You can see and export your receipts in Settings → Privacy
+→ My consents. When a document changes, or BMM holds no receipt for the version in force, it asks
+you again before you continue.
 
 ## 9. COMMUNITY & SUPPORT
 BMM is a community-driven project. Support is provided on a best-effort basis through our community channels (Discord, Forums).
@@ -103,9 +116,11 @@ itself remains free.
 
 ## 14. CHANGES TO THESE TERMS
 These Terms may change as the Software does. Material changes will be announced in the
-application and on the BetterCommunity site before they take effect. Continuing to use the
-Software after that constitutes acceptance. Each version carries the effective date below, and
-previous versions remain available in the repository's history.
+application and on the BetterCommunity site before they take effect. When the text changes, BMM
+shows the new version and asks you to accept it before you continue; your answer is recorded as a
+consent receipt. If you do not accept, you can stop using the Software (section 15). Each version
+carries the version and effective date shown at the top and bottom of this document, and previous
+versions remain available in the repository's history.
 
 ## 15. TERMINATION
 You may stop using the Software at any time; uninstalling ends these Terms for you, except for
@@ -125,12 +140,17 @@ keep the right to bring proceedings in the courts of your own country.
 The place of jurisdiction is **Lausanne, canton of Vaud, Switzerland**.
 
 ## 17. CONTACT
-Questions about these Terms: the BetterCommunity site's contact form, or the project's Discord.
-Privacy requests, including access and erasure, are handled as described in **PRIVACY.md**.
+Questions about these Terms: **[contact e-mail]**, the BetterCommunity site's contact form, or the
+project's Discord. Privacy requests, including access and erasure, are handled as described in
+**PRIVACY.md**.
+
+## 18. LANGUAGE
+These Terms exist in English and in French. **If the two versions differ, the English version
+prevails.**
 
 ---
 
-**Effective date:** 13 August 2026 · **Applies to:** BMM 1.0.0 and later
+**Version:** 2026-10-13 · **Effective date:** 13 October 2026 · **Applies to:** BMM 1.0.2 and later
 
 By using Better Mods Manager, you acknowledge that you have read, understood, and agreed to be
 bound by these terms.

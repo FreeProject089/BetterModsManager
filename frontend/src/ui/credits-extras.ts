@@ -123,6 +123,11 @@ export async function openLicenceReader(host: HTMLElement, o: { name: string; ve
             <div class="stk-d-actions">
                 <button type="button" class="btn btn-secondary btn-sm" data-lic-copy>${uiIcon('copy', 14)} ${escHtml(tx('credits.licCopy', 'Copy the text'))}</button>
             </div>`;
+        // md-lite output is a shell until hydrated (headings, code copy buttons, cards).
+        const md = host.querySelector<HTMLElement>('.stk-lic-md');
+        if (md) {
+            try { (await import('../docs/md-hydrate.js')).hydrateMdLite(md); } catch { /* stays readable unhydrated */ }
+        }
     };
     host.onclick = (e) => {
         const tgt = e.target as HTMLElement;

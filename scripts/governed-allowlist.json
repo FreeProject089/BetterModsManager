@@ -5,8 +5,8 @@
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     },
     "spawn_blocking": {
-      "count": 1,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt. Second: POST /api/repo/convert, one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
     },
     "fs::copy": {
       "count": 1,
@@ -317,6 +317,10 @@
     "spawn_blocking": {
       "count": 7,
       "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO; `ai-analyze` (the extraction of at most --limit mods, files capped per mod) and `ai-classify` (one capped inference)"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "one backup copy of repo.json (a single small file) before bmm_repo_convert rewrites it"
     }
   },
   "src/mcp/server.rs": {
@@ -363,6 +367,16 @@
     "spawn_blocking": {
       "count": 2,
       "why": "exempt: the Storage Manager presets read the drive list (one sysinfo enumeration, one read-only IOCTL per drive letter for the bus and the seek penalty) and the profiles, then build the plans in memory; apply writes data.json once. No bulk I/O; off the main thread because a spinning-up disk or a dead network drive answers in seconds"
+    }
+  },
+  "src/commands/repo_convert.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "one backup copy of repo.json (a single small file) before it is rewritten"
     }
   }
 }

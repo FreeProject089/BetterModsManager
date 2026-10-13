@@ -198,7 +198,14 @@ describe('the workflows that sign and re-sign it', () => {
         const y = wf('release.yml');
         assert.match(y, /sign-update-manifest\.mjs sign/);
         assert.match(y, /sign-update-manifest\.mjs verify/);
-        assert.match(y, /gh release upload/);
+        // ONE `gh release create` with every asset (the manifest included), so no client ever sees
+        // the release without its signed manifest; published as Latest, never as a pre-release.
+        const publish = y.slice(y.indexOf('- name: Publish the release'));
+        assert.match(publish, /update-manifest\.json/);
+        assert.match(publish, /gh release create [^\n]*--latest/);
+        assert.doesNotMatch(publish, /--prerelease/);
+        assert.match(publish, /exactly one installer asset/);
+        assert.ok(y.indexOf('sign-update-manifest.mjs verify') < y.lastIndexOf('gh release create'), 'signed and verified before publishing');
     });
 
     test('the weekly job re-signs both manifests, verifies, and uploads with --clobber', () => {

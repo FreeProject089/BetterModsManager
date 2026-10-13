@@ -178,8 +178,10 @@ export function reveal(el: HTMLElement, guide: HTMLElement | null, ownDialog: El
     const host = el.closest(OVERLAY) as HTMLElement | null;
     if (host && !isOpenOverlay(host)) return { kind: 'closed-dialog', title: dialogTitle(host) };
 
-    // 2. Hidden tabs and <details>: open them outermost first, at most a few levels.
-    for (let pass = 0; pass < 3 && !isShown(el); pass++) {
+    // 2. Hidden tabs and <details>: open them outermost first, at most a few levels. Five, not
+    //    three: a control in Server Repo's « Advanced tools » sits under its tab, the area, its
+    //    tool and sometimes one of the tool's own sections.
+    for (let pass = 0; pass < 5 && !isShown(el); pass++) {
         const chain = hiddenChain(el);
         if (!chain.length) break;
         const outer = chain[0];
