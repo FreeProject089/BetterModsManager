@@ -761,9 +761,10 @@ function updateTagFilterUI() {
     let missingPack = false;
     sortedTags.forEach((tag:any) => {
       const c = hex(tag.color), c2 = hex(tag.color2);
-      const dot = c ? `<span class="lib-tag-dot" style="background:${c2 ? `linear-gradient(135deg,${c},${c2})` : c}"></span>` : '';
       let ic = '';
       if (isPackIcon(tag.icon)) { ic = renderPackIcon(tag.icon, 14, c || undefined); if (!ic) missingPack = true; }
+      // The icon already wears the tag's colour: a dot beside it says it twice.
+      const dot = c && !ic ? `<span class="lib-tag-dot" style="background:${c2 ? `linear-gradient(135deg,${c},${c2})` : c}"></span>` : '';
       const deco = dot || ic ? ` data-icon="${escAttr(`<span class="lib-tag-opt">${dot}${ic}</span>`)}"` : '';
       html += `<option value="${escAttr(String(tag.id))}"${deco}>${escHtml(tag.name)}</option>`;
     });

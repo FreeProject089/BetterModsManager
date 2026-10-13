@@ -128,7 +128,9 @@ function runBulk(mode: 'enable' | 'disable'): void {
         label: t(mode === 'enable' ? 'lib.sel.jobEnable' : 'lib.sel.jobDisable', { n: String(mods.length) }),
         source: 'library',
     });
-    setSelecting(false);
+    // Stay in selection mode: the bar closing on its own read as « the button closed it for no
+    // reason ». The ticks stay, so the counts follow the job (syncSelection on each refresh).
+    renderBar();
 }
 
 function focusCard(id: string): void {

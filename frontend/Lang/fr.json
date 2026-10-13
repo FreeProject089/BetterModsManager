@@ -1621,7 +1621,7 @@
   "modpack.modsIncluded": "mods inclus",
   "modpack.modsManagement": "Gestion des Mods",
   "modpack.modsSelected": "sélectionné(s)",
-  "modpack.multiProfile": "Multi-profil (mods de différents profils)",
+  "modpack.multiProfile": "Multi-profil",
   "modpack.multiProfileDesc": "Permet de mixer des mods venant de différents profils.",
   "modpack.name": "Nom du Modpack",
   "modpack.namePlaceholder": "Mon super modpack",

@@ -1622,7 +1622,7 @@
   "modpack.modsIncluded": "mods included",
   "modpack.modsManagement": "Mods Management",
   "modpack.modsSelected": "selected",
-  "modpack.multiProfile": "Multi-profile (mix mods from different profiles)",
+  "modpack.multiProfile": "Multi-profile",
   "modpack.multiProfileDesc": "Allows mixing mods from different profiles.",
   "modpack.name": "Modpack Name",
   "modpack.namePlaceholder": "My awesome modpack",
