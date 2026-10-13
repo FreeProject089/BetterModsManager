@@ -43,9 +43,12 @@ La 1.0.2 est une grosse mise à jour : les mises à jour remarchent en un clic, 
 - « Valider » se fait en un passage rapide, avec progression et Annuler, et ne relit que les fichiers qui ont changé. « Convertir » montre toujours d'abord un essai à blanc, puis demande avant d'écrire, avec sauvegarde et nouvelle signature.
 - Suivre un repo : BMM le vérifie selon la fréquence choisie et vous prévient, télécharge ou applique la mise à jour (jamais pendant qu'un jeu tourne). Le serveur de repo de BMM fournit un flux Atom et répond « non modifié » quand rien n'a changé.
 - Un mod garde le même identifiant d'une synchronisation à l'autre, même renommé ou réimporté ; les doublons laissés par les anciennes versions sont réparés une fois au démarrage, après une sauvegarde.
+- La page est refaite : une carte principale par onglet, des étapes numérotées qui suivent ce qui est fait, une carte d'état pour le serveur en marche, les Outils avancés dans une seule carte. Le panneau « Votre serveur » ne s'affiche plus quand le serveur est arrêté.
+- Mini-serveur autonome : une page d'état (`/status`), un contrôle de santé, le flux Atom `feed.xml`, des téléchargements qui reprennent, une limite de débit en option, un `server.config.json`, et des tâches planifiées (vérifier les fichiers, synchroniser depuis git, rsync ou un dossier, sauvegarder repo.json, faire tourner les journaux) avec leur dernière et prochaine exécution sur la page d'état. Il est livré avec un service systemd, un script de tâche Windows et un README en anglais et en français.
 
 ## [IMPROVED] Paramètres, catalogues, crédits
 - Paramètres : un sommaire de toutes les cartes en sept groupes, une recherche qui masque ce qui ne correspond pas (Ctrl+F), des cartes mieux rangées.
+- Agencement des Paramètres depuis le sommaire : « Modifier l'agencement » permet de glisser les cartes, de les déplacer avec Alt+flèches, de masquer ou réafficher une carte, et de tout réinitialiser.
 - Catalogue d'applications : chaque carte montre son état et l'action suivante (Installer, Lancer, Mettre à jour, Réessayer), filtre par état d'installation, tri, message clair quand une source est hors ligne, descriptions et README affichés en mode sûr.
 - Catalogues : un format versionné lit toutes les anciennes variantes et les flux signés de BetterCommunity v2 ; les sources sont mises en cache, rafraîchies seulement si elles ont changé, et une source en panne ne masque plus les autres.
 - Crédits : contributeurs du code générés depuis l'historique des quatre dépôts, avec leur nombre de commits, dans des cartes plus propres.
@@ -88,7 +91,7 @@ La 1.0.2 est une grosse mise à jour : les mises à jour remarchent en un clic, 
 - Chaque paquet intégré avec son lien et sa licence, lisible dans l'application.
 
 ## [VISUAL] Démarrage et thèmes
-- Une animation de démarrage plus courte et plus calme, centrée sur le logo ; rien ne bouge avec « moins d'animations ».
+- L'intro classique avec Tasky revient, plus légère : elle se termine dès que BMM est prêt, se passe d'un clic ou d'une touche, et devient un écran fixe avec « moins d'animations ». Paramètres → Graphismes → Animation de démarrage : Classique, Logo (courte) ou Désactivée. Le numéro de version s'y affiche maintenant.
 - Nouveau thème intégré : BMM Logo.
 
 ## [IMPROVED] Planificateur

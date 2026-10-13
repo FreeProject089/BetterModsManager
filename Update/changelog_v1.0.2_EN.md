@@ -43,9 +43,12 @@
 - « Validate » is one fast pass with progress and Cancel, and only re-reads files that changed. « Convert » always shows a dry run, then asks before writing, with a backup and a new signature.
 - Follow a repo: BMM checks it on a schedule you choose and notifies you, downloads, or applies the update (never while a game is running). BMM's own repo server serves an Atom feed and answers « not modified » when nothing changed.
 - A mod keeps the same id across re-syncs, renames and re-imports; duplicates left by older versions are repaired once at start-up, after a backup.
+- The page is restyled: one main card per tab, numbered steps that follow what is done, a live status card for the running server, the Advanced tools in one card. The « Your server » panel no longer shows while the server is stopped.
+- Standalone mini-server: a status page (`/status`), a health check, the Atom feed `feed.xml`, resumable downloads, an optional rate limit, a `server.config.json`, and scheduled jobs (check files, sync from git, rsync or a folder, back up repo.json, rotate logs) with their last and next run on the status page. It ships with a systemd unit, a Windows task script and a README in English and French.
 
 ## [IMPROVED] Settings, catalogues, credits
 - Settings: an index of every card in seven groups, a search that hides what does not match (Ctrl+F), tidier cards.
+- Settings layout from the index: « Edit layout » lets you drag cards, move them with Alt+arrows, hide or show a card, and reset.
 - App catalogue: each card shows its state and next action (Install, Launch, Update, Retry), filters by install state, sorting, a clear message when a source is offline, descriptions and READMEs rendered safely.
 - Catalogues: one versioned format reads every older variant and the signed feeds of BetterCommunity v2; sources are cached, refreshed only when they changed, and one failing source no longer hides the others.
 - Credits: code contributors generated from the history of the four repositories, with commit counts, in cleaner cards.
@@ -88,7 +91,7 @@
 - Every bundled package with its link and its licence, readable in the app.
 
 ## [VISUAL] Start-up and themes
-- A shorter, quieter start-up animation centred on the logo; nothing moves under « fewer animations ».
+- The classic Tasky intro is back and lighter: it ends as soon as BMM is ready, can be skipped with a click or a key, and becomes a still splash under « fewer animations ». Settings → Graphics → Start-up animation: Classic, Logo (short) or Off. The version number now shows in it.
 - New built-in theme: BMM Logo.
 
 ## [IMPROVED] Scheduler
