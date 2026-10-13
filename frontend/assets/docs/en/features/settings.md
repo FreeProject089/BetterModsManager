@@ -7,6 +7,16 @@ mystery.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/settings.bmmreplay" data-page="features/settings" data-title="A tour of Settings"></div>
 
 
+## Finding a setting
+
+The top of the page is an **index** of every card, in seven groups: **Appearance**,
+**Library**, **Automation**, **Performance**, **Accounts and services**, **Privacy and
+security**, **Application** (anything else sits under **Other**). Click a name to jump to its
+card.
+
+**Search settings** (:kbd[Ctrl+F] while Settings is open) hides every card that does not match
+what you type and says how many sections still do. Clear the box to see everything again.
+
 ## The four that matter most
 
 ### Themes & Appearance
@@ -42,10 +52,14 @@ activate in the background" and "my machine froze for thirty seconds".
 
 ### Updates
 
-Check for a new BMM version, opt into **pre-releases**, or turn **auto-update** off.
-Pre-releases get fixes first and bugs first — the toggle is there so it's your call, not a
-surprise. A separate control checks your *mods* for updates (see [Server Repo](doc-page:features/repo)),
-distinct from updating the app itself.
+The **Auto Update** card: check for a new BMM version at start-up or not, pick the **update
+channel** (**Stable** or **Pre-release**), and choose a **background check** while BMM stays
+open (**Off**, **Every 6 h**, **Daily**). It shows when the last check ran. What happens when
+a version is found, and how the installer is checked before it runs, is in
+[Updating BMM](doc-page:getting-started/install#updating-bmm).
+
+A separate control checks your *mods* for updates (see [Server Repo](doc-page:features/repo)), distinct from
+updating the app itself.
 
 ### Data
 
@@ -176,6 +190,9 @@ the API token that plugins and scripts authenticate with.
 Opt in or out of anonymous usage data, and manage the sub-options (session replays, full
 capture, benchmark sharing) independently. Everything is off unless you turn it on, and the
 page spells out exactly what each toggle sends.
+
+**My consents** lists every answer you gave about the Terms, the Privacy Policy and telemetry,
+with a proof for each: see [Privacy](doc-page:features/privacy-telemetry#proof-of-consent-my-consents).
 
 ### Security (plugin trust)
 
@@ -318,4 +335,5 @@ Replay the interactive in-app tutorials at any time. New to BMM? Start here.
 
 Diagnostics, crash-report tools, and the **factory reset** noted above. Handy when something's
 wrong; the reset is the one control in the whole app with no undo, so it's fenced behind a
-confirmation.
+confirmation. The developer tools also hold the [BMM Tools](doc-page:features/tools) and the
+[Replay and Animation studios](doc-page:features/tools#replay-studio-and-animation-studio).

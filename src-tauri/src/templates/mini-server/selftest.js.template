@@ -1,0 +1,211 @@
+#!/usr/bin/env node
+/**
+ * Self-test of this BMM mini-server's extras (bmm-extras.js): schedules, ranges, caching, the
+ * feed, the status page and the scheduled jobs, on a throw-away copy — your repo is not touched.
+ *
+ *   node bmm-server/selftest.js
+ *
+ * Exit code 0 = everything passed. Needs nothing but Node.js.
+ */
+'use strict';
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const http = require('http');
+const crypto = require('crypto');
+
+const here = __dirname;
+const extrasPath = [path.join(here, '..', 'bmm-extras.js'), path.join(here, 'bmm-extras.js'), process.env.BMM_EXTRAS].filter(Boolean).find(p => fs.existsSync(p));
+if (!extrasPath) { console.error('bmm-extras.js not found next to this folder'); process.exit(2); }
+const X = require(extrasPath);
+
+let failed = 0, passed = 0;
+const pending = [];
+function check(name, fn) {
+    pending.push((async () => {
+        try { await fn(); passed++; console.log('  ok   ' + name); }
+        catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + (e && e.message || e)); }
+    })());
+}
+function eq(a, b, what) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error((what || 'value') + ': expected ' + JSON.stringify(b) + ', got ' + JSON.stringify(a)); }
+function ok(v, what) { if (!v) throw new Error(what || 'expected true'); }
+
+function sha(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
+
+function fixture() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmm-selftest-'));
+    fs.mkdirSync(path.join(dir, 'mods', 'm1', 'Data'), { recursive: true });
+    const a = Buffer.from('0123456789abcdefghij');
+    fs.writeFileSync(path.join(dir, 'mods', 'm1', 'Data', 'a.txt'), a);
+    fs.writeFileSync(path.join(dir, 'mods', 'm1', 'extra.txt'), 'not listed');
+    const repo = {
+        name: 'Self-test repo', description: 'fixture', author: 'me', author_id: null, signature: null,
+        version: '1.0.0', game_name: 'Game', created_at: '2026-01-01T00:00:00Z', format_version: '1.0',
+        profiles: [{ id: 'p', name: 'P', game_name: 'Game', mods: [{ id: 'm1', name: 'Mod <One>', version: '2.0', author: null, description: 'desc', tags: [],
+            files: [{ relative_path: 'Data/a.txt', size: a.length, sha256_hash: sha(a), chunks: null }], download_links: [], dependencies: [] }] }],
+    };
+    fs.writeFileSync(path.join(dir, 'repo.json'), JSON.stringify(repo, null, 2));
+    return dir;
+}
+
+function request(port, p, headers) {
+    return new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port, path: p, headers: headers || {} }, (res) => {
+            const chunks = [];
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString() }));
+        }).on('error', reject);
+    });
+}
+
+console.log('BMM mini-server self-test (extras ' + X.EXTRAS_VERSION + ', node ' + process.version + ')');
+
+check('every: 15m, 6h, 1d; garbage refused', () => {
+    eq(X.parseEvery('15m'), 900000); eq(X.parseEvery('6h'), 21600000); eq(X.parseEvery('1d'), 86400000);
+    eq(X.parseEvery('nope'), null); eq(X.parseEvery('2s'), null, 'below 10 s');
+});
+
+check('cron: daily 03:00, weekdays every 15 min, impossible date', () => {
+    const n = X.cronNext(X.parseCron('0 3 * * *'), new Date(2026, 9, 14, 10, 0));
+    eq([n.getDate(), n.getHours(), n.getMinutes()], [15, 3, 0]);
+    const w = X.cronNext(X.parseCron('*/15 * * * 1-5'), new Date(2026, 9, 17, 23, 50)); // a Saturday
+    eq([w.getDay(), w.getHours(), w.getMinutes()], [1, 0, 0]);
+    eq(X.cronNext(X.parseCron('0 0 31 2 *'), new Date(2026, 0, 1)), null);
+    eq(X.parseCron('61 * * * *'), null); eq(X.parseCron('* * *'), null);
+    ok(X.parseCron('@daily'), '@daily');
+});
+
+check('range: single, suffix, open, unsatisfiable, several (= whole file)', () => {
+    eq(X.parseRange('bytes=0-9', 100), { start: 0, end: 9 });
+    eq(X.parseRange('bytes=-10', 100), { start: 90, end: 99 });
+    eq(X.parseRange('bytes=95-', 100), { start: 95, end: 99 });
+    eq(X.parseRange('bytes=200-', 100), 'unsatisfiable');
+    eq(X.parseRange('bytes=0-1,5-6', 100), null);
+});
+
+check('version bump', () => { eq(X.bumpVersion('1.0.9'), '1.0.10'); eq(X.bumpVersion('v2'), 'v3'); });
+
+check('feed: escaped, one entry per mod version', () => {
+    const repo = JSON.parse(fs.readFileSync(path.join(fixture(), 'repo.json'), 'utf8'));
+    const f = X.atomFeed(repo, 'http://h:1/', Date.UTC(2026, 0, 2));
+    ok(f.includes('<title>Mod &lt;One&gt; 2.0</title>'), 'escaped title');
+    ok(f.includes('<updated>2026-01-02T00:00:00Z</updated>'), 'updated');
+    ok(f.includes('href="http://h:1/repo.json"'), 'link');
+});
+
+check('status page: self-contained, light and dark', () => {
+    const html = X.renderStatus({ healthy: true, kind: 'test', uptimeMs: 5000, base: 'http://h', connectLink: 'bmm://repo/connect?url=x',
+        repo: { protected: false, name: '<b>R</b>', format: 'format 1.0', version: '1', mods: 1, files: 1, size: 20, updated: Date.now(), signed: false }, jobs: [], jobsDisabled: false });
+    ok(!/<script[^>]+src=|<link[^>]+stylesheet/i.test(html), 'no external resource');
+    ok(html.includes('prefers-color-scheme:dark'), 'dark mode');
+    ok(html.includes('&lt;b&gt;R&lt;/b&gt;'), 'escaped name');
+});
+
+check('rescan: finds a changed file, rewrites an unsigned manifest, keeps a backup', async () => {
+    const dir = fixture();
+    const ex = X.create({ dir, kind: 'test' });
+    fs.writeFileSync(path.join(dir, 'mods', 'm1', 'Data', 'a.txt'), 'changed content!');
+    const r1 = await X.jobRescan({ dir, config: ex.config, backupRepo: () => 'x' }, { rewrite: false });
+    ok(/1 changed/.test(r1.message) && /1 not in the manifest/.test(r1.message), r1.message);
+    fs.writeFileSync(path.join(dir, 'server.config.json'), JSON.stringify({ jobs: [{ id: 'rs', type: 'rescan', every: '1h', rewrite: true, bumpVersion: true }] }));
+    const ex2 = X.create({ dir, kind: 'test' });
+    const st = await ex2.runJob('rs');
+    eq(st.result, 'ok', 'result');
+    const repo = JSON.parse(fs.readFileSync(path.join(dir, 'repo.json'), 'utf8'));
+    eq(repo.profiles[0].mods[0].files[0].sha256_hash, sha(Buffer.from('changed content!')), 'hash');
+    eq(repo.version, '1.0.1', 'version');
+    ok(fs.readdirSync(path.join(dir, 'bmm-server', 'backups')).length === 1, 'one backup');
+    ex.stop(); ex2.stop();
+});
+
+check('rescan: a signed manifest is never rewritten', async () => {
+    const dir = fixture();
+    const f = path.join(dir, 'repo.json');
+    const repo = JSON.parse(fs.readFileSync(f, 'utf8'));
+    repo.signature = 'abcd'; repo.author_id = 'ef01';
+    fs.writeFileSync(f, JSON.stringify(repo));
+    fs.writeFileSync(path.join(dir, 'mods', 'm1', 'Data', 'a.txt'), 'changed');
+    const r = await X.jobRescan({ dir, config: {}, backupRepo: () => { throw new Error('must not back up'); } }, { rewrite: true });
+    ok(/not rewritten/.test(r.message), r.message);
+    eq(JSON.parse(fs.readFileSync(f, 'utf8')).signature, 'abcd');
+});
+
+check('backup: keeps N, skips an unchanged manifest', async () => {
+    const dir = fixture();
+    fs.writeFileSync(path.join(dir, 'server.config.json'), JSON.stringify({ jobs: [{ id: 'b', type: 'backup', cron: '@daily', keep: 2 }] }));
+    const ex = X.create({ dir, kind: 'test' });
+    await ex.runJob('b');
+    const again = await ex.runJob('b');
+    ok(/unchanged/.test(again.message), again.message);
+    ex.stop();
+});
+
+check('folder sync: copies mods and the manifest, never the server files', async () => {
+    const src = fixture();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmm-selftest-dst-'));
+    fs.writeFileSync(path.join(src, 'access.json'), '{"password":"from-source"}');
+    fs.writeFileSync(path.join(dir, 'access.json'), '{"password":""}');
+    fs.writeFileSync(path.join(dir, 'server.config.json'), JSON.stringify({ jobs: [{ id: 's', type: 'sync', every: '30m', source: { kind: 'folder', path: src } }] }));
+    const ex = X.create({ dir, kind: 'test' });
+    const r = await ex.runJob('s');
+    eq(r.result, 'ok', r.message);
+    ok(fs.existsSync(path.join(dir, 'repo.json')) && fs.existsSync(path.join(dir, 'mods', 'm1', 'Data', 'a.txt')), 'copied');
+    eq(JSON.parse(fs.readFileSync(path.join(dir, 'access.json'), 'utf8')).password, '', 'access.json untouched');
+    ex.stop();
+});
+
+check('http: health, status, feed, 304, range, HEAD, private folder, rate limit', async () => {
+    const dir = fixture();
+    fs.writeFileSync(path.join(dir, 'server.config.json'), JSON.stringify({ rateLimit: { perMinute: 0 } }));
+    const ex = X.create({ dir, kind: 'test' });
+    const srv = http.createServer((req, res) => {
+        if (ex.early(req, res, '10.0.0.9')) return;
+        if (ex.serve(req, res)) return;
+        const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '');
+        const abs = path.resolve(dir, rel);
+        const segs = path.relative(dir, abs).split(path.sep).filter(Boolean);
+        if (!X.insideDir(dir, abs) || ex.isPrivate(segs) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) { res.statusCode = 404; return res.end(); }
+        const r = ex.prepareFile(req, res, abs);
+        if (r.done) return;
+        res.setHeader('Content-Length', r.length);
+        fs.createReadStream(abs, { start: r.start, end: r.end }).pipe(res);
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const port = srv.address().port;
+    try {
+        eq((await request(port, '/health')).status, 200, '/health');
+        const st = await request(port, '/status');
+        ok(st.status === 200 && st.body.includes('Self-test repo') && st.body.includes('bmm://repo/connect?url='), 'status page');
+        const js = JSON.parse((await request(port, '/status.json')).body);
+        eq([js.repo.files, js.repo.size], [1, 20], 'status.json counts');
+        const feed = await request(port, '/feed.atom');
+        ok(feed.status === 200 && feed.body.includes('<feed'), 'feed');
+        eq((await request(port, '/feed.xml', { 'if-none-match': feed.headers.etag })).status, 304, 'feed 304');
+        const full = await request(port, '/mods/m1/Data/a.txt');
+        eq([full.status, full.headers['accept-ranges']], [200, 'bytes']);
+        eq((await request(port, '/mods/m1/Data/a.txt', { 'if-none-match': full.headers.etag })).status, 304, 'file 304');
+        const part = await request(port, '/mods/m1/Data/a.txt', { range: 'bytes=10-14' });
+        eq([part.status, part.body, part.headers['content-range']], [206, 'abcde', 'bytes 10-14/20']);
+        const stale = await request(port, '/mods/m1/Data/a.txt', { range: 'bytes=10-14', 'if-range': '"other"' });
+        eq(stale.status, 200, 'If-Range mismatch sends the whole file');
+        eq((await request(port, '/mods/m1/Data/a.txt', { range: 'bytes=99-' })).status, 416);
+        fs.mkdirSync(path.join(dir, 'bmm-server'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'bmm-server', 'x.json'), '{}');
+        eq((await request(port, '/bmm-server/x.json')).status, 404, 'bmm-server/ is private');
+        fs.writeFileSync(path.join(dir, 'server.config.json'), JSON.stringify({ rateLimit: { perMinute: 60, burst: 2 } }));
+        const fresh = X.create({ dir, kind: 'test' });
+        const codes = [];
+        for (let i = 0; i < 3; i++) {
+            const res = { headers: {}, statusCode: 0, setHeader(k, v) { this.headers[k] = v; }, end() {} };
+            fresh.early({ url: '/health', headers: {} }, res, '10.0.0.1');
+            codes.push(res.statusCode);
+        }
+        eq(codes, [200, 200, 429], 'third request inside the burst is refused');
+        fresh.stop();
+    } finally { srv.close(); ex.stop(); }
+});
+
+Promise.all(pending).then(() => {
+    console.log('\n' + passed + ' passed, ' + failed + ' failed');
+    process.exit(failed ? 1 : 0);
+});

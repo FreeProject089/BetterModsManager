@@ -56,6 +56,9 @@ pub struct MiniServerExportOptions {
     pub enable_docker: Option<bool>,
     pub docker_host_type: Option<String>,
     pub server_type: Option<String>,
+    /// Status page, rate limit and scheduled jobs of the generated server (mini_server_extras.rs).
+    #[serde(default)]
+    pub extras: Option<crate::commands::mini_server_extras::MiniServerExtras>,
 }
 
 pub(crate) const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
@@ -970,6 +973,7 @@ fn export_server_repo_blocking(
             enable_docker,
             &docker_host_type,
             &server_type,
+            &opt.extras.clone().unwrap_or_default(),
         )?;
     }
 
@@ -2215,7 +2219,12 @@ fn generate_mini_server_files(
     enable_docker: bool,
     docker_host_type: &str,
     server_type: &str,
+    extras: &crate::commands::mini_server_extras::MiniServerExtras,
 ) -> Result<(), String> {
+    // 0. The scheduled jobs and the public URL are checked before anything is written: a typo
+    // in a schedule must be refused here, not logged on a machine the owner may never look at.
+    crate::commands::mini_server_extras::build_config(extras)?;
+
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
     let cf_path = {
@@ -2302,6 +2311,19 @@ fn generate_mini_server_files(
         fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;
     }
 
+    // 4b. Status page, health, feed, ranges, rate limit and scheduled jobs: bmm-extras.js and its
+    // server.config.json, the READMEs (EN/FR), the systemd unit, the Windows task, the self-test.
+    crate::commands::mini_server_extras::write_extras(output_path, port, server_type, server_version, extras)?;
+    // The script editions read the download password from access.json only: without this, the
+    // password typed in the generator was silently ignored by them. (Express bakes it in.)
+    if server_type != "server" {
+        match crate::commands::mini_server_extras::seed_download_password(output_path, download_password) {
+            Ok(false) if !download_password.trim().is_empty() => println!("[REPO] access.json already sets a password: kept"),
+            Err(e) => println!("[REPO] access.json: {e}"),
+            _ => {}
+        }
+    }
+
     // 5. Copy Bans if exists
     if let Ok(ban_path) = ban_manager::get_ban_file_path(handle) {
         if ban_path.exists() {
@@ -2339,7 +2361,7 @@ fn generate_mini_server_files(
         // Dockerfile + docker-compose.yml, and the admin password in .env beside them (with its
         // .gitignore / .dockerignore lines), not in the compose file. See docker_export.rs.
         let written = crate::commands::docker_export::write_docker_files(
-            output_path, dockerfile_content, compose_template, port, admin_password,
+            output_path, dockerfile_content, &crate::commands::mini_server_extras::compose_for(compose_template, extras), port, admin_password,
         ).map_err(|_| "repo.errWriteCompose".to_string())?;
 
         println!("[DOCKER] Docker files generated at: {:?}, {:?}, {:?}", written.dockerfile, written.compose, written.env);
@@ -2407,6 +2429,9 @@ pub struct StandaloneServerConfig {
     pub enable_docker: Option<bool>,
     pub docker_host_type: Option<String>,
     pub server_type: Option<String>,
+    /// Status page, rate limit and scheduled jobs (mini_server_extras.rs). Absent = defaults.
+    #[serde(default)]
+    pub extras: Option<crate::commands::mini_server_extras::MiniServerExtras>,
 }
 
 #[tauri::command]
@@ -2430,6 +2455,7 @@ pub async fn generate_standalone_server(
         enable_docker,
         docker_host_type,
         server_type,
+        extras,
     } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
@@ -2449,7 +2475,7 @@ pub async fn generate_standalone_server(
     let enable_docker = enable_docker.unwrap_or(false);
     let docker_host_type = docker_host_type.unwrap_or_else(|| "linux".to_string());
     let stype = server_type.unwrap_or_else(|| "user".to_string());
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, &download_password.unwrap_or_default(), enable_docker, &docker_host_type, &stype)
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, &download_password.unwrap_or_default(), enable_docker, &docker_host_type, &stype, &extras.unwrap_or_default())
 }
 
 #[tauri::command]

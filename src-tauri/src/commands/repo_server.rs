@@ -1053,7 +1053,8 @@ fn builtin_may_serve(rel: &str) -> bool {
             let n = one.to_ascii_lowercase();
             n == "repo.json" || n == "info.json" || n == "monitoring.json" || n == "feed.xml"
         }
-        [first, ..] => !first.eq_ignore_ascii_case("node_modules"),
+        // bmm-server/: the standalone server's job state and repo.json backups (mini_server_extras.rs).
+        [first, ..] => !first.eq_ignore_ascii_case("node_modules") && !first.eq_ignore_ascii_case("bmm-server"),
     }
 }
 
@@ -1194,6 +1195,7 @@ mod servable_tests {
             "downloads.json", "package.json", "BMM-Standalone-Server.bat", "Dockerfile",
             "docker-compose.yml", "keyauth.mjs", "access-gate.js", "hub-server.js",
             "repo.json::$DATA", "node_modules/express/index.js", "", "/",
+            "bmm-extras.js", "server.config.json", "README-SERVER.md", "bmm-server/backups/repo-20260101-000000.json", "BMM-SERVER/jobs-state.json",
         ] {
             assert!(!builtin_may_serve(bad), "{bad} served");
         }

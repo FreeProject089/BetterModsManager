@@ -126,35 +126,102 @@ exactement où tu t'étais arrêté. Supprime-le à la main si tu veux vraiment 
 
 ## Quelle version ?
 
-**Stable**, sauf raison particulière. Dans **Réglages → Mises à jour** tu peux opter pour les
-**pré-versions** : elles reçoivent les correctifs en premier et les bugs en premier. C'est un vrai
-compromis, d'où l'interrupteur plutôt qu'un défaut. Si tu aimes être en avance et que signaler une
-aspérité de temps en temps ne te dérange pas, active-le ; si tu veux juste que tes mods marchent,
-laisse-le coupé.
+**Stable**, sauf raison particulière. **Paramètres → Mise à jour automatique → Canal de mise à jour**
+propose deux choix :
+
+| Canal | Ce que tu reçois |
+|---|---|
+| **Stable** | Les versions testées uniquement. Le choix par défaut. |
+| **Préversion** | Aussi les versions bêta, avant leur sortie finale : les correctifs en premier, et les bugs en premier. |
+
+Une préversion installée continue de suivre le canal préversion : on ne lui propose jamais une
+stable plus ancienne comme « mise à jour ».
 
 ---
 
-## Mise à jour automatique
+## Mettre BMM à jour
 
-Activée par défaut. BMM vérifie, te le dit, et se met à jour. Tu peux la couper au même endroit — mais
-alors mets à jour à la main, parce qu'un gestionnaire de mods avec un an de retard sur les dépôts
-qu'il lit finira par ne plus être d'accord avec eux.
+BMM cherche une nouvelle version à son démarrage. **Vérifier en arrière-plan** (même carte) ajoute
+une vérification tant qu'il reste ouvert : **Désactivé**, **Toutes les 6 h** ou **Chaque jour**. La
+carte affiche aussi la dernière vérification, et si elle a échoué.
 
-Une mise à jour est vérifiée avant de pouvoir toucher ton installation : le paquet **doit** porter une
-signature Ed25519 valide pour la clé d'éditeur inscrite dans l'installeur, sinon il est refusé *avant*
-que le dossier d'installation soit touché. L'installeur prend ensuite un instantané et rollback si
-l'installation elle-même échoue. Voir [Sécurité](doc-page:how-it-works/security).
+Quand une version est disponible, BMM affiche ses notes et trois choix :
 
-Où il regarde, dans l'ordre : le manifeste sur les
-[releases GitHub](https://github.com/FreeProject089/BetterModsManager/releases/latest), puis le
-miroir sur BetterCommunity. Il interroge toutes les sources joignables et retient la version la plus
-récente annoncée, donc une source hors service ne bloque jamais une mise à jour. Quand la version
-propose un delta, seules les parties modifiées sont téléchargées.
+| Bouton | Ce qui se passe |
+|---|---|
+| **Installer maintenant** | Téléchargement, vérification, installation. Tout se fait dans BMM : pas besoin d'aller sur GitHub. |
+| **Installer au prochain lancement** | Téléchargée et vérifiée maintenant, installée au prochain démarrage de BMM (tu as quelques secondes pour choisir **Pas maintenant** ou **Abandonner**). |
+| **Me le rappeler demain** | Rien n'est téléchargé. BMM redemande demain. |
+
+La fenêtre montre ensuite les étapes : **Téléchargement** (taille, vitesse, temps restant),
+**Vérification**, **Installation**.
+
+### Ce qui est vérifié avant de lancer l'installateur
+
+L'installateur est vérifié avant de démarrer, dans cet ordre :
+
+1. Le **`update-manifest.json`** signé de la version : il liste `BMM-Setup.exe` avec son SHA-256,
+   signé avec la clé de l'éditeur intégrée à BMM.
+2. Sinon, le **`update.json`** signé de la version, qui liste lui aussi `BMM-Setup.exe` avec son
+   SHA-256.
+3. Sinon, BMM dit clairement ce qui n'a pas pu être vérifié (pas de `update.json`, un `update.json`
+   auquel il ne peut pas se fier, ou aucun checksum pour l'installateur) et tu choisis
+   **Installer quand même** ou **Annuler**. **Annuler** est le choix par défaut.
+
+BetterInstaller vérifie ensuite le paquet lui-même : il doit porter une signature Ed25519 valide
+pour la clé d'éditeur intégrée à l'installeur, sinon il est refusé avant que le dossier
+d'installation soit touché, et une installation qui échoue est annulée.
+
+La fenêtre indique quelle vérification a réussi. Un fichier téléchargé qui **ne correspond pas** à ce
+que la version annonce est affiché en rouge : il est peut-être corrompu ou modifié, et l'installer
+n'est pas recommandé.
+
+:::note[Si tu as installé BMM avec BetterInstaller]
+La mise à jour passe par BetterInstaller, sans question : BMM lance `BMM-Setup.exe --update`, qui
+attend la fermeture de BMM, installe par-dessus en gardant ton dossier, tes composants, tes
+raccourcis et tes choix, puis relance BMM. Le même programme de mise à jour se lance aussi à la main
+ou depuis un script : voir la
+[ligne de commande de BetterInstaller](https://github.com/FreeProject089/BetterInstaller/blob/master/GUIDE_FR.md#ligne-de-commande--installer-mettre-à-jour-réparer-modifier-désinstaller-sans-surveillance).
+:::
+
+### Quand ça ne passe pas
+
+Un échec reste affiché dans la fenêtre, avec la raison en clair (demande d'autorisation refusée,
+fichier encore bloqué par un antivirus, accès refusé par une stratégie de sécurité, installateur
+fermé aussitôt avec un code d'erreur), et deux boutons : **Réessayer** et
+**Télécharger depuis la page de la version**. Un installateur qui demande les droits administrateur
+affiche l'invite d'autorisation Windows habituelle.
+
+### Depuis une ancienne version
+
+| Tu as | Ce qui se passe |
+|---|---|
+| **1.0.x** | La mise à jour normale décrite plus haut. |
+| **0.9.11** | Accepte la mise à jour vers **0.9.12**, puis celle vers 1.0.2 qu'elle propose ensuite. La 0.9.12 est une version passerelle : seul son système de mise à jour change, pour qu'elle voie la ligne 1.0 et vérifie l'installateur avant de le lancer. |
+| **Plus ancien** | Télécharge `BMM-Setup.exe` depuis la page de la version et lance-le. Tes données sont conservées. |
+
+Un passage à une nouvelle version majeure (0.9 → 1.0) est toujours une installation complète par
+l'installeur, jamais un correctif fichier par fichier : le dossier de données change, et BMM y
+recopie tes données au premier lancement (voir [Où BMM range les choses](#ou-bmm-range-les-choses)).
+
+### La couper
+
+Décoche **Vérifier les mises à jour automatiquement** dans **Paramètres → Mise à jour automatique**,
+et rien n'est vérifié au démarrage. Mets alors à jour à la main, parce qu'un gestionnaire de mods
+avec un an de retard sur les dépôts qu'il lit finira par ne plus être d'accord avec eux. Une build
+peut aussi avoir les mises à jour complètement coupées (`DisableUpdate` dans
+[`app.cfg`](doc-page:reference/app-cfg)).
+
+Où BMM regarde : la version sur
+[GitHub](https://github.com/FreeProject089/BetterModsManager/releases), puis le miroir sur
+BetterCommunity, et il garde la version la plus récente annoncée par l'une d'elles, donc une source
+hors service ne bloque jamais une mise à jour. Les règles qu'un manifeste signé doit respecter sont
+dans [Sécurité](doc-page:how-it-works/security#la-mise-a-jour-rapide-de-bmm-est-signee-aussi).
 
 !!! note "Limité par GitHub ?"
 
     Les vérifications de mises à jour et de téléchargements passent par GitHub. Si tu vois des erreurs
-    de limitation, ajoute un **token GitHub** optionnel dans **Réglages → Identité & API** — ça relève
+    de limitation, ajoute un **token GitHub** optionnel dans **Réglages → Identité & API** : ça relève
     la limite. Il n'a besoin que du scope lecture, il est stocké localement, et il n'est jamais envoyé
     ailleurs qu'à GitHub. Purement optionnel ; la plupart des gens n'en ont jamais besoin.
 

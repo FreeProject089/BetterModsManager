@@ -71,6 +71,7 @@ export function runAskAction(a: any): void {
         const id = String(a.setting);
         setTimeout(() => {
             const card = document.getElementById(id) || document.querySelectorAll<HTMLElement>('#view-settings .settings-sections > .glass-card')[Number(id)];
+            card?.classList.add('stg-card-peek');   // shown even if hidden from the layout
             card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }, 80);
     }

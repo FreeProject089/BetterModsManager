@@ -268,7 +268,10 @@ The frontend is **TypeScript** (`// @ts-nocheck`) under `frontend/src/`, compile
 
 ## 15. Auto-Update Engine (`autoupdate.rs`)
 
-GitHub-based async updater with SemVer comparison and asset detection.
+Async updater over the GitHub Releases API with SemVer comparison and two channels (stable,
+pre-release). Since 1.0.2 nothing runs unverified without the person's explicit choice: the
+installer is checked against the release's signed `update-manifest.json`, else its signed
+`update.json`, else the person decides, and it is started through `ShellExecuteExW`. See §81.
 
 ---
 
@@ -280,7 +283,7 @@ Distribution mode controlled via `app.cfg` with themed release note modals.
 
 ## 17. Legal & EULA System (v0.9.9)
 
-- **Installer Integration**: Forced EULA acceptance in NSIS and WiX/MSI configurations.
+- **Installer Integration**: Forced EULA acceptance in NSIS and WiX/MSI configurations (0.9.x; since 1.0.0 the installer is BetterInstaller, which shows the Terms and Privacy Policy and, since 1.0.2, writes a consent receipt for each).
 - **Dynamic Localization**: Backend command `get_eula_text` dynamically selects `EULA_{LANG}.md` with fallback to `EULA.md`.
 - **Markdown Rendering**: Frontend uses `renderMarkdown` utility to display legal text with full formatting in a dedicated modal.
 - **Community Governance**: Formalized "Server Repositories & Moderation" clauses to protect community hosts.
@@ -1377,8 +1380,9 @@ and Escape order (`check-modal-shell` in CI).
 
 ## 79. Telemetry categories, live errors, no IP lookup (v1.0.0+)
 
-`telemetry-model.ts` holds the categories and the consent state (the installer only
-pre-selects). `live-issues-core.ts`, `live-issues.ts` and `live_issues.rs` send errors within
+`telemetry-model.ts` holds the categories and the consent state. Since 1.0.2 an installer
+`privacy_choice` (`essential` / `all` / `custom`) is consent or refusal and is recorded with a
+receipt (`installer_handoff.rs`); an older installer's single box only pre-selects. `live-issues-core.ts`, `live-issues.ts` and `live_issues.rs` send errors within
 seconds: redacted twice, fingerprinted, deduplicated, capped per hour, queued on disk, HTTPS or
 loopback only. `laya-telemetry.ts` sends Laya usage counts, never text.
 `analytics_system_profile` no longer carries `private_ip` or `public_ip`, and nothing asks an
@@ -1392,3 +1396,67 @@ sees the connection address and truncates it server-side.
 631 commands registered, 97 endpoints in the local API, 95 MCP tools, 81 CLI subcommands, 120
 actions in the scheduler, 13 built-in themes, and 92 steps in `npm run ci`. `check-counts` and
 `check-theme-count` fail when a page quotes another number.
+
+## 81. 1.0.2: update pipeline, consent ledger, followed repos, activity, catalogue index
+
+### Update pipeline (`autoupdate.rs`, `update-notes.ts`)
+
+| Step | Detail |
+| :--- | :--- |
+| **Release list** | Stable channel = `/releases/latest`; pre-release channel = the highest non-draft release of the list. |
+| **Installer asset** | A release carries one installer, `BMM-Setup.exe`. The picker takes `BMM-Setup.exe`, else the only `.exe`, else the only `.msi` (releases before 1.0); two of a kind is refused. |
+| **1. `signed`** | `update-manifest.json`: Ed25519 signature checked against the key BMM pins, app id, `issued < expires`, at most 7 days valid and not expired, a version strictly newer; its `installers` entry gives the SHA-256 of `BMM-Setup.exe`. |
+| **2. `update-json`** | No manifest: the release is read again by tag and `BMM-Setup.exe` is compared with the SHA-256 that BetterInstaller's signed `update.json` declares inside its signed body (same pinned key, same 7-day rule). |
+| **3. `unverified`** | Neither can vouch: the dialog says why and asks (Cancel focused, or Install anyway). Only « Install anyway » sends `confirm_sha256`, and Rust runs exactly those bytes. A mismatch is shown in red. |
+| **Launch** | `proc::shell_launch` (`ShellExecuteExW`) from a fresh `%TEMP%\bmm_update_<uuid>\` folder, off the async runtime because it waits while a UAC prompt is open. The Windows error is mapped to a sentence. No PowerShell `Start-Process`. |
+| **BetterInstaller install** | `BMM-Setup.exe --update --wait-pid <pid> --launch`; exit code 3 (no existing install) restarts it interactively. A release that cannot be read falls back to `<install>/uninstall.exe --update`, also through `ShellExecuteExW`. |
+| **Later** | « Install on next launch » keeps a signed installer and verifies it again at start. |
+
+Publishing side: `scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe
+--require-installer` builds the manifest, `sign-update-manifest.mjs` signs and verifies it, and
+`scripts/check-release-versions.mjs` gates the release. Source mode (in `npm run ci`): one version
+in `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock` and
+`installer.toml`. `--artifacts` mode (before publishing): both manifests signed for this version
+at publish time, `update.json` naming this `bmm.bpkg`, the manifest naming this `BMM-Setup.exe`,
+and a single installer asset. `resign-manifests.yml` renews both signatures twice a week.
+
+### Consent ledger (`consent_ledger.rs`, `consent.ts`)
+
+One receipt per answer (Terms, Privacy Policy, telemetry, live error reports): document, version,
+SHA-256 of the exact text shown, language, choice and categories, time, source, app version, and a
+random install id (not derived from hardware or the Creator ID). Stored next to `data.json` as
+`consent-ledger.jsonl`, append-only: each line's `hash` covers the previous line's hash, `mac` is
+an HMAC with a local key, and `consent-ledger.head` records the newest line so a truncation is
+seen. `consent_verify` reports the first break. The installer's receipts count only when the text
+hash matches a text this BMM ships. Receipts leave the machine only with telemetry consent or the
+« Send to the server » button.
+
+### Followed repos and Atom feed (`repo_follow.rs`, `repo-follow.ts`)
+
+Follow settings live on `ConnectedServerRepo` in `data.json`. The schedule is the frontend runner:
+it asks `repo_follow_due` every few minutes, checks due repos one at a time, and for `download` /
+`apply` runs the plan the check returns through the ordinary sync and the activation job manager.
+A check is a conditional GET of `repo.json` (stored ETag / Last-Modified; SHA-256 of the body when
+the server sends neither), so an unchanged repo costs one 304. Nothing is installed while the
+governor's game mode is on. The built-in repo server serves `feed.xml` (Atom) next to `repo.json`.
+Mod ids stay stable through `mod_ids.rs`: the sync matches a record by origin before the folder,
+and `dedupe_mod_ids` repairs older duplicates once per start, after a backup of `data.json`.
+
+### Activity centre (`core/activity.ts`, `activity-sources.ts`, `ui/activity-center.ts`)
+
+One registry with no DOM: `startActivity({ kind, title, cancel })` returns a handle with
+`update({ progress, detail })`, `done()`, `fail(err)` and `cancelled()`; `trackPromise` drives
+one from a promise. A `key` makes a start idempotent, so a command and its progress events share
+one row. The last 30 finished entries are kept (in `localStorage` when it is available).
+`activity-sources.ts` adapts each subsystem (activation, downloads, sync, scans, installs,
+exports, scheduler, Laya, benchmark) to it.
+
+### Catalogue format and index (`catalog_format.rs`, `catalog_cache.rs`, `catalog-search.ts`)
+
+`catalog_format.rs` reads every older catalogue shape and the signed BetterCommunity v2 feeds
+into one `bmm-catalog` document (`format_version`), tested against the fixtures in
+`src-tauri/tests/catalog_format/`. `catalog_cache.rs` keeps one file per source in
+`catalog-cache/`, revalidates with `If-None-Match` / `If-Modified-Since`, and serves the last good
+copy marked `stale` when a source fails. `catalog-search.ts` builds one token index per change:
+case, accents and punctuation folded, prefix search, ranking by field, and entries with the same
+kind and id (or the same download SHA-256) merged into one with every source listed.

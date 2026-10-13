@@ -175,6 +175,23 @@ refused, and a refused manifest looks exactly like "you are up to date"; the log
   workflows in a repository with no activity for 60 days: re-enable it from the Actions tab if so.
   See [Security](doc-page:how-it-works/security) for the rules BMM applies.
 
+### The update window says the installer could not be checked
+
+The release offers neither a signed `update-manifest.json` nor a signed `update.json` that
+BMM can use for this installer, and the window says which. **Cancel** (the default) changes
+nothing. Choose **Install anyway** only if you trust where the file comes from; otherwise wait
+for the publisher to fix the release, or download `BMM-Setup.exe` from the release page.
+A file shown **in red** does not match what the release declares: do not install it, try
+again later. See [Updating BMM](doc-page:getting-started/install#updating-bmm).
+
+### The installer does not start
+
+The window says why, in words, with the Windows error: permission prompt declined (press
+**Try again** and accept it), file still held by an antivirus (BMM already retried a few
+times; wait for the scan and **Try again**), access denied by a security policy (ask whoever
+manages the PC), or an installer that closed at once with an error code. **Download from the
+release page** always works as a fallback.
+
 ### A repo sync says a file failed
 
 The downloaded file's hash didn't match what the repo published, and BMM treats that as an error rather

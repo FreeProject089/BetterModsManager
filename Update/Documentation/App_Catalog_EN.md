@@ -68,6 +68,29 @@ The absolute path of the file you picked never reaches the published document.
 - When the source publishes a newer version, the card offers an **Update**.
 - Uninstalling removes the tracked files.
 
+## Cards, filters and sorting (1.0.2)
+
+Each card says where the app stands and what to do next:
+
+| State | Next action |
+|---|---|
+| Not installed | **Install** |
+| Installed | **Launch** |
+| Update available (the card shows the installed and the catalogue version) | **Update** |
+| Installing, updating or removing | progress on the card; it can continue in the background |
+| Install, update or uninstall failed | the error, with **Try again** and **Dismiss** |
+
+- **Filter by install state**: any state, installed, not installed, update available. These
+  combine with the category, price, tag and source filters, and **Clear filters** resets them.
+- **Sort**: catalogue order, name A to Z, name Z to A, smallest download.
+- **A source that does not answer** is named in a message above the list (« N source(s) did
+  not answer. Their apps are missing below. ») with **Try again**; the apps of the other sources
+  still show. When no source answers, the page says so instead of showing an empty catalogue.
+- **Descriptions and READMEs** are rendered with B.MD, BMM's Markdown renderer, through its safe
+  path: the text comes from a third party, so the result is sanitised and scripts or unsafe HTML are
+  dropped. A README that
+  cannot be loaded shows the error and **Try again**.
+
 ## Executable detection
 
 For apps installed outside BMM, the catalog can **detect existing executables** so a card switches to "installed" instead of proposing a duplicate download.

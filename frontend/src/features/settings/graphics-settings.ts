@@ -50,6 +50,20 @@ function storeSet(k: string, v: string | null): void { try { if (v == null) loca
 
 export function reducesAnimations(): boolean { return storeGet(REDUCE_ANIM_KEY) === '1'; }
 
+/** The start-up intro's style, read by boot-loader.js before anything else runs (so it lives
+ *  in localStorage, not in the Rust settings). Unset = classic. */
+export const INTRO_KEY = 'bmm.introStyle';
+const INTRO_STYLES = ['classic', 'logo', 'off'] as const;
+const INTRO_LABEL: Record<string, [string, string]> = {
+    classic: ['gfx.intro.classic', 'Classic (Tasky)'],
+    logo: ['gfx.intro.logo', 'Logo (short)'],
+    off: ['gfx.intro.off', 'Off'],
+};
+function introStyle(): string { const v = storeGet(INTRO_KEY); return v && (INTRO_STYLES as readonly string[]).includes(v) ? v : 'classic'; }
+function introOptions(selected: string): string {
+    return INTRO_STYLES.map((s) => `<option value="${s}"${s === selected ? ' selected' : ''}>${esc(tr(INTRO_LABEL[s][0], INTRO_LABEL[s][1]))}</option>`).join('');
+}
+
 /** Apply the app-wide choice. The theme's own --bmm-anim-speed: 0 still turns animations off
  *  when this is off: either one is enough (theme-engine.ts reads the same key). */
 export function applyReduceAnimations(on = reducesAnimations()): void {
@@ -120,6 +134,15 @@ export function mountGraphicsCard(): HTMLElement | null {
                     </label>
                 </div>
             </div>
+            <div class="stm-card">
+                <div class="stm-row">
+                    <div class="stm-grow">
+                        <label class="stm-card-title" for="gfx-intro-style" data-i18n="gfx.intro">${esc(tr('gfx.intro', 'Start-up animation'))}</label>
+                        <div class="stm-help" data-i18n="gfx.introHint">${esc(tr('gfx.introHint', 'Shown while BMM starts, and gone as soon as it is ready. A click or any key skips it. With reduced animations it stays still.'))}</div>
+                    </div>
+                    <select id="gfx-intro-style" class="input">${introOptions(introStyle())}</select>
+                </div>
+            </div>
             <details class="stm-card stm-gfx-hw" id="hw-card">
                 <summary class="stm-card-title" data-i18n="storage.hwTitle">${esc(t('storage.hwTitle'))}</summary>
                 <div id="hw-body" class="stm-help"></div>
@@ -132,6 +155,16 @@ export function mountGraphicsCard(): HTMLElement | null {
         storeSet(REDUCE_ANIM_KEY, on ? '1' : null);
         applyReduceAnimations(on);
     });
+    const introSel = card.querySelector<HTMLSelectElement>('#gfx-intro-style');
+    introSel?.addEventListener('change', () => {
+        storeSet(INTRO_KEY, introSel.value === 'classic' ? null : introSel.value);
+    });
+    // Written from code: relabelled on a language switch like the graphics-card options.
+    const relabelIntro = () => {
+        if (!card.isConnected) { document.removeEventListener('langChanged', relabelIntro); return; }
+        if (introSel) { const v = introSel.value; introSel.innerHTML = introOptions(v); introSel.value = v; }
+    };
+    document.addEventListener('langChanged', relabelIntro);
     void fillGraphics(card);
     return card;
 }

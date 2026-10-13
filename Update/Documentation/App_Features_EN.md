@@ -164,12 +164,26 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ## 13. Auto-Update System
 
+Since 1.0.2, **« Download update »** (and **« Install now »** in the update dialog) does everything from BMM, for stable releases and
+pre-releases: download, check, install. Nobody is sent to GitHub.
+
 | Feature | Description |
 | :--- | :--- |
-| **Automatic Check on Startup** | BMM queries the GitHub Releases API (now pointing to `FreeProject089/BetterModsManager`) shortly after launch to check for newer versions. |
-| **Manual Check Button** | Available in the sidebar and Settings for on-demand checks. |
-| **Update Modal** | Displays version comparisons, markdown release notes, and direct installer download buttons. |
-| **Reactivation (v0.9.8)** | Auto-updates are now re-enabled by default in `app.cfg`. |
+| **Check** | At start-up, from the sidebar and from Settings. Optional background check while BMM stays open: **Off**, **Every 6 h** or **Daily**. The last check (or the last failed one) is shown. |
+| **Channels** | **Stable** (tested releases only, the default) or **Pre-release** (beta builds too). A build installed from a pre-release keeps following the pre-release channel. |
+| **What checks the installer** | In this order: (1) the release's signed `update-manifest.json` (Ed25519, checked against the key BMM pins, valid at most 7 days), which lists `BMM-Setup.exe` with its SHA-256; (2) otherwise the release's signed `update.json`, which also lists `BMM-Setup.exe` with its SHA-256; (3) otherwise BMM says plainly what could not be checked and asks: **Install anyway** or **Cancel** (Cancel is the default). A file that does not match what the release declares is shown in red. The dialog says which check passed. |
+| **Progress** | Download with size, speed and time left, then the file check, then the installer start. An interrupted download resumes where it stopped. |
+| **How the installer starts** | The way Explorer starts a program (`ShellExecuteExW`), so an installer that needs administrator rights gets the normal Windows permission prompt. A failed start says why, with the real Windows error (prompt declined, file held by an antivirus, blocked by a policy, installer closed at once). |
+| **BetterInstaller installs** | Update with no questions: BMM runs `BMM-Setup.exe --update`, which waits for BMM to close, installs over it keeping your folder, components, shortcuts and choices, and starts BMM again. |
+| **Later** | **Remind me tomorrow**, or **Install on next launch** (the checked installer is kept and checked again before it runs). |
+| **Failures** | Every failure stays in the window with its explanation, **Try again** and **Download from the release page**. |
+| **Quick Update** | Refreshes the interface and language files only, without the installer; the version number does not change. |
+
+**Older installs.** A 0.9.11 copy reaches 1.0.2 through **0.9.12**, a bridge release whose only
+change is the updater: it sees the 1.0.x line and installs only an installer that a signed
+`update-manifest.json` lists (then 0.9.12 → 1.0.2). A 0.9.11 copy that skips the bridge runs
+`BMM-Setup.exe`, the only installer on the release. 1.0.x copies installed by BetterInstaller
+read `update.json` and `bmm.bpkg`; other 1.0.x copies read the signed `update-manifest.json`.
 
 ---
 
@@ -333,7 +347,7 @@ BMM ensures legal transparency and provides clear guidelines for community safet
 
 | Feature | Description |
 | :--- | :--- |
-| **Mandatory EULA** | Users must accept the End User License Agreement during the installation process (NSIS and MSI). |
+| **Mandatory EULA** | Users must accept the End User License Agreement during the installation process (NSIS and MSI in 0.9.x; since 1.0.0 the installer is BetterInstaller). |
 | **Integrated EULA Viewer** | Access the full legal document anytime from the Credits page. Features high-quality Markdown rendering. |
 | **Localized Legal Agreement** | The EULA automatically adapts to your system language (EN/FR support) for better accessibility. |
 | **Moderation Clauses** | Explicit legal definitions for server repository moderation and user conduct. |
@@ -1250,8 +1264,11 @@ action with its duration.
 
 ## 85. Telemetry by category, live errors, no IP lookup (v1.0.0+)
 
-Nothing is collected until you say yes; the installer's box only **pre-selects** the answer in
-BMM's dialog. Categories: usage, performance, live errors, Laya usage statistics, masked replay
+Nothing is collected until you say yes. Since 1.0.2 the installer asks the privacy question
+itself, cookie-banner style, with nothing pre-selected (*Essential only*, *Accept all* or
+*Customize*); that answer is recorded as consent or refusal, with a receipt, and BMM does not ask
+again. An older installer's single box only
+**pre-selects** the answer in BMM's dialog. Categories: usage, performance, live errors, Laya usage statistics, masked replay
 (**Turn all on** or **Choose**). **Errors sent live** are cleaned of secrets and names first,
 grouped and capped. BMM puts **no IP address** in what it sends and never asks a third-party
 service (such as an IP-echo or geolocation service) for your address or location.
@@ -1266,3 +1283,133 @@ service (such as an IP-echo or geolocation service) for your address or location
 | **Feedback contact** | The e-mail field only when BetterCommunity cannot tell who you are; a size budget and a quality gauge before Send. |
 | **Repo zip compression** | Deflate, zstd, bzip2 or stored. |
 | **Dialogs** | One shared shell: readable close button, focus kept inside, Escape closes the top one. |
+
+## 87. Activity centre (v1.0.2)
+
+A button in the title bar shows everything BMM is running, on every screen: a ring that fills
+with the overall progress and a count of running tasks. Covered: turning mods on and off,
+downloads, repo syncs and checks, scans, installs, imports and exports, scheduled tasks, Laya
+jobs and benchmarks.
+
+Its panel lists each running task with its step, progress, elapsed time and **Cancel** where
+the task can stop, then the last 30 finished ones (done, failed with the message, or
+cancelled). Esc closes it.
+
+## 88. BMM Tools (v1.0.2)
+
+A **Tools** hub, opened from the command palette, the navigation bar or DevTools. Seven
+read-only tools: nothing is deleted, moved or rewritten.
+
+| Tool | What it answers |
+| :--- | :--- |
+| **Duplicate finder** | Mods registered more than once, and identical files carried by several mods (size, then BLAKE3 hash). |
+| **Conflict summary** | Every pair of mods writing the same files, for one profile or all, active conflicts first. |
+| **Disk usage** | What each profile's mods and backups weigh, per mod, and BMM's own data folder. |
+| **Profile diff** | Two profiles side by side: mods in only one, another version, another state, another order. |
+| **Missing and orphans** | Mods a profile names but the library lacks, mod folders that are gone, folders no mod is registered on, profile folders that vanished. |
+| **Hash checker** | The BLAKE3 or SHA-256 of a file, compared with a hash you paste. |
+| **Manifest and catalogue validator** | What a BMM file is (mod list, modpack, catalogue, repo, theme…) and what is wrong with it, from a file or pasted text. |
+
+Every result can be copied, or exported as JSON or CSV. A long run shows its progress and can
+be cancelled (the results are then marked partial).
+
+## 89. Server Repo, simple by default (v1.0.2)
+
+The Server Repo page opens on the guided steps to **sync** a repo or **host** one. Everything
+else sits in a searchable **Advanced tools** area that remembers which tools you opened.
+
+New tools there:
+
+| Tool | Description |
+| :--- | :--- |
+| **Create a repo in one click** | From a profile, a modpack or a folder of mods. |
+| **Validate a repo** | Manifest, files, hashes, signature and format version in one report. One fast pass with progress and Cancel; only files that changed are read again. |
+| **Set the repo version** | The number subscribers see beside the repo's name, re-signed. |
+| **Preview as subscribers see it** | The card BMM shows after Fetch, from the folder or the running server. |
+| **Share link** | A one-click link and a message to send, with password or key notes when needed. |
+| **Host on a static web host** | Instructions and configuration for GitHub Pages, nginx or any host that serves files. |
+
+**Format versions.** A repo manifest now states its format (`format_version`), signed with the
+rest. The page shows each repo's format. **Convert** brings an older manifest to the current
+format: it always shows a dry run first, then asks before writing, keeps a backup of the old
+manifest and signs the new one. A repo written in a newer format than this BMM reads is refused
+with a clear message.
+
+**Stable mod ids.** A mod keeps the same id across re-syncs, renames and re-imports. Duplicate
+ids left by older versions are repaired once at start-up, after a backup of your data.
+
+## 90. Followed repos and the repo feed (v1.0.2)
+
+**Follow this repo** on the Server Repo page: BMM then checks it on a schedule you choose (from
+every 15 minutes to every week) and, per repo, **tells you**, **downloads** the update, or
+**downloads and applies** it. Nothing is downloaded or applied while a game is running; BMM
+tries again at the next check. Each check is a conditional request, so an unchanged repo costs
+one « not modified » (304) answer, and each check is a row in the activity centre.
+
+BMM's own repo server serves an **Atom feed** (`feed.xml`) next to `repo.json`, and answers
+« not modified » when nothing changed. Any feed reader, or a scheduled task's RSS trigger, can
+follow it.
+
+## 91. Settings index and search (v1.0.2)
+
+Settings opens with an index of every card, sorted into groups (Appearance, Library,
+Automation, Performance, Accounts and services, Privacy and security, Application). A search
+field hides every card that does not match; **Ctrl+F** jumps to it.
+
+## 92. App catalogue cards (v1.0.2)
+
+Each card shows the app's state (installed, not installed, update available, in progress,
+failed) and the next action: **Install**, **Launch**, **Update** or **Try again**. The list can
+be filtered by install state and sorted (catalogue order, name, smallest download). When a
+source does not answer, a clear message says so and the apps of the other sources still show.
+Descriptions and READMEs are rendered with B.MD, the safe Markdown renderer. See
+[App_Catalog_EN.md](App_Catalog_EN.md).
+
+## 93. One catalogue format, one index (v1.0.2)
+
+Every kind of catalogue (apps, plugins, themes, automations, modpacks, repos, tutorials, mod
+lists) can be written in one versioned format (`"format": "bmm-catalog"`, `format_version`).
+BMM reads every older variant, and the signed feeds of BetterCommunity v2, through the same
+reader.
+
+Sources are cached on disk and asked again with a conditional request, so an unchanged source
+is not downloaded again. A source that fails keeps showing its last good copy, marked as stale,
+and never hides the others. All followed catalogues are merged into one index: search ignores
+case and accents, and an entry listed by two catalogues shows once.
+
+## 94. Credits (v1.0.2)
+
+The code contributors are generated from the git history of the four repositories (BMM,
+BetterCommunity, BMM Docs and BetterInstaller), with their commit counts, in cleaner cards.
+Every bundled package is listed with its link and its licence, readable in the app.
+
+## 95. Replay and Animation studios (v1.0.2)
+
+**Replay Studio** gets a timeline: trim, cut anywhere, add markers, undo and redo, with a live
+preview and lighter exports. **Animation Studio** can build an animation as a sequence of steps,
+each with its own timing, previewed live, reordered, and exported or imported as JSON.
+
+## 96. Proof of consent: « My consents » (v1.0.2)
+
+Every answer about the Terms of Service, the Privacy Policy and telemetry leaves a **receipt**:
+the document, its version, the SHA-256 of the exact text shown, the language, the answer (and
+each category), the time, where it was given (installer, first launch, Settings, a `bmm://`
+link, the local API, the command line, the MCP server, an import) and the BMM version.
+
+- Receipts are keyed by a **random install id**, never by your Creator ID or your hardware.
+- They are kept on your PC in an **append-only, tamper-evident chain**: an edited, removed or
+  inserted receipt is detected.
+- **Settings → Privacy → My consents** lists them, says whether the chain is intact, exports
+  them as JSON and can send them to the server.
+- An answer with no receipt is asked again (after an update from 1.0.x, after importing old
+  settings, or when a document changes).
+
+## 97. BetterCommunity v2 switch and telemetry v2 envelope (v1.0.2)
+
+BMM speaks BetterCommunity v1 by default. Two `app.cfg` lines move it to v2 for test builds:
+`BCApiVersion=v2` and `BCv2Base=<address>` (empty means the v1 address). Only what has a v2
+adapter moves: feedback and bug reports, the copy of consent receipts, and the catalogue and
+repo lists v2 serves. Details: `APP_CFG.md`.
+
+Telemetry packets now carry an envelope that says what they are: `schema: "bmm-telemetry"` and
+a version `v`, so a server can tell this format from anything else it receives.

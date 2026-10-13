@@ -214,13 +214,23 @@ the packages, and BMM refuses it unless **every** rule holds:
 Only the signed part is read. The interface never hands BMM a list to apply: it passes back the
 document it was given, and BMM verifies it **again** before downloading or writing anything.
 
-The **full installer** fallback (the *Download & install* button, for the same copies) is held to
-the same list: the signed body may carry an `installers` entry per release installer, with its
-`https` URL and SHA-256. BMM runs an installer only if the signed manifest lists that exact URL and
-the downloaded bytes have that hash; it saves it under the name the manifest gives, in a fresh folder
-of its own. A release with no signed manifest, a manifest that lists no installer, another URL or a
-hash mismatch is **refused with a message, and BMM stays on its current version**. It used to
-download whatever the release feed pointed at and launch it unchecked.
+The **installer** (`BMM-Setup.exe`, the *Download update* button) is checked before it runs, in
+this order:
+
+1. The signed `update-manifest.json` above: its body carries an `installers` entry per release
+   installer, with its `https` URL and SHA-256. BMM picks the installer among the signed
+   entries itself, and runs it only if the downloaded bytes have that hash.
+2. Otherwise, the release's signed `update.json` (BetterInstaller's, under its own context line),
+   which lists `BMM-Setup.exe` with its SHA-256.
+3. Otherwise, nothing vouches for the file. BMM says why in plain words (no `update.json`, one
+   it cannot trust, or no checksum for the installer) and asks: **Install anyway** or
+   **Cancel**, with Cancel as the default. Nothing runs without that click.
+
+A file that does not match a hash the release declares is shown in red, as possibly corrupted
+or tampered with. BMM saves the installer in a fresh folder of its own and starts it the way
+Explorer starts a program (`ShellExecuteExW`), so an installer that needs administrator rights
+gets the normal Windows prompt and a failure comes back with the real Windows error. Before
+1.0, BMM downloaded whatever the release feed pointed at and launched it unchecked.
 
 Because the signature expires, the publisher renews it twice a week with an automated job (the
 workflow *Re-sign update manifests*, which also renews BetterInstaller's `update.json`). If that job

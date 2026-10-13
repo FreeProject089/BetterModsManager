@@ -137,7 +137,28 @@ Changelog intégré supportant le Markdown complet avec accès aux archives hist
 
 ## 13. Système de mise à jour automatique
 
-Vérification asynchrone via GitHub Releases avec modale de mise à jour dédiée et notes de version.
+Depuis la 1.0.2, **« Télécharger la mise à jour »** (et **« Installer maintenant »** dans la fenêtre de mise à jour) fait tout depuis BMM, pour les versions
+stables comme pour les préversions : téléchargement, vérification, installation. Plus besoin de
+passer par GitHub.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Vérification** | Au démarrage, depuis la barre latérale et depuis les Paramètres. Vérification en arrière-plan facultative tant que BMM reste ouvert : **Désactivé**, **Toutes les 6 h** ou **Chaque jour**. La dernière vérification (ou le dernier échec) est affichée. |
+| **Canaux** | **Stable** (versions testées uniquement, par défaut) ou **Préversion** (versions bêta en plus). Une version installée depuis une préversion reste sur le canal préversion. |
+| **Ce qui vérifie l'installateur** | Dans cet ordre : (1) le `update-manifest.json` signé de la release (Ed25519, vérifié avec la clé épinglée dans BMM, valable 7 jours au plus), qui liste `BMM-Setup.exe` avec son SHA-256 ; (2) sinon le `update.json` signé de la release, qui liste lui aussi `BMM-Setup.exe` avec son SHA-256 ; (3) sinon BMM dit clairement ce qui n'a pas pu être vérifié et demande : **Installer quand même** ou **Annuler** (Annuler est le choix par défaut). Un fichier qui ne correspond pas à ce que la release déclare s'affiche en rouge. La fenêtre indique quelle vérification a réussi. |
+| **Progression** | Téléchargement avec taille, vitesse et temps restant, puis la vérification du fichier, puis le démarrage de l'installateur. Un téléchargement interrompu reprend là où il s'est arrêté. |
+| **Lancement de l'installateur** | Comme l'Explorateur lance un programme (`ShellExecuteExW`) : un installateur qui demande les droits administrateur reçoit l'invite d'autorisation normale de Windows. Un échec de lancement dit pourquoi, avec la vraie erreur Windows (invite refusée, fichier bloqué par un antivirus, bloqué par une stratégie, installateur fermé aussitôt). |
+| **Installations BetterInstaller** | Mise à jour sans question : BMM lance `BMM-Setup.exe --update`, qui attend la fermeture de BMM, installe par-dessus en gardant ton dossier, tes composants, tes raccourcis et tes choix, puis redémarre BMM. |
+| **Plus tard** | **Me le rappeler demain**, ou **Installer au prochain lancement** (l'installateur vérifié est conservé et vérifié de nouveau avant de s'exécuter). |
+| **Échecs** | Tout échec reste dans la fenêtre avec son explication, **Réessayer** et **Télécharger depuis la page de la version**. |
+| **Mise à jour rapide** | Actualise seulement l'interface et les fichiers de langue, sans l'installateur ; le numéro de version ne change pas. |
+
+**Anciennes installations.** Une copie 0.9.11 arrive à la 1.0.2 en passant par la **0.9.12**,
+une version passerelle dont le seul changement est le système de mise à jour : elle voit la
+branche 1.0.x et n'installe qu'un installateur listé par un `update-manifest.json` signé (puis
+0.9.12 → 1.0.2). Une copie 0.9.11 qui saute la passerelle lance `BMM-Setup.exe`, le seul
+installateur de la release. Les copies 1.0.x installées par BetterInstaller lisent `update.json`
+et `bmm.bpkg` ; les autres copies 1.0.x lisent le `update-manifest.json` signé.
 
 ---
 
@@ -252,7 +273,7 @@ BMM assure une transparence légale et fournit des directives claires pour la s�
 
 | Fonctionnalité | Description |
 | :--- | :--- |
-| **EULA Obligatoire** | Les utilisateurs doivent accepter le Contrat de Licence Utilisateur Final (EULA) lors du processus d'installation (NSIS et MSI). |
+| **EULA Obligatoire** | Les utilisateurs doivent accepter le Contrat de Licence Utilisateur Final (EULA) lors du processus d'installation (NSIS et MSI en 0.9.x ; depuis la 1.0.0, l'installateur est BetterInstaller). |
 | **Lecteur EULA Intégré** | Accédez au document légal complet à tout moment depuis la page Crédits. Rendu Markdown de haute qualité. |
 | **Contrat Localisé** | L'EULA s'adapte automatiquement à la langue de votre système (support EN/FR) pour une meilleure accessibilité. |
 | **Clauses de Modération** | Définitions légales explicites pour la modération des dépôts de serveurs et la conduite des utilisateurs. |
@@ -1178,8 +1199,12 @@ permission **réseau**. Une tâche en échec peut **réessayer** (jusqu'à 5 ten
 
 ## 85. Télémétrie par catégorie, erreurs en direct, pas de recherche d'IP (v1.0.0+)
 
-Rien n'est collecté avant ton oui ; la case de l'installateur ne fait que **présélectionner** la
-réponse dans le dialogue de BMM. Catégories : usage, performances, erreurs en direct, statistiques
+Rien n'est collecté avant ton oui. Depuis la 1.0.2, l'installateur pose lui-même la question de
+confidentialité, façon bandeau de cookies, sans rien de présélectionné (*L'essentiel uniquement*,
+*Tout accepter* ou *Personnaliser*) ; cette réponse est enregistrée comme consentement ou refus,
+avec un reçu, et BMM ne redemande pas.
+La case unique d'un ancien installateur ne fait que **présélectionner** la réponse dans le
+dialogue de BMM. Catégories : usage, performances, erreurs en direct, statistiques
 d'usage de Laya, relecture masquée (**Tout activer** ou **Choisir**). Les **erreurs envoyées en
 direct** sont d'abord nettoyées des secrets et des noms, regroupées et plafonnées. BMM ne met
 **aucune adresse IP** dans ce qu'il envoie et ne demande jamais ton adresse ou ta localisation à
@@ -1195,3 +1220,143 @@ un service tiers (écho d'IP ou géolocalisation).
 | **Contact des retours** | Le champ e-mail seulement quand BetterCommunity ne peut pas savoir qui tu es ; un budget de taille et une jauge de qualité avant Envoyer. |
 | **Compression zip des dépôts** | Deflate, zstd, bzip2 ou stocké. |
 | **Dialogues** | Un seul cadre partagé : bouton fermer lisible, focus gardé dedans, Échap ferme celui du dessus. |
+
+## 87. Centre d'activité (v1.0.2)
+
+Un bouton dans la barre de titre montre tout ce que BMM est en train de faire, sur chaque écran :
+un anneau qui se remplit avec la progression globale et le nombre de tâches en cours. Sont
+couverts : l'activation et la désactivation des mods, les téléchargements, les synchronisations
+et vérifications de dépôts, les analyses, les installations, les imports et exports, les tâches
+planifiées, les travaux de Laya et les benchmarks.
+
+Son panneau liste chaque tâche en cours avec son étape, sa progression, le temps écoulé et
+**Annuler** quand la tâche peut s'arrêter, puis les 30 dernières tâches terminées (réussie,
+échouée avec le message, ou annulée). Échap le ferme.
+
+## 88. Outils BMM (v1.0.2)
+
+Un hub **Outils**, ouvert depuis la palette de commandes, la barre de navigation ou les
+DevTools. Sept outils en lecture seule : rien n'est supprimé, déplacé ni réécrit.
+
+| Outil | Ce qu'il répond |
+| :--- | :--- |
+| **Détecteur de doublons** | Les mods enregistrés plusieurs fois, et les fichiers identiques portés par plusieurs mods (taille, puis empreinte BLAKE3). |
+| **Résumé des conflits** | Chaque paire de mods qui écrivent les mêmes fichiers, pour un profil ou tous, conflits actifs en premier. |
+| **Espace disque** | Le poids des mods et des sauvegardes de chaque profil, par mod, et le dossier de données de BMM. |
+| **Comparer des profils** | Deux profils côte à côte : mods présents dans un seul, autre version, autre état, autre ordre. |
+| **Manquants et orphelins** | Les mods qu'un profil nomme mais que la bibliothèque n'a plus, les dossiers de mods disparus, les dossiers sur lesquels aucun mod n'est enregistré, les dossiers de profil disparus. |
+| **Vérificateur d'empreinte** | Le BLAKE3 ou le SHA-256 d'un fichier, comparé à une empreinte que tu colles. |
+| **Validateur de manifestes et catalogues** | Ce qu'est un fichier BMM (liste de mods, modpack, catalogue, dépôt, thème…) et ce qui ne va pas, depuis un fichier ou un texte collé. |
+
+Chaque résultat peut être copié, ou exporté en JSON ou en CSV. Un long traitement affiche sa
+progression et peut être annulé (les résultats sont alors marqués partiels).
+
+## 89. Dépôt serveur, simple par défaut (v1.0.2)
+
+La page Dépôt serveur s'ouvre sur les étapes guidées pour **synchroniser** un dépôt ou en
+**héberger** un. Tout le reste se trouve dans une zone **Outils avancés** avec recherche, qui
+se souvient des outils que tu as ouverts.
+
+Nouveaux outils :
+
+| Outil | Description |
+| :--- | :--- |
+| **Créer un dépôt en un clic** | Depuis un profil, un modpack ou un dossier de mods. |
+| **Valider un dépôt** | Manifeste, fichiers, empreintes, signature et version de format dans un seul rapport. Une passe rapide avec progression et Annuler ; seuls les fichiers modifiés sont relus. |
+| **Changer la version du dépôt** | Le numéro que les abonnés voient à côté du nom du dépôt, re-signé. |
+| **Aperçu côté abonnés** | La carte que BMM affiche après Récupérer, depuis le dossier ou le serveur en marche. |
+| **Lien de partage** | Un lien en un clic et un message à envoyer, avec les indications de mot de passe ou de clé si besoin. |
+| **Héberger sur un hébergeur statique** | Instructions et configuration pour GitHub Pages, nginx ou tout hébergeur qui sert des fichiers. |
+
+**Versions de format.** Un manifeste de dépôt indique désormais son format (`format_version`),
+signé avec le reste. La page affiche le format de chaque dépôt. **Convertir** amène un ancien
+manifeste au format actuel : un essai à blanc est toujours montré d'abord, puis BMM demande
+avant d'écrire, garde une sauvegarde de l'ancien manifeste et signe le nouveau. Un dépôt écrit
+dans un format plus récent que celui que ce BMM sait lire est refusé avec un message clair.
+
+**Identifiants de mods stables.** Un mod garde le même identifiant d'une synchronisation, d'un
+renommage ou d'une réimportation à l'autre. Les identifiants en double laissés par les anciennes
+versions sont réparés une fois au démarrage, après une sauvegarde de tes données.
+
+## 90. Dépôts suivis et flux du dépôt (v1.0.2)
+
+**Suivre ce dépôt** sur la page Dépôt serveur : BMM le vérifie alors selon le rythme que tu
+choisis (de toutes les 15 minutes à chaque semaine) et, par dépôt, **te prévient**,
+**télécharge** la mise à jour, ou la **télécharge et l'applique**. Rien n'est téléchargé ni
+appliqué pendant qu'un jeu tourne ; BMM réessaie à la vérification suivante. Chaque vérification
+est une requête conditionnelle : un dépôt inchangé ne coûte qu'une réponse « non modifié »
+(304), et chaque vérification est une ligne du centre d'activité.
+
+Le serveur de dépôt intégré à BMM sert un **flux Atom** (`feed.xml`) à côté de `repo.json`, et
+répond « non modifié » quand rien n'a changé. N'importe quel lecteur de flux, ou le déclencheur
+RSS d'une tâche planifiée, peut le suivre.
+
+## 91. Index et recherche des Paramètres (v1.0.2)
+
+Les Paramètres s'ouvrent sur un index de toutes les cartes, rangées par groupes (Apparence,
+Bibliothèque, Automatisation, Performance, Comptes et services, Confidentialité et sécurité,
+Application). Un champ de recherche masque toutes les cartes qui ne correspondent pas ;
+**Ctrl+F** y mène directement.
+
+## 92. Cartes du catalogue d'apps (v1.0.2)
+
+Chaque carte montre l'état de l'app (installée, non installée, mise à jour disponible, en cours,
+échec) et l'action suivante : **Installer**, **Lancer**, **Mettre à jour** ou **Réessayer**. La
+liste peut être filtrée par état d'installation et triée (ordre du catalogue, nom, plus petit
+téléchargement). Quand une source ne répond pas, un message clair le dit et les apps des autres
+sources restent affichées. Les descriptions et les README sont rendus avec B.MD, le moteur
+Markdown sûr. Voir [App_Catalog_FR.md](App_Catalog_FR.md).
+
+## 93. Un seul format de catalogue, un seul index (v1.0.2)
+
+Chaque type de catalogue (apps, plugins, thèmes, automatisations, modpacks, dépôts, tutoriels,
+listes de mods) peut s'écrire dans un seul format versionné (`"format": "bmm-catalog"`,
+`format_version`). BMM lit toutes les anciennes variantes, et les flux signés de
+BetterCommunity v2, avec le même lecteur.
+
+Les sources sont gardées en cache sur le disque et redemandées par requête conditionnelle : une
+source inchangée n'est pas retéléchargée. Une source en échec continue d'afficher sa dernière
+copie valide, marquée comme périmée, et ne masque jamais les autres. Tous les catalogues suivis
+sont fusionnés en un seul index : la recherche ignore la casse et les accents, et une entrée
+listée par deux catalogues n'apparaît qu'une fois.
+
+## 94. Crédits (v1.0.2)
+
+Les contributeurs du code sont générés à partir de l'historique git des quatre dépôts (BMM,
+BetterCommunity, BMM Docs et BetterInstaller), avec leur nombre de commits, dans des cartes plus
+nettes. Chaque paquet embarqué est listé avec son lien et sa licence, lisible dans l'app.
+
+## 95. Studios Replay et Animation (v1.0.2)
+
+**Replay Studio** gagne une timeline : rogner, couper n'importe où, ajouter des marqueurs,
+annuler et rétablir, avec un aperçu en direct et des exports plus légers. **Animation Studio**
+peut construire une animation comme une suite d'étapes, chacune avec son propre timing,
+prévisualisée en direct, réordonnée, et exportée ou importée en JSON.
+
+## 96. Preuve du consentement : « Mes consentements » (v1.0.2)
+
+Chaque réponse sur les Conditions d'utilisation, la Politique de confidentialité et la
+télémétrie laisse un **reçu** : le document, sa version, le SHA-256 du texte exact affiché, la
+langue, la réponse (et chaque catégorie), l'heure, l'endroit où elle a été donnée (installateur,
+premier lancement, Paramètres, un lien `bmm://`, l'API locale, la ligne de commande, le serveur
+MCP, un import) et la version de BMM.
+
+- Les reçus sont liés à un **identifiant d'installation aléatoire**, jamais à ton Creator ID ni
+  à ton matériel.
+- Ils sont conservés sur ton PC dans une **chaîne en ajout seul, qui révèle toute
+  falsification** : un reçu modifié, supprimé ou inséré est détecté.
+- **Paramètres → Confidentialité → Mes consentements** les liste, dit si la chaîne est intacte,
+  les exporte en JSON et peut les envoyer au serveur.
+- Une réponse sans reçu est redemandée (après une mise à jour depuis une 1.0.x, après l'import
+  d'anciens paramètres, ou quand un document change).
+
+## 97. Bascule BetterCommunity v2 et enveloppe de télémétrie v2 (v1.0.2)
+
+BMM parle à BetterCommunity v1 par défaut. Deux lignes de `app.cfg` le passent en v2 pour les
+versions de test : `BCApiVersion=v2` et `BCv2Base=<adresse>` (vide = l'adresse de la v1). Seul
+ce qui a un adaptateur v2 bascule : les retours et rapports de bug, la copie des reçus de
+consentement, et les listes de catalogues et de dépôts que la v2 sert. Détails : `APP_CFG.md`.
+
+Les paquets de télémétrie portent désormais une enveloppe qui dit ce qu'ils sont :
+`schema: "bmm-telemetry"` et une version `v`, pour qu'un serveur distingue ce format de tout ce
+qu'il reçoit d'autre.

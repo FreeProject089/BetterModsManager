@@ -1192,12 +1192,15 @@ async function main() {
     initCredits();
     // Force an explicit initial scan at startup so we don't rely on the debounced focus event
     setTimeout(() => { refreshMods(true); }, 500);
-    // The splash is the logo now (boot-loader.js): no « happy mascot » frame to wait for.
-    const loaderText = document.getElementById('loader-text');
-    if (loaderText)
-        loaderText.textContent = t('common.loaded');
+    // BMM is up: the intro (boot-loader.js) ends as soon as it may (past its impact, Tasky's
+    // happy beat in the classic style), then removes itself. The fallback below only runs if
+    // boot-loader.js never ran.
+    const intro = window.__bmmIntro;
     const loader = document.getElementById('app-loader');
-    if (loader) {
+    if (intro?.ready) {
+        intro.ready();
+    }
+    else if (loader) {
         setTimeout(() => {
             loader.style.opacity = '0';
             loader.style.visibility = 'hidden';

@@ -9,6 +9,11 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 
 const ORDER_KEY = 'bmm_settings_card_order';
+/** Cards the user took off the page (keys). Search still finds them; the layout code does not
+ *  carry them (it is an order, and stays the format older builds read). */
+const HIDDEN_KEY = 'bmm_settings_card_hidden';
+/** Fired on document when the edit mode or a card's visibility changes (settings-nav.ts). */
+export const LAYOUT_EVENT = 'bmm:settings-layout';
 
 /**
  * The order the settings page opens in when nobody has rearranged it.
@@ -116,7 +121,60 @@ function cards(): HTMLElement[] {
 
 function saveOrder(): void {
     const order = cards().map((c, i) => cardKey(c, i));
-    localStorage.setItem(ORDER_KEY, JSON.stringify(order));
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(order)); } catch { /* private mode: this session only */ }
+}
+
+// ── Hidden cards ──────────────────────────────────────────────────────────────
+function loadHidden(): Set<string> {
+    try {
+        const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]');
+        return new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+    } catch { return new Set(); }
+}
+const _hidden: Set<string> = loadHidden();
+function saveHidden(): void {
+    try {
+        if (_hidden.size) localStorage.setItem(HIDDEN_KEY, JSON.stringify([..._hidden]));
+        else localStorage.removeItem(HIDDEN_KEY);
+    } catch { /* private mode: this session only */ }
+}
+function paintHidden(): void {
+    cards().forEach((c, i) => c.classList.toggle('stg-card-hidden', _hidden.has(cardKey(c, i))));
+}
+function emitLayout(): void {
+    document.dispatchEvent(new CustomEvent(LAYOUT_EVENT, { detail: { editing: _editMode } }));
+}
+
+export function isCardHidden(key: string): boolean { return _hidden.has(key); }
+export function hiddenCardCount(): number {
+    const present = new Set(cards().map((c, i) => cardKey(c, i)));
+    return [..._hidden].filter((k) => present.has(k)).length;
+}
+export function setCardHidden(key: string, hidden: boolean): void {
+    if (hidden) _hidden.add(key); else _hidden.delete(key);
+    saveHidden();
+    paintHidden();
+    emitLayout();
+}
+
+/**
+ * Put `keys` (cards already on the page, e.g. one group's) in this order, in the places those
+ * cards occupy now: every other card keeps its position. Saved like a drag on the page.
+ */
+export function reorderSettingsCards(keys: string[]): void {
+    const c = container();
+    if (!c) return;
+    const list = cards();
+    const keyOf = list.map((card, i) => cardKey(card, i));
+    const wanted = new Set(keys);
+    const slots = keyOf.map((k, i) => (wanted.has(k) ? i : -1)).filter((i) => i >= 0);
+    if (slots.length !== keys.length) return;
+    const next = keyOf.slice();
+    slots.forEach((slot, j) => { next[slot] = keys[j]; });
+    if (next.every((k, i) => k === keyOf[i])) return;
+    const byKey = new Map(list.map((card, i) => [keyOf[i], card] as const));
+    for (const k of next) { const el = byKey.get(k); if (el) c.appendChild(el); }
+    saveOrder();
 }
 
 function applyOrder(order: string[]): void {
@@ -189,6 +247,25 @@ function makeDraggable(card: HTMLElement, index: number): void {
     });
 }
 
+export function isLayoutEditing(): boolean { return _editMode; }
+/** One edit mode for both doors: the toolbar above the cards and the index beside them. */
+export function setLayoutEditing(on: boolean): void {
+    if (on === _editMode) return;
+    setEditMode(on);
+    emitLayout();
+}
+
+/** Default order, every card shown. */
+export function resetSettingsLayout(): void {
+    try { localStorage.removeItem(ORDER_KEY); } catch { /* nothing saved to remove */ }
+    _hidden.clear();
+    saveHidden();
+    if (_originalOrder.length) applyOrder(_originalOrder);
+    paintHidden();
+    emitLayout();
+    toast(t('cardorder.resetDone') || 'Default order restored', 'info');
+}
+
 function setEditMode(on: boolean): void {
     _editMode = on;
     const c = container();
@@ -240,7 +317,7 @@ function renderToolbar(): void {
         </div>`;
     c.insertBefore(bar, c.firstChild);
 
-    bar.querySelector('#cardorder-editbtn')?.addEventListener('click', () => setEditMode(!_editMode));
+    bar.querySelector('#cardorder-editbtn')?.addEventListener('click', () => setLayoutEditing(!_editMode));
     bar.querySelector('#cardorder-navbar')?.addEventListener('click', () => {
         import('../../ui/navbar-customize.js').then(m => m.openNavbarEditor()).catch(() => {});
     });
@@ -263,12 +340,8 @@ function renderToolbar(): void {
         toast(t('cardorder.applied') || 'Layout applied', 'success');
         (bar.querySelector('#cardorder-import-row') as HTMLElement).style.display = 'none';
     });
-    bar.querySelector('#cardorder-reset')?.addEventListener('click', () => {
-        localStorage.removeItem(ORDER_KEY);
-        // Re-apply the default order live — no refresh needed.
-        if (_originalOrder.length) applyOrder(_originalOrder);
-        toast(t('cardorder.resetDone') || 'Default order restored', 'info');
-    });
+    // Default order live (no refresh), and every hidden card back.
+    bar.querySelector('#cardorder-reset')?.addEventListener('click', resetSettingsLayout);
 }
 
 let _wired = false;
@@ -290,6 +363,7 @@ export function initCardReorder(): void {
     }
     renderToolbar();
     cards().forEach((card, i) => makeDraggable(card, i));
+    paintHidden();
     if (!_wired) {
         _wired = true;
         try {
@@ -297,6 +371,7 @@ export function initCardReorder(): void {
             // A saved order always wins; the default only decides what a fresh install sees.
             applyOrder(Array.isArray(saved) && saved.length ? saved : _originalOrder);
         } catch {}
+        paintHidden();
         // Re-translate the toolbar live when the language changes (no refresh).
         document.addEventListener('langChanged', () => {
             const bar = document.getElementById('cardorder-bar');

@@ -33,6 +33,12 @@ WORKDIR C:\app
 COPY mods/ ./mods/
 COPY repo.json ./
 COPY Info.json ./
+# The access gate (download password, authorised keys) and the extras (status page, health,
+# feed, ranges, scheduled jobs). Without access-gate.js the server would start OPEN even when
+# access.json sets a password. access.json and server.config.json are baked in so a bare
+# `docker run` enforces them; docker-compose.yml mounts them over these copies for live edits.
+# The image therefore carries the download password: do not push it to a public registry.
+COPY access-gate.js keyauth.mjs bmm-extras.js access.json server.config.json ./
 
 # Copy server script (Windows batch file). It starts itself with the `node` found on PATH
 # (stage 1): without it the script would try to download node.exe with PowerShell, which Nano
@@ -50,7 +56,7 @@ EXPOSE PORT_PLACEHOLDER
 # Health check. The old one called `powershell`, which Nano Server does not have, so it could
 # only ever report "unhealthy". node is on PATH here; the probe is the Linux image's.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 `
-    CMD ["node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+    CMD ["node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
 
 # Start the server
 CMD ["cmd", "/c", "server.bat"]

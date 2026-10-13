@@ -34,13 +34,21 @@ const zlib = require('zlib');
 const { spawn, execSync } = require('child_process');
 
 // Placeholders (populated by BMM during export)
-const PORT = PORT_PLACEHOLDER;
+const PORT = Number(process.env.PORT) || PORT_PLACEHOLDER;
 const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
 const USE_UPNP = USE_UPNP_PLACE_HOLDER; 
 const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
 const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
 // .env (docker compose env_file) wins over the value BMM baked in when it generated this file.
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ADMIN_PASSWORD_PLACEHOLDER';
+
+// Status page, health, Atom feed, ETag/304, resumable downloads, rate limiting and scheduled
+// jobs: bmm-extras.js beside this file, configured by server.config.json. Loaded defensively, so
+// a folder generated before it existed keeps running exactly as it did.
+let extras = null;
+try {
+    extras = require('./bmm-extras.js').create({ dir: __dirname, kind: 'v2-linux', adminPassword: ADMIN_PASSWORD, port: PORT });
+} catch (e) { if (!e || e.code !== 'MODULE_NOT_FOUND') console.error('[EXTRAS] not loaded:', e && e.message); }
 
 const VERSION = "2.4.0-linux";
 const logFile = path.join(__dirname, 'server.log');
@@ -578,7 +586,10 @@ const server = http.createServer(async (req, res) => {
 
     const xff = req.headers['x-forwarded-for'];
     const ip = (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1').replace('::ffff:', '');
-    const isAuthorized = () => req.headers['authorization'] === ADMIN_PASSWORD;
+    // /health, /status, /status.json, /admin/jobs and the rate limit (bmm-extras.js).
+    if (extras && extras.early(req, res, ip)) return;
+    // Constant-time when the extras are there (CWE-208).
+    const isAuthorized = () => (extras ? extras.safeEqual(req.headers['authorization'], ADMIN_PASSWORD) : req.headers['authorization'] === ADMIN_PASSWORD);
 
     const urlObj = new URL(req.url, "http://" + (req.headers.host || "localhost"));
     const queryKey = urlObj.searchParams.get('key') || urlObj.searchParams.get('id') || urlObj.searchParams.get('creatorid');
@@ -666,6 +677,9 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // The Atom feed (/feed.xml, /feed.atom), behind the same gates as repo.json.
+    if (extras && extras.serve(req, res)) return;
+
     let urlPath = decodeURIComponent(req.url.split('?')[0]);
     if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
     
@@ -685,7 +699,9 @@ const server = http.createServer(async (req, res) => {
     // `/mods/../server.js` or `/SERVER.JS` cannot get past it.
     const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
     if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
-        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')) {
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')
+        // bmm-server/ holds the job state and the repo.json backups: never served.
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'bmm-server')) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
 
@@ -694,6 +710,8 @@ const server = http.createServer(async (req, res) => {
             const repo = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
             if (repo && Array.isArray(repo.modpacks)) repo.modpacks = repo.modpacks.filter(m => m && m.enabled !== false);
             const content = JSON.stringify(repo);
+            // ETag + 304 + gzip: a follower checking an unchanged repo gets no body.
+            if (extras) { extras.sendBody(req, res, content, 'application/json; charset=utf-8'); return; }
             res.setHeader('Content-Type', 'application/json');
             if (req.headers['accept-encoding'] && req.headers['accept-encoding'].includes('gzip')) {
                 res.setHeader('Content-Encoding', 'gzip');
@@ -703,7 +721,11 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    const total = fs.statSync(absolutePath).size;
+    const _stat = fs.statSync(absolutePath);
+    // ETag / Last-Modified / 304, Range / 206 / 416 and HEAD. A 304 or a HEAD is not a download.
+    const _part = extras ? extras.prepareFile(req, res, absolutePath, _stat) : null;
+    if (_part && _part.done) return;
+    const total = _part ? _part.length : _stat.size;
     const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') ? 'LAN' : 'WAN');
     const dlId = ip + "-" + Date.now();
     const dlObj = { ip, creatorId: key, file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
@@ -713,12 +735,12 @@ const server = http.createServer(async (req, res) => {
     addToHistory(ip, key, "DL_START", urlPath);
     const s = sessions.get(ip); if (s && !s.files.includes(urlPath)) s.files.push(urlPath);
 
-    res.statusCode = 200;
+    res.statusCode = _part ? _part.status : 200;
     const mime = { '.json': 'application/json', '.zip': 'application/zip', '.lua': 'text/plain' };
     res.setHeader('Content-Type', mime[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream');
     res.setHeader('Content-Length', total);
 
-    const stream = fs.createReadStream(absolutePath);
+    const stream = fs.createReadStream(absolutePath, _part ? { start: _part.start, end: _part.end } : undefined);
     let bytesSentInInterval = 0; let intervalStart = Date.now();
 
     stream.on('data', chunk => {
@@ -808,6 +830,9 @@ async function ensureUpnpc() {
         }
     }
 }
+
+// Scheduled jobs and a graceful SIGTERM (docker stop, systemd).
+if (extras) extras.attach(server);
 
 server.listen(PORT, '0.0.0.0', async () => {
     console.clear();

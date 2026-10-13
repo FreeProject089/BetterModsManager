@@ -52,7 +52,7 @@ octet. Gardez-les ainsi, sans quoi un BMM installé se comporte autrement qu'un 
     | Analyseur | Clés | `Clé = valeur` fonctionne ? |
     |---|---|---|
     | recherche de sous-chaîne sur le fichier en minuscules | `Prod`, `PTB`, `DisableUpdate`, `FSDM`, `AutoEULA_on_first_Start`, `quicklink1_disabled`, `quicklink2_disabled` | **Non** — lu silencieusement comme la valeur par défaut |
-    | analyseur ligne à ligne, découpe au premier `=` | `BCTestMode`, `BCTestBase` | Oui |
+    | analyseur ligne à ligne, découpe au premier `=` | `BCTestMode`, `BCTestBase`, `BCApiVersion`, `BCv2Base`, `DocsReplays` | Oui |
 
     Ainsi `BCTestMode = true` fonctionne et `PTB = true` non, dans le même fichier, sans le
     moindre avertissement dans un sens ou dans l'autre. Écrivez chaque clé serrée :
@@ -96,6 +96,9 @@ fichier qu'on a oublié d'enlever.
 | `AutoEULA_on_first_Start` | `=true` | Affiche la licence automatiquement au premier lancement. Sinon elle reste lisible depuis Aide &amp; autres. |
 | `BCTestMode` | `BCTestMode=true` | Pointe le blog et les écrans communautaires vers `BCTestBase` au lieu du vrai site. |
 | `BCTestBase` | un hôte, port facultatif | La base de test ou locale, p. ex. `http://localhost:5176`. Ignorée si `BCTestMode` n'est pas `true`. |
+| `BCApiVersion` | `BCApiVersion=v2` (ou `2`) | Passe à **BetterCommunity v2** ce qui a un adaptateur v2. Absente ou toute autre valeur : v1. Voir plus bas. |
+| `BCv2Base` | une adresse `https://` | L'adresse de la v2. Vide ou absente : l'adresse de la v1. |
+| `DocsReplays` | `DocsReplays=false` (ou `off`) | Retire tous les rejeux de session (`.bmmreplay`) de la documentation d'Aide &amp; autres. |
 
 `DisableUpdate` décide *si* la vérification a lieu ; `autoupdate_api` dans `links.json` décide
 *où elle regarde*. Les deux sont sans rapport — voir
@@ -108,6 +111,34 @@ le clic droit « Inspecter » et F12 de WebView2 dépendent d'un fait de compila
 Laisser un `BCTestBase` périmé dans un fichier livré est sans conséquence. Laisser
 `BCTestMode=true` ne l'est pas — le blog de chaque utilisateur pointerait alors vers une
 machine qui n'est pas la sienne.
+
+## BetterCommunity v2 : `BCApiVersion` et `BCv2Base`
+
+L'interrupteur de **BetterCommunity v2**, pour les builds de test tant que la v2 tourne à côté de
+la v1. Aucune des deux clés n'est dans le fichier livré : sans elles, BMM parle à la v1 et rien ne
+change.
+
+```ini
+BCApiVersion=v2
+BCv2Base=https://v2.example.org
+```
+
+`BCApiVersion=v2` ne déplace que ce qui a un adaptateur v2 : les retours et rapports de bug vont au
+centre de retours de la v2, les
+[reçus de consentement](doc-page:features/privacy-telemetry#preuve-du-consentement-mes-consentements)
+sont proposés au registre de consentements de la v2 (avec la même autorisation que la copie
+télémétrie), et les catalogues, listes de dépôts et dépôts hébergés que la v2 sert elle-même sont
+lus depuis la v2. Tous les autres appels à BetterCommunity restent sur la v1.
+
+`BCv2Base` doit être en `https://`, ou en `http://` simple vers cette machine uniquement
+(`localhost`, `127.0.0.1`, `*.localhost`) ; toute autre valeur est ignorée et la v2 utilise
+l'adresse de la v1. Les deux clés sont lues une fois au démarrage : les changer demande un
+redémarrage.
+
+La télémétrie n'a pas d'interrupteur à elle : chaque lot que BMM envoie (seulement avec votre
+consentement) est emballé dans une enveloppe versionnée (`"schema": "bmm-telemetry"`, `"v"`). Ces deux champs ne
+portent aucune donnée sur personne ; un serveur plus ancien les ignore, un plus récent lit `v`
+d'abord.
 
 ## Les clés qui sont là et ne font rien
 

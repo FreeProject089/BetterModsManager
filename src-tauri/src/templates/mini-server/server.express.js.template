@@ -26,7 +26,7 @@ function safeEqual(a, b) {
 }
 
 // Configuration
-const PORT = {{PORT}};
+const PORT = Number(process.env.PORT) || {{PORT}};
 // .env (docker compose env_file) wins over the value BMM baked in when it generated this file.
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "{{ADMIN_PASSWORD}}";
 // Optional download password. When non-empty, every content request (repo.json + mod files)
@@ -38,6 +38,14 @@ const DOWNLOAD_PASSWORD = "{{DOWNLOAD_PASSWORD}}";
 // this file by setting "audience" in access.json, or the BMM_PUBLIC_ORIGIN env var.
 const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || "{{PUBLIC_ORIGIN}}";
 const UPLOAD_LIMIT = {{UPLOAD_LIMIT}}; // KB/s
+
+// Status page, health, Atom feed, ETag/304, resumable downloads, rate limiting and scheduled
+// jobs: bmm-extras.js beside this file, configured by server.config.json. Loaded defensively, so
+// a folder generated before it existed keeps running exactly as it did.
+let extras = null;
+try {
+    extras = require('./bmm-extras.js').create({ dir: __dirname, kind: 'express', adminPassword: ADMIN_PASSWORD, downloadPassword: DOWNLOAD_PASSWORD, port: PORT });
+} catch (e) { if (!e || e.code !== 'MODULE_NOT_FOUND') console.error('[EXTRAS] not loaded:', e && e.message); }
 
 // State
 const sessions = new Map();
@@ -147,6 +155,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// /health, /status, /status.json, /admin/jobs and the rate limit, before anything else.
+app.use((req, res, next) => {
+    if (extras && extras.early(req, res, String(req.ip || '').replace('::ffff:', ''))) return;
+    next();
+});
+
 // Session Tracking Middleware
 app.use(async (req, res, next) => {
     const ip = req.ip.replace('::ffff:', '') || '127.0.0.1';
@@ -213,6 +227,12 @@ app.use(async (req, res, next) => {
 });
 
 // Admin Authentication Middleware
+// The feed, behind the same gate as repo.json (the middleware above has run).
+app.use((req, res, next) => {
+    if (extras && extras.serve(req, res)) return;
+    next();
+});
+
 const authAdmin = (req, res, next) => {
     if (safeEqual(req.headers['authorization'], ADMIN_PASSWORD)) {
         next();
@@ -269,6 +289,8 @@ app.get('/repo.json', (req, res) => {
     try {
         const repo = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
         if (repo && Array.isArray(repo.modpacks)) repo.modpacks = repo.modpacks.filter(m => m && m.enabled !== false);
+        // ETag + 304: a follower checking an unchanged repo gets no body.
+        if (extras) return extras.sendBody(req, res, JSON.stringify(repo), 'application/json; charset=utf-8');
         res.json(repo);
     } catch(e) { 
         res.status(500).json({ err: "Failed to parse repo.json" }); 
@@ -293,14 +315,20 @@ app.use('/', (req, res, next) => {
     // `/mods/../server.js` or `/SERVER.JS` cannot get past it.
     const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
     if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
-        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')) {
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'bmm-server')) {
+        // bmm-server/ holds the job state and the repo.json backups: never served.
         return res.status(404).send('Not Found');
     }
 
     const ip = req.clientIp;
     const key = req.creatorId;
     const isLocal = ip === '127.0.0.1' || ip === '::1';
-    const total = fs.statSync(absolutePath).size;
+    const _stat = fs.statSync(absolutePath);
+    // ETag / Last-Modified / 304, Range / 206 / 416 and HEAD. A 304 or a HEAD is not a download.
+    const _part = extras ? extras.prepareFile(req, res, absolutePath, _stat) : null;
+    if (_part && _part.done) return;
+    const total = _part ? _part.length : _stat.size;
     const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') ? 'LAN' : 'WAN');
     const dlId = `${ip}-${Date.now()}`;
     const dlObj = { ip, creatorId: key, file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
@@ -310,7 +338,7 @@ app.use('/', (req, res, next) => {
     addToHistory(ip, key, "DL_START", urlPath);
     const s = sessions.get(ip); if (s && !s.files.includes(urlPath)) s.files.push(urlPath);
 
-    const stream = fs.createReadStream(absolutePath);
+    const stream = fs.createReadStream(absolutePath, _part ? { start: _part.start, end: _part.end } : undefined);
     res.setHeader('Content-Length', total);
     
     let bytesSentInInterval = 0; let intervalStart = Date.now();
@@ -357,7 +385,7 @@ app.use('/', (req, res, next) => {
     stream.pipe(res);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.clear();
     const cyan = '\x1b[36m'; const green = '\x1b[32m'; const magenta = '\x1b[35m';
     const blue = '\x1b[34m'; const reset = '\x1b[0m'; const bold = '\x1b[1m';
@@ -374,5 +402,8 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`  ${bold}${cyan}[REPO]${reset}    repo.json: ${fmt}${fmt.startsWith('legacy') ? '  (convert it in BMM: Server Repo, or bmm repo-convert <folder>)' : ''}`);
     }
     console.log(`  ${bold}${magenta}[ADMIN]${reset}   Password: ${underline}${ADMIN_PASSWORD}${reset}`);
-    console.log(`  ${bold}${blue}[DASH]${reset}    http://127.0.0.1:${PORT}/dashboard\n`);
+    console.log(`  ${bold}${blue}[DASH]${reset}    http://127.0.0.1:${PORT}/dashboard`);
+    if (extras) console.log(`  ${bold}${green}[STATUS]${reset}  http://127.0.0.1:${PORT}/status  (health: /health, feed: /feed.xml)\n`);
 });
+// Scheduled jobs and a graceful SIGTERM (docker stop, systemd).
+if (extras) extras.attach(server);

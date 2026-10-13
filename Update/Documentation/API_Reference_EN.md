@@ -137,7 +137,7 @@ This document is the single source of truth for everything that can be driven pr
 ### Telemetry & local recorder
 | Path | Auth | Body |
 |---|---|---|
-| `/api/telemetry/consent` | yes | `{ enabled: bool }` — toggle "Share anonymous usage data" |
+| `/api/telemetry/consent` | yes | `{ enabled: bool, via? }` — toggle "Share anonymous usage data". The answer leaves a consent receipt; `via` (`cli` or `mcp`) is recorded as its source, anything else as `api` |
 | `/api/telemetry/settings` | yes | `{ replay?, full?, bench? }` — manage telemetry sub-options (omitted = unchanged) |
 | `/api/recorder` | yes | `{ on?, full?, rust?, js? }` — configure the local Session recorder |
 | `/api/replay/export` | yes | `{}` — export the current local session as a `.bmmreplay` file |
@@ -150,10 +150,10 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mod/update` | yes | `{ repoUrl? }` — pull updates for mods linked to that repo; omit `repoUrl` to cover every linked source |
 | `/api/mod/config` | `mods.write` | `{ modId, repoModId?, updateUrl?, updateSources?, directUrl? }` — set where a mod checks for its own updates |
 | `/api/repo/manifest` | `repo.write` | `{ modsDir, outputPath?, name?, author?, gameName?, filesBaseUrl?, filesLayout?, reuseExisting?, only? }` — write a `repo.json` for a folder that is already hosted. Copies nothing and needs no profile; synchronous, so a publish script can act on the diff it returns. `reuseExisting` defaults to **true**: re-running produces a new revision of the SAME repo, not a different one |
-| `/api/repo/convert` | `repo.write` | `{ path, dryRun?, rehash?, sign? }` — convert a repo folder's manifest to format 1.0: missing keys filled, files re-hashed, `format_version` stamped, old manifest backed up (`repo.json.v<old>-<stamp>.bak`), re-signed with this BMM's key. `dryRun` returns the plan only |
-| `/api/repo/validate` | `repo.read` | `{ path, deep? }` — check a repo folder without changing it: format, signature, duplicate ids, every file against its hash (parallel, cancellable). Returns `{ ok, report }` |
+| `/api/repo/convert` | `repo.write` | `{ path, dryRun?, rehash?, sign?, setVersion? }` — convert a repo folder's manifest to format 1.0: missing keys filled, files re-hashed, `format_version` stamped, old manifest backed up (`repo.json.v<old>-<stamp>.bak`), re-signed with this BMM's key. `rehash` and `sign` default to true. `setVersion` sets the repo's `version` in the same pass (same dry run, backup and signature). `dryRun` returns the plan only. Returns `{ ok, report }` |
+| `/api/repo/validate` | `repo.read` | `{ path, deep?, runId? }` — check a repo folder without changing it: format, signature, duplicate ids, every file against its hash (parallel, cancellable). Only files whose size or date changed are re-read, unless `deep: true`. `runId` is echoed in the progress events. Returns `{ ok, report }` |
 | `/api/repo/follow` | `repo.write` | `{ url, name?, enabled?, intervalMin?, action?, remove? }` — follow a repo or change how (`action`: notify · download · apply); `remove: true` stops following |
-| `/api/repo/follow/check` | `repo.write` | `{ url, password?, force? }` — check one followed repo now (conditional GET). Returns the updates and the install plan; installs nothing |
+| `/api/repo/follow/check` | `repo.write` | `{ url, password?, force? }` — check one followed repo now (conditional GET: an unchanged repo costs one 304; `force: true` ignores the stored ETag / Last-Modified). Returns `{ ok, check }` with the updates and the install plan; installs nothing |
 | `/api/discord/rpc` | yes | `{ enabled: bool }` — enable/disable Discord Rich Presence |
 | `/api/data/export-auto` | yes | `{ dir, name? (template: `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — unattended backup, returns the path written |
 | `/api/launchpack/run` | yes | `{ id }` — run a saved launch pack |

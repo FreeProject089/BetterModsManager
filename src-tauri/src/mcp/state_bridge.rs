@@ -1109,6 +1109,13 @@ pub fn generate_lightweight_server(
         std::fs::write(&main_sh_path, linux_content)?;
     }
 
+    // The access gate every edition requires (the Express one will not start without it, the
+    // Dockerfiles copy it) and the extras with their defaults: status page, health, feed,
+    // ranges, scheduled rescan / backup / log rotation, README EN+FR, service files, self-test.
+    crate::commands::mini_server_extras::write_access_modules(&output_path)?;
+    crate::commands::mini_server_extras::write_extras(&output_path, port, server_type, server_version, &Default::default())
+        .map_err(|e| anyhow::anyhow!(e))?;
+
     // Copy Bans if exists
     let ban_path = data_dir.join("bans.json");
     if ban_path.exists() {

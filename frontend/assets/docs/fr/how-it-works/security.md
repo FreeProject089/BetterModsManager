@@ -225,14 +225,26 @@ signée avec la même clé d'éditeur que les paquets, et BMM la refuse si **une
 Seule la partie signée est lue. L'interface ne donne jamais à BMM une liste à appliquer : elle lui
 rend le document reçu, et BMM le vérifie **à nouveau** avant de télécharger ou d'écrire quoi que ce soit.
 
-Le repli **installateur complet** (le bouton *Télécharger et installer*, pour les mêmes copies) suit
-la même liste : le corps signé peut porter une entrée `installers` par installateur de la version,
-avec son URL `https` et son SHA-256. BMM ne lance un installateur que si le manifeste signé liste
-exactement cette URL et que les octets téléchargés ont ce hash ; il l'enregistre sous le nom que donne
-le manifeste, dans un dossier neuf qui lui est propre. Une version sans manifeste signé, un manifeste
-qui ne liste aucun installateur, une autre URL ou un hash divergent sont **refusés avec un message, et
-BMM reste sur sa version actuelle**. Avant, il téléchargeait ce que le flux de versions indiquait et
-le lançait sans contrôle.
+L'**installateur** (`BMM-Setup.exe`, le bouton *Télécharger la mise à jour*) est vérifié avant de
+se lancer, dans cet ordre :
+
+1. Le `update-manifest.json` signé ci-dessus : son corps porte une entrée `installers` par
+   installateur de la version, avec son URL `https` et son SHA-256. BMM choisit lui-même
+   l'installateur parmi les entrées signées, et ne le lance que si les octets téléchargés ont ce
+   hash.
+2. Sinon, le `update.json` signé de la version (celui de BetterInstaller, sous sa propre ligne de
+   contexte), qui liste `BMM-Setup.exe` avec son SHA-256.
+3. Sinon, rien ne garantit le fichier. BMM dit pourquoi en clair (pas de `update.json`, un
+   `update.json` auquel il ne peut pas se fier, ou aucun checksum pour l'installateur) et
+   demande : **Installer quand même** ou **Annuler**, Annuler étant le choix par défaut. Rien ne
+   se lance sans ce clic.
+
+Un fichier qui ne correspond pas au hash annoncé par la version est affiché en rouge, comme
+peut-être corrompu ou modifié. BMM enregistre l'installateur dans un dossier neuf qui lui est
+propre et le lance comme l'Explorateur lance un programme (`ShellExecuteExW`) : un installateur qui
+demande les droits administrateur affiche l'invite Windows habituelle, et un échec revient avec la
+vraie erreur Windows. Avant la 1.0, BMM téléchargeait ce que le flux de versions indiquait et le
+lançait sans contrôle.
 
 Comme la signature expire, l'éditeur la renouvelle deux fois par semaine avec un job automatique (le
 workflow *Re-sign update manifests*, qui renouvelle aussi le `update.json` de BetterInstaller). Si ce

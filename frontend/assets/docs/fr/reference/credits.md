@@ -4,6 +4,11 @@ BMM est construit par le projet Better* et ses contributeurs. L'écran **Crédit
 référence pour la liste des personnes — il est généré depuis les données du projet, donc il reste juste
 là où cette page dériverait.
 
+Sa section **Contributeurs** liste les personnes qui ont écrit du code dans les quatre dépôts (BMM,
+BetterCommunity, BMM Docs et BetterInstaller), chacune avec son nombre de commits. La liste est
+générée depuis l'historique de ces dépôts à la compilation de BMM, pas tapée à la main. Le même
+écran liste chaque paquet inclus avec son lien et sa licence, lisible dans l'app.
+
 - **Site & communauté :** [BetterCommunity](doc-page:features/community)
 - **Sources & versions :** [github.com/FreeProject089](https://github.com/FreeProject089)
 - **Cette doc :** [BMM-Docs](https://github.com/FreeProject089/BMM-Docs) — corrections bienvenues.

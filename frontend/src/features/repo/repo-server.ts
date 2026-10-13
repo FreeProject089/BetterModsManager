@@ -6,6 +6,7 @@ import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
 import { setHostRunning, pushHostActivity } from './repo-host-flow.js';
+import { mountMiniServerOptions, readMiniServerExtras } from './mini-server-options.js';
 
 export function initRepoServer(elements) {
     const {
@@ -438,6 +439,7 @@ const ICON_DONE = (uiIcon('check', 14));
         serverTypeSelect.dispatchEvent(new Event('change'));
     }
     
+    mountMiniServerOptions();
     if (btnGenMiniServer) {
         btnGenMiniServer.addEventListener('click', async () => {
             let jsonPath = inputMiniRepoPath ? inputMiniRepoPath.value.trim() : '';
@@ -474,7 +476,8 @@ const ICON_DONE = (uiIcon('check', 14));
 
                 await invoke('generate_standalone_server', {
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType,
+                        extras: readMiniServerExtras()
                     }
                 });
 

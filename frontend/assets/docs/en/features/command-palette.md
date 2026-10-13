@@ -16,7 +16,7 @@ The palette is built from the live app, so it always matches what's actually in 
     - *Mods* — add a mod, scan the folder, verify integrity, show history, enable/disable all, check for updates.
     - *Profiles* — new profile, import from OvGME / OMM, disable every profile.
     - *Server Repo* — open the Sync or Host tab, browse saved repos, generate a standalone server, start/stop the built-in server, open monitoring, check subscribed repos, copy your creator ID.
-    - *Tools & Settings* — check for app updates, restart the onboarding tour, open storage & disk usage, open hashing stats.
+    - *Tools & Settings* — check for app updates, restart the onboarding tour, open storage & disk usage, open hashing stats, open [BMM Tools](doc-page:features/tools) or one of its seven tools directly.
 
 ## Classic vs. semantic search
 

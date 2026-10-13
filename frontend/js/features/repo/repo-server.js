@@ -6,6 +6,7 @@ import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
 import { setHostRunning, pushHostActivity } from './repo-host-flow.js';
+import { mountMiniServerOptions, readMiniServerExtras } from './mini-server-options.js';
 export function initRepoServer(elements) {
     const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, cbDocker, dockerOptions, dockerHostSelect, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
     let isServerRunning = false;
@@ -424,6 +425,7 @@ export function initRepoServer(elements) {
         // Trigger once to set initial state
         serverTypeSelect.dispatchEvent(new Event('change'));
     }
+    mountMiniServerOptions();
     if (btnGenMiniServer) {
         btnGenMiniServer.addEventListener('click', async () => {
             let jsonPath = inputMiniRepoPath ? inputMiniRepoPath.value.trim() : '';
@@ -455,7 +457,8 @@ export function initRepoServer(elements) {
                 localStorage.setItem('bmm_last_mini_server_version', serverVersion.toString());
                 await invoke('generate_standalone_server', {
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType,
+                        extras: readMiniServerExtras()
                     }
                 });
                 toast(t('repo.miniServerSuccess'), "success");

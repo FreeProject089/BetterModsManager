@@ -70,6 +70,31 @@ Le chemin absolu du fichier choisi n'atteint jamais le document publié.
 - Quand la source publie une version plus récente, la carte propose une **Mise à jour**.
 - Désinstaller supprime les fichiers suivis.
 
+## Cartes, filtres et tri (1.0.2)
+
+Chaque carte dit où en est l'app et quoi faire ensuite :
+
+| État | Action suivante |
+|---|---|
+| Non installée | **Installer** |
+| Installée | **Lancer** |
+| Mise à jour disponible (la carte montre la version installée et celle du catalogue) | **Mettre à jour** |
+| Installation, mise à jour ou suppression en cours | progression sur la carte ; elle peut continuer en arrière-plan |
+| Échec de l'installation, de la mise à jour ou de la désinstallation | l'erreur, avec **Réessayer** et **Masquer** |
+
+- **Filtre par état d'installation** : tous les états, installées, non installées, mise à jour
+  disponible. Il se combine avec les filtres de catégorie, de prix, de tag et de source, et
+  **Effacer les filtres** les remet à zéro.
+- **Tri** : ordre du catalogue, nom de A à Z, nom de Z à A, téléchargement le plus léger.
+- **Une source qui ne répond pas** est signalée par un message au-dessus de la liste (« N
+  source(s) n'ont pas répondu. Leurs apps manquent ci-dessous. ») avec **Réessayer** ; les apps
+  des autres sources restent affichées. Quand aucune source ne répond, la page le dit au lieu
+  d'afficher un catalogue vide.
+- **Les descriptions et les README** sont rendus avec B.MD, le moteur Markdown de BMM, par son
+  chemin sûr : le texte vient d'un tiers, donc le résultat est assaini et les scripts ou le HTML
+  dangereux sont retirés.
+  Un README qui ne se charge pas affiche l'erreur et **Réessayer**.
+
 ## Détection d'exécutables
 
 Pour les apps installées hors de BMM, le catalogue peut **détecter les exécutables existants** : la carte passe en « installée » au lieu de proposer un téléchargement en double.

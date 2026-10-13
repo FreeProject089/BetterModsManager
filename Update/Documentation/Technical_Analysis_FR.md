@@ -241,7 +241,10 @@ Visibilité contrôlée par `app.cfg`. Réinitialisation complète de l'état po
 
 ## 15. Moteur de mise à jour automatique (`autoupdate.rs`)
 
-Updater asynchrone GitHub avec comparaison SemVer et détection intelligente d'assets.
+Updater asynchrone sur l'API GitHub Releases avec comparaison SemVer et deux canaux (stable,
+préversion). Depuis la 1.0.2, rien ne s'exécute sans vérification sauf choix explicite de la
+personne : l'installateur est vérifié avec le `update-manifest.json` signé de la release, sinon
+son `update.json` signé, sinon la personne décide, et il est lancé par `ShellExecuteExW`. Voir §81.
 
 ---
 
@@ -253,7 +256,7 @@ Mode de distribution spécial avec notes de mise à jour thématiques.
 
 ## 17. Système Légal & EULA (v0.9.9)
 
-- **Intégration Installateur** : Acceptation forcée de l'EULA dans les configurations NSIS et WiX/MSI.
+- **Intégration Installateur** : Acceptation forcée de l'EULA dans les configurations NSIS et WiX/MSI (0.9.x ; depuis la 1.0.0, l'installateur est BetterInstaller, qui affiche les Conditions et la Politique de confidentialité et, depuis la 1.0.2, écrit un reçu de consentement pour chacune).
 - **Localisation Dynamique** : La commande backend `get_eula_text` sélectionne dynamiquement `EULA_{LANG}.md` avec un repli sur `EULA.md`.
 - **Rendu Markdown** : Le frontend utilise l'utilitaire `renderMarkdown` pour afficher le texte légal avec un formatage complet dans une modale dédiée.
 - **Gouvernance Communautaire** : Clauses formalisées sur les "Dépôts de serveurs et modération" pour protéger les hôtes communautaires.
@@ -1343,8 +1346,10 @@ chaque dialogue le même bouton fermer, le même piège de focus et le même ord
 
 ## 79. Catégories de télémétrie, erreurs en direct, pas de recherche d'IP (v1.0.0+)
 
-`telemetry-model.ts` porte les catégories et l'état du consentement (l'installateur ne fait que
-présélectionner). `live-issues-core.ts`, `live-issues.ts` et `live_issues.rs` envoient les erreurs
+`telemetry-model.ts` porte les catégories et l'état du consentement. Depuis la 1.0.2, le
+`privacy_choice` de l'installateur (`essential` / `all` / `custom`) vaut consentement ou refus
+et est enregistré avec un reçu (`installer_handoff.rs`) ; la case unique d'un ancien installateur
+ne fait que présélectionner. `live-issues-core.ts`, `live-issues.ts` et `live_issues.rs` envoient les erreurs
 en quelques secondes : expurgées deux fois, avec empreinte, dédoublonnées, plafonnées par heure,
 mises en file sur disque, HTTPS ou boucle locale uniquement. `laya-telemetry.ts` envoie des
 compteurs d'usage de Laya, jamais de texte. `analytics_system_profile` ne porte plus `private_ip`
@@ -1359,3 +1364,74 @@ toujours l'adresse de la connexion et la tronque côté serveur.
 631 commandes enregistrées, 97 endpoints dans l'API locale, 95 outils MCP, 81 sous-commandes CLI,
 120 actions de tâche dans le planificateur, 13 thèmes intégrés, et 92 étapes dans `npm run ci`.
 `check-counts` et `check-theme-count` échouent quand une page cite un autre nombre.
+
+## 81. 1.0.2 : chaîne de mise à jour, registre des consentements, dépôts suivis, activité, index des catalogues
+
+### Chaîne de mise à jour (`autoupdate.rs`, `update-notes.ts`)
+
+| Étape | Détail |
+| :--- | :--- |
+| **Liste des versions** | Canal stable = `/releases/latest` ; canal préversion = la version non brouillon la plus haute de la liste. |
+| **Installateur** | Une release porte un seul installateur, `BMM-Setup.exe`. Le choix prend `BMM-Setup.exe`, sinon le seul `.exe`, sinon le seul `.msi` (versions antérieures à la 1.0) ; deux du même type sont refusés. |
+| **1. `signed`** | `update-manifest.json` : signature Ed25519 vérifiée avec la clé épinglée dans BMM, identifiant d'app, `issued < expires`, 7 jours de validité au plus et non expiré, une version strictement plus récente ; son entrée `installers` donne le SHA-256 de `BMM-Setup.exe`. |
+| **2. `update-json`** | Pas de manifeste : la release est relue par son tag et `BMM-Setup.exe` est comparé au SHA-256 que le `update.json` signé de BetterInstaller déclare dans son corps signé (même clé épinglée, même règle des 7 jours). |
+| **3. `unverified`** | Aucun des deux ne peut garantir le fichier : la fenêtre dit pourquoi et demande (Annuler a le focus, ou Installer quand même). Seul « Installer quand même » envoie `confirm_sha256`, et Rust exécute exactement ces octets. Une non-correspondance s'affiche en rouge. |
+| **Lancement** | `proc::shell_launch` (`ShellExecuteExW`) depuis un dossier neuf `%TEMP%\bmm_update_<uuid>\`, hors du runtime asynchrone car l'appel attend pendant qu'une invite UAC est ouverte. L'erreur Windows est traduite en phrase. Plus de `Start-Process` PowerShell. |
+| **Installation BetterInstaller** | `BMM-Setup.exe --update --wait-pid <pid> --launch` ; le code de sortie 3 (aucune installation existante) le relance en mode interactif. Une release illisible se replie sur `<install>/uninstall.exe --update`, lancé aussi par `ShellExecuteExW`. |
+| **Plus tard** | « Installer au prochain lancement » garde un installateur signé et le vérifie de nouveau au démarrage. |
+
+Côté publication : `scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe
+--require-installer` construit le manifeste, `sign-update-manifest.mjs` le signe et le vérifie,
+et `scripts/check-release-versions.mjs` garde la release. Mode source (dans `npm run ci`) : une
+seule version dans `package.json`, `package-lock.json`, `tauri.conf.json`,
+`Cargo.toml`/`Cargo.lock` et `installer.toml`. Mode `--artifacts` (avant publication) : les deux
+manifestes signés pour cette version au moment de la publication, `update.json` qui nomme ce
+`bmm.bpkg`, le manifeste qui nomme ce `BMM-Setup.exe`, et un seul installateur parmi les
+fichiers. `resign-manifests.yml` renouvelle les deux signatures deux fois par semaine.
+
+### Registre des consentements (`consent_ledger.rs`, `consent.ts`)
+
+Un reçu par réponse (Conditions, Politique de confidentialité, télémétrie, rapports d'erreurs en
+direct) : document, version, SHA-256 du texte exact affiché, langue, choix et catégories, heure,
+source, version de l'app, et un identifiant d'installation aléatoire (ni dérivé du matériel ni du
+Creator ID). Stocké à côté de `data.json` dans `consent-ledger.jsonl`, en ajout seul : le `hash`
+de chaque ligne couvre le hash de la ligne précédente, `mac` est un HMAC avec une clé locale, et
+`consent-ledger.head` retient la ligne la plus récente pour qu'une troncature se voie.
+`consent_verify` signale la première rupture. Les reçus de l'installateur ne comptent que si
+l'empreinte du texte correspond à un texte que ce BMM embarque. Les reçus ne quittent la machine
+qu'avec le consentement à la télémétrie ou le bouton « Envoyer au serveur ».
+
+### Dépôts suivis et flux Atom (`repo_follow.rs`, `repo-follow.ts`)
+
+Les réglages de suivi vivent sur `ConnectedServerRepo` dans `data.json`. Le rythme est porté par
+le runner du frontend : il interroge `repo_follow_due` toutes les quelques minutes, vérifie les
+dépôts dus un par un, et pour `download` / `apply` exécute le plan renvoyé par la vérification via
+la synchronisation ordinaire et le gestionnaire de tâches d'activation. Une vérification est un
+GET conditionnel de `repo.json` (ETag / Last-Modified enregistrés ; SHA-256 du corps quand le
+serveur n'envoie ni l'un ni l'autre) : un dépôt inchangé ne coûte qu'une réponse 304. Rien n'est
+installé pendant que le mode jeu du gouverneur est actif. Le serveur de dépôt intégré sert
+`feed.xml` (Atom) à côté de `repo.json`. Les identifiants de mods restent stables grâce à
+`mod_ids.rs` : la synchronisation reconnaît un enregistrement par son origine avant son dossier,
+et `dedupe_mod_ids` répare les anciens doublons une fois par démarrage, après une sauvegarde de
+`data.json`.
+
+### Centre d'activité (`core/activity.ts`, `activity-sources.ts`, `ui/activity-center.ts`)
+
+Un seul registre, sans DOM : `startActivity({ kind, title, cancel })` renvoie une poignée avec
+`update({ progress, detail })`, `done()`, `fail(err)` et `cancelled()` ; `trackPromise` en pilote
+une depuis une promesse. Une `key` rend un démarrage idempotent : une commande et ses événements de
+progression partagent une seule ligne. Les 30 dernières entrées terminées sont conservées (dans
+`localStorage` quand il est disponible). `activity-sources.ts` y branche chaque sous-système
+(activation, téléchargements, synchronisation, analyses, installations, exports, planificateur,
+Laya, benchmark).
+
+### Format et index des catalogues (`catalog_format.rs`, `catalog_cache.rs`, `catalog-search.ts`)
+
+`catalog_format.rs` lit toutes les anciennes formes de catalogue et les flux signés de
+BetterCommunity v2 en un seul document `bmm-catalog` (`format_version`), testé sur les fixtures de
+`src-tauri/tests/catalog_format/`. `catalog_cache.rs` garde un fichier par source dans
+`catalog-cache/`, revalide avec `If-None-Match` / `If-Modified-Since`, et sert la dernière copie
+valide marquée `stale` quand une source échoue. `catalog-search.ts` construit un index de jetons à
+chaque changement : casse, accents et ponctuation repliés, recherche par préfixe, classement par
+champ, et les entrées de même type et même identifiant (ou de même SHA-256 de téléchargement)
+fusionnées en une seule qui liste toutes ses sources.

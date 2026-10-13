@@ -7,6 +7,17 @@ par section pour que rien ne reste un mystère.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/settings.bmmreplay" data-page="features/settings" data-title="Un tour des Paramètres"></div>
 
 
+## Trouver un réglage
+
+Le haut de la page est un **index** de toutes les cartes, en sept groupes : **Apparence**,
+**Bibliothèque**, **Automatisation**, **Performances**, **Comptes et services**,
+**Confidentialité et sécurité**, **Application** (le reste est sous **Autres**). Clique sur un nom
+pour aller à sa carte.
+
+**Rechercher un réglage** (:kbd[Ctrl+F] quand les Paramètres sont ouverts) masque toutes les cartes
+qui ne correspondent pas à ce que tu tapes et indique combien de sections restent. Vide la case pour
+tout revoir.
+
 ## Les quatre qui comptent le plus
 
 ### Thèmes & Apparence
@@ -44,11 +55,15 @@ entre « les mods s'activent en arrière-plan » et « ma machine a gelé trente
 
 ### Mises à jour
 
-Vérifie une nouvelle version de BMM, opte pour les **pré-versions**, ou coupe la **mise à jour
-automatique**. Les pré-versions reçoivent les correctifs en premier et les bugs en premier —
-l'interrupteur existe pour que ce soit ton choix, pas une surprise. Un contrôle distinct
-vérifie tes *mods* (voir [Dépôt Serveur](doc-page:features/repo)), à ne pas confondre avec la mise
-à jour de l'app elle-même.
+La carte **Mise à jour automatique** : vérifier ou non une nouvelle version de BMM au démarrage,
+choisir le **canal de mise à jour** (**Stable** ou **Préversion**), et une **vérification en
+arrière-plan** tant que BMM reste ouvert (**Désactivé**, **Toutes les 6 h**, **Chaque jour**). Elle
+affiche la dernière vérification. Ce qui se passe quand une version est trouvée, et comment
+l'installateur est vérifié avant de se lancer, est dans
+[Mettre BMM à jour](doc-page:getting-started/install#mettre-bmm-a-jour).
+
+Un contrôle distinct vérifie tes *mods* (voir [Dépôt Serveur](doc-page:features/repo)), à ne pas confondre avec
+la mise à jour de l'app elle-même.
 
 ### Données
 
@@ -189,6 +204,10 @@ ou réinitialises le token API avec lequel les plugins et scripts s'authentifien
 Accepte ou refuse les données d'usage anonymes, et gère les sous-options (rejeux de session,
 capture complète, partage de benchmark) indépendamment. Tout est coupé sauf si tu l'actives, et
 la page détaille exactement ce que chaque interrupteur envoie.
+
+**Mes consentements** liste chaque réponse que tu as donnée sur les Conditions, la Politique de
+confidentialité et la télémétrie, avec une preuve pour chacune : voir
+[Confidentialité](doc-page:features/privacy-telemetry#preuve-du-consentement-mes-consentements).
 
 ### Sécurité (confiance des plugins)
 
@@ -337,4 +356,5 @@ Rejoue les tutoriels interactifs de l'app à tout moment. Nouveau sur BMM ? Comm
 
 Diagnostics, outils de rapports de crash, et la **réinitialisation d'usine** notée plus haut.
 Pratique quand quelque chose cloche ; la réinit est le seul contrôle de toute l'app sans retour
-en arrière, donc protégé par une confirmation.
+en arrière, donc protégé par une confirmation. Les outils développeur donnent aussi accès aux
+[Outils BMM](doc-page:features/tools) et aux [studios Replay et Animation](doc-page:features/tools#replay-studio-et-animation-studio).

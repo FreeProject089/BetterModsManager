@@ -17,10 +17,19 @@
 // (.set-row, .tc-setting, .sk-row), never arbitrary markup, so a control cannot be orphaned
 // from its label. A folded card that matches is shown open while the search lasts, without
 // touching its saved fold state.
+//
+// The index is also where the layout is edited (« Edit layout » under it, or the toolbar above
+// the cards: one mode, card-order.ts owns it). In edit mode each entry is a row: drag it, or
+// Alt+Up / Alt+Down, to move its card within its group (a card's group is fixed by
+// SETTINGS_GROUPS, so a move never crosses one), and the eye hides the card from the page.
+// Every change goes through card-order.ts, the same storage the toolbar writes.
 
 import { t } from '../core/i18n.js';
 import { uiIcon } from './icons.js';
-import { SETTINGS_GROUPS, settingsCardKey } from '../features/settings/card-order.js';
+import {
+    SETTINGS_GROUPS, settingsCardKey, LAYOUT_EVENT, isLayoutEditing, setLayoutEditing, isCardHidden,
+    setCardHidden, hiddenCardCount, reorderSettingsCards, resetSettingsLayout,
+} from '../features/settings/card-order.js';
 
 const ROW_SEL = '.set-row, .tc-setting, .sk-row';
 const HIDE = 'stg-filtered-out';
@@ -86,6 +95,7 @@ function ensureLayout(): HTMLElement | null {
             </div>
             <div class="stg-search-count" id="settings-search-count" aria-live="polite"></div>
             <nav class="stg-nav" id="settings-index-nav"></nav>
+            <div class="stg-index-foot" id="settings-index-foot"></div>
         </aside>
         <div class="stg-main">
             <div class="stg-empty" id="settings-search-empty" hidden>
@@ -143,7 +153,10 @@ function renderIndex(): void {
     const rest = list.filter((c) => !placed.has(c.dataset.cardKey || ''));
     if (rest.length) groups.push({ label: t('settings.group.other'), items: rest });
 
+    const editing = isLayoutEditing();
     nav.textContent = '';
+    nav.classList.toggle('is-editing', editing);
+    document.getElementById('settings-index')?.classList.toggle('is-editing', editing);
     for (const g of groups) {
         const box = document.createElement('div');
         box.className = 'stg-nav-group';
@@ -151,22 +164,196 @@ function renderIndex(): void {
         head.className = 'stg-nav-head';
         head.textContent = g.label;
         box.appendChild(head);
-        for (const card of g.items) {
+        const named = g.items.filter((card) => cardTitle(card));
+        named.forEach((card, i) => {
             const name = cardTitle(card);
-            if (!name) continue;
+            const key = card.dataset.cardKey || '';
             const a = document.createElement('button');
             a.type = 'button';
             a.className = 'stg-nav-link';
-            a.dataset.cardKey = card.dataset.cardKey || '';
+            a.dataset.cardKey = key;
             a.textContent = name;
             a.title = name;
-            a.addEventListener('click', () => jumpTo(card, true));
-            box.appendChild(a);
-        }
+            a.addEventListener('click', () => {
+                if (_dragMoved) return;   // the click that ends a drag is not « go to this card »
+                jumpTo(card, true);
+            });
+            if (!editing) { box.appendChild(a); return; }
+            box.appendChild(editRow(a, key, i, named.length));
+        });
         nav.appendChild(box);
     }
+    renderFoot();
     syncNavVisibility();
     queueSpy();
+    if (_focusAfter) {
+        const { key, part } = _focusAfter;
+        _focusAfter = null;
+        const row = nav.querySelector(`.stg-nav-row[data-card-key="${CSS.escape(key)}"]`);
+        const want = row?.querySelector<HTMLButtonElement>(`[data-part="${part}"]:not([disabled])`)
+            || row?.querySelector<HTMLButtonElement>('.stg-nav-link');
+        want?.focus();
+    }
+}
+
+// ── Edit mode ────────────────────────────────────────────────────────────────
+
+let _focusAfter: { key: string; part: string } | null = null;
+let _dragMoved = false;
+
+function rowButton(part: string, icon: 'move-up' | 'move-down' | 'eye' | 'eye-off', label: string): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'stg-row-btn';
+    b.dataset.part = part;
+    b.innerHTML = uiIcon(icon, 14);
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    return b;
+}
+
+/** One entry in edit mode: grip, the link, move up / down, show / hide. */
+function editRow(link: HTMLButtonElement, key: string, index: number, count: number): HTMLElement {
+    const hidden = isCardHidden(key);
+    const row = document.createElement('div');
+    row.className = 'stg-nav-row' + (hidden ? ' is-hidden' : '');
+    row.dataset.cardKey = key;
+    const grip = document.createElement('span');
+    grip.className = 'stg-row-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    grip.innerHTML = uiIcon('grip', 14);
+    link.dataset.part = 'link';
+    link.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+    const up = rowButton('up', 'move-up', t('settings.layout.up'));
+    const down = rowButton('down', 'move-down', t('settings.layout.down'));
+    up.disabled = index === 0;
+    down.disabled = index === count - 1;
+    const eye = rowButton('eye', hidden ? 'eye-off' : 'eye', t(hidden ? 'settings.layout.show' : 'settings.layout.hide'));
+    eye.setAttribute('aria-pressed', String(hidden));
+    up.addEventListener('click', () => moveBy(key, -1, 'up'));
+    down.addEventListener('click', () => moveBy(key, 1, 'down'));
+    eye.addEventListener('click', () => { _focusAfter = { key, part: 'eye' }; setCardHidden(key, !hidden); });
+    row.addEventListener('keydown', (e) => {
+        if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        const part = (e.target as HTMLElement).closest<HTMLElement>('[data-part]')?.dataset.part || 'link';
+        moveBy(key, e.key === 'ArrowUp' ? -1 : 1, part);
+    });
+    row.addEventListener('pointerdown', (e) => startRowDrag(e, row));
+    row.append(grip, link, up, down, eye);
+    return row;
+}
+
+/** The keys of a group, in the order its rows show them. */
+function groupKeys(box: Element): string[] {
+    return Array.from(box.querySelectorAll<HTMLElement>('.stg-nav-row')).map((r) => r.dataset.cardKey || '');
+}
+
+function moveBy(key: string, delta: number, part: string): void {
+    const row = document.querySelector(`#settings-index-nav .stg-nav-row[data-card-key="${CSS.escape(key)}"]`);
+    const box = row?.closest('.stg-nav-group');
+    if (!box) return;
+    const keys = groupKeys(box);
+    const i = keys.indexOf(key);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= keys.length) return;
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+    _focusAfter = { key, part };
+    reorderSettingsCards(keys);   // the observer re-renders the index; focus follows the card
+}
+
+// Drag a row within its group: the rows move as you drag, the cards once, on release.
+function startRowDrag(e: PointerEvent, row: HTMLElement): void {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('.stg-row-btn')) return;
+    const box = row.closest('.stg-nav-group');
+    if (!box) return;
+    const startY = e.clientY;
+    let dragging = false;
+    _dragMoved = false;
+    const move = (ev: PointerEvent) => {
+        if (!dragging) {
+            if (Math.abs(ev.clientY - startY) < 4) return;
+            dragging = true;
+            _dragMoved = true;
+            row.classList.add('is-dragging');
+            document.body.style.userSelect = 'none';
+        }
+        const others = Array.from(box.querySelectorAll<HTMLElement>('.stg-nav-row')).filter((r) => r !== row);
+        let placed = false;
+        for (const sib of others) {
+            const r = sib.getBoundingClientRect();
+            if (ev.clientY < r.top + r.height / 2) {
+                if (sib.previousElementSibling !== row) box.insertBefore(row, sib);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed && box.lastElementChild !== row) box.appendChild(row);
+    };
+    const end = () => {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', end);
+        document.removeEventListener('pointercancel', end);
+        document.body.style.userSelect = '';
+        row.classList.remove('is-dragging');
+        if (!dragging) return;
+        _focusAfter = { key: row.dataset.cardKey || '', part: 'link' };
+        reorderSettingsCards(groupKeys(box));
+        queueRender();   // repaint the up/down states, also when the row went back where it was
+        setTimeout(() => { _dragMoved = false; }, 0);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end);
+    document.addEventListener('pointercancel', end);
+}
+
+function footButton(cls: string, icon: 'edit' | 'reset' | 'check', label: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `btn btn-xs stg-foot-btn ${cls}`;
+    b.innerHTML = `${uiIcon(icon, 14)}<span></span>`;
+    b.querySelector('span')!.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+}
+
+/** Under the index: « Edit layout » (and how many cards are hidden), or the edit controls. */
+function renderFoot(): void {
+    const foot = document.getElementById('settings-index-foot');
+    if (!foot) return;
+    foot.textContent = '';
+    if (isLayoutEditing()) {
+        const hint = document.createElement('p');
+        hint.className = 'stg-foot-hint';
+        hint.textContent = t('settings.layout.editHint');
+        const row = document.createElement('div');
+        row.className = 'stg-foot-row';
+        row.append(
+            footButton('btn-ghost', 'reset', t('cardorder.reset'), () => resetSettingsLayout()),
+            footButton('btn-primary stg-foot-done', 'check', t('cardorder.editDone'), () => {
+                setLayoutEditing(false);
+                requestAnimationFrame(() => (document.querySelector('#settings-index-foot .stg-foot-edit') as HTMLElement | null)?.focus());
+            }),
+        );
+        foot.append(hint, row);
+        return;
+    }
+    foot.appendChild(footButton('btn-ghost stg-foot-edit', 'edit', t('cardorder.edit'), () => {
+        // Search and edit do not mix: a filtered list would move cards you cannot see.
+        const input = document.getElementById('settings-search') as HTMLInputElement | null;
+        if (input?.value) { input.value = ''; applySearch(''); }
+        setLayoutEditing(true);
+        requestAnimationFrame(() => (document.querySelector('#settings-index-nav .stg-nav-link') as HTMLElement | null)?.focus());
+    }));
+    const n = hiddenCardCount();
+    if (n) {
+        const chip = document.createElement('span');
+        chip.className = 'stg-foot-hidden';
+        chip.innerHTML = `${uiIcon('eye-off', 12)}<span></span><b></b>`;
+        chip.querySelector('span')!.textContent = t('settings.layout.hidden');
+        chip.querySelector('b')!.textContent = String(n);
+        foot.appendChild(chip);
+    }
 }
 
 function jumpTo(card: HTMLElement, unfold: boolean): void {
@@ -282,11 +469,16 @@ function applySearch(raw: string): void {
 /** Hide the index entries of hidden cards, and the group headings left with none. */
 function syncNavVisibility(): void {
     const hidden = new Set(cards().filter((c) => c.classList.contains(HIDE)).map((c) => c.dataset.cardKey || ''));
+    // A card taken off the page is off the index too, except while editing (to bring it back)
+    // and while searching (search still finds it, and shows it).
+    const keepHidden = isLayoutEditing() || !!_query;
     document.querySelectorAll('#settings-index-nav .stg-nav-group').forEach((g) => {
         let any = false;
         g.querySelectorAll('.stg-nav-link').forEach((a) => {
-            const off = hidden.has((a as HTMLElement).dataset.cardKey || '');
-            (a as HTMLElement).hidden = off;
+            const key = (a as HTMLElement).dataset.cardKey || '';
+            const off = hidden.has(key) || (!keepHidden && isCardHidden(key));
+            const item = (a.closest('.stg-nav-row') as HTMLElement | null) || (a as HTMLElement);
+            item.hidden = off;
             if (!off) any = true;
         });
         (g as HTMLElement).hidden = !any;
@@ -320,6 +512,12 @@ export function initSettingsNav(): void {
     _wired = true;
 
     scroller()?.addEventListener('scroll', queueSpy, { passive: true });
+    // Edit mode toggled (here or in the toolbar), a card hidden or shown, a layout reset.
+    document.addEventListener(LAYOUT_EVENT, () => {
+        const input = document.getElementById('settings-search') as HTMLInputElement | null;
+        if (input) input.disabled = isLayoutEditing();
+        queueRender();
+    });
     document.addEventListener('langChanged', () => {
         const l = document.querySelector('#view-settings .stg-layout') as HTMLElement | null;
         if (l) translateChrome(l);

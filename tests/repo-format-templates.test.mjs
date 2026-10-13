@@ -29,7 +29,7 @@ const EXPECT = {
     'v1.0.json': 'format 1.0',
 };
 
-for (const name of ['server.express.js.template', 'hub-server.js.template']) {
+for (const name of ['server.express.js.template', 'hub-server.js.template', 'bmm-extras.js.template']) {
     test(`${name}: names every fixture's format like BMM does`, () => {
         const repoFormatOf = load(name);
         const files = readdirSync(FIX).filter((f) => f.endsWith('.json'));

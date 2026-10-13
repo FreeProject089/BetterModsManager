@@ -19,7 +19,7 @@ réellement devant toi.
     - *Mods* — ajouter un mod, scanner le dossier, vérifier l'intégrité, afficher l'historique, tout activer/désactiver, vérifier les mises à jour.
     - *Profils* — nouveau profil, importer depuis OvGME / OMM, désactiver tous les profils.
     - *Dépôt Serveur* — ouvrir l'onglet Sync ou Héberger, parcourir les dépôts enregistrés, générer un serveur autonome, démarrer/arrêter le serveur intégré, ouvrir le monitoring, vérifier les dépôts suivis, copier ton ID créateur.
-    - *Outils & Paramètres* — vérifier les mises à jour de l'app, relancer la visite d'accueil, ouvrir le stockage & l'espace disque, ouvrir les stats de hachage.
+    - *Outils & Paramètres* — vérifier les mises à jour de l'app, relancer la visite d'accueil, ouvrir le stockage & l'espace disque, ouvrir les stats de hachage, ouvrir les [Outils BMM](doc-page:features/tools) ou directement l'un de leurs sept outils.
 
 ## Recherche classique vs. sémantique
 

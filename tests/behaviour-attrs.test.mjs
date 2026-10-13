@@ -158,6 +158,10 @@ const HARMLESS = {
     // dragged (written, never read for an action). The probe reaches both through the drag's
     // document-level mousemove/mousedown listeners.
     'data-si': 'tutorial guide step list, own rows', 'data-edge': 'tutorial guide snap preview, own element; written only',
+    // Settings index, edit mode (settings-nav.ts): a row drag's document-level pointer listeners
+    // read the key of the row being dragged, a row the index built itself; the value only
+    // reorders the app's own settings cards.
+    'data-card-key': 'settings index edit-mode drag, own rows; reorders the app\'s own cards',
 };
 
 function documentListenerAttrs() {

@@ -25,11 +25,30 @@ description, sa version, et jusqu'à trois tags. Des badges de confiance accompa
 Ces badges sont attribués par BMM selon **l'origine du catalogue**, jamais selon ce que
 prétend le JSON — un catalogue communautaire ne peut pas se badger « Officiel » lui-même.
 
+Chaque carte affiche aussi son **état** (installée, non installée, en installation, en mise à
+jour, en échec) et la **prochaine action** qui lui correspond : **Installer**, **Lancer**,
+**Mettre à jour**, ou **Réessayer** après un échec. Clique sur une carte pour ses détails : la
+description et le README sont rendus en [B.MD](doc-page:reference/custom-markdown) par le chemin
+sûr, donc un catalogue ne peut pas exécuter de code dans BMM en écrivant une page.
+
+### Trouver une app
+
+| Contrôle | Choix |
+|---|---|
+| **État d'installation** | Tous les états, **Installées**, **Non installées**, **Mise à jour disponible**. |
+| **Trier** | **Ordre du catalogue**, **Nom de A à Z**, **Nom de Z à A**, **Téléchargement le plus léger**. |
+| Catégorie, prix, tags | Pour affiner encore la liste. |
+
+Quand une source est injoignable, la page le dit clairement, et les apps de toutes les autres
+sources restent listées : une source en échec ne cache plus les autres. Les sources sont mises en
+cache et relues seulement quand elles ont changé.
+
 ## Installer
 
 Clique **Installer** et BMM télécharge l'app, **la vérifie contre la somme de contrôle de
-l'éditeur quand elle est fournie** (une non-correspondance est signalée et l'installation
-bloquée par défaut, pour qu'un téléchargement altéré ou corrompu ne s'exécute pas), et
+l'éditeur quand elle est fournie** (en cas de non-correspondance, ou sans aucune somme de
+contrôle, BMM s'arrête et demande : **Annuler** n'installe rien, donc un téléchargement altéré
+ou corrompu ne s'exécute pas sauf si tu le choisis), et
 enregistre la version installée pour proposer des mises à jour plus tard.
 
 Ce que « installer » veut dire dépend du type de téléchargement :
@@ -119,6 +138,11 @@ catalogue officiel peut aussi **importer automatiquement** des catalogues commun
 souvent, tu n'as rien à ajouter à la main. Les chaînes de catalogues importés sont suivies
 jusqu'à un total de **30 sources**, pour qu'une grande toile communautaire de catalogues reste
 bornée.
+
+Chaque catalogue que lit BMM, quels que soient son âge et son type, passe par un seul format
+versionné, qui lit aussi les flux signés de BetterCommunity v2. Le format est décrit dans
+[Format des catalogues](doc-page:reference/catalog-format), et une seule adresse qui apporte
+plusieurs catalogues d'un coup est un [index de catalogues](doc-page:reference/catalog-index).
 
 ## Un catalogue qui porte ses applications
 

@@ -33,6 +33,15 @@ function paint(): void {
         li.classList.toggle('is-blocked', s === 'manifest' && state.folder && state.manifest === false);
         if (s === current) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
     }
+    // The blocks below the strip carry the same state on their numbered heading: the folder
+    // block covers steps 1-2, the start block step 3.
+    const blockDone: Record<string, boolean> = { folder: done.folder && done.manifest, start: done.start };
+    const blockCurrent: Record<string, boolean> = { folder: current === 'folder' || current === 'manifest', start: current === 'start' };
+    document.querySelectorAll<HTMLElement>('#view-repo [data-flow-block]').forEach((b) => {
+        const k = b.dataset.flowBlock || '';
+        b.classList.toggle('is-done', !!blockDone[k]);
+        b.classList.toggle('is-current', !!blockCurrent[k]);
+    });
     const panel = document.getElementById('repo-run-panel');
     if (panel) panel.classList.toggle('is-on', state.running);
 }

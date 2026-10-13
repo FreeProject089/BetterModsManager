@@ -12,6 +12,30 @@ silence.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Se connecter à un dépôt et synchroniser"></div>
 
 
+## Simple par défaut
+
+La page commence par les étapes guidées des deux usages courants : **synchroniser** un dépôt dans
+un profil, et en **héberger** un. Tout le reste est dans **Outils avancés** : tape dans
+**Chercher un outil** pour les filtrer, et BMM se souvient de ceux que tu as ouverts la dernière
+fois.
+
+| Outil | Ce qu'il fait |
+|---|---|
+| **Créer un dépôt en un clic** | Depuis un profil, un modpack ou un dossier de mods. BMM écrit un dépôt signé, prêt à héberger. |
+| **Construire un dépôt depuis des profils** | Le générateur complet : plusieurs profils, identité, seed, archive, serveur inclus. |
+| **Mettre à jour un dépôt existant** | Ajouter ou retirer des mods et des profils sans tout reconstruire. |
+| **Inclure plus dans un dépôt** | Plugins, thèmes, modpacks, automatisations, listes de mods, catalogues. Voir [Tout ce que le dépôt transporte d'autre](#tout-ce-que-le-depot-transporte-dautre). |
+| **Manifeste seul (repo.json)** | Décrire des mods déjà hébergés ailleurs. Rien n'est copié. |
+| **Mettre à jour depuis le listing du serveur** | Tes mods n'existent que sur le serveur : rafraîchir `repo.json` depuis son index de dossiers. |
+| **Valider un dépôt** | Manifeste, fichiers, empreintes, signature et version de format, dans un seul rapport lisible. |
+| **Changer la version du dépôt** | Changer le numéro que voient les abonnés, et resigner. |
+| **Aperçu côté abonnés** | La carte que BMM affiche après Fetch, depuis le dossier ou le serveur lancé. |
+| **Lien de partage** | Un lien en un clic et un message à envoyer, avec les notes de mot de passe ou de clé si besoin. |
+| **Héberger sur un hébergeur statique** | GitHub Pages, nginx ou tout hébergeur qui sert des fichiers : instructions et configuration. |
+| **Publier par SSH** | Envoyer le dossier du dépôt sur ton propre serveur. Voir [SSH/SFTP](#mettre-le-dossier-sur-le-serveur-sshsftp). |
+| **Options du serveur**, **Qui se connecte**, **Serveur hub multi-dépôts** | Port, vitesse, mots de passe, clés ; monitoring, liste blanche et bannissements ; plusieurs dépôts sur un seul port. |
+| **Vérifier les mises à jour des mods**, **Options de synchronisation** | Les mises à jour des mods installés, et le comportement de la prochaine synchro. |
+
 ## Se connecter à un dépôt
 
 Parcours la liste officielle et partenaire, ou colle une URL de dépôt directement. Une fois
@@ -32,6 +56,11 @@ La synchro tire les mods du dépôt sur ta machine et dans un profil. BMM fait u
 les fichiers modifiés** — mettre à jour un dépôt de 5 Go après un petit patch coûte quelques
 mégaoctets, pas cinq gigas. Une longue synchro peut être **annulée** en cours de route, et tu
 peux plafonner sa vitesse de téléchargement pour ne pas saturer ta connexion.
+
+Un mod synchronisé garde le **même identifiant** d'une synchro à l'autre, après un renommage ou
+une réimportation : son historique, ses liens et sa place dans tes profils le suivent. Les
+doublons laissés par d'anciennes versions de BMM sont réparés une fois, au démarrage, après une
+sauvegarde.
 
 ## Détection de mises à jour
 
@@ -63,6 +92,34 @@ L'URL d'un fichier brut ne porte aucun numéro de version : BMM n'a rien à comp
 un **retéléchargement direct** plutôt que de faire semblant de savoir. Pour une vraie détection
 de mises à jour, lie le mod à un dépôt qui publie des versions.
 
+## Suivre un dépôt
+
+Au lieu d'appuyer toi-même sur *Vérifier les mises à jour des mods*, tu peux **suivre** un dépôt :
+saisis son adresse côté synchro, puis **Suivre ce dépôt**. Il rejoint la liste **Dépôts suivis**,
+où chaque dépôt a :
+
+| Réglage | Choix |
+|---|---|
+| **Vérifier ce dépôt selon son intervalle** | Activé, ou en pause. |
+| **Vérifier** | Toutes les 15 minutes, toutes les heures, toutes les 6 heures, tous les jours ou toutes les semaines. |
+| **Quand il y a une mise à jour** | **Me prévenir** (par défaut), **La télécharger**, ou **La télécharger et l'appliquer**. |
+
+*La télécharger* synchronise les fichiers des mods mis à jour dans leur profil. *La télécharger et
+l'appliquer* désactive aussi puis réactive ceux qui sont activés dans le profil actif, pour que le
+jeu reçoive les nouveaux fichiers. **Rien n'est téléchargé ni appliqué pendant qu'un jeu tourne** :
+BMM te prévient et réessaie à la vérification suivante. **Vérifier maintenant** vérifie tous les
+dépôts suivis d'un coup ; **Vérifier** en vérifie un, et **Ne plus suivre** le retire. Chaque
+vérification est une ligne du [centre d'activité](doc-page:features/activity).
+
+Une vérification ne coûte presque rien : BMM demande au serveur si `repo.json` a changé depuis la
+dernière fois, et un dépôt inchangé répond « non modifié » sans renvoyer le manifeste.
+
+:::note[Un flux Atom pour chaque dépôt servi par BMM]
+Le serveur de dépôt intégré à BMM sert aussi `feed.xml`, un **flux Atom** des mises à jour du
+dépôt, à côté de `repo.json`. N'importe quel lecteur de flux peut suivre un dépôt de cette façon,
+avec ou sans BMM, tout comme une [tâche planifiée](doc-page:features/scheduler) avec un déclencheur `on feed`.
+:::
+
 ## Héberger ton propre dépôt
 
 Tu peux transformer tes propres mods en un dépôt d'où d'autres synchronisent. L'onglet Host
@@ -70,11 +127,8 @@ est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**
 
 ### Trois façons de produire le manifeste
 
-!!! note "Comment l'onglet Héberger est organisé"
-    La carte **Générer** est découpée en sections numérotées qu'on ouvre une à la fois (profils ·
-    sortie & identité · distribution · inclure plus & publier via SSH), et **Manifeste seul** de
-    la même façon. Chaque carte de l'onglet se replie depuis le chevron de son en-tête. Dans
-    *Distribution*, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
+!!! note "Options d'archive et de compression"
+    Dans **Construire un dépôt depuis des profils**, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
     est une case séparée et optionnelle à l'intérieur (les indicateurs `zipOutput` et
     `generateServer` de l'API sont indépendants pour la même raison — une archive seule
     s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Un sélecteur
@@ -86,18 +140,18 @@ est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**
     `/api/repo/gen` et `/api/repo/gen-now`, le générateur de scripts, le CLI
     (`generate-repo --zip-mods --compression zstd`) et l'outil MCP `bmm_generate_repo`. Le
     fichier reste un `.zip` ordinaire quel que soit le choix ; seul Deflate est garanti de
-    s'ouvrir dans n'importe quel décompresseur tiers. Le **hub multi-dépôts** —
-    un serveur Node et un tableau de bord pour tous vos dépôts — est sa propre carte dans
-    l'étape *Servir les fichiers*.
+    s'ouvrir dans n'importe quel décompresseur tiers. Le **hub multi-dépôts** (un serveur
+    Node et un tableau de bord pour tous vos dépôts) est son propre outil,
+    **Serveur hub multi-dépôts**.
 
 Ce sont des alternatives — choisis celle qui correspond à l'endroit où tes mods se trouvent
 déjà.
 
 | Voie | Ce qu'elle fait | Quand l'utiliser |
 |---|---|---|
-| **Export complet** | Copie chaque mod dans un dossier de sortie, à côté du manifeste. | Tu pars de zéro ; les mods sont sur cette machine. |
+| **Créer un dépôt en un clic** / **Construire un dépôt depuis des profils** | Copie chaque mod dans un dossier de sortie, à côté du manifeste (depuis un dossier de mods, l'outil en un clic les décrit là où ils sont). | Tu pars de zéro ; les mods sont sur cette machine. |
 | **Manifeste seul** | Écrit seulement `repo.json` pour des dossiers que BMM peut lire ici — un, plusieurs, ou un ensemble de profils. **Rien n'est copié.** | Les mods sont déjà là où tu les veux. |
-| **Mettre à jour depuis le serveur** | Lit ce que contient ton serveur — en HTTP, ou en SFTP sur une machine SSH — et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
+| **Mettre à jour depuis le listing du serveur** | Lit ce que contient ton serveur — en HTTP, ou en SFTP sur une machine SSH — et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
 
 Quelle que soit la voie, le manifeste liste chaque mod, sa version, les hachages SHA-256 par
 fichier (plus des hachages de blocs de 4 Mo sur les gros fichiers) et le changelog éventuel,
@@ -127,7 +181,9 @@ abonnés voient une mise à jour et non un dépôt inconnu, et on te dit ce qui 
 **modifié** et **retiré**. Ce dernier compte : un chemin mal tapé écrit un manifeste
 parfaitement valide décrivant un serveur vide.
 
-Il n'y a aucun numéro de version à incrémenter ; les changements sont détectés par hachage.
+Tu n'as pas à incrémenter de version : les changements sont détectés par hachage. Quand tu veux
+que les abonnés voient un nouveau numéro, **Changer la version du dépôt** le modifie et resigne le
+manifeste.
 
 *Mettre à jour depuis le serveur* va plus loin : elle compare les tailles et dates du listing
 à ton dernier manifeste et ne télécharge que ce qui a réellement changé, réutilisant le
@@ -193,6 +249,62 @@ courte signée par BetterCommunity et validée hors ligne, et elle correspond à
 identifiants de ce compte — son bcid, ses clés de créateur et ses comptes Discord liés — donc
 bannir le compte suit la personne plutôt qu'un seul de ses pseudonymes. Ces entrées ne
 s'appliquent que si le dépôt exige un compte, seul cas où une identité signée existe.
+
+### Le vérifier avant de publier
+
+- **Valider un dépôt** lit `repo.json`, recalcule l'empreinte de chaque fichier listé, et vérifie la
+  signature et la version de format, en une seule passe avec progression et **Annuler**. Rien
+  n'est écrit. Relancé, il ne relit que les fichiers qui ont changé.
+- **Aperçu côté abonnés** montre la carte que BMM affiche après Fetch.
+- **Lien de partage** donne un lien en un clic et un message prêt, avec les notes de mot de passe
+  ou de clé qu'un dépôt protégé demande.
+- Un manifeste écrit par un ancien BMM affiche sa **version de format**, et **Convertir…** le met à
+  jour : il montre toujours d'abord un essai à blanc de chaque changement, demande avant d'écrire,
+  garde l'ancien fichier en `.bak` et resigne. Un dépôt écrit dans un format plus récent que ce que
+  ton BMM lit est refusé avec un message clair. Voir
+  [Versions de format](doc-page:reference/repo-format#9-versions-de-format-et-convertir-un-ancien-manifeste).
+
+### Héberger sans que BMM tourne
+
+**Héberger sur un hébergeur statique** donne les fichiers et la configuration pour GitHub Pages,
+nginx ou tout hébergeur qui sert des fichiers : le dépôt n'est alors que des fichiers, et aucun BMM
+n'a besoin de rester ouvert. Voir aussi
+[L'héberger sans BMM](doc-page:reference/repo-format#7-lheberger-sans-bmm).
+
+### Le mini-serveur autonome
+
+**Mini-serveur** (un outil avancé de l'écran Server Repo) écrit un dossier qui sert le dépôt tout
+seul, sur une autre machine : une édition script (v1 ou v2, Node.js téléchargé s'il manque) ou une
+édition Node.js + Express, avec les fichiers Docker si vous les demandez. Chaque édition embarque
+désormais les mêmes compléments, proches de ce que fait le serveur intégré de BMM :
+
+| Adresse | Contenu |
+|---|---|
+| `/repo.json`, fichiers des mods | `ETag`, `Last-Modified`, `304 Not Modified`, `Range` (reprise des téléchargements), `HEAD` |
+| `/feed.xml` | Le flux Atom du dépôt, sous le même nom que le serveur intégré, derrière le même mot de passe |
+| `/status` | Une page d'état sans aucune ressource externe, claire ou sombre selon le système : nom du dépôt, version, version de format, nombre et taille des fichiers, dernière mise à jour, lien du flux, un bouton **Ouvrir dans BMM** (`bmm://repo/connect?url=…`) et les tâches planifiées |
+| `/status.json`, `/health` | La même chose en JSON ; `200` tant que `repo.json` est lisible (Docker et systemd s'en servent) |
+
+Le mot de passe de téléchargement va dans `access.json` pour toutes les éditions ; les abonnés
+l'envoient en `X-Repo-Password` ou `?password=`. Une limite de requêtes par adresse, le journal,
+l'adresse publique et les tâches sont dans `server.config.json` à côté du serveur, qu'il relit
+quand vous le modifiez ; les variables d'environnement (`PORT`, `BMM_PUBLIC_URL`,
+`BMM_RATE_LIMIT`, `BMM_JOBS=off`…) passent avant.
+
+**Tâches planifiées.** Le générateur demande, par des choix simples, à quelle fréquence vérifier
+les fichiers et sauvegarder `repo.json`, et s'il faut faire tourner le journal. **Avancé** ajoute :
+réécrire les empreintes d'un manifeste non signé quand un fichier a changé (un manifeste signé
+n'est jamais réécrit : réexportez-le depuis BMM), augmenter sa version, votre propre planification
+(un intervalle comme `15m`, `6h`, `1d`, ou une ligne cron comme `0 3 * * *`), une synchronisation
+depuis une source (`git pull`, `rsync`, ou un dossier dans lequel BMM exporte, puis une
+revérification), la limite de requêtes et l'adresse publique. Une planification que BMM ne sait
+pas lire est refusée avant que quoi que ce soit soit écrit. Sur le serveur, la dernière exécution,
+son résultat et la prochaine de chaque tâche s'affichent sur `/status`.
+
+Le dossier contient aussi `README-SERVER.md` et `README-SERVER.fr.md` (adresses, configuration,
+HTTPS derrière Caddy ou nginx), une unité systemd et un script de démarrage Windows dans
+`bmm-server/`, et un auto-test : `node bmm-server/selftest.js`. Rien dans `bmm-server/` n'est
+jamais servi.
 
 ## Panneau d'admin & monitoring
 

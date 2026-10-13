@@ -186,6 +186,23 @@ jour » ; le journal dit pourquoi (`Update manifest refused: … expired`).
   60 jours : réactive-le depuis l'onglet Actions le cas échéant. Voir [Sécurité](doc-page:how-it-works/security)
   pour les règles que BMM applique.
 
+### La fenêtre de mise à jour dit que l'installateur n'a pas pu être vérifié
+
+La version ne propose ni `update-manifest.json` signé ni `update.json` signé que BMM puisse
+utiliser pour cet installateur, et la fenêtre dit lequel manque. **Annuler** (le choix par défaut)
+ne change rien. Ne choisis **Installer quand même** que si tu fais confiance à la provenance du
+fichier ; sinon attends que l'éditeur corrige la version, ou télécharge `BMM-Setup.exe` depuis la
+page de la version. Un fichier affiché **en rouge** ne correspond pas à ce que la version annonce :
+ne l'installe pas, réessaie plus tard. Voir [Mettre BMM à jour](doc-page:getting-started/install#mettre-bmm-a-jour).
+
+### L'installateur ne démarre pas
+
+La fenêtre dit pourquoi, en clair, avec l'erreur Windows : demande d'autorisation refusée (appuie
+sur **Réessayer** et accepte-la), fichier encore bloqué par un antivirus (BMM a déjà réessayé
+plusieurs fois ; attends la fin de l'analyse et **Réessayer**), accès refusé par une stratégie de
+sécurité (demande à qui gère le PC), ou installateur fermé aussitôt avec un code d'erreur.
+**Télécharger depuis la page de la version** marche toujours en dernier recours.
+
 ### Une synchro de dépôt dit qu'un fichier a échoué
 
 Le hash du fichier téléchargé ne correspondait pas à ce que le dépôt a publié, et BMM traite ça comme une

@@ -17,6 +17,11 @@ services:
       - ./server.log:/app/server.log
       - ./history.json:/app/history.json
       - ./downloads.json:/app/downloads.json
+      # Live-editable: the password and keys, the server options and scheduled jobs, and the
+      # jobs' own state and repo.json backups.
+      - ./access.json:/app/access.json:ro
+      - ./server.config.json:/app/server.config.json:ro
+      - ./bmm-server:/app/bmm-server
     # ADMIN_PASSWORD is in .env beside this file, written by BMM with it and kept out of git
     # (.gitignore) and out of the image (.dockerignore): this file can be shared or committed
     # without the password in it. Change the password there, then `docker compose up -d`.
@@ -26,7 +31,7 @@ services:
       - PORT=PORT_PLACEHOLDER
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3

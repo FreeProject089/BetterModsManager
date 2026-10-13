@@ -74,11 +74,19 @@ function insideDir(dir, p) {
 const { spawn, execSync } = require('child_process');
 
 // placeholders
-const PORT = PORT_PLACEHOLDER;
+const PORT = Number(process.env.PORT) || PORT_PLACEHOLDER;
 const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
 const USE_UPNP = USE_UPNP_PLACE_HOLDER;
 const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
 const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
+
+// Status page, health, Atom feed, ETag/304, resumable downloads, rate limiting and scheduled
+// jobs: bmm-extras.js beside this file, configured by server.config.json. Loaded defensively, so
+// a folder generated before it existed keeps running exactly as it did.
+let extras = null;
+try {
+    extras = require('./bmm-extras.js').create({ dir: __dirname, kind: 'v1-windows', adminPassword: '', port: PORT });
+} catch (e) { if (!e || e.code !== 'MODULE_NOT_FOUND') console.error('[EXTRAS] not loaded:', e && e.message); }
 
 const logFile = path.join(__dirname, 'server.log');
 const bansFile = path.join(__dirname, 'bans.json');
@@ -150,6 +158,8 @@ const server = http.createServer(async (req, res) => {
     const xff = req.headers['x-forwarded-for'];
     const cfIp = req.headers['cf-connecting-ip'];
     const ip = (cfIp || (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1')).replace('::ffff:', '');
+    // /health, /status, /status.json, /admin/jobs and the rate limit (bmm-extras.js).
+    if (extras && extras.early(req, res, ip)) return;
     
     const b = getBans();
     const key = req.headers['x-creator-id'] || req.headers['x-creator-key'];
@@ -212,6 +222,9 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // The Atom feed (/feed.xml, /feed.atom), behind the same gates as repo.json.
+    if (extras && extras.serve(req, res)) return;
+
     let urlPath = decodeURIComponent(req.url.split('?')[0]);
     if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
 
@@ -235,11 +248,17 @@ const server = http.createServer(async (req, res) => {
     // `/mods/../monitoring.json` or `/monitoring.json.` cannot spell their way past it.
     const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
     if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
-        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')) {
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')
+        // bmm-server/ holds the job state and the repo.json backups: never served.
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'bmm-server')) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
 
-    const total = fs.statSync(absolutePath).size;
+    const _stat = fs.statSync(absolutePath);
+    // ETag / Last-Modified / 304, Range / 206 / 416 and HEAD. A 304 or a HEAD is not a download.
+    const _part = extras ? extras.prepareFile(req, res, absolutePath, _stat) : null;
+    if (_part && _part.done) return;
+    const total = _part ? _part.length : _stat.size;
     const protocol = ip.startsWith('127.0.0.1') ? 'Local' : (ip.startsWith('192.168.') || ip.startsWith('10.') ? 'LAN' : 'WAN');
     const dlId = `${ip}-${Date.now()}`;
     const dlObj = { ip, creatorId: key || '-', file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
@@ -249,9 +268,9 @@ const server = http.createServer(async (req, res) => {
     const mime = { '.json': 'application/json', '.zip': 'application/zip', '.txt': 'text/plain', '.html': 'text/html', '.lua': 'text/plain' };
     res.setHeader('Content-Type', mime[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream');
     res.setHeader('Content-Length', total);
-    res.statusCode = 200;
+    res.statusCode = _part ? _part.status : 200;
 
-    const stream = fs.createReadStream(absolutePath);
+    const stream = fs.createReadStream(absolutePath, _part ? { start: _part.start, end: _part.end } : undefined);
     let bytesSentInInterval = 0;
     let intervalStart = Date.now();
 
@@ -338,6 +357,9 @@ async function testLocalReachability() {
         req.setTimeout(1000, () => { req.destroy(); r(false); });
     });
 }
+
+// Scheduled jobs and a graceful SIGTERM (docker stop, systemd).
+if (extras) extras.attach(server);
 
 server.listen(PORT, '0.0.0.0', async () => {
     console.clear();

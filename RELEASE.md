@@ -7,7 +7,7 @@ BMM ships through **BetterInstaller**. NSIS and MSI are no longer built.
 ## The commands
 
 ```bash
-npm run ci                # the eleven gates — run this before anything else
+npm run ci                # every gate (includes check-release-versions) — run this before anything else
 npm run build             # the app itself (no installer)
 npm run build:installer   # the installer, from whatever npm run build produced
 npm run release           # version gate, build, installer, then release:assets
@@ -184,19 +184,25 @@ whether to allow something.
 
 ## Updates
 
-Two paths exist, and they are not rivals:
+From 1.0.2 one dialog does it all (« Download update » / « Install now »): BMM downloads
+`BMM-Setup.exe`, checks it (see « Channels » below) and starts it.
 
-- **Installed by BetterInstaller** — BMM finds the maintenance binary next to itself
-  (`<install>/uninstall.exe`) and delegates the check to it. That path handles repair, update and
-  uninstall, and can apply a binary delta instead of the full package.
-- **Anything else** (dev runs, portable copies) — BMM's own incremental updater reads
-  `update-manifest.json` from the GitHub release, which `npm run build` generates.
+- **Installed by BetterInstaller** — BMM runs the checked `BMM-Setup.exe --update --wait-pid <pid>
+  --launch`, which updates the install in place. When the release cannot be read, BMM falls back
+  to the maintenance binary next to itself (`<install>/uninstall.exe --update`), which reads
+  `update.json` + `bmm.bpkg` and can apply a binary delta instead of the full package.
+- **Anything else** (dev runs, portable copies) — the same download and check, then the installer
+  runs interactively. Quick Update (interface and language files only) reads the language files
+  and `links.json` that `update-manifest.json` lists.
 
-`update-manifest.json` is **signed**. `npm run build` writes it unsigned into
-`dist/release-assets-v<version>/`; the release workflow then signs it with the publisher key
-(`node scripts/sign-update-manifest.mjs sign <file> --key private.key`), checks it against the key
-BMM pins (`… verify <file>`) and uploads it with the files it names. BMM refuses an unsigned,
-foreign, expired or not-newer manifest (`autoupdate.rs`, `verify_manifest_text`).
+`update-manifest.json` is **signed**, on every publish path. `npm run build` only writes an
+unsigned draft into `dist/release-assets-v<version>/`. `npm run release:assets`, the release
+workflow and `release.ps1` all rebuild it with `--installer Release/BMM-Setup.exe
+--require-installer` (so it lists exactly one installer, `BMM-Setup.exe`, with its SHA-256), sign
+it with the publisher key (`node scripts/sign-update-manifest.mjs sign <file> --key private.key`),
+check it against the key BMM pins (`… verify <file>`) and run `check-release-versions --artifacts`
+before anything is uploaded. BMM refuses an unsigned, foreign, expired or not-newer manifest
+(`autoupdate.rs`, `verify_manifest_text`).
 
 Both signed manifests — this one and BetterInstaller's `update.json` — expire after 7 days.
 `.github/workflows/resign-manifests.yml` renews them twice a week (secret `BMM_PRIVATE_KEY`; the
@@ -213,9 +219,10 @@ there is nothing to configure per install.
 ## Bridging older installs
 
 Three generations of BMM are out there, and each reads something different from the newest
-release. **Decision (1.0.2): keep publishing every one of them alongside the signed manifest**,
-rather than a one-off bridge release. They cost a few kilobytes per release, and dropping one
-strands every copy that reads only it.
+release. **Decision (1.0.2): keep publishing every asset each of them reads, alongside the signed
+manifest.** They cost a few kilobytes per release, and dropping one strands every copy that reads
+only it. On top of that, 0.9.11 copies get a bridge release, **0.9.12**, published first (see
+« Bridge 0.9.12 » below).
 
 | Installed | What it does on « update » | What it needs on the release |
 |---|---|---|
@@ -273,11 +280,12 @@ file, in this order (`UpdateInfo.verification`, shown in the dialog):
    SHA-256 of the exact bytes it showed (`confirm_sha256`); Rust runs those bytes (kept in memory,
    never on disk) and nothing else.
 
-**To publish:** BetterInstaller's `update.json` carries no installer checksum today (the published
-v1.0.1 one verifies with the pinned key but describes only `bmm.bpkg`, and says `1.0.0`). Until the
-release script adds the `installers` entry to the signed body, a release without
-`update-manifest.json` lands in case 3: installable, with the warning. Releases made with
-`release.ps1 -Publish` carry `update-manifest.json` and stay in case 1.
+**To publish:** every publish path (`npm run release`, `release.ps1 -Publish`, the tag workflow)
+ships the signed `update-manifest.json`, so a 1.0.2 release lands in case 1. BetterInstaller's
+release script now also writes the `installers` entry (`BMM-Setup.exe`, SHA-256, size) inside the
+signed body of `update.json` (`bpkg update-manifest --installer`), so case 2 holds too. Only the
+already published v1.0.1 (no manifest, an `update.json` that describes only `bmm.bpkg` and says
+`1.0.0`) lands in case 3: installable, with the warning.
 
 **How the installer starts:** in a fresh `%TEMP%\bmm_update_<uuid>\` folder, through
 ShellExecuteExW. When this copy was installed by BetterInstaller and the file is `BMM-Setup.exe`,
@@ -330,7 +338,9 @@ one switch in `index.html`, six i18n keys, the version, its release notes):
   then « Starting the installer »; a failure shows the reason with « Try again » and « Open the
   release page ».
 
-Commit `a44d1345` on `bridge-0.9.12` (on top of `1243ecc8`).
+Branch `bridge-0.9.12`; the updater work is commit `a44d1345` (on top of `1243ecc8`), followed by
+dialog fixes up to `00c7b1df` (translated « could not be checked » reasons, the navbar « Check for
+Updates » button).
 
 **Build it** (in the worktree; it has no `node_modules` yet):
 
@@ -392,6 +402,7 @@ uninstalled or deleted build left the scheme pointing at nothing.
 
 ## Checklist
 
+- [ ] The owner publishes: nobody else pushes a tag or creates a release
 - [ ] `npm run ci` green (includes `check-release-versions`)
 - [ ] Version bumped in `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` (+ `Cargo.lock`) **and** `installer.toml`
 - [ ] Changelog `Update/changelog_v<version>_EN.md` + `_FR.md` (CI uses the EN one as the release body)
@@ -404,6 +415,11 @@ uninstalled or deleted build left the scheme pointing at nothing.
 ### 1.0.2
 
 - Versions: 1.0.2 in all six sources (the gate is green).
+- Order: **0.9.12 first, as Latest**, then **1.0.2 as Latest** (it takes Latest from 0.9.12). Never
+  set 0.9.12 back to Latest afterwards (see « Bridge 0.9.12 »).
 - Publish as **Latest**, not a pre-release, with only `BMM-Setup.exe` as installer asset.
-- Re-sign `update.json` and `update-manifest.json` at publish time; `resign-manifests.yml` keeps them fresh afterwards.
+- Every asset: `BMM-Setup.exe`, `bmm.bpkg`, `update.json`, signed `update-manifest.json`,
+  `lang-*.json`, `links.json`. `check-release-versions --artifacts` passes on exactly these.
+- Re-sign `update.json` and `update-manifest.json` at publish time (both expire 7 days after
+  signing); `resign-manifests.yml` renews them twice a week afterwards.
 - Changelog: `Update/changelog_v1.0.2_EN.md` / `_FR.md`. Release comms drafts: `Release/1.0.2/`.

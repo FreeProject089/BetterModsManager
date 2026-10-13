@@ -25,11 +25,30 @@ three tags. Trust badges sit alongside the name:
 These badges are assigned by BMM based on **where the catalog came from**, never by what the
 JSON claims — a community catalog can't badge itself "Official".
 
+Each card also shows its **state** (installed, not installed, installing, updating, failed)
+and the one **next action** that fits it: **Install**, **Launch**, **Update**, or **Try again**
+after a failure. Click a card for its details: the description and the README are rendered as
+[B.MD](doc-page:reference/custom-markdown) through the safe path, so a catalogue cannot run code
+in BMM by writing a page.
+
+### Finding an app
+
+| Control | Choices |
+|---|---|
+| **Install state** | Any state, **Installed**, **Not installed**, **Update available**. |
+| **Sort** | **Catalog order**, **Name A to Z**, **Name Z to A**, **Smallest download**. |
+| Category, price, tags | Narrow the list further. |
+
+When a source cannot be reached, the page says so plainly, and the apps of every other source
+are still listed: one failing source no longer hides the others. Sources are cached and only
+read again when they changed.
+
 ## Installing
 
 Click **Install** and BMM downloads the app, **verifies it against the publisher's checksum
-when one is provided** (a mismatch is flagged and the install is blocked by default, so a
-tampered or corrupted download doesn't run), and records the installed version so it can offer
+when one is provided** (on a mismatch, or when there is no checksum at all, BMM stops and asks:
+**Cancel** leaves nothing installed, so a tampered or corrupted download doesn't run unless you
+choose to), and records the installed version so it can offer
 updates later.
 
 What "install" means depends on the download's type:
@@ -112,6 +131,11 @@ apps merge into the list; remove any that fail to load. The official catalog can
 **auto-import** community catalogs, so you often don't need to add anything by hand. Chains of
 imported catalogs are followed up to a total of **30 sources**, so a big community web of
 catalogs stays bounded.
+
+Every catalogue BMM reads, whatever its age or kind, goes through one versioned format, which
+also reads the signed feeds of BetterCommunity v2. The format is described in
+[Catalogue format](doc-page:reference/catalog-format), and a single address that brings in several
+catalogues at once is a [catalogue index](doc-page:reference/catalog-index).
 
 ## A catalogue that carries its apps
 

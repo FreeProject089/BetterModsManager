@@ -84,24 +84,37 @@
     </div>
 
     <div id="app-window-outer">
-        <!-- App Loader: the BMM logo, its name, the version, one thin progress line.
-             Animated by boot-loader.js (short; nothing moves under reduced motion); app.ts fades it
-             out and removes it once the app is up. Everything is visible without JS, so a
-             missing GSAP leaves a calm splash instead of an empty one. The logo is on its
-             own pale tile because the mark is half black and this screen usually is not; a
-             theme with a mascot (assets.mascot) replaces it, like every Tasky picture. -->
-        <div id="app-loader" role="status" aria-label="Better Mod Manager">
+        <!-- App Loader: the start-up intro. boot-loader.js picks the style (Settings → Graphics
+             & display: Classic « Convergence » with Tasky, the default / Logo / Off), animates
+             it and removes it when app.ts says BMM is ready. Everything readable is visible
+             without JS (a missing GSAP leaves a still splash, not an empty one); the purely
+             decorative layers (.ld-fx) start hidden. A theme with a mascot or a loader image
+             (assets.mascot / assets.loader) replaces #ld-logo, like every Tasky picture. -->
+        <div id="app-loader" role="status" aria-label="Better Mod Manager" aria-busy="true" data-intro="classic">
+            <div id="ld-bg-glow" class="ld-fx" aria-hidden="true"></div>
+            <div id="ld-flash" class="ld-fx" aria-hidden="true"></div>
             <div id="ld-stage">
                 <div id="ld-logo-wrap">
                     <div id="ld-logo-glow" aria-hidden="true"></div>
-                    <img id="ld-logo" src="assets/brand/bmm-logo-tile.svg" alt="" width="96" height="96">
+                    <div id="ld-halo2" class="ld-fx ld-ring" aria-hidden="true"></div>
+                    <div id="ld-halo" class="ld-fx ld-ring" aria-hidden="true"></div>
+                    <div id="ld-pulse" class="ld-fx ld-ring" aria-hidden="true"></div>
+                    <div id="ld-wave" class="ld-fx ld-ring" aria-hidden="true"></div>
+                    <div id="ld-orb-0" class="ld-fx ld-orb" aria-hidden="true"></div>
+                    <div id="ld-orb-1" class="ld-fx ld-orb" aria-hidden="true"></div>
+                    <div id="ld-orb-2" class="ld-fx ld-orb" aria-hidden="true"></div>
+                    <img id="ld-logo" src="assets/brand/tasky-splash.webp" alt="" width="80" height="80" draggable="false">
+                    <div id="ld-flare" class="ld-fx" aria-hidden="true"></div>
                 </div>
-                <div id="ld-brand" aria-hidden="true"><span class="ld-w1">Better</span><span class="ld-w2">Mod.Manager</span></div>
+                <div id="ld-brand" aria-hidden="true">
+                    <img id="ld-mark" src="assets/brand/bmm-logo-tile.svg" alt="" width="20" height="20" draggable="false">
+                    <span class="ld-word ld-w1">Better</span><span class="ld-word ld-w2">Mod.Manager</span>
+                </div>
                 <div id="ld-ver" aria-hidden="true"></div>
                 <!-- By BetterCommunity. Not translated: a name and a preposition. -->
                 <div id="ld-by">
                     By
-                    <img src="assets/BC_white.webp" alt="" class="ld-by-mark">
+                    <img src="assets/BC_white.webp" alt="" class="ld-by-mark" draggable="false">
                     <b>BetterCommunity</b>
                 </div>
             </div>
@@ -109,47 +122,158 @@
         </div>
 
         <style>
+            /* Shared ─ the frame. Only transform and opacity are ever animated. */
             #app-loader {
                 position: fixed; inset: 0; z-index: 9999; overflow: hidden;
                 display: flex; align-items: center; justify-content: center;
                 background: var(--bmm-loader-bg);
-                transition: opacity 0.45s ease, visibility 0.45s ease;
+                user-select: none; -webkit-user-select: none; cursor: default;
+                transition: opacity var(--bmm-intro-duration, 0.65s) ease, visibility var(--bmm-intro-duration, 0.65s) ease;
             }
-            #ld-stage { display: flex; flex-direction: column; align-items: center; }
-            #ld-logo-wrap { position: relative; width: 96px; height: 96px; }
-            #ld-logo-glow {
-                position: absolute; inset: -44px; border-radius: 50%; pointer-events: none;
-                background: radial-gradient(circle, rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.22) 0%, transparent 66%);
-            }
-            #ld-logo {
-                position: relative; display: block; width: 96px; height: 96px; border-radius: 24px;
-                object-fit: contain; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
-            }
-            #ld-brand {
-                margin-top: 22px; display: flex; align-items: baseline; gap: 7px;
-                font-family: var(--font-sans, system-ui, sans-serif); font-style: italic; line-height: 1;
-            }
-            .ld-w1 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: var(--bmm-brand-better); }
-            .ld-w2 { font-size: 21px; font-weight: 900; letter-spacing: -0.01em; color: var(--bmm-brand-mm); }
+            #app-loader.ld-out { opacity: 0; visibility: hidden; pointer-events: none; }
+            #app-loader.ld-still { transition-duration: 0.15s; }
+            #ld-stage { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+            #ld-logo-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+            #ld-logo { position: relative; z-index: 3; display: block; object-fit: contain; }
+            #ld-logo-glow { position: absolute; border-radius: 50%; pointer-events: none; }
             #ld-ver {
-                min-height: 1.2em; margin-top: 10px; font-family: var(--bmm-font-mono, monospace);
+                min-height: 1.2em; font-family: var(--bmm-font-mono, 'JetBrains Mono', monospace);
                 font-size: 10.5px; letter-spacing: 0.12em; color: var(--bmm-text-muted);
             }
             #ld-by {
-                margin-top: 16px; display: inline-flex; align-items: center; gap: 6px;
+                display: inline-flex; align-items: center; gap: 6px;
                 font-size: 10px; letter-spacing: 0.08em; color: var(--bmm-text-muted);
             }
             #ld-by b { font-weight: 600; color: var(--bmm-text-secondary); }
             .ld-by-mark { display: block; width: 14px; height: 14px; padding: 1px; border-radius: 4px; background: #fff; }
-            #ld-prog-track {
+            #ld-prog { width: 100%; height: 100%; border-radius: inherit; transform-origin: 0 50%; transform: scaleX(0); }
+            .ld-fx { position: absolute; pointer-events: none; opacity: 0; }
+            .ld-ring { border-radius: 50%; }
+
+            /* Classic ─ « Convergence ». Rings are drawn at their largest size and scaled down to
+               start, so they stay sharp at any DPI; glows are gradients (no filter: blur). */
+            #app-loader[data-intro="classic"] #ld-logo-wrap { width: 100px; height: 100px; }
+            #app-loader[data-intro="classic"] #ld-logo { width: 80px; height: 80px; backface-visibility: visible; }
+            #ld-bg-glow {
+                width: 640px; height: 640px; left: 50%; top: 50%; margin: -320px 0 0 -320px; border-radius: 50%;
+                background: radial-gradient(circle,
+                    rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.07) 0%,
+                    rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.035) 38%,
+                    transparent 68%);
+            }
+            #ld-flash { inset: 0; background: rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.14); }
+            #app-loader[data-intro="classic"] #ld-logo-glow {
+                inset: -64px;
+                background: radial-gradient(circle,
+                    rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.26) 0%,
+                    rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.12) 34%,
+                    transparent 66%);
+            }
+            #ld-halo {
+                inset: -10px; border: 1.5px solid rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.55);
+                box-shadow: 0 0 22px rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.35), inset 0 0 6px rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.2);
+            }
+            #ld-halo2 {
+                inset: -22px; border: 1px solid rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.25);
+                box-shadow: 0 0 14px rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.15);
+            }
+            #ld-pulse {   /* 2.6 × the halo; starts at scale 0.37 */
+                width: 312px; height: 312px; left: 50%; top: 50%; margin: -156px 0 0 -156px;
+                border: 1.5px solid rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.6);
+            }
+            #ld-wave {    /* the shockwave at full size; starts at scale 0.02 */
+                width: 260px; height: 260px; left: 50%; top: 50%; margin: -130px 0 0 -130px;
+                border: 3px solid rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.9);
+                box-shadow: 0 0 18px rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.5);
+            }
+            .ld-orb { left: 50%; top: 50%; border-radius: 50%; z-index: 4; }
+            #ld-orb-0 { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: var(--bmm-cyan); box-shadow: 0 0 14px 3px rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.7); }
+            #ld-orb-1 { width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; background: var(--bmm-accent); box-shadow: 0 0 12px 3px rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.7); }
+            #ld-orb-2 { width: 6px; height: 6px; margin: -3px 0 0 -3px; background: var(--bmm-brand-mm-2); box-shadow: 0 0 11px 3px rgba(251, 191, 36, 0.7); }
+            #ld-flare {   /* Tasky arrives « hot »: was filter: brightness(4) blur(6px), repainted every frame */
+                inset: -8px; z-index: 4; border-radius: 50%;
+                background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.55) 38%, transparent 70%);
+            }
+            #app-loader[data-intro="classic"] #ld-brand {
+                margin-top: 16px; display: flex; align-items: baseline; gap: 6px; perspective: 400px;
+                font-family: 'Helvetica Now Text', Helvetica, Arial, var(--font-sans, system-ui), sans-serif; font-size: 15px; line-height: 1.2;
+            }
+            #ld-mark { display: none; }
+            #app-loader[data-intro="classic"] #ld-mark {
+                display: block; width: 20px; height: 20px; align-self: center; border-radius: 5px;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+            }
+            .ld-word, .ld-char { display: inline-block; }
+            #app-loader[data-intro="classic"] .ld-w1 { font-weight: 300; letter-spacing: 0.17em; color: var(--bmm-text-primary); }
+            #app-loader[data-intro="classic"] .ld-w2 { font-weight: 700; letter-spacing: 0.09em; color: var(--bmm-brand-mm); }
+            /* The amber gradient sits on each letter (a clip on the word would not reach letters
+               that are their own layer while they move). */
+            #app-loader[data-intro="classic"] .ld-w2,
+            #app-loader[data-intro="classic"] .ld-w2 .ld-char {
+                background: linear-gradient(110deg, var(--bmm-brand-mm-2) 0%, var(--bmm-brand-mm) 100%);
+                -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+            }
+            #app-loader[data-intro="classic"] .ld-w2:has(.ld-char) { background: none; }
+            /* Gradient text is transparent glyphs over a clipped background: where the background
+               does not paint (Windows high contrast, print), the word would vanish. */
+            @media (forced-colors: active), print {
+                #app-loader[data-intro="classic"] .ld-w2,
+                #app-loader[data-intro="classic"] .ld-w2 .ld-char { -webkit-text-fill-color: currentColor; background: none; }
+            }
+            #app-loader[data-intro="classic"] #ld-ver { margin-top: 9px; font-size: 10px; }
+            #app-loader[data-intro="classic"] #ld-by { margin-top: 14px; }
+            #app-loader[data-intro="classic"] #ld-prog-track {
+                position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+                background: rgba(var(--bmm-surface-r, 255), var(--bmm-surface-g, 255), var(--bmm-surface-b, 255), 0.05);
+            }
+            #app-loader[data-intro="classic"] #ld-prog {
+                background: linear-gradient(90deg, var(--bmm-cyan) 0%, var(--bmm-accent) 55%, var(--bmm-brand-mm-2) 100%);
+                border-radius: 0 1px 1px 0;
+            }
+            .ld-ripple {
+                position: absolute; z-index: 10; width: 108px; height: 108px; margin: -54px 0 0 -54px;
+                border-radius: 50%; pointer-events: none;
+                border: 1.5px solid rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.8);
+                box-shadow: 0 0 10px rgba(var(--bmm-cyan-r), var(--bmm-cyan-g), var(--bmm-cyan-b), 0.4);
+            }
+
+            /* Logo ─ the short entrance centred on the BMM logo. The logo sits on its own pale
+               tile because the mark is half black and this screen usually is not. */
+            #app-loader[data-intro="logo"] .ld-fx { display: none; }
+            #app-loader[data-intro="logo"] #ld-logo-wrap { width: 96px; height: 96px; }
+            #app-loader[data-intro="logo"] #ld-logo-glow {
+                inset: -44px;
+                background: radial-gradient(circle, rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), 0.22) 0%, transparent 66%);
+            }
+            #app-loader[data-intro="logo"] #ld-logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32); }
+            #app-loader[data-intro="logo"] #ld-brand {
+                margin-top: 22px; display: flex; align-items: baseline; gap: 7px;
+                font-family: var(--font-sans, system-ui, sans-serif); font-style: italic; line-height: 1;
+            }
+            #app-loader[data-intro="logo"] .ld-w1 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: var(--bmm-brand-better); }
+            #app-loader[data-intro="logo"] .ld-w2 { font-size: 21px; font-weight: 900; letter-spacing: -0.01em; color: var(--bmm-brand-mm); }
+            #app-loader[data-intro="logo"] #ld-ver { margin-top: 10px; }
+            #app-loader[data-intro="logo"] #ld-by { margin-top: 16px; }
+            #app-loader[data-intro="logo"] #ld-prog-track {
                 position: absolute; left: 50%; bottom: 52px; width: 168px; height: 3px; margin-left: -84px;
                 border-radius: 999px; overflow: hidden; background: var(--bmm-s10);
             }
-            #ld-prog { width: 0; height: 100%; border-radius: inherit; background: var(--bmm-accent); }
-            /* Reduced motion (the OS, or Settings → Graphics « fewer animations »): no tweens at
-               all (boot-loader.js), and the progress line, which only exists to move, goes. */
-            @media (prefers-reduced-motion: reduce) { #ld-prog-track { display: none; } }
-            .ld-still #ld-prog-track { display: none; }
+            #app-loader[data-intro="logo"] #ld-prog { background: var(--bmm-accent); }
+
+            /* Off ─ the theme's background only. */
+            #app-loader[data-intro="off"] #ld-stage,
+            #app-loader[data-intro="off"] #ld-prog-track,
+            #app-loader[data-intro="off"] .ld-fx { display: none; }
+
+            /* Still (reduced motion: the OS, Settings → Graphics « Reduce animations », a window
+               that starts hidden, or no GSAP): the picture without the show. Decorations and the
+               progress line, which only exist to move, are not drawn. */
+            #app-loader.ld-still .ld-fx,
+            #app-loader.ld-still #ld-prog-track { display: none; }
+            @media (prefers-reduced-motion: reduce) {
+                #app-loader .ld-fx, #app-loader #ld-prog-track { display: none; }
+                #app-loader { transition-duration: 0.15s; }
+            }
         </style>
 
         <script src="boot-loader.js"></script>
@@ -1053,7 +1177,7 @@
                                     <span class="repo-group-t" data-i18n="repo.simple.hostTitle">Host a repo</span>
                                     <span class="repo-group-sub" data-i18n="repo.simple.hostSub">Others sync from the address you share.</span>
                                 </div>
-                            <div class="repo-card repo-card--green rp-plain">
+                            <div class="repo-card repo-card--green rp-plain rp-main">
                                 <div class="repo-card-body">
                                     <ol class="rp-flow" id="repo-host-flow" aria-label="Hosting steps">
                                         <li class="rp-flow-step" data-flow-step="folder"><span class="rp-flow-n">1</span><span class="rp-flow-t" data-i18n="repo.flow.folder">Pick the folder</span></li>
@@ -1064,7 +1188,7 @@
 
                                     <div class="rp-hstep" data-flow-block="folder">
                                         <div class="form-group" style="margin-bottom:12px;">
-                                            <label class="form-label" style="margin-bottom:4px;"
+                                            <label class="form-label rp-step-h" data-step="1" for="repo-host-path"
                                                 data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
                                             <div class="path-picker">
                                                 <input type="text" class="form-input" id="repo-host-path"
@@ -1096,6 +1220,7 @@
                                     </div>
 
                                     <div class="rp-hstep" data-flow-block="start">
+                                        <div class="rp-step-h" data-step="3" data-i18n="repo.flow.start">Start the server</div>
                                         <div class="repo-status-bar rp-srv-status" role="status">
                                             <span id="repo-server-status-dot" class="rp-srv-dot" aria-hidden="true"></span>
                                             <span id="repo-server-status-label" class="rp-srv-label" data-i18n="repo.serverOffline">...</span>
@@ -1112,8 +1237,8 @@
                                         <div id="repo-server-loading-bar" class="rp-indeterminate" style="display:none;"><span></span></div>
                                     </div>
 
-                                    <section class="rp-run" id="repo-run-panel" aria-labelledby="repo-run-h">
-                                        <h4 class="rp-sub-h" id="repo-run-h" data-i18n="repo.run.title">Your server</h4>
+                                    <section class="rp-run rp-live" id="repo-run-panel" aria-labelledby="repo-run-h">
+                                        <h4 class="rp-sub-h rp-live-h" id="repo-run-h"><span class="rp-live-dot" aria-hidden="true"></span><span data-i18n="repo.run.title">Your server</span></h4>
                                         <div id="repo-server-stats-container" class="rp-stats" style="display:none;">
                                             <div class="rp-stat">
                                                 <span class="rp-stat-l" data-i18n="repo.stat.downloads">Downloads</span>
@@ -1940,7 +2065,7 @@
                                         <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.45;" data-i18n="repo.hub.accessHint">Set a password and the dashboard asks for it before anyone can manage the hub. Leave blank to keep the dashboard open on your local network.</div>
                                     </section>
 
-                                    <div id="repo-hub-result" style="display:none;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;font-size:12px;color:var(--green);line-height:1.6;"></div>
+                                    <div id="repo-hub-result" class="rp-result rp-tone--ok" style="display:none;"></div>
 
                                     <button class="btn btn-primary" id="btn-generate-repo-hub" disabled data-i18n="repo.hub.generate" style="align-self:flex-end;">Generate hub server</button>
                                 </div>
@@ -2047,13 +2172,13 @@
                                 <span class="repo-group-t" data-i18n="repo.groupJoin">Rejoindre un repo</span>
                                 <span class="repo-group-sub" data-i18n="repo.groupJoinSub">Coller l'adresse qu'on vous a donn&#233;e. Rien n'est &#233;crit avant l'aper&#231;u.</span>
                             </div>
-                            <div class="repo-card repo-card--accent rp-plain">
+                            <div class="repo-card repo-card--accent rp-plain rp-main">
                                 <div class="repo-card-body">
                                     <p class="rp-lede"
                                         data-i18n="repo.syncDesc">...</p>
 
                                     <div class="form-group" style="margin-bottom:4px;">
-                                        <label class="form-label" style="margin-bottom:4px;"
+                                        <label class="form-label rp-step-h" data-step="1" for="repo-sync-url"
                                             data-i18n="repo.url">...</label>
                                         <div class="path-picker rp-url-row">
                                             <input type="text" class="form-input" id="repo-sync-url"
@@ -2166,7 +2291,7 @@
                                     </div>
 
                                     <div id="repo-sync-paths-section">
-                                        <div class="rp-sub-h rp-sub-h--rule" data-i18n="repo.syncFolders">...</div>
+                                        <div class="rp-step-h rp-step-h--rule" data-step="2" data-i18n="repo.syncFolders">...</div>
 
                                         <div class="form-group" style="margin-bottom:10px;">
                                             <label class="form-label" style="margin-bottom:4px;"
@@ -2232,7 +2357,7 @@
                                                 <span id="repo-sync-pause-text" data-i18n="common.pause">Pause</span>
                                             </button>
                                             <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync"
-                                                style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
+                                                style="display:none;flex:1;justify-content:center;gap:6px">
                                                 <svg class="ic ic-close" data-icon="close" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                                 <span data-i18n="common.cancel">Annuler</span>
                                             </button>

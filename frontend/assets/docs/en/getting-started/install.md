@@ -124,34 +124,98 @@ off. Delete it by hand if you really want a blank slate — and **export first**
 
 ## Which build?
 
-**Stable**, unless you have a reason. In **Settings → Updates** you can opt into **pre-releases**:
-they get fixes first and bugs first. That's a real trade, which is why it's a toggle and not the
-default. If you like being early and don't mind reporting the occasional rough edge, turn it on; if
-you just want your mods to work, leave it off.
+**Stable**, unless you have a reason. **Settings → Auto Update → Update channel** has two
+choices:
+
+| Channel | What you get |
+|---|---|
+| **Stable** | Tested releases only. The default. |
+| **Pre-release** | Beta builds too, before they are final: fixes first, and bugs first. |
+
+A pre-release build you installed keeps following the pre-release channel, so it is never
+offered an older stable build as an "update".
 
 ---
 
-## Auto-update
+## Updating BMM
 
-On by default. BMM checks, tells you, and updates itself. You can turn it off in the same place — but
-then update by hand, because a mod manager that's a year behind the repos it reads will eventually
-disagree with them.
+BMM checks for a new version when it starts. **Check in the background** (same card) adds a
+check while it stays open: **Off**, **Every 6 h** or **Daily**. The card also shows when the
+last check ran, and whether it failed.
 
-An update is verified before it can touch your install: the package **must** carry a valid Ed25519
-signature for the publisher key baked into the installer, or it is refused *before* the install
-directory is touched. The installer then snapshots and rolls back if the install itself fails. See
-[Security](doc-page:how-it-works/security).
+When a version is available, BMM shows its notes and three choices:
 
-Where it looks, in order: the manifest on
-[GitHub releases](https://github.com/FreeProject089/BetterModsManager/releases/latest), then the
-mirror on BetterCommunity. It fetches every source it can reach and takes the newest version any of
-them advertises, so one being down never blocks an update. When the release offers a delta, only the
-changed parts are downloaded.
+| Button | What happens |
+|---|---|
+| **Install now** | Download, check, install. Everything happens in BMM: no trip to GitHub. |
+| **Install on next launch** | Downloaded and checked now, installed the next time you start BMM (you get a few seconds to say **Not now** or **Discard**). |
+| **Remind me tomorrow** | Nothing is downloaded. BMM asks again tomorrow. |
+
+The window then shows the steps: **Download** (size, speed, time left), **Verify**, **Install**.
+
+### What is checked before the installer runs
+
+The installer is checked before it starts, in this order:
+
+1. The release's signed **`update-manifest.json`**: it lists `BMM-Setup.exe` with its SHA-256,
+   signed with the publisher's key built into BMM.
+2. Otherwise, the release's signed **`update.json`**, which also lists `BMM-Setup.exe` with its
+   SHA-256.
+3. Otherwise, BMM says plainly what could not be checked (no `update.json`, an
+   `update.json` it cannot trust, or no checksum for the installer) and you choose
+   **Install anyway** or **Cancel**. **Cancel** is the default.
+
+BetterInstaller then checks the package itself: it must carry a valid Ed25519 signature for the
+publisher key built into the installer, or it is refused before the install folder is touched,
+and a failed install is rolled back.
+
+The window says which check passed. A downloaded file that does **not** match what the release
+declares is shown in red: it may be corrupted or tampered with, and installing it is not
+recommended.
+
+:::note[If you installed BMM with BetterInstaller]
+The update goes through BetterInstaller with no questions: BMM runs `BMM-Setup.exe --update`,
+which waits for BMM to close, installs over it keeping your folder, components, shortcuts and
+choices, and starts BMM again. The same updater can be run by hand or from a script: see the
+[BetterInstaller command line](https://github.com/FreeProject089/BetterInstaller/blob/master/GUIDE.md#command-line-unattended-install-update-repair-modify-uninstall).
+:::
+
+### When it does not go through
+
+A failure stays in the window, with the reason in words (permission prompt declined, file
+still held by an antivirus, access denied by a security policy, an installer that closed at
+once with an error code), and two buttons: **Try again** and **Download from the release page**.
+An installer that needs administrator rights gets the normal Windows permission prompt.
+
+### Coming from an older version
+
+| You have | What happens |
+|---|---|
+| **1.0.x** | The normal update above. |
+| **0.9.11** | Accept the update to **0.9.12**, then the update to 1.0.2 it offers next. 0.9.12 is a bridge release: only its updater changed, so that it sees the 1.0 line and checks the installer before running it. |
+| **Anything older** | Download `BMM-Setup.exe` from the release page and run it. Your data is kept. |
+
+A jump to a new major version (0.9 → 1.0) is always a full install with the installer, never a
+file-by-file patch: the data folder moves, and BMM copies your data across on first launch
+(see [Where BMM puts things](#where-bmm-puts-things)).
+
+### Turning it off
+
+Untick **Check for updates automatically** in **Settings → Auto Update**, and nothing is
+checked at start-up. Then update by hand, because a mod manager a year behind the repos it
+reads will eventually disagree with them. A build can also have updates switched off entirely
+(`DisableUpdate` in [`app.cfg`](doc-page:reference/app-cfg)).
+
+Where BMM looks: the release on
+[GitHub](https://github.com/FreeProject089/BetterModsManager/releases), then the mirror on
+BetterCommunity, and it keeps the newest version any of them advertises, so one being down
+never blocks an update. The rules a signed manifest must pass are in
+[Security](doc-page:how-it-works/security#bmms-own-quick-update-is-signed-too).
 
 !!! note "Rate-limited on GitHub?"
 
     Update and download checks hit GitHub. If you ever see rate-limit errors, add an optional
-    **GitHub token** in **Settings → Identity & API** — it raises the limit. It only needs read
+    **GitHub token** in **Settings → Identity & API**: it raises the limit. It only needs read
     scope, it is stored locally, and it is never sent anywhere but GitHub. Purely optional; most
     people never need it.
 

@@ -453,6 +453,8 @@ registerSearchProvider('settings', (q): SearchHit[] => {
       sub: tr({ en: 'Settings', fr: 'Paramètres' }),
       run: () => {
         (document.querySelector('.nav-item[data-view="settings"]') as HTMLElement | null)?.click();
+        // A card hidden from the layout (card-order.ts) is shown for this visit: you asked for it.
+        card.classList.add('stg-card-peek');
         setTimeout(() => card.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
       },
     });
