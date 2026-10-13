@@ -1,0 +1,53 @@
+{
+  "categories": [
+    {
+      "key": "usage",
+      "name": { "en": "Usage statistics", "fr": "Statistiques d'utilisation" },
+      "description": { "en": "Pages and features used, clicks, session length. Never what you type.", "fr": "Pages et fonctions utilisées, clics, durée des sessions. Jamais ce que vous tapez." }
+    },
+    {
+      "key": "perf",
+      "name": { "en": "Performance", "fr": "Performance" },
+      "description": { "en": "FPS, memory use and load times.", "fr": "FPS, mémoire utilisée et temps de chargement." }
+    },
+    {
+      "key": "errors",
+      "name": { "en": "Errors, live", "fr": "Erreurs en direct" },
+      "description": { "en": "Errors and crashes: the message, where it happened, BMM version and OS.", "fr": "Erreurs et plantages : le message, l'endroit, la version de BMM et le système." }
+    },
+    {
+      "key": "laya",
+      "name": { "en": "Laya usage statistics", "fr": "Statistiques Laya" },
+      "description": { "en": "Which Laya feature, provider and speed, suggestions kept or rejected per field. Never any text.", "fr": "Fonction de Laya utilisée, fournisseur, vitesse, suggestions gardées ou refusées par champ. Jamais de texte." }
+    },
+    {
+      "key": "replay",
+      "name": { "en": "Session replay (masked)", "fr": "Replay de session (masqué)" },
+      "description": { "en": "The BMM window only: clicks, scrolling, navigation. Typed text is masked.", "fr": "La fenêtre de BMM seule : clics, défilement, navigation. Le texte saisi est masqué." }
+    }
+  ],
+  "events": [
+    { "name": "$identify", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "os", "os_caption", "arch", "cpu", "cpu_cores", "ram_gb", "gpu", "is_vm", "disk_count", "disk_total_gb", "monitor_count", "primary_resolution", "locale", "app_version", "first_seen"] },
+    { "name": "session_start", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "ts", "first_seen"] },
+    { "name": "session_end", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "duration_sec", "views_visited", "journey"] },
+    { "name": "page_enter", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "from", "depth", "first_visit"] },
+    { "name": "page_leave", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "dwell_ms", "to"] },
+    { "name": "modal_open", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "name", "title"] },
+    { "name": "app_catalog", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "pages", "tabs", "modals", "diagrams", "guides", "labels"] },
+    { "name": "click", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "text", "tag", "id"] },
+    { "name": "outbound", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "url"] },
+    { "name": "copy", "category": "usage", "properties": ["session_id", "seq", "view", "modal"] },
+    { "name": "form_submit", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "id"] },
+    { "name": "input_change", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "field"] },
+    { "name": "repo_connect", "category": "usage", "properties": ["session_id", "seq", "view", "modal", "host"] },
+    { "name": "perf", "category": "perf", "properties": ["session_id", "seq", "view", "modal", "fps_avg", "frametime_avg_ms", "frametime_worst_ms", "js_heap_mb"] },
+    { "name": "webvitals", "category": "perf", "properties": ["session_id", "seq", "view", "modal", "lcp", "fcp", "cls", "inp", "ttfb", "response"] },
+    { "name": "benchmark", "category": "perf", "properties": ["session_id", "seq", "view", "modal", "source", "mode", "dataset_bytes", "total_ms", "ops"] },
+    { "name": "error", "category": "errors", "properties": ["session_id", "seq", "view", "modal", "message"] },
+    { "name": "$log_js", "category": "errors", "properties": ["session_id", "seq", "view", "modal", "level", "msg"] },
+    { "name": "$log_rust", "category": "errors", "properties": ["session_id", "seq", "view", "modal", "log"] },
+    { "name": "laya_use", "category": "laya", "properties": ["session_id", "seq", "view", "modal", "feature", "provider", "ok", "latency_ms", "latency_bucket", "error", "suggested_fields", "suggested", "abstained", "hits", "low_confidence"] },
+    { "name": "laya_feedback", "category": "laya", "properties": ["session_id", "seq", "view", "modal", "feature", "field", "outcome", "source", "provider"] },
+    { "name": "laya_model", "category": "laya", "properties": ["session_id", "seq", "view", "modal", "action", "ok", "error"] }
+  ]
+}

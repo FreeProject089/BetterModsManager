@@ -713,6 +713,10 @@ pub struct BcConfig {
     /// `BCv2Base=https://host[:port]`: where BetterCommunity v2 lives while it runs beside v1
     /// (staging). Empty = the same root as v1 (after the cut-over, one domain serves both).
     pub v2_base: String,
+    /// True when app.cfg carries a `BCApiVersion` line at all. app.cfg wins over links.json
+    /// (`bc_api`), so an explicit `BCApiVersion=v1` pins this install to v1 whatever the remote
+    /// switch says; without the line the remote switch may select v2 (bc_v2.rs `pick_switch`).
+    pub api_version_set: bool,
 }
 
 /// `BCApiVersion` as written: `v2` / `2` (any case) is v2, everything else v1.
@@ -732,6 +736,7 @@ pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
     let mut base_url = String::new();
     let mut api_version = "v1";
     let mut v2_base = String::new();
+    let mut api_version_set = false;
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             for line in content.lines() {
@@ -739,7 +744,10 @@ pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
                     match k.trim().to_lowercase().as_str() {
                         "bctestmode" => test_mode = v.trim().eq_ignore_ascii_case("true"),
                         "bctestbase" => base_url = v.trim().to_string(),
-                        "bcapiversion" => api_version = bc_api_version_of(v),
+                        "bcapiversion" => {
+                            api_version = bc_api_version_of(v);
+                            api_version_set = !v.trim().is_empty();
+                        }
                         "bcv2base" => v2_base = v.trim().to_string(),
                         _ => {}
                     }
@@ -748,7 +756,7 @@ pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
         }
     }
     info!("[BC] test_mode={}, base_url='{}', api={}, v2_base='{}'", test_mode, base_url, api_version, v2_base);
-    BcConfig { test_mode, base_url, api_version: api_version.to_string(), v2_base }
+    BcConfig { test_mode, base_url, api_version: api_version.to_string(), v2_base, api_version_set }
 }
 
 /// `DocsReplays=false` (or `off`) in app.cfg: Help & Other shows no session replay

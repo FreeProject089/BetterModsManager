@@ -81,6 +81,13 @@ mod commands {
     // the same model, the same caps and the same idle unload — and, like the app, offline.
     #[path = "../../commands/ai_embedded.rs"]
     pub mod ai_embedded;
+    // The BetterCommunity v2 mode is decided by the running app (links.json, health check). The
+    // CLI never opens such a session, so it reads the model from the v1 mirrors, as before.
+    pub mod bc_v2 {
+        pub fn effective_v2_root() -> Option<String> {
+            None
+        }
+    }
     // « Laya v2 »: the questions, the criteria and how the answers are combined — and the
     // offline « Ask Laya » index. Mounted so the CLI asks exactly what the app asks.
     #[path = "../../commands/ai_laya.rs"]

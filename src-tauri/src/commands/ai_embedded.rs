@@ -72,6 +72,27 @@ pub const PACK_URLS: &[&str] = &[
     "https://github.com/FreeProject089/BetterModsManager/releases/download/laya-model-1/laya-offline-1.zip",
     "https://bettercommunity.ch/api/assets/bmm-laya-offline",
 ];
+/// The mirrors this session tries, in order: [`PACK_URLS`], and in BetterCommunity v2 mode the
+/// same platform asset on the v2 root (ADR 0019: `/api/assets/bmm-laya-offline`, a redirect to
+/// the release file) just before the v1 one. The pin below is unchanged: a mirror can serve a
+/// bad file, never get it installed.
+pub fn pack_mirrors() -> Vec<String> {
+    pack_mirrors_for(crate::commands::bc_v2::effective_v2_root().as_deref())
+}
+
+pub fn pack_mirrors_for(v2_root: Option<&str>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for u in PACK_URLS {
+        if let (Some(root), Some(i)) = (v2_root, u.find("/api/assets/")) {
+            let v2 = format!("{}{}", root.trim_end_matches('/'), &u[i..]);
+            if v2 != *u && !out.contains(&v2) {
+                out.push(v2);
+            }
+        }
+        out.push(u.to_string());
+    }
+    out
+}
 pub const PACK_SHA256: &str = "e276b90f3e16de8273fa34cc202ea140b64cd08345072fcea19fc5df31de62b5";
 pub const PACK_SIZE: u64 = 327_125_837;
 
@@ -867,7 +888,7 @@ pub fn status() -> Status {
         outdated: found.is_none() && [install_dir(), user_dir()].iter().flatten().any(|d| looks_outdated(d)),
         needed_bytes: space_needed(partial),
         free_bytes: user_dir().and_then(|d| free_space(&d)),
-        mirrors: PACK_URLS.iter().map(|u| u.to_string()).collect(),
+        mirrors: pack_mirrors(),
         packs: packs(),
         folder: found.as_ref().map(|(d, _)| d.clone()).or_else(|| user_dir().and_then(|d| d.ancestors().find(|a| a.is_dir()).map(Path::to_path_buf))).map(|d| d.display().to_string()).unwrap_or_default(),
     }
@@ -1202,7 +1223,7 @@ pub fn install_user_copy(progress: &dyn Fn(Progress), cancel: &AtomicBool) -> Re
     let mut ok = false;
     // The mirrors in order: a GitHub outage (or a network that blocks it) falls through to
     // BetterCommunity. The pin is the same, so a mirror can serve a bad file, never install it.
-    for (i, url) in PACK_URLS.iter().enumerate() {
+    for (i, url) in pack_mirrors().iter().enumerate() {
         match fetch_pack(i, url, &part, progress, cancel) {
             Ok(()) => {
                 ok = true;
@@ -1500,6 +1521,18 @@ mod tests {
         for u in PACK_URLS {
             assert!(u.starts_with("https://"), "{}", u);
         }
+    }
+
+    #[test]
+    fn v2_mode_adds_the_v2_asset_before_the_v1_one_and_v1_changes_nothing() {
+        assert_eq!(pack_mirrors_for(None), PACK_URLS.iter().map(|u| u.to_string()).collect::<Vec<_>>());
+        let m = pack_mirrors_for(Some("https://v2.bettercommunity.ch"));
+        assert_eq!(m.len(), PACK_URLS.len() + 1);
+        assert_eq!(m[0], PACK_URLS[0], "GitHub stays first");
+        assert_eq!(m[1], "https://v2.bettercommunity.ch/api/assets/bmm-laya-offline");
+        assert_eq!(m[2], PACK_URLS[1]);
+        // after the cut-over one domain serves both: no duplicate
+        assert_eq!(pack_mirrors_for(Some("https://bettercommunity.ch")).len(), PACK_URLS.len());
     }
 
     /// BetterInstaller downloads the same pack with the same pin (when the installer sources sit

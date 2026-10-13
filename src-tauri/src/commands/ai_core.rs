@@ -515,13 +515,19 @@ fn memory_secrets() -> &'static Mutex<HashMap<String, String>> {
 
 #[cfg(target_os = "windows")]
 fn dpapi(data: &[u8], protect: bool) -> Result<Vec<u8>, String> {
+    dpapi_with(data, protect, b"BetterModsManager/ai-secrets/v1")
+}
+
+/// DPAPI (user scope) with the caller's own entropy, so two stores never open each other's
+/// blobs. Also used by the BetterCommunity v2 sign-in (bc_v2_auth.rs).
+#[cfg(target_os = "windows")]
+pub(crate) fn dpapi_with(data: &[u8], protect: bool, entropy_bytes: &[u8]) -> Result<Vec<u8>, String> {
     use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{
         CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
-    const ENTROPY: &[u8] = b"BetterModsManager/ai-secrets/v1";
     let input = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
-    let entropy = CRYPT_INTEGER_BLOB { cbData: ENTROPY.len() as u32, pbData: ENTROPY.as_ptr() as *mut u8 };
+    let entropy = CRYPT_INTEGER_BLOB { cbData: entropy_bytes.len() as u32, pbData: entropy_bytes.as_ptr() as *mut u8 };
     let mut out = CRYPT_INTEGER_BLOB::default();
     // SAFETY: every pointer outlives the call; `out` is allocated by the API, copied, wiped and
     // released with LocalFree.
@@ -652,12 +658,12 @@ fn store_raw(dir: &Path, name: &str, value: &str) -> Result<&'static str, String
 }
 
 #[cfg(target_os = "windows")]
-fn hex_encode(b: &[u8]) -> String {
+pub(crate) fn hex_encode(b: &[u8]) -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
 #[cfg(target_os = "windows")]
-fn hex_decode(s: &str) -> Option<Vec<u8>> {
+pub(crate) fn hex_decode(s: &str) -> Option<Vec<u8>> {
     if s.len() % 2 != 0 {
         return None;
     }

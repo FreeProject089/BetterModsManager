@@ -94,8 +94,11 @@ pub mod analytics;
 pub mod live_issues;
 // Proof of consent: the append-only, hash-chained "My consents" ledger (Settings → Privacy).
 pub mod consent_ledger;
-// BetterCommunity v2 readiness: v2 root from app.cfg (BCApiVersion/BCv2Base) + consent receipts → v2 ledger.
+// BetterCommunity v2: the session's mode (app.cfg > links.json > v1, health checked), consent
+// receipts and legal texts → the v2 ledger; the device-flow sign-in; app telemetry on v2.
 pub mod bc_v2;
+pub mod bc_v2_auth;
+pub mod bc_v2_telemetry;
 pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;
