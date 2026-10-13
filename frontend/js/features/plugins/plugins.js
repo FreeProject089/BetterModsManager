@@ -7816,7 +7816,10 @@ function getEndpointDefs() {
             method: 'POST', path: '/api/telemetry/consent', auth: true,
             desc: t('plugins.ep.telConsent') || 'Telemetry consent',
             about: 'Active ou désactive le consentement global à la télémétrie (opt-in). Refuser efface immédiatement la file locale (droit à l\'effacement). Équivalent deeplink : <code>bmm://telemetry/consent?enabled=true</code>.',
-            fields: [{ name: 'enabled', type: 'boolean', required: true, desc: 'true pour activer la collecte, false pour la couper et purger.' }],
+            fields: [
+                { name: 'enabled', type: 'boolean', required: true, desc: 'true pour activer la collecte, false pour la couper et purger.' },
+                { name: 'via', type: 'string', required: false, desc: t('plugins.epF.telVia') },
+            ],
             responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "telemetry/consent" }' }, e401],
         },
         {

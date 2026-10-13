@@ -3827,6 +3827,7 @@
   "plugins.epF.convRehash": "Recalculer le hash de chaque fichier listé (vrai par défaut).",
   "plugins.epF.convSign": "Signer avec la clé de ce BMM (vrai par défaut).",
   "plugins.epF.convSetVersion": "Fixer la version du repo dans la même passe, ex. 1.2.0.",
+  "plugins.epF.telVia": "Qui a demandé, inscrit sur la preuve de consentement : cli ou mcp ; toute autre valeur est notée api.",
   "plugins.ep.repoUpdate": "Mettre à jour repo",
   "plugins.ep.modConfig": "Configurer les sources de MAJ d'un mod",
   "plugins.ep.modCheckUpdates": "Vérifier les MAJ des mods",

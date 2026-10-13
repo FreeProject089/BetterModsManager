@@ -11235,6 +11235,7 @@
   "plugins.epF.convRehash": "Re-hash every listed file (default true).",
   "plugins.epF.convSign": "Sign with this BMM’s key (default true).",
   "plugins.epF.convSetVersion": "Set the repo version in the same pass, e.g. 1.2.0.",
+  "plugins.epF.telVia": "Who asked, written on the consent receipt: cli or mcp; anything else is recorded as api.",
   "plugins.epAbout.repoList": "Every remote repo BMM has registered, whether added through <code>POST /api/repo/connect</code> or from the interface. Each entry carries the repo's URL and name.",
   "plugins.epAbout.repoConnect": "Registers a remote repo's URL in BMM's connected list. With no <code>name</code>, BMM tries to read one from the remote <code>repo.json</code>. A repo already in the list is not added twice.",
   "plugins.epAbout.repoForget": "Removes a repo from the connected list. The body must carry the repo's URL exactly as it was added. Files already synced are <b>not</b> deleted.",
