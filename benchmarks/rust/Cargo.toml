@@ -59,6 +59,9 @@ hex = "0.4"
 base64 = "0.21"
 zeroize = { version = "1.8", features = ["serde"] }
 aes-gcm = "0.11.1"
+# ── deps required to compile the REAL repo_format.rs verbatim (1.0.2: repo validate / convert
+#    hashing); catalog_format.rs needs nothing beyond serde_json/base64/ed25519-dalek above ──
+chrono = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
@@ -81,6 +84,16 @@ harness = false
 
 [[bench]]
 name = "creator_key"
+harness = false
+
+# 1.0.2 hot paths: the universal catalogue normaliser (every catalogue BMM reads goes through
+# it) and the repo validate / convert hasher (sha256 + 4 MiB chunk table per file).
+[[bench]]
+name = "catalog_normalize"
+harness = false
+
+[[bench]]
+name = "repo_hash"
 harness = false
 
 # Optimised benches — measuring debug builds would be meaningless.

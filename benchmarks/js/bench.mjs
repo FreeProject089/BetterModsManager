@@ -103,6 +103,51 @@ for (const size of [200, 1000, 5000]) {
   record(s3.run());
 }
 
+// ── Suites 5–6 (1.0.2): the REAL compiled modules, no mirror ─────────────────
+// frontend/js/core/*.js is what the app loads (tsc output of frontend/src/core). Both modules
+// have no imports, so they load in Node as they are. Run `npm run compile` at the repo root
+// first if frontend/src changed since the last build.
+const FRONT = new URL('../../frontend/js/core/', import.meta.url);
+{
+  // Activity centre (1.0.2): every long task registers, updates and ends through this registry,
+  // which notifies the title-bar button and persists the last 30 finished entries.
+  const act = await import(new URL('activity.js', FRONT).href);
+  const store = new Map();
+  act.configureActivity({ storage: () => ({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) }) });
+  let notified = 0;
+  act.subscribeActivity(() => { notified++; });
+  const s = new Suite('activity registry (1.0.2): one task, start → 10 updates → done');
+  s.add('start + 10 updates + done (1 listener)', () => {
+    const h = act.startActivity({ kind: 'hash', title: 'Integrity check', cancel: () => {} });
+    for (let i = 1; i <= 10; i++) h.update({ progress: i / 10, detail: `file ${i}` });
+    h.done('ok');
+    return notified;
+  }, { kind: 'real' });
+  const running = Array.from({ length: 20 }, (_, i) => act.startActivity({ kind: 'sync', title: `job ${i}`, progress: i / 20 }));
+  s.add('overallProgress over 20 running tasks', () => act.overallProgress(), { kind: 'real' });
+  record(s.run());
+  for (const h of running) h.done();
+}
+{
+  // Universal catalogue format (1.0.2), the frontend twin of catalog_format.rs: what a
+  // catalogue fetched by the page goes through before the list renders.
+  const cf = await import(new URL('catalog-format.js', FRONT).href);
+  const r = rng(11);
+  const hex = () => Array.from({ length: 64 }, () => '0123456789ABCDEF'[Math.floor(r() * 16)]).join('');
+  const v1 = (n) => ({ name: 'Benchmark apps', version: '1.0', apps: Array.from({ length: n }, (_, i) => ({
+    id: `app-${i}`, title: `Demo App ${i}`, description: 'Batch-converts and compresses texture folders.', category: 'utility', price: 'free',
+    tags: ['textures', 'performance'], version: '2.3.0', images: { thumb: `https://example.org/img/${i}.png` },
+    download: { url: `https://example.org/downloads/app-${i}.zip`, file_type: 'zip', size: 12400000 + i, sha256: `sha256:${hex()}` } })) });
+  const s = new Suite('catalogue normaliser JS (1.0.2): v1 apps catalogue → universal');
+  for (const n of [100, 1000]) {
+    const doc = v1(n);
+    const res = cf.normalizeCatalog(doc, { kind: 'app' });
+    if ((res.catalog.items || []).length !== n) throw new Error(`catalog-format: expected ${n} items, got ${(res.catalog.items || []).length}`);
+    s.add(`normalizeCatalog v1 apps (${n} items)`, () => cf.normalizeCatalog(doc, { kind: 'app' }), { kind: 'real', size: n });
+  }
+  record(s.run());
+}
+
 // ── Correctness guard: optimized must equal shipped on representative inputs ──
 (function verify() {
   const s1 = makeState(500, 'name_asc', 'air');

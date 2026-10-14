@@ -15,6 +15,15 @@ npm run release:assets    # signed update-manifest.json listing Release/BMM-Setu
 npm run check:release     # one version everywhere (add --artifacts to check Release/ too)
 ```
 
+**The release tool** runs all of it, step by step, with logs and a summary:
+`tools\release\release.bat` (menu) or `tools\release\release.bat --all --version X.Y.Z --yes`.
+Preflight, version bump, commit changelog, BetterInstaller build (+ NSIS/MSI extras that are never
+published), verification and checksums, BMM Docs PDFs, release cards / screenshots / README hero
+with editable sources, README version refresh, benchmarks compared with the previous version, a
+Gource history video, and the GitHub release draft with the `gh release create` command, printed
+and never run. See [tools/release/README.md](tools/release/README.md)
+([français](tools/release/README_FR.md)).
+
 `npm run build` ends with `tauri build --no-bundle`. That switch is the change: BMM used to build
 an NSIS installer *and* an MSI on every release build — about 107 MB of artefacts nobody ships any
 more, on top of the time to produce them.
