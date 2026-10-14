@@ -3,6 +3,17 @@
 BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux
 fichiers d'origine plus qu'il ne le faut.
 
+![BMM 1.0.2 : la Bibliothèque, avec des mods étiquetés et un interrupteur par mod](assets/docs/media/screenshots/library.png)
+
+**Nouveau en 1.0.2 :** le [Centre d'activité](doc-page:features/activity) montre tout ce que BMM est
+en train de faire, les [Outils BMM](doc-page:features/tools) vérifient ta bibliothèque sans rien
+modifier, et la page [Serveur Repo](doc-page:features/repo) te guide étape par étape pour te
+synchroniser à un dépôt ou en héberger un.
+
+![Le Centre d'activité, ouvert au-dessus de la Bibliothèque](assets/docs/media/screenshots/activity.png)
+
+![Serveur Repo, onglet Héberger, avec la carte du serveur en marche](assets/docs/media/screenshots/repo-host.png)
+
 Si tu débutes, lis cette page. Elle est courte, et elle explique l'idée unique sur laquelle
 tout le reste est bâti. La sauter, c'est la raison pour laquelle on se perd au troisième
 écran.

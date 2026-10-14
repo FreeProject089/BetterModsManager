@@ -1,245 +1,136 @@
 <div align="center">
-  <img src="frontend/assets/BMm.png" alt="Better Mod Manager" width="200" />
-  
+
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.2" width="100%" />
+
   # Better Mod Manager
 
-  **A Modern, High-Performance Universal Mod Manager for Windows**
+  **A universal mod manager for Windows: profiles, a mod library, modpacks and Server Repo sync.**
 
-  ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=flat-square)
+  ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg?style=flat-square)
   ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-important?style=flat-square)
   ![Rust](https://img.shields.io/badge/built%20with-Rust-orange?style=flat-square&logo=rust)
-  ![Tauri](https://img.shields.io/badge/framework-Tauri%20v1-24C8D8?style=flat-square&logo=tauri)
-  ![TypeScript](https://img.shields.io/badge/frontend-TypeScript%205.7-3178C6?style=flat-square&logo=typescript)
+  ![Tauri](https://img.shields.io/badge/framework-Tauri%20v2-24C8D8?style=flat-square&logo=tauri)
 
-  [Official Website](https://freeproject089.github.io/BMM_Web/) •
+  [Download](https://github.com/FreeProject089/BetterModsManager/releases/latest) •
+  [Documentation](https://bettercommunity.ch/docs) •
   [Discord](https://discord.gg/CTaaEF9R75) •
-  [Support on Ko-fi](https://ko-fi.com/I2I31ZIPPG)
+  [Ko-fi](https://ko-fi.com/I2I31ZIPPG) •
+  [Français](README_FR.md)
 
-  ---
-
-</div>
-
-## What is Better Mod Manager?
-
-Better Mod Manager is a **next-generation mod manager** built from the ground up for performance, safety, and user experience. Unlike traditional managers that rely on fragile symlinks or lack proper conflict handling, BMM introduces the **Smart Physical Copy Engine** — a copy-based approach that gives you absolute control, reliability, and data integrity.
-
-Whether you manage mods for DCS, Skyrim, Fallout, Cyberpunk, or any other game, BMM turns the chaos of mod conflicts into a clean, automated workflow.
-
----
-
-## The Smart Physical Copy Engine
-
-Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragile, and hard to debug. BMM takes a different approach:
-
-| Aspect | Traditional Managers | Better Mod Manager |
-|--------|----------------------|-------------------|
-| **Isolation** | Symlinks (fragile) | Physical copies (rock-solid) |
-| **Safety** | Manual backups | Automated backups before ANY change |
-| **Recovery** | Complex restoration | One-click atomic restoration |
-| **Conflict detection** | Limited or absent | Real-time SHA-256 per-file verification |
-| **Data loss risk** | High | None — protected by 3+ independent layers |
-
-**How it works:**
-1. Activating a mod physically copies its files into your game directory
-2. Original files are automatically backed up with SHA-256 fingerprints
-3. Conflicts are detected in real-time with configurable priority handling
-4. One click restores any game to its exact pre-mod state
-
----
-
-<div align="center">
-  <img src="frontend/assets/gifs/credits_bg.gif" alt="BMM Git History Visualization (Gource)" width="100%" />
-
-  *Gource visualization of BMM's development history*
 </div>
 
 ---
 
-## Key Features
+## What it is
 
-### Management & Organization
+Better Mod Manager (BMM) keeps your mods and your setups apart. The **Library** holds every mod
+you own; a **Profile** decides which of them are on, and in what order, for one game. Turning a
+mod on copies its files into the game, backs up what it replaces and records SHA-256 hashes, so
+a profile can always be switched back off cleanly and a game update or reinstall never takes
+your mods with it.
 
-- **Multi-Game Profiles** — Create a fully independent profile for every game in your library. Each profile gets its own game path, mod folder, activation state, custom theme, and configuration. Switch between DCS, Skyrim, Cyberpunk, or any other game in one click with zero cross-contamination.
+On top of that: modpacks, shareable `.MM` lists, repositories you can sync from or host
+yourself, an app catalogue, an optional offline AI helper, a scheduler, plugins, themes, and a
+CLI, an MCP server and a local API for scripting.
 
-- **Profile Disk Usage** — Async background scanning shows you exactly how much disk space each profile consumes in real time — no manual calculation needed.
+## Screenshots
 
-- **Smart Conflict Detection** — When two mods try to install the same file, BMM catches it instantly. The priority system lets you define which mod wins, and the conflict panel shows you every collision at a glance before anything is applied.
+| | |
+|---|---|
+| ![Mod Library](.github/screenshots/library.png) **Mod Library**: tagged mods, filters, load order, one switch per mod. | ![Profiles](.github/screenshots/profiles.png) **Profiles**: one setup per game, or several per game. |
+| ![Server Repo, Sync](.github/screenshots/repo-sync.png) **Server Repo, Sync**: paste a `repo.json` address, preview, then sync. | ![Server Repo, Host](.github/screenshots/repo-host.png) **Server Repo, Host**: numbered steps and the running server's card. |
+| ![Activity centre](.github/screenshots/activity.png) **Activity centre** (new in 1.0.2): every running task, with Cancel. | ![BMM Tools](.github/screenshots/tools.png) **BMM Tools** (new in 1.0.2): read-only checks, here disk usage per profile. |
+| ![App Catalog](.github/screenshots/apps.png) **App Catalog**: each card shows its state and next action. | ![Settings](.github/screenshots/settings.png) **Settings**: an index of every card, with search (Ctrl+F). |
 
-- **Local Mod Pooling** — If two profiles share the same mod file (e.g., a shared DLL or texture), BMM reuses the single physical copy automatically. Saves gigabytes when managing large mod collections across multiple games.
+<p align="center"><img src=".github/screenshots/library-light.png" alt="Mod Library, light theme" width="70%" /><br/><sub>The same Library in the built-in light theme. Screenshots use demo data.</sub></p>
 
-- **Archive Explorer** — Preview the full directory tree inside any `.zip`, `.7z`, or `.rar` archive without extracting it first. Drag-select nodes to install only the files you need.
+## Features
 
-- **Visual Mapper** — A pan/zoom tree visualizer built for scale: renders 10 000+ files at 60 FPS, detects circular symlinks, and lets you navigate your game or mod folder structure in real time without a file manager.
+- **Library**: every mod you own, with tags, search, filters, SHA-256 integrity checks and conflict detection before anything is written.
+- **Profiles**: a game folder, a mods folder, a backup folder and a set of enabled mods per profile; switch in one click.
+- **Modpacks and `.MM` lists**: toggle a whole bundle at once, or hand your exact setup (links included) to someone else.
+- **Server Repo**: sync mods from a `repo.json`, follow a repo for updates, or host your own repo from BMM or with the standalone mini-server.
+- **App Catalog**: the tools around modding, installed, launched and updated from one page.
+- **Mapper**: fix a mod whose folders do not match what the game expects.
+- **Laya (optional AI)**: suggests a mod's details and checks bug reports; the built-in offline model sends nothing anywhere.
+- **Scheduler and BMMScript**: tasks with triggers, conditions and loops, written in the editor or as BMMScript; risky steps need permissions you grant one by one.
+- **Plugins and API**: extend BMM with plugins, deeplinks (`bmm://`) and a local HTTP API.
+- **Themes**: built-in themes (dark and light), a theme editor and a theme catalogue.
+- **CLI and MCP**: `bmm-mcp-server.exe` drives BMM from scripts or from an AI agent over MCP.
+- **Help built in**: bilingual articles, interactive tutorials and a command palette (Ctrl+K).
 
-- **Mod History & Audit Log** — Every activation, deactivation, update, and rollback is recorded with a timestamp, author, version tag, and optional note. Useful for debugging regressions: "which mod did I add yesterday that broke the game?"
+## What's new in 1.0.2
 
----
+The full list is in the [1.0.2 changelog](Update/changelog_v1.0.2_EN.md). The highlights:
 
-### Safety & Integrity
+- **One-click updates that work again**: download, check against the release's signed manifest, install. Stable or pre-release channel, optional background check.
+- **Activity centre**: a title-bar button listing every running task (activation, downloads, sync, scans, exports, Laya jobs…) with progress and Cancel, plus the last 30 finished ones.
+- **BMM Tools**: duplicate finder, conflict summary, disk usage, profile comparison, missing and orphaned mods, hash checker, manifest and catalogue validator; results export to JSON or CSV.
+- **Server Repo, simpler**: guided steps for Sync and Host, an « Advanced tools » area, followed repos, an Atom feed, repo format versions, and a standalone mini-server with a status page and scheduled jobs.
+- **Settings**: an index of every card, search, and a layout you can rearrange from the index.
+- **App Catalog and catalogues**: clearer cards, filters by install state, one versioned catalogue format.
+- **My consents**: every answer about the Terms, the Privacy Policy and telemetry leaves a tamper-evident receipt you can view and export.
+- **Start-up**: the classic Tasky intro is back and lighter (Classic, Logo or Off); new built-in theme « BMM Logo ».
 
-- **Deep Integrity Engine** — BMM computes a SHA-256 fingerprint for every managed file at activation time. You can re-run a full integrity scan at any point to detect files that have been silently modified, corrupted, or deleted outside of BMM.
+## Install
 
-- **Automated Triple-Layer Backups** — Before overwriting any original game file, BMM stores the original in three independent locations: a session cache, a persistent backup folder, and a registry-linked snapshot. Even if one layer fails, your game is recoverable.
+1. Download **`BMM-Setup.exe`** from the [latest release](https://github.com/FreeProject089/BetterModsManager/releases/latest).
+2. Run it. Windows may show SmartScreen the first time: **More info → Run anyway**.
+3. Launch BMM.
 
-- **Thread-Safe I/O** — All file operations are protected by Rust Mutex locks. Parallel mod activations, background scans, and UI updates never race against each other — no corrupted writes, ever.
+Requirements: Windows 10 or 11 with WebView2 (present on Windows 11 and up-to-date Windows 10).
+`BMM-Setup.exe` is built with [BetterInstaller](https://github.com/FreeProject089/BetterInstaller):
+it checks the package's Ed25519 signature before writing anything, installs per user by default,
+and doubles as the maintenance tool (update, repair, uninstall).
 
-- **System Access Control** — *Full mode* gives unrestricted filesystem access (power users). *Limited mode* confines the entire JavaScript layer to your declared profile directories — the JS code literally cannot read or write anything outside your mod folders.
+**Updating**
 
-- **Creator ID** — A permanent Ed25519 key pair is derived from your machine's hardware fingerprint (CPU, motherboard serial, disk UUID, etc.) and sealed in the Windows registry. It identifies you uniquely as a mod author when publishing to a repository server — and remains stable across GPU swaps, RAM upgrades, and network card changes.
+| You have | What to do |
+|---|---|
+| 1.0.x | Accept the update BMM offers. A BetterInstaller install updates with no questions: BMM runs `BMM-Setup.exe --update`, which waits for BMM to close, installs over it keeping your folder and choices, and starts it again. |
+| 0.9.11 | Accept the update to **0.9.12** (a bridge release), then the update to 1.0.2 it offers next. |
+| Older | Download `BMM-Setup.exe` from the release page and run it. Your data is kept. |
 
-- **EULA Enforcement** — A bilingual (EN/FR) EULA viewer appears on first launch with mandatory scroll-to-bottom acceptance. Prevents silently shipping the app without user awareness.
+The same updater can be run by hand or from a script; see the
+[BetterInstaller command line](https://github.com/FreeProject089/BetterInstaller/blob/master/GUIDE.md#command-line-unattended-install-update-repair-modify-uninstall).
 
----
+## Privacy
 
-### Mod Sharing & Synchronization
+BMM needs no account and shows no ads; your profiles, mods and settings stay on your PC. Telemetry
+is **off until you say yes**, in the installer or on BMM's consent screen, and can be turned off
+again in Settings → Privacy. Some connections are on by default (update checks, the link list,
+connectivity checks, fonts and icons); each one is listed with its off-switch in the
+[Privacy Policy](PRIVACY.md). Every answer you give leaves a versioned, hashed consent receipt,
+kept on your PC and listed under Settings → Privacy → **My consents**.
 
-- **Server Repository Mode** — Turn any machine into a LAN or public mod server in one click. Clients connect by URL and receive a signed snapshot of the repository. Only changed files are transferred on sync (delta sync) — bandwidth-efficient even for 50 GB mod packs.
+## Documentation and help
 
-- **Creator ID Signing** — Every repository snapshot is signed with the author's Ed25519 private key before publishing. Clients verify the signature automatically before applying any update — no man-in-the-middle attack can inject tampered mods.
+- **Documentation**: <https://bettercommunity.ch/docs> (user guide, how it works, API, CLI and MCP reference, in English and French)
+- **In the app**: **Help & other**, and **Ctrl+K** to search everything
+- **Discord**: <https://discord.gg/CTaaEF9R75>
+- **Releases**: <https://github.com/FreeProject089/BetterModsManager/releases>
+- **Bug reports**: [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues), or **Settings → Feedback & bug reports** in BMM
 
-- **Direct Install (`bmm://`)** — Web pages can link to mods using the custom `bmm://` URI scheme. Clicking the link opens BMM and pre-fills the install dialog — one-click mod installation directly from a browser.
+## Build from source
 
-- **Modpack System (.bmp)** — Bundle an entire mod setup (files + metadata + priority order + SHA-256 checksums) into a single `.bmp` archive. Recipients can install, verify, or auto-repair the full pack with one action.
-
-- **.MM Export Format** — Export a complete profile configuration — mod list, priorities, dependency tree, and manifests — as a single `.MM` file that can be imported on any machine running BMM.
-
----
-
-### Automation & AI Integration
-
-- **Launch Packs** — Group any combination of `.exe`, `.bat`, and `.ps1` files into a named launch pack. One click silently starts DCS, a voice comms app, a TrackIR driver, and a custom script in the right order — no more hunting through taskbar.
-
-- **MCP Server** — Expose BMM's full capabilities to AI agents via JSON-RPC 2.0. Claude, Gemini, or any MCP-compatible agent can list mods, activate profiles, check integrity, sync repositories, and analyze crash logs — all through natural language.
-
-- **Advanced CLI** — Headless control for scripts and CI pipelines: `bmm-mcp-server.exe list-mods --profile dcs`, `sync-profile`, `activate-mod`, `export-modpack`, `analyze-crashes`. All commands return structured JSON.
-
-- **Scheduler** — A task pairs a trigger with a workflow, and a workflow branches, loops and waits: IF/ELSE, FOR EACH, SWITCH, TRY/ON ERROR, BREAK/CONTINUE. A step can run a **script you write** — PowerShell, CMD, Bash or Python. It is saved to a file and the interpreter is handed the file, so nothing you type is ever placed on a command line and there is no quoting to get wrong. Repo syncs run for real rather than opening a dialog nobody is there to confirm.
-
-- **Task permissions** — Three capabilities, granted separately and off by default: run external programs, run scripts, fire deeplinks. Each names what it unlocks rather than hiding behind one "allow unsafe" box, and a step whose permission is missing fails with a message saying which to grant — it never runs quietly.
-
----
-
-### Community & Ecosystem
-
-- **Dynamic i18n** — Full English and French UI with hot-swap at runtime (no restart). The translation system is file-based and template-driven — adding a new language requires only a JSON file.
-
-- **Interactive Help & Docs** — 35+ Mermaid architecture diagrams with pan/zoom navigation, a semantic search engine that understands concepts (search "safety" and find backup/integrity/restore topics), the Tasky mascot for contextual tips, and step-by-step interactive tutorials.
-
-- **Discord Rich Presence** — Shows your active game profile, current mod count, and whether you're hosting a repository server — visible to friends in Discord without any setup.
-
-- **Feedback & bug reports** — Structured bug reports, crash reports and suggestions sent from inside BMM to the BetterCommunity feedback centre, with automatic context capture (OS version, profile state, recent actions) and an offline queue.
-
-- **Notification centre** — A toast is a three-second window onto something that already happened; miss it and it was gone. Every message BMM has shown you is now kept, with its source, its time and its full text — searchable, filterable, with the unread count drawn onto the taskbar icon. Link a BetterCommunity account and its notifications join the same list.
-
----
-
-### Performance & Optimization
-
-- **Disk I/O Limiter** — Set a maximum transfer speed (MB/s) for mod activations. Prevents BMM from saturating your disk and causing stutters in other apps or background games.
-
-- **Real-Time Performance Monitor** — A draggable overlay tracks CPU, RAM, and disk I/O while BMM is running. Timeline scrubbing lets you replay the performance graph, and CSV export feeds data into external analysis tools.
-
-- **Storage Manager** — Full filesystem analysis across all drives: used/free space, SSD vs HDD detection, critical space alerts, and per-profile storage breakdowns.
-
-- **Built-in Benchmark** — Measures your disk's sequential read/write speed without leaving BMM — useful for diagnosing slow mod activation or verifying SSD health.
-
----
-
-## Technical Stack
-
-| Layer | Technology | Details |
-|:------|:-----------|:--------|
-| **Backend** | Rust (stable) | Tauri v2, Tokio, Reqwest, Serde, Zip-rs, thread-safe Mutex |
-| **Frontend** | TypeScript 5.7 (Strict) | Compiled to ES2022, vanilla DOM, zero frameworks |
-| **Styling** | CSS3 | Custom properties, glassmorphism, fully responsive |
-| **Cryptography** | ed25519-dalek 2.x + sha2 0.10 | Ed25519 signing, SHA-256 integrity checks |
-| **Data Persistence** | serde_json | AppData/Roaming local storage |
-| **IPC** | Tauri Commands & Events | Type-safe, async Rust ↔ TypeScript communication |
-| **Windows Integration** | winreg 0.52 | Registry persistence for Creator ID sealing |
-
----
-
-## Quick Start
-
-### Prerequisites
-- **Windows** 10 or 11 (64-bit)
-- [Node.js](https://nodejs.org/) LTS
-- [Rust](https://www.rust-lang.org/tools/install) (stable toolchain)
-- [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) (WebView2, Visual C++ build tools)
-
-### Development Setup
+You need Windows 10 or 11, [Node.js](https://nodejs.org/) 22 (the version CI uses), the
+[Rust](https://www.rust-lang.org/tools/install) stable toolchain and the
+[Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/FreeProject089/BetterModsManager.git
 cd BetterModsManager
-
-# 2. Install JS dependencies
 npm install
-
-# 3. Start development server (hot-reload)
-npm run dev
-
-# 4. Build a production installer
-npm run build
+npm run dev     # TypeScript watch + the app in development mode
+npm run build   # checks, compiles the frontend, builds the app (no installer)
+npm run ci      # every gate, in the order CI runs them
 ```
 
-### Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start Tauri dev server with TypeScript watch |
-| `npm run build` | Compile TS + build Windows installer |
-| `npm run watch` | TypeScript watch mode only |
-| `npm run typecheck` | Type-check without compiling |
-| `npm run ci` | Every gate, in the order CI runs them — slow on purpose |
-
-`npm run ci` is the one that matters before you push: a green `tsc` means the code compiles,
-not that the app works. **[Every command, grouped by what you are trying to do](https://freeproject089.github.io/BMM-Docs/reference/commands/)**.
-
----
-
-## Documentation & Guides
-
-| Resource | Link |
-|----------|------|
-| **📚 BMM Docs — the full documentation site** (user guide, how-it-works, API reference, EN/FR) | https://freeproject089.github.io/BMM-Docs/ |
-| In-app help | **Help & other** in BMM — bilingual articles, 45 interactive diagrams, tutorials. Press **Ctrl+K** anywhere to search the whole app. |
-| Feature Overview | [App_Features_EN.md](Update/Documentation/App_Features_EN.md) |
-| Technical Architecture | [Technical_Analysis_EN.md](Update/Documentation/Technical_Analysis_EN.md) |
-| Creator ID System | [creator_id.md](.Assets/.md/creator_id.md) |
-| Server Repository Guide | [REPOS_GUIDE_EN.md](.Assets/REPOS_GUIDE_EN.md) |
-| Docker Deployment | [DOCKER_GUIDE_EN.md](Update/Guides/Developer/DOCKER_GUIDE_EN.md) |
-| MCP Tools Reference | [MCP_Tools_List_EN.md](Update/Guides/Developer/MCP_Tools_List_EN.md) |
-| CLI Reference | [BMM_CLI_Guide_EN.md](Update/Guides/Developer/BMM_CLI_Guide_EN.md) |
-| Build-time flags (`app.cfg`) | [APP_CFG.md](APP_CFG.md) — debug menu, updates, test server |
-| Translation Guide | [TranslationGuide_EN.md](Update/Documentation/TranslationGuide_EN.md) |
-| Changelog v1.0.0 | [changelog_v1.0.0_EN.md](Update/changelog_v1.0.0_EN.md) |
-
-### Get Help
-- **Official Website** — https://freeproject089.github.io/BMM_Web/
-- **Discord** — [Join the server](https://discord.gg/CTaaEF9R75)
-- **Bug Reports** — [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues) or **Settings → Feedback & bug reports** inside the app
-- **Support Development** — [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
-
----
+The installer is built separately with BetterInstaller (`npm run build:installer`). Every
+command is listed in the [commands reference](https://freeproject089.github.io/BMM-Docs/reference/commands/).
 
 ## License
 
-Better Mod Manager is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.
-
-You are free to use, modify, and distribute BMM. See [LICENSE.md](LICENSE.md) for full details.
-
----
-
-<div align="center">
-
-  **Made with ❤️ for the Modding Community**
-
-  [Website](https://freeproject089.github.io/BMM_Web/) •
-  [GitHub](https://github.com/FreeProject089/BetterModsManager) •
-  [Discord](https://discord.gg/CTaaEF9R75) •
-  [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
-
-</div>
+Better Mod Manager is free software under the **GNU General Public License v3.0**. See
+[LICENSE.md](LICENSE.md).

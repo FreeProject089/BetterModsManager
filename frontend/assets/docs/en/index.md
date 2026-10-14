@@ -3,6 +3,16 @@
 BMM installs, organises and shares your mods — across games, without ever touching the
 original files more than it has to.
 
+![BMM 1.0.2: the Mod Library, with tagged mods and one switch per mod](assets/docs/media/screenshots/library.png)
+
+**New in 1.0.2:** the [Activity centre](doc-page:features/activity) shows everything BMM is doing,
+[BMM Tools](doc-page:features/tools) checks your library without changing it, and the
+[Server Repo](doc-page:features/repo) page walks you through syncing or hosting a repo step by step.
+
+![The Activity centre, open over the Library](assets/docs/media/screenshots/activity.png)
+
+![Server Repo, Host tab, with the running server's card](assets/docs/media/screenshots/repo-host.png)
+
 If you're new, read this page. It's short, and it explains the one idea the rest of the app
 is built on. Skipping it is why people get lost on screen three.
 
