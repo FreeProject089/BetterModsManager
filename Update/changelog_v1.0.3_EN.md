@@ -119,6 +119,7 @@
 - The scripts list showed nothing (not even « No script imported yet ») until something was added.
 - Editing a plugin now shows its current icon.
 - When the all-profiles mod list cannot be read, the creator falls back to the current profile's mods instead of offering nothing.
+- « Duplicate » now copies the original plugin's files (scripts, bundled folders, automations, catalogue bundles and its icon) into the new plugin when it is saved. The copy listed those files without having them. Only files inside the original plugin's folder are copied: a path that is absolute, climbs out with `..`, or goes through a link is left out of the copy.
 
 ### Installed plugins
 - Filters: all, update available, mod lists, scripts, automations and catalogues, asks for permissions. Only filters with plugins in them are shown.

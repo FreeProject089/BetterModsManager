@@ -4539,6 +4539,11 @@ const PC_RISK_KEY = {
 // whether a matching id is "the one being edited" or "somebody else's plugin about to be
 // replaced". Cleared by every fresh render.
 let _pcEditingId = '';
+// Set by Duplicate: the id of the plugin the form was copied from. The first save asks the
+// backend to copy that plugin's bundled files (scripts, folders, automations, catalogues, icon)
+// into the new one, since the manifest carries their paths over but not the files. Cleared by
+// every fresh render and after that first save, when the files are the new plugin's own.
+let _pcDuplicateOf = '';
 // The Create tab's own refresh, so prefillCreateTab (which sets fields from outside, with
 // no input events) can bring the preview, the checks and the cards back in step.
 let _pcAfterPrefill = null;
@@ -4553,6 +4558,7 @@ function renderCreate(container) {
     _editBundles = [];
     _removedBundles = [];
     _pcEditingId = '';
+    _pcDuplicateOf = '';
     const secHead = (n, title, lead) => `
         <header class="pc-sec-h">
             <span class="pc-sec-n" aria-hidden="true">${n}</span>
@@ -5662,7 +5668,9 @@ function renderCreate(container) {
             automationSrcPaths: automationPaths.length ? automationPaths : null,
             bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
             removedBundled: removedBundledPayload(),
+            duplicateOf: _pcDuplicateOf || null,
         });
+        _pcDuplicateOf = '';
         _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
         if (plugin)
             _installedPlugins.push(plugin);
@@ -12769,7 +12777,7 @@ function handleEditPlugin(manifest) {
     if (tab)
         tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     // Pre-fill after render
-    setTimeout(() => prefillCreateTab(manifest), 60);
+    setTimeout(() => { _pcDuplicateOf = ''; prefillCreateTab(manifest); }, 60);
 }
 function handleDuplicatePlugin(manifest) {
     const copy = JSON.parse(JSON.stringify(manifest));
@@ -12778,7 +12786,12 @@ function handleDuplicatePlugin(manifest) {
     const tab = document.querySelector('.plug-tab[data-tab="create"]');
     if (tab)
         tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    setTimeout(() => prefillCreateTab(copy), 60);
+    setTimeout(() => {
+        prefillCreateTab(copy);
+        // After the prefill: the bundled paths in the form are the source's files, which the
+        // backend copies over on save.
+        _pcDuplicateOf = String(manifest.id || '');
+    }, 60);
 }
 function prefillCreateTab(manifest) {
     const setVal = (id, val) => {

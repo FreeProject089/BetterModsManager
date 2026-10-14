@@ -126,6 +126,79 @@ A task can run **even when BMM is closed** (it registers with the OS scheduler).
 evaluated top to bottom and *the first matching row wins* — so order your rules from most
 specific to most general, exactly like a firewall.
 
+## Create a plugin
+
+**Plugins & API → Create** is a guided form in six steps. A step bar on top shows what is done
+and what still needs attention; click a step to go to it.
+
+1. **Start from** — what is the plugin for? This sets the apply mode; everything stays
+   editable.
+
+    | Template | What it makes |
+    |---|---|
+    | Mod list | Enables a set of mods when applied |
+    | Server mod list | Strict: exactly these mods, the others are turned off |
+    | Script pack | Runs scripts and ships files. Needs the unsafe-plugins permission |
+    | Mods + scripts | Applies the mod list, then runs the scripts |
+    | Automation pack | Ships `.bmmpa` automations, imported disabled and checked |
+    | Catalogue bundle | Ships a `.bmmbundle` catalogue the installer can follow |
+    | Blank | Start empty and choose everything yourself |
+
+2. **Identity** — name, id, version, author, game, website, tags, description and icon. The
+   **id is suggested from the name** while you have not typed one. Letters, digits, `-` and `.`
+   only, and it **must not change once the plugin is shared**: catalogues, `bmm://` links and
+   the plugin's folder all use it.
+3. **Contents** — what the plugin carries: mods (each one required or optional), scripts,
+   folders, automations, catalogue bundles. Add only what it needs. A mod this PC does not have
+   stays in the list, marked *not on this PC*.
+4. **On apply** — what applying does, as four cards (mod list, scripts only, both,
+   automations), next to the **strict** switch.
+5. **Permissions** — what the plugin *asks* for. Ticking here only asks: the person installing
+   sees the request pre-ticked and decides. Each permission shows a risk level, and the bar
+   shows the overall risk:
+
+    | Risk | Means |
+    |---|---|
+    | **Low** | Reads a list. Changes nothing |
+    | **Medium** | Changes your setup: mods, profiles, packs, automations |
+    | **High** | Runs programs, reads or replaces all your data, signs as you or records your screen |
+
+    Ask for the minimum, and say why in the description.
+
+6. **Save & share**
+    - **Save locally** installs it in BMM; it appears under *Installed*.
+    - **Dry run** shows what applying would change on this PC. Nothing is changed.
+    - **Export .bmmplug** makes one file to send; others import it from Plugins.
+    - **Publish in a catalogue**: add the hosted `.bmmplug` to a plugin catalogue with its
+      SHA-256 (**My catalogues** opens the builder).
+    - **Link to apply it**: `bmm://plugin/activate?id=<id>`, with a copy button.
+    - **See the files** opens what was packed.
+
+Next to the form, a live panel shows the **plugin card** as installers will see it, a
+**checklist** (missing name or id, an empty plugin, an apply mode that does not match the
+contents, high-risk permissions without a description…) that reads *Ready to save.* when
+there is nothing left, and the **plugin.json** that will be written, with a copy button.
+
+**Start over** clears the form; nothing saved is deleted. The head says when you are editing
+an existing plugin, and saving over another installed plugin with the same id asks first.
+
+!!! note "Duplicate"
+
+    **Duplicate**, in a plugin's menu, opens the form pre-filled with a copy (`<id>-copy`).
+    When you save it, the original's files — scripts, bundled folders, automations, catalogue
+    bundles and its icon — are copied into the new plugin. Only files inside the original
+    plugin's folder are copied: an absolute path, a `..` or a link is left out.
+
+## The Installed list
+
+Filters above the list: **All**, **Update available**, **Mod lists**, **Scripts**,
+**Automations & catalogues**, **Asks for permissions**. Only the filters that have plugins in
+them are shown, and the search matches name, id, author and tag.
+
+Each card has a status line: how many permissions the plugin asks for, with the highest risk
+among them, and **vX available** when its catalogue has a newer version that was not
+installed automatically (auto-update off, or no checksum).
+
 ## What a plugin is, on disk
 
 A plugin is a folder with a manifest. Nothing is compiled, nothing is installed into BMM — you
@@ -164,6 +237,13 @@ place, generated against the code:
 
 Both are worth skimming once even if you never write a plugin: they are the clearest inventory
 of what BMM can be made to do.
+
+In the app, **Plugins & API → API & Scripts → Endpoints** has the same list, **grouped by
+area** — mods, profiles, modpacks, plugins, server repos, apps and catalogues, automation and
+hooks, data, keys and privacy, BMM itself — each group with its count per method. The search
+matches a method, a path or a word; the filters show one method (`GET`, `POST`…) or only the
+endpoints that need **No token**. Each endpoint shows its fields, its permission and its
+`bmm://` equivalent when it has one.
 
 
 ## Files a plugin ships — `assets/`

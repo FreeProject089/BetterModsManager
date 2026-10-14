@@ -119,6 +119,7 @@
 - La liste des scripts n'affichait rien (pas même « Aucun script importé ») tant que rien n'était ajouté.
 - Modifier un plugin affiche maintenant son icône actuelle.
 - Quand la liste des mods de tous les profils ne peut pas être lue, le créateur se rabat sur les mods du profil actuel au lieu de ne rien proposer.
+- « Dupliquer » copie maintenant les fichiers du plugin d'origine (scripts, dossiers embarqués, automatisations, catalogues groupés et son icône) dans le nouveau plugin à l'enregistrement. La copie listait ces fichiers sans les avoir. Seuls les fichiers du dossier du plugin d'origine sont copiés : un chemin absolu, qui en sort par `..` ou qui passe par un lien est laissé hors de la copie.
 
 ### Plugins installés
 - Filtres : tous, mise à jour disponible, listes de mods, scripts, automatisations et catalogues, demande des permissions. Seuls les filtres qui contiennent des plugins sont affichés.

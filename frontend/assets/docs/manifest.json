@@ -220,7 +220,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 2974,
+      "words": 3672,
       "diagrams": 0,
       "fr": true
     },
@@ -490,7 +490,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 811,
+      "words": 1388,
       "diagrams": 0,
       "fr": true
     },
@@ -505,7 +505,7 @@
         "en": "Every token the editor exposes, explained — plus the theme file format and a from-zero walkthrough.",
         "fr": "Chaque token exposé par l'éditeur, expliqué — plus le format du fichier thème et un parcours depuis zéro."
       },
-      "words": 934,
+      "words": 1075,
       "diagrams": 0,
       "fr": true
     },

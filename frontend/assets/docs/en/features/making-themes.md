@@ -14,7 +14,7 @@ why **Reset this section** can undo one area without touching the rest.
 
 A token is a CSS variable, always named `--bmm-*`. Change `--bmm-accent` and every button,
 link and active state that uses it follows. You never chase individual elements — unless you
-want to, which is what the **CSS** tab and **+ Elements** are for.
+want to, which is what the **CSS** and **Elements** sections are for.
 
 Three rules keep a theme readable, learned from the built-ins:
 
@@ -28,21 +28,23 @@ Three rules keep a theme readable, learned from the built-ins:
 ## Start from zero, in order
 
 1. Open the editor: **Settings → Themes → Editor**, or [this link](bmm://theme/editor).
-2. Pick the built-in closest to what you want and **Save as** a copy — inheriting a working
-   theme beats starting from a blank page.
-3. Set **Surfaces** (the tint) and **Background** (base, cards, sidebar). Look at the app
-   after each change — the editor applies live.
-4. Set **Text** and check every level (primary/secondary/muted) against your new surfaces.
+2. In **Basics**, **Start from** the built-in closest to what you want (or make **A palette
+   from one colour**) and **Save as new** — inheriting a working theme beats starting from a
+   blank page.
+3. Set **Surfaces** (the tint) and **Background** (base, cards, sidebar). Watch the preview
+   after each change, or tick **Apply to BMM as I edit** to see it on the real app.
+4. Set **Text** and check every level (primary/secondary/muted) against your new surfaces —
+   the contrast checks under the preview do it for you, with **Fix** on every pair that fails.
 5. Pick your **Accent** family, then **Borders**, **Shape**, **Typography**.
 6. Only then: wallpaper, effects, Tasky, charts — the decoration layer.
 7. **Export** (or **Share**) from the footer's *File* menu.
 
-The **eyedropper** is the shortcut through all of this: click it, then click any element in
-BMM, and the editor jumps to the token that styles it.
+The **eyedropper** is the shortcut through all of this: click it, then right-click any element
+in BMM, and the editor jumps to the token that styles it.
 
 ## Every token, by group
 
-The tables below are the editor's **Simple** tab, in full. *Type* tells you what a value
+The tables below are the editor's **All tokens** section, in full. *Type* tells you what a value
 looks like: a `color` accepts anything CSS does (`#0af`, `rgb(...)`, `rgba(...)` for
 transparency); a `size` is a CSS length or number as noted; `font` is a font-family list;
 `image` is a URL or a picked file (embedded into the theme).
@@ -70,7 +72,7 @@ Colours behind the whole app, cards and bars.
 
     A detailed image competes with the text on top of it. A photo at full strength makes a
     mod list hard to scan; the same photo at `8px` blur and `0.35` opacity reads as a colour.
-    Clearing the wallpaper from **Assets** clears all three.
+    Clearing the wallpaper from **Pictures** clears all three.
 
 ### Surfaces
 
@@ -237,6 +239,7 @@ A theme exports as one JSON file. Everything is optional except `id` and `name` 
 
 ```json
 {
+  "format_version": 2,
   "id": "my-theme",
   "name": "My Theme",
   "author": "you",
@@ -260,18 +263,39 @@ A theme exports as one JSON file. Everything is optional except `id` and `name` 
 
 | Field | What it carries |
 |---|---|
+| `format_version` | The file format, `2` today. A file without it is v1 and is migrated when read; unknown fields are kept |
 | `vars` | The token overrides — the tables above |
 | `mode` | `"dark"` or `"light"` — **declare it**; light mode triggers contrast patches |
-| `global_css` | Raw CSS appended after the tokens (the editor's **CSS** tab) |
+| `global_css` | Raw CSS appended after the tokens (the editor's **CSS** section) |
 | `assets` | Embedded images (wallpaper, logo, Tasky) as base64 — they travel with the file |
 | `fonts` | Embedded font files |
-| `custom_elements` | Your **+ Elements** additions — buttons, banners, badges |
+| `custom_elements` | Your **Elements** additions — buttons, banners, badges |
 | `element_overrides` / `html_swaps` | Per-element style overrides / innerHTML swaps (icons) |
 | `pages` | Per-view overrides, keyed by view id |
 | `bmm_min_version` | Refuses to load on older BMM builds |
 
+A token value that contains `;`, `{` or `}` outside quotes or parentheses is **ignored**: it
+would end the declaration and start CSS of its own. `url("data:image/png;base64,…")` is fine,
+the `;` is inside the parentheses. The editor's status line lists every ignored value.
+
 Because a theme can carry CSS, HTML elements and assets, **only install themes from sources
 you trust** — the same rule as any catalogue content.
+
+## Renamed in 1.0.3
+
+Six built-in themes were named after other products. Their colours did not change; their name
+and id did. **The old ids still work**: a saved choice, a `bmm://theme/apply` link, a
+scheduler task or an MCP call that uses one gets the new theme, and the id is rewritten the
+next time it is saved.
+
+| Old id | New id | Name |
+|---|---|---|
+| `bmm-discord` | `bmm-indigo` | Indigo |
+| `bmm-spotify` | `bmm-neon` | Neon |
+| `bmm-claude` | `bmm-clay` | Clay |
+| `bmm-nord` | `bmm-arctic` | Arctic |
+| `bmm-vscode` | `bmm-charcoal` | Charcoal |
+| `bmm-macos` | `bmm-cobalt` | Cobalt |
 
 ## Drop-in folder
 

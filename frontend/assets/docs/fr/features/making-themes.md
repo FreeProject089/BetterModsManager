@@ -15,8 +15,8 @@ zone sans toucher au reste.
 
 Un token est une variable CSS, toujours nommée `--bmm-*`. Changez `--bmm-accent` et chaque
 bouton, lien et état actif qui l'utilise suit. Vous ne courez jamais après des éléments
-individuels — sauf si vous le voulez, et c'est à ça que servent l'onglet **CSS** et
-**+ Éléments**.
+individuels — sauf si vous le voulez, et c'est à ça que servent les sections **CSS** et
+**Éléments**.
 
 Trois règles gardent un thème lisible, apprises des thèmes intégrés :
 
@@ -32,22 +32,25 @@ Trois règles gardent un thème lisible, apprises des thèmes intégrés :
 ## Partir de zéro, dans l'ordre
 
 1. Ouvrez l'éditeur : **Paramètres → Thèmes → Éditeur**, ou [ce lien](bmm://theme/editor).
-2. Prenez le thème intégré le plus proche de ce que vous voulez et **Enregistrez-sous** une
-   copie — hériter d'un thème qui marche bat la page blanche.
+2. Dans **Essentiel**, **Partir de** le thème intégré le plus proche de ce que vous voulez
+   (ou faites **Une palette à partir d'une couleur**) puis **Enregistrer comme nouveau** —
+   hériter d'un thème qui marche bat la page blanche.
 3. Réglez **Surfaces** (la teinte) puis **Arrière-plan** (base, cartes, sidebar). Regardez
-   l'app après chaque changement — l'éditeur applique en direct.
+   l'aperçu après chaque changement, ou cochez **Appliquer à BMM pendant la saisie** pour le
+   voir sur la vraie app.
 4. Réglez le **Texte** et vérifiez chaque niveau (primaire/secondaire/atténué) contre vos
-   nouvelles surfaces.
+   nouvelles surfaces — les contrôles de contraste sous l'aperçu le font pour vous, avec
+   **Corriger** sur chaque paire qui échoue.
 5. Choisissez votre famille d'**Accents**, puis **Bordures**, **Forme**, **Typographie**.
 6. Seulement ensuite : wallpaper, effets, Tasky, graphiques — la couche décorative.
 7. **Exportez** (ou **Partagez**) depuis le menu *Fichier* du pied de l'éditeur.
 
-La **pipette** est le raccourci à travers tout ça : cliquez-la, puis cliquez n'importe quel
-élément de BMM, et l'éditeur saute au token qui le style.
+La **pipette** est le raccourci à travers tout ça : cliquez-la, puis faites un clic droit sur
+n'importe quel élément de BMM, et l'éditeur saute au token qui le style.
 
 ## Chaque token, par groupe
 
-Les tableaux ci-dessous sont l'onglet **Simple** de l'éditeur, au complet. *Type* dit à quoi
+Les tableaux ci-dessous sont la section **Tous les jetons** de l'éditeur, au complet. *Type* dit à quoi
 ressemble une valeur : une `couleur` accepte tout ce que le CSS accepte (`#0af`, `rgb(...)`,
 `rgba(...)` pour la transparence) ; une `taille` est une longueur CSS ou un nombre selon le
 cas ; `police` est une liste de font-family ; `image` est une URL ou un fichier choisi
@@ -76,7 +79,7 @@ Les couleurs derrière toute l'app, les cartes et les barres.
 
     Une image détaillée entre en concurrence avec le texte posé dessus. Une photo à pleine
     force rend une liste de mods difficile à parcourir ; la même photo à `8px` de flou et
-    `0.35` d'opacité se lit comme une couleur. Effacer le wallpaper depuis **Assets** efface
+    `0.35` d'opacité se lit comme une couleur. Effacer le wallpaper depuis **Images** efface
     les trois.
 
 ### Surfaces
@@ -247,6 +250,7 @@ Un thème s'exporte en un seul fichier JSON. Tout est optionnel sauf `id` et `na
 
 ```json
 {
+  "format_version": 2,
   "id": "mon-theme",
   "name": "Mon Thème",
   "author": "vous",
@@ -270,18 +274,40 @@ Un thème s'exporte en un seul fichier JSON. Tout est optionnel sauf `id` et `na
 
 | Champ | Ce qu'il transporte |
 |---|---|
+| `format_version` | Le format du fichier, `2` aujourd'hui. Un fichier sans ce champ est en v1 et migré à la lecture ; les champs inconnus sont conservés |
 | `vars` | Les surcharges de tokens — les tableaux ci-dessus |
 | `mode` | `"dark"` ou `"light"` — **déclarez-le** ; le mode clair déclenche les correctifs de contraste |
-| `global_css` | Du CSS brut appliqué après les tokens (l'onglet **CSS** de l'éditeur) |
+| `global_css` | Du CSS brut appliqué après les tokens (la section **CSS** de l'éditeur) |
 | `assets` | Images embarquées (wallpaper, logo, Tasky) en base64 — elles voyagent avec le fichier |
 | `fonts` | Fichiers de polices embarqués |
-| `custom_elements` | Vos ajouts **+ Éléments** — boutons, bannières, badges |
+| `custom_elements` | Vos ajouts **Éléments** — boutons, bannières, badges |
 | `element_overrides` / `html_swaps` | Surcharges de style par élément / remplacements d'innerHTML (icônes) |
 | `pages` | Surcharges par vue, indexées par id de vue |
 | `bmm_min_version` | Refuse de se charger sur un BMM plus ancien |
 
+Une valeur de token qui contient `;`, `{` ou `}` hors des guillemets ou des parenthèses est
+**ignorée** : elle terminerait la déclaration et commencerait du CSS à elle.
+`url("data:image/png;base64,…")` passe, le `;` est entre les parenthèses. La ligne d'état de
+l'éditeur liste chaque valeur ignorée.
+
 Parce qu'un thème peut transporter du CSS, des éléments HTML et des assets, **n'installez
 que des thèmes de sources de confiance** — la même règle que pour tout contenu de catalogue.
+
+## Renommés en 1.0.3
+
+Six thèmes intégrés portaient le nom d'autres produits. Leurs couleurs n'ont pas changé ; leur
+nom et leur id, si. **Les anciens ids marchent toujours** : un choix enregistré, un lien
+`bmm://theme/apply`, une tâche du planificateur ou un appel MCP qui en utilise un reçoit le
+nouveau thème, et l'id est réécrit au prochain enregistrement.
+
+| Ancien id | Nouvel id | Nom |
+|---|---|---|
+| `bmm-discord` | `bmm-indigo` | Indigo |
+| `bmm-spotify` | `bmm-neon` | Neon |
+| `bmm-claude` | `bmm-clay` | Clay |
+| `bmm-nord` | `bmm-arctic` | Arctic |
+| `bmm-vscode` | `bmm-charcoal` | Charcoal |
+| `bmm-macos` | `bmm-cobalt` | Cobalt |
 
 ## Le dossier de dépôt direct
 

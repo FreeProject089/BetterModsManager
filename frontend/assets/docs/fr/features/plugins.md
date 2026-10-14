@@ -132,6 +132,84 @@ planificateur du système). Les règles sont évaluées de haut en bas et *la pr
 correspond gagne* — ordonne-les donc de la plus spécifique à la plus générale, exactement
 comme un pare-feu.
 
+## Créer un plugin
+
+**Plugins & API → Créer** est un formulaire guidé en six étapes. Une barre d'étapes en haut
+montre ce qui est fait et ce qui demande encore de l'attention ; un clic sur une étape y mène.
+
+1. **Point de départ** — à quoi sert le plugin ? Ça règle le mode d'application ; tout reste
+   modifiable.
+
+    | Modèle | Ce qu'il fait |
+    |---|---|
+    | Liste de mods | Active un ensemble de mods à l'application |
+    | Mods d'un serveur | Strict : exactement ces mods, les autres sont désactivés |
+    | Pack de scripts | Lance des scripts et livre des fichiers. Demande l'autorisation des plugins non sûrs |
+    | Mods + scripts | Applique la liste de mods, puis lance les scripts |
+    | Pack d'automatisations | Livre des automatisations `.bmmpa`, importées désactivées et vérifiées |
+    | Catalogue groupé | Livre un catalogue `.bmmbundle` que l'installateur peut suivre |
+    | Vierge | Partir de zéro et tout choisir toi-même |
+
+2. **Identité** — nom, id, version, auteur, jeu, site web, tags, description et icône. **L'id
+   est proposé à partir du nom** tant que tu n'en as pas saisi. Lettres, chiffres, `-` et `.`
+   seulement, et il **ne doit plus changer une fois le plugin partagé** : les catalogues, les
+   liens `bmm://` et le dossier du plugin l'utilisent tous.
+3. **Contenu** — ce que le plugin transporte : des mods (chacun requis ou optionnel), des
+   scripts, des dossiers, des automatisations, des catalogues groupés. N'ajoute que ce dont il
+   a besoin. Un mod absent de ce PC reste dans la liste, marqué *absent de ce PC*.
+4. **À l'application** — ce que fait l'application du plugin, en quatre cartes (liste de mods,
+   scripts seulement, les deux, automatisations), à côté de l'interrupteur **strict**.
+5. **Permissions** — ce que le plugin *demande*. Cocher ici ne fait que demander : la personne
+   qui installe voit la demande pré-cochée et décide. Chaque permission affiche un niveau de
+   risque, et la barre affiche le risque global :
+
+    | Risque | Veut dire |
+    |---|---|
+    | **Faible** | Lit une liste. Ne change rien |
+    | **Moyen** | Modifie ta configuration : mods, profils, packs, automatisations |
+    | **Élevé** | Lance des programmes, lit ou remplace toutes tes données, signe en ton nom ou enregistre ton écran |
+
+    Demande le minimum, et dis pourquoi dans la description.
+
+6. **Enregistrer et partager**
+    - **Sauvegarder localement** l'installe dans BMM ; il apparaît dans *Installés*.
+    - **Essai à blanc** montre ce que l'application changerait sur ce PC. Rien n'est modifié.
+    - **Exporter .bmmplug** fait un seul fichier à envoyer ; les autres l'importent depuis
+      Plugins.
+    - **Publier dans un catalogue** : ajoute le `.bmmplug` hébergé à un catalogue de plugins
+      avec son SHA-256 (**Mes catalogues** ouvre l'outil).
+    - **Lien pour l'appliquer** : `bmm://plugin/activate?id=<id>`, avec un bouton copier.
+    - **Voir les fichiers** ouvre ce qui a été empaqueté.
+
+À côté du formulaire, un panneau en direct montre la **carte du plugin** telle que la verront
+les gens qui l'installent, une **liste de vérifications** (nom ou id manquant, plugin vide,
+mode d'application qui ne correspond pas au contenu, permissions à risque élevé sans
+description…) qui affiche *Prêt à enregistrer.* quand il ne reste rien, et le
+**plugin.json** qui sera écrit, avec un bouton copier.
+
+**Recommencer** vide le formulaire ; rien de ce qui est enregistré n'est supprimé. L'en-tête
+indique quand tu modifies un plugin existant, et enregistrer par-dessus un autre plugin
+installé du même id demande d'abord.
+
+!!! note "Dupliquer"
+
+    **Dupliquer**, dans le menu d'un plugin, ouvre le formulaire rempli avec une copie
+    (`<id>-copy`). À l'enregistrement, les fichiers de l'original — scripts, dossiers
+    embarqués, automatisations, catalogues groupés et son icône — sont copiés dans le nouveau
+    plugin. Seuls les fichiers du dossier du plugin d'origine sont copiés : un chemin absolu,
+    un `..` ou un lien est laissé de côté.
+
+## La liste des plugins installés
+
+Des filtres au-dessus de la liste : **Tous**, **Mise à jour dispo**, **Listes de mods**,
+**Scripts**, **Automatisations et catalogues**, **Demande des permissions**. Seuls les filtres
+qui contiennent des plugins sont affichés, et la recherche porte sur le nom, l'id, l'auteur et
+les tags.
+
+Chaque carte a une ligne d'état : combien de permissions le plugin demande, avec le risque le
+plus élevé parmi elles, et **vX disponible** quand son catalogue a une version plus récente
+qui n'a pas été installée automatiquement (mise à jour auto désactivée, ou pas d'empreinte).
+
 ## Ce qu'est un plugin, sur le disque
 
 Un plugin est un dossier avec un manifeste. Rien n'est compilé, rien n'est installé dans BMM —
@@ -173,6 +251,13 @@ même endroit, généré à partir du code :
 
 Les deux valent un coup d'œil même si tu n'écris jamais de plugin : c'est l'inventaire le plus
 clair de ce qu'on peut faire faire à BMM.
+
+Dans l'app, **Plugins & API → API & Scripts → Endpoints** a la même liste, **groupée par
+domaine** — mods, profils, modpacks, plugins, dépôts serveur, applications et catalogues,
+automatisation et hooks, données, clés et confidentialité, BMM lui-même — chaque groupe avec
+son compte par méthode. La recherche accepte une méthode, un chemin ou un mot ; les filtres
+montrent une seule méthode (`GET`, `POST`…) ou seulement les endpoints **Sans jeton**. Chaque
+endpoint montre ses champs, sa permission et son équivalent `bmm://` quand il en a un.
 
 
 ## Fichiers livrés par un plugin — `assets/`

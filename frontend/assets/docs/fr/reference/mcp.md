@@ -141,7 +141,7 @@ donne les valeurs acceptées.
 | Outil | Paramètres | Requiert | Ce que ça fait |
 |---|---|---|---|
 | `bmm_list_themes` | — |  | Liste les thèmes d'interface installés et lequel est actif |
-| `bmm_apply_theme` | `theme_id`\* | app | Définit le thème BMM actif par son id (p. ex. bmm-discord, bmm-void, ou un thème personnalisé installé) |
+| `bmm_apply_theme` | `theme_id`\* | app | Définit le thème BMM actif par son id (p. ex. bmm-indigo, bmm-void, ou un thème personnalisé installé) |
 | `bmm_get_theme` | `theme_id`\* |  | Lit la définition complète d'un thème personnalisé INSTALLÉ (variables, surcharges d'éléments) |
 
 ### Planification & benchmarks
