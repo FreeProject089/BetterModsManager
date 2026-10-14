@@ -27,6 +27,14 @@ $cli = Join-Path $rustDir 'target\release\bmm-bench-cli.exe'
 
 Write-Host "==> Generating fixtures in $fixDir ..." -ForegroundColor Cyan
 Remove-Item -Recurse -Force $fixDir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $fixDir | Out-Null
+# Windows PowerShell 5.1 drops the inner double quotes of a native argument: a command string
+# with a quoted path reached hyperfine unquoted, and it tried to run « E:\...\Better » (every
+# timing failed, empty JSON). So nothing handed to hyperfine may contain a space: the CLI is
+# copied next to the fixtures, in %TEMP% (8.3 short form on this machine).
+if ($fixDir -match ' ') { throw "the fixture folder must not contain a space: $fixDir (point TEMP to a path without spaces)" }
+Copy-Item $cli (Join-Path $fixDir 'bmm-bench-cli.exe') -Force
+$cli = Join-Path $fixDir 'bmm-bench-cli.exe'
 & $cli gen-tree   (Join-Path $fixDir 'tree') medium
 & $cli gen-archives (Join-Path $fixDir 'tree') (Join-Path $fixDir 'arch')
 
@@ -37,10 +45,12 @@ $out  = Join-Path $fixDir 'out'
 $formats = @('mod.zip','mod.tar','mod.tar.gz','mod.7z') | Where-Object { Test-Path (Join-Path $arch $_) }
 # NOTE: we use hyperfine -N (no intermediate shell) so hyperfine parses the
 # command itself. This avoids cmd.exe / bash quoting differences and correctly
-# handles the space in "Better Project". Every path token is double-quoted.
+# keeps paths out of the repository (see the note above: no spaces).
 # Extraction is idempotent (extract_to overwrites), so no --prepare clean is
-# needed. q() wraps a value in the double quotes hyperfine -N expects.
-function q($s) { return "`"$s`"" }
+# needed. q() refuses a path with a space rather than letting PowerShell mangle it.
+# hyperfine -N splits the command shell-style, where an unquoted backslash is an escape: paths go
+# with forward slashes (Windows accepts them).
+function q($s) { if ($s -match ' ') { throw "path with a space: $s" }; return ($s -replace '\\', '/') }
 
 $extractRuns = foreach ($f in $formats) {
   $label = [IO.Path]::GetFileName($f)

@@ -18,6 +18,18 @@ pub mod archive;
 #[path = "../../../src-tauri/src/commands/creator_v5/keystore.rs"]
 pub mod creator_keystore;
 
+/// The real universal catalogue format (1.0.2): detection, v1 → universal conversion,
+/// validation. No `crate::` path in it, so it is mounted verbatim like `archive`.
+#[path = "../../../src-tauri/src/commands/catalog_format.rs"]
+#[allow(dead_code)]
+pub mod catalog_format;
+
+/// The real repo format module (1.0.2): `hash_file` (sha256 + chunk table) and
+/// `hash_in_order`, used by repo validate / convert. Mounted verbatim as well.
+#[path = "../../../src-tauri/src/commands/repo_format.rs"]
+#[allow(dead_code)]
+pub mod repo_format;
+
 pub mod fixtures;
 pub mod fs_mirror;
 pub mod repo_schema;

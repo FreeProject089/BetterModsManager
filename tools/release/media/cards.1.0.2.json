@@ -1,0 +1,28 @@
+{
+  "en": {
+    "sub": "Big update · Windows · Free and open source",
+    "chips": ["One-click updates", "Activity centre", "BMM Tools", "Server Repo tools"],
+    "whatsNew": "What's new in {version}",
+    "features": [
+      ["One-click, checked updates", "Download, verify, install from BMM"],
+      ["Activity centre", "Every running task in one panel"],
+      ["BMM Tools", "Duplicates, conflicts, disk usage, profile diff"],
+      ["Server Repo, simpler", "Guided hosting, validate, convert, share"],
+      ["Cleaner Settings", "Index, search, tidy cards"],
+      ["Replay & Animation Studio", "Timeline editing, cuts, sequences"]
+    ]
+  },
+  "fr": {
+    "sub": "Grosse mise à jour · Windows · Gratuit et libre",
+    "chips": ["Mises à jour en un clic", "Centre d'activité", "Outils BMM", "Outils Server Repo"],
+    "whatsNew": "Les nouveautés de la {version}",
+    "features": [
+      ["Mises à jour en un clic", "Téléchargées, vérifiées, installées depuis BMM"],
+      ["Centre d'activité", "Toutes les tâches en cours au même endroit"],
+      ["Outils BMM", "Doublons, conflits, espace disque, comparaison"],
+      ["Server Repo simplifié", "Hébergement guidé, validation, conversion"],
+      ["Paramètres plus clairs", "Sommaire, recherche, cartes rangées"],
+      ["Studios Replay et Animation", "Montage sur timeline, coupes, séquences"]
+    ]
+  }
+}

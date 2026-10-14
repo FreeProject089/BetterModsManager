@@ -71,6 +71,16 @@ Then open **`benchmarks/results/index.html`** in a browser to present.
   `std::fs::copy` vs the 1 MiB smart-IO chunked copy.
 - **`repo_json`** — `serde_json` parse & serialize of `ServerRepo` swept by mod
   count, plus typed-struct vs untyped-`Value` parsing.
+- **`catalog_normalize`** (1.0.2) — the **real** `src-tauri/src/commands/catalog_format.rs`
+  (mounted verbatim, like `archive.rs`): `normalize_text` on a v1 apps catalogue, a v1 plugins
+  catalogue and an already universal document, at 100 / 1 000 / 5 000 items. Asserts every item
+  survives the conversion before timing.
+- **`repo_hash`** (1.0.2) — the **real** `src-tauri/src/commands/repo_format.rs` hasher behind
+  Server Repo « Validate » / « Convert » (sha256 + 4 MiB chunk table): `hash_in_order`
+  (sequential), `hash_file` over rayon (what the app's governed hasher does, minus ticket and
+  progress events) and the validate cache's hit path (a mirror: stamp + map lookup). Fixture:
+  the medium tree plus four 6–9 MiB files.
+- **`creator_key`** — the real creator key v5 store (`creator_v5/keystore.rs`).
 
 ### Frontend micro-bench (`js/`)
 Mirrors verbatim from `frontend/src`:
@@ -78,6 +88,12 @@ Mirrors verbatim from `frontend/src`:
   `localeCompare`) vs optimized (tag `Map` + `Intl.Collator`), swept 200→5000 mods.
 - **i18n** `t()` (`core/i18n.ts`) — shipped (a fresh `RegExp` per param) vs an
   optimized single-pass substitution.
+
+- **activity registry** (1.0.2) — the compiled `frontend/js/core/activity.js` itself: one task
+  started, updated 10 times and finished (one listener, history persisted to an in-memory
+  storage), and `overallProgress` over 20 running tasks.
+- **catalogue normaliser JS** (1.0.2) — the compiled `frontend/js/core/catalog-format.js`:
+  `normalizeCatalog` on a v1 apps catalogue of 100 and 1 000 items.
 
 Each optimized variant is **asserted equal** to the shipped one before timing, so
 the numbers compare apples to apples. These optimizations are now **applied in the
@@ -90,6 +106,18 @@ process cost — startup + one real `extract` / `entries` / `scan` — which is 
 latency a user perceives.
 
 ---
+
+## Results per version (release tool)
+
+`tools/release` (step `bench`, or `node tools/release/bench/run.mjs --version X.Y.Z`) runs every
+suite, then stores the version's numbers in `results/<version>/summary.json` (committed: point
+estimate, 95 % interval, samples, throughput, machine, toolchain) with the raw files in
+`results/<version>/raw/` (ignored), compares them with the newest earlier version and writes
+`Release/<version>/bench/BENCHMARK.md` (+ `_FR.md`, `.html`, PNG charts, an animated GIF). See
+[tools/release/README.md](../tools/release/README.md#benchmarks) for how verdicts are decided.
+
+`results/1.0.0/summary.json` is the baseline captured from the results that were on disk before
+the 1.0.2 run (June to September 2026, all while package.json said 1.0.0).
 
 ## Interpreting the deck
 - **Lower bars are better** (mean time). Rust charts also show throughput (MiB/s).

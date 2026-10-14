@@ -1,0 +1,1869 @@
+{
+  "schema": 1,
+  "version": "1.0.2",
+  "capturedAt": {
+    "from": "2026-06-15T20:17:38.416Z",
+    "to": "2026-10-14T07:46:16.300Z"
+  },
+  "commit": "627f956c6387ef8a0a89258fea9af9b2eccb0164",
+  "machine": {
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13700F",
+    "logicalCores": 24,
+    "ramGiB": 32,
+    "os": "Windows_NT 10.0.26300 x64",
+    "node": "v24.14.0",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "hyperfine": "hyperfine 1.20.0",
+    "otherCpuBefore": null,
+    "otherCpuAfter": null
+  },
+  "suites": [],
+  "caveats": {
+    "en": [
+      "Benchmarks ran on one desktop machine with other programs closed; a laptop on battery, another disk or another antivirus gives different absolute numbers. Compare the deltas, not the absolute values, with your own machine.",
+      "The previous version's numbers were measured on the same workstation but at an earlier date, possibly with an older Rust/Node toolchain and different Windows updates: part of a small delta can come from the toolchain or the OS, not from BMM.",
+      "Disk-bound benchmarks (extraction, copy, hashing, end-to-end) depend on the file cache: fixtures are warm (read once before timing), which is the case for a mod you just downloaded, not for a cold boot.",
+      "The memory collector runs each operation once; its times have no interval and only changes beyond ±15 % are called better or worse.",
+      "Some suites keep an OLD implementation next to the current one (« shipped » in the interface suites is the pre-optimisation code kept as a baseline); the current app runs the « optimized » rows.",
+      "Benchmarks new in this version have no previous value: they start the history the next release compares against."
+    ],
+    "fr": [
+      "Les mesures ont tourné sur un seul PC de bureau, autres programmes fermés ; un portable sur batterie, un autre disque ou un autre antivirus donnent d'autres valeurs absolues. Comparez les écarts, pas les valeurs absolues, avec votre machine.",
+      "Les chiffres de la version précédente viennent de la même machine mais d'une date antérieure, peut-être avec d'anciens outils Rust/Node et d'autres mises à jour Windows : une partie d'un petit écart peut venir des outils ou du système, pas de BMM.",
+      "Les mesures liées au disque (extraction, copie, hachage, bout en bout) dépendent du cache fichiers : les jeux de test sont « chauds » (lus une fois avant la mesure), comme un mod qu'on vient de télécharger, pas comme après un démarrage à froid.",
+      "Le collecteur mémoire exécute chaque opération une seule fois ; ses temps n'ont pas d'intervalle et seuls les écarts au-delà de ±15 % sont jugés.",
+      "Certaines séries gardent une ANCIENNE implémentation à côté de l'actuelle (« shipped » dans les séries de l'interface est le code d'avant optimisation, gardé comme référence) ; l'application actuelle exécute les lignes « optimized ».",
+      "Les mesures nouvelles dans cette version n'ont pas de valeur précédente : elles ouvrent l'historique que la prochaine version comparera."
+    ]
+  },
+  "metrics": [
+    {
+      "id": "criterion:archive_entries/7z",
+      "source": "criterion",
+      "group": "archive_entries",
+      "name": "7z",
+      "unit": "ns",
+      "value": 314433.5445439501,
+      "lo": 302295.72672197525,
+      "hi": 326937.3968204141,
+      "median": 312091.42992424243,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:31:54.473Z",
+      "criterionChange": {
+        "value": -0.9045122013873217,
+        "lo": -0.9084797245001902,
+        "hi": -0.9008024166933084,
+        "at": "2026-10-14T03:31:54.507Z"
+      }
+    },
+    {
+      "id": "criterion:archive_entries/tar",
+      "source": "criterion",
+      "group": "archive_entries",
+      "name": "tar",
+      "unit": "ns",
+      "value": 1740735.1560338063,
+      "lo": 1675657.4784436864,
+      "hi": 1811463.4606188734,
+      "median": 1650106.3879210223,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:31:33.639Z",
+      "criterionChange": {
+        "value": 0.47423684532387367,
+        "lo": 0.4165071252013456,
+        "hi": 0.5318086941602477,
+        "at": "2026-10-14T03:31:33.670Z"
+      }
+    },
+    {
+      "id": "criterion:archive_entries/tar.gz",
+      "source": "criterion",
+      "group": "archive_entries",
+      "name": "tar.gz",
+      "unit": "ns",
+      "value": 6936654.75,
+      "lo": 6819954.25625,
+      "hi": 7063856.840625,
+      "median": 6735837.5,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:31:43.069Z",
+      "criterionChange": {
+        "value": 0.10766916034374985,
+        "lo": 0.08928375975606061,
+        "hi": 0.12651081593970348,
+        "at": "2026-10-14T03:31:43.099Z"
+      }
+    },
+    {
+      "id": "criterion:archive_entries/zip",
+      "source": "criterion",
+      "group": "archive_entries",
+      "name": "zip",
+      "unit": "ns",
+      "value": 3913189.153846153,
+      "lo": 3743403.5384615376,
+      "hi": 4092995.323076923,
+      "median": 3623111.5384615385,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:31:21.260Z",
+      "criterionChange": {
+        "value": 0.5083446992114251,
+        "lo": 0.43623857119166265,
+        "hi": 0.5822571373247255,
+        "at": "2026-10-14T03:31:21.297Z"
+      }
+    },
+    {
+      "id": "criterion:archive_entry_count_invariant",
+      "source": "criterion",
+      "group": "archive_entry_count_invariant",
+      "name": "archive_entry_count_invariant",
+      "unit": "ns",
+      "value": 0.2157914406579745,
+      "lo": 0.2131770948094304,
+      "hi": 0.21867467327918355,
+      "median": 0.21139163198972605,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:33:45.416Z",
+      "criterionChange": {
+        "value": 0.059089343992950294,
+        "lo": 0.04098040451204719,
+        "hi": 0.07634202427239759,
+        "at": "2026-10-14T03:33:45.445Z"
+      }
+    },
+    {
+      "id": "criterion:archive_extract_to/7z",
+      "source": "criterion",
+      "group": "archive_extract_to",
+      "name": "7z",
+      "unit": "ns",
+      "value": 482078135,
+      "lo": 452929557.1875,
+      "hi": 513821911.1875,
+      "median": 465639100,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:33:34.320Z",
+      "criterionChange": {
+        "value": 1.4013862968604252,
+        "lo": 1.2563496826776444,
+        "hi": 1.5656642737371125,
+        "at": "2026-10-14T03:33:34.327Z"
+      }
+    },
+    {
+      "id": "criterion:archive_extract_to/tar",
+      "source": "criterion",
+      "group": "archive_extract_to",
+      "name": "tar",
+      "unit": "ns",
+      "value": 365259273.75,
+      "lo": 294136603.0625,
+      "hi": 443227291.25,
+      "median": 278023950,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:32:51.425Z",
+      "criterionChange": {
+        "value": 3.477575271021628,
+        "lo": 2.6911486129465647,
+        "hi": 4.59156883174347,
+        "at": "2026-10-14T03:32:51.435Z"
+      }
+    },
+    {
+      "id": "criterion:archive_extract_to/tar.gz",
+      "source": "criterion",
+      "group": "archive_extract_to",
+      "name": "tar.gz",
+      "unit": "ns",
+      "value": 196687681.6666667,
+      "lo": 187903748.75,
+      "hi": 206705404.74999997,
+      "median": 190948250,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:33:06.913Z",
+      "criterionChange": {
+        "value": 1.253340096276332,
+        "lo": 1.111345335308557,
+        "hi": 1.3950356589741633,
+        "at": "2026-10-14T03:33:06.921Z"
+      }
+    },
+    {
+      "id": "criterion:archive_extract_to/zip",
+      "source": "criterion",
+      "group": "archive_extract_to",
+      "name": "zip",
+      "unit": "ns",
+      "value": 249708258.3333334,
+      "lo": 242454088.2916667,
+      "hi": 257325952.5,
+      "median": 245775683.3333333,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 7430132
+      },
+      "at": "2026-10-14T03:32:16.430Z",
+      "criterionChange": {
+        "value": 0.4044675311447439,
+        "lo": 0.34796518652296565,
+        "hi": 0.4552819456104427,
+        "at": "2026-10-14T03:32:16.441Z"
+      }
+    },
+    {
+      "id": "criterion:blake3/large_2m_files",
+      "source": "criterion",
+      "group": "blake3",
+      "name": "large_2m_files",
+      "unit": "ns",
+      "value": 1483720.5216512934,
+      "lo": 1470468.1843775208,
+      "hi": 1497523.408023157,
+      "median": 1471324.5283018867,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 3142853
+      },
+      "at": "2026-10-14T03:39:18.174Z",
+      "criterionChange": {
+        "value": 0.2103268886394689,
+        "lo": 0.19781835318994592,
+        "hi": 0.22308514084083833,
+        "at": "2026-10-14T03:39:18.212Z"
+      }
+    },
+    {
+      "id": "criterion:blake3/medium_64k_files",
+      "source": "criterion",
+      "group": "blake3",
+      "name": "medium_64k_files",
+      "unit": "ns",
+      "value": 316637.2279995184,
+      "lo": 311109.7484921818,
+      "hi": 322432.9652080024,
+      "median": 315454.47463768115,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 98280
+      },
+      "at": "2026-10-14T03:39:04.048Z",
+      "criterionChange": {
+        "value": 0.7842379289701771,
+        "lo": 0.7378503128490816,
+        "hi": 0.8304596614631878,
+        "at": "2026-10-14T03:39:04.079Z"
+      }
+    },
+    {
+      "id": "criterion:catalog_normalize/universal/100",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "universal/100",
+      "unit": "ns",
+      "value": 627247.4171242042,
+      "lo": 618848.904794689,
+      "hi": 637197.7293160867,
+      "median": 619361.8510928962,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 100
+      },
+      "at": "2026-10-14T03:34:25.544Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/universal/1000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "universal/1000",
+      "unit": "ns",
+      "value": 7687316.5,
+      "lo": 7546683.4375,
+      "hi": 7833664.5,
+      "median": 7564331.25,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 1000
+      },
+      "at": "2026-10-14T03:34:57.230Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/universal/5000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "universal/5000",
+      "unit": "ns",
+      "value": 45299297,
+      "lo": 44030683.375,
+      "hi": 46661311.025,
+      "median": 43298550,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 5000
+      },
+      "at": "2026-10-14T03:35:40.635Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_apps/100",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_apps/100",
+      "unit": "ns",
+      "value": 848966.8204184446,
+      "lo": 836699.9310595525,
+      "hi": 862100.2947273827,
+      "median": 832500.8333333333,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 100
+      },
+      "at": "2026-10-14T03:34:02.653Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_apps/1000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_apps/1000",
+      "unit": "ns",
+      "value": 9728903.000000004,
+      "lo": 9564580.666666664,
+      "hi": 9904681.75,
+      "median": 9582333.333333332,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 1000
+      },
+      "at": "2026-10-14T03:34:36.997Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_apps/5000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_apps/5000",
+      "unit": "ns",
+      "value": 57068321,
+      "lo": 55604986.8,
+      "hi": 58670391.9625,
+      "median": 55255775,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 5000
+      },
+      "at": "2026-10-14T03:35:12.505Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_plugins/100",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_plugins/100",
+      "unit": "ns",
+      "value": 585409.0836683954,
+      "lo": 581429.7912695846,
+      "hi": 589666.9003812884,
+      "median": 582236.5384615385,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 100
+      },
+      "at": "2026-10-14T03:34:13.833Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_plugins/1000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_plugins/1000",
+      "unit": "ns",
+      "value": 6474367.5,
+      "lo": 6391960.1525,
+      "hi": 6562140.28,
+      "median": 6387225,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 1000
+      },
+      "at": "2026-10-14T03:34:46.932Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:catalog_normalize/v1_plugins/5000",
+      "source": "criterion",
+      "group": "catalog_normalize",
+      "name": "v1_plugins/5000",
+      "unit": "ns",
+      "value": 38419467.5,
+      "lo": 37156788.8375,
+      "hi": 39847387.5,
+      "median": 36421350,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 5000
+      },
+      "at": "2026-10-14T03:35:25.831Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_cold_load/read_unseal_validate",
+      "source": "criterion",
+      "group": "creator_cold_load",
+      "name": "read_unseal_validate",
+      "unit": "ns",
+      "value": 796925.0740521495,
+      "lo": 773474.9737731818,
+      "hi": 822156.0058879069,
+      "median": 760528.2354797979,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:35:52.577Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_cold_load/warm_reload",
+      "source": "criterion",
+      "group": "creator_cold_load",
+      "name": "warm_reload",
+      "unit": "ns",
+      "value": 352783.5900354941,
+      "lo": 342855.8322543248,
+      "hi": 363530.4304523282,
+      "median": 336422.97530864197,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:01.764Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_proof_build/cached_fingerprint_and_sign",
+      "source": "criterion",
+      "group": "creator_proof_build",
+      "name": "cached_fingerprint_and_sign",
+      "unit": "ns",
+      "value": 52860.56259880574,
+      "lo": 50662.90679603515,
+      "hi": 55419.1356350431,
+      "median": 49538.78947368421,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:19.515Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_proof_build/fingerprint_and_sign",
+      "source": "criterion",
+      "group": "creator_proof_build",
+      "name": "fingerprint_and_sign",
+      "unit": "ns",
+      "value": 6740072.875,
+      "lo": 6612395.734375,
+      "hi": 6871702.465625,
+      "median": 6638325,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:10.861Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_proof_build/sign_only",
+      "source": "criterion",
+      "group": "creator_proof_build",
+      "name": "sign_only",
+      "unit": "ns",
+      "value": 49480.9802140893,
+      "lo": 48374.19822636841,
+      "hi": 50684.51181949032,
+      "median": 47229.78739002933,
+      "n": 100,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:28.485Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_rotation/rotate_at_command_path",
+      "source": "criterion",
+      "group": "creator_rotation",
+      "name": "rotate_at_command_path",
+      "unit": "ns",
+      "value": 13691266.666666666,
+      "lo": 13049408.57142857,
+      "hi": 14462986.059523812,
+      "median": 13126985.714285715,
+      "n": 30,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:53.068Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:creator_rotation/rotate_persist_readback",
+      "source": "criterion",
+      "group": "creator_rotation",
+      "name": "rotate_persist_readback",
+      "unit": "ns",
+      "value": 11088792.685460487,
+      "lo": 10699016.65654247,
+      "hi": 11491898.101054179,
+      "median": 11076926.068376068,
+      "n": 30,
+      "better": "lower",
+      "throughput": null,
+      "at": "2026-10-14T03:36:44.219Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:dir_scan/jwalk/large",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "jwalk/large",
+      "unit": "ns",
+      "value": 1241962.165218467,
+      "lo": 1224548.2873035627,
+      "hi": 1260106.697753291,
+      "median": 1240117.5193050192,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 24
+      },
+      "at": "2026-10-14T03:38:06.762Z",
+      "criterionChange": {
+        "value": 4.6860681684756464,
+        "lo": 4.567760713219882,
+        "hi": 4.802908850269426,
+        "at": "2026-10-14T03:38:06.798Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/jwalk/medium",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "jwalk/medium",
+      "unit": "ns",
+      "value": 1838826.159521686,
+      "lo": 1811879.7943851266,
+      "hi": 1866513.0845311321,
+      "median": 1816753.9816772374,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 120
+      },
+      "at": "2026-10-14T03:37:35.157Z",
+      "criterionChange": {
+        "value": 4.7809270840833396,
+        "lo": 4.657108928127189,
+        "hi": 4.900737703647645,
+        "at": "2026-10-14T03:37:35.194Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/jwalk/small",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "jwalk/small",
+      "unit": "ns",
+      "value": 2267288.6086956505,
+      "lo": 2235779.5217391304,
+      "hi": 2300439.0000000005,
+      "median": 2230217.3913043477,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 200
+      },
+      "at": "2026-10-14T03:37:03.579Z",
+      "criterionChange": {
+        "value": 4.485914203328832,
+        "lo": 4.368606828426896,
+        "hi": 4.603637433774593,
+        "at": "2026-10-14T03:37:03.614Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/std_recursive/large",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "std_recursive/large",
+      "unit": "ns",
+      "value": 1369167.2091843444,
+      "lo": 1307973.341260503,
+      "hi": 1430916.446000802,
+      "median": 1350041.292997543,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 24
+      },
+      "at": "2026-10-14T03:38:32.387Z",
+      "criterionChange": {
+        "value": 5.016347331252076,
+        "lo": 4.726826181683863,
+        "hi": 5.323212581806712,
+        "at": "2026-10-14T03:38:32.429Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/std_recursive/medium",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "std_recursive/medium",
+      "unit": "ns",
+      "value": 3211226.7999999993,
+      "lo": 3092223.4049999993,
+      "hi": 3329300.623333334,
+      "median": 3138250,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 120
+      },
+      "at": "2026-10-14T03:37:54.291Z",
+      "criterionChange": {
+        "value": 5.760986839824578,
+        "lo": 5.503827181751432,
+        "hi": 5.991641478059329,
+        "at": "2026-10-14T03:37:54.332Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/std_recursive/small",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "std_recursive/small",
+      "unit": "ns",
+      "value": 2746367.714285714,
+      "lo": 2609909.3571428554,
+      "hi": 2898655.428571428,
+      "median": 2427017.8571428573,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 200
+      },
+      "at": "2026-10-14T03:37:21.430Z",
+      "criterionChange": {
+        "value": 2.7802226015426004,
+        "lo": 2.5829574943980194,
+        "hi": 2.960384875083184,
+        "at": "2026-10-14T03:37:21.454Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/walkdir/large",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "walkdir/large",
+      "unit": "ns",
+      "value": 1276289.910162097,
+      "lo": 1212602.5592281697,
+      "hi": 1341664.8657893168,
+      "median": 1210627.0146520147,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 24
+      },
+      "at": "2026-10-14T03:38:19.226Z",
+      "criterionChange": {
+        "value": 4.309080133298322,
+        "lo": 4.0412180168661465,
+        "hi": 4.592799140668022,
+        "at": "2026-10-14T03:38:19.262Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/walkdir/medium",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "walkdir/medium",
+      "unit": "ns",
+      "value": 3627496.875,
+      "lo": 3479487.6875,
+      "hi": 3778050.0421875,
+      "median": 3602546.875,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 120
+      },
+      "at": "2026-10-14T03:37:45.220Z",
+      "criterionChange": {
+        "value": 6.204393863863516,
+        "lo": 5.925584806566447,
+        "hi": 6.520277426634107,
+        "at": "2026-10-14T03:37:45.253Z"
+      }
+    },
+    {
+      "id": "criterion:dir_scan/walkdir/small",
+      "source": "criterion",
+      "group": "dir_scan",
+      "name": "walkdir/small",
+      "unit": "ns",
+      "value": 3598774.625,
+      "lo": 3387842.8328125,
+      "hi": 3819994,
+      "median": 3273790.625,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "elements": 200
+      },
+      "at": "2026-10-14T03:37:13.159Z",
+      "criterionChange": {
+        "value": 3.845361399988887,
+        "lo": 3.563049626693888,
+        "hi": 4.121331767779711,
+        "at": "2026-10-14T03:37:13.192Z"
+      }
+    },
+    {
+      "id": "criterion:file_copy/smart_io_1m",
+      "source": "criterion",
+      "group": "file_copy",
+      "name": "smart_io_1m",
+      "unit": "ns",
+      "value": 3197354.1661979137,
+      "lo": 3028629.0565798106,
+      "hi": 3364281.5630337326,
+      "median": 3302188.7648809524,
+      "n": 30,
+      "better": "lower",
+      "throughput": {
+        "bytes": 3142853
+      },
+      "at": "2026-10-14T03:39:43.491Z",
+      "criterionChange": {
+        "value": 0.891283710392442,
+        "lo": 0.704760165359361,
+        "hi": 1.0730009899594775,
+        "at": "2026-10-14T03:39:43.504Z"
+      }
+    },
+    {
+      "id": "criterion:file_copy/smart_io_256k",
+      "source": "criterion",
+      "group": "file_copy",
+      "name": "smart_io_256k",
+      "unit": "ns",
+      "value": 6714456.609467578,
+      "lo": 6288417.066169251,
+      "hi": 7167703.043036364,
+      "median": 6345854.120879121,
+      "n": 30,
+      "better": "lower",
+      "throughput": {
+        "bytes": 3142853
+      },
+      "at": "2026-06-15T20:17:38.416Z",
+      "criterionChange": {
+        "value": 0.24771284588738185,
+        "lo": 0.11948791470374917,
+        "hi": 0.39036601324932985,
+        "at": "2026-06-15T20:17:38.453Z"
+      }
+    },
+    {
+      "id": "criterion:file_copy/std_fs_copy",
+      "source": "criterion",
+      "group": "file_copy",
+      "name": "std_fs_copy",
+      "unit": "ns",
+      "value": 1655499.882436843,
+      "lo": 1561580.3236338147,
+      "hi": 1754839.7037252253,
+      "median": 1655631.2626262626,
+      "n": 30,
+      "better": "lower",
+      "throughput": {
+        "bytes": 3142853
+      },
+      "at": "2026-10-14T03:39:30.702Z",
+      "criterionChange": {
+        "value": 0.7182969347227011,
+        "lo": 0.6144411402348684,
+        "hi": 0.8443876982837093,
+        "at": "2026-10-14T03:39:30.714Z"
+      }
+    },
+    {
+      "id": "criterion:repo_hash/cache_hit",
+      "source": "criterion",
+      "group": "repo_hash",
+      "name": "cache_hit",
+      "unit": "ns",
+      "value": 10966090.305449007,
+      "lo": 10099812.711430548,
+      "hi": 11898899.029290777,
+      "median": 10514712.94642857,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "elements": 124
+      },
+      "at": "2026-10-14T03:40:37.909Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:repo_hash/parallel",
+      "source": "criterion",
+      "group": "repo_hash",
+      "name": "parallel",
+      "unit": "ns",
+      "value": 39453898.72582871,
+      "lo": 38552055.553820826,
+      "hi": 40366974.67043366,
+      "median": 39508571.25,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 37282706
+      },
+      "at": "2026-10-14T03:40:25.064Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:repo_hash/sequential",
+      "source": "criterion",
+      "group": "repo_hash",
+      "name": "sequential",
+      "unit": "ns",
+      "value": 197187746.6666667,
+      "lo": 188243520.00000006,
+      "hi": 206333071.6666667,
+      "median": 198163433.33333334,
+      "n": 20,
+      "better": "lower",
+      "throughput": {
+        "bytes": 37282706
+      },
+      "at": "2026-10-14T03:40:03.459Z",
+      "criterionChange": null
+    },
+    {
+      "id": "criterion:repo_json_parse/large_500mods",
+      "source": "criterion",
+      "group": "repo_json_parse",
+      "name": "large_500mods",
+      "unit": "ns",
+      "value": 2403875.833333333,
+      "lo": 2314639.708333334,
+      "hi": 2498931.7729166667,
+      "median": 2244214.583333333,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 1633795
+      },
+      "at": "2026-10-14T03:41:09.750Z",
+      "criterionChange": {
+        "value": 0.38265339689820377,
+        "lo": 0.3302496945572344,
+        "hi": 0.4358878018296422,
+        "at": "2026-10-14T03:41:09.781Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_parse/medium_50mods",
+      "source": "criterion",
+      "group": "repo_json_parse",
+      "name": "medium_50mods",
+      "unit": "ns",
+      "value": 189025.7951453697,
+      "lo": 180727.34407364772,
+      "hi": 198064.78595387138,
+      "median": 172860.10101010103,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 128933
+      },
+      "at": "2026-10-14T03:40:59.175Z",
+      "criterionChange": {
+        "value": 0.2541484654168882,
+        "lo": 0.19849290328021538,
+        "hi": 0.31632128942979043,
+        "at": "2026-10-14T03:40:59.210Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_parse/small_5mods",
+      "source": "criterion",
+      "group": "repo_json_parse",
+      "name": "small_5mods",
+      "unit": "ns",
+      "value": 15624.47007132506,
+      "lo": 15210.705573131147,
+      "hi": 16084.007785929822,
+      "median": 15179.30471719204,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 9699
+      },
+      "at": "2026-10-14T03:40:47.621Z",
+      "criterionChange": {
+        "value": 0.2246516280958173,
+        "lo": 0.1950805710396921,
+        "hi": 0.25566966263307944,
+        "at": "2026-10-14T03:40:47.649Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_serialize/large_500mods",
+      "source": "criterion",
+      "group": "repo_json_serialize",
+      "name": "large_500mods",
+      "unit": "ns",
+      "value": 2582112.190476191,
+      "lo": 2482711.469047618,
+      "hi": 2679272.003571429,
+      "median": 2635433.333333333,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 1633795
+      },
+      "at": "2026-10-14T03:41:40.829Z",
+      "criterionChange": {
+        "value": 0.9031594630512054,
+        "lo": 0.8276866256756331,
+        "hi": 0.9712395761652824,
+        "at": "2026-10-14T03:41:40.867Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_serialize/medium_50mods",
+      "source": "criterion",
+      "group": "repo_json_serialize",
+      "name": "medium_50mods",
+      "unit": "ns",
+      "value": 116627.22066665492,
+      "lo": 111875.02242244242,
+      "hi": 121539.65892083672,
+      "median": 109027.0987654321,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 128933
+      },
+      "at": "2026-10-14T03:41:29.861Z",
+      "criterionChange": {
+        "value": 0.42683587250971833,
+        "lo": 0.36699851783916454,
+        "hi": 0.48345369181509745,
+        "at": "2026-10-14T03:41:29.891Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_serialize/small_5mods",
+      "source": "criterion",
+      "group": "repo_json_serialize",
+      "name": "small_5mods",
+      "unit": "ns",
+      "value": 8570.734926252802,
+      "lo": 8249.408465108392,
+      "hi": 8906.445047475714,
+      "median": 8062.244275525525,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 9699
+      },
+      "at": "2026-10-14T03:41:20.004Z",
+      "criterionChange": {
+        "value": 0.3082483148420345,
+        "lo": 0.2614079132996766,
+        "hi": 0.35388517869237335,
+        "at": "2026-10-14T03:41:20.038Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_typed_vs_value/typed_ServerRepo",
+      "source": "criterion",
+      "group": "repo_json_typed_vs_value",
+      "name": "typed_ServerRepo",
+      "unit": "ns",
+      "value": 3466790.846153847,
+      "lo": 3144478.153846154,
+      "hi": 3890428.863461538,
+      "median": 2990773.076923077,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 1633795
+      },
+      "at": "2026-10-14T03:41:50.110Z",
+      "criterionChange": {
+        "value": 1.025898273800676,
+        "lo": 0.834802344129463,
+        "hi": 1.3071446572449557,
+        "at": "2026-10-14T03:41:50.143Z"
+      }
+    },
+    {
+      "id": "criterion:repo_json_typed_vs_value/untyped_Value",
+      "source": "criterion",
+      "group": "repo_json_typed_vs_value",
+      "name": "untyped_Value",
+      "unit": "ns",
+      "value": 7393990.142857144,
+      "lo": 7129300.953571428,
+      "hi": 7667022.717857143,
+      "median": 7169050,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 1633795
+      },
+      "at": "2026-10-14T03:41:59.603Z",
+      "criterionChange": {
+        "value": 0.8044620454446045,
+        "lo": 0.7332157887026552,
+        "hi": 0.8744091638308256,
+        "at": "2026-10-14T03:41:59.641Z"
+      }
+    },
+    {
+      "id": "criterion:sha256/large_2m_files",
+      "source": "criterion",
+      "group": "sha256",
+      "name": "large_2m_files",
+      "unit": "ns",
+      "value": 2014806.96,
+      "lo": 1983493.8,
+      "hi": 2047338.846,
+      "median": 1987744,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 3142853
+      },
+      "at": "2026-10-14T03:38:52.053Z",
+      "criterionChange": {
+        "value": 0.15170965792494284,
+        "lo": 0.13264316508834945,
+        "hi": 0.17250831109750756,
+        "at": "2026-10-14T03:38:52.083Z"
+      }
+    },
+    {
+      "id": "criterion:sha256/medium_64k_files",
+      "source": "criterion",
+      "group": "sha256",
+      "name": "medium_64k_files",
+      "unit": "ns",
+      "value": 381006.5362792702,
+      "lo": 370057.3968821437,
+      "hi": 392348.64425746317,
+      "median": 377914.1146953405,
+      "n": 100,
+      "better": "lower",
+      "throughput": {
+        "bytes": 98280
+      },
+      "at": "2026-10-14T03:38:42.108Z",
+      "criterionChange": {
+        "value": 0.6926243182874849,
+        "lo": 0.6454477845663754,
+        "hi": 0.7410752938455162,
+        "at": "2026-10-14T03:38:42.139Z"
+      }
+    },
+    {
+      "id": "js:mod-list filter+sort (200 mods, search miss, name_asc)/shipped (.find + localeCompare)",
+      "source": "js",
+      "group": "mod-list filter+sort (200 mods, search miss, name_asc)",
+      "name": "shipped (.find + localeCompare)",
+      "unit": "ns",
+      "value": 34810.67429505517,
+      "lo": 33898.63581285393,
+      "hi": 35722.71277725641,
+      "median": 34702.778912954636,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list filter+sort (200 mods, search miss, name_asc)/optimized (Map + Collator)",
+      "source": "js",
+      "group": "mod-list filter+sort (200 mods, search miss, name_asc)",
+      "name": "optimized (Map + Collator)",
+      "unit": "ns",
+      "value": 18336.47413102675,
+      "lo": 16772.96421962323,
+      "hi": 19899.984042430267,
+      "median": 18112.97453147525,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list filter+sort (1000 mods, search miss, name_asc)/shipped (.find + localeCompare)",
+      "source": "js",
+      "group": "mod-list filter+sort (1000 mods, search miss, name_asc)",
+      "name": "shipped (.find + localeCompare)",
+      "unit": "ns",
+      "value": 293396.5758754864,
+      "lo": 276050.43190770154,
+      "hi": 310742.7198432713,
+      "median": 300640.8560311284,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list filter+sort (1000 mods, search miss, name_asc)/optimized (Map + Collator)",
+      "source": "js",
+      "group": "mod-list filter+sort (1000 mods, search miss, name_asc)",
+      "name": "optimized (Map + Collator)",
+      "unit": "ns",
+      "value": 132022.12113720644,
+      "lo": 125059.35513578187,
+      "hi": 138984.88713863102,
+      "median": 136644.3757725587,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list filter+sort (5000 mods, search miss, name_asc)/shipped (.find + localeCompare)",
+      "source": "js",
+      "group": "mod-list filter+sort (5000 mods, search miss, name_asc)",
+      "name": "shipped (.find + localeCompare)",
+      "unit": "ns",
+      "value": 995922.1647058825,
+      "lo": 940120.3955132031,
+      "hi": 1051723.9338985619,
+      "median": 957664.7058823529,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list filter+sort (5000 mods, search miss, name_asc)/optimized (Map + Collator)",
+      "source": "js",
+      "group": "mod-list filter+sort (5000 mods, search miss, name_asc)",
+      "name": "optimized (Map + Collator)",
+      "unit": "ns",
+      "value": 549405.0649350649,
+      "lo": 529854.0002938163,
+      "hi": 568956.1295763134,
+      "median": 541564.2857142857,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/shipped/name_asc",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "shipped/name_asc",
+      "unit": "ns",
+      "value": 6081183.076923077,
+      "lo": 5866619.434810783,
+      "hi": 6295746.719035371,
+      "median": 6095430.769230769,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/optimized/name_asc",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "optimized/name_asc",
+      "unit": "ns",
+      "value": 3855839.047619047,
+      "lo": 3615205.4336001193,
+      "hi": 4096472.661637975,
+      "median": 3655338.095238095,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/shipped/status",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "shipped/status",
+      "unit": "ns",
+      "value": 5368787.25,
+      "lo": 5285490.945566257,
+      "hi": 5452083.554433743,
+      "median": 5404231.25,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/optimized/status",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "optimized/status",
+      "unit": "ns",
+      "value": 6132760.333333332,
+      "lo": 5536339.590654471,
+      "hi": 6729181.076012193,
+      "median": 6928154.166666667,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/shipped/activation_order",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "shipped/activation_order",
+      "unit": "ns",
+      "value": 5714760.2857142845,
+      "lo": 5602041.564289319,
+      "hi": 5827479.00713925,
+      "median": 5627928.571428572,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:mod-list sort only (5000 mods, no search)/optimized/activation_order",
+      "source": "js",
+      "group": "mod-list sort only (5000 mods, no search)",
+      "name": "optimized/activation_order",
+      "unit": "ns",
+      "value": 4036682.4,
+      "lo": 3935534.372832456,
+      "hi": 4137830.4271675437,
+      "median": 4091640,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:i18n t() interpolation (keys with params)/shipped (RegExp per param)",
+      "source": "js",
+      "group": "i18n t() interpolation (keys with params)",
+      "name": "shipped (RegExp per param)",
+      "unit": "ns",
+      "value": 1486.700275286054,
+      "lo": 1438.66279510958,
+      "hi": 1534.737755462528,
+      "median": 1500.2097417554635,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:i18n t() interpolation (keys with params)/optimized (single-pass)",
+      "source": "js",
+      "group": "i18n t() interpolation (keys with params)",
+      "name": "optimized (single-pass)",
+      "unit": "ns",
+      "value": 254.90940046940895,
+      "lo": 247.74845431978062,
+      "hi": 262.07034661903725,
+      "median": 255.1960217139123,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:i18n t() — full screen render (200 strings)/shipped",
+      "source": "js",
+      "group": "i18n t() — full screen render (200 strings)",
+      "name": "shipped",
+      "unit": "ns",
+      "value": 278124.2472727273,
+      "lo": 269740.0707615708,
+      "hi": 286508.4237838838,
+      "median": 277661.0909090909,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:i18n t() — full screen render (200 strings)/optimized",
+      "source": "js",
+      "group": "i18n t() — full screen render (200 strings)",
+      "name": "optimized",
+      "unit": "ns",
+      "value": 46582.378151260506,
+      "lo": 44670.154876819826,
+      "hi": 48494.601425701185,
+      "median": 47212.815126050424,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — plain text (fast path, no escaping)/shipped (5× .replace)",
+      "source": "js",
+      "group": "escHtml — plain text (fast path, no escaping)",
+      "name": "shipped (5× .replace)",
+      "unit": "ns",
+      "value": 177661.45530145534,
+      "lo": 171982.7294464672,
+      "hi": 183340.1811564435,
+      "median": 181618.08731808732,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — plain text (fast path, no escaping)/optimized (test + 1 pass)",
+      "source": "js",
+      "group": "escHtml — plain text (fast path, no escaping)",
+      "name": "optimized (test + 1 pass)",
+      "unit": "ns",
+      "value": 111488.79902557856,
+      "lo": 108062.73696066925,
+      "hi": 114914.86109048786,
+      "median": 109176.00487210718,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — text with special chars/shipped (5× .replace)",
+      "source": "js",
+      "group": "escHtml — text with special chars",
+      "name": "shipped (5× .replace)",
+      "unit": "ns",
+      "value": 519368.625,
+      "lo": 512028.80526038515,
+      "hi": 526708.4447396148,
+      "median": 514905.625,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — text with special chars/optimized (test + 1 pass)",
+      "source": "js",
+      "group": "escHtml — text with special chars",
+      "name": "optimized (test + 1 pass)",
+      "unit": "ns",
+      "value": 379121.4545454545,
+      "lo": 369170.56240225205,
+      "hi": 389072.3466886569,
+      "median": 373864.5933014354,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — full screen render (300 strings, ~25% escaped)/shipped",
+      "source": "js",
+      "group": "escHtml — full screen render (300 strings, ~25% escaped)",
+      "name": "shipped",
+      "unit": "ns",
+      "value": 273535.2278481013,
+      "lo": 260932.15911515817,
+      "hi": 286138.29658104444,
+      "median": 264726.582278481,
+      "n": 25,
+      "better": "lower",
+      "kind": "shipped",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:escHtml — full screen render (300 strings, ~25% escaped)/optimized",
+      "source": "js",
+      "group": "escHtml — full screen render (300 strings, ~25% escaped)",
+      "name": "optimized",
+      "unit": "ns",
+      "value": 179786.8101761253,
+      "lo": 172933.34771138447,
+      "hi": 186640.2726408661,
+      "median": 178504.1095890411,
+      "n": 25,
+      "better": "lower",
+      "kind": "optimized",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:activity registry (1.0.2): one task, start → 10 updates → done/start + 10 updates + done (1 listener)",
+      "source": "js",
+      "group": "activity registry (1.0.2): one task, start → 10 updates → done",
+      "name": "start + 10 updates + done (1 listener)",
+      "unit": "ns",
+      "value": 17322.427364185114,
+      "lo": 16902.84577024885,
+      "hi": 17742.00895812138,
+      "median": 17053.299798792756,
+      "n": 25,
+      "better": "lower",
+      "kind": "real",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:activity registry (1.0.2): one task, start → 10 updates → done/overallProgress over 20 running tasks",
+      "source": "js",
+      "group": "activity registry (1.0.2): one task, start → 10 updates → done",
+      "name": "overallProgress over 20 running tasks",
+      "unit": "ns",
+      "value": 789.2409991456816,
+      "lo": 770.3880000229888,
+      "hi": 808.0939982683744,
+      "median": 782.2962857491558,
+      "n": 25,
+      "better": "lower",
+      "kind": "real",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:catalogue normaliser JS (1.0.2): v1 apps catalogue → universal/normalizeCatalog v1 apps (100 items)",
+      "source": "js",
+      "group": "catalogue normaliser JS (1.0.2): v1 apps catalogue → universal",
+      "name": "normalizeCatalog v1 apps (100 items)",
+      "unit": "ns",
+      "value": 1014425.2195121953,
+      "lo": 998276.2854392622,
+      "hi": 1030574.1535851285,
+      "median": 1009587.8048780488,
+      "n": 25,
+      "better": "lower",
+      "kind": "real",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "js:catalogue normaliser JS (1.0.2): v1 apps catalogue → universal/normalizeCatalog v1 apps (1000 items)",
+      "source": "js",
+      "group": "catalogue normaliser JS (1.0.2): v1 apps catalogue → universal",
+      "name": "normalizeCatalog v1 apps (1000 items)",
+      "unit": "ns",
+      "value": 11053932.5,
+      "lo": 10753611.336969847,
+      "hi": 11354253.663030153,
+      "median": 11169025,
+      "n": 25,
+      "better": "lower",
+      "kind": "real",
+      "at": "2026-10-14T03:42:36.003Z"
+    },
+    {
+      "id": "e2e:entries/entries mod.zip",
+      "source": "hyperfine",
+      "group": "e2e entries",
+      "name": "entries mod.zip",
+      "unit": "ns",
+      "value": 72319742.64705881,
+      "lo": 64548811.4737429,
+      "hi": 80090673.82037473,
+      "median": 60140650.00000001,
+      "n": 68,
+      "better": "lower",
+      "at": "2026-10-14T07:46:13.272Z"
+    },
+    {
+      "id": "e2e:entries/entries mod.tar",
+      "source": "hyperfine",
+      "group": "e2e entries",
+      "name": "entries mod.tar",
+      "unit": "ns",
+      "value": 59878750.684931524,
+      "lo": 56704868.15164227,
+      "hi": 63052633.21822077,
+      "median": 61676800.00000001,
+      "n": 73,
+      "better": "lower",
+      "at": "2026-10-14T07:46:13.272Z"
+    },
+    {
+      "id": "e2e:entries/entries mod.tar.gz",
+      "source": "hyperfine",
+      "group": "e2e entries",
+      "name": "entries mod.tar.gz",
+      "unit": "ns",
+      "value": 76052133.33333334,
+      "lo": 73838767.62815166,
+      "hi": 78265499.03851503,
+      "median": 75701700.00000001,
+      "n": 39,
+      "better": "lower",
+      "at": "2026-10-14T07:46:13.272Z"
+    },
+    {
+      "id": "e2e:entries/entries mod.7z",
+      "source": "hyperfine",
+      "group": "e2e entries",
+      "name": "entries mod.7z",
+      "unit": "ns",
+      "value": 75941430.43478262,
+      "lo": 72284571.55305806,
+      "hi": 79598289.3165072,
+      "median": 74224500,
+      "n": 46,
+      "better": "lower",
+      "at": "2026-10-14T07:46:13.272Z"
+    },
+    {
+      "id": "e2e:extract/extract mod.zip",
+      "source": "hyperfine",
+      "group": "e2e extract",
+      "name": "extract mod.zip",
+      "unit": "ns",
+      "value": 248418300,
+      "lo": 244017451.02308556,
+      "hi": 252819148.9769145,
+      "median": 246762100,
+      "n": 11,
+      "better": "lower",
+      "at": "2026-10-14T07:45:56.709Z"
+    },
+    {
+      "id": "e2e:extract/extract mod.tar",
+      "source": "hyperfine",
+      "group": "e2e extract",
+      "name": "extract mod.tar",
+      "unit": "ns",
+      "value": 280257690.90909094,
+      "lo": 268366829.26439735,
+      "hi": 292148552.5537845,
+      "median": 277439000,
+      "n": 11,
+      "better": "lower",
+      "at": "2026-10-14T07:45:56.709Z"
+    },
+    {
+      "id": "e2e:extract/extract mod.tar.gz",
+      "source": "hyperfine",
+      "group": "e2e extract",
+      "name": "extract mod.tar.gz",
+      "unit": "ns",
+      "value": 285207510.00000006,
+      "lo": 280363647.9154634,
+      "hi": 290051372.08453673,
+      "median": 284619500,
+      "n": 10,
+      "better": "lower",
+      "at": "2026-10-14T07:45:56.709Z"
+    },
+    {
+      "id": "e2e:extract/extract mod.7z",
+      "source": "hyperfine",
+      "group": "e2e extract",
+      "name": "extract mod.7z",
+      "unit": "ns",
+      "value": 487581970.00000006,
+      "lo": 479097718.2869166,
+      "hi": 496066221.71308345,
+      "median": 491118300,
+      "n": 10,
+      "better": "lower",
+      "at": "2026-10-14T07:45:56.709Z"
+    },
+    {
+      "id": "e2e:scan/scan jwalk",
+      "source": "hyperfine",
+      "group": "e2e scan",
+      "name": "scan jwalk",
+      "unit": "ns",
+      "value": 60963266.66666667,
+      "lo": 57594239.00227218,
+      "hi": 64332294.33106118,
+      "median": 56489600,
+      "n": 39,
+      "better": "lower",
+      "at": "2026-10-14T07:46:16.300Z"
+    },
+    {
+      "id": "mem:scan_jwalk/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "scan_jwalk time",
+      "unit": "ns",
+      "value": 2324000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:scan_jwalk/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "scan_jwalk peak heap",
+      "unit": "KiB",
+      "value": 185.9,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:sha256_all/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "sha256_all time",
+      "unit": "ns",
+      "value": 47478000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:sha256_all/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "sha256_all peak heap",
+      "unit": "KiB",
+      "value": 2048,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:blake3_all/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "blake3_all time",
+      "unit": "ns",
+      "value": 24797000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:blake3_all/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "blake3_all peak heap",
+      "unit": "KiB",
+      "value": 1.5,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 51220416,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:copy_smart_io/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "copy_smart_io time",
+      "unit": "ns",
+      "value": 2140000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 3142853,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:copy_smart_io/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "copy_smart_io peak heap",
+      "unit": "KiB",
+      "value": 1024,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 3142853,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:zip_entries/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "zip_entries time",
+      "unit": "ns",
+      "value": 947000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 14128032,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:zip_entries/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "zip_entries peak heap",
+      "unit": "KiB",
+      "value": 9.7,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 14128032,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:zip_extract/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "zip_extract time",
+      "unit": "ns",
+      "value": 44182000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 14128032,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:zip_extract/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "zip_extract peak heap",
+      "unit": "KiB",
+      "value": 2166,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 14128032,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:repo_serialize/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "repo_serialize time",
+      "unit": "ns",
+      "value": 1973000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 1633795,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:repo_serialize/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "repo_serialize peak heap",
+      "unit": "KiB",
+      "value": 3072,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 1633795,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:repo_parse/time",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "repo_parse time",
+      "unit": "ns",
+      "value": 3844000,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 1633795,
+      "at": "2026-10-14T03:42:35.886Z"
+    },
+    {
+      "id": "mem:repo_parse/peak",
+      "source": "mem",
+      "group": "memory collector (one run)",
+      "name": "repo_parse peak heap",
+      "unit": "KiB",
+      "value": 2024.6,
+      "lo": null,
+      "hi": null,
+      "n": 1,
+      "better": "lower",
+      "bytes": 1633795,
+      "at": "2026-10-14T03:42:35.886Z"
+    }
+  ],
+  "valid": false,
+  "invalidReason": "the 1.0.2 run of 2026-10-14 shared the machine with a running game (WardogsClient-Win64-Shipping, 10-45 % CPU, measured right after): almost every timing came out 20-600 % slower than 1.0.0"
+}
